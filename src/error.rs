@@ -127,6 +127,12 @@ pub enum Error {
     /// file itself is fine.
     #[error("operation cancelled by caller")]
     Cancelled,
+
+    /// A value the caller passed names nothing the file has, such as an
+    /// export phase the project does not list. The message says what the
+    /// file has.
+    #[error("{0}")]
+    InvalidInput(String),
 }
 
 fn for_path(path: &Option<String>) -> String {

@@ -1,0 +1,2123 @@
+[
+  {
+    "name": "export_gltf",
+    "description": "Write the model as a binary glTF 2.0 file to out_path, which must end in .glb, must not be the model, and must not exist unless overwrite is true. The file is the one rvt-gltf writes. If a resource limit kept part of the file unread, nothing is written unless allow_partial is true. Returns a summary (entity counts, unread streams, size and sha256) and a resource_link to the file; the glb is never returned inline. Sends progress notifications when the request carries a progress token, and cancelling it stops the export with nothing written. Writes only the file it is asked for. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "allow_partial": {
+          "default": false,
+          "description": "Write the file even when a resource limit kept part of the model from\nbeing read. The result lists the unread streams.",
+          "type": "boolean"
+        },
+        "model": {
+          "description": "The `model_id` that `open_model` returned, or the path of the file.",
+          "type": "string"
+        },
+        "out_path": {
+          "description": "Where to write the binary glTF. It must end in `.glb`, must not be the\nmodel, and must not exist unless `overwrite` is true.",
+          "type": "string"
+        },
+        "overwrite": {
+          "default": false,
+          "description": "Replace `out_path` if it exists.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "model",
+        "out_path"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "$defs": {
+        "OutputOut": {
+          "description": "The file an export wrote.",
+          "properties": {
+            "bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "path": {
+              "description": "Absolute path of the file.",
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "bytes",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "UnreadOut": {
+          "description": "A stream a resource limit kept from being read whole.",
+          "properties": {
+            "description": {
+              "description": "The same, in words.",
+              "type": "string"
+            },
+            "kind": {
+              "description": "`stream_too_large`, `inflated_member_too_large` or\n`inflated_total_too_large`.",
+              "type": "string"
+            },
+            "limit": {
+              "description": "That limit in bytes.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "description": "The stream, such as `Partitions/189`.",
+              "type": "string"
+            },
+            "stored_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "stored_bytes",
+            "kind",
+            "limit",
+            "description"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "building_elements": {
+          "description": "Building elements the export wrote.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "building_elements_with_geometry": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "diagnostics": {
+          "description": "The export diagnostics (`ifc` only), as for `get_diagnostics`."
+        },
+        "entity_counts": {
+          "additionalProperties": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "By IFC entity.",
+          "type": "object"
+        },
+        "format": {
+          "description": "`ifc` or `glb`.",
+          "type": "string"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "output": {
+          "$ref": "#/$defs/OutputOut"
+        },
+        "partial": {
+          "description": "True when part of the file was not read and the export was written\nanyway (`allow_partial`).",
+          "type": "boolean"
+        },
+        "unread_streams": {
+          "items": {
+            "$ref": "#/$defs/UnreadOut"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "model_id",
+        "format",
+        "output",
+        "building_elements",
+        "building_elements_with_geometry",
+        "entity_counts",
+        "partial",
+        "unread_streams",
+        "notes"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "export_ifc",
+    "description": "Write the model as IFC4 to out_path, which must end in .ifc, must not be the model, and must not exist unless overwrite is true. The file is the one rvt-ifc writes with the same switches (options); SOURCE_DATE_EPOCH fixes the time in its header. If a resource limit kept part of the file unread, nothing is written unless options.allow_partial is true. Returns a summary (entity counts, diagnostics, unread streams, size and sha256) and a resource_link to the file; the IFC is never returned inline. Sends progress notifications when the request carries a progress token, and cancelling it stops the export with nothing written. Writes only the file it is asked for. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "inputSchema": {
+      "$defs": {
+        "IfcOptions": {
+          "description": "The `rvt-ifc` switches that change the model. The defaults are `rvt-ifc`'s.",
+          "properties": {
+            "allow_partial": {
+              "default": false,
+              "description": "Write the file even when a resource limit kept part of the model from\nbeing read (`--allow-partial`). The result lists the unread streams.",
+              "type": "boolean"
+            },
+            "mode": {
+              "$ref": "#/$defs/ModeArg",
+              "description": "Required quality (`rvt-ifc --mode`)."
+            },
+            "no_base_quantities": {
+              "default": false,
+              "description": "Leave out the base quantities (`--no-base-quantities`).",
+              "type": "boolean"
+            },
+            "revit_property_sets": {
+              "default": false,
+              "description": "Also write Revit's own parameter sets (`--revit-property-sets`).",
+              "type": "boolean"
+            },
+            "revit_set_placement": {
+              "default": false,
+              "description": "Also place properties where Revit's exporter does\n(`--revit-set-placement`).",
+              "type": "boolean"
+            },
+            "saved_meshes": {
+              "$ref": "#/$defs/MeshesArg",
+              "description": "Bodies drawn from saved meshes (`rvt-ifc --saved-meshes`,\n`--no-saved-meshes`)."
+            }
+          },
+          "type": "object"
+        },
+        "MeshesArg": {
+          "description": "Which bodies are drawn from the mesh Revit saved for display.",
+          "oneOf": [
+            {
+              "const": "doors_and_windows",
+              "description": "Doors and windows on Revit 2023 to 2027 (the default).",
+              "type": "string"
+            },
+            {
+              "const": "all",
+              "description": "Every element that would be its record's bounding box. Slower.",
+              "type": "string"
+            },
+            {
+              "const": "off",
+              "description": "None: doors and windows keep their record's box.",
+              "type": "string"
+            }
+          ]
+        },
+        "ModeArg": {
+          "description": "The quality the export must reach, as `rvt-ifc --mode`.",
+          "oneOf": [
+            {
+              "const": "scaffold",
+              "description": "Write what is recovered, however little (the default).",
+              "type": "string"
+            },
+            {
+              "const": "typed-no-geometry",
+              "description": "Require validated typed elements, and write no geometry.",
+              "type": "string"
+            },
+            {
+              "const": "geometry",
+              "description": "Require at least one element with geometry.",
+              "type": "string"
+            },
+            {
+              "const": "strict",
+              "description": "Also require project metadata, units, levels and no warnings.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "model": {
+          "description": "The `model_id` that `open_model` returned, or the path of the file.",
+          "type": "string"
+        },
+        "options": {
+          "$ref": "#/$defs/IfcOptions",
+          "description": "The `rvt-ifc` switches; none by default."
+        },
+        "out_path": {
+          "description": "Where to write the IFC4 file. It must end in `.ifc`, must not be the\nmodel, and must not exist unless `overwrite` is true.",
+          "type": "string"
+        },
+        "overwrite": {
+          "default": false,
+          "description": "Replace `out_path` if it exists.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "model",
+        "out_path"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "$defs": {
+        "OutputOut": {
+          "description": "The file an export wrote.",
+          "properties": {
+            "bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "path": {
+              "description": "Absolute path of the file.",
+              "type": "string"
+            },
+            "sha256": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "bytes",
+            "sha256"
+          ],
+          "type": "object"
+        },
+        "UnreadOut": {
+          "description": "A stream a resource limit kept from being read whole.",
+          "properties": {
+            "description": {
+              "description": "The same, in words.",
+              "type": "string"
+            },
+            "kind": {
+              "description": "`stream_too_large`, `inflated_member_too_large` or\n`inflated_total_too_large`.",
+              "type": "string"
+            },
+            "limit": {
+              "description": "That limit in bytes.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "description": "The stream, such as `Partitions/189`.",
+              "type": "string"
+            },
+            "stored_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "stored_bytes",
+            "kind",
+            "limit",
+            "description"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "building_elements": {
+          "description": "Building elements the export wrote.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "building_elements_with_geometry": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "diagnostics": {
+          "description": "The export diagnostics (`ifc` only), as for `get_diagnostics`."
+        },
+        "entity_counts": {
+          "additionalProperties": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "By IFC entity.",
+          "type": "object"
+        },
+        "format": {
+          "description": "`ifc` or `glb`.",
+          "type": "string"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "output": {
+          "$ref": "#/$defs/OutputOut"
+        },
+        "partial": {
+          "description": "True when part of the file was not read and the export was written\nanyway (`allow_partial`).",
+          "type": "boolean"
+        },
+        "unread_streams": {
+          "items": {
+            "$ref": "#/$defs/UnreadOut"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "model_id",
+        "format",
+        "output",
+        "building_elements",
+        "building_elements_with_geometry",
+        "entity_counts",
+        "partial",
+        "unread_streams",
+        "notes"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_diagnostics",
+    "description": "The export diagnostics of a model, as rvt-ifc --diagnostics writes them (docs/schemas/export-diagnostics.schema.json in the rvt-rs repository): what was decoded and exported, what was skipped, approximated or left out with the reason for each, unsupported features, warnings, the confidence level, and the streams a resource limit kept unread. What is not read: rvt-rs decodes a subset of a Revit file, and this server answers from the model the IFC export writes. An element's body is often only its record's bounding box (provenance.body_source says which); family files give no family geometry; an element's property sets hold the parameters the export writes, and Revit's own parameter sets need export_ifc with options.revit_property_sets; the Revit Mark parameter is not decoded; files saved by Revit 2015 to 2022, 2026 and 2027 are experimental, and 2008 to 2014 more so (release_support in the summary); get_diagnostics lists what the export skipped or approximated and why. docs/status.md in the rvt-rs repository (https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md) states what is read per release and category.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "model": {
+          "description": "The `model_id` that `open_model` returned, or the path of a `.rvt`,\n`.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "$defs": {
+        "UnreadOut": {
+          "description": "A stream a resource limit kept from being read whole.",
+          "properties": {
+            "description": {
+              "description": "The same, in words.",
+              "type": "string"
+            },
+            "kind": {
+              "description": "`stream_too_large`, `inflated_member_too_large` or\n`inflated_total_too_large`.",
+              "type": "string"
+            },
+            "limit": {
+              "description": "That limit in bytes.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "description": "The stream, such as `Partitions/189`.",
+              "type": "string"
+            },
+            "stored_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "stored_bytes",
+            "kind",
+            "limit",
+            "description"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "diagnostics": {
+          "description": "The export diagnostics, as `rvt-ifc --diagnostics` writes them\n(`docs/schemas/export-diagnostics.schema.json`)."
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "unread_streams": {
+          "items": {
+            "$ref": "#/$defs/UnreadOut"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "model_id",
+        "diagnostics",
+        "unread_streams",
+        "notes"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_element",
+    "description": "One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance, and the file's: Revit release and build, schema class count and ElemTable record layout. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "inputSchema": {
+      "$defs": {
+        "IdArg": {
+          "anyOf": [
+            {
+              "format": "int64",
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "description": "An ElementId or a GlobalId."
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/IdArg",
+          "description": "The element's Revit ElementId (`1234`) or its 22-character IFC\nGlobalId, as `list_elements` gives them."
+        },
+        "model": {
+          "description": "The `model_id` that `open_model` returned, or the path of the file.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model",
+        "id"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "$defs": {
+        "ElemTableProvenance": {
+          "description": "How the file's `Global/ElemTable` stream frames its records.",
+          "properties": {
+            "framing": {
+              "description": "`explicit` for the 28- and 40-byte layouts, `implicit` for the\n12-byte fallback no corpus file uses.",
+              "type": "string"
+            },
+            "owner_field_bytes": {
+              "description": "Width of the owner field, on the explicit layouts.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "owner_field_offset": {
+              "description": "Offset of the owner field within a record.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "record_stride": {
+              "description": "Bytes per record (28 or 40 on every file in the corpus).",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "record_stride",
+            "owner_field_offset",
+            "framing"
+          ],
+          "type": "object"
+        },
+        "ElementProvenance": {
+          "description": "Where one element's answer comes from. Every element in an answer carries\none. Fields the model does not have are absent.",
+          "properties": {
+            "area_body_refusal": {
+              "description": "For an Area with no body, why it has none.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "body_source": {
+              "description": "How the element's body was derived, such as\n`partition_element_record_bbox` (only its record's box) or\n`partition_wall_centreline`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "category": {
+              "description": "The IFC entity the export writes, such as `IFCWALL`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "class": {
+              "description": "The Revit class the element's record names, such as `Wall`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "element_id": {
+              "description": "The Revit ElementId, which the IFC export writes as the `Tag`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "global_id": {
+              "description": "The IFC GlobalId the export writes: Revit's own where the file yields\nit, otherwise one derived from the document's identity and the\nElementId.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "profile_source": {
+              "description": "Where the plan profile of the body came from.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "space_outline_source": {
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary` or `none`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "EntityRefOut": {
+          "description": "Another entity the export writes for the same ElementId (a slab's further\npieces, a curtain wall's parts).",
+          "properties": {
+            "global_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "ifc_type": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ifc_type",
+            "name"
+          ],
+          "type": "object"
+        },
+        "FileProvenance": {
+          "description": "What the file itself says about where its elements come from.",
+          "properties": {
+            "elem_table": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ElemTableProvenance"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The record layout of `Global/ElemTable`."
+            },
+            "revit_build": {
+              "description": "That release's build tag (from `BasicFileInfo`).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "revit_release": {
+              "description": "The Revit release that saved the file (from `BasicFileInfo`).",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "schema_class_count": {
+              "description": "How many classes the file's embedded schema (`Formats/Latest`) lists.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "LevelRefOut": {
+          "description": "A storey as one element sits on it.",
+          "properties": {
+            "elevation_feet": {
+              "format": "double",
+              "type": "number"
+            },
+            "index": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "index",
+            "name",
+            "elevation_feet"
+          ],
+          "type": "object"
+        },
+        "PropertyOut": {
+          "description": "One property or quantity, as the IFC export writes it.",
+          "properties": {
+            "ifc_type": {
+              "description": "For a property, its IfcValue type, such as `IFCLENGTHMEASURE`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "quantity": {
+              "description": "For a quantity, its IFC4 quantity type, such as `IFCQUANTITYLENGTH`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "value": {
+              "description": "The value in the units the IFC is written in: metres, square metres,\ncubic metres, kilograms, radians."
+            }
+          },
+          "required": [
+            "name",
+            "value"
+          ],
+          "type": "object"
+        },
+        "PropertySetOut": {
+          "description": "A property set or a quantity set of an element or its type.",
+          "properties": {
+            "kind": {
+              "description": "`properties`, or `quantities` for a `Qto_` set.",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "properties": {
+              "items": {
+                "$ref": "#/$defs/PropertyOut"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "name",
+            "kind",
+            "properties"
+          ],
+          "type": "object"
+        },
+        "TypeOut": {
+          "description": "The type object an element is typed by.",
+          "properties": {
+            "element_id": {
+              "description": "The type's Revit ElementId.",
+              "type": "string"
+            },
+            "property_sets": {
+              "items": {
+                "$ref": "#/$defs/PropertySetOut"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "element_id",
+            "property_sets"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "body": {
+          "description": "`extrusion`, `solid`, `mapped` or `none`: the kind of body the export\nwrites for the element.",
+          "type": "string"
+        },
+        "element_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TypeOut"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The element's type object and its sets, where the model has them."
+        },
+        "file": {
+          "$ref": "#/$defs/FileProvenance",
+          "description": "The file the element comes from."
+        },
+        "host_id": {
+          "description": "The ElementId of the wall that hosts a door or window.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "description": "The Revit ElementId.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "level": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LevelRefOut"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "location_feet": {
+          "description": "Where the element is placed, in the model's feet.",
+          "items": {
+            "format": "double",
+            "type": "number"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "other_entities": {
+          "description": "Other entities with the same ElementId.",
+          "items": {
+            "$ref": "#/$defs/EntityRefOut"
+          },
+          "type": "array"
+        },
+        "predefined_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "property_sets": {
+          "items": {
+            "$ref": "#/$defs/PropertySetOut"
+          },
+          "type": "array"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ElementProvenance"
+        },
+        "rotation_degrees": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "trust_markers": {
+          "additionalProperties": true,
+          "description": "Every `...Source`, `...Resolved` and `...Refusal` property of the\nelement's record: how its body, profile, thickness, level and family\nname were derived. Absent where the export has no record for it.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "model_id",
+        "name",
+        "body",
+        "provenance",
+        "file",
+        "trust_markers",
+        "property_sets",
+        "other_entities"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_summary",
+    "description": "The summary open_model returns, for a model_id or a path: release and build, element counts by IFC entity and Revit class, levels, room count and the diagnostics summary (what was read, approximated, skipped and left unread). What is not read: rvt-rs decodes a subset of a Revit file, and this server answers from the model the IFC export writes. An element's body is often only its record's bounding box (provenance.body_source says which); family files give no family geometry; an element's property sets hold the parameters the export writes, and Revit's own parameter sets need export_ifc with options.revit_property_sets; the Revit Mark parameter is not decoded; files saved by Revit 2015 to 2022, 2026 and 2027 are experimental, and 2008 to 2014 more so (release_support in the summary); get_diagnostics lists what the export skipped or approximated and why. docs/status.md in the rvt-rs repository (https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md) states what is read per release and category.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "model": {
+          "description": "The `model_id` that `open_model` returned, or the path of a `.rvt`,\n`.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "$defs": {
+        "DiagnosticsSummary": {
+          "description": "What the export read, approximated and left out. `get_diagnostics` has\nthe whole report.",
+          "properties": {
+            "bounding_box_bodies": {
+              "description": "Bodies that are only their element record's bounding box: placed and\nsized, shape not decoded.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "bounding_box_spaces": {
+              "description": "Spaces whose area is the area of their record's box.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "confidence_level": {
+              "description": "`scaffold`, or how far past it the model goes.",
+              "type": "string"
+            },
+            "confidence_score": {
+              "format": "float",
+              "type": "number"
+            },
+            "notes": {
+              "description": "Steps of the export that were skipped or fell back, in words.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "partial": {
+              "description": "True when a resource limit kept part of the file from being read, so\nthe answers miss what those streams hold.",
+              "type": "boolean"
+            },
+            "skipped": {
+              "items": {
+                "$ref": "#/$defs/SkippedOut"
+              },
+              "type": "array"
+            },
+            "unexported_element_records": {
+              "description": "Element records found but not exported for want of an ElementId.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "unread_streams": {
+              "items": {
+                "$ref": "#/$defs/UnreadOut"
+              },
+              "type": "array"
+            },
+            "unsupported_feature_count": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "warning_count": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "confidence_level",
+            "confidence_score",
+            "partial",
+            "unread_streams",
+            "skipped",
+            "warning_count",
+            "unsupported_feature_count",
+            "bounding_box_bodies",
+            "bounding_box_spaces",
+            "unexported_element_records",
+            "notes"
+          ],
+          "type": "object"
+        },
+        "ElemTableProvenance": {
+          "description": "How the file's `Global/ElemTable` stream frames its records.",
+          "properties": {
+            "framing": {
+              "description": "`explicit` for the 28- and 40-byte layouts, `implicit` for the\n12-byte fallback no corpus file uses.",
+              "type": "string"
+            },
+            "owner_field_bytes": {
+              "description": "Width of the owner field, on the explicit layouts.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "owner_field_offset": {
+              "description": "Offset of the owner field within a record.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "record_stride": {
+              "description": "Bytes per record (28 or 40 on every file in the corpus).",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "record_stride",
+            "owner_field_offset",
+            "framing"
+          ],
+          "type": "object"
+        },
+        "ElementCounts": {
+          "description": "How many building elements the model holds.",
+          "properties": {
+            "by_ifc_type": {
+              "additionalProperties": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "description": "By IFC entity, such as `IFCWALL`.",
+              "type": "object"
+            },
+            "by_revit_class": {
+              "additionalProperties": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "description": "By the Revit class the record names, such as `Wall`.",
+              "type": "object"
+            },
+            "total": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "total",
+            "by_ifc_type",
+            "by_revit_class"
+          ],
+          "type": "object"
+        },
+        "FileProvenance": {
+          "description": "What the file itself says about where its elements come from.",
+          "properties": {
+            "elem_table": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ElemTableProvenance"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The record layout of `Global/ElemTable`."
+            },
+            "revit_build": {
+              "description": "That release's build tag (from `BasicFileInfo`).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "revit_release": {
+              "description": "The Revit release that saved the file (from `BasicFileInfo`).",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "schema_class_count": {
+              "description": "How many classes the file's embedded schema (`Formats/Latest`) lists.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "LevelOut": {
+          "description": "One storey of the model.",
+          "properties": {
+            "element_count": {
+              "description": "The building elements the export puts on this storey.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "elevation_feet": {
+              "format": "double",
+              "type": "number"
+            },
+            "elevation_metres": {
+              "format": "double",
+              "type": "number"
+            },
+            "index": {
+              "description": "Position in the model's list of storeys.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "index",
+            "name",
+            "elevation_feet",
+            "elevation_metres",
+            "element_count"
+          ],
+          "type": "object"
+        },
+        "SkippedOut": {
+          "description": "Something the export left out or approximated, with how many.",
+          "properties": {
+            "count": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "reason",
+            "count"
+          ],
+          "type": "object"
+        },
+        "UnreadOut": {
+          "description": "A stream a resource limit kept from being read whole.",
+          "properties": {
+            "description": {
+              "description": "The same, in words.",
+              "type": "string"
+            },
+            "kind": {
+              "description": "`stream_too_large`, `inflated_member_too_large` or\n`inflated_total_too_large`.",
+              "type": "string"
+            },
+            "limit": {
+              "description": "That limit in bytes.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "description": "The stream, such as `Partitions/189`.",
+              "type": "string"
+            },
+            "stored_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "stored_bytes",
+            "kind",
+            "limit",
+            "description"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "diagnostics": {
+          "$ref": "#/$defs/DiagnosticsSummary"
+        },
+        "elements": {
+          "$ref": "#/$defs/ElementCounts"
+        },
+        "file": {
+          "$ref": "#/$defs/FileProvenance"
+        },
+        "file_kind": {
+          "description": "`rvt`, `rfa`, `rte`, `rft` or `unknown`, from the file name extension.",
+          "type": "string"
+        },
+        "levels": {
+          "items": {
+            "$ref": "#/$defs/LevelOut"
+          },
+          "type": "array"
+        },
+        "model_id": {
+          "description": "Opaque handle for the other tools. It lives while the server runs and\nwhile the model is among the most recently used ones it keeps.",
+          "type": "string"
+        },
+        "not_read": {
+          "description": "What the answers do not cover.",
+          "type": "string"
+        },
+        "project_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "release_support": {
+          "description": "How the file's release is read, and that row's status."
+        },
+        "revit_release": {
+          "description": "The Revit release that saved the file.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "room_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "model_id",
+        "file_kind",
+        "size_bytes",
+        "file",
+        "elements",
+        "levels",
+        "room_count",
+        "diagnostics",
+        "not_read"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_elements",
+    "description": "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, each present only where the model has it. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "category": {
+          "description": "Only elements of this IFC entity: `IFCWALL`, `IfcWall` and `wall` all\nname walls. `get_summary` lists the entities the model holds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "class": {
+          "description": "Only elements of this Revit class, such as `Wall`, `Room` or `Level`,\nas the element's record names it (`provenance.class`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "level": {
+          "description": "Only elements on the storey with this name (see `list_levels`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "How many elements to return: 100 by default, at most 1000.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "model": {
+          "description": "The `model_id` that `open_model` returned, or the path of the file.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "How many matching elements to skip, for the next page.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "$defs": {
+        "ElementProvenance": {
+          "description": "Where one element's answer comes from. Every element in an answer carries\none. Fields the model does not have are absent.",
+          "properties": {
+            "area_body_refusal": {
+              "description": "For an Area with no body, why it has none.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "body_source": {
+              "description": "How the element's body was derived, such as\n`partition_element_record_bbox` (only its record's box) or\n`partition_wall_centreline`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "category": {
+              "description": "The IFC entity the export writes, such as `IFCWALL`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "class": {
+              "description": "The Revit class the element's record names, such as `Wall`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "element_id": {
+              "description": "The Revit ElementId, which the IFC export writes as the `Tag`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "global_id": {
+              "description": "The IFC GlobalId the export writes: Revit's own where the file yields\nit, otherwise one derived from the document's identity and the\nElementId.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "profile_source": {
+              "description": "Where the plan profile of the body came from.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "space_outline_source": {
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary` or `none`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "ElementRow": {
+          "description": "One element in a list.",
+          "properties": {
+            "id": {
+              "description": "The Revit ElementId.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "level": {
+              "description": "The name of the storey the element is on.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": "string"
+            },
+            "predefined_type": {
+              "description": "The IFC4 `PredefinedType` the export writes.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "provenance": {
+              "$ref": "#/$defs/ElementProvenance"
+            }
+          },
+          "required": [
+            "name",
+            "provenance"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "elements": {
+          "items": {
+            "$ref": "#/$defs/ElementRow"
+          },
+          "type": "array"
+        },
+        "limit": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "offset": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "returned": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total": {
+          "description": "How many elements match the filters.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "model_id",
+        "total",
+        "offset",
+        "limit",
+        "returned",
+        "elements"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_levels",
+    "description": "List the levels (building storeys) of a model with their elevation in feet and metres and how many building elements the export puts on each. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "model": {
+          "description": "The `model_id` that `open_model` returned, or the path of a `.rvt`,\n`.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "$defs": {
+        "LevelOut": {
+          "description": "One storey of the model.",
+          "properties": {
+            "element_count": {
+              "description": "The building elements the export puts on this storey.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "elevation_feet": {
+              "format": "double",
+              "type": "number"
+            },
+            "elevation_metres": {
+              "format": "double",
+              "type": "number"
+            },
+            "index": {
+              "description": "Position in the model's list of storeys.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "index",
+            "name",
+            "elevation_feet",
+            "elevation_metres",
+            "element_count"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "levels": {
+          "items": {
+            "$ref": "#/$defs/LevelOut"
+          },
+          "type": "array"
+        },
+        "model_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_id",
+        "levels"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "list_rooms",
+    "description": "List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_boundary for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "model": {
+          "description": "The `model_id` that `open_model` returned, or the path of a `.rvt`,\n`.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "$defs": {
+        "ElementProvenance": {
+          "description": "Where one element's answer comes from. Every element in an answer carries\none. Fields the model does not have are absent.",
+          "properties": {
+            "area_body_refusal": {
+              "description": "For an Area with no body, why it has none.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "body_source": {
+              "description": "How the element's body was derived, such as\n`partition_element_record_bbox` (only its record's box) or\n`partition_wall_centreline`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "category": {
+              "description": "The IFC entity the export writes, such as `IFCWALL`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "class": {
+              "description": "The Revit class the element's record names, such as `Wall`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "element_id": {
+              "description": "The Revit ElementId, which the IFC export writes as the `Tag`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "global_id": {
+              "description": "The IFC GlobalId the export writes: Revit's own where the file yields\nit, otherwise one derived from the document's identity and the\nElementId.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "profile_source": {
+              "description": "Where the plan profile of the body came from.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "space_outline_source": {
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary` or `none`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "RoomOut": {
+          "description": "One room.",
+          "properties": {
+            "area_square_feet": {
+              "description": "The plan area of the room's outline, where the outline is one read\nexactly (`space_outline_source` is `stored_solid`, `stored_solid_faces`\nor, for an Area, `area_boundary`). Absent for `record_box`, where the\narea of a box is not the area of a room, and for\n`stored_solid_approximate`.",
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "area_square_metres": {
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "level": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "level_elevation_feet": {
+              "format": "double",
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "number": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "provenance": {
+              "$ref": "#/$defs/ElementProvenance"
+            }
+          },
+          "required": [
+            "provenance"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "model_id": {
+          "type": "string"
+        },
+        "rooms": {
+          "items": {
+            "$ref": "#/$defs/RoomOut"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "model_id",
+        "rooms"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "open_model",
+    "description": "Open a Revit file (.rvt, .rfa, .rte or .rft) and decode it once, with the same decode rvt-ifc runs. Every other tool answers from that decoded model and the IFC export is written from it, so an answer and the export cannot disagree. Returns model_id, the Revit release and build, element counts by IFC entity and Revit class, levels, and what was left out (diagnostics, unread streams). Handle lifetime: model_id is opaque and stays valid while this server process runs and the model is among the most recently used ones the server keeps (2 by default); after an eviction or a restart a tool returns an error and you call open_model again. Every tool also takes the file path in place of the model_id. Reads the file only: no Revit install, no network call, nothing is written. What is not read: rvt-rs decodes a subset of a Revit file, and this server answers from the model the IFC export writes. An element's body is often only its record's bounding box (provenance.body_source says which); family files give no family geometry; an element's property sets hold the parameters the export writes, and Revit's own parameter sets need export_ifc with options.revit_property_sets; the Revit Mark parameter is not decoded; files saved by Revit 2015 to 2022, 2026 and 2027 are experimental, and 2008 to 2014 more so (release_support in the summary); get_diagnostics lists what the export skipped or approximated and why. docs/status.md in the rvt-rs repository (https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md) states what is read per release and category.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "model": {
+          "description": "The `model_id` that `open_model` returned, or the path of a `.rvt`,\n`.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "type": "object"
+    },
+    "outputSchema": {
+      "$defs": {
+        "DiagnosticsSummary": {
+          "description": "What the export read, approximated and left out. `get_diagnostics` has\nthe whole report.",
+          "properties": {
+            "bounding_box_bodies": {
+              "description": "Bodies that are only their element record's bounding box: placed and\nsized, shape not decoded.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "bounding_box_spaces": {
+              "description": "Spaces whose area is the area of their record's box.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "confidence_level": {
+              "description": "`scaffold`, or how far past it the model goes.",
+              "type": "string"
+            },
+            "confidence_score": {
+              "format": "float",
+              "type": "number"
+            },
+            "notes": {
+              "description": "Steps of the export that were skipped or fell back, in words.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "partial": {
+              "description": "True when a resource limit kept part of the file from being read, so\nthe answers miss what those streams hold.",
+              "type": "boolean"
+            },
+            "skipped": {
+              "items": {
+                "$ref": "#/$defs/SkippedOut"
+              },
+              "type": "array"
+            },
+            "unexported_element_records": {
+              "description": "Element records found but not exported for want of an ElementId.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "unread_streams": {
+              "items": {
+                "$ref": "#/$defs/UnreadOut"
+              },
+              "type": "array"
+            },
+            "unsupported_feature_count": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "warning_count": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "confidence_level",
+            "confidence_score",
+            "partial",
+            "unread_streams",
+            "skipped",
+            "warning_count",
+            "unsupported_feature_count",
+            "bounding_box_bodies",
+            "bounding_box_spaces",
+            "unexported_element_records",
+            "notes"
+          ],
+          "type": "object"
+        },
+        "ElemTableProvenance": {
+          "description": "How the file's `Global/ElemTable` stream frames its records.",
+          "properties": {
+            "framing": {
+              "description": "`explicit` for the 28- and 40-byte layouts, `implicit` for the\n12-byte fallback no corpus file uses.",
+              "type": "string"
+            },
+            "owner_field_bytes": {
+              "description": "Width of the owner field, on the explicit layouts.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "owner_field_offset": {
+              "description": "Offset of the owner field within a record.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "record_stride": {
+              "description": "Bytes per record (28 or 40 on every file in the corpus).",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "record_stride",
+            "owner_field_offset",
+            "framing"
+          ],
+          "type": "object"
+        },
+        "ElementCounts": {
+          "description": "How many building elements the model holds.",
+          "properties": {
+            "by_ifc_type": {
+              "additionalProperties": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "description": "By IFC entity, such as `IFCWALL`.",
+              "type": "object"
+            },
+            "by_revit_class": {
+              "additionalProperties": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "description": "By the Revit class the record names, such as `Wall`.",
+              "type": "object"
+            },
+            "total": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "total",
+            "by_ifc_type",
+            "by_revit_class"
+          ],
+          "type": "object"
+        },
+        "FileProvenance": {
+          "description": "What the file itself says about where its elements come from.",
+          "properties": {
+            "elem_table": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ElemTableProvenance"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The record layout of `Global/ElemTable`."
+            },
+            "revit_build": {
+              "description": "That release's build tag (from `BasicFileInfo`).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "revit_release": {
+              "description": "The Revit release that saved the file (from `BasicFileInfo`).",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "schema_class_count": {
+              "description": "How many classes the file's embedded schema (`Formats/Latest`) lists.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "type": "object"
+        },
+        "LevelOut": {
+          "description": "One storey of the model.",
+          "properties": {
+            "element_count": {
+              "description": "The building elements the export puts on this storey.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "elevation_feet": {
+              "format": "double",
+              "type": "number"
+            },
+            "elevation_metres": {
+              "format": "double",
+              "type": "number"
+            },
+            "index": {
+              "description": "Position in the model's list of storeys.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "index",
+            "name",
+            "elevation_feet",
+            "elevation_metres",
+            "element_count"
+          ],
+          "type": "object"
+        },
+        "SkippedOut": {
+          "description": "Something the export left out or approximated, with how many.",
+          "properties": {
+            "count": {
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "reason",
+            "count"
+          ],
+          "type": "object"
+        },
+        "UnreadOut": {
+          "description": "A stream a resource limit kept from being read whole.",
+          "properties": {
+            "description": {
+              "description": "The same, in words.",
+              "type": "string"
+            },
+            "kind": {
+              "description": "`stream_too_large`, `inflated_member_too_large` or\n`inflated_total_too_large`.",
+              "type": "string"
+            },
+            "limit": {
+              "description": "That limit in bytes.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "name": {
+              "description": "The stream, such as `Partitions/189`.",
+              "type": "string"
+            },
+            "stored_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "stored_bytes",
+            "kind",
+            "limit",
+            "description"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "diagnostics": {
+          "$ref": "#/$defs/DiagnosticsSummary"
+        },
+        "elements": {
+          "$ref": "#/$defs/ElementCounts"
+        },
+        "file": {
+          "$ref": "#/$defs/FileProvenance"
+        },
+        "file_kind": {
+          "description": "`rvt`, `rfa`, `rte`, `rft` or `unknown`, from the file name extension.",
+          "type": "string"
+        },
+        "levels": {
+          "items": {
+            "$ref": "#/$defs/LevelOut"
+          },
+          "type": "array"
+        },
+        "model_id": {
+          "description": "Opaque handle for the other tools. It lives while the server runs and\nwhile the model is among the most recently used ones it keeps.",
+          "type": "string"
+        },
+        "not_read": {
+          "description": "What the answers do not cover.",
+          "type": "string"
+        },
+        "project_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "release_support": {
+          "description": "How the file's release is read, and that row's status."
+        },
+        "revit_release": {
+          "description": "The Revit release that saved the file.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "room_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size_bytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "model_id",
+        "file_kind",
+        "size_bytes",
+        "file",
+        "elements",
+        "levels",
+        "room_count",
+        "diagnostics",
+        "not_read"
+      ],
+      "type": "object"
+    },
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  }
+]

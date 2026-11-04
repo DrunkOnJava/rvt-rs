@@ -32,7 +32,7 @@
 
 use crate::le_bytes;
 use crate::native_parameters::ObjectGraph;
-use crate::{RevitFile, compression, native_document, native_parameters, native_segments};
+use crate::{RevitFile, native_document, native_parameters, native_segments};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The model geometry classes read: solid forms, free-form (imported or
@@ -160,8 +160,7 @@ fn read_documents(
     let mut documents: BTreeMap<u64, Document> = BTreeMap::new();
     let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
     for name in streams {
-        let stored = rf.read_stream(name)?;
-        let prepared = compression::prepare_stream_for_inflate(name, &stored);
+        let prepared = rf.read_prepared_stream(name)?;
         let inflated = rf.inflated_partition(name).ok();
         native_segments::walk_inflated(
             &prepared,
@@ -330,8 +329,7 @@ fn load(
     let mut keys: BTreeSet<[u8; 16]> = BTreeSet::new();
     let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
     for name in &streams {
-        let stored = rf.read_stream(name)?;
-        let prepared = compression::prepare_stream_for_inflate(name, &stored);
+        let prepared = rf.read_prepared_stream(name)?;
         let inflated = rf.inflated_partition(name).ok();
         native_segments::walk_inflated(
             &prepared,
@@ -590,8 +588,7 @@ pub fn family_records_in(
     }
     let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
     for name in &loaded.streams {
-        let stored = rf.read_stream(name)?;
-        let prepared = compression::prepare_stream_for_inflate(name, &stored);
+        let prepared = rf.read_prepared_stream(name)?;
         let inflated = rf.inflated_partition(name).ok();
         native_segments::walk_inflated(
             &prepared,

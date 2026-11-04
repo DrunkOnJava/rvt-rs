@@ -56,24 +56,35 @@ impl<'a> Reader<'a> {
         Ok(u64::from_le_bytes(self.take(8)?.try_into()?))
     }
 }
-/// The member of `inflated` at `offset` where it is the whole gzip member
-/// `compressed`, as the decoder in [`walk_inflated`] would read it: a header
-/// with no optional fields, the DEFLATE stream, then a CRC and ISIZE that
-/// match the member, ending at the segment's end, within the group budget.
+/// The member of `inflated` at `offset`, and its index among the stream's
+/// members, where it is the whole gzip member `compressed`, as the decoder in
+/// [`walk_inflated`] would read it: a header with no optional fields, the
+/// DEFLATE stream, then a CRC and ISIZE that match the member, ending at the
+/// segment's end, within the group budget.
 fn whole_member<'a>(
     inflated: &'a InflatedStream,
     offset: usize,
     compressed: &[u8],
     max_group_bytes: usize,
-) -> Option<&'a [u8]> {
-    let (member, consumed) = inflated.member_at(offset)?;
+) -> Option<(usize, &'a [u8])> {
+    let (index, member) = inflated.member_index(offset)?;
+    let consumed = inflated.member_consumed(index)?;
     let trailer = compressed.get(consumed..)?;
     if compressed.get(3) != Some(&0) || trailer.len() != 8 || member.len() > max_group_bytes {
         return None;
     }
     let crc = inflated.member_crc_at(offset)?;
     (trailer[..4] == crc.to_le_bytes() && trailer[4..] == (member.len() as u32).to_le_bytes())
-        .then_some(member)
+        .then_some((index, member))
+}
+/// A continuation group's bytes while its segments are joined: borrowed from
+/// the inflated stream when they are consecutive whole members of it, which
+/// are stored one after the other, and copied otherwise (#1075).
+struct Group<'a> {
+    data: Cow<'a, [u8]>,
+    /// The first and last member of the stream that `data` is the span of,
+    /// while it is one.
+    span: Option<(usize, usize)>,
 }
 /// Walk a checksum-prepared partition. Each callback receives a complete
 /// continuation group, not a claimed live element. Maximum reassembled group
@@ -124,7 +135,7 @@ pub fn walk_inflated(
     let mut content_key = None;
     let mut content_element_count = None;
     let mut last_size = None;
-    let mut active: Option<(GroupSource, Cow<[u8]>)> = None;
+    let mut active: Option<(GroupSource, Group<'_>)> = None;
     loop {
         let offset = r.pos;
         let next = r.u16()?;
@@ -186,10 +197,10 @@ pub fn walk_inflated(
             let channel = r.u64()?;
             let compressed_at = r.pos;
             let compressed = r.take(size as usize - 8)?;
-            let bytes = match inflated
+            let (bytes, member_index) = match inflated
                 .and_then(|stream| whole_member(stream, compressed_at, compressed, max_group_bytes))
             {
-                Some(member) => Cow::Borrowed(member),
+                Some((index, member)) => (Cow::Borrowed(member), Some(index)),
                 None => {
                     let mut decoder = flate2::bufread::GzDecoder::new(compressed);
                     let mut bytes = Vec::new();
@@ -204,7 +215,7 @@ pub fn walk_inflated(
                         decoder.get_ref().is_empty(),
                         "gzip does not consume exact declared segment boundary"
                     );
-                    Cow::Owned(bytes)
+                    (Cow::Owned(bytes), None)
                 }
             };
             stats.segments += 1;
@@ -216,18 +227,38 @@ pub fn walk_inflated(
                 from_previous == active.is_some(),
                 "segment continuation state mismatch at {offset}"
             );
-            if let Some((source, data)) = &mut active {
+            if let Some((source, group)) = &mut active {
                 ensure!(
                     source.channel == channel && source.content_key == content_key,
                     "continuation channel/content mismatch"
                 );
                 ensure!(
-                    data.len()
+                    group
+                        .data
+                        .len()
                         .checked_add(bytes.len())
                         .is_some_and(|n| n <= max_group_bytes),
                     "reassembled group budget exceeded"
                 );
-                data.to_mut().extend_from_slice(&bytes);
+                // The next member of the stream continues the span: the group
+                // is that much more of the stream's bytes, not a copy.
+                let continued = match (group.span, member_index, inflated) {
+                    (Some((first, last)), Some(index), Some(stream))
+                        if last.checked_add(1) == Some(index) =>
+                    {
+                        stream
+                            .members_span(first, index)
+                            .map(|span| (first, index, span))
+                    }
+                    _ => None,
+                };
+                if let Some((first, index, span)) = continued {
+                    group.data = Cow::Borrowed(span);
+                    group.span = Some((first, index));
+                } else {
+                    group.span = None;
+                    group.data.to_mut().extend_from_slice(&bytes);
+                }
                 source.segment_count += 1;
                 source.declared_objects += u64::from(count);
                 source.declared_body_bytes += u64::from(raw);
@@ -242,12 +273,15 @@ pub fn walk_inflated(
                         declared_objects: u64::from(count),
                         declared_body_bytes: u64::from(raw),
                     },
-                    bytes,
+                    Group {
+                        data: bytes,
+                        span: member_index.map(|index| (index, index)),
+                    },
                 ));
             }
             if !to_next {
-                let (source, bytes) = active.take().unwrap();
-                callback(&source, &bytes)?;
+                let (source, group) = active.take().unwrap();
+                callback(&source, &group.data)?;
                 stats.groups += 1;
             }
         } else if next == checkback_tag {

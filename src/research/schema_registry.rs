@@ -46,13 +46,26 @@ pub struct Registry {
     pub reference_count: usize,
     pub terminator_offset: usize,
     pub classes: Vec<Class>,
+    /// Each class name's first index in `classes`, built on first use: a
+    /// scan of every class for each lookup was most of an Element base
+    /// decode (#1237).
+    #[serde(skip)]
+    names: std::sync::OnceLock<std::collections::HashMap<String, usize>>,
 }
 impl Registry {
     pub fn class(&self, tag: u16) -> Option<&Class> {
         self.classes.get(usize::from(tag.checked_sub(12)?))
     }
+    /// The first class named `name`.
     pub fn named(&self, name: &str) -> Option<&Class> {
-        self.classes.iter().find(|c| c.name == name)
+        let names = self.names.get_or_init(|| {
+            let mut names = std::collections::HashMap::with_capacity(self.classes.len());
+            for (index, class) in self.classes.iter().enumerate() {
+                names.entry(class.name.clone()).or_insert(index);
+            }
+            names
+        });
+        self.classes.get(*names.get(name)?)
     }
 }
 struct Reader<'a> {
@@ -291,5 +304,6 @@ pub fn parse(bytes: &[u8]) -> Result<Registry> {
         reference_count: r.references,
         terminator_offset,
         classes,
+        names: Default::default(),
     })
 }

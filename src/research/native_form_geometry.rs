@@ -29,7 +29,7 @@
 
 use crate::le_bytes;
 use crate::native_parameters::{GraphObject, ObjectGraph};
-use crate::{RevitFile, compression, native_document, native_saved_mesh, native_segments};
+use crate::{RevitFile, native_document, native_saved_mesh, native_segments};
 use anyhow::{Result, ensure};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -136,8 +136,7 @@ pub fn walk(
     let mut walked = Walked::default();
     let budget = native_document::group_budget(file, native_document::DEFAULT_MAX_GROUP_BYTES);
     for name in &document.streams {
-        let stored = file.read_stream(name)?;
-        let prepared = compression::prepare_stream_for_inflate(name, &stored);
+        let prepared = file.read_prepared_stream(name)?;
         let inflated = file.inflated_partition(name).ok();
         native_segments::walk_inflated(
             &prepared,

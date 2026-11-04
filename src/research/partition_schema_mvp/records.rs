@@ -345,7 +345,8 @@ pub(super) fn without_non_primary_options(
 ) -> Vec<crate::partition_element_records::PartitionElementRecord> {
     let options = rf.memoised_design_options();
     // Elements not in the export phase are left out too, as Revit's export
-    // leaves them out, except rooms (#328, RE-184).
+    // leaves them out, and a room whose own phase is not it (#328, RE-184,
+    // RE-326).
     let phases = rf.memoised_phase_filter();
     records.retain(|record| !options.excludes(record) && !phases.excludes(record));
     records

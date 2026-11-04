@@ -23,6 +23,17 @@
 #             maintainer's choice, 2026-10-05, C9)
 #
 # `skip=` leaves out the synthetic-fixture tests inside a real-file target.
+#
+# One end-to-end test is not a target of that binary: the MCP server's, in its
+# crate, rvt-mcp/tests/mcp_stdio.rs. Its class is
+#
+#   cli       mcp_stdio     (rvt-rs-mcp: the built server over real stdio)
+#
+# but it is not listed below, because this manifest names the tests/*.rs
+# targets of the root crate and the script above fails on one that is not
+# there. ci.yml runs it in its own step ("MCP server end to end", in the test
+# matrix on every OS, and again in Corpus health on Einhoven), and
+# tools/check-local.sh runs `cargo test -p rvt-rs-mcp`.
 
 hardening fuzz_regressions
 real      arc_wall_corpus

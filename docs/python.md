@@ -69,9 +69,9 @@ print(f.missing_required_streams())  # [] on a valid Revit file
 # Schema counts (cheap).
 summary = f.schema_summary()
 print(summary["classes"], summary["fields"], summary["cpp_types"])
-# 395 13570 ...   on the 2024 sample
+# 4126 11562 ...  on a Revit 2024 file
 
-# Full schema as JSON (~1-2 MB on typical families).
+# Full schema as JSON (large: every class and field).
 import json
 schema = json.loads(f.schema_json())
 adoc = next((c for c in schema["classes"] if c["name"] == "ADocument"), None)
@@ -195,8 +195,6 @@ Raises `IOError` on missing files, non-CFB input, file-size over
 | `build` | `str \| None` | Revit build tag, e.g. `"20230308_1635(x64)"` |
 | `guid` | `str \| None` | Document GUID from `BasicFileInfo`, if present |
 | `part_atom_title` | `str \| None` | Family document title from `PartAtom` XML |
-| `schedule_csv(kind="elements", metric=False, excel=False)` | `str` | Element (`kind="elements"`) or room (`kind="rooms"`) schedule as CSV text; same columns as `rvt-schedule` |
-| `metadata(redact=False)` | `dict` | Document identity: release, build, title, last saved, worksharing, central model path, last-saved-by user, document GUID, save counter, cloud flag, and every `BasicFileInfo` `Key: value` line (`docs/schemas/file-metadata.schema.json`) |
 
 Each getter calls into the Rust parser on access. All four
 `BasicFileInfo`-backed getters return `None` if the
@@ -211,6 +209,14 @@ stream_names(self) -> list[str]
 ```
 All OLE stream paths in the file, sorted, `/`-separated
 regardless of host OS. The reference corpus has 13 entries.
+
+```text
+unread_streams(self) -> list[dict]
+```
+The streams a resource limit kept from being read whole so far (#1075), each
+a dict with `name`, `stored_bytes`, `kind` (`"stream_too_large"`,
+`"inflated_member_too_large"` or `"inflated_total_too_large"`) and `limit`.
+Empty when nothing was cut; see [Parse-safety controls](#parse-safety-controls).
 
 ```text
 read_stream(self, name: str) -> bytes
@@ -255,6 +261,26 @@ parse; `part_atom_json_strict` raises `ValueError` naming which
 (`Stream not found: PartAtom` or `Malformed PartAtom XML: ...`).
 
 ```text
+metadata(self, redact: bool = False) -> dict
+```
+Document identity, the same dict as `rvt.read_metadata(path)`, with the keys
+`revit_version`, `build`, `title`, `last_saved` (ISO 8601 UTC), `worksharing`,
+`workshared`, `username`, `central_model_path`, `last_save_path`,
+`document_guid`, `document_increments`, `locale`, `single_user_cloud_model` and
+`properties` (every `BasicFileInfo` `Key: value` line, as `{"key", "value"}`).
+`redact=True` scrubs the user name and user paths before sharing. JSON
+contract: [`file-metadata.schema.json`](schemas/file-metadata.schema.json).
+
+```text
+schedule_csv(self, kind: str = "elements", metric: bool = False, excel: bool = False) -> str
+```
+The element (`kind="elements"`) or room (`kind="rooms"`) schedule as CSV
+text, with the columns of `rvt-schedule`. `metric=True` writes lengths in
+metres, `excel=True` prefixes a UTF-8 byte-order mark for Excel on Windows.
+Only decoded values are written; unknowns are empty cells. Any other `kind`
+raises `ValueError`.
+
+```text
 schema_summary(self) -> dict[str, int]
 ```
 Decoded schema counts. Cheap. Keys: `classes`, `fields`,
@@ -294,9 +320,9 @@ Return shape after `json.loads`:
 }
 ```
 
-Typical reference-corpus schema is ~395 classes / ~13,570 fields
-— the JSON string is on the order of 1-2 MB. For counts only,
-prefer `schema_summary()`.
+The whole schema is read (#410): 4,126 classes and 11,562 fields on a
+Revit 2024 file. The JSON string is large, so for counts only prefer
+`schema_summary()`.
 
 Stable JSON schemas for summary dictionaries, schema diagnostics,
 decoded ADocument records, production decoded elements, element
@@ -311,7 +337,8 @@ Run the Layer-5a walker and return `ADocument`'s instance fields
 as a dict, or `None` if the entry-point detector can't confidently
 locate an `ADocument` record in this file. Raises `ValueError` if the
 file's schema declares no `ADocument` class, which no Revit file lacks
-(a synthetic file, or a damaged schema).
+(a synthetic file, or a damaged schema), and `IOError` if a stream cannot be
+read.
 
 Return shape when present:
 
@@ -347,8 +374,10 @@ export_diagnostics(self, saved_meshes: bool = True) -> dict
 ```
 
 `decoded_elements()` returns production-walker elements. Each entry
-has `id`, `class_name`, `byte_range`, `fields`, and `typed`. `typed`
-is the typed projection for
+has `id`, `class_name`, `byte_range`, `fields`, `parameters` (the element's
+saved parameters, as `rvt-elements` lists them; a file whose parameters
+cannot be read keeps its elements and raises a `UserWarning`), and `typed`.
+`typed` is the typed projection for
 `Level` / `Wall` / `Floor` / `Door` / `Window` / `Room` / `Material`
 (also listed as `rvt.MVP_TYPED_CLASSES`), or `None` for other classes.
 JSON contract: [`decoded-elements.schema.json`](schemas/decoded-elements.schema.json).
@@ -408,7 +437,8 @@ Variants of `read_adocument()`. `read_adocument_strict` raises
 `ValueError` when the `ADocument` record is not located or any of its
 fields fell back to raw bytes. `read_adocument_lossy` returns
 `{"value", "complete", "partial_fields", "failed_streams", "warnings",
-"confidence"}` and raises `OSError` only on stream-level failures.
+"confidence"}`, and raises `OSError` on stream-level failures and
+`ValueError` when the schema declares no `ADocument` class.
 
 ```text
 schema_diagnostics(self) -> dict
@@ -445,7 +475,7 @@ if `BasicFileInfo` can't be parsed.
 | Exception | Raised when |
 |---|---|
 | `IOError` | File missing, non-CFB input, file-size over `max_file_bytes`, unknown stream name, read error |
-| `ValueError` | File parsed as CFB but IFC export couldn't build a model |
+| `ValueError` | File parsed as CFB but could not be decoded further: the IFC export cannot build a model, `mode` is not one of the four or is not met, a resource limit left part of the file unread and `allow_partial` is false, a strict variant fails, the schema or `Global/ElemTable` does not parse, `read_adocument` finds no `ADocument` class, or `schedule_csv` gets another `kind` |
 
 `IOError` is the Python alias of `OSError` — both are caught by
 `except OSError` or `except IOError`.
@@ -543,13 +573,12 @@ issue or drop to the Rust CLIs (`rvt-info`, `rvt-analyze`,
 
 Not in Python today:
 
-- **Per-element decoders.** The walker reads `ADocument`; the 81
-  Layer-5b element classes registered in `elements::all_decoders()`
-  (`Wall`, `Floor`, `Door`, etc. — see `compatibility.md` §3) aren't
-  yet exposed to Python. Even in Rust they are a synthesized-fixture
-  registry, not wired into `iter_elements` on real project files.
-  `rvt-doc` and the Rust `elements::all_decoders()` API cover the
-  registry surface.
+- **The decoder registry.** `decoded_elements()` lists the production
+  walker's elements, with the typed projection of the seven classes in
+  `rvt.MVP_TYPED_CLASSES`. The 81 classes registered in
+  `elements::all_decoders()` (see [`compatibility.md`](compatibility.md) §3)
+  are not exposed as a registry: the walker decodes the other registered
+  classes generically, and `rvt-doc` and the Rust API list them.
 - **The export model itself.** `write_ifc()` returns the IFC text and
   `export_diagnostics()` its diagnostics, but the in-memory `IfcModel`
   (entities, storeys, materials) is not exposed as Python objects, and
@@ -617,8 +646,10 @@ changes land in:
 - [`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) — the pyo3 binding layer
 - [`python/rvt/__init__.pyi`](../python/rvt/__init__.pyi) — type
   stubs (keep in sync)
-- [`tests/python/test_rvt.py`](../tests/python/test_rvt.py) —
-  pytest coverage against the reference corpus
+- [`tests/python/`](../tests/python/) — pytest: `test_rvt.py` against the
+  reference corpus, and `test_docs_python.py`, which runs every `python`
+  block on this page against the synthetic fixture (a block that shows a
+  signature or a result shape is fenced `text` and is not run)
 
 Do not add Rust code solely to expose something to Python — wire
 through the existing Rust public API where possible.
