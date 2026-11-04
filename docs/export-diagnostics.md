@@ -45,6 +45,44 @@ rvt-ifc model.rvt -o diagnostic.ifc --diagnostic-proxies \
   --diagnostics diagnostic.json
 ```
 
+Where each element was read from is a list as long as the file has elements,
+so it is off unless asked for (#1325):
+
+```bash
+rvt-ifc model.rvt -o model.ifc --diagnostics model.diagnostics.json --element-provenance
+```
+
+adds `decoded.element_provenance` to the sidecar. On the BIM4LCA office as built the table is 4,462,401 bytes of compact JSON (what the library and Python write) against 38,640 bytes of diagnostics without it, about 116 times; the CLI's pretty-printed sidecar grows from 52,677 to 7,370,747 bytes (140 times), Core Interior's from 27,588 to 571,989 and RE1 Architecture's from 13,956 to 85,470 (Measure run 41831418684). Without the flag the sidecar has no such field and is the bytes it
+was before the flag existed. `ExportOptions::with_element_provenance(true)`
+and Python's `export_diagnostics(element_provenance=True)` (and
+`rvt_to_ifc_diagnostics(..., element_provenance=True)`) do the same, and the MCP
+server turns it on for the models it opens. The IFC is the same file either way.
+
+What an element's `offset` is, and what has been measured:
+
+- `offset` is the frame the exporter selected for the element's record, not
+  necessarily the copy a body came from. Among an element's frames, Revit 2024
+  and later (`select_instance_records`) take the one with the greatest vertical
+  extent and, on a tie, the greater `(stream, offset)`, comparing the stream name
+  as text; Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) take the
+  newest, the highest-numbered partition and then the latest offset, with no
+  extent test. A body reader may take another copy: the sketch-line readers take
+  the current one (`current_partitions`, RE-216), which is also the copy
+  `native.stream` names. So `offset` and `native.stream` can name different
+  partitions, and neither is guaranteed to be the copy a body came from;
+  `body_source` names the reader, not its copy.
+- `tests/element_provenance_offsets.rs` reads the bytes at every reported
+  offset on Core Interior, the RE1 models, Einhoven and the BIM4LCA as-built
+  office. Einhoven (Revit 2023) confirmed 13 of 13 first-prologue frames and 71
+  of 71 native records. Not measured: Revit 2008 to 2022, and the
+  second-prologue path of 2023.
+- The schema-walk carrier (`global_latest_schema_walk`) has no element on any of
+  those seven models, so its offset check has not run on any. Its offsets index
+  `Global/Latest` as the walk inflates it (`inflate_stream_auto`); `rvt-dump`
+  inflates that stream with its own routine, and the two are not compared.
+- `native` and `by_carrier` count every element with an ElementId, the
+  omitted ones included.
+
 ## Schema
 
 `schema_version` is currently `1`. Additive fields may appear in a future
@@ -211,6 +249,7 @@ Important nested fields:
 | `decoded.unknown_unit_identifiers` | array | Revit unit identifiers observed but not mapped to IFC units. |
 | `decoded.wall_curve_lengths_feet` | object | The length of each exported wall's native curve in feet, by ElementId (RE-252): one of the two lengths Revit's export may write as the wall's `Qto_WallBaseQuantities.Length`. `tools/re/qtos_vs_ifc.py` reads it to count apart a wall whose two lengths differ. It is not written in the IFC file, and is absent when no wall has one. |
 | `decoded.walls_type_confirmed` | array | The ElementIds of the exported walls whose native `SWall` record names the type the export gives them (RE-253). Where Revit's export gives such a wall another type, `tools/re/qtos_vs_ifc.py` counts its differing `Width` apart. Not written in the IFC file; absent when there is none. |
+| `decoded.element_provenance` | object | Present only with `rvt-ifc --element-provenance` (see CLI above for the size: about 116 times the rest of the diagnostics in compact JSON on the BIM4LCA office). Where each decoded element was read from, by ElementId (#1325): `elements` maps an ElementId to its `carrier` (`partition_element_record_first_prologue`, `partition_element_record_second_prologue`, `global_latest_schema_walk`, `partition_arc_wall`, `partition_area_record`, `partition_derived` or `other`), its `stream` (`Partitions/46`, `Global/Latest`), its `offset` in that stream inflated, the `record_offset` where its ElementId is stored (a partition record header; for a second-prologue frame the enclosing record's, whose id is `enclosing_record_id`, RE-35), its `class_tag` and the `class_name` that resolves to in the file's own schema, its `builtin_category`, and its `native` record (`copies`, which `copy` is named, `stream`, `offset`). An offset indexes the stream as `RevitFile::inflated_partition` returns it, which `rvt-dump` writes as `Partitions_NN.decomp` (#291); for the schema walk it indexes `Global/Latest` inflated as the walk inflates it. `by_carrier` counts every element with an ElementId by carrier, with how many have their offset given (`located`) and how many do not (`unlocated`), whatever the cap of 250,000 listed entries (`omitted_entries` counts the highest ElementIds left out); `unkeyed_elements` counts decoded elements with no ElementId, which have no entry; `native` counts the native records of every element with an ElementId the same way; `layout_release`, `partition_count` and `record_id_bytes` (8 from Revit 2024, 4 before) describe the file. When an element has several partition element record frames, `offset` is the one the exporter selected: on Revit 2024 and later (`select_instance_records`) the frame with the greatest vertical extent and, on a tie, the greater `(stream, offset)`, the stream compared as text; on Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) the newest, with no extent test. A native record in several partitions names the current copy (RE-145, RE-216). A body reader may take another copy (the sketch-line readers take the current one), so `offset` and `native.stream` can name different partitions, and neither is guaranteed to be the copy a body came from. The schema-walk carrier is unmeasured: no model of the offsets test has such an element. Not written in the IFC file; absent for a placeholder export and unless asked for. |
 | `exported.by_ifc_type` | object | Count of exported building elements grouped by STEP entity type. |
 | `exported.building_elements_with_geometry` | integer | Exported elements with enough placement/body data for geometry. |
 | `exported.building_elements_carried_by_parts` | integer | Exported elements with no body of their own because their aggregated parts carry it, as in Revit's export: stairs (RE-39) and curtain walls (RE-46). Not counted in `building_elements_with_geometry`. |

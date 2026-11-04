@@ -108,7 +108,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 ## get_element
 
-One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance, and the file's: Revit release and build, schema class count and ElemTable record layout. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
+One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance (the carrier its record was read from, and its stream and byte offset), and the file's: Revit release and build, schema class count, partition count and ElemTable record layout. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
 
 Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
@@ -172,7 +172,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 ## list_elements
 
-List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, each present only where the model has it. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
+List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
 
 Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
@@ -318,12 +318,21 @@ Where one element's answer comes from. Every element in an answer carries one. F
 |---|---|---|---|
 | `area_body_refusal` | string \| null | no | For an Area with no body, why it has none. |
 | `body_source` | string \| null | no | How the element's body was derived, such as `partition_element_record_bbox` (only its record's box) or `partition_wall_centreline`. |
+| `carrier` | string \| null | no | The kind of record the element was read from, such as `partition_element_record_first_prologue`. |
 | `category` | string \| null | no | The IFC entity the export writes, such as `IFCWALL`. |
 | `class` | string \| null | no | The Revit class the element's record names, such as `Wall`. |
+| `class_name` | string \| null | no | The class that tag resolves to in the file's own schema. |
+| `class_tag` | integer \| null | no | The class tag the record names. |
 | `element_id` | string \| null | no | The Revit ElementId, which the IFC export writes as the `Tag`. |
+| `enclosing_record_id` | string \| null | no | For a frame inside another partition record, the ElementId of that record. |
 | `global_id` | string \| null | no | The IFC GlobalId the export writes: Revit's own where the file yields it, otherwise one derived from the document's identity and the ElementId. |
+| `native_record` | [NativeRecordOut](#nativerecordout) \| null | no | The element's native record, where the export's native passes indexed one. |
+| `offset` | integer \| null | no | Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the greater stream and offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from. |
 | `profile_source` | string \| null | no | Where the plan profile of the body came from. |
+| `provenance_omitted` | boolean \| null | no | True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`). |
+| `record_offset` | integer \| null | no | Where the ElementId is stored: the partition record header it is the first bytes of. |
 | `space_outline_source` | string \| null | no | For a room or space, where its outline came from: `record_box` (the area of its box, not of the room), `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`, `family_body`, and for an Area `area_boundary` or `none`. |
+| `stream` | string \| null | no | The stream the record is in: `Partitions/NN` or `Global/Latest`. |
 
 ### ElementRow
 
@@ -354,6 +363,9 @@ What the file itself says about where its elements come from.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `elem_table` | [ElemTableProvenance](#elemtableprovenance) \| null | no | The record layout of `Global/ElemTable`. |
+| `layout_release` | integer \| null | no | The release whose record layout the file takes, which can be older than the saving release. |
+| `omitted_entries` | integer \| null | no | How many elements the provenance table left out past its cap of 250,000 listed; their record fields are absent and `provenance_omitted` says so. |
+| `partition_count` | integer \| null | no | How many `Partitions/NN` streams the file has. |
 | `revit_build` | string \| null | no | That release's build tag (from `BasicFileInfo`). |
 | `revit_release` | integer \| null | no | The Revit release that saved the file (from `BasicFileInfo`). |
 | `schema_class_count` | integer \| null | no | How many classes the file's embedded schema (`Formats/Latest`) lists. |
@@ -422,6 +434,18 @@ The quality the export must reach, as `rvt-ifc --mode`.
 | "typed-no-geometry" | Require validated typed elements, and write no geometry. |
 | "geometry" | Require at least one element with geometry. |
 | "strict" | Also require project metadata, units, levels and no warnings. |
+
+### NativeRecordOut
+
+The native record the native readers hold for an element.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `class_name` | string \| null | no | The class the record names in the file's schema. |
+| `copies` | integer | yes | In how many partitions the element has a native record. |
+| `copy` | string | yes | Which copy this is: `only`, `current` (the current one of several, RE-216) or `unresolved`. |
+| `offset` | integer \| null | no | Where the record's header starts in that partition inflated. |
+| `stream` | string \| null | no | The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from. |
 
 ### OutputOut
 
