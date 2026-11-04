@@ -1348,7 +1348,8 @@ jobs:
           print(".cursor/environment.json validates against the Cursor environment schema")
           PY
 
-  # The one check the main-protection ruleset requires (C1). It passes only
+  # The one check the main-protection ruleset requires (C1), as `full / CI
+  # passed` when ci-pr.yml calls this for a ready pull request. It passes only
   # when every job above passed or was skipped, so a pull request cannot
   # merge while Corpus health, the writer corpus or IfcOpenShell is still
   # running or has failed, and renaming a job never touches the ruleset.

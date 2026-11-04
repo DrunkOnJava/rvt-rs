@@ -300,12 +300,15 @@ where CI and Measure run, only when it is ready to release.
 The following is the actual state of release infrastructure, not the
 aspirational state. Update this section when you wire up more of it.
 
-- **CI on every push to `main` and on every PR** (`.github/workflows/ci.yml`):
+- **CI on every push to `main` and on every PR** (`.github/workflows/ci.yml`,
+  which a pull request runs through `ci-pr.yml`: in full once ready, only the
+  fast jobs while a draft):
   fmt, clippy, the test matrix (Linux, macOS and Windows, stable, and the
   MSRV), rustdoc, `cargo deny`, `cargo audit`, the docs.rs build preview,
   the Python wheel and its integration tests, IfcOpenShell validation and
-  the witness verdicts, the PII guard and the rest. `CI passed`, the one
-  required check, passes only when every one of them did (see
+  the witness verdicts, the PII guard and the rest. `full / CI passed` (a
+  push to `main` names it `CI passed`), the one required check, passes only
+  when every one of them did (see
   [`docs/maintaining.md`](docs/maintaining.md#pull-requests)).
 - **Publish workflow** (`.github/workflows/publish.yml`), on `v*` tags and
   `workflow_dispatch`: the checks and publish order of step 10. Its

@@ -8,7 +8,7 @@ it is the point of this doc.
 
 The `ifcopenshell-validate` job ("IfcOpenShell validates exports" in
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) is part of
-`CI passed`, the check every merge needs. It exports with the `rvt-ifc` the
+`full / CI passed`, the check every merge needs. It exports with the `rvt-ifc` the
 pull request builds and checks the result against readers rvt-rs did not
 write:
 

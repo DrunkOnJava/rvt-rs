@@ -28,9 +28,9 @@ permissions:
 jobs:
   full:
     if: github.event.pull_request.draft != true
-    uses: ./.github/workflows/ci.yml
+    uses: $/.github/workflows/ci.yml
   fast:
     if: github.event.pull_request.draft == true
-    uses: ./.github/workflows/ci.yml
+    uses: $/.github/workflows/ci.yml
     with:
       fast: true

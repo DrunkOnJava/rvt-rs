@@ -98,7 +98,7 @@ when a release ships.
 
 `rust-version` in `Cargo.toml` is the oldest stable Rust the crate builds on, and
 the MSRV job in CI checks every target (`cargo check --all-targets`) on exactly that release. It is one of the jobs
-`CI passed` requires, named `build + real files / ubuntu-24.04 / msrv` so that
+`full / CI passed` requires, named `full / build + real files / ubuntu-24.04 / msrv` on a pull request so that
 the name does not change when the release does. The MSRV is never lower than the
 floor the 2024 edition sets (1.85), and it moves up when a dependency worth
 taking needs a newer compiler: quick-xml 0.42 needs 1.86 and earcut 0.4.10 and
