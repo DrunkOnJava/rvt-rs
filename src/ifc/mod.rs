@@ -88,6 +88,7 @@ pub mod element_provenance;
 pub mod entities;
 pub mod export_content;
 mod export_pipeline;
+pub mod family_extrusions;
 pub mod from_decoded;
 pub mod gltf;
 pub mod pbr;
