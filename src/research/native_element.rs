@@ -157,8 +157,13 @@ pub fn decode_base(body: &[u8], registry: &Registry) -> Result<ElementBase> {
         );
     }
     if let Some(base) = read_base(body, registry, class_tag, class, element) {
+        match read_base_by_graph(body, registry, class_tag, class, element) {
+            Ok(slow) => crate::prof::compared(&format!("{base:?}"), &format!("{slow:?}")),
+            Err(error) => crate::prof::compared("fast", &format!("slow error {error}")),
+        }
         return Ok(base);
     }
+    crate::prof::fallback();
     read_base_by_graph(body, registry, class_tag, class, element)
 }
 

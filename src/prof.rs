@@ -14,15 +14,35 @@ pub fn at() -> u128 {
     start().elapsed().as_millis()
 }
 
+static COMPARED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static DIFFS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static FALLBACKS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+pub fn compared(fast: &str, slow: &str) {
+    use std::sync::atomic::Ordering::Relaxed;
+    COMPARED.fetch_add(1, Relaxed);
+    if fast != slow && DIFFS.fetch_add(1, Relaxed) < 3 {
+        eprintln!("BASEDIFF fast={fast} slow={slow}");
+    }
+}
+
+pub fn fallback() {
+    FALLBACKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+}
+
 pub fn lap(name: &str) {
+    use std::sync::atomic::Ordering::Relaxed;
     let now = Instant::now();
     let mut last = LAST.lock().unwrap();
     let previous = last.unwrap_or_else(start);
     *last = Some(now);
     eprintln!(
-        "LAP {name} +{} ms @{} ms",
+        "LAP {name} +{} ms @{} ms base_compared={} base_diffs={} base_fallbacks={}",
         now.duration_since(previous).as_millis(),
-        at()
+        at(),
+        COMPARED.load(Relaxed),
+        DIFFS.load(Relaxed),
+        FALLBACKS.load(Relaxed)
     );
 }
 
