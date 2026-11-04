@@ -36,6 +36,7 @@ Hints: read-only: no, may overwrite: yes, idempotent: yes, open world: no.
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
 | `out_path` | string | yes | Where to write the binary glTF. It must end in `.glb`, must not be the model, and must not exist unless `overwrite` is true. |
 | `overwrite` | boolean | no | Replace `out_path` if it exists. Default: false. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -66,6 +67,7 @@ Hints: read-only: no, may overwrite: yes, idempotent: yes, open world: no.
 | `options` | [IfcOptions](#ifcoptions) | no | The `rvt-ifc` switches; none by default. |
 | `out_path` | string | yes | Where to write the IFC4 file. It must end in `.ifc`, must not be the model, and must not exist unless `overwrite` is true. |
 | `overwrite` | boolean | no | Replace `out_path` if it exists. Default: false. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -93,6 +95,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -115,6 +118,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 |---|---|---|---|
 | `id` | [IdArg](#idarg) | yes | The element's Revit ElementId (`1234`) or its 22-character IFC GlobalId, as `list_elements` gives them. |
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -147,6 +151,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -181,6 +186,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | `limit` | integer \| null | no | How many elements to return: 100 by default, at most 1000. |
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
 | `offset` | integer \| null | no | How many matching elements to skip, for the next page. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -204,6 +210,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -223,6 +230,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -233,7 +241,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 ## open_model
 
-Open a Revit file (.rvt, .rfa, .rte or .rft) and decode it once, with the same decode rvt-ifc runs. Every other tool answers from that decoded model and the IFC export is written from it, so an answer and the export cannot disagree. Returns model_id, the Revit release and build, element counts by IFC entity and Revit class, levels, and what was left out (diagnostics, unread streams). Handle lifetime: model_id is opaque and stays valid while this server process runs and the model is among the most recently used ones the server keeps (2 by default); after an eviction or a restart a tool returns an error and you call open_model again. Every tool also takes the file path in place of the model_id. Reads the file only: no Revit install, no network call, nothing is written. What is not read: rvt-rs decodes a subset of a Revit file, and this server answers from the model the IFC export writes. An element's body is often only its record's bounding box (provenance.body_source says which); family files give no family geometry; an element's property sets hold the parameters the export writes, and Revit's own parameter sets need export_ifc with options.revit_property_sets; the Revit Mark parameter is not decoded; files saved by Revit 2015 to 2022, 2026 and 2027 are experimental, and 2008 to 2014 more so (release_support in the summary); get_diagnostics lists what the export skipped or approximated and why. docs/status.md in the rvt-rs repository (https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md) states what is read per release and category.
+Open a Revit file (.rvt, .rfa, .rte or .rft) and decode it once, with the same decode rvt-ifc runs. Every other tool answers from that decoded model and the IFC export is written from it, so an answer and the export cannot disagree. Returns model_id, the Revit release and build, element counts by IFC entity and Revit class, levels, and what was left out (diagnostics, unread streams). Handle lifetime: model_id is opaque and stays valid while this server process runs and the model is among the most recently used ones the server keeps (2 by default); after an eviction or a restart a tool returns an error and you call open_model again. Every tool also takes the file path in place of the model_id. Phase: pass phase (a phase name or ElementId) with the path to read a project phase other than the last, as rvt-ifc --phase does; the model_id then names that phase, and get_diagnostics lists the rooms it leaves out. Reads the file only: no Revit install, no network call, nothing is written. What is not read: rvt-rs decodes a subset of a Revit file, and this server answers from the model the IFC export writes. An element's body is often only its record's bounding box (provenance.body_source says which); family files give no family geometry; an element's property sets hold the parameters the export writes, and Revit's own parameter sets need export_ifc with options.revit_property_sets; the Revit Mark parameter is not decoded; files saved by Revit 2015 to 2022, 2026 and 2027 are experimental, and 2008 to 2014 more so (release_support in the summary); get_diagnostics lists what the export skipped or approximated and why. docs/status.md in the rvt-rs repository (https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md) states what is read per release and category.
 
 Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
@@ -242,6 +250,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 

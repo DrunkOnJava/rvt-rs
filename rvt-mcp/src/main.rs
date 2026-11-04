@@ -16,7 +16,6 @@ mod args;
 mod config;
 mod exports;
 mod output;
-mod pipeline;
 mod schema;
 mod server;
 mod store;

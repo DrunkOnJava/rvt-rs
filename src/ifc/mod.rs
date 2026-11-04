@@ -11,6 +11,12 @@
 //! model as deterministic ISO 10303-21 text, and [`gltf`], [`sheet`] and
 //! [`schedule_csv`] write the same model as GLB, plan SVG and CSV.
 //!
+//! To build the model as `rvt-ifc` builds it (the exporter, the project phase,
+//! the bodies drawn from saved graphics, Revit's property sets, the
+//! base-quantity switch and the record of unread streams), call
+//! [`run_export`] with [`ExportOptions`]: `rvt-ifc`, `rvt-gltf`, the Python
+//! package, the viewer and `rvt-rs-mcp` all do.
+//!
 //! What is read on which release and input, category by category, is in
 //! `docs/supported-profile.md`, and every export's diagnostics name what was
 //! approximated or left out ([`RvtDocExporter::export_with_diagnostics`]).
@@ -80,6 +86,7 @@ pub mod clipping;
 pub mod compare;
 pub mod entities;
 pub mod export_content;
+mod export_pipeline;
 pub mod family_extrusions;
 pub mod from_decoded;
 pub mod gltf;
@@ -98,6 +105,10 @@ mod wall_cut_openings;
 
 pub use export_content::{
     ELEMENT_RECORD_PROPERTY_SET, ExportContentPolicy, is_misleading_proxy_class,
+};
+pub use export_pipeline::{
+    ExportKind, ExportNote, ExportOptions, ExportRun, SavedMeshChoice, run_export,
+    run_export_with_limits, run_export_with_limits_and_control,
 };
 pub use from_decoded::{BuilderOptions, ElementInput, build_ifc_model};
 pub use step_writer::write_step;

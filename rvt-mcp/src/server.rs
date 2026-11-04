@@ -20,7 +20,9 @@ use rvt::control::{CancelToken, ProgressEvent, Stage, WalkerControl};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-use crate::args::{ExportGltfArgs, ExportIfcArgs, GetElementArgs, ListElementsArgs, ModelArgs};
+use crate::args::{
+    ExportGltfArgs, ExportIfcArgs, GetElementArgs, ListElementsArgs, ModelArgs, phase_of,
+};
 use crate::config::Failure;
 use crate::exports::{self, Exported};
 use crate::schema::{
@@ -154,13 +156,14 @@ where
     }
 }
 
-/// The open model of `model` and its default decode.
+/// The open model of `model` (at `phase`) and its default decode.
 fn decode(
     store: &Store,
     model: &str,
+    phase: Option<&str>,
     control: &WalkerControl,
 ) -> Result<(Arc<Entry>, Arc<Computed>), Failure> {
-    let entry = store.open(model)?;
+    let entry = store.open(model, phase)?;
     let computed = entry.computed(store.config(), control)?;
     Ok((entry, computed))
 }
@@ -168,11 +171,11 @@ fn decode(
 async fn summary_answer(
     store: &Arc<Store>,
     context: &RequestContext<RoleServer>,
-    model: String,
+    args: ModelArgs,
 ) -> Result<Json<SummaryOut>, CallToolResult> {
     let store = Arc::clone(store);
     let out = run_job(context, move |control| {
-        let (entry, computed) = decode(&store, &model, control)?;
+        let (entry, computed) = decode(&store, &args.model, phase_of(&args.phase), control)?;
         Ok(views::summary(&entry, &computed))
     })
     .await?;
@@ -203,6 +206,7 @@ impl RvtServer {
         description = concat!(
             "Open a Revit file (.rvt, .rfa, .rte or .rft) and decode it once, with the same decode rvt-ifc runs. Every other tool answers from that decoded model and the IFC export is written from it, so an answer and the export cannot disagree. Returns model_id, the Revit release and build, element counts by IFC entity and Revit class, levels, and what was left out (diagnostics, unread streams). ",
             "Handle lifetime: model_id is opaque and stays valid while this server process runs and the model is among the most recently used ones the server keeps (2 by default); after an eviction or a restart a tool returns an error and you call open_model again. Every tool also takes the file path in place of the model_id. ",
+            "Phase: pass phase (a phase name or ElementId) with the path to read a project phase other than the last, as rvt-ifc --phase does; the model_id then names that phase, and get_diagnostics lists the rooms it leaves out. ",
             "Reads the file only: no Revit install, no network call, nothing is written. ",
             not_read!()
         ),
@@ -219,7 +223,7 @@ impl RvtServer {
         context: RequestContext<RoleServer>,
     ) -> Result<Json<SummaryOut>, CallToolResult> {
         let args = parse::<ModelArgs>("open_model", arguments)?;
-        summary_answer(&self.store, &context, args.model).await
+        summary_answer(&self.store, &context, args).await
     }
 
     #[tool(
@@ -243,7 +247,7 @@ impl RvtServer {
         context: RequestContext<RoleServer>,
     ) -> Result<Json<SummaryOut>, CallToolResult> {
         let args = parse::<ModelArgs>("get_summary", arguments)?;
-        summary_answer(&self.store, &context, args.model).await
+        summary_answer(&self.store, &context, args).await
     }
 
     #[tool(
@@ -269,7 +273,7 @@ impl RvtServer {
         let args = parse::<ListElementsArgs>("list_elements", arguments)?;
         let store = Arc::clone(&self.store);
         let out = run_job(&context, move |control| {
-            let (entry, computed) = decode(&store, &args.model, control)?;
+            let (entry, computed) = decode(&store, &args.model, phase_of(&args.phase), control)?;
             let filter = ElementFilter {
                 category: args
                     .category
@@ -309,7 +313,7 @@ impl RvtServer {
         let args = parse::<GetElementArgs>("get_element", arguments)?;
         let store = Arc::clone(&self.store);
         let out = run_job(&context, move |control| {
-            let (entry, computed) = decode(&store, &args.model, control)?;
+            let (entry, computed) = decode(&store, &args.model, phase_of(&args.phase), control)?;
             views::get_element(&entry, &computed, &args.id.text()).map_err(Failure::Message)
         })
         .await?;
@@ -339,7 +343,7 @@ impl RvtServer {
         let args = parse::<ModelArgs>("list_rooms", arguments)?;
         let store = Arc::clone(&self.store);
         let out = run_job(&context, move |control| {
-            let (entry, computed) = decode(&store, &args.model, control)?;
+            let (entry, computed) = decode(&store, &args.model, phase_of(&args.phase), control)?;
             Ok(views::rooms(&entry, &computed))
         })
         .await?;
@@ -369,7 +373,7 @@ impl RvtServer {
         let args = parse::<ModelArgs>("list_levels", arguments)?;
         let store = Arc::clone(&self.store);
         let out = run_job(&context, move |control| {
-            let (entry, computed) = decode(&store, &args.model, control)?;
+            let (entry, computed) = decode(&store, &args.model, phase_of(&args.phase), control)?;
             Ok(views::levels_out(&entry, &computed))
         })
         .await?;
@@ -399,7 +403,7 @@ impl RvtServer {
         let args = parse::<ModelArgs>("get_diagnostics", arguments)?;
         let store = Arc::clone(&self.store);
         let out = run_job(&context, move |control| {
-            let (entry, computed) = decode(&store, &args.model, control)?;
+            let (entry, computed) = decode(&store, &args.model, phase_of(&args.phase), control)?;
             Ok(views::diagnostics_out(&entry, &computed))
         })
         .await?;

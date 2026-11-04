@@ -74,45 +74,32 @@ fn parse_export_quality_mode(mode: &str) -> PyResult<ifc::ExportQualityMode> {
     ifc::ExportQualityMode::parse(mode).map_err(to_py_val)
 }
 
-/// Draw `result`'s default saved-mesh bodies (doors and windows on Revit
-/// 2023 to 2027, `ifc::saved_meshes::default_scope`) when `saved_meshes`, and
-/// recount its diagnostics, as `rvt-ifc` does by default. Saved graphics only
-/// improve bodies: when they cannot be read, the export keeps the bodies it
-/// has and a `RuntimeWarning` says so.
-fn attach_saved_meshes(
+/// The default IFC export of `rf` (`ifc::run_export_with_limits`, the build `rvt-ifc`
+/// runs), drawing doors and windows from their saved meshes (Revit 2023 to
+/// 2027) when `saved_meshes`. Saved graphics only improve bodies: when they
+/// cannot be read, the export keeps the bodies it has and a `RuntimeWarning`
+/// says so.
+fn export_run(
     py: Python<'_>,
     rf: &mut RustRevitFile,
-    result: &mut ifc::ExportResult,
+    mode: ifc::ExportQualityMode,
+    walker_limits: walker::WalkerLimits,
     saved_meshes: bool,
-) -> PyResult<()> {
-    if !saved_meshes {
-        return Ok(());
+) -> PyResult<ifc::ExportRun> {
+    let options = ifc::ExportOptions::default()
+        .with_mode(mode)
+        .with_saved_meshes(if saved_meshes {
+            ifc::SavedMeshChoice::Default
+        } else {
+            ifc::SavedMeshChoice::Off
+        });
+    let run = ifc::run_export_with_limits(rf, &options, walker_limits).map_err(to_py_val)?;
+    for note in run.notes.iter().filter(|note| note.skipped().is_some()) {
+        let category = py.import("builtins")?.getattr("RuntimeWarning")?;
+        py.import("warnings")?
+            .call_method1("warn", (note.to_string(), category))?;
     }
-    let Some(scope) = ifc::saved_meshes::default_scope(rf) else {
-        return Ok(());
-    };
-    match ifc::saved_meshes::attach_scoped_with_control(
-        rf,
-        &mut result.model,
-        scope,
-        &rvt::control::WalkerControl::default(),
-    ) {
-        Ok(_) => {
-            ifc::recount_exported(&mut result.diagnostics, &result.model);
-            ifc::record_unread_streams(&mut result.diagnostics, rf.unread_streams());
-        }
-        Err(e) => {
-            let category = py.import("builtins")?.getattr("RuntimeWarning")?;
-            py.import("warnings")?.call_method1(
-                "warn",
-                (
-                    format!("saved graphics not read, bodies unchanged: {e}"),
-                    category,
-                ),
-            )?;
-        }
-    }
-    Ok(())
+    Ok(run)
 }
 
 fn write_ifc_with_quality_mode(
@@ -140,16 +127,13 @@ fn write_ifc_with_quality_mode_and_limits(
     allow_partial: bool,
     saved_meshes: bool,
 ) -> PyResult<String> {
-    let mut result = ifc::RvtDocExporter
-        .export_with_diagnostics_mode_and_limits(rf, mode, walker_limits)
-        .map_err(to_py_val)?;
-    attach_saved_meshes(py, rf, &mut result, saved_meshes)?;
+    let run = export_run(py, rf, mode, walker_limits, saved_meshes)?;
     // #1075: a stream a resource limit kept from being read leaves the
     // export without what it holds; refuse unless the caller accepts that.
-    if !allow_partial && !rf.unread_streams().is_empty() {
+    if !allow_partial && !run.unread.is_empty() {
         let mut message =
             String::from("part of the file was not read, so the IFC would be incomplete:");
-        for stream in rf.unread_streams() {
+        for stream in &run.unread {
             message.push_str(&format!("\n  {stream}"));
         }
         message.push_str(
@@ -157,8 +141,8 @@ fn write_ifc_with_quality_mode_and_limits(
         );
         return Err(PyValueError::new_err(message));
     }
-    mode.validate(&result.diagnostics).map_err(to_py_val)?;
-    Ok(ifc::write_step(&result.model))
+    mode.validate(&run.diagnostics).map_err(to_py_val)?;
+    Ok(ifc::write_step(&run.model))
 }
 
 fn unread_streams_to_list<'py>(
@@ -757,7 +741,7 @@ impl PyRevitFile {
     }
 
     /// Produce an IFC4 STEP string for this Revit file via
-    /// `ifc::RvtDocExporter`. Document-level export — project name,
+    /// `ifc::run_export_with_limits`. Document-level export — project name,
     /// description, units, classifications. Raises `ValueError` if
     /// the file can't be parsed far enough to produce a model, or if
     /// `mode` quality gates are not met.
@@ -841,11 +825,14 @@ impl PyRevitFile {
     /// it writes.
     #[pyo3(signature = (saved_meshes = true))]
     fn export_diagnostics_json(&mut self, py: Python<'_>, saved_meshes: bool) -> PyResult<String> {
-        let mut result = ifc::RvtDocExporter
-            .export_with_diagnostics_and_limits(&mut self.inner, self.walker_limits)
-            .map_err(to_py_val)?;
-        attach_saved_meshes(py, &mut self.inner, &mut result, saved_meshes)?;
-        serde_json::to_string(&result.diagnostics).map_err(to_py_val)
+        let run = export_run(
+            py,
+            &mut self.inner,
+            ifc::ExportQualityMode::Scaffold,
+            self.walker_limits,
+            saved_meshes,
+        )?;
+        serde_json::to_string(&run.diagnostics).map_err(to_py_val)
     }
 
     /// Produce the default IFC export diagnostics as a Python dict.
@@ -969,11 +956,14 @@ fn read_metadata<'py>(py: Python<'py>, path: &str, redact: bool) -> PyResult<Bou
 #[pyo3(signature = (path, saved_meshes = true))]
 fn rvt_to_ifc_diagnostics(py: Python<'_>, path: &str, saved_meshes: bool) -> PyResult<String> {
     let mut rf = RustRevitFile::open(path).map_err(to_py_io)?;
-    let mut result = ifc::RvtDocExporter
-        .export_with_diagnostics(&mut rf)
-        .map_err(to_py_val)?;
-    attach_saved_meshes(py, &mut rf, &mut result, saved_meshes)?;
-    serde_json::to_string(&result.diagnostics).map_err(to_py_val)
+    let run = export_run(
+        py,
+        &mut rf,
+        ifc::ExportQualityMode::Scaffold,
+        walker::WalkerLimits::default(),
+        saved_meshes,
+    )?;
+    serde_json::to_string(&run.diagnostics).map_err(to_py_val)
 }
 
 /// Compiled Python submodule named `_rvt`. Sits under the
