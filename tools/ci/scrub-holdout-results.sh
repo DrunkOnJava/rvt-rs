@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # Reduce the Measure results of each model fetched without a licence to
-# redistribute it, the held-out models (research/holdout-models.tsv, RE-252)
-# and BIMcollab's example model (research/bimcollab-models.tsv, RE-198), to
-# summary counts before they are uploaded.
+# redistribute it, the held-out models (research/holdout-models.tsv, RE-252),
+# BIMcollab's example model (research/bimcollab-models.tsv, RE-198) and
+# Autodesk's rac_advanced sample scored against an IFC2X3 export that carries
+# no licence (research/rac-advanced-export.tsv, #1354; the main session,
+# 2026-11-04, after Griffin's precedent for BIMcollab), to summary counts
+# before they are uploaded.
 #
 # Usage:
 #   tools/ci/scrub-holdout-results.sh RESULTS_DIR
 #
 # A public repository's artifacts can be downloaded by anyone, so nothing taken
 # from those models per element may be uploaded (Griffin, 2026-10-26). For
-# each RESULTS_DIR/holdout-*/ and RESULTS_DIR/bimcollab-*/ this keeps
+# each RESULTS_DIR/holdout-*/, RESULTS_DIR/bimcollab-*/ and RESULTS_DIR/racadv-*/
+# this keeps
 # counts.txt, made of the summary lines of its probe scores (the wall length
 # rule, with the walls it is wrong on as a count, the export's version, the
 # census of its wall representations, the hours between its save and its
@@ -49,7 +53,7 @@
 set -euo pipefail
 
 RESULTS="${1:?usage: scrub-holdout-results.sh RESULTS_DIR}"
-for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
+for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; do
   [ -d "$dir" ] || continue
   {
     for f in "$dir"probe_score*.txt; do

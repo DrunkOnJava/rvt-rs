@@ -17,7 +17,10 @@
 //! - `rooms`: concentric squares, the shape of a room with holes;
 //! - `unbounded list`: faces whose list of objects counts more than the reader
 //!   resolves;
-//! - `no list`: faces with no list of objects.
+//! - `no list`: faces with no list of objects;
+//! - `columns`: vertical cylinders, the round columns of a room (#1354): 13 of
+//!   them in a room, which the readers draw as voids, and 512 of a radius that
+//!   makes each 1,024 chords, which `PLAN_SEGMENTS_MAX` leaves to the box.
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_re316_hostile_solid
@@ -49,6 +52,24 @@ fn wall(from: (f64, f64), direction: (f64, f64), length: f64) -> Vec<u8> {
     put(&mut face, &[0.0, 0.0, 1.0]);
     put(&mut face, &[direction.0, direction.1, 0.0]);
     face.resize(174, 0xff);
+    face
+}
+
+/// A vertical cylinder of `radius` about `centre`, a full turn, from the floor
+/// to `HEIGHT`, in the 202-byte layout: the plane's 158 bytes with the axis
+/// and the radius after them (#1354).
+fn column(centre: (f64, f64), radius: f64) -> Vec<u8> {
+    let mut face = Vec::with_capacity(202);
+    face.extend_from_slice(&FACE_TAG);
+    face.extend_from_slice(&[0xff; 16]);
+    put(&mut face, &[0.0, 0.0, std::f64::consts::TAU, HEIGHT]);
+    face.resize(85, 0xff);
+    face.push(1);
+    put(&mut face, &[centre.0, centre.1, 0.0]);
+    put(&mut face, &[1.0, 0.0, 0.0]);
+    put(&mut face, &[0.0, 1.0, 0.0]);
+    put(&mut face, &[0.0, 0.0, 1.0, radius]);
+    face.resize(202, 0xff);
     face
 }
 
@@ -136,4 +157,16 @@ fn main() {
         .map(|k| wall((0.0, k as f64 * 0.01), (1.0, 0.0), 100.0))
         .collect();
     run("5000 faces", &many, Some(512), 100.0);
+    let mut room = vec![
+        wall((0.0, 0.0), (1.0, 0.0), 100.0),
+        wall((100.0, 0.0), (0.0, 1.0), 100.0),
+        wall((100.0, 100.0), (-1.0, 0.0), 100.0),
+        wall((0.0, 100.0), (0.0, -1.0), 100.0),
+    ];
+    room.extend((0..13).map(|k| column((10.0 + 6.0 * k as f64, 50.0), 0.4921)));
+    run("room with 13 round columns", &room, Some(17), 100.0);
+    let hostile: Vec<Vec<u8>> = (0..512)
+        .map(|k| column((k as f64 * 0.5, 50.0), 1.0e4))
+        .collect();
+    run("512 columns of 1024 chords", &hostile, Some(512), 100.0);
 }
