@@ -1126,11 +1126,15 @@ an export is checked against its own mesh. `rvt-ifc --family-extrusions`
 instance from its family's extrusions where they reproduce its saved mesh.
 On Core Interior, RE1 and the BIM4LCA office files the first run, which drew
 arcs as arcs, replaced 335 bodies; of the 251 the body scorer matched, 250 had
-Revit's vertices within 0.001 ft of their surface and one did not (the volumes
-suggest a difference in where Revit's tessellation of an arc starts: an
-inference, not a measurement). An instance with an arc in a profile therefore
-keeps its mesh: 64 bodies are replaced, all 64 within 0.001 ft, and every
-scorer row equals the saved-mesh baseline's. The flag reads Revit 2024 to 2027
+Revit's vertices within 0.001 ft of their surface and one did not: Revit's
+export draws that circle (0.2292 ft) as an `IfcCircleProfileDef`, which
+IfcOpenShell cuts into 27 chords, and two half arcs of it come out as 28, so
+no vertex coincides (a count mismatch, reproduced and measured in
+`reports/element-framing/RE-327-family-extrusions.md` §11). An arc over 0.12
+ft in radius is therefore written as short arcs whose chords lie within
+0.00025 ft of it, which bounds Revit's vertices from the surface whatever
+Revit's tessellation; a smaller one is written as the arc, which IfcOpenShell
+cuts within 0.00088 ft of itself. The flag reads Revit 2024 to 2027
 (measured on 2024 and 2025); an earlier file has no instance transform that
 reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions.md`
 §9).
