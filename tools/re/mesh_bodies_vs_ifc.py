@@ -210,6 +210,7 @@ def surface_distance(points, triangles):
     """
     terms = triangle_terms(triangles)
     n = len(points)
+    _t0 = time.time()
     if n * len(triangles) <= EXHAUSTIVE or not (np.isfinite(points).all() and np.isfinite(triangles).all()):
         worst = 0.0
         step = max(1, PAIR_BUDGET // len(triangles))
@@ -232,10 +233,12 @@ def surface_distance(points, triangles):
     order = np.concatenate([order, np.full(-len(order) % BLOCK, order[-1])])
     blocks = order.reshape(-1, BLOCK)
     block_lo, block_hi = lo[blocks].min(axis=1), hi[blocks].max(axis=1)
+    TIMES["setup"] += time.time() - _t0
     seeds = min(SEEDS, len(blocks))
     nearest = np.empty(n)
     step = max(1, PAIR_BUDGET // len(blocks))
     for start in range(0, n, step):
+        _t = time.time()
         p = points[start : start + step]
         gap = np.maximum(np.maximum(block_lo[None] - p[:, None], p[:, None] - block_hi[None]), 0.0)
         bound = np.sqrt(dot(gap, gap))
@@ -245,7 +248,10 @@ def surface_distance(points, triangles):
         for column in range(seeds):
             best = np.minimum(best, distances(p[:, None, :], tuple(x[blocks[seed[:, column]]] for x in terms)).min(axis=1))
             bound[rows, seed[:, column]] = np.inf
+        TIMES["bound+seeds"] += time.time() - _t
+        _t = time.time()
         pair_rows, pair_blocks = np.nonzero(bound <= (best + slack)[:, None])
+        TIMES["block pairs"] += len(pair_rows)
         done = 0
         while done < len(pair_rows):
             stop = int(np.searchsorted(pair_rows, pair_rows[min(len(pair_rows) - 1, done + PAIR_BUDGET // BLOCK)], side="right"))
@@ -270,20 +276,41 @@ def surface_distance(points, triangles):
             row, tri = row[keep], tri[keep]
             np.minimum.at(best, row, distances(p[row][:, None, :], tuple(x[tri][:, None] for x in terms))[:, 0])
         nearest[start : start + step] = best
+        TIMES["pairs"] += time.time() - _t
+    _t = time.time()
     slivers = np.flatnonzero(sliver)
-    step = max(1, PAIR_BUDGET // n)
-    for start in range(0, len(slivers), step):
-        part = slivers[start : start + step]
-        nearest = np.minimum(nearest, distances(points[:, None, :], tuple(x[part] for x in terms)).min(axis=1))
+    TIMES["slivers n"] += len(slivers)
+    if len(slivers):
+        near = tuple(x[slivers] for x in terms)
+        near_lo, near_hi = lo[slivers], hi[slivers]
+        step = max(1, (PAIR_BUDGET // 4) // len(slivers))
+        for start in range(0, n, step):
+            p = points[start : start + step]
+            held = nearest[start : start + step]
+            gap = np.maximum(np.maximum(near_lo[None] - p[:, None], p[:, None] - near_hi[None]), 0.0)
+            floor = np.minimum(np.sqrt(dot(gap, gap)), np.abs(dot(p[:, None, :] - near[0][None], near[3][None])))
+            row, col = np.nonzero(floor <= (held + slack)[:, None])
+            for done in range(0, len(row), PAIR_BUDGET):
+                r, c = row[done : done + PAIR_BUDGET], col[done : done + PAIR_BUDGET]
+                np.minimum.at(held, r, distances(p[r][:, None, :], tuple(x[c][:, None] for x in near))[:, 0])
+                TIMES["sliver pairs kept"] += len(r)
+    TIMES["sliver"] += time.time() - _t
+    TIMES["pruned calls"] += 1
     return float(nearest.max())
 
 
 def sample(triangles):
-    points = np.unique(triangles.reshape(-1, 3), axis=0)
+    """The body's distinct vertices in lexicographic order, every `step`th of them so that
+    at most VERTEX_CAP are kept (what `np.unique(axis=0)` gives, sorted without its
+    structured-array comparison)."""
+    vertices = triangles.reshape(-1, 3)
+    vertices = vertices[np.lexsort((vertices[:, 2], vertices[:, 1], vertices[:, 0]))]
+    points = vertices[np.r_[True, (vertices[1:] != vertices[:-1]).any(axis=1)]]
     step = max(1, -(-len(points) // VERTEX_CAP))
     return points[::step]
 
 
+TIMES = collections.defaultdict(float)
 SCORING = {}
 
 
@@ -337,68 +364,23 @@ def experiment(ours, ref, tags):
     old = importlib.util.module_from_spec(spec)
     sys.modules["old"] = old
     spec.loader.exec_module(old)
-    buckets = collections.defaultdict(float)
-    counts = collections.Counter()
-    ctx = {}
-    real_distances = old.distances
-
-    def timed_distances(p, terms):
-        t = time.time()
-        r = real_distances(p, terms)
-        key = (ctx["mode"], terms[0].ndim)
-        buckets[key] += time.time() - t
-        counts[key] += 1
-        return r
-
-    old.distances = timed_distances
-    real_sd = old.surface_distance
-    sliver_total = [0]
-
-    def sd(points, triangles):
-        ctx["mode"] = "pruned" if len(points) * len(triangles) > old.EXHAUSTIVE else "exh"
-        return real_sd(points, triangles)
-
     SCORING.update(ours=ours, ref=ref)
     t = time.time()
     res_old = []
     for tag in tags:
         a, b = ours[tag][2], ref[tag][2]
         rv, ov = old.volume(b), old.volume(a)
-        res_old.append((ov / rv if rv > 0 else float("inf"), sd(old.sample(b), a), sd(old.sample(a), b)))
-    t_old = time.time() - t
-    log(f"experiment: old serial {t_old:.1f}s; distances time by (mode, terms ndim): {dict((str(k), round(v, 2)) for k, v in buckets.items())}; calls {dict((str(k), v) for k, v in counts.items())}")
+        res_old.append((ov / rv if rv > 0 else float("inf"), old.surface_distance(old.sample(b), a), old.surface_distance(old.sample(a), b)))
+    log(f"experiment: old serial {time.time() - t:.1f}s")
+    TIMES.clear()
     t = time.time()
     res_new = [score_pair(tag) for tag in tags]
-    t_new = time.time() - t
-    log(f"experiment: new serial {t_new:.1f}s, identical to old: {res_new == res_old}, mismatches {sum(a != b for a, b in zip(res_new, res_old))}")
-    import concurrent.futures as cf
-
+    log(f"experiment: new serial {time.time() - t:.1f}s, identical to old: {res_new == res_old}, mismatches {sum(a != b for a, b in zip(res_new, res_old))}")
+    log(f"experiment: new stages {dict((k, round(v, 2)) for k, v in TIMES.items())}")
     cpus = os.cpu_count()
-    t = time.time()
-    with cf.ThreadPoolExecutor(cpus) as pool:
-        res_thread = list(pool.map(score_pair, tags))
-    log(f"experiment: new threads x{cpus} {time.time() - t:.1f}s, identical: {res_thread == res_old}")
     t = time.time()
     res_proc = score_all(ours, ref, tags)
     log(f"experiment: new processes x{cpus} {time.time() - t:.1f}s, identical: {res_proc == res_old}")
-    sample_old = sample_new = 0.0
-    same = 0
-    for tag in tags:
-        for tri in (ours[tag][2], ref[tag][2]):
-            t = time.time()
-            x = sample(tri)
-            sample_old += time.time() - t
-            t = time.time()
-            pts = tri.reshape(-1, 3)
-            order = np.lexsort((pts[:, 2], pts[:, 1], pts[:, 0]))
-            srt = pts[order]
-            keep = np.r_[True, (srt[1:] != srt[:-1]).any(axis=1)]
-            uniq = srt[keep]
-            step = max(1, -(-len(uniq) // VERTEX_CAP))
-            y = uniq[::step]
-            sample_new += time.time() - t
-            same += x.tobytes() == y.tobytes()
-    log(f"experiment: sample np.unique {sample_old:.1f}s, lexsort {sample_new:.1f}s, byte-identical {same} of {2 * len(tags)}")
     SCORING.clear()
 
 
