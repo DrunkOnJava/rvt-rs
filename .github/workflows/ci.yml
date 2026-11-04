@@ -258,6 +258,14 @@ jobs:
       - name: Run the API documentation's examples
         if: runner.os == 'Linux' && matrix.label != 'msrv'
         run: cargo test --profile ci --doc
+      # The unit tests of pure helpers (CONTRIBUTING.md, "Tests"): functions
+      # with no file, network, process or clock I/O, tested on the ways they
+      # can fail, beside the end-to-end checks and never in place of them. The
+      # self dev-dependency turns on `unstable-research` for them. Linux only,
+      # as the doc tests are.
+      - name: Run the pure helpers' unit tests
+        if: runner.os == 'Linux' && matrix.label != 'msrv'
+        run: cargo test --profile ci --lib
       # Real-file, end-to-end CLI and contract checks only; the manifest
       # names every tests/*.rs target and the script fails on one it does
       # not classify, so a new target cannot run or skip unnoticed (#206).
