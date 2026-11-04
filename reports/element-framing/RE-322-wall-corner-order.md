@@ -68,7 +68,7 @@ The faces a wall stops at are the other wall's faces where its own line ends, no
 - the faces of the walls that decide agree to 1e-3 ft;
 - the wall has one layer, or has several and stops against walls of one layer each.
 
-Then the end is, every layer alike: at the near face of the earlier perpendicular walls; else at the joint if a wall that continues the wall is listed before the first perpendicular wall after it (and every continuing wall's line ends on the joint); else at the far face of the perpendicular walls after it. `attach_wall_corner_reaches` writes it as the wall's join reach (and as each layer's, for a layered wall), in place of the reach a join list or a T joint gave the end, and names no partner: a corner of three has none.
+Then the end is, every layer alike: at the near face of the earlier perpendicular walls; else at the joint if a wall that continues the wall is listed before the first perpendicular wall after it (and every continuing wall's line ends on the joint); else at the far face of the perpendicular walls after it. `attach_wall_corner_reaches` writes it as the wall's join reach (and as each layer's, for a layered wall), in place of the reach a join list or a T joint gave the end, and names no partner: a corner of three has none. So an end it reads loses the `JoinStartWallElementId` and `JoinStartRunsThrough` that RE-70's lists gave it (the viewer's "stops at" link), also where one perpendicular wall decides it.
 
 The tally of the scorer's reading of the rule, over the same data as section 1 (the scorer leaves out a corner with a wall that has no body in Revit's export, which the exporter does not):
 
@@ -111,7 +111,7 @@ Run [41759839869](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41759839869
 | ends within 0.001 ft (`wall_ends_cv_vs_ifc`) | 1,073 of 1,212 | 1,103 | 978 of 1,178 | 986 | 16 of 18 | 18 |
 | Revit quantities equal (`qtos_vs_ifc`) | 29,448 | 29,472 | 29,762 | 29,777 | | |
 
-End for end (`wall_corner_ends_vs_ifc` DATA, runs 41753373378 and 41759839869): as built 30 ends go from off to right and none from right to off; 28 walls gain both ends and none loses them. At permit 8 ends go from off to right, none the other way, and 8 walls gain both ends. The scorer's reading of the rule fixes 9 permit ends and the exporter 8: the start of wall 2639982, a bar of unequal thickness with a layered wall off the line, is read by the scorer only. The one quantity that differs was there before. Layer sets and layer bands are unchanged. Core Interior's 360 walls stay 360 of 360, and its IFC and RE1's are byte for byte as before; `18_WallJoins` changes at walls 4511 and 4567. The other R2025 models were byte for byte as before at the first rule (run 41756871771); the unfiltered run on the final head repeats that.
+End for end (`wall_corner_ends_vs_ifc` DATA, runs 41753373378 and 41759839869): as built 30 ends go from off to right and none from right to off; 28 walls gain both ends and none loses them. Six ends that were right as built move by 3e-6 to 1.3e-5 ft, inside the tolerance (walls 2114504, 3098955 at both ends, 3121295, 3121883 and 3128081): their face now comes from where the other wall's line ends, not from the joint, and the last digits differ. At permit 8 ends go from off to right, none the other way, and 8 walls gain both ends. The scorer's reading of the rule fixes 9 permit ends and the exporter 8: the start of wall 2639982, a bar of unequal thickness with a layered wall off the line, is read by the scorer only. The one quantity that differs was there before. Layer sets and layer bands are unchanged. Core Interior's 360 walls stay 360 of 360, and its IFC and RE1's are byte for byte as before; `18_WallJoins` changes at walls 4511 and 4567. The other R2025 models were byte for byte as before at the first rule (run 41756871771); the unfiltered run on the final head repeats that.
 
 ## 8. What it does not cover
 
@@ -123,7 +123,7 @@ End for end (`wall_corner_ends_vs_ifc` DATA, runs 41753373378 and 41759839869): 
 ## 9. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref re-322-wall-corners -f ref=edc7bb082eb9e3300c1607a5072e235697d0f4f3 -f base=none -f nordic=true -f r2025=true \
+gh workflow run measure.yml --ref main -f ref=edc7bb082eb9e3300c1607a5072e235697d0f4f3 -f base=none -f nordic=true -f r2025=true \
   -f models="nordic-office-as-built nordic-office-permit core-interior re1-architecture r2025-18_WallJoins" \
   -f scorers="wall_bodies_vs_ifc wall_ends_cv_vs_ifc wall_ends_list wall_layers_vs_ifc layer_sets_vs_ifc qtos_vs_ifc" \
   -f probe=probe_re322_wall_corners -f probe_scorer=wall_corner_ends_vs_ifc -f keep_ifc=true
