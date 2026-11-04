@@ -125,4 +125,4 @@ The probe prints, per file, the residual fields' grammar names, descriptors and 
 
 ## 8. Identity
 
-Measure 41757335670, `-f base=main -f nordic=true -f r2025=true -f samples=true -f families=true -f scorers=none`, head 1a8427d5: *results below*.
+Measure 41757335670, `-f base=main -f nordic=true -f r2025=true -f samples=true -f families=true -f scorers=none`, head 1a8427d5 (the commits after it add this report only) against `main` at 44b0b46c: 105 items, the reference models, the BIM4LCA office, puzzbobb's R2025 models, the 58 sample projects and the 13 families. The 92 IFC exports (`ifc.sha256`), their 92 `diagnostics.json`, the 71 `rvt-info` outputs (`info.json`, `info.exit`) and the 58 `schema.txt` are byte-identical between base and head, and the scorer comparison is empty: no export and no `rvt-info` output moved. What moves is `rvt-schema`'s JSON for the reclassified fields (`Unknown` becomes `PointerArray`, `PointerContainer` or `Flagged`, and `ZoningAppInfo::first` becomes `ElementIdRef` on 2026); Measure does not compare it, and the `schema-table` JSON schema has the two new branches.
