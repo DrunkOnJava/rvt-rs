@@ -46,7 +46,8 @@ impl From<CliExportQualityMode> for ExportQualityMode {
         rvt-ifc model.rvt                     writes model.ifc next to the input\n  \
         rvt-ifc model.rvt -o out.ifc --diagnostics out.diagnostics.json\n  \
         rvt-ifc model.rvt --diagnostics out.diagnostics.json --anonymize   to post publicly\n  \
-        rvt-ifc model.rvt --mode geometry\n\n\
+        rvt-ifc model.rvt --mode geometry\n  \
+        rvt-ifc model.rvt --phase \"Working Drawings\"   export that phase, not the last\n\n\
         SOURCE_DATE_EPOCH (Unix seconds) sets the time the IFC header and owner\n\
         history record, so two exports of the same file are the same bytes.\n\n\
         Exit status 3: a resource limit kept part of the file from being read, so\n\
@@ -165,6 +166,14 @@ struct Args {
     /// on a 32-bit build).
     #[arg(long, value_name = "BYTES")]
     max_inflate_bytes: Option<usize>,
+    /// Export this phase, by its name (exactly) or its ElementId, instead of
+    /// the project's last. A name is matched first and an ElementId only
+    /// when no phase has that name, so a name made of digits wins. Revit's
+    /// export shows one phase: an element that does not exist in it, and a
+    /// room whose own phase is not it, are left out. An unknown phase is an
+    /// error that lists the file's phases (RE-326).
+    #[arg(long, value_name = "NAME|ID", conflicts_with = "placeholder")]
+    phase: Option<String>,
     /// Raise the stream, inflate and walker-scan limits for large models:
     /// streams up to 2 GiB, 8 GiB inflated. A model whose largest partition
     /// is 1 GiB stored needs several GB of memory.
@@ -214,6 +223,9 @@ fn run(args: Args) -> anyhow::Result<()> {
             args.large_model,
         ),
     )?;
+    if let Some(phase) = &args.phase {
+        rf.set_export_phase(phase)?;
+    }
     let quality_mode = ExportQualityMode::from(args.mode);
     let walker_limits = walker_limits_from_args(&args);
 
@@ -954,6 +966,7 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
                 "element_record_without_volume" => "without a 3D body",
                 "element_record_in_non_primary_design_option" => "in non-primary design options",
                 "element_record_empty_curtain_panel" => "empty curtain panels",
+                "room_not_in_export_phase" => "rooms in a phase other than the export phase",
                 "element_record_family_space_without_body" => {
                     "family instances written as spaces whose family draws no model form"
                 }
