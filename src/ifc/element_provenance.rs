@@ -197,8 +197,8 @@ pub enum CopyRule {
     /// One frame or partition of the record, as the reader's scan kept it,
     /// without the record's other copies being compared: the last frame of a
     /// type symbol whose frames do not agree, the solids of a room, read in
-    /// the room's own partition only, and the first frame of each sketch line
-    /// of a roof by extrusion.
+    /// the room's own partition only, the first frame of each sketch line of
+    /// a roof by extrusion, and the records of a family's embedded document.
     Frame,
 }
 
@@ -923,6 +923,7 @@ const PROFILE_FRAME_READERS: &[&str] = &[
     "type_hollow_section",
     "type_i_section",
     "pipe_connectors",
+    "family_forms",
 ];
 
 /// The readers whose value a body with this `BodySource` is drawn from (#1360):
@@ -945,6 +946,9 @@ fn body_readers(body: &str) -> &'static [&'static str] {
         ec::WALL_ARC_BODY_SOURCE => &["bounded_arc"],
         ec::INSTANCE_TURNED_BODY_SOURCE | ec::INSTANCE_ORIENTED_BODY_SOURCE => {
             &["instance_transform"]
+        }
+        super::family_extrusions::FAMILY_EXTRUSION_BODY_SOURCE => {
+            &[SELECTED_FRAME_READER, "instance_transform", "family_forms"]
         }
         super::saved_meshes::SAVED_MESH_BODY_SOURCE => &["saved_graphics"],
         ec::SPIRAL_RUN_BODY_SOURCE => &["native_run"],

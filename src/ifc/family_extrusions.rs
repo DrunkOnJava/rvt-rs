@@ -170,8 +170,16 @@ fn root_ids(
 
 /// The solids of a family's visible extrusions, or `None` where it has a
 /// void or an extrusion the reader does not rebuild.
-fn family_parts(document: &FormDocument) -> Option<Vec<ExtrusionSolid>> {
+///
+/// With the solids, where `recording` asks, the records of the document they
+/// were read from (#1368): each extrusion, its sketch plane and its sketch's
+/// curves. Not asked, none is collected.
+fn family_parts(
+    document: &FormDocument,
+    recording: bool,
+) -> Option<(Vec<ExtrusionSolid>, BTreeSet<u64>)> {
     let mut parts = Vec::new();
+    let mut records = BTreeSet::new();
     for id in document.extrusion_ids() {
         let extrusion = document.extrusion(id).ok()?;
         if extrusion.cutting {
@@ -181,8 +189,54 @@ fn family_parts(document: &FormDocument) -> Option<Vec<ExtrusionSolid>> {
             continue;
         }
         parts.push(extrusion.default_solid().ok()?);
+        if recording {
+            records.insert(extrusion.id);
+            records.insert(extrusion.plane_id);
+            records.extend(extrusion.curve_ids.iter().copied());
+        }
     }
-    (!parts.is_empty()).then_some(parts)
+    (!parts.is_empty()).then_some((parts, records))
+}
+
+/// Note, for the instance `id` now drawn from its family's extrusions, the
+/// records of the family's document they were rebuilt from, one part for each
+/// (#1368). The instance's transform is the `instance_transform` source the
+/// transform scan noted for it.
+fn note_forms(
+    rf: &mut crate::RevitFile,
+    id: u64,
+    family: u64,
+    forms: &BTreeMap<u64, BTreeSet<u64>>,
+    places: &native_family_forms::RecordPlaces,
+) {
+    use super::element_provenance::{CopyRule, SourcePart, ValueSource};
+    let Ok(instance) = u32::try_from(id) else {
+        return;
+    };
+    let mut parts = Vec::new();
+    for record in forms.get(&family).into_iter().flatten() {
+        let (Some((stream, offset)), Ok(element_id)) =
+            (places.get(&(family, *record)), u32::try_from(*record))
+        else {
+            // A record with no place (its group is not the partition's own
+            // bytes) leaves the source unnoted: a part list that left a record
+            // out would not be the records the body was rebuilt from.
+            return;
+        };
+        parts.push(SourcePart {
+            element_id,
+            stream: stream.clone(),
+            offset: *offset,
+        });
+    }
+    if parts.is_empty() {
+        return;
+    }
+    let copies = parts.len();
+    rf.note_value_source(
+        instance,
+        ValueSource::from_parts("family_forms", CopyRule::Frame, copies, parts),
+    );
 }
 
 /// `solid`, a solid in a family's coordinates, in the frame of an element
@@ -423,23 +477,31 @@ pub fn attach_with_control(
         .iter()
         .map(|class| class.to_string())
         .collect();
-    let records = native_family_forms::family_records_in(
+    // The records' places are kept only while the handle records value
+    // sources (`--element-provenance`).
+    let recording = rf.recording_value_sources();
+    let (records, places) = native_family_forms::family_records_at(
         rf,
         &families,
         &classes,
         &native_document::Options::default().releases,
         None,
+        recording,
     )?;
     report.families = records.len();
     let mut parts: BTreeMap<u64, Vec<ExtrusionSolid>> = BTreeMap::new();
+    let mut forms: BTreeMap<u64, BTreeSet<u64>> = BTreeMap::new();
     for (family, items) in records {
         control.check()?;
         let mut document = FormDocument::default();
         for (id, graph) in items {
             document.insert(id, graph);
         }
-        if let Some(solids) = family_parts(&document) {
+        if let Some((solids, used)) = family_parts(&document, recording) {
             parts.insert(family, solids);
+            if recording {
+                forms.insert(family, used);
+            }
         }
     }
     report.families_rebuilt = parts.len();
@@ -460,10 +522,11 @@ pub fn attach_with_control(
 
     for (id, index) in &by_id {
         control.check()?;
-        let Some(solids) = symbol_of
+        let family = symbol_of
             .get(id)
             .and_then(|symbol| family_of_symbol.get(symbol))
-            .and_then(|family| parts.get(family))
+            .copied();
+        let Some((family, solids)) = family.and_then(|family| Some((family, parts.get(&family)?)))
         else {
             report.not_rebuilt += 1;
             continue;
@@ -539,6 +602,9 @@ pub fn attach_with_control(
         }
         report.replaced += 1;
         report.with_arcs += usize::from(with_arcs);
+        if recording {
+            note_forms(rf, *id, family, &forms, &places);
+        }
     }
     Ok(report)
 }
