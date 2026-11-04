@@ -25,25 +25,31 @@ The key is a sha256 over:
     which carry the export time (the hash tools/ci/measure-reference-models.sh
     writes to ifc.sha256), so a rebuild that writes the same model hits;
   - the scorer and every module of tools/re and tools/ci it can reach, by
-    import, importlib path or name (a module it only mentions is included);
+    import, importlib path or name (a module it only mentions is included),
+    and every file under tools/re and tools/ci that is not Python (the Measure
+    script, the requirements, the schemas), whichever the scorer reads;
   - the value of every environment variable the closure reads, except the two
     that only size the mesh cache (RVT_MESH_CACHE, RVT_MESH_WORKERS);
   - the files a scorer reads that its arguments do not name (EXTRA_INPUTS);
-  - the Python and platform, the sha256 of tools/ci/requirements-ifc.txt, the
-    installed version of every package it pins, the versions IfcOpenShell and
-    numpy report, and RVT_IFC_FLAGS.
+  - the Python minor version and platform, the sha256 of
+    tools/ci/requirements-ifc.txt, the installed version of every package it
+    pins, the versions IfcOpenShell and numpy report, RVT_IFC_FLAGS, and this
+    file's own sha256 (so a change to what is kept or looked up starts a cache).
 
 A step is not cached when its closure does something the key cannot see: lists
 or walks a directory, takes a directory name from an argument, reads a file
 it names itself, runs a program, draws a random number or a date, reads the
-IFC's export time, or reads an environment variable by a computed name. The
-models that Measure keeps only counts of (`holdout-*`, `bimcollab-*`, the
-directories tools/ci/scrub-holdout-results.sh reduces) are never looked up or
-stored, because the Actions cache of a public repository can be restored by a
-workflow a fork's pull request changes, so what the scrub removes must not be in
-it; each entry names its model, and `finish` removes any that names one of
-those or none. Only status 0 is kept: a scorer that crashed, ran out of time or of
-memory is run again.
+IFC's export time, or reads an environment variable by a computed name; or when
+an argument is a directory. The models that Measure keeps only counts of, or
+once did (`holdout-*`, `bimcollab-*`, the directories
+tools/ci/scrub-holdout-results.sh reduces, and `spent-*`, a pair that left the
+held-out list and came back), are never looked up or stored, because the Actions
+cache of a public repository can be restored by a workflow a fork's pull request
+changes, so what the scrub removes must not be in it; each entry names its model,
+and `finish` removes any that names one of those or none. Only status 0 is kept,
+and only if neither the output nor any file the step also wrote shows a failure a
+rerun could mend, or is over 4 MiB: a scorer that crashed, ran out of time or of
+memory is run again. An entry that lacks a file the step wrote is a miss.
 """
 
 import argparse
@@ -64,9 +70,11 @@ CI_DIR = os.path.dirname(os.path.abspath(__file__))
 RE_DIR = os.path.join(os.path.dirname(CI_DIR), "re")
 REQUIREMENTS = os.path.join(CI_DIR, "requirements-ifc.txt")
 
-FORMAT = 1
+FORMAT = 2
 NEUTRAL_ENV = {"RVT_MESH_CACHE", "RVT_MESH_WORKERS"}
-HELD_OUT = ("holdout-*", "bimcollab-*")
+# BIM Whale's AdvancedProject was spent, then held out again (2026-11-03,
+# research/holdout-archive-models.tsv): a spent pair's results are not safe either.
+HELD_OUT = ("holdout-*", "bimcollab-*", "spent-*")
 MAX_ENTRY_BYTES = 4 * 1024 * 1024
 STALE_SECONDS = 3 * 24 * 3600
 # Output that shows a failure a rerun could mend, whatever the status says.
@@ -338,8 +346,21 @@ def fingerprint():
                 reported[name] = value if isinstance(value, str) else None
             except Exception as error:
                 reported[name] = f"unavailable: {type(error).__name__}"
+        with open(os.path.abspath(__file__), "rb") as own:
+            helper = sha(own.read())
+        others = []
+        for directory in (RE_DIR, CI_DIR):
+            for base, names, files in os.walk(directory):
+                names.sort()
+                for name in sorted(files):
+                    if not name.endswith(".py") and "__pycache__" not in base:
+                        path = os.path.join(base, name)
+                        with open(path, "rb") as handle:
+                            others.append(f"{os.path.relpath(path, os.path.dirname(CI_DIR))} {sha(handle.read())}")
         found = {
             "format": FORMAT,
+            "helper": helper,
+            "other files": sha("\n".join(others).encode()),
             # The minor release, not the patch: the runner image a job lands on
             # moves the patch (3.12.15 to 3.12.16 in run 41769277902, which cost
             # two of its six shards every hit), and the libraries that decide
@@ -376,6 +397,8 @@ def make_key(args, script, script_args):
         full = os.path.abspath(arg)
         if full in outputs:
             tokens.append(["output", arg])
+        elif os.path.isdir(arg):
+            raise Uncacheable("an argument is a directory")
         elif os.path.isfile(arg):
             own = os.path.dirname(full) == directory
             tokens.append(["file", arg, file_digest(arg, own and arg.endswith(".ifc"))])
@@ -408,7 +431,7 @@ def lookup(args):
     if not root:
         return 2
     if is_held_out(os.path.basename(os.path.abspath(args.dir))):
-        log(f"not cached {label}: held out, only its counts leave the runner")
+        log(f"not cached {label}: held out now or once, only counts of it leave the runner")
         return 2
     script, *script_args = args.command
     try:
@@ -419,12 +442,13 @@ def lookup(args):
     os.makedirs(os.path.dirname(keyfile(args)), exist_ok=True)
     atomic_write(keyfile(args), key.encode("ascii"))
     entry = entry_path(root, key)
-    if os.path.isfile(os.path.join(entry, "out")):
+    complete = os.path.isfile(os.path.join(entry, "out")) and all(
+        os.path.isfile(os.path.join(entry, "extra-" + os.path.basename(path))) for path in args.extra
+    )
+    if complete:
         shutil.copyfile(os.path.join(entry, "out"), args.dest)
         for path in args.extra:
-            kept = os.path.join(entry, "extra-" + os.path.basename(path))
-            if os.path.isfile(kept):
-                shutil.copyfile(kept, path)
+            shutil.copyfile(os.path.join(entry, "extra-" + os.path.basename(path)), path)
         stale = time.time() - os.stat(entry).st_mtime > STALE_SECONDS
         os.utime(entry)
         with open(os.path.join(args.dir, "timings.log"), "a", encoding="utf-8") as timings:
@@ -448,13 +472,23 @@ def store(args):
     if status is None:
         last = out.rstrip(b"\n").rsplit(b"\n", 1)[-1]
         status = int(last[5:]) if last.startswith(b"exit ") and last[5:].isdigit() else -1
-    text = out.decode("utf-8", "replace")
     if status != 0:
         log(f"not kept {label} {key[:12]}: status {status}")
         return 0
-    if len(out) > MAX_ENTRY_BYTES or any(mark in text for mark in TRANSIENT):
-        log(f"not kept {label} {key[:12]}: output too large or shows a failure to repeat")
-        return 0
+    # The output and every file the step also wrote: each must be there, under
+    # the size cap, and show no failure a rerun could mend (a check that raised
+    # prints it into its file and may still exit 0).
+    contents = [("output", out)]
+    for path in args.extra:
+        if not os.path.isfile(path):
+            log(f"not kept {label} {key[:12]}: {os.path.basename(path)} was not written")
+            return 0
+        with open(path, "rb") as handle:
+            contents.append((os.path.basename(path), handle.read()))
+    for name, data in contents:
+        if len(data) > MAX_ENTRY_BYTES or any(mark in data.decode("utf-8", "replace") for mark in TRANSIENT):
+            log(f"not kept {label} {key[:12]}: {name} is over the size cap or shows a failure to repeat")
+            return 0
     entry = entry_path(root, key)
     if os.path.isdir(entry):
         return 0
@@ -462,8 +496,7 @@ def store(args):
     os.makedirs(scratch)
     shutil.copyfile(args.dest, os.path.join(scratch, "out"))
     for path in args.extra:
-        if os.path.isfile(path):
-            shutil.copyfile(path, os.path.join(scratch, "extra-" + os.path.basename(path)))
+        shutil.copyfile(path, os.path.join(scratch, "extra-" + os.path.basename(path)))
     with open(os.path.join(scratch, "meta.json"), "w", encoding="utf-8") as meta:
         json.dump({"model": os.path.basename(os.path.abspath(args.dir)), "step": args.step}, meta)
     os.makedirs(os.path.dirname(entry), exist_ok=True)

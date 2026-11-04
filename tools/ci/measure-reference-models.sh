@@ -66,10 +66,10 @@
 # (tools/ci/measure-cache.py, docs/maintaining.md); its `<step> cached` line
 # stands for its time in timings.log, and OUT_DIR/score-cache-<shard>.log (written
 # by the workflow) lists each hit and miss. Exports, rvt-info, rvt-gltf, the
-# witness exports and probes always run, and the held-out models and BIMcollab's
-# (holdout-*, bimcollab-*), of which only counts leave the runner, are never
-# looked up or stored: the Actions cache is not private to the workflows that
-# may change it.
+# witness exports and probes always run, and the held-out models, BIMcollab's
+# and the pairs once held out (holdout-*, bimcollab-*, spent-*), of which only
+# counts leave the runner, are never looked up or stored: the Actions cache is
+# not private to the workflows that may change it.
 # A scorer that fails is recorded, not fatal: its output is the evidence.
 # These runs check what the exports hold; their times are not benchmarks
 # (the workflow's `timing` job times both refs on one runner,
@@ -223,7 +223,8 @@ score() { # name args...
 # its directory: a step whose every input is as it was in an earlier run takes
 # that run's output, and `<step> cached` stands for its time in timings.log. A
 # step is kept only if it finished with status 0, and the models whose results
-# only leave the runner as counts are never cached.
+# only leave the runner as counts (holdout-*, bimcollab-*), and the pairs that
+# were once held out (spent-*), are never cached.
 CACHE_TOOL="$(dirname "$0")/measure-cache.py"
 cscore() { # name args...: `score`, from the cache when the scorer and its inputs are unchanged
   local out="$1" dir step found=2; shift
@@ -280,8 +281,12 @@ schema() { # dir max_bytes
     if [ "$(stat -c %s "$1/model.ifc")" -le "$2" ]; then
       # The validation and the EXPRESS rules read one parse of the file; the
       # rules' summary comes back in a file, to follow the validation's.
+      # (validation.jsonl is kept for ports_vs_ifc, which a sample has none of,
+      # and which measure_sample deletes.)
+      local extras="$1/validation.jsonl $1/schema-rules.part"
+      case "$(basename "$1")" in sample-*) extras="$1/schema-rules.part" ;; esac
       echo "validate:"
-      CACHE_EXTRA="$1/validation.jsonl $1/schema-rules.part" cached "$1" schema-validate-rules $(( 2 * STEP_TIMEOUT )) \
+      CACHE_EXTRA="$extras" cached "$1" schema-validate-rules $(( 2 * STEP_TIMEOUT )) \
         "$(dirname "$0")/ifc_validate_summary.py" --both "$1/model.ifc" "$1/validation.jsonl" "$1/schema-rules.part"
       echo "rules:"
       cat "$1/schema-rules.part" 2> /dev/null || true

@@ -106,39 +106,50 @@ writes the cached output and a `<step> cached` line to the model's
   lines, which carry the export time, so a rebuild that writes the same model
   hits; Revit's export; the glTF; the validation findings); the scorer and
   every module of `tools/re` and `tools/ci` it reaches by import, importlib
-  path or name; the value of every environment variable they read (apart from
-  the two that size the mesh cache), which is `PSETS_MISSING` for
-  `psets_vs_ifc` and `qtos_vs_ifc`; the files a scorer reads that its
-  arguments do not name (`qtos_vs_ifc`'s `diagnostics.json`,
-  `unfilled_openings_vs_ifc`'s sibling Revit exports); the Python minor
-  version (not the patch: a runner image moves it, 3.12.15 to 3.12.16 in run
-  41769277902, which cost two of six shards every hit), the platform, the sha256 of `tools/ci/requirements-ifc.txt`, the installed
+  path or name, and every file of `tools/re` and `tools/ci` that is not Python
+  (the Measure script, the requirements, the schemas); the value of every
+  environment variable the scorers read (apart from the two that size the mesh
+  cache), which is `PSETS_MISSING` for `psets_vs_ifc` and `qtos_vs_ifc`; the
+  files a scorer reads that its arguments do not name (`qtos_vs_ifc`'s
+  `diagnostics.json`, `unfilled_openings_vs_ifc`'s sibling Revit exports); the
+  Python minor version (not the patch: a runner image moves it, 3.12.15 to
+  3.12.16 in run 41769277902, which cost two of six shards every hit), the
+  platform, the sha256 of `tools/ci/requirements-ifc.txt`, the installed
   version of every package it pins, the versions IfcOpenShell and numpy
-  report, and `RVT_IFC_FLAGS`. Each entry therefore hashes the rvt-rs IFC,
-  Revit's reference IFC (or the glTF), the command-line arguments, the scorer
-  and its transitive `tools/re` and `tools/ci` imports, the environment
-  variables they read and the library versions.
+  report, `RVT_IFC_FLAGS`, and the sha256 of `measure-cache.py` itself, so a
+  change to what is kept or looked up starts a cache. Each entry therefore
+  hashes the rvt-rs IFC, Revit's reference IFC (or the glTF), the command-line
+  arguments, the scorer and its transitive `tools/re` and `tools/ci` imports,
+  the environment variables they read and the library versions.
 - **What is never cached.** A step whose closure lists or walks a directory,
   takes a directory from an argument, opens a file by a literal path, runs a
   program, draws a number or a date, reads the IFC's export time or reads an
-  environment variable by a computed name: the cache tells the reason in
-  `score-cache-<shard>.log` and runs it. A new scorer that reads anything but the
-  files it is given is run every time until `EXTRA_INPUTS` in
-  `measure-cache.py` names what it reads. A step is kept only if it finished
-  with status 0 and printed nothing that shows a failure a rerun could mend.
-  The held-out models and BIMcollab's (`holdout-*`, `bimcollab-*`), of which
-  only counts leave the runner (`tools/ci/scrub-holdout-results.sh`), are never
-  looked up or stored, because the Actions cache of a public repository can be
-  restored by a workflow that a fork's pull request changes: nothing the scrub
-  removes may be in it. Each entry names its model, and the end of every run
-  removes any entry that names one of those models or none and prints the
-  entries by model prefix, so the saved cache is shown to hold none. That gives
-  up caching a share of the work, not a small one: in the unfiltered run
-  41748430211 the 18 held-out models took 32.8 of the 119 task-minutes of
-  model steps (28%); they run only with `-f holdout=true`.
+  environment variable by a computed name, or one given a directory as an
+  argument: the cache tells the reason in `score-cache-<shard>.log` and runs
+  it. A new scorer that reads anything but the files it is given is run every
+  time until `EXTRA_INPUTS` in `measure-cache.py` names what it reads. A step
+  is kept only if it finished with status 0 and neither its output nor any file
+  it also wrote (the validation findings, the rules summary) is over 4 MiB or
+  shows a failure a rerun could mend (`unreadable:`, a traceback, a
+  `MemoryError`, a dead worker); `ifc_validate_summary.py --both` exits 1 when
+  a check failed, where its separate runs print the failure and exit 0. An
+  entry that lacks a file the step wrote is a miss.
+  The held-out models, BIMcollab's and the pairs that were held out
+  (`holdout-*`, `bimcollab-*`, `spent-*`: BIM Whale's AdvancedProject was spent
+  and held out again on 2026-11-03), of which only counts leave the runner
+  (`tools/ci/scrub-holdout-results.sh`), are never looked up or stored, because
+  the Actions cache of a public repository can be restored by a workflow that a
+  fork's pull request changes: nothing the scrub removes may be in it, and a
+  pair's results do not become safe by being spent. Each entry names its model,
+  and the end of every run removes any entry that names one of those models or
+  none and prints the entries by model prefix, so the saved cache is shown to
+  hold none. That gives up caching a share of the work, not a small one: in
+  the unfiltered run 41748430211 the 18 held-out models took 32.8 of the 119
+  task-minutes of model steps (28%); they run only with `-f holdout=true`.
 - **Where it lives.** Each shard of the run, whatever it is called, restores
-  the newest `measure-scores-v1-main-<shard>.*` cache before the measured code
-  builds (a run given `models` is the shard `all`, with a cache of its own,
+  the newest `measure-scores-v2-main-<shard>.*` cache after the measured code
+  has built (a build script never sees a writable cache) (a run given `models`
+  is the shard `all`, with a cache of its own,
   built by earlier runs of that kind). It is saved only where rust-cache is saved: the
   workflow dispatched from `main` and the side measuring `main`'s own code
   (`inputs.ref` empty, or `base` `main`), because the build scripts of any
@@ -150,7 +161,7 @@ writes the cached output and a `<step> cached` line to the model's
   names only by version, and the cache would then hold what that run produced.
   That is why only `main`'s own code saves it. A run dispatched with `-f
   score_cache=<name>` reads and saves a cache of its own,
-  `measure-scores-v1-x-<name>-<shard>.*`, from any ref (GitHub scopes a
+  `measure-scores-v2-x-<name>-<shard>.*`, from any ref (GitHub scopes a
   branch's caches to that branch, and the shared cache never reads the name);
   this is how a change to the cache itself is proved. `-f score_cache=off`
   runs every step as before.
@@ -166,7 +177,12 @@ writes the cached output and a `<step> cached` line to the model's
   change to the cache or to a scorer, run Measure twice on one branch with
   `-f score_cache=<name>` (cold, then warm) and once with `-f
   score_cache=off`, and `diff -r` the three results apart from `*.log`,
-  `diagnostics.json`; a third warm run with `-f
+  `commit.txt` and `runner*.txt` (`diagnostics.json` is not left out: it is
+  byte-identical across runs of one commit, and `qtos_vs_ifc` reads it); to
+  check that a changed input misses, run the same name at two commits whose
+  exports differ for some model, and the second must miss on the models that
+  moved and hit on the rest, and diff clean against a run with the cache off
+  at that commit; a warm run with `-f
   psets_missing=Pset_WallCommon.Reference` must miss `psets_vs_ifc` on every
   model and hit everything else.
 

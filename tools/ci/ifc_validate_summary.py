@@ -68,18 +68,22 @@ def both(path, statements, rules_out):
     """The default validation on stdout and the rules check in RULES_OUT, each
     exactly what its own run prints, from one parse of the file: a file that
     does not open, or a check that fails, is the finding of both or of that
-    one, as it is when they run apart."""
+    one, as it is when they run apart. It returns 1 when anything failed, which
+    the apart runs do not (they print the failure and exit 0), so that Measure's
+    cache never keeps a failure that a rerun could mend, a MemoryError say."""
     try:
         model = ifcopenshell.open(path)
     except Exception as error:
         print(unreadable(error))
         with open(rules_out, "w", encoding="utf-8") as out:
             out.write(unreadable(error) + "\n")
-        return
+        return 1
+    failed = 0
     try:
         main(path, statements, model)
     except Exception as error:
         print(unreadable(error))
+        failed = 1
     captured = io.StringIO()
     failure = None
     with contextlib.redirect_stdout(captured):
@@ -89,6 +93,7 @@ def both(path, statements, rules_out):
             failure = error
     with open(rules_out, "w", encoding="utf-8") as out:
         out.write(captured.getvalue() + (unreadable(failure) + "\n" if failure else ""))
+    return 1 if failed or failure else 0
 
 
 def main(path, statements=None, model=None):
@@ -109,8 +114,7 @@ if __name__ == "__main__":
     if args[:1] == ["--both"]:
         if len(args) != 4:
             sys.exit(__doc__)
-        both(args[1], args[2], args[3])
-        sys.exit(0)
+        sys.exit(both(args[1], args[2], args[3]))
     with_rules = args[:1] == ["--rules"]
     if with_rules:
         args = args[1:]

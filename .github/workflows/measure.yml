@@ -341,7 +341,8 @@ jobs:
       # keeps a cache of its own, named by the shard whatever the shard is
       # called, and ends its name with a `.` that no shard name holds, so one
       # shard's prefix is never another's.
-      # The held-out models and BIMcollab's are never cached (RE-252).
+      # The held-out models, BIMcollab's and the pairs once held out (spent-*)
+      # are never cached (RE-252).
       - name: Score cache key
         id: score-cache-key
         shell: bash
@@ -352,7 +353,7 @@ jobs:
         run: |
           enabled=true
           save=false
-          main=measure-scores-v1-main-
+          main=measure-scores-v2-main-
           case "$SCORE_CACHE" in
             off)
               enabled=false
@@ -366,7 +367,7 @@ jobs:
                 echo "::error::score_cache is off, or a name of up to 40 letters, digits, dots and underscores"
                 exit 1
               fi
-              own="measure-scores-v1-x-$SCORE_CACHE-"
+              own="measure-scores-v2-x-$SCORE_CACHE-"
               save=true
               ;;
           esac
@@ -384,13 +385,6 @@ jobs:
             echo "MEASURE_CACHE_WORK=$RUNNER_TEMP/score-cache-work" >> "$GITHUB_ENV"
           fi
           echo "score cache: enabled=$enabled save=$save key prefix $own$SHARD."
-      - name: Restore the score cache
-        if: steps.score-cache-key.outputs.enabled == 'true'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: _score-cache
-          key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: ${{ steps.score-cache-key.outputs.restore }}
       # The three binaries every shard and every run of a commit builds alike
       # (about 70 s of each job) are kept under the commit's full SHA, the
       # toolchain and the profile: what the cache holds is what that code
@@ -461,6 +455,15 @@ jobs:
             measured/target/ci/rvt-gltf
             measured/target/ci/rvt-info
           key: ${{ steps.binaries-key.outputs.key }}
+      # Restored after the Build step, so that no build script of the measured
+      # ref ever sees a writable score cache.
+      - name: Restore the score cache
+        if: steps.score-cache-key.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _score-cache
+          key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ steps.score-cache-key.outputs.restore }}
       - name: Fetch the reference models
         run: tools/fetch-reference-models.sh models
       # The office models' host being down is NOT MEASURED; a file that no
