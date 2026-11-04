@@ -415,14 +415,28 @@ jobs:
       # exports of them (Drshelden/IFC-ECS, MIT), pinned by commit and checked by hash,
       # placed beside the magnetar projects so tests/element_records_2025.rs
       # runs here instead of skipping.
+      # The download took 3 s on most runs and 6.9 min on one (#1380), so the
+      # files are kept in the Actions cache under their pinned commit, saved on
+      # main; every file is still checked against its hash, and only a missing
+      # or changed one is fetched.
+      - name: Restore the Revit 2025 oracle
+        id: re1-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _re1
+          key: re1-oracle-9e8b37175a0fba1397f7011aeee917fe52de7623
       - name: Fetch the Revit 2025 oracle (Drshelden/IFC-ECS RE1, MIT)
         run: |
           set -euo pipefail
           base=https://raw.githubusercontent.com/Drshelden/IFC-ECS/9e8b37175a0fba1397f7011aeee917fe52de7623/data/RE1
           dir="${GITHUB_WORKSPACE}/_project_corpus/Revit"
+          mkdir -p _re1
           while read -r name sum; do
-            curl -sSfL --retry 5 --retry-all-errors -o "${dir}/${name}" "${base}/${name}"
-            echo "${sum}  ${dir}/${name}" | sha256sum -c -
+            if ! echo "${sum}  _re1/${name}" | sha256sum -c --status - 2>/dev/null; then
+              curl -sSfL --retry 5 --retry-all-errors -o "_re1/${name}" "${base}/${name}"
+              echo "${sum}  _re1/${name}" | sha256sum -c -
+            fi
+            cp "_re1/${name}" "${dir}/${name}"
           done <<'LIST'
           RE1-Architecture.rvt 4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4
           RE1-Architecture.ifc a9b5d36677aa6a8bb91b77d8bc354ed9028a7ca3e9e2491a47ba14cfd8e26200
@@ -433,6 +447,12 @@ jobs:
           RE1-Electrical.rvt 9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b
           RE1-Electrical.ifc c7002a10c8e10ab2fca64ff61dcf38db04da652924f65ce53c2064827dfa9e16
           LIST
+      - name: Save the Revit 2025 oracle
+        if: github.ref == 'refs/heads/main' && steps.re1-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _re1
+          key: ${{ steps.re1-cache.outputs.cache-primary-key }}
       # #766: four Revit 2024 models of VTT's BIM4LCA example buildings and
       # Revit's IFC export of one (CC BY-SA 4.0), read by byte range from the
       # 1.58 GB ARCH.zip by tools/ci/fetch-bim4lca.py and checked against
@@ -542,6 +562,35 @@ jobs:
           path: target/tmp/element-provenance/
           if-no-files-found: ignore
           retention-days: 14
+  corpus-mcp:
+    # The MCP server's end-to-end test on Einhoven, a job of its own beside
+    # Corpus health rather than a step after its tier-two gates: run after
+    # them it made Corpus health, already the slowest job on every pull
+    # request, about 3 minutes longer (8.1 to 10.2 minutes on main,
+    # 2026-11-04).
+    name: MCP server on Einhoven (tier 2 — external)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch project corpus (magnetar MIT)
+        uses: $/.github/actions/fetch-corpus
+        with:
+          repository: magnetar-io/revit-test-datasets
+          path: _project_corpus
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: false
+          shared-key: ci-release
       # The MCP server's end-to-end test on Einhoven: elements, GlobalIds
       # looked up and found in the exported IFC, the exports against rvt-ifc's.
       - name: MCP server end to end on Einhoven
@@ -1507,6 +1556,7 @@ jobs:
       - test
       - i686-overflow
       - corpus-tier2
+      - corpus-mcp
       - writer-patch-corpus
       - ifcopenshell-validate
       - doc
