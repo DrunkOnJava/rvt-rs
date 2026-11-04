@@ -333,6 +333,96 @@ fn ifc_compare_tells_an_export_from_itself_and_from_revits() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// RE-326: `rvt-ifc --phase` names the phase the export shows. RE1
+/// Architecture's phases are Existing (12589) and New Construction (86961),
+/// and its 11 rooms are in the second, the last.
+#[test]
+fn ifc_phase_option_chooses_the_export_phase_of_a_real_file() {
+    let Some(rvt) = project("RE1-Architecture.rvt") else {
+        eprintln!("skipping: RE1-Architecture.rvt absent");
+        return;
+    };
+    let dir = scratch("ifc-phase");
+    let export = |tag: &str, phase: Option<&str>| {
+        let ifc = dir.join(format!("{tag}.ifc"));
+        let diagnostics = dir.join(format!("{tag}.json"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_rvt-ifc"));
+        command
+            .env("SOURCE_DATE_EPOCH", "0")
+            .arg(&rvt)
+            .arg("-o")
+            .arg(&ifc)
+            .arg("--diagnostics")
+            .arg(&diagnostics);
+        if let Some(phase) = phase {
+            command.arg("--phase").arg(phase);
+        }
+        (command.output().expect("run rvt-ifc"), ifc, diagnostics)
+    };
+    let read_json = |path: &PathBuf| -> Value {
+        serde_json::from_slice(&std::fs::read(path).expect("diagnostics"))
+            .expect("diagnostics JSON")
+    };
+    let spaces = |json: &Value| json["exported"]["by_ifc_type"]["IFCSPACE"].as_u64();
+    let room_items = |json: &Value| -> Vec<Value> {
+        json["skipped"]
+            .as_array()
+            .expect("skipped")
+            .iter()
+            .filter(|item| item["reason"] == "room_not_in_export_phase")
+            .cloned()
+            .collect()
+    };
+
+    // The default is the last phase: every room is written and none is counted.
+    let (output, default_ifc, default_json) = export("default", None);
+    ok("rvt-ifc", &output);
+    let default_diagnostics = read_json(&default_json);
+    assert_eq!(spaces(&default_diagnostics), Some(11), "rooms by default");
+    assert!(room_items(&default_diagnostics).is_empty());
+    let default_bytes = std::fs::read(&default_ifc).expect("default IFC");
+
+    // The last phase named, by its name and by its ElementId, is the default.
+    for (tag, phase) in [("by-name", "New Construction"), ("by-id", "86961")] {
+        let (output, ifc, _) = export(tag, Some(phase));
+        ok("rvt-ifc", &output);
+        assert_eq!(
+            std::fs::read(&ifc).expect("IFC"),
+            default_bytes,
+            "--phase {phase} is the default export"
+        );
+    }
+
+    // The first phase leaves out the 11 rooms, which sit in the second, and
+    // counts them by it.
+    let (output, ifc, diagnostics) = export("existing", Some("Existing"));
+    ok("rvt-ifc", &output);
+    assert!(ifc.exists());
+    let json = read_json(&diagnostics);
+    assert_eq!(
+        spaces(&json).unwrap_or(0),
+        0,
+        "rooms written for the first phase"
+    );
+    let items = room_items(&json);
+    assert_eq!(items.len(), 1, "room items: {items:?}");
+    assert_eq!(items[0]["count"], 11);
+    assert_eq!(items[0]["classes"]["Room"], 11);
+    assert_eq!(items[0]["phase"], "New Construction");
+
+    // A phase the file does not list is an error that lists its phases, and
+    // nothing is written.
+    let (output, ifc, _) = export("unknown", Some("No such phase"));
+    assert_eq!(output.status.code(), Some(1), "an unknown phase");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Existing") && stderr.contains("New Construction"),
+        "the error lists the file's phases: {stderr}"
+    );
+    assert!(!ifc.exists(), "no IFC for an unknown phase");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn write_round_trips_or_refuses_a_streams_own_bytes() {
     let files = families();

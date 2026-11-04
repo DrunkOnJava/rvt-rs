@@ -112,15 +112,19 @@ rvt-rs-mcp --version
 Every tagged release from v0.2.0 on attaches ready-to-run archives of
 all the CLIs (`rvt-info`, `rvt-inspect`, `rvt-ifc`, …) to its page under
 <https://github.com/DrunkOnJava/rvt-rs/releases>. No Rust toolchain is
-needed.
+needed. In the archive names `<tag>` is the release tag with its `v`
+(`rvt-rs-v0.13.0-x86_64-unknown-linux-musl.tar.gz`); the wheel and the
+container image name the version without it (`0.13.0`). The release page also
+carries the Python wheels, the sdist and the archives' attestation bundle
+(`rvt-rs-<tag>.intoto.jsonl`).
 
 | Platform | Archive |
 |---|---|
-| Linux x86_64 (static, any distribution) | `rvt-rs-<version>-x86_64-unknown-linux-musl.tar.gz` |
-| Linux arm64 (static, any distribution) | `rvt-rs-<version>-aarch64-unknown-linux-musl.tar.gz` |
-| macOS Apple silicon | `rvt-rs-<version>-aarch64-apple-darwin.tar.gz` |
-| macOS Intel | `rvt-rs-<version>-x86_64-apple-darwin.tar.gz` |
-| Windows x86_64 | `rvt-rs-<version>-x86_64-pc-windows-msvc.zip` |
+| Linux x86_64 (static, any distribution) | `rvt-rs-<tag>-x86_64-unknown-linux-musl.tar.gz` |
+| Linux arm64 (static, any distribution) | `rvt-rs-<tag>-aarch64-unknown-linux-musl.tar.gz` |
+| macOS Apple silicon | `rvt-rs-<tag>-aarch64-apple-darwin.tar.gz` |
+| macOS Intel | `rvt-rs-<tag>-x86_64-apple-darwin.tar.gz` |
+| Windows x86_64 | `rvt-rs-<tag>-x86_64-pc-windows-msvc.zip` |
 
 Each archive holds the binaries plus `README.md`, `LICENSE` and `NOTICE`.
 Download `SHA256SUMS` from the same release and check the archive before
@@ -129,15 +133,15 @@ unpacking:
 ```bash
 # Linux / macOS
 shasum -a 256 -c SHA256SUMS --ignore-missing
-tar -xzf rvt-rs-<version>-<target>.tar.gz
-./rvt-rs-<version>-<target>/rvt-info --version
+tar -xzf rvt-rs-<tag>-<target>.tar.gz
+./rvt-rs-<tag>-<target>/rvt-info --version
 ```
 
 ```powershell
 # Windows (PowerShell): compare with the line for your archive in SHA256SUMS
-Get-FileHash .\rvt-rs-<version>-x86_64-pc-windows-msvc.zip -Algorithm SHA256
-Expand-Archive .\rvt-rs-<version>-x86_64-pc-windows-msvc.zip -DestinationPath .
-.\rvt-rs-<version>-x86_64-pc-windows-msvc\rvt-info.exe --version
+Get-FileHash .\rvt-rs-<tag>-x86_64-pc-windows-msvc.zip -Algorithm SHA256
+Expand-Archive .\rvt-rs-<tag>-x86_64-pc-windows-msvc.zip -DestinationPath .
+.\rvt-rs-<tag>-x86_64-pc-windows-msvc\rvt-info.exe --version
 ```
 
 Each archive also carries a GitHub build-provenance attestation, which
@@ -145,12 +149,12 @@ proves it was built by this repository's release workflow from the tagged
 commit. Check it with the GitHub CLI:
 
 ```bash
-gh attestation verify rvt-rs-<version>-<target>.tar.gz -R DrunkOnJava/rvt-rs
+gh attestation verify rvt-rs-<tag>-<target>.tar.gz -R DrunkOnJava/rvt-rs
 ```
 
 The binaries are not code-signed. On macOS, a browser download is
 quarantined by Gatekeeper; clear it for the unpacked folder with
-`xattr -dr com.apple.quarantine rvt-rs-<version>-<target>`. On Windows,
+`xattr -dr com.apple.quarantine rvt-rs-<tag>-<target>`. On Windows,
 SmartScreen may ask for confirmation the first time.
 
 To run the tools from anywhere, move the folder somewhere permanent and add
@@ -164,8 +168,8 @@ archives are attached to that run as artifacts.
 
 Every tagged release from v0.2.0 on also publishes a container image
 holding the same static Linux binaries, for `linux/amd64` and `linux/arm64`:
-`ghcr.io/drunkonjava/rvt-rs:<version>` and, for a final release,
-`ghcr.io/drunkonjava/rvt-rs:latest`. It is a distroless image of about the
+`ghcr.io/drunkonjava/rvt-rs:<version>` (the tag without its `v`, as
+`0.13.0`) and, for a final release, `ghcr.io/drunkonjava/rvt-rs:latest`. It is a distroless image of about the
 binaries' size, with no shell and no package manager. The working directory
 is `/data`, so mount the folder holding the model there:
 

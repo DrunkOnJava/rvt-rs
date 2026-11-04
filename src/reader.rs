@@ -885,6 +885,53 @@ impl RevitFile {
         computed
     }
 
+    /// Choose the phase the export shows, by the phase's name (exactly) or
+    /// its ElementId, instead of the project's last (RE-326). Revit's IFC
+    /// export shows one phase and leaves out an element that does not exist
+    /// in it and a room whose own phase is not it; this changes both. Call it
+    /// before the first export or element read of this handle. It fails,
+    /// naming the phases the file lists, when none matches, and for a file
+    /// whose phases are not read or whose release applies no export phase.
+    ///
+    /// # Errors
+    ///
+    /// [`Error::InvalidInput`] when the phase is not one of the file's, or
+    /// the file's phases cannot be chosen from.
+    pub fn set_export_phase(&mut self, phase: &str) -> Result<()> {
+        if let Ok(release) = self.layout_release() {
+            if crate::partition_element_records_2023::is_32bit_release(release)
+                && !crate::partition_element_records_2023::applies_export_filters(release)
+            {
+                return Err(Error::InvalidInput(format!(
+                    "the export phase is applied to Revit 2016 and later, and this file is \
+                     Revit {release}: it writes every element and room whatever its phase"
+                )));
+            }
+        }
+        let filter = self.memoised_phase_filter();
+        if let Some(error) = &filter.read_error {
+            return Err(Error::InvalidInput(format!(
+                "the project's phases could not be read ({error}), so the export phase \
+                 cannot be chosen"
+            )));
+        }
+        if filter.order.is_empty() {
+            return Err(Error::InvalidInput(
+                "this file lists no project phases (a family, or a release whose phases are \
+                 not read), so no export phase can be chosen"
+                    .into(),
+            ));
+        }
+        let Some(id) = filter.find_phase(phase) else {
+            return Err(Error::InvalidInput(format!(
+                "the file has no phase named or numbered {phase:?}; its phases are {}",
+                filter.phases_listing()
+            )));
+        };
+        self.phase_filter = Some(Arc::new(filter.with_export_phase(id)));
+        Ok(())
+    }
+
     /// Record the Areas of a Revit 2015 to 2023 file that were left unwritten,
     /// by reason (RE-324).
     pub(crate) fn set_unwritten_areas(&mut self, by_reason: BTreeMap<String, usize>) {
