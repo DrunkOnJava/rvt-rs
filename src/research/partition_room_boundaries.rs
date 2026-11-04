@@ -57,11 +57,11 @@
 //! face, as chords of its arc, in the walk and in the span: a column the room
 //! surrounds is a void of the outline and one against a wall a notch (#1354,
 //! RE-334). Before that the walk ignored the cylinder, so a room kept its
-//! columns' area, and the loops of six `rac_advanced` rooms stayed open. The
-//! only Revit export of a room with a round column is an IFC2X3 export of that
-//! project, which draws each column as a void; the exports of the BIM4LCA
-//! office, Core Interior, RE1 and the R2025 models are byte for byte as before,
-//! so none of them has one, and no IFC4 export of such a room exists.
+//! columns' area, and the loops of six `rac_advanced` rooms stayed open. Revit
+//! draws each column as a void in its IFC2X3 export of `rac_advanced` and in
+//! its IFC4 export of `rac_basic` (room 101); the exports of the BIM4LCA
+//! office, Core Interior, RE1, the R2025 models and the held-out files are byte
+//! for byte as before, so none of them has a room with one.
 //!
 //! Core Interior keeps a room's record and solid in more than one partition,
 //! and the copies can disagree: room 20832's outline spans 10.5 ft in one and
