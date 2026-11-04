@@ -7,7 +7,7 @@ This page is for the importer of an rvt-rs export: what an `IfcSpace` holds for 
 | Source | `IfcSpace` | Body |
 |---|---|---|
 | A Revit room | `Name` is the room's number, `LongName` its name, `PredefinedType` `SPACE`, in the storey of the Level its record names | the outline of the room's stored solid, or the record's bounding box (below) |
-| A Revit area (Revit 2024) | the same naming | the region its area boundary lines enclose around its point, up to the Level above it (below); none where that is not proven: the space then has no `Representation` |
+| A Revit area (Revit 2024; Revit 2015 to 2023 only where the body is proven, RE-324) | the same naming | the region its area boundary lines enclose around its point, up to the Level above it (below); none where that is not proven: the space then has no `Representation` |
 | A Revit Space (MEP), in a model that has one | `IfcSpace` without a predefined type; no measurement singles one out | its record's box (`record_box`) unless a carrier draws more (`family_body`) |
 | A family instance whose "Export to IFC As" names `IfcSpace` (#763) | named `Family:Type:ElementId` as Revit's export names other family instances | its record's box, turned with the instance (`record_box`), until a carrier draws its family. Where its family draws no model form, Revit's export leaves the instance out, and rvt-rs will too once PR #1279 (RE-312, for #1262, parking bays) lands |
 
@@ -47,6 +47,8 @@ The export also counts the spaces drawn as their record's box (rooms and family 
 | 2025 | stored solid | RE1 Architecture, six purpose-made R2025 models, held-out models (below) |
 | 2026, 2027 | stored solid, as on 2025 (RE-314, #1260) | 16 held-out rooms, all rectangles, and a held-out house (below) |
 
+Areas as spaces, with a body where their boundary lines prove one, are read on Revit 2024. On Revit 2015 to 2023 an Area is written only where its region and body are proven; the others are not written and are counted by reason in `skipped` (`area_without_proven_body`, RE-324). They are measured against the same project's 2024 save on Autodesk's samples, and against no Revit export: the first rule, writing every placed Area as 2024 does, wrote spaces Revit's export lacks on a held-out project (below).
+
 `ROOM_SOLID_SUPPORTED_REVIT_VERSIONS` in `src/research/partition_room_boundaries.rs` is the list of releases whose room solids are read.
 
 ## What is measured, and where
@@ -76,7 +78,7 @@ Measure runs the scorer on every reference model (`-f scorers=space_profiles_vs_
 
 On Warmond, RE-316 closes 6 of the 8 rooms that kept their box (5 were off in area; one was a rectangle already equal to Revit's, whose vertices are no longer the box's: vertices within 0.01 ft 127 → 126); the 2 that keep their box are rectangles. Area within 0.1% goes from 174 to 179 of the 179 paired spaces (Measure run 41728355227, `main` at 7fd339e2 against this change, counts only; by Revit's floor too: 177 of 177 `stored_solid` and `stored_solid_faces` rooms).
 
-A model with no rooms in Revit's export (the other R2025 models, RE1 Electrical, Mechanical and Plumbing) scores 0 of 0. One held-out model writes none of Revit's spaces: BIM Whale's 2021 project (8), whose spaces are Areas, which rvt-rs reads on Revit 2024 only. Vitoria's 2018 project exported no element, and none of its 73 spaces, before PR #1286 (#1261): its spent `ALD26 Before` now writes all 73 (run 41707934595, full output, in the row above), and its held-out sibling `ALD26 Project` writes 73 `IfcSpace` against Revit's 73 (counts only, not scored here).
+A model with no rooms in Revit's export (the other R2025 models, RE1 Electrical, Mechanical and Plumbing) scores 0 of 0. One held-out model writes none of Revit's spaces: BIM Whale's 2021 project (8), whose spaces are Areas of a 'Rentable' scheme. The first rule for Revit 2015 to 2023 Areas (RE-324), writing every placed Area as 2024 does, found Revit's 8 and wrote 2 spaces Revit's export lacks (Measure run 41757734285, counts only): a measured negative. An Area there is now written only where its body is proven, and none of the 10 written spaces had one, so the rule writes 0 of Revit's 8 and 0 extras, as `main` does (run 41764492879). That zero is vacuous: it does not show the rule separates Revit's 8 from the 2 extras. The project's Areas stay undelivered (#1261) and, under W5, it is a regression check, never developed on. Vitoria's 2018 project exported no element, and none of its 73 spaces, before PR #1286 (#1261): its spent `ALD26 Before` now writes all 73 (run 41707934595, full output, in the row above), and its held-out sibling `ALD26 Project` writes 73 `IfcSpace` against Revit's 73 (counts only, not scored here).
 
 The other held-out figures are Measure run 41728355227 (`main` at 7fd339e2), counts only; the office's Area figures are Measure run 41740909229 (RE-317), which leaves every held-out count as it was. On the 2026 house and on Gdynia, every room's area is right where it is scored, but none of their outlines is within 0.01 ft of Revit's; the files are held out, so why is not examined.
 
@@ -90,8 +92,8 @@ What the misses are:
 
 ## What is not measured
 
-- **Areas** (RE-317), measured on the BIM4LCA office only:
-  - releases other than Revit 2024;
+- **Areas** (RE-317, RE-324), measured against Revit's export on the BIM4LCA office only:
+  - Revit 2015 to 2023 against any Revit export: Autodesk's `rac_advanced` (2015 to 2023) and `rst_basic` (2016 to 2023) are read like the same project's 2024 save, and the held-out BIM Whale project is a regression check, quoted by counts only (RE-324). An Area there is written only where its body is proven, so 22 of `rac_advanced`'s 25 Areas (18 in groups with a line that is not along an axis, 4 bounded partly by walls) are not written, nor all 25 on its 2021 save (`skipped`, `area_without_proven_body`). Revit 2008 to 2014 are not read, and a 2015 Area that names a design option is left out;
   - the top storey: an Area on the highest Level has no body, where Revit draws it one unit high;
   - Levels that are not building stories: an Area has a body only where its Level and the Level above are both read as building stories and no other Level lies between them or at either elevation. All ten of the office's Levels are storeys, so every Area there meets that, and a Level that breaks it is unmeasured;
   - the Level's "Story Above", which Revit's exporter takes first for an Area's height and rvt-rs never reads: the office's heights equal the distance to the next Level up, so a Level whose Story Above is another Level is unmeasured;
