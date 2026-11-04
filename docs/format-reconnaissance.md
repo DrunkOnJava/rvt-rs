@@ -1206,7 +1206,7 @@ container). Every other combination of scalar base × modifier fell
 through. Q5.2 generalises the rule:
 
 - **`{kind} 0x10 0x00 0x00 …` → `Vector<base>`** for every scalar base
-  byte observed: `0x01` bool, `0x02` u16, `0x04`/`0x05` u32, `0x06`
+  byte observed: `0x01` bool, `0x02` char (1 byte; first written u16, RE-325), `0x04`/`0x05` u32, `0x06`
   f32, `0x07` f64, `0x0b` u64, `0x0d` point/transform, `0x0e` ref.
 - **`{kind} 0x50 0x00 0x00 …` → `Container<base>`** for the same set.
   Reference containers (`kind == 0x0e`) additionally extract embedded
@@ -1231,6 +1231,14 @@ Two additional wire patterns were mapped:
   the common `tag=0x0014, sub=0x0000` case.
 
 ### Deprecated 0x03 i32-alias (2016–2018 only)
+
+> **Corrected by RE-325 (2026-11-04).** This section is kept as it was
+> written. `0x03` is not an alias, not 4 bytes and not confined to 2016 to
+> 2018: it is the C++ `short`, 2 bytes, and the schema holds it in every
+> release 2014 to 2027 (24 to 27 scalar fields and three `short[3]` arrays;
+> the scan files 9 of the scalars as `Primitive`). `0x02` is the C++
+> `char`, 1 byte, not a `u16`. See
+> `reports/element-framing/RE-325-scalar-widths.md`.
 
 Five fields in Revit 2016–2018 use discriminator byte `0x03`, which
 does not appear in any later release:
@@ -2419,3 +2427,7 @@ A Revit 2024 Area stores no boundary: its chain record (RE-35) names its Level, 
 ## Addendum — RE-322 the order of a corner's walls in the join list is a priority (2026-11-03)
 
 A wall's `VWallDriver.m_controlJoinsSet` lists, for each join, its walls with the end each joins by (`m_JoinInfo.m_info`, `m_joinedEnd`) and the join's type (`m_wallJoinType`: 0 a butt join on every join of the BIM4LCA office and Core Interior, 1 the mitre of R2025 `18_WallJoins`' walls 4511 and 4567). The list names every wall that ends at the point, on every storey; counting only those that overlap the wall in elevation, the order is the order Revit joined them in and an earlier wall wins. At a corner of three or more walls a wall stops at the near face of the perpendicular walls listed before it, meets flush a wall that continues it when that is listed before the next perpendicular wall, and otherwise runs through the perpendicular walls listed after it, to their far face; faces are taken from where each wall's own line ends, as walls of different thickness are aligned on a face (0.082 ft between the lines of a 0.656 ft and a 0.492 ft wall). It is Revit's end, on the whole body and on each side, on all 95 ends it reads as built, 34 at permit and 8 on Core Interior, and 30 and 8 of them go from wrong to right in rvt-rs's export. RE-222 section 4's negative for the join order came from counting the walls of other storeys and from layered corners; a layered wall at layered walls is not given by RE-71's nesting with the order, and a corner a column cuts stops at the column. Report: `reports/element-framing/RE-322-wall-corner-order.md`; the probe is `probes/examples/probe_re322_wall_corners.rs`.
+
+## Addendum — RE-324 Areas on Revit 2015 to 2023 (2026-11-03)
+
+The 32-bit layout (RE-315) writes an Area's chain record as the 2024 one with `u32` ElementIds: 119 bytes, the `BuiltInCategory` 14 bytes after its ElementId, its design option, container and placement words 12, 16 and 24 bytes after that (`ff ff ff ff`, `ff ff ff ff` and `0xffffef7f` on every one of Autodesk's 26 sample Areas of 2015 to 2023, the placement kind of 2015 to 2018 included), and two counted lists of `u32` ElementIds, of six and of two, that name its Level, its area scheme and its two boundary lines. The Area's point is the same two `f64`s as on 2024, 35 bytes after the `01 00 00 00 · ElementId` header of its element data, which opens with the Level's id. Autodesk's `rac_advanced` of 2015 to 2023 (25 Areas) and `rst_basic` of 2016 to 2023 (1) give every Area the number, name, Level, scheme, boundary lines and point of the same project's 2024 save, and, on the saves where the model is the 2024 one, the same body or the same refusal. The 2015 to 2021 `rac_advanced` saves hold an earlier state of the model: 16 north-edge boundary lines 0.0246 ft off, and one Area's point as far; the 2021 save holds both states. Writing every placed Area as 2024 does wrote spaces Revit's export lacks on a held-out Revit 2021 project (RE-324), so a 2015 to 2023 Area is written only where its boundary lines prove its region and body. Report: `reports/element-framing/RE-324-areas-2015-2023.md`; probe: `probes/examples/probe_re324_area_records_32bit.rs`.
