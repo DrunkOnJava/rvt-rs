@@ -924,6 +924,25 @@ Revit's do (428 before), and 422 of 589 at building permit (377); Core
 Interior, RE1 and the R2025 models are unchanged
 (`reports/element-framing/RE-223-wall-tee-cores.md`).
 
+**RE-322 (2026-11-03)** reads a wall's end at a corner of three or more walls
+from the order its native record lists the walls of the join in. Once the
+walls that do not overlap it in elevation are left out (the list also names
+the walls on other storeys that end at the same point), an earlier wall wins:
+a wall stops at the near face of the perpendicular walls listed before it,
+meets flush a wall that continues it when that is listed before the next
+perpendicular wall, and otherwise runs through the perpendicular walls listed
+after it, to faces taken from where each wall's own line ends. It is read
+only where it is right on every measured end (a butt join, straight walls at
+right angles or straight on, nothing but walls cutting the wall, single-layer
+walls or a layered wall stopping against single-layer walls). On the office as
+built 510 of 607 walls end where Revit's do (482 before), and 430 of 589 at
+building permit (422); two single-layer walls that meet at a mitre end on the
+line through its corners (R2025 `18_WallJoins`: 9 of 9, from 7). Core
+Interior and RE1 are byte for byte as before. Layered corners of two walls,
+a layered wall at layered walls and every corner a column cuts were measured
+and are not read
+(`reports/element-framing/RE-322-wall-corner-order.md`).
+
 The public viewer's demo gallery leads with the two files this section
 measures, staged from the deploy workflow's `magnetar-io/revit-test-datasets`
 checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,

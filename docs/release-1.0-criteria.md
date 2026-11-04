@@ -59,8 +59,8 @@ other loadable families are boxes unless `--saved-meshes` draws theirs, which is
 A face the saved graphics do not decode marks a partial mesh, which keeps its box since RE-224: on the office 1,294 of the 1,352 bodies then drawn are exact.
 Some partial meshes record nothing, so every class but doors and windows stays opt-in;
 on the office 221 of 269 doors keep their box, their saved graphics not decoding whole (Measure run 40932136360).
-Walls: 360 of 360 with Revit's ends on Core Interior, 482 of 607 on the office as built (RE-222,
-RE-223).
+Walls: 360 of 360 with Revit's ends on Core Interior, 510 of 607 on the office as built and 430 of 589 at permit (RE-222,
+RE-223, RE-322).
 Wall tops: a wall whose top join or cut pair names a floor, roof or footing that covers its whole plan is cut at its underside, which is Revit's top on 64 of the office's 65 cut tops as built and 70 of 70 at permit (RE-267);
 a wall such an element covers in part is drawn stepped (RE-320): 49 walls as built and 46 at permit, and rvt-rs's top is Revit's over the whole plan on 583 of 607 walls as built (544 before) and 571 of 589 at permit (530 before). The one wall as built that Revit cuts although 0.0243 ft² of its plan lies outside the floor, inside an abutting wall, keeps its full height, as do the walls whose layers Revit ends at different heights.
 Per-category results are in the [supported profile](supported-profile.md#geometry-on-revit-2024-and-2025-projects);
