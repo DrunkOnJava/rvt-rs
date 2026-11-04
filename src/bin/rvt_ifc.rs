@@ -167,10 +167,11 @@ struct Args {
     #[arg(long, value_name = "BYTES")]
     max_inflate_bytes: Option<usize>,
     /// Export this phase, by its name (exactly) or its ElementId, instead of
-    /// the project's last. Revit's export shows one phase: an element that
-    /// does not exist in it, and a room whose own phase is not it, are left
-    /// out. An unknown phase is an error that lists the file's phases
-    /// (RE-326).
+    /// the project's last. A name is matched first and an ElementId only
+    /// when no phase has that name, so a name made of digits wins. Revit's
+    /// export shows one phase: an element that does not exist in it, and a
+    /// room whose own phase is not it, are left out. An unknown phase is an
+    /// error that lists the file's phases (RE-326).
     #[arg(long, value_name = "NAME|ID", conflicts_with = "placeholder")]
     phase: Option<String>,
     /// Raise the stream, inflate and walker-scan limits for large models:

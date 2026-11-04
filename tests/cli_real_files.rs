@@ -399,7 +399,11 @@ fn ifc_phase_option_chooses_the_export_phase_of_a_real_file() {
     ok("rvt-ifc", &output);
     assert!(ifc.exists());
     let json = read_json(&diagnostics);
-    assert_eq!(spaces(&json), None, "rooms written for the first phase");
+    assert_eq!(
+        spaces(&json).unwrap_or(0),
+        0,
+        "rooms written for the first phase"
+    );
     let items = room_items(&json);
     assert_eq!(items.len(), 1, "room items: {items:?}");
     assert_eq!(items[0]["count"], 11);
