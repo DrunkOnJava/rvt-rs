@@ -162,6 +162,12 @@ const ARC_CHORD_TOLERANCE_FEET: f64 = 0.0005;
 /// wall's face on three rooms of the BIM4LCA office, and the box holds it.
 pub const ROOM_SLIVER_FEET: f64 = 0.02;
 
+/// The most plan segments a room's walls and the chords of its columns' arcs
+/// may make before the room is left to its box (#1354): a column of 0.49 ft
+/// radius is 70 chords and the largest room measured has 13 of them, and the
+/// work of joining and nesting the segments is quadratic in them.
+pub const PLAN_SEGMENTS_MAX: usize = 4096;
+
 /// The most plan segments [`region_boundary`] resolves.
 pub const BOUNDARY_SEGMENTS_MAX: usize = RESOLVE_FACES_MAX;
 
@@ -552,13 +558,16 @@ pub struct SpanRead {
 }
 
 /// The plan edges of the wall faces among `faces` that reach `anchor`, and,
-/// where `span` reads arcs, of the round columns that do.
+/// where `span` reads arcs or is unset (the walk of RE-101 reads them, #1354),
+/// of the round columns that do. `None` where a column's arc cannot be read or
+/// the edges pass [`PLAN_SEGMENTS_MAX`].
 fn wall_edges(
     faces: &[RoomFace],
     bbox: [f64; 6],
     anchor: OutlineAnchor,
     span: Option<SpanRead>,
 ) -> Option<Vec<[f64; 4]>> {
+    let arcs = span.is_none_or(|read| read.arcs);
     let mut lines = Vec::new();
     for face in faces {
         if span.is_none() || face.cylinder.is_none() {
@@ -566,7 +575,7 @@ fn wall_edges(
                 lines.push(edge);
             }
         }
-        if span.is_some_and(|read| read.arcs) {
+        if arcs {
             if let Some((low, high)) = face.vertical_cylinder_heights() {
                 let reached = match anchor {
                     OutlineAnchor::Floor => (low - bbox[2]).abs() <= BOX_TOLERANCE_FEET,
@@ -576,6 +585,9 @@ fn wall_edges(
                     lines.extend(face.arc_segments()?);
                 }
             }
+        }
+        if lines.len() > PLAN_SEGMENTS_MAX {
+            return None;
         }
     }
     Some(lines)
@@ -722,11 +734,11 @@ pub fn resolved_outline_of_solids_at(
     for &at in headers {
         let faces = solid_span(buf, at);
         let exact = SpanRead {
-            arcs: false,
+            arcs: true,
             slack: 0.0,
         };
         let slack = SpanRead {
-            arcs: false,
+            arcs: true,
             slack: ROOM_SLIVER_FEET,
         };
         let Some(this) = span_outline(&faces, bbox, OutlineAnchor::Floor, exact)
