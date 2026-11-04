@@ -534,7 +534,7 @@ pub fn append_typed_production_elements(
     let mut opening_hosts: Vec<(usize, u32, u32)> = Vec::new();
     // RE-267: each wall's entity index and the elements its top join and cut
     // pairs name, for the cut at the floor that covers it.
-    let mut pending_tops: Vec<(usize, Vec<u32>)> = Vec::new();
+    let mut pending_tops: Vec<wall_tops::Pending> = Vec::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
     // entity; `None` once two of its elements disagree.
@@ -1188,7 +1188,13 @@ pub fn append_typed_production_elements(
         if policy.include_geometry && decoded.class == "Wall" {
             let named = crate::partition_schema_mvp::wall_top_cutters_from_fields(&decoded.fields);
             if !named.is_empty() {
-                pending_tops.push((entity_index, named));
+                pending_tops.push(wall_tops::Pending {
+                    index: entity_index,
+                    named,
+                    pair_only: crate::partition_schema_mvp::wall_top_pair_only_from_fields(
+                        &decoded.fields,
+                    ),
+                });
             }
         }
         // RE-291: a column whose type is a plain rectangle, with the elements its pairs name.
@@ -4313,6 +4319,13 @@ pub const LANDING_SLAB_BODY_HEIGHT_SOURCE: &str = "native_landing_top_and_type_t
 /// floor, roof or footing its top join or a cut pair names, where that
 /// element covers the whole of the wall's plan (#1067, RE-267).
 pub const WALL_TOP_COVER_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_at_covering_floor";
+
+/// `BodyHeightSource` of a wall whose top is cut at the underside of the
+/// floor, roof or footing its top join or a cut pair names over the part of
+/// the wall's plan the element covers, and left at the wall's own top over
+/// the rest: drawn as one prism of its plan to the underside and the pieces
+/// of the plan outside the element from there to the top (#1067, RE-320).
+pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_covering_floor";
 
 /// `BodySource` of a body that is the element record's bounding box, where
 /// no carrier refines it (#409).

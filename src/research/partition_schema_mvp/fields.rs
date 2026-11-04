@@ -756,6 +756,11 @@ pub const WALL_UNCUT_FIELD: &str = "m_wall_uncut";
 /// roofs and footings the export may cut its top at.
 pub const WALL_TOP_CUTTERS_FIELD: &str = "m_wall_top_cutters";
 
+/// Field holding, as a vector of ElementIds, those of
+/// [`WALL_TOP_CUTTERS_FIELD`] that only a `CutPairGStep` names and the top
+/// join does not ([`crate::native_walls::WallRecords::pair_only`], RE-320).
+pub const WALL_TOP_PAIR_ONLY_FIELD: &str = "m_wall_top_pair_only";
+
 /// Field set on a wall whose native record holds no step that cuts, embeds or
 /// sweeps its solid ([`crate::native_walls::WallRecords::whole`], RE-270).
 pub const WALL_WHOLE_FIELD: &str = "m_wall_whole";

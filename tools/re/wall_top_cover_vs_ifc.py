@@ -40,6 +40,41 @@ wall from its start, `-` where the body is not there):
   gap tag:<Tag> floor:<Tag> rvt-rs <x0 x1 y0 y1 pieces n> | Revit <...>
                                           the extent of the wall's plan outside
                                           the floor's
+  plan tag:<Tag> points <n> equal <n> taller <n> lower <n> | form <...>
+                                          the highest point of rvt-rs's body
+                                          against Revit's at 5 rows of stations
+                                          across the wall (0.4 and 0.2 thicknesses
+                                          off the centre line on each side, and the
+                                          centre line), at the points inside both
+                                          plans: equal within 0.01 ft, rvt-rs's
+                                          taller, rvt-rs's lower (RE-320; a strip
+                                          of the wall beside the centre line that a
+                                          floor covers cannot show on the centre
+                                          line); Revit's body is shifted across the
+                                          wall's thickness so that the two plans'
+                                          faces lie midway (the fit of Revit's frame
+                                          onto rvt-rs's leaves up to 0.02 ft); form
+                                          is how each file draws the wall's Body
+  faces tag:<Tag> top <z> rvt-rs <A> Revit <A> taller <A> lower <A> volume rvt-rs <V> Revit <V>
+                                          the plan area of the horizontal faces at
+                                          rvt-rs's highest point in each body, and,
+                                          inside the part of the plan both files
+                                          draw, the area where rvt-rs is at that
+                                          height and Revit's body is not (taller)
+                                          and where Revit's is and rvt-rs's is not
+                                          (lower), in square feet; and each body's
+                                          volume, cubic feet
+  piece tag:<Tag> area <A> width <W> at <x> <y> inside Revit's plan <A> at Revit's full height <share> in other walls <share>
+                                          for a wall rvt-rs steps: each piece of
+                                          its plan at its highest point, its area,
+                                          its least width, and the share of it
+                                          inside Revit's plan where Revit's body is
+                                          at that height too, and the share of it
+                                          that lies inside the plan of another wall
+                                          of rvt-rs's that shares more than 0.5 ft of
+                                          its height
+  summary ...                             walls equal on the centre line, and
+                                          over the whole plan, and the points
 
 `covers` is the share of the wall's plan area that lies inside the floor's
 plan; `gap` the area of the wall's plan outside it.
@@ -60,12 +95,16 @@ import ifcopenshell
 import ifcopenshell.geom
 import numpy as np
 import shapely
+import shapely.affinity
 
 import wall_heights_vs_ifc as base
 
 STEP = 0.25
 MAX_STATIONS = 400
 MAX_RUNS = 24
+PLAN_ROWS = (-0.4, -0.2, 0.0, 0.2, 0.4)
+PLAN_TOLERANCE = 0.01
+CHUNK = 400
 TOLERANCE = base.TOLERANCE
 KINDS = base.CUTTERS
 
@@ -172,6 +211,114 @@ def heights_at(triangles, xs, ys):
         steps = np.diff(rounded, axis=1) > 0
     distinct = finite[:, :1].astype(int).sum(axis=1) + (steps & finite[:, 1:]).sum(axis=1)
     return low, high, distinct
+
+
+def forms(path):
+    """Tag -> how the file draws the wall's Body: its representation type and
+    the classes of its items (an extrusion's profile class after a slash)."""
+    f = ifcopenshell.open(path)
+    out = {}
+    for product in f.by_type("IfcWall"):
+        if not product.Tag or product.Representation is None:
+            continue
+        found = []
+        for representation in product.Representation.Representations:
+            if representation.RepresentationIdentifier != "Body":
+                continue
+            for item in representation.Items:
+                name = item.is_a()
+                if item.is_a("IfcExtrudedAreaSolid"):
+                    name += "/" + item.SweptArea.is_a()
+                found.append((representation.RepresentationType or "-", name))
+        if found:
+            counts = {}
+            for _, name in found:
+                counts[name] = counts.get(name, 0) + 1
+            out[str(product.Tag)] = found[0][0] + " " + " ".join(f"{n}x{c}" for n, c in sorted(counts.items()))
+    return out
+
+
+def high_at(triangles, xs, ys):
+    """The highest point at each of the points, in chunks."""
+    parts = [heights_at(triangles, xs[i:i + CHUNK], ys[i:i + CHUNK])[1] for i in range(0, len(xs), CHUNK)]
+    return np.concatenate(parts) if parts else np.zeros(0)
+
+
+def plan_top(ours_body, revit_body, ours_plan, revit_plan, xs, ys, direction, thickness):
+    """(points, equal, taller, lower): rvt-rs's highest point against Revit's
+    over PLAN_ROWS rows of stations across the wall, at the points inside
+    both plans where both bodies are, or None."""
+    normal = np.array([-direction[1], direction[0]])
+    px = np.concatenate([xs + normal[0] * thickness * row for row in PLAN_ROWS])
+    py = np.concatenate([ys + normal[1] * thickness * row for row in PLAN_ROWS])
+    inside = shapely.contains_xy(ours_plan, px, py) & shapely.contains_xy(revit_plan, px, py)
+    px, py = px[inside], py[inside]
+    if not len(px):
+        return None
+    ours_high, revit_high = high_at(ours_body, px, py), high_at(revit_body, px, py)
+    both = np.isfinite(ours_high) & np.isfinite(revit_high)
+    if not both.any():
+        return None
+    gap = ours_high[both] - revit_high[both]
+    return (
+        int(both.sum()),
+        int((np.abs(gap) <= PLAN_TOLERANCE).sum()),
+        int((gap > PLAN_TOLERANCE).sum()),
+        int((gap < -PLAN_TOLERANCE).sum()),
+    )
+
+
+def across_shift(ours_plan, revit_plan, direction):
+    """The shift, across the wall, that puts Revit's plan midway between the
+    same faces as rvt-rs's: the two plans' extents along the normal to the
+    wall's long axis, centred on each other."""
+    normal = np.array([-direction[1], direction[0]])
+
+    def extent(plan):
+        along = np.array(plan.convex_hull.exterior.coords) @ normal
+        return float(along.min() + along.max()) / 2
+
+    return (extent(ours_plan) - extent(revit_plan)) * normal
+
+
+def shifted(triangles, shift):
+    out = triangles.copy()
+    out[:, :, 0] += shift[0]
+    out[:, :, 1] += shift[1]
+    return out
+
+
+def volume(triangles):
+    """The volume of the closed surface `triangles`, cubic feet."""
+    corner_a, corner_b, corner_c = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    return abs(float(np.einsum("ij,ij->i", corner_a, np.cross(corner_b, corner_c)).sum() / 6.0))
+
+
+def top_faces(triangles, top):
+    """The union, seen from above, of the upward horizontal faces of
+    `triangles` within 0.01 ft of the height `top`, or an empty polygon."""
+    corner_a = triangles[:, 1] - triangles[:, 0]
+    corner_b = triangles[:, 2] - triangles[:, 0]
+    normal = np.cross(corner_a, corner_b)
+    size = np.linalg.norm(normal, axis=1)
+    spread = triangles[:, :, 2].max(axis=1) - triangles[:, :, 2].min(axis=1)
+    heights = triangles[:, :, 2].mean(axis=1)
+    flat = (size > 1e-12) & (spread <= 0.001) & (normal[:, 2] > 0) & (np.abs(heights - top) <= 0.01)
+    found = triangles[flat]
+    plan = footprint(found) if len(found) else None
+    return shapely.Polygon() if plan is None else plan
+
+
+def pieces_of(plan):
+    return list(plan.geoms) if hasattr(plan, "geoms") else [plan]
+
+
+def least_width(polygon):
+    rectangle = shapely.minimum_rotated_rectangle(polygon)
+    if rectangle.geom_type != "Polygon":
+        return 0.0
+    corners = np.array(rectangle.exterior.coords)[:4]
+    return float(min(np.hypot(*(corners[1] - corners[0])), np.hypot(*(corners[2] - corners[1]))))
 
 
 def level_range(triangles, xs, ys, direction, thickness):
@@ -312,6 +459,14 @@ def main():
         for tag in set(ours_slabs) | set(revit_slabs)
     }
     plans = {}
+    ours_forms, revit_forms = forms(args[0]), forms(args[1])
+    wall_tags = list(both)
+    wall_plans = [footprint(ours_walls[t]) for t in wall_tags]
+    wall_index = shapely.STRtree([p if p is not None else shapely.Polygon() for p in wall_plans])
+    wall_heights = [(float(ours_walls[t][:, :, 2].min()), float(ours_walls[t][:, :, 2].max())) for t in wall_tags]
+    on_centre = on_plan = walls_planned = 0
+    plan_points = [0, 0, 0, 0]
+    tallers = lowers = 0.0
 
     def slab_plan(source, tag, table):
         if (source, tag) not in plans:
@@ -341,10 +496,55 @@ def main():
         print(f"levels tag:{tag} rvt-rs {levels(ours_body)} | Revit {levels(revit_body)}")
         _, ours_high, _ = heights_at(ours_body, xs, ys)
         _, revit_high, hits = heights_at(revit_body, xs, ys)
+        ours_runs, revit_runs = runs(ours_high, cell, length), runs(revit_high, cell, length)
         print(
-            f"top tag:{tag} rvt-rs {runs(ours_high, cell, length)} | Revit {runs(revit_high, cell, length)} "
+            f"top tag:{tag} rvt-rs {ours_runs} | Revit {revit_runs} "
             f"| hits {int(hits.max()) if len(hits) else 0}"
         )
+        on_centre += ours_runs == revit_runs
+        shift = across_shift(ours_plan, revit_plan, direction)
+        revit_across = shifted(revit_body, shift)
+        revit_plan_across = shapely.affinity.translate(revit_plan, shift[0], shift[1])
+        planned = plan_top(ours_body, revit_across, ours_plan, revit_plan_across, xs, ys, direction, thickness)
+        if planned is None:
+            print(f"plan tag:{tag} points 0 | form rvt-rs {ours_forms.get(tag, '-')} | Revit {revit_forms.get(tag, '-')}")
+        else:
+            walls_planned += 1
+            on_plan += planned[0] == planned[1]
+            plan_points = [a + b for a, b in zip(plan_points, planned)]
+            print(
+                f"plan tag:{tag} points {planned[0]} equal {planned[1]} taller {planned[2]} lower {planned[3]} "
+                f"| form rvt-rs {ours_forms.get(tag, '-')} | Revit {revit_forms.get(tag, '-')}"
+            )
+        top = ours_box[5]
+        ours_full, revit_full = top_faces(ours_body, top), top_faces(revit_across, top)
+        common = ours_plan.intersection(revit_plan_across)
+        taller = ours_full.difference(revit_full).intersection(common).area
+        lower = revit_full.difference(ours_full).intersection(common).area
+        print(
+            f"faces tag:{tag} top {top:.4f} rvt-rs {ours_full.area:.4f} Revit {revit_full.area:.4f} "
+            f"taller {taller:.4f} lower {lower:.4f} volume rvt-rs {volume(ours_body):.4f} Revit {volume(revit_body):.4f}"
+        )
+        tallers += taller
+        lowers += lower
+        low, high = ours_box[4], ours_box[5]
+        if ours_full.area < ours_plan.area - 1e-3:
+            for piece in pieces_of(ours_full):
+                inside = piece.intersection(common).area
+                if inside > 1e-6:
+                    others = [
+                        wall_plans[i]
+                        for i in wall_index.query(piece)
+                        if wall_tags[i] != tag
+                        and wall_plans[i] is not None
+                        and min(high, wall_heights[i][1]) - max(low, wall_heights[i][0]) > 0.5
+                    ]
+                    beside = piece.intersection(shapely.union_all(others)).area / piece.area if others else 0.0
+                    print(
+                        f"piece tag:{tag} area {piece.area:.4f} width {least_width(piece):.4f} at {piece.centroid.x:.4f} {piece.centroid.y:.4f} "
+                        f"inside Revit's plan {inside:.4f} at Revit's full height {piece.intersection(common).intersection(revit_full).area / inside:.4f} "
+                        f"in other walls {beside:.4f}"
+                    )
         low, high = ours_box[4], ours_box[5]
         reach = (min(ours_box[0], revit_box[0]) - 0.1, max(ours_box[1], revit_box[1]) + 0.1,
                  min(ours_box[2], revit_box[2]) - 0.1, max(ours_box[3], revit_box[3]) + 0.1)
@@ -375,6 +575,12 @@ def main():
             )
             if fmt_gap(ours_cover) != "-" or fmt_gap(revit_cover) != "-":
                 print(f"gap tag:{tag} floor:{slab} rvt-rs {fmt_gap(ours_cover)} | Revit {fmt_gap(revit_cover)}")
+    print(
+        f"summary walls {len(both)}; equal on the centre line {on_centre}; "
+        f"equal over the plan {on_plan} of {walls_planned} compared; "
+        f"points {plan_points[0]} equal {plan_points[1]} taller {plan_points[2]} lower {plan_points[3]}; "
+        f"full-height area taller {tallers:.4f} lower {lowers:.4f} ft2"
+    )
     unmeshed = {}
     for (path, _), (kind, reason) in base.UNMESHED.items():
         key = ("rvt-rs" if path == args[0] else "Revit", kind, reason)

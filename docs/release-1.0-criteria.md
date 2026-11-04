@@ -62,7 +62,7 @@ on the office 221 of 269 doors keep their box, their saved graphics not decoding
 Walls: 360 of 360 with Revit's ends on Core Interior, 482 of 607 on the office as built (RE-222,
 RE-223).
 Wall tops: a wall whose top join or cut pair names a floor, roof or footing that covers its whole plan is cut at its underside, which is Revit's top on 64 of the office's 65 cut tops as built and 70 of 70 at permit (RE-267);
-the 29 walls as built and 26 at permit that Revit steps over a floor that covers them in part keep their full height, and so does the one wall as built that Revit cuts although 0.0243 ft² of its plan lies outside the floor.
+a wall such an element covers in part is drawn stepped (RE-320): 49 walls as built and 46 at permit, and rvt-rs's top is Revit's over the whole plan on 583 of 607 walls as built (544 before) and 571 of 589 at permit (530 before). The one wall as built that Revit cuts although 0.0243 ft² of its plan lies outside the floor, inside an abutting wall, keeps its full height, as do the walls whose layers Revit ends at different heights.
 Per-category results are in the [supported profile](supported-profile.md#geometry-on-revit-2024-and-2025-projects);
 the residuals are the issues under the 0.13.0 milestone, and `tools/re/box_bodies_vs_ifc.py` counts in Measure, per class, the bodies still drawn as their box and how much of it Revit's body fills
 Open: family instances other than doors and windows drawn from their saved meshes by default ([#1191](https://github.com/DrunkOnJava/rvt-rs/issues/1191)),

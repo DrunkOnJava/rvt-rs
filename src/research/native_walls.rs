@@ -154,17 +154,22 @@ fn line_ends(fields: &Value) -> Option<([f64; 2], [f64; 2])> {
 
 /// The ElementIds named by a wall's top join (every `JoinToRoofGStep` with
 /// `m_baseOrTop` 1, its `m_ids`) and by its `CutPairGStep`s (`m_otherId`),
-/// from the `(class, fields)` of the objects of its record; a null reference
-/// (an id of 0 or less) names nothing. `None` where a step names its
-/// elements in a shape that is not read, so that no step is left out unseen.
-fn named_by_steps<'a>(steps: impl Iterator<Item = (&'a str, &'a Value)>) -> Option<BTreeSet<u64>> {
-    let mut named = BTreeSet::new();
+/// each as its own set, from the `(class, fields)` of the objects of its
+/// record; a null reference (an id of 0 or less) names nothing. `None` where
+/// a step names its elements in a shape that is not read, so that no step is
+/// left out unseen.
+fn named_by_steps<'a>(
+    steps: impl Iterator<Item = (&'a str, &'a Value)>,
+) -> Option<(BTreeSet<u64>, BTreeSet<u64>)> {
+    let mut joined = BTreeSet::new();
+    let mut paired = BTreeSet::new();
     for (class, fields) in steps {
-        let references: Vec<&Value> = match class {
-            "JoinToRoofGStep" if fields.get("m_baseOrTop").and_then(Value::as_i64) == Some(1) => {
-                fields.get("m_ids")?.as_array()?.iter().collect()
-            }
-            "CutPairGStep" => vec![fields.get("m_otherId")?],
+        let (references, named): (Vec<&Value>, &mut BTreeSet<u64>) = match class {
+            "JoinToRoofGStep" if fields.get("m_baseOrTop").and_then(Value::as_i64) == Some(1) => (
+                fields.get("m_ids")?.as_array()?.iter().collect(),
+                &mut joined,
+            ),
+            "CutPairGStep" => (vec![fields.get("m_otherId")?], &mut paired),
             _ => continue,
         };
         for reference in references {
@@ -174,7 +179,7 @@ fn named_by_steps<'a>(steps: impl Iterator<Item = (&'a str, &'a Value)>) -> Opti
             }
         }
     }
-    Some(named)
+    Some((joined, paired))
 }
 
 /// The join listing `wall`'s `end`, as (member, end it joins by) pairs.
@@ -283,6 +288,11 @@ pub struct WallRecords {
     /// `CutPairGStep`s name, in ascending order. A wall that names none, or
     /// one of whose steps is not readable, is left out.
     pub top_cutters: BTreeMap<u64, Vec<u64>>,
+    /// Those of [`Self::top_cutters`] that only a `CutPairGStep` names, never
+    /// the top join (RE-320): a Join Geometry cut takes the volume the element
+    /// shares with the wall, which is the wall's top only where the element
+    /// reaches it. A wall with none is left out.
+    pub pair_only: BTreeMap<u64, Vec<u64>>,
     /// The walls whose record holds no step but the harmless ones (a wall's
     /// base, ends, split faces, reference planes, join tweaks and layer
     /// extensions):
@@ -470,6 +480,7 @@ pub fn native_walls_and_top_joins_into(
     let mut top_joined: BTreeMap<u64, bool> = BTreeMap::new();
     let mut uncut: BTreeSet<u64> = BTreeSet::new();
     let mut top_cutters: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
+    let mut pair_only: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut whole: BTreeSet<u64> = BTreeSet::new();
     let mut bounded: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let options = Options {
@@ -524,8 +535,14 @@ pub fn native_walls_and_top_joins_into(
             .objects
             .iter()
             .map(|object| (object.class_name.as_str(), &object.fields));
-        if let Some(named) = named_by_steps(steps).filter(|named| !named.is_empty()) {
-            top_cutters.insert(id, named.into_iter().collect());
+        if let Some((joined, paired)) = named_by_steps(steps)
+            .filter(|(joined, paired)| !(joined.is_empty() && paired.is_empty()))
+        {
+            let only: Vec<u64> = paired.difference(&joined).copied().collect();
+            top_cutters.insert(id, joined.union(&paired).copied().collect());
+            if !only.is_empty() {
+                pair_only.insert(id, only);
+            }
         }
         if graph.objects.iter().all(|object| {
             !object.class_name.ends_with("Step")
@@ -682,6 +699,7 @@ pub fn native_walls_and_top_joins_into(
         top_joined,
         uncut,
         top_cutters,
+        pair_only,
         whole,
         bounded,
     })
