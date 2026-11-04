@@ -19,6 +19,10 @@ each hold "ref on ours", both directions within 0.001 ft and within 1e-5 ft
 (the tessellations coincide), and the volume within 1% and 0.01%. Then the
 scored bodies with an arc that miss "ref on ours", one line each.
 
+With RVT_SCORER_FINE_MESH=1 (#1355, RE-331) `mesh_bodies_vs_ifc` also prints its
+`fine` rows (both files meshed at one equal, fine deflection), and this prints
+the same census for the fine scores, each line led by `fine`.
+
 Needs IfcOpenShell and numpy.
 
 Usage:
@@ -124,7 +128,7 @@ def our_arcs(element):
     return count, largest
 
 
-def census(scored):
+def census(scored, label=""):
     ours = mesh_bodies_vs_ifc.DESCRIBED.get("ours", {})
     ref = mesh_bodies_vs_ifc.DESCRIBED.get("ref", {})
     rows = collections.defaultdict(collections.Counter)
@@ -146,22 +150,22 @@ def census(scored):
             misses.append((to_ours, tag, cls, object_type, ratio, to_ref, largest, ref.get(tag, "not described")))
     print()
     if not rows:
-        print("scored bodies with an arc in a profile: none")
+        print(f"{label}scored bodies with an arc in a profile: none")
         return
     total = rows[("all", "all")]["n"]
-    print(f"scored bodies with an arc in a profile: {total}")
-    print(f"{'n':>6} {'ref on ours':>11} {'0.001 ft':>8} {'1e-5 ft':>7} {'vol 1%':>7} {'vol .01%':>8}  Revit's form; rvt-rs's arcs")
+    print(f"{label}scored bodies with an arc in a profile: {total}")
+    print(f"{label}{'n':>6} {'ref on ours':>11} {'0.001 ft':>8} {'1e-5 ft':>7} {'vol 1%':>7} {'vol .01%':>8}  Revit's form; rvt-rs's arcs")
     for key in sorted(rows, key=lambda k: (k[0] != "all", k[0], k[1] != "all", k[1])):
         row = rows[key]
         print(
-            f"{row['n']:>6} {row['ref on ours']:>11} {row['0.001 ft']:>8} {row['1e-5 ft']:>7} {row['vol 1%']:>7}"
+            f"{label}{row['n']:>6} {row['ref on ours']:>11} {row['0.001 ft']:>8} {row['1e-5 ft']:>7} {row['vol 1%']:>7}"
             f" {row['vol 0.01%']:>8}  {key[0]}; {key[1]}"
         )
     misses.sort(reverse=True)
-    print(f"scored bodies with an arc that miss 'ref on ours': {len(misses)}")
+    print(f"{label}scored bodies with an arc that miss 'ref on ours': {len(misses)}")
     for to_ours, tag, cls, object_type, ratio, to_ref, largest, form in misses[:15]:
         print(
-            f"  {tag} {cls} '{object_type}': volume ratio {ratio:.4f}, Revit's vertices to rvt-rs's surface"
+            f"  {label}{tag} {cls} '{object_type}': volume ratio {ratio:.4f}, Revit's vertices to rvt-rs's surface"
             f" {to_ours:.4g} ft, rvt-rs's to Revit's {to_ref:.4g} ft, largest arc radius {largest:.4g} ft; Revit: {form}"
         )
 
@@ -185,6 +189,8 @@ def main():
     status = mesh_bodies_vs_ifc.main()
     if status == 0:
         census(mesh_bodies_vs_ifc.RESULT.get("scored", []))
+        if "scored_fine" in mesh_bodies_vs_ifc.RESULT:
+            census(mesh_bodies_vs_ifc.RESULT["scored_fine"], "fine ")
     return status
 
 
