@@ -584,12 +584,15 @@ pub(crate) fn curved_edge_points(
     edge_on_plane(&samples, knots, eval, plane_frame(g, surface)?)
 }
 
+/// Moves a curved face's samples of one edge onto the plane beside it.
+type CurvedRefine<'a> = &'a dyn Fn(usize, usize, Vec<[f64; 2]>) -> Result<Vec<[f64; 2]>>;
+
 /// How `ring_impl` refines each edge's samples: a plane face's to its curved
 /// neighbours' points, or a curved face's onto the planes beside it.
 enum Refine<'a> {
     No,
     Plane,
-    Curved(&'a dyn Fn(usize, usize, Vec<[f64; 2]>) -> Result<Vec<[f64; 2]>>),
+    Curved(CurvedRefine<'a>),
 }
 /// Whether any two edges of a loop no more than eight apart cross: what a
 /// refined edge whose points are out of order makes (#1247).
