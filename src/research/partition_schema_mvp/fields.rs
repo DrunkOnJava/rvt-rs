@@ -413,6 +413,22 @@ pub const SLAB_TYPE_LAYER_COUNT_FIELD: &str = "m_slab_type_layer_count";
 /// step that cuts its solid, a `CutPairGStep` or a `WallCutoutGStep` (RE-295).
 pub const SLAB_UNCUT_FIELD: &str = "m_slab_uncut";
 
+/// Field holding, as a vector of three floats `[a, b, c]`, the plane
+/// `z = a·x + b·y + c` (model feet) of the top of a floor whose native record
+/// shape-edits its corner vertices (`SlabShapeEditGStep`, #1384, RE-336).
+pub const SLAB_TOP_PLANE_FIELD: &str = "m_slab_top_plane";
+
+/// Field holding, as a code, why a floor whose native record edits its shape
+/// (`SlabShapeEditGStep`) has no [`SLAB_TOP_PLANE_FIELD`]: the edits are not
+/// of its corners alone, or its corners do not lie in one plane (#1384).
+pub const SLAB_SHAPE_UNREAD_FIELD: &str = "m_slab_shape_unread";
+
+/// Field holding, as a vector of ElementIds, the elements a wall's base join
+/// (`JoinToRoofGStep` with `m_baseOrTop` 0) names
+/// ([`crate::native_walls::WallRecords::base_cutters`], #1384): the floors and
+/// footings the export may cut its base at.
+pub const WALL_BASE_CUTTERS_FIELD: &str = "m_wall_base_cutters";
+
 /// Field holding a railing's height, its type's top rail height, feet
 /// (RE-231).
 pub const RAILING_HEIGHT_FIELD: &str = "m_railing_height";

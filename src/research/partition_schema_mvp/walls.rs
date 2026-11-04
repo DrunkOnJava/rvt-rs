@@ -57,6 +57,26 @@ pub fn wall_top_cutters_from_fields(fields: &[(String, InstanceField)]) -> Vec<u
         .unwrap_or_default()
 }
 
+/// The ElementIds [`WALL_BASE_CUTTERS_FIELD`] records: what a wall's base join
+/// names (#1384). Empty where it holds none.
+pub fn wall_base_cutters_from_fields(fields: &[(String, InstanceField)]) -> Vec<u32> {
+    fields
+        .iter()
+        .find_map(|(name, value)| match value {
+            InstanceField::Vector(items) if name == WALL_BASE_CUTTERS_FIELD => Some(
+                items
+                    .iter()
+                    .filter_map(|item| match item {
+                        InstanceField::ElementId { id, .. } => Some(*id),
+                        _ => None,
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
 /// The ElementIds [`WALL_TOP_PAIR_ONLY_FIELD`] records: those of a wall's top
 /// cutters that only a cut pair names (RE-320). Empty where it holds none.
 pub fn wall_top_pair_only_from_fields(fields: &[(String, InstanceField)]) -> Vec<u32> {
@@ -619,6 +639,7 @@ pub(super) fn attach_wall_layers(
         top_joined,
         uncut,
         top_cutters,
+        base_cutters,
         pair_only,
         whole,
         bounded,
@@ -652,6 +673,22 @@ pub(super) fn attach_wall_layers(
             if let Some(items) = items {
                 wall.fields
                     .push((WALL_TOP_CUTTERS_FIELD.into(), InstanceField::Vector(items)));
+            }
+        }
+        // #1384: the elements its base join names.
+        if let Some(named) = wall.id.and_then(|id| base_cutters.get(&u64::from(id))) {
+            let items: Option<Vec<InstanceField>> = named
+                .iter()
+                .map(|&id| {
+                    Some(InstanceField::ElementId {
+                        tag: 0,
+                        id: u32::try_from(id).ok()?,
+                    })
+                })
+                .collect();
+            if let Some(items) = items {
+                wall.fields
+                    .push((WALL_BASE_CUTTERS_FIELD.into(), InstanceField::Vector(items)));
             }
         }
         if let Some(only) = wall.id.and_then(|id| pair_only.get(&u64::from(id))) {

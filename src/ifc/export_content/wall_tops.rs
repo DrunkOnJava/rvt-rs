@@ -55,17 +55,40 @@
 //! stays the full prism, which the passes that read a wall's plan and its
 //! record's box use; the writer, the glTF and the plan outline draw its
 //! `solid_shape`.
+//!
+//! # A wall's base (#1384, RE-336)
+//!
+//! A wall's base join (`JoinToRoofGStep` with `m_baseOrTop` 0) takes its base
+//! up to the top of the floor or footing it names, over the part of the wall's
+//! plan the element covers. [`cut_wall_bases`] does this for a wall the one
+//! named element covers whole, when that top lies between the wall's base and
+//! top over all of the plan: at the element's level where it is drawn as a
+//! plain extrusion, and along the plane of its shape-edited corners where the
+//! floor is drawn as a solid between that plane and its underside (the
+//! `native_slab_shape_edit` body of `export_content`). The wall's body is then
+//! its profile from that top to its own, the `solid_shape`, and the wall
+//! carries a `BodyHeightSource` and `BaseCoverElementId`.
+//!
+//! A wall of which this is not proven keeps its base. When it names a floor
+//! with shape-edited corners it carries the reason as `BaseCoverRefusal`: the
+//! floor's edits are not read, it is not one plain extrusion, no named element
+//! covers its plan or two do, or the top crosses its base or its top. A named
+//! element of which only part covers the wall is not stepped here.
 
 use std::collections::{HashMap, HashSet};
 
 use super::{
-    ELEMENT_RECORD_PROPERTY_SET, WALL_TOP_COVER_BODY_HEIGHT_SOURCE,
+    ELEMENT_RECORD_PROPERTY_SET, WALL_BASE_COVER_BODY_HEIGHT_SOURCE, WALL_BASE_REFUSAL_PROPERTY,
+    WALL_BASE_SLOPED_BODY_HEIGHT_SOURCE, WALL_TOP_COVER_BODY_HEIGHT_SOURCE,
     WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use crate::ifc::body_geometry::{
-    Body, Placement, Point2, Ring, extrusion_rings, plan_outline, section,
+    Body, Placement, PlanPlane, Point2, Ring, between_surfaces_mesh, extrusion_rings, plan_outline,
+    section,
 };
-use crate::ifc::entities::{Extrusion, IfcEntity, ProfileDef, Property, PropertyValue, SolidShape};
+use crate::ifc::entities::{
+    BrepTriangle, Extrusion, IfcEntity, ProfileDef, Property, PropertyValue, SolidShape,
+};
 
 /// How much of a wall's plan may lie outside its floor's, or inside the
 /// floor's openings, and still be covered, square feet. On the BIM4LCA office
@@ -584,6 +607,7 @@ fn build_cutter(
     entities: &[IfcEntity],
     pieces: &[usize],
     voids: &HashMap<usize, Vec<&[Point2]>>,
+    shape_edited: bool,
 ) -> Option<Cutter> {
     let mut heights: Option<(f64, f64)> = None;
     let mut top = f64::NEG_INFINITY;
@@ -592,7 +616,7 @@ fn build_cutter(
     for &index in pieces {
         let IfcEntity::BuildingElement {
             extrusion: Some(body),
-            solid_shape: None,
+            solid_shape,
             representation_map_index: None,
             location_feet: Some(location),
             rotation_radians,
@@ -601,6 +625,13 @@ fn build_cutter(
         else {
             return None;
         };
+        // A floor whose shape is edited is drawn as a solid between its sloped
+        // top and bottom (#1384); its extrusion is the box prism, which gives
+        // its outline.
+        match (solid_shape, shape_edited) {
+            (None, false) | (Some(SolidShape::FacetedBrep { .. }), true) => {}
+            _ => return None,
+        }
         if !(body.height_feet.is_finite() && body.height_feet > 0.0)
             || !location.iter().all(|v| v.is_finite())
         {
@@ -649,32 +680,11 @@ enum Cut {
 /// For each of `pending` (a wall's entity index and the ElementIds its top
 /// join and cut pairs name) that is cut: its index and how.
 fn decide(entities: &[IfcEntity], pending: &[Pending]) -> Vec<(usize, Cut)> {
-    let mut pieces: HashMap<u32, Vec<usize>> = HashMap::new();
-    let mut voids: HashMap<usize, Vec<&[Point2]>> = HashMap::new();
-    let mut profiled: HashSet<usize> = HashSet::new();
-    for (index, entity) in entities.iter().enumerate() {
-        match entity {
-            IfcEntity::BuildingElement {
-                ifc_type,
-                type_guid: Some(guid),
-                ..
-            } if CUTTER_TYPES.contains(&ifc_type.as_str()) => {
-                if let Ok(id) = guid.parse::<u32>() {
-                    pieces.entry(id).or_default().push(index);
-                }
-            }
-            IfcEntity::VoidOpening {
-                host, outline_feet, ..
-            } => voids
-                .entry(*host)
-                .or_default()
-                .push(outline_feet.as_slice()),
-            IfcEntity::WallProfileOpening { host, .. } => {
-                profiled.insert(*host);
-            }
-            _ => {}
-        }
-    }
+    let Gathered {
+        pieces,
+        voids,
+        profiled,
+    } = gather(entities);
     let walls: Vec<(usize, Wall)> = entities
         .iter()
         .enumerate()
@@ -702,7 +712,7 @@ fn decide(entities: &[IfcEntity], pending: &[Pending]) -> Vec<(usize, Cut)> {
             };
             let Some(cutter) = cutters
                 .entry(id)
-                .or_insert_with(|| build_cutter(entities, found, &voids))
+                .or_insert_with(|| build_cutter(entities, found, &voids, false))
                 .as_ref()
             else {
                 continue;
@@ -876,6 +886,297 @@ pub(super) fn cut_wall_tops(entities: &mut [IfcEntity], pending: &[Pending]) {
                     ),
                 });
             }
+        }
+    }
+}
+
+/// A wall whose base join names elements, waiting for the pass (#1384).
+pub(super) struct PendingBase {
+    /// The wall's entity index.
+    pub index: usize,
+    /// The ElementIds its base join names.
+    pub named: Vec<u32>,
+}
+
+/// How a wall's base is cut.
+enum BaseCut {
+    /// At one level across its plan.
+    Level { level: f64, id: u32 },
+    /// Along the plane of a shape-edited top.
+    Plane { plane: PlanPlane, id: u32 },
+}
+
+/// What the passes read of `entities` besides the walls.
+struct Gathered<'a> {
+    /// The indices of the floors, roofs and footings under each ElementId.
+    pieces: HashMap<u32, Vec<usize>>,
+    /// The outlines of the openings that void each, by entity index.
+    voids: HashMap<usize, Vec<&'a [Point2]>>,
+    /// The walls with an edited elevation profile, by entity index.
+    profiled: HashSet<usize>,
+}
+
+fn gather(entities: &[IfcEntity]) -> Gathered<'_> {
+    let mut pieces: HashMap<u32, Vec<usize>> = HashMap::new();
+    let mut voids: HashMap<usize, Vec<&[Point2]>> = HashMap::new();
+    let mut profiled: HashSet<usize> = HashSet::new();
+    for (index, entity) in entities.iter().enumerate() {
+        match entity {
+            IfcEntity::BuildingElement {
+                ifc_type,
+                type_guid: Some(guid),
+                ..
+            } if CUTTER_TYPES.contains(&ifc_type.as_str()) => {
+                if let Ok(id) = guid.parse::<u32>() {
+                    pieces.entry(id).or_default().push(index);
+                }
+            }
+            IfcEntity::VoidOpening {
+                host, outline_feet, ..
+            } => voids
+                .entry(*host)
+                .or_default()
+                .push(outline_feet.as_slice()),
+            IfcEntity::WallProfileOpening { host, .. } => {
+                profiled.insert(*host);
+            }
+            _ => {}
+        }
+    }
+    Gathered {
+        pieces,
+        voids,
+        profiled,
+    }
+}
+
+/// What the pass decides for a wall whose base join names elements.
+enum BaseDecision {
+    /// Cut it so.
+    Cut(BaseCut),
+    /// Leave it: why, as a code.
+    Left(&'static str),
+}
+
+/// What the pass has read once, for every wall.
+struct BaseContext<'a> {
+    entities: &'a [IfcEntity],
+    gathered: Gathered<'a>,
+    shapes: &'a HashMap<u32, Option<PlanPlane>>,
+}
+
+/// How the base of `wall` (the entity at `index`) is cut at the one element of
+/// `named` that covers it (#1384): at that element's level, or along the plane
+/// its shape-edited corners lie in, when that top lies between the wall's base
+/// and top over the whole of the wall's plan. Left as it was, with the reason,
+/// where the wall is not one plain extrusion or has an edited elevation
+/// profile, where a named element's edits are not read, where no named element
+/// drawn as a body covers the whole plan, where two do, or where the top
+/// crosses the wall's base or its top.
+fn decide_base(
+    context: &BaseContext<'_>,
+    cutters: &mut HashMap<u32, Option<Cutter>>,
+    index: usize,
+    named: &[u32],
+) -> BaseDecision {
+    let BaseContext {
+        entities,
+        gathered,
+        shapes,
+    } = context;
+    if gathered.profiled.contains(&index) {
+        return BaseDecision::Left("wall_profile_edited");
+    }
+    let Some(wall) = entities.get(index).and_then(build_wall) else {
+        return BaseDecision::Left("wall_not_one_plain_extrusion");
+    };
+    let mut eligible: Vec<BaseCut> = Vec::new();
+    let mut built = false;
+    let mut crossed = false;
+    for &id in named {
+        let Some(found) = gathered.pieces.get(&id) else {
+            continue;
+        };
+        let shape = shapes.get(&id);
+        if matches!(shape, Some(None)) {
+            return BaseDecision::Left("floor_shape_not_read");
+        }
+        let Some(cutter) = cutters
+            .entry(id)
+            .or_insert_with(|| build_cutter(entities, found, &gathered.voids, shape.is_some()))
+            .as_ref()
+        else {
+            continue;
+        };
+        built = true;
+        if !covers(cutter, &wall) {
+            continue;
+        }
+        let (low, high, cut) = match shape {
+            Some(Some(plane)) => {
+                let (low, high) = wall
+                    .plan
+                    .iter()
+                    .map(|&(x, y)| plane[0] * x + plane[1] * y + plane[2])
+                    .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), h| {
+                        (lo.min(h), hi.max(h))
+                    });
+                (low, high, BaseCut::Plane { plane: *plane, id })
+            }
+            _ => (
+                cutter.top,
+                cutter.top,
+                BaseCut::Level {
+                    level: cutter.top,
+                    id,
+                },
+            ),
+        };
+        if low > wall.base + UNDERSIDE_TOLERANCE_FEET && high < wall.top - UNDERSIDE_TOLERANCE_FEET
+        {
+            eligible.push(cut);
+        } else if high > wall.base + UNDERSIDE_TOLERANCE_FEET
+            && low < wall.top - UNDERSIDE_TOLERANCE_FEET
+        {
+            crossed = true;
+        }
+    }
+    match (eligible.pop(), eligible.is_empty()) {
+        (Some(cut), true) => BaseDecision::Cut(cut),
+        (Some(_), false) => BaseDecision::Left("several_elements_cover_the_wall"),
+        (None, _) if crossed => BaseDecision::Left("top_crosses_the_wall_base_or_top"),
+        (None, _) if built => BaseDecision::Left("no_element_covers_the_wall_plan"),
+        (None, _) => BaseDecision::Left("named_element_body_not_read"),
+    }
+}
+
+/// The decision for each of `pending` that is cut, or that names an element
+/// with shape-edited corners and is left: a wall that names only unedited
+/// elements and is not cut was not going to be raised by a sloped top, and
+/// carries no reason.
+fn decide_bases(
+    entities: &[IfcEntity],
+    pending: &[PendingBase],
+    shapes: &HashMap<u32, Option<PlanPlane>>,
+) -> Vec<(usize, BaseDecision)> {
+    let context = BaseContext {
+        entities,
+        gathered: gather(entities),
+        shapes,
+    };
+    let mut cutters: HashMap<u32, Option<Cutter>> = HashMap::new();
+    let mut decisions = Vec::new();
+    for PendingBase { index, named } in pending {
+        let decision = decide_base(&context, &mut cutters, *index, named);
+        let edited = named.iter().any(|id| shapes.contains_key(id));
+        if matches!(decision, BaseDecision::Cut(_)) || edited {
+            decisions.push((*index, decision));
+        }
+    }
+    decisions
+}
+
+/// Cut the base of each wall of `pending` at the top of the floor or footing
+/// that covers it (see [`decide_bases`], #1384, RE-336): a level cut is the
+/// wall's profile extruded from that level, and one along a sloped top is the
+/// solid between that top and the wall's own. The extrusion stays the full
+/// prism, which the passes that read a wall's plan and its record's box use;
+/// the writer, the glTF and the plan outline draw the `solid_shape`.
+pub(super) fn cut_wall_bases(
+    entities: &mut [IfcEntity],
+    pending: &[PendingBase],
+    shapes: &HashMap<u32, Option<PlanPlane>>,
+) {
+    if pending.is_empty() {
+        return;
+    }
+    let decisions = decide_bases(entities, pending, shapes);
+    for (index, decision) in decisions {
+        let Some(IfcEntity::BuildingElement {
+            extrusion: Some(body),
+            location_feet: Some(location),
+            rotation_radians,
+            solid_shape,
+            property_set,
+            ..
+        }) = entities.get_mut(index)
+        else {
+            continue;
+        };
+        let cut = match decision {
+            BaseDecision::Cut(cut) => cut,
+            BaseDecision::Left(reason) => {
+                if let Some(set) = property_set
+                    .as_mut()
+                    .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
+                {
+                    set.properties.push(Property {
+                        name: WALL_BASE_REFUSAL_PROPERTY.into(),
+                        value: PropertyValue::Text(reason.into()),
+                    });
+                }
+                continue;
+            }
+        };
+        let Some((outer, holes)) = extrusion_rings(body) else {
+            continue;
+        };
+        if !holes.is_empty() {
+            continue;
+        }
+        let base = location[2];
+        let top = body.height_feet;
+        let placement = Placement::new(Some(*location), *rotation_radians);
+        let (shape, source, id) = match cut {
+            BaseCut::Level { level, id } => {
+                let from = level - base;
+                (
+                    SolidShape::PlacedExtrusion {
+                        profile: ProfileDef::ArbitraryClosed { points: outer },
+                        origin_feet: [0.0, 0.0, from],
+                        axis: [0.0, 0.0, 1.0],
+                        ref_direction: [1.0, 0.0, 0.0],
+                        depth_feet: top - from,
+                    },
+                    WALL_BASE_COVER_BODY_HEIGHT_SOURCE,
+                    id,
+                )
+            }
+            BaseCut::Plane { plane, id } => {
+                let bottom = |p: Point2| {
+                    let at = placement.apply([p.0, p.1, 0.0]);
+                    plane[0] * at[0] + plane[1] * at[1] + plane[2] - base
+                };
+                let Some(mesh) = between_surfaces_mesh(&outer, &[], bottom, |_| top) else {
+                    continue;
+                };
+                (
+                    SolidShape::FacetedBrep {
+                        vertices_feet: mesh.vertices,
+                        triangles: mesh
+                            .triangles
+                            .into_iter()
+                            .map(|[a, b, c]| BrepTriangle(a, b, c))
+                            .collect(),
+                    },
+                    WALL_BASE_SLOPED_BODY_HEIGHT_SOURCE,
+                    id,
+                )
+            }
+        };
+        *solid_shape = Some(shape);
+        if let Some(set) = property_set
+            .as_mut()
+            .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
+        {
+            set.properties.push(Property {
+                name: "BodyHeightSource".into(),
+                value: PropertyValue::Text(source.into()),
+            });
+            set.properties.push(Property {
+                name: "BaseCoverElementId".into(),
+                value: PropertyValue::Integer(i64::from(id)),
+            });
         }
     }
 }

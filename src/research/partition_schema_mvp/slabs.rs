@@ -771,6 +771,114 @@ fn is_plate(element: &DecodedElement) -> bool {
     matches!(element.class.as_str(), "Floor" | "Ceiling" | "Roof")
 }
 
+/// How far four or more corner heights of a shape-edited floor may stray from
+/// the plane through the first three, feet (#1384).
+const SLAB_PLANE_TOLERANCE_FEET: f64 = 1e-5;
+
+/// What a floor's native `SlabShapeEditGStep` says of its top (#1384, RE-336).
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum SlabShape {
+    /// No vertex is moved.
+    Unedited,
+    /// Its corners are moved to heights that lie in the plane
+    /// `z = a·x + b·y + c`, model feet.
+    Plane([f64; 3]),
+    /// It is edited in a way that is not read: the reason.
+    Unread(&'static str),
+}
+
+/// The top of the floor whose native record is `graph`: `None` where it holds
+/// no `SlabShapeEditGStep`. A step edits a floor's corner vertices, each given
+/// at its plan place with the offset of its height from the floor's original
+/// face height (`m_originalFaceHeight`); the interior vertices, edge vertices
+/// and creases a step can also hold are not read, and neither are corners that
+/// do not lie in one plane.
+fn slab_shape(graph: &crate::native_parameters::ObjectGraph) -> Option<SlabShape> {
+    let step = graph
+        .objects
+        .iter()
+        .find(|object| object.class_name == "SlabShapeEditGStep")?;
+    let fields = &step.fields;
+    let held = |name: &str| fields.get(name).and_then(serde_json::Value::as_array);
+    let corners = held("m_cornerVertices")?;
+    let others = ["m_interiorVertices", "m_edgeVertices", "m_explicitCreases"]
+        .iter()
+        .any(|name| held(name).is_some_and(|items| !items.is_empty()));
+    let original = fields
+        .get("m_originalFaceHeight")
+        .and_then(serde_json::Value::as_f64)?;
+    let mut points: Vec<[f64; 3]> = Vec::with_capacity(corners.len());
+    for corner in corners {
+        let vertex = corner.get("m_vertex")?;
+        let at = vertex.get("m_xyLocation")?.as_array()?;
+        let (x, y) = (at.first()?.as_f64()?, at.get(1)?.as_f64()?);
+        let offset = vertex.get("m_offset")?.as_f64()?;
+        if !(x.is_finite() && y.is_finite() && offset.is_finite()) {
+            return Some(SlabShape::Unread("corner_vertex_not_finite"));
+        }
+        points.push([x, y, original + offset]);
+    }
+    let moved = points
+        .iter()
+        .any(|p| (p[2] - original).abs() > SLAB_PLANE_TOLERANCE_FEET);
+    if !moved && !others {
+        return Some(SlabShape::Unedited);
+    }
+    if fields.get("m_dormant").and_then(serde_json::Value::as_bool) != Some(false) {
+        return Some(SlabShape::Unread("shape_edit_dormant_or_unmarked"));
+    }
+    if others {
+        return Some(SlabShape::Unread("interior_edge_vertices_or_creases"));
+    }
+    if points.len() < 3 || !original.is_finite() {
+        return Some(SlabShape::Unread("fewer_than_three_corner_vertices"));
+    }
+    let [x0, y0, z0] = points[0];
+    let [x1, y1, z1] = points[1];
+    let [x2, y2, z2] = points[2];
+    let det = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
+    if det.abs() < 1e-9 {
+        return Some(SlabShape::Unread("first_three_corners_collinear"));
+    }
+    let a = ((z1 - z0) * (y2 - y0) - (z2 - z0) * (y1 - y0)) / det;
+    let b = ((x1 - x0) * (z2 - z0) - (x2 - x0) * (z1 - z0)) / det;
+    let c = z0 - a * x0 - b * y0;
+    let flat = points
+        .iter()
+        .all(|p| (a * p[0] + b * p[1] + c - p[2]).abs() <= SLAB_PLANE_TOLERANCE_FEET);
+    if !flat || !(a.is_finite() && b.is_finite() && c.is_finite()) {
+        return Some(SlabShape::Unread("corners_not_in_one_plane"));
+    }
+    Some(SlabShape::Plane([a, b, c]))
+}
+
+/// The plane [`SLAB_TOP_PLANE_FIELD`] records, `z = a·x + b·y + c` in model
+/// feet (#1384).
+pub fn slab_top_plane_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 3]> {
+    fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Vector(items) if name == SLAB_TOP_PLANE_FIELD => {
+            let [a, b, c] = items.as_slice() else {
+                return None;
+            };
+            let float = |item: &InstanceField| match item {
+                InstanceField::Float { value, .. } => Some(*value),
+                _ => None,
+            };
+            Some([float(a)?, float(b)?, float(c)?])
+        }
+        _ => None,
+    })
+}
+
+/// The reason [`SLAB_SHAPE_UNREAD_FIELD`] records: why a shape-edited floor's
+/// top is not read (#1384).
+pub fn slab_shape_unread_from_fields(fields: &[(String, InstanceField)]) -> Option<&str> {
+    fields.iter().find_map(|(name, value)| match value {
+        InstanceField::String(reason) if name == SLAB_SHAPE_UNREAD_FIELD => Some(reason.as_str()),
+        _ => None,
+    })
+}
+
 /// Mark each floor, ceiling and roof of `lists` whose native record was read
 /// and holds no step that cuts its solid (RE-295): no `CutPairGStep`, the join
 /// that cuts one element with another, and no `WallCutoutGStep`, the cut a
@@ -778,6 +886,10 @@ fn is_plate(element: &DecodedElement) -> bool {
 /// the cut, which the floor's profile and layers do not give. An element whose
 /// record is not read, on a release the native record path does not read, is
 /// not marked.
+///
+/// The same pass gives a floor whose `SlabShapeEditGStep` moves its corner
+/// vertices the plane of its top ([`SLAB_TOP_PLANE_FIELD`]), and one whose
+/// edits are not read the reason ([`SLAB_SHAPE_UNREAD_FIELD`], #1384).
 pub(super) fn attach_slab_uncut(rf: &mut RevitFile, lists: &mut [&mut Vec<DecodedElement>]) {
     let ids: BTreeSet<u64> = lists
         .iter()
@@ -793,6 +905,7 @@ pub(super) fn attach_slab_uncut(rf: &mut RevitFile, lists: &mut [&mut Vec<Decode
         ..crate::native_document::Options::default()
     };
     let mut cut: BTreeMap<u64, bool> = BTreeMap::new();
+    let mut shapes: BTreeMap<u64, SlabShape> = BTreeMap::new();
     let read = crate::native_document::extract_graphs(rf, &options, |record| {
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
@@ -804,21 +917,40 @@ pub(super) fn attach_slab_uncut(rf: &mut RevitFile, lists: &mut [&mut Vec<Decode
             )
         });
         *cut.entry(record.identity.element_id).or_default() |= steps;
+        if let Some(shape) = slab_shape(graph) {
+            let held = shapes.entry(record.identity.element_id).or_insert(shape);
+            if *held != shape {
+                *held = SlabShape::Unread("record_copies_disagree");
+            }
+        }
         Ok(())
     });
     if read.is_err() {
         return;
     }
     for element in lists.iter_mut().flat_map(|list| list.iter_mut()) {
-        if is_plate(element)
-            && element
-                .id
-                .and_then(|id| cut.get(&u64::from(id)))
-                .is_some_and(|seen| !seen)
-        {
+        if !is_plate(element) {
+            continue;
+        }
+        let id = element.id.map(u64::from);
+        if id.and_then(|id| cut.get(&id)).is_some_and(|seen| !seen) {
             element
                 .fields
                 .push((SLAB_UNCUT_FIELD.into(), InstanceField::Bool(true)));
+        }
+        match id.and_then(|id| shapes.get(&id)) {
+            Some(SlabShape::Plane([a, b, c])) => {
+                let float = |value: f64| InstanceField::Float { value, size: 8 };
+                element.fields.push((
+                    SLAB_TOP_PLANE_FIELD.into(),
+                    InstanceField::Vector(vec![float(*a), float(*b), float(*c)]),
+                ));
+            }
+            Some(SlabShape::Unread(reason)) => element.fields.push((
+                SLAB_SHAPE_UNREAD_FIELD.into(),
+                InstanceField::String((*reason).into()),
+            )),
+            Some(SlabShape::Unedited) | None => {}
         }
     }
 }

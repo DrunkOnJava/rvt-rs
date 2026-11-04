@@ -553,6 +553,12 @@ pub fn append_typed_production_elements(
     // RE-267: each wall's entity index and the elements its top join and cut
     // pairs name, for the cut at the floor that covers it.
     let mut pending_tops: Vec<wall_tops::Pending> = Vec::new();
+    // #1384: each wall's entity index and the elements its base join names,
+    // for the cut at the top of the floor or footing it stands on, and the
+    // top of each floor whose shape is edited: its plane, or `None` where the
+    // edits are not read.
+    let mut pending_bases: Vec<wall_tops::PendingBase> = Vec::new();
+    let mut slab_shapes: HashMap<u32, Option<super::body_geometry::PlanPlane>> = HashMap::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
     // entity; `None` once two of its elements disagree.
@@ -1222,6 +1228,30 @@ pub fn append_typed_production_elements(
                 });
             }
         }
+        if policy.include_geometry && decoded.class == "Wall" {
+            let named = crate::partition_schema_mvp::wall_base_cutters_from_fields(&decoded.fields);
+            if !named.is_empty() {
+                pending_bases.push(wall_tops::PendingBase {
+                    index: entity_index,
+                    named,
+                });
+            }
+        }
+        if policy.include_geometry && decoded.class == "Floor" {
+            if let Some(id) = decoded.id {
+                if let Some(plane) =
+                    crate::partition_schema_mvp::slab_top_plane_from_fields(&decoded.fields)
+                {
+                    slab_shapes.insert(id, Some(plane));
+                } else if crate::partition_schema_mvp::slab_shape_unread_from_fields(
+                    &decoded.fields,
+                )
+                .is_some()
+                {
+                    slab_shapes.insert(id, None);
+                }
+            }
+        }
         // RE-291: a column whose type is a plain rectangle, with the elements its pairs name.
         if policy.include_geometry
             && matches!(decoded.class.as_str(), "Column" | "StructuralColumn")
@@ -1474,6 +1504,10 @@ pub fn append_typed_production_elements(
 
     // RE-267: a wall's top is cut at the underside of the floor that covers it.
     wall_tops::cut_wall_tops(entities, &pending_tops);
+
+    // #1384: a wall's base is cut at the top of the floor or footing it stands
+    // on, level or following that element's shape-edited top.
+    wall_tops::cut_wall_bases(entities, &pending_bases, &slab_shapes);
 
     // RE-270: the side areas and volumes of a wall joined to floors that
     // leave it as its record's box. It runs after the pass above, on purpose:
@@ -4356,6 +4390,31 @@ pub const WALL_TOP_COVER_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_at_covering_fl
 /// of the plan outside the element from there to the top (#1067, RE-320).
 pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_covering_floor";
 
+/// `BodyHeightSource` of a wall whose base is cut at the top of the floor or
+/// footing its base join names, where that element is level and covers the
+/// whole of the wall's plan (#1384, RE-336).
+pub const WALL_BASE_COVER_BODY_HEIGHT_SOURCE: &str = "wall_base_cut_at_covering_floor";
+
+/// `BodyHeightSource` of a wall whose base follows the shape-edited top of the
+/// floor or footing its base join names, drawn as a solid between that top and
+/// the wall's own top (#1384, RE-336).
+pub const WALL_BASE_SLOPED_BODY_HEIGHT_SOURCE: &str = "wall_base_sloped_at_covering_floor";
+
+/// Property of a floor's [`ELEMENT_RECORD_PROPERTY_SET`] that says why a floor
+/// whose corner vertices are shape-edited is still drawn as its record box
+/// (#1384, RE-336).
+pub const SLAB_SHAPE_REFUSAL_PROPERTY: &str = "SlabShapeRefusal";
+
+/// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says why a wall
+/// whose base join names a floor with shape-edited corners keeps the base of
+/// its record box (#1384, RE-336).
+pub const WALL_BASE_REFUSAL_PROPERTY: &str = "BaseCoverRefusal";
+
+/// `BodySource` of a floor whose corner vertices are shape-edited, drawn as
+/// the slab between its sloped top and the same surface one thickness lower
+/// (#1384, RE-336).
+pub const FLOOR_SHAPE_BODY_SOURCE: &str = "native_slab_shape_edit";
+
 /// `BodySource` of a body that is the element record's bounding box, where
 /// no carrier refines it (#409).
 pub const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
@@ -5014,6 +5073,44 @@ fn roof_slope_solid(
         |p| sign * offset(p) * rise,
         vertical,
     )?;
+    Some(entities::SolidShape::FacetedBrep {
+        vertices_feet: mesh.vertices,
+        triangles: mesh
+            .triangles
+            .into_iter()
+            .map(|[a, b, c]| entities::BrepTriangle(a, b, c))
+            .collect(),
+    })
+}
+
+/// A floor's body when its corners are shape-edited (#1384, RE-336): its plan
+/// outline, between its top, the plane `z = a·x + b·y + c`, and the same
+/// surface one thickness lower, with upright sides. `[x, y, z]` is the
+/// element's placement (the record box's base) and `outer` and `inner` are
+/// the outline relative to `(x, y)`; `height` is the box's.
+///
+/// The thickness is read from the box: the lowest underside is the box's base,
+/// so it is the lowest top less the base. `None` unless the highest top then
+/// reproduces `height` within [`ROOF_SLOPE_CLOSURE_FEET`], so the body is
+/// exactly as tall as the one Revit recorded.
+fn floor_slope_solid(
+    plane: super::body_geometry::PlanPlane,
+    [x, y, z]: [f64; 3],
+    outer: &[(f64, f64)],
+    inner: &[Vec<(f64, f64)>],
+    height: f64,
+) -> Option<entities::SolidShape> {
+    let top = |(px, py): (f64, f64)| plane[0] * (px + x) + plane[1] * (py + y) + plane[2] - z;
+    let (low, high) = outer
+        .iter()
+        .map(|&p| top(p))
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), h| {
+            (lo.min(h), hi.max(h))
+        });
+    if !(low.is_finite() && low > 1e-6 && (high - height).abs() <= ROOF_SLOPE_CLOSURE_FEET) {
+        return None;
+    }
+    let mesh = super::body_geometry::sloped_slab_mesh(outer, inner, |p| top(p) - low, low)?;
     Some(entities::SolidShape::FacetedBrep {
         vertices_feet: mesh.vertices,
         triangles: mesh
@@ -6417,6 +6514,30 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     } else {
         None
     };
+    // #1384: a floor whose corner vertices are shape-edited rises along the
+    // plane they lie in.
+    let floor_slope = if class == "Floor" {
+        profile
+            .as_ref()
+            .filter(|profile| profile.pieces.is_empty())
+            .and_then(|profile| {
+                let plane =
+                    crate::partition_schema_mvp::slab_top_plane_from_fields(&decoded.fields)?;
+                let outer: Vec<(f64, f64)> = profile
+                    .outer_xy
+                    .iter()
+                    .map(|(px, py)| (px - x, py - y))
+                    .collect();
+                let inner: Vec<Vec<(f64, f64)>> = profile
+                    .inner_xy
+                    .iter()
+                    .map(|ring| ring.iter().map(|(px, py)| (px - x, py - y)).collect())
+                    .collect();
+                floor_slope_solid(plane, [x, y, z], &outer, &inner, height)
+            })
+    } else {
+        None
+    };
     // RE-211: a roof by extrusion, its section run across its record box.
     let roof_extrusion = if class == "Roof" && roof_slope.is_none() {
         crate::partition_schema_mvp::roof_extrusion_from_fields(&decoded.fields).and_then(
@@ -6527,6 +6648,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                             .map(|_| LANDING_TREAD_BODY_SOURCE.into())
                     })
                     .or_else(|| roof_slope.as_ref().map(|_| ROOF_SLOPE_BODY_SOURCE.into()))
+                    .or_else(|| floor_slope.as_ref().map(|_| FLOOR_SHAPE_BODY_SOURCE.into()))
                     .or_else(|| {
                         roof_extrusion
                             .as_ref()
@@ -6578,6 +6700,25 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             name: "BodyHeightSource".into(),
             value: PropertyValue::Text(source.into()),
         });
+    }
+    // #1384: why a floor whose corners are shape-edited is still its box.
+    if class == "Floor" && floor_slope.is_none() {
+        let reason = crate::partition_schema_mvp::slab_shape_unread_from_fields(&decoded.fields)
+            .or_else(|| {
+                crate::partition_schema_mvp::slab_top_plane_from_fields(&decoded.fields).map(|_| {
+                    match profile.as_ref() {
+                        None => "plan_outline_not_read",
+                        Some(profile) if !profile.pieces.is_empty() => "plan_outline_in_pieces",
+                        Some(_) => "plane_does_not_reproduce_record_box",
+                    }
+                })
+            });
+        if let Some(reason) = reason {
+            properties.push(Property {
+                name: SLAB_SHAPE_REFUSAL_PROPERTY.into(),
+                value: PropertyValue::Text(reason.into()),
+            });
+        }
     }
     // #219 / RE-27: the host Level the record's counted reference list
     // names. `ifc::apply_record_level_reference_storeys` reads it back
@@ -7122,7 +7263,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                         None,
                     )
                 }
-                None => match (turned, roof_slope.or(roof_extrusion)) {
+                None => match (turned, roof_slope.or(floor_slope).or(roof_extrusion)) {
                     (Some((angle, along, across)), None) => (
                         Some(angle),
                         Extrusion::rectangle(along, across, height),
