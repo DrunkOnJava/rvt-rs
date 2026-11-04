@@ -1053,6 +1053,23 @@ different. A parameter named for it on the element's type is not read. 58 of
 94 exports of the unfiltered run move: every file with structural columns or
 framing (`reports/element-framing/RE-285-structural-load-bearing.md`).
 
+**RE-327 (2026-11-04)** rebuilds a family's extrusions from their own records:
+the sketch's `CurveElem` lines and arcs (in the family's coordinates), chained
+into loops, placed in the `SketchPlane`'s frame and swept between the
+extrusion's two `Double` parameters. Against the mesh Revit saved for each
+form, the 24 extrusions of the family corpus (12 releases) match within
+0.001 ft and so do 6,093 of the 6,172 extrusions of Autodesk's 58 sample
+projects (Revit 2015 to 2027) whose saved mesh decodes whole; the other 79,
+a down-facing plane that is not flipped and whose extrusion sets no
+`m_alwaysRefPlaneNorm`, have the solid on the wrong side of the plane and are
+refused. Ellipses (137), four open sketches (66), sweeps, revolutions,
+blends and voids are not drawn. The 2014 family of Discussion #112 is outside
+the native releases, so its 85 of 86 is not reproduced. `rvt-ifc
+--family-extrusions` (opt-in; the default export is unchanged) draws an
+instance from its family's extrusions where they reproduce its saved mesh;
+that export is not yet measured against Revit's own
+(`reports/element-framing/RE-327-family-extrusions.md`).
+
 ## Performance
 
 Opening a large project is no longer a minutes-long wait. Every partition

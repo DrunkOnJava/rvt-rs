@@ -90,6 +90,13 @@ struct Args {
     /// mesh Revit saved for them.
     #[arg(long, conflicts_with = "placeholder")]
     no_saved_meshes: bool,
+    /// Draw a family instance from its family's own extrusions (the sketch
+    /// curves they were drawn from, swept between their offsets, with true
+    /// arcs) instead of its saved mesh, where they reproduce the mesh; every
+    /// other instance keeps it (#156). Implies `--saved-meshes`. Revit 2023
+    /// to 2027 files. Slower on large files.
+    #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
+    family_extrusions: bool,
     /// Also write Revit's own property sets, as Revit's exporter does with
     /// "Export Revit property sets": each element's named parameters in one
     /// set per parameter group, and its type's on its type object (RE-210).
@@ -240,7 +247,7 @@ fn run(args: Args) -> anyhow::Result<()> {
             Ok(report) => {
                 rvt::ifc::recount_exported(&mut diagnostics, &model);
                 if report.candidates > 0 {
-                    let what = if args.saved_meshes {
+                    let what = if args.saved_meshes || args.family_extrusions {
                         "bounding-box bodies"
                     } else {
                         "door and window bounding-box bodies"
@@ -252,6 +259,25 @@ fn run(args: Args) -> anyhow::Result<()> {
                 }
             }
             Err(e) => eprintln!("rvt-ifc: saved graphics not read, bodies unchanged: {e}"),
+        }
+    }
+
+    if args.family_extrusions {
+        // Like the saved graphics, the extrusions only improve bodies: when
+        // they cannot be read, the export goes ahead with the bodies it has.
+        match rvt::ifc::family_extrusions::attach(&mut rf, &mut model) {
+            Ok(report) => {
+                rvt::ifc::recount_exported(&mut diagnostics, &model);
+                eprintln!(
+                    "rvt-ifc: {} of {} saved-mesh bodies drawn from their family's extrusions ({} families found, {} rebuilt; {} instances of a rebuilt family kept their mesh, which the extrusions did not reproduce)",
+                    report.replaced,
+                    report.candidates,
+                    report.families,
+                    report.families_rebuilt,
+                    report.kept
+                );
+            }
+            Err(e) => eprintln!("rvt-ifc: family extrusions not read, bodies unchanged: {e:#}"),
         }
     }
 
@@ -394,7 +420,7 @@ fn saved_mesh_scope(
     if args.placeholder || args.no_saved_meshes {
         return None;
     }
-    if args.saved_meshes {
+    if args.saved_meshes || args.family_extrusions {
         return Some(SavedMeshScope::All);
     }
     rvt::ifc::saved_meshes::default_scope(rf)

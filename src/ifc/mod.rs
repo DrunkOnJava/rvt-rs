@@ -80,6 +80,7 @@ pub mod clipping;
 pub mod compare;
 pub mod entities;
 pub mod export_content;
+pub mod family_extrusions;
 pub mod from_decoded;
 pub mod gltf;
 pub mod pbr;

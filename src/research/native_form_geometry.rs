@@ -40,11 +40,22 @@ use std::f64::consts::{PI, TAU};
 pub const START_PARAMETER: i64 = -1_001_800;
 /// The other bound: the upper one on every extrusion measured.
 pub const END_PARAMETER: i64 = -1_001_801;
+/// The `Int` parameter that shows or hides a form (`IS_VISIBLE_PARAM`).
+const VISIBLE_PARAMETER: i64 = -1_006_205;
 
 /// How close two curve ends must be to join, feet.
 const TOLERANCE: f64 = 1e-6;
 /// How far from its plane a sketch curve may lie, feet.
 const PLANE_TOLERANCE: f64 = 1e-5;
+/// How far apart the ends of two sketch curves may be to join. The sketches
+/// whose chains stayed open at [`TOLERANCE`] have gaps of 1.4e-5 to 6.5e-5.
+const JOIN_TOLERANCE: f64 = 1e-4;
+/// The most triangles a mesh may have to be compared with solids.
+const MAX_MESH_TRIANGLES: usize = 50_000;
+/// How many point-to-triangle distances a comparison may take.
+const MESH_PAIR_BUDGET: usize = 2_000_000;
+/// The sagitta of the chords Revit's saved meshes tessellate arcs with, feet.
+const SAGITTA: f64 = 0.001;
 const MAX_LOOPS: usize = 256;
 const MAX_POLYGON_VERTICES: usize = 20_000;
 /// The angle an arc is drawn as a chord of when a polygon is needed.
@@ -544,6 +555,13 @@ impl Loop {
         self.curves.iter().map(Curve::area_term).sum()
     }
 
+    /// The same loop run the other way.
+    pub fn reversed(&self) -> Loop {
+        Loop {
+            curves: self.curves.iter().rev().map(Curve::reversed).collect(),
+        }
+    }
+
     fn polygon(&self) -> Vec<V2> {
         let mut out = Vec::new();
         for curve in &self.curves {
@@ -554,8 +572,10 @@ impl Loop {
 }
 
 /// Chains `curves` into closed loops, each curve used once and run the way
-/// its neighbours need. Errs where a chain cannot close, or where more than
-/// one curve could continue it (a branching sketch is not a profile).
+/// its neighbours need. A chain whose ends are within 1e-4 ft of
+/// each other is closed by a line between them. Errs where a chain cannot
+/// close, or where more than one curve could continue it (a branching
+/// sketch is not a profile).
 pub fn assemble_loops(curves: &[Curve]) -> Result<Vec<Loop>, String> {
     let mut used = vec![false; curves.len()];
     let mut loops = Vec::new();
@@ -567,15 +587,15 @@ pub fn assemble_loops(curves: &[Curve]) -> Result<Vec<Loop>, String> {
         let mut chain = vec![seed.clone()];
         let start = seed.start_point();
         let mut end = seed.end_point();
-        while dist2(start, end) > TOLERANCE {
+        while dist2(start, end) > JOIN_TOLERANCE {
             let mut found: Vec<(usize, bool)> = Vec::new();
             for (j, curve) in curves.iter().enumerate() {
                 if used[j] {
                     continue;
                 }
-                if dist2(end, curve.start_point()) <= TOLERANCE {
+                if dist2(end, curve.start_point()) <= JOIN_TOLERANCE {
                     found.push((j, false));
-                } else if dist2(end, curve.end_point()) <= TOLERANCE {
+                } else if dist2(end, curve.end_point()) <= JOIN_TOLERANCE {
                     found.push((j, true));
                 }
             }
@@ -594,6 +614,12 @@ pub fn assemble_loops(curves: &[Curve]) -> Result<Vec<Loop>, String> {
             };
             end = curve.end_point();
             chain.push(curve);
+        }
+        if dist2(start, end) > 1e-9 {
+            chain.push(Curve::Line {
+                from: end,
+                to: start,
+            });
         }
         loops.push(Loop { curves: chain });
     }
@@ -698,7 +724,7 @@ pub fn profile(loops: Vec<Loop>) -> Result<Profile, String> {
     let area: f64 = areas
         .iter()
         .zip(&depths)
-        .map(|(a, depth)| if depth % 2 == 0 { *a } else { -*a })
+        .map(|(a, depth)| if *depth & 1 == 0 { *a } else { -*a })
         .sum();
     Ok(Profile {
         loops,
@@ -720,6 +746,37 @@ impl Profile {
             .fold(f64::INFINITY, f64::min);
         let inside = self.polygons.iter().filter(|g| contains(g, p)).count() % 2 == 1;
         if inside { -nearest } else { nearest }
+    }
+
+    /// For each loop, the loop it lies directly inside: the container with
+    /// the most containers of its own. `None` for a loop inside no other.
+    pub fn parents(&self) -> Vec<Option<usize>> {
+        self.polygons
+            .iter()
+            .enumerate()
+            .map(|(i, polygon)| {
+                self.polygons
+                    .iter()
+                    .enumerate()
+                    .filter(|(j, other)| *j != i && contains(other, polygon[0]))
+                    .max_by_key(|(j, _)| self.depths[*j])
+                    .map(|(j, _)| j)
+            })
+            .collect()
+    }
+
+    /// The total length of the profile's arcs, feet.
+    pub fn arc_length(&self) -> f64 {
+        self.loops
+            .iter()
+            .flat_map(|l| l.curves.iter())
+            .map(|curve| match curve {
+                Curve::Arc {
+                    radius, start, end, ..
+                } => radius * (end - start).abs(),
+                Curve::Line { .. } => 0.0,
+            })
+            .sum()
     }
 
     /// The least and greatest of `d . p` over the profile's curves.
@@ -888,6 +945,9 @@ pub struct Extrusion {
     pub plane_ref: Option<(String, Option<bool>)>,
     /// The extrusion's `m_alwaysRefPlaneNorm`.
     pub always_ref_plane_norm: Option<bool>,
+    /// Its stored `Visible` (`IS_VISIBLE_PARAM`, -1006205), where it holds
+    /// one: 0 hides the form.
+    pub visible: Option<i64>,
     /// The sketch's `m_flipXY` and `m_flipZ`, where its `VarSketch` record
     /// decodes.
     pub sketch_flips: Option<(bool, bool)>,
@@ -902,27 +962,91 @@ pub struct Extrusion {
     pub stored_loops_agree: Option<bool>,
 }
 
+/// How an extrusion's sketch plane places its solid. Every field but the
+/// first is a reading of the plane's matrix the probes tried against the
+/// saved meshes; [`Convention::COLUMNS`] is the one that holds.
+#[derive(Clone, Copy, Debug)]
+pub struct Convention {
+    /// Take the matrix's rows, not its columns, as the plane's axes.
+    pub transposed: bool,
+    /// Reverse the normal where the sketch plane's `m_flipZ` is set.
+    pub apply_flip: bool,
+    /// Take the normal as the cross product of the x and y axes, not the
+    /// third axis (they differ when the matrix is a mirror).
+    pub cross_normal: bool,
+    /// Reverse the normal.
+    pub reverse_normal: bool,
+}
+
+impl Convention {
+    /// The matrix's columns are the plane's x, y and normal axes, and a
+    /// flipped plane reverses the normal.
+    pub const COLUMNS: Convention = Convention {
+        transposed: false,
+        apply_flip: true,
+        cross_normal: false,
+        reverse_normal: false,
+    };
+}
+
+/// What the reader does with a down-facing sketch plane that is not flipped
+/// and whose extrusion does not set `m_alwaysRefPlaneNorm`
+/// ([`Extrusion::down_facing_unreferenced`]): every one of the 79 forms of
+/// the sample projects that read the normal as the matrix's third column put
+/// the solid on the other side of the plane from the saved mesh.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DownFacing {
+    /// Refuse the form.
+    Refuse,
+    /// Put the solid on the other side of the plane.
+    Reverse,
+}
+
+/// The reader's reading of [`DownFacing`] forms.
+pub const DOWN_FACING: DownFacing = DownFacing::Refuse;
+
 impl Extrusion {
+    /// Whether the sketch plane's matrix has its third column pointing down
+    /// (-z), the plane is not flipped and the extrusion does not set
+    /// `m_alwaysRefPlaneNorm`: the signature of the 79 forms (of 6,172 with a
+    /// complete saved mesh) whose solids the matrix's normal puts on the
+    /// wrong side of the plane. Down-facing planes that are flipped, or
+    /// whose extrusion sets `m_alwaysRefPlaneNorm`, match as read.
+    pub fn down_facing_unreferenced(&self) -> bool {
+        self.matrix[2][2] < -0.999
+            && !self.plane_flipped
+            && self.always_ref_plane_norm == Some(false)
+    }
+
+    /// The solid between the two offsets, read as [`Convention::COLUMNS`] and
+    /// [`DOWN_FACING`] say. Errs as [`Extrusion::solid`] does, and for a
+    /// down-facing plane when [`DOWN_FACING`] refuses it.
+    pub fn default_solid(&self) -> Result<ExtrusionSolid, String> {
+        if self.down_facing_unreferenced() {
+            return match DOWN_FACING {
+                DownFacing::Refuse => {
+                    Err("down-facing sketch plane with no reference normal".into())
+                }
+                DownFacing::Reverse => self.solid(Convention {
+                    reverse_normal: true,
+                    ..Convention::COLUMNS
+                }),
+            };
+        }
+        self.solid(Convention::COLUMNS)
+    }
+
     /// The solid between the two offsets, the sketch's curves placed in the
-    /// sketch plane's frame and chained into a profile. `transposed` takes
-    /// the matrix's rows, not its columns, as the plane's axes; `apply_flip`
-    /// reverses the normal where the sketch plane is flipped; `cross_normal`
-    /// takes the normal as the cross product of the x and y axes, not the
-    /// third axis (they differ when the matrix is a mirror). Errs where
-    /// the frame is not orthonormal, a curve is off the plane, or the curves
-    /// do not make closed, non-crossing loops.
-    pub fn solid(
-        &self,
-        transposed: bool,
-        apply_flip: bool,
-        cross_normal: bool,
-    ) -> Result<ExtrusionSolid, String> {
+    /// sketch plane's frame and chained into a profile. Errs where the frame
+    /// is not orthonormal, a curve is off the plane, or the curves do not
+    /// make closed, non-crossing loops.
+    pub fn solid(&self, convention: Convention) -> Result<ExtrusionSolid, String> {
         let frame = frame_of(
             self.matrix,
             self.origin,
-            transposed,
-            apply_flip && self.plane_flipped,
-            cross_normal,
+            convention.transposed,
+            (convention.apply_flip && self.plane_flipped) != convention.reverse_normal,
+            convention.cross_normal,
         )?;
         let planar = self
             .curves
@@ -1148,6 +1272,19 @@ impl FormDocument {
                 }
             }
         }
+        let mut visible = None;
+        for object in graph
+            .objects
+            .iter()
+            .filter(|object| object.class_name == "ParamValueSetInt")
+        {
+            let entries = object.fields.get("m_paramSet").and_then(Value::as_array);
+            for entry in entries.into_iter().flatten() {
+                if entry.get("m_paramId").and_then(identifier) == Some(VISIBLE_PARAMETER) {
+                    visible = entry.get("m_value").and_then(Value::as_i64);
+                }
+            }
+        }
         let start = start.filter(|v| v.is_finite()).ok_or("no start offset")?;
         let end = end.filter(|v| v.is_finite()).ok_or("no end offset")?;
 
@@ -1264,6 +1401,7 @@ impl FormDocument {
             determinant,
             plane_ref,
             always_ref_plane_norm,
+            visible,
             sketch_flips,
             sketch_normal,
             start,
@@ -1271,4 +1409,148 @@ impl FormDocument {
             stored_loops_agree,
         })
     }
+}
+
+fn sub3(a: V3, b: V3) -> V3 {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+fn norm3(a: V3) -> f64 {
+    dot3(a, a).sqrt()
+}
+
+fn along(a: V3, b: V3, t: f64) -> V3 {
+    [a[0] + t * b[0], a[1] + t * b[1], a[2] + t * b[2]]
+}
+
+/// The distance from `p` to triangle `abc`.
+fn triangle_distance(p: V3, a: V3, b: V3, c: V3) -> f64 {
+    let ab = sub3(b, a);
+    let ac = sub3(c, a);
+    let ap = sub3(p, a);
+    let d1 = dot3(ab, ap);
+    let d2 = dot3(ac, ap);
+    if d1 <= 0.0 && d2 <= 0.0 {
+        return norm3(ap);
+    }
+    let bp = sub3(p, b);
+    let d3 = dot3(ab, bp);
+    let d4 = dot3(ac, bp);
+    if d3 >= 0.0 && d4 <= d3 {
+        return norm3(bp);
+    }
+    let vc = d1 * d4 - d3 * d2;
+    if vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0 {
+        return norm3(sub3(p, along(a, ab, d1 / (d1 - d3))));
+    }
+    let cp = sub3(p, c);
+    let d5 = dot3(ab, cp);
+    let d6 = dot3(ac, cp);
+    if d6 >= 0.0 && d5 <= d6 {
+        return norm3(cp);
+    }
+    let vb = d5 * d2 - d1 * d6;
+    if vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0 {
+        return norm3(sub3(p, along(a, ac, d2 / (d2 - d6))));
+    }
+    let va = d3 * d6 - d5 * d4;
+    if va <= 0.0 && d4 - d3 >= 0.0 && d5 - d6 >= 0.0 {
+        let w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        return norm3(sub3(p, along(b, sub3(c, b), w)));
+    }
+    let denominator = 1.0 / (va + vb + vc);
+    if !denominator.is_finite() {
+        return f64::INFINITY;
+    }
+    let inside = along(along(a, ab, vb * denominator), ac, vc * denominator);
+    norm3(sub3(p, inside))
+}
+
+/// How closely a union of solids reproduces a triangle mesh.
+#[derive(Clone, Copy, Debug)]
+pub struct MeshAgreement {
+    /// The solids' volume less the mesh's, cubic feet.
+    pub volume_deficit: f64,
+    pub mesh_volume: f64,
+    /// The most volume a mesh whose arcs are chords 0.001 ft deep
+    /// can lack of the solids'.
+    pub volume_slack: f64,
+    /// The furthest any mesh vertex lies from the nearest solid's surface.
+    pub vertex_max: f64,
+    /// The furthest any sampled point of the solids' surfaces lies from the
+    /// mesh.
+    pub surface_max: f64,
+}
+
+impl MeshAgreement {
+    /// Whether the volumes agree within 1%, and the arcs' chord loss.
+    pub fn volume_agrees(&self) -> bool {
+        self.volume_deficit >= -0.01 * self.mesh_volume
+            && self.volume_deficit <= 0.01 * self.mesh_volume + self.volume_slack
+    }
+}
+
+/// Compares `solids`, in the mesh's coordinates, with a triangle mesh:
+/// volumes, the mesh's vertices against the solids' surfaces, and samples of
+/// the solids' surfaces against the mesh's triangles. `None` where the mesh
+/// is empty, indexes outside its vertices or is larger than the reader
+/// bounds.
+pub fn mesh_agreement(
+    solids: &[ExtrusionSolid],
+    vertices: &[V3],
+    triangles: &[[u32; 3]],
+) -> Option<MeshAgreement> {
+    if solids.is_empty()
+        || vertices.is_empty()
+        || triangles.is_empty()
+        || triangles.len() > MAX_MESH_TRIANGLES
+    {
+        return None;
+    }
+    let corners: Vec<[V3; 3]> = triangles
+        .iter()
+        .map(|t| {
+            let at = |i: u32| vertices.get(usize::try_from(i).ok()?).copied();
+            Some([at(t[0])?, at(t[1])?, at(t[2])?])
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let mesh_volume = corners
+        .iter()
+        .map(|[a, b, c]| dot3(*a, cross3(*b, *c)) / 6.0)
+        .sum::<f64>()
+        .abs();
+    let volume: f64 = solids.iter().map(ExtrusionSolid::volume).sum();
+    let volume_slack: f64 = solids
+        .iter()
+        .map(|s| 2.0 / 3.0 * s.profile.arc_length() * SAGITTA * (s.high - s.low))
+        .sum();
+    let vertex_max = vertices
+        .iter()
+        .map(|v| {
+            solids
+                .iter()
+                .map(|s| s.signed_distance(*v).abs())
+                .fold(f64::INFINITY, f64::min)
+        })
+        .fold(0.0, f64::max);
+    let samples: Vec<V3> = solids.iter().flat_map(|s| s.surface_samples(12)).collect();
+    let budget = (MESH_PAIR_BUDGET / corners.len()).clamp(50, 4000);
+    let stride = (samples.len() / budget).max(1);
+    let surface_max = samples
+        .iter()
+        .step_by(stride)
+        .map(|p| {
+            corners
+                .iter()
+                .map(|[a, b, c]| triangle_distance(*p, *a, *b, *c))
+                .fold(f64::INFINITY, f64::min)
+        })
+        .fold(0.0, f64::max);
+    Some(MeshAgreement {
+        volume_deficit: volume - mesh_volume,
+        mesh_volume,
+        volume_slack,
+        vertex_max,
+        surface_max,
+    })
 }

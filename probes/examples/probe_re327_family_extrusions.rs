@@ -44,7 +44,9 @@ use anyhow::Result;
 use rvt::RevitFile;
 use rvt::research::native_document::{self, Options};
 use rvt::research::native_family_forms::family_records_in;
-use rvt::research::native_form_geometry::{self, Curve, Curve3, ExtrusionSolid, FormDocument};
+use rvt::research::native_form_geometry::{
+    self, Convention, Curve, Curve3, ExtrusionSolid, FormDocument,
+};
 use rvt::research::native_parameters::{self, GraphLimits, ObjectGraph};
 use rvt::research::native_saved_mesh::{self, Primitive};
 
@@ -507,20 +509,66 @@ fn judge(
                 continue;
             }
         };
-        let mut variants: Vec<(&str, bool, bool, bool)> =
-            vec![("columns", false, true, false), ("rows", true, true, false)];
+        let signature = extrusion.down_facing_unreferenced();
+        let excluded = signature && extrusion.default_solid().is_err();
+        let columns = Convention::COLUMNS;
+        let mut variants: Vec<(&str, Convention)> = vec![
+            ("columns", columns),
+            (
+                "rows",
+                Convention {
+                    transposed: true,
+                    ..columns
+                },
+            ),
+        ];
         if extrusion.determinant < 0.0 {
-            variants.push(("columns-cross", false, true, true));
-            variants.push(("rows-cross", true, true, true));
+            variants.push((
+                "columns-cross",
+                Convention {
+                    cross_normal: true,
+                    ..columns
+                },
+            ));
+            variants.push((
+                "rows-cross",
+                Convention {
+                    transposed: true,
+                    cross_normal: true,
+                    ..columns
+                },
+            ));
         }
         if extrusion.plane_flipped {
-            variants.push(("columns-unflipped", false, false, false));
-            variants.push(("rows-unflipped", true, false, false));
+            variants.push((
+                "columns-unflipped",
+                Convention {
+                    apply_flip: false,
+                    ..columns
+                },
+            ));
+            variants.push((
+                "rows-unflipped",
+                Convention {
+                    transposed: true,
+                    apply_flip: false,
+                    ..columns
+                },
+            ));
+        }
+        if signature {
+            variants.push((
+                "reversed",
+                Convention {
+                    reverse_normal: true,
+                    ..columns
+                },
+            ));
         }
         let mut built: Vec<(&str, ExtrusionSolid)> = Vec::new();
         let mut refusals: Vec<(&str, String)> = Vec::new();
-        for (name, transposed, flip, cross) in variants {
-            match extrusion.solid(transposed, flip, cross) {
+        for (name, convention) in variants {
+            match extrusion.solid(convention) {
                 Ok(solid) => built.push((name, solid)),
                 Err(reason) => refusals.push((name, reason)),
             }
@@ -552,9 +600,13 @@ fn judge(
             }
             continue;
         };
-        bump(tally, "built");
-        if extrusion.cutting {
-            bump(tally, "built void");
+        if excluded {
+            bump(tally, "excluded down-facing");
+        } else {
+            bump(tally, "built");
+            if extrusion.cutting {
+                bump(tally, "built void");
+            }
         }
         let holes = first
             .1
@@ -586,7 +638,9 @@ fn judge(
             *lines += 1;
             bump(
                 tally,
-                if extrusion.cutting {
+                if excluded {
+                    "excluded down-facing, no mesh"
+                } else if extrusion.cutting {
                     "no mesh void"
                 } else {
                     "no mesh"
@@ -602,6 +656,40 @@ fn judge(
             .iter()
             .map(|(name, solid)| (*name, measure(solid, &mesh)))
             .collect();
+        let verdict_of = |name: &str| {
+            results
+                .iter()
+                .find(|(n, _)| *n == name)
+                .map(|(_, m)| m.ok(mesh.volume))
+        };
+        let key = if mesh.complete {
+            "complete mesh"
+        } else {
+            "partial mesh"
+        };
+        if excluded {
+            let word = |v: Option<bool>| match v {
+                Some(true) => "MATCH",
+                Some(false) => "DIFFER",
+                None => "unbuilt",
+            };
+            bump(
+                tally,
+                format!(
+                    "excluded down-facing, {key}: reversed {}, as read {}",
+                    word(verdict_of("reversed")),
+                    word(verdict_of("columns"))
+                ),
+            );
+            println!(
+                "{head} mesh {} complete {} excluded down-facing reversed {} as-read {}",
+                mesh.triangles.len(),
+                mesh.complete,
+                word(verdict_of("reversed")),
+                word(verdict_of("columns"))
+            );
+            continue;
+        }
         let matching: Vec<&str> = results
             .iter()
             .filter(|(_, m)| m.ok(mesh.volume))
@@ -615,45 +703,13 @@ fn judge(
                     .total_cmp(&b.1.vertex.max(b.1.surface))
             })
             .unwrap_or(&results[0]);
-        let key = if mesh.complete {
-            "complete mesh"
-        } else {
-            "partial mesh"
-        };
         let flag = |value: Option<bool>| match value {
             Some(true) => "1",
             Some(false) => "0",
             None => "-",
         };
-        let third = [
-            extrusion.matrix[0][2],
-            extrusion.matrix[1][2],
-            extrusion.matrix[2][2],
-        ];
-        let axis = (0..3)
-            .max_by(|a, b| third[*a].abs().total_cmp(&third[*b].abs()))
-            .unwrap_or(2);
-        let direction = if third[axis].abs() < 0.999 {
-            "oblique".to_string()
-        } else {
-            format!(
-                "{}{}",
-                if third[axis] > 0.0 { "+" } else { "-" },
-                ["x", "y", "z"][axis]
-            )
-        };
-        let sketch_side = match extrusion.sketch_normal {
-            Some(n) => {
-                if n[0] * third[0] + n[1] * third[1] + n[2] * third[2] > 0.0 {
-                    "same"
-                } else {
-                    "opposite"
-                }
-            }
-            None => "-",
-        };
         let attributes = format!(
-            "n {direction} sketchnormal {sketch_side} det {} planeflip {} norm {} sketchflips {}{} ref {} mirror {}",
+            "det {} planeflip {} norm {} sketchflips {}{} ref {} mirror {}",
             if extrusion.determinant < 0.0 {
                 "-1"
             } else {
@@ -669,24 +725,17 @@ fn judge(
                 .map_or("-", |(class, _)| class.as_str()),
             flag(extrusion.plane_ref.as_ref().and_then(|(_, m)| *m)),
         );
-        let verdict = if !mesh.complete {
-            "partial mesh"
-        } else if matching.is_empty() {
-            "DIFFER"
-        } else {
-            "MATCH"
-        };
-        bump(tally, format!("attrs {attributes} -> {verdict}"));
-        if matching.is_empty() && mesh.complete {
-            println!(
-                "differ-plane {label} {id} matrix {:?} origin {:?} {attributes} start {:.6} end {:.6}",
-                extrusion.matrix, extrusion.origin, extrusion.start, extrusion.end
-            );
-        }
+        let default_ok = verdict_of("columns").unwrap_or(false);
         if matching.is_empty() {
             bump(tally, format!("DIFFER, {key}"));
             if extrusion.cutting {
                 bump(tally, format!("DIFFER void, {key}"));
+            }
+            if mesh.complete {
+                println!(
+                    "differ-plane {label} {id} matrix {:?} origin {:?} {attributes} start {:.6} end {:.6}",
+                    extrusion.matrix, extrusion.origin, extrusion.start, extrusion.end
+                );
             }
         } else {
             bump(tally, format!("MATCH, {key}"));
@@ -699,6 +748,9 @@ fn judge(
             if matching.len() == 1 {
                 bump(tally, format!("matches only under {}", matching[0]));
             }
+        }
+        if !default_ok && !matching.is_empty() {
+            bump(tally, "matches under another convention only");
         }
         if *lines < FORM_LINES || matching.is_empty() {
             println!(
