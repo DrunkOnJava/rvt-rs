@@ -158,6 +158,8 @@ The chain is STE1200's team's (Discussion #112): sketch curve records, closed lo
 
 ## 11. Arcs in a profile, again (#1346)
 
+**Superseded by #1366 (2026-11-04):** the rule of this section that keeps the mesh for an arc over 0.12 ft in radius is removed. The maintainer decided on #1355 that the fine tessellation judges a body both files write as true curves (RE-331 section 5), the scorers apply it (#1365), and every arc is written as an arc again (RE-331 section 9). The measurements below stand as the record of why the rule was made.
+
 **Date:** 2026-11-04. **Artefacts:** the RE-32 oracle pair of RE1 Architecture, `RE1-Architecture.ifc` (Revit's export, sha256 a9b5d366…6200) and `RE1-Architecture.rvt` (sha256 4a78bdd6…8ce4); IfcOpenShell 0.9.0.post1, the version `tools/ci/requirements-ifc.txt` pins. **Reproduce:** `python3 tools/re/arc_tessellation_study.py RE1-Architecture.ifc` (the three tables below, no rvt-rs binary needed); the Measure runs are in §11.6.
 
 **Why arcs were left out.** The first run drew arcs as `IfcArcIndex` arcs and replaced 335 bodies; 250 of the 251 the body scorer matched had Revit's vertices within 3.4e-5 ft of the surface, and RE1 Architecture's element 360331 had them 0.001439 ft off, over the 0.001 ft "ref on ours" bar (§9). §9 left the cause as an inference from the volumes: that Revit's tessellation of an arc starts elsewhere than IfcOpenShell's tessellation of ours.

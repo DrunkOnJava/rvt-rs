@@ -1135,24 +1135,13 @@ mismatch is the default tessellation's, not a difference of shape: the bar for
 a body both files write as true curves is the fine tessellation (RE-331 §8,
 the maintainer's decision on #1355): all 251 hold, 187 decided by the fine
 tessellation and 64 by the default one (Measure run 41871114299). Revit
-24.0.5's IFC4 export of the office writes a circle as half arcs. IfcOpenShell's default
-tessellation of the two forms of a circle has the same chords up to 0.164 ft
-and at 0.3281 ft and one chord more or fewer at 0.2292, 0.4921, 0.9843 and
-1.9685 ft; over 0.137 ft a chord's own deviation passes the 0.001 ft bar, so a
-difference in the count or in where the circle starts misses it, for a partial
-arc as for a whole circle. No one form meets both exporters, and nothing in the
-`.rvt` says which will read it. An arc of 0.12 ft in radius or less is written
-as the arc, and an instance with an arc over 0.12 ft in radius keeps its mesh in
-every release, which meets the bar against both. The shipped rule replaces 66
-of the 335 (Core Interior 37, each office file 9, RE1 Architecture 7,
-Electrical 2, Mechanical 1, Plumbing 1) and keeps 269 for an arc (the office
-files 120 each, the terrain files 11 each, RE1 Architecture 1, Electrical 6);
-every combined row of `mesh_bodies_vs_ifc` equals the `--saved-meshes`
-baseline's, and the 2 replaced bodies with an arc, circles of 0.12 ft or less
-in RE1's IFC2X3 export, each hold the bar and coincide with Revit's at 1e-5 ft.
-No partial arc and no arc of the IFC4 dialect is among the 66: the arcs the rule
-draws are thinly measured. True arcs for the larger ones come back if a finer
-tessellation of the scorers changes the bar (#1355, a decision for Griffin). The flag reads Revit 2024 to 2027
+24.0.5's IFC4 export of the office writes a circle as half arcs and Revit
+26.2's IFC2X3 export as an `IfcCircleProfileDef`. Every arc is written as the
+arc, whatever its radius (#1366): 335 bodies are replaced (Core Interior 37,
+each office file 129, each terrain file 11, RE1 Architecture 8, Electrical 8,
+Mechanical 1, Plumbing 1), 251 of them scored by `mesh_bodies_vs_ifc`, the
+other 84 being office `IfcSpace` instances that `space_profiles_vs_ifc`
+scores. The flag reads Revit 2024 to 2027
 (measured on 2024 and 2025); an earlier file has no instance transform that
 reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions.md`
 §9).
