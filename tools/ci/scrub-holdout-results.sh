@@ -120,7 +120,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
     for f in "$dir"mesh_bodies_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E "^(saved_graphics_mesh bodies scored: [0-9]+; in Revit's export [0-9]+|Ifc[A-Za-z0-9]+: [0-9]+ bodies, every [0-9]+th scored|Ifc[A-Za-z0-9]+ +[0-9]+( +[0-9]+){5} +([0-9]+\.[0-9]+|nan|-))$" "$f" | sed 's/^/mesh bodies: /' || true
-      grep -E "^(fine tessellation: IfcOpenShell mesher-linear-deflection [0-9.e-]+ m \(1e-5 ft\) and mesher-angular-deflection [0-9.]+ rad, both files; [0-9]+ of [0-9]+ bodies meshed in both|fine (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){8}  ([0-9]+\.[0-9]+|nan|inf) [0-9]+\.[0-9]+|fine change (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){8}|fine bodies that miss 'ref on ours': [0-9]+)$" "$f" | sed 's/^/mesh bodies: /' || true
+      grep -E "^(fine tessellation: IfcOpenShell mesher-linear-deflection [0-9.e-]+ m \(1e-5 ft\) and mesher-angular-deflection [0-9.]+ rad, both files; [0-9]+ of [0-9]+ bodies meshed in both, [0-9]+ of them meshed differently|fine (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){8}  ([0-9]+\.[0-9]+|nan|inf) [0-9]+\.[0-9]+|fine change (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){9}|fine bodies that miss 'ref on ours': [0-9]+)$" "$f" | sed 's/^/mesh bodies: /' || true
     done
     for f in "$dir"box_bodies_vs_ifc.txt; do
       [ -f "$f" ] || continue

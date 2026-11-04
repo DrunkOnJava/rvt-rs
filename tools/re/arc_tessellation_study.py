@@ -38,13 +38,19 @@ without an rvt-rs binary.
 
 Usage:
 
-    python3 tools/re/arc_tessellation_study.py [RE1-Architecture.ifc [--write-ours FILE]]
+    python3 tools/re/arc_tessellation_study.py [RE1-Architecture.ifc [--write-ours FILE]] [--deflections]
+
+`--deflections` adds the table that chose fine_mesh.py's values: for pairs of
+linear and angular deflections, the mean time to mesh one circle body and the
+worst miss between the two forms of a circle, over radii from 0.229 to 2 ft.
 """
 
+import argparse
 import math
 import os
 import sys
 import tempfile
+import time
 
 import ifcopenshell
 import ifcopenshell.geom
@@ -309,6 +315,45 @@ def fine_worst_cases(scratch):
         )
 
 
+def deflection_choice(scratch):
+    print()
+    print("Deflections tried (IfcOpenShell mesher-linear-deflection in metres, mesher-angular-deflection in radians):")
+    print("the mean time to mesh one circle body, and over radii of 0.229, 0.2625, 0.5, 1 and 2 ft the worst miss between")
+    print("rvt-rs's two half arcs and Revit's circle as the three forms at four starts, in feet")
+    print("  linear m | angular rad | mean s per body | worst Revit's vertices to ours, ours to Revit's")
+    radii = (0.229, 0.2625, 0.5, 1.0, 2.0)
+    for linear, angular in (
+        (1e-5, 0.01), (1e-5, 0.02), (1e-5, 0.03), (1e-5, 0.05),
+        (1e-5 * FEET, 0.02), (1e-5 * FEET, 0.03), (1e-5 * FEET, 0.04),
+    ):  # fmt: skip
+        settings = ifcopenshell.geom.settings()
+        settings.set("use-world-coords", True)
+        settings.set("mesher-linear-deflection", linear)
+        settings.set("mesher-angular-deflection", angular)
+        spent, bodies, to_ours, to_ref = 0.0, 0, 0.0, 0.0
+        for feet in radii:
+            r = feet * FEET
+
+            def mesh(text):
+                nonlocal spent, bodies
+                with open(scratch, "w") as out:
+                    out.write(text)
+                model = ifcopenshell.open(scratch)
+                started = time.perf_counter()
+                shape = ifcopenshell.geom.create_shape(settings, model.by_type("IfcBuildingElementProxy")[0])
+                spent += time.perf_counter() - started
+                bodies += 1
+                vertices = np.array(shape.geometry.verts).reshape(-1, 3) / FEET
+                return vertices[np.array(shape.geometry.faces).reshape(-1, 3)]
+
+            ours = mesh(circle_body(r, "arcs", 0.0, 2))
+            for phase in STARTS:
+                for form, pieces in FORMS:
+                    scored = score(ours, mesh(circle_body(r, form, phase, pieces)))
+                    to_ours, to_ref = max(to_ours, scored[1]), max(to_ref, scored[2])
+        print(f"  {linear:.4g} | {angular:g} | {spent / bodies:.3f} | {to_ours:.6f} {to_ref:.6f}")
+
+
 def dispenser(revit_path, scratch, ours_out=None):
     model = ifcopenshell.open(revit_path)
     element = next(e for e in model.by_type("IfcElement") if e.Tag == "360331")
@@ -399,22 +444,23 @@ def dispenser(revit_path, scratch, ours_out=None):
 
 
 def main():
-    args = sys.argv[1:]
-    out = None
-    if len(args) >= 2 and args[-2] == "--write-ours":
-        out = args[-1]
-        args = args[:-2]
-    if len(args) > 1 or (args and args[0] in ("-h", "--help")) or (out and not args):
-        print(__doc__)
-        return 2
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("revit", nargs="?", help="a Revit export that holds RE1 Architecture's element 360331")
+    parser.add_argument("--write-ours", metavar="FILE", help="with a Revit export, write rvt-rs's shape of that element to FILE")
+    parser.add_argument("--deflections", action="store_true", help="also print the deflections tried for fine_mesh.py")
+    args = parser.parse_args()
+    if args.write_ours and not args.revit:
+        parser.error("--write-ours needs a Revit export")
     with tempfile.TemporaryDirectory() as scratch:
         path = os.path.join(scratch, "study.ifc")
         chord_counts(path)
         worst_cases(path)
         fine_chord_counts(path)
         fine_worst_cases(path)
-        if args:
-            dispenser(args[0], path, out)
+        if args.deflections:
+            deflection_choice(path)
+        if args.revit:
+            dispenser(args.revit, path, args.write_ours)
     return 0
 
 

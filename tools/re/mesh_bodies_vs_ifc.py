@@ -388,20 +388,35 @@ def held(default, fine):
     return "both" if default and fine else "default only" if default else "fine only" if fine else "neither"
 
 
-def fine_block(ours_fine, ref_fine, ref, default_scores):
+def fine_block(ours_fine, ref_fine, ours, ref, default_scores):
     """Score the bodies meshed in both files at the fine deflection and print the
-    `fine` rows beside the default ones (#1355). Returns the fine scores like `scored`."""
+    `fine` rows beside the default ones (#1355). A body whose two meshes are the
+    triangles of the default ones (a faceted body, which the deflection does not
+    touch) keeps its default scores: the same triangles give the same scores.
+    Returns the fine scores like `scored`."""
     tags = sorted(set(ours_fine) & set(ref_fine) & set(default_scores), key=lambda t: (len(t), t))
+    moved = [
+        t
+        for t in tags
+        if not (np.array_equal(ours_fine[t][2], ours[t][2]) and np.array_equal(ref_fine[t][2], ref[t][2]))
+    ]
     print()
-    print(f"fine tessellation: {fine_mesh.LABEL}, both files; {len(tags)} of {len(default_scores)} bodies meshed in both")
+    print(
+        f"fine tessellation: {fine_mesh.LABEL}, both files; {len(tags)} of {len(default_scores)} bodies meshed in both,"
+        f" {len(moved)} of them meshed differently"
+    )
     if not tags:
         return []
+    fine_scores = {t: default_scores[t] for t in tags}
+    fine_scores.update(zip(moved, score_all(ours_fine, ref_fine, moved)))
     rows = collections.defaultdict(collections.Counter)
     ratios = collections.defaultdict(list)
     largest = collections.defaultdict(float)
     changes = collections.defaultdict(collections.Counter)
     scored = []
-    for tag, (ratio, to_ours, to_ref) in zip(tags, score_all(ours_fine, ref_fine, tags)):
+    differ = set(moved)
+    for tag in tags:
+        ratio, to_ours, to_ref = fine_scores[tag]
         cls, object_type, _ = ref[tag]
         far = max(to_ours, to_ref)
         d_ratio, d_to_ours, d_to_ref = default_scores[tag]
@@ -409,6 +424,7 @@ def fine_block(ours_fine, ref_fine, ref, default_scores):
         for key in (cls, "total"):
             row = rows[key]
             row["n"] += 1
+            row["differ"] += tag in differ
             row["vol 1%"] += abs(ratio - 1) <= 0.01
             row["vol 0.01%"] += abs(ratio - 1) <= 1e-4
             row["0.01 ft"] += far <= 0.01
@@ -435,13 +451,13 @@ def fine_block(ours_fine, ref_fine, ref, default_scores):
             f"  {statistics.median(ratios[cls]):.4f} {largest[cls]:.6f}"
         )
     print(
-        f"fine change {'class':<28} {'n':>6}  holding 'ref on ours' (0.001 ft): both, default only, fine only, neither;"
-        " then the same for both directions within 0.001 ft"
+        f"fine change {'class':<28} {'n':>6} {'differ':>6}  bodies meshed differently; then holding 'ref on ours' (0.001 ft):"
+        " both, default only, fine only, neither; then the same for both directions within 0.001 ft"
     )
     for cls in order:
         row, change = rows[cls], changes[cls]
         counts = [change[f"{bar} {kind}"] for bar in ("ref", "0.001 ft") for kind in ("both", "default only", "fine only", "neither")]
-        print(f"fine change {cls:<28} {row['n']:>6} " + " ".join(f"{v:>6}" for v in counts))
+        print(f"fine change {cls:<28} {row['n']:>6} {row['differ']:>6} " + " ".join(f"{v:>6}" for v in counts))
     misses = sorted((s for s in scored if s[5] > 0.001), key=lambda s: -s[5])
     print(f"fine bodies that miss 'ref on ours': {len(misses)}")
     for far, tag, cls, object_type, ratio, to_ours, to_ref in misses[:15]:
@@ -535,7 +551,7 @@ def main():
             listed = " ".join(f"{v:.4f}" for v in shells[:8])
             print(f"    {side} shells {len(shells)}, signed volumes (cubic ft): {listed}")
     if fine:
-        RESULT["scored_fine"] = fine_block(ours_fine, ref_fine, ref, default_scores)
+        RESULT["scored_fine"] = fine_block(ours_fine, ref_fine, ours, ref, default_scores)
     return 0
 
 
