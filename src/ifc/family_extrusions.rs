@@ -5,12 +5,26 @@
 //! extruded between. Where the bodies of a family's instances are the meshes
 //! Revit saved for display ([`super::saved_meshes`]), [`attach`] rebuilds the
 //! family's extrusions and draws the instance from them instead, as
-//! `IfcExtrudedAreaSolid`s over `IfcIndexedPolyCurve` profiles of straight
-//! segments. An instance with an arc in a profile keeps its mesh: in the one
-//! case measured, Revit's vertices lay 0.0014 ft from the extrusions' arcs as
-//! IfcOpenShell tessellates them, which the volumes suggest is a difference
-//! in where Revit's tessellation of an arc starts (an inference from the
-//! volumes, not a measurement; RE-327 section 9).
+//! `IfcExtrudedAreaSolid`s over `IfcIndexedPolyCurve` profiles.
+//!
+//! An arc in a profile of 0.12 ft in radius or less is written as the arc
+//! (`IfcIndexedPolyCurve` arcs, the form Revit 24.0.5's IFC4 export gives it;
+//! an arc too flat to survive the writer's micrometre rounding is a line). An
+//! instance with an arc over 0.12 ft in radius keeps its mesh, in every
+//! release, since Revit's two exporters write a circle in two forms: as arcs in
+//! Revit 24.0.5's IFC4 export (the BIM4LCA office) and as an
+//! `IfcCircleProfileDef` in Revit 26.2's IFC2X3 export (RE1). IfcOpenShell's
+//! default tessellation of the two forms of a circle has the same chords up to
+//! 0.164 ft and at 0.3281 ft and one chord more or fewer at 0.2292, 0.4921,
+//! 0.9843 and 1.9685 ft (27 against 28 for the toilet-paper dispenser of RE1
+//! Architecture, element 360331, 0.2292 ft in radius, whose vertices lay
+//! 0.001439 ft from rvt-rs's surface); over 0.137 ft the chord's own deviation
+//! passes the 0.001 ft bar, so a difference in the chord count or in where the
+//! circle starts misses it, and a partial arc is as exposed as a whole circle.
+//! No one form meets both exporters under that tessellation, and which one will
+//! read a file is not in the `.rvt`. An arc of 0.12 ft or less is within
+//! 0.00088 ft of itself in either form (RE-327 section 11, #1346; the scorers'
+//! tessellation is #1355).
 //!
 //! An instance keeps its saved mesh unless the extrusions reproduce it. The
 //! family's document holds the family as saved, and a placed instance is
@@ -70,10 +84,23 @@ const VERTEX_TOLERANCE: f64 = 1e-4;
 /// feet: the 0.001 ft chords the mesh draws arcs with (the largest of the
 /// 6,014 printed forms is 0.000998 ft), and a tenth more.
 const SURFACE_TOLERANCE: f64 = 1.1e-3;
+/// The largest radius, feet, of an arc that is drawn. IfcOpenShell 0.9 cuts an
+/// arc into chords of at most 0.2417 rad, which for a radius of 0.12 ft is a
+/// chord 0.00088 ft off the arc whatever form the arc is in (the bar is 0.001
+/// ft); over 0.137 ft the chord passes the bar, and a vertex of Revit's can lie
+/// up to 0.0016 ft from the other form's surface (RE-327 section 11).
+const ARC_MAX_RADIUS: f64 = 0.12;
+/// How far an arc's midpoint may lie from its chord, feet, for the arc to be
+/// written as a line: the writer rounds coordinates to a micrometre (3.3e-6
+/// ft), and a midpoint that close to the chord can round onto it, which leaves
+/// IfcOpenShell three collinear points for an arc. Five micrometres is
+/// 1.6e-5 ft.
+const FLAT_ARC_SAGITTA: f64 = 1.6e-5;
 
 /// What [`attach`] did. Every instance drawn from a saved mesh is counted
 /// once: `candidates = replaced + not_rebuilt + unplaced + unchecked +
-/// volume_differs + vertices_differ + surface_differs + arcs + unwritable`.
+/// volume_differs + vertices_differ + surface_differs + arcs +
+/// unwritable`.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
 #[non_exhaustive]
 pub struct FamilyExtrusionReport {
@@ -103,14 +130,16 @@ pub struct FamilyExtrusionReport {
     pub volume_differs: usize,
     pub vertices_differ: usize,
     pub surface_differs: usize,
-    /// Candidates the extrusions reproduce, left with their mesh because a
-    /// profile has an arc: in the one case measured, Revit's vertices lay
-    /// 0.0014 ft from the extrusions' arcs, which the volumes suggest is a
-    /// difference in where Revit starts its tessellation of an arc (an
-    /// inference, RE-327 section 9).
+    /// Candidates the extrusions reproduce, left with their mesh for an arc
+    /// over 0.12 ft in radius, whose circle Revit 24.0.5's IFC4 export writes
+    /// as arcs and Revit 26.2's IFC2X3 export as an `IfcCircleProfileDef`
+    /// (RE-327 section 11).
     pub arcs: usize,
-    /// Candidates the extrusions reproduce whose profile cannot be written.
+    /// Candidates the extrusions reproduce whose profile cannot be written: a
+    /// solid of no depth.
     pub unwritable: usize,
+    /// Of `replaced`, instances with an arc in a profile.
+    pub with_arcs: usize,
 }
 
 fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
@@ -212,6 +241,17 @@ fn to_element_frame(
     })
 }
 
+/// Whether a loop has an arc the rule does not draw: one over `ARC_MAX_RADIUS`
+/// in radius, or whose radius does not read.
+fn has_arc_beyond_the_rule(source: &Loop) -> bool {
+    source.curves.iter().any(|curve| {
+        matches!(
+            curve,
+            Curve::Arc { radius, .. } if !radius.is_finite() || *radius > ARC_MAX_RADIUS
+        )
+    })
+}
+
 /// One closed `IfcIndexedPolyCurve` over a loop of a profile, in the plane
 /// frame IFC builds from the placement's axis and reference direction
 /// (`handed` is -1 where the solid's frame is left-handed, which mirrors the
@@ -244,23 +284,32 @@ fn indexed_curve(source: &Loop, counter_clockwise: bool, handed: f64) -> Option<
                 segments.push(CurveSegment::Line([current, end]));
                 current = end;
             }
-            Curve::Arc { start, end, .. } => {
-                if (end - start).abs() > PI + 1e-9 {
-                    points.push(mirrored(curve.point_at(0.25)));
-                    let quarter = points.len() - 1;
-                    points.push(mirrored(curve.point_at(0.5)));
-                    let middle = points.len() - 1;
-                    points.push(mirrored(curve.point_at(0.75)));
-                    let three_quarters = points.len() - 1;
-                    let last = push_end(&mut points);
-                    segments.push(CurveSegment::Arc([current, quarter, middle]));
-                    segments.push(CurveSegment::Arc([middle, three_quarters, last]));
-                    current = last;
+            Curve::Arc {
+                radius, start, end, ..
+            } => {
+                let pieces = if (end - start).abs() > PI + 1e-9 {
+                    2
                 } else {
-                    points.push(mirrored(curve.point_at(0.5)));
+                    1
+                };
+                let flat = radius * (1.0 - ((end - start).abs() / pieces as f64 / 2.0).cos())
+                    < FLAT_ARC_SAGITTA;
+                for k in 0..pieces {
+                    if !flat {
+                        points.push(mirrored(curve.point_at((k as f64 + 0.5) / pieces as f64)));
+                    }
                     let middle = points.len() - 1;
-                    let last = push_end(&mut points);
-                    segments.push(CurveSegment::Arc([current, middle, last]));
+                    let last = if closes && k + 1 == pieces {
+                        0
+                    } else {
+                        points.push(mirrored(curve.point_at((k + 1) as f64 / pieces as f64)));
+                        points.len() - 1
+                    };
+                    segments.push(if flat {
+                        CurveSegment::Line([current, last])
+                    } else {
+                        CurveSegment::Arc([current, middle, last])
+                    });
                     current = last;
                 }
             }
@@ -476,12 +525,16 @@ pub fn attach_with_control(
             report.surface_differs += 1;
             continue;
         }
-        let has_arc = local
+        let with_arcs = local
             .iter()
             .flat_map(|solid| solid.profile.loops.iter())
             .flat_map(|profile_loop| profile_loop.curves.iter())
             .any(|curve| matches!(curve, Curve::Arc { .. }));
-        if has_arc {
+        let big_arc = local
+            .iter()
+            .flat_map(|solid| solid.profile.loops.iter())
+            .any(has_arc_beyond_the_rule);
+        if big_arc {
             report.arcs += 1;
             continue;
         }
@@ -507,6 +560,7 @@ pub fn attach_with_control(
             }
         }
         report.replaced += 1;
+        report.with_arcs += usize::from(with_arcs);
     }
     Ok(report)
 }
