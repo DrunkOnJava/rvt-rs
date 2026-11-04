@@ -182,7 +182,39 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       base: ${{ steps.plan.outputs.base }}
+      head_sha: ${{ steps.refs.outputs.head }}
+      base_sha: ${{ steps.refs.outputs.base }}
     steps:
+      # Each ref is resolved to a full SHA once, here, so every shard of a side
+      # checks out the same commit even when its branch moves during the run
+      # (shards start up to minutes apart). A ref the commits API cannot
+      # resolve (a pull request's refs/pull/N/head) is passed on as given. The
+      # timing job, which saves its cache from the code it checks out, keeps
+      # the inputs as given (CodeQL's cache-poisoning rule flags a checkout of
+      # a step's output there), so it takes full SHAs.
+      - name: Resolve the refs
+        id: refs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_REF: ${{ inputs.ref || github.sha }}
+          BASE_REF: ${{ inputs.base || 'main' }}
+        run: |
+          full() {
+            if [[ "$1" =~ ^[0-9a-f]{40}$ || "$1" == none ]]; then
+              echo "$1"
+            elif sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/$1" --jq .sha 2>/dev/null) && [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "$sha"
+            else
+              echo "::warning::$1 is not a commit the API resolves; every shard checks it out as given" >&2
+              echo "$1"
+            fi
+          }
+          head=$(full "$HEAD_REF")
+          base=$(full "$BASE_REF")
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head ${HEAD_REF} -> ${head}; base ${BASE_REF} -> ${base}"
       - id: plan
         shell: bash
         env:
@@ -247,36 +279,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # A ref given as an abbreviated SHA is not a ref checkout can fetch:
-      # it is expanded to the full SHA here. Branches, tags and full SHAs pass
-      # through unchanged. The timing job, which saves its cache from the
-      # code it checks out, keeps the inputs as given (CodeQL's cache-poisoning
-      # rule flags a checkout of a step's output there), so it takes full SHAs.
-      - name: Resolve the refs
-        id: refs
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_REF: ${{ inputs.ref || github.sha }}
-          BASE_REF: ${{ inputs.base || 'main' }}
-        run: |
-          full() {
-            if [[ "$1" =~ ^[0-9a-f]{7,39}$ ]]; then
-              gh api "repos/$GITHUB_REPOSITORY/commits/$1" --jq .sha
-            else
-              echo "$1"
-            fi
-          }
-          head=$(full "$HEAD_REF")
-          base=$(full "$BASE_REF")
-          echo "head=$head" >> "$GITHUB_OUTPUT"
-          echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "head ${HEAD_REF} -> ${head}; base ${BASE_REF} -> ${base}"
       - name: Measured source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ matrix.side == 'base' && steps.refs.outputs.base || steps.refs.outputs.head }}
+          ref: ${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}
           path: measured
       - name: Install Rust stable
         shell: bash
@@ -296,7 +303,8 @@ jobs:
           # request) does not save either: that code's build scripts run
           # here, and a cache they wrote would be restored by every later
           # main run.
-          save-if: ${{ github.ref == 'refs/heads/main' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '') }}
+          # One shard of a side saves it; the others build the same code.
+          save-if: ${{ github.ref == 'refs/heads/main' && (matrix.shard == 'rest' || matrix.shard == 'all') && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '') }}
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -449,6 +457,8 @@ jobs:
           name: measure-${{ matrix.side }}-${{ matrix.shard }}
           path: results
           if-no-files-found: error
+          # Compare re-uploads them merged as measure-head and measure-base.
+          retention-days: 7
 
   compare:
     name: Compare
@@ -468,6 +478,22 @@ jobs:
           pattern: measure-base-*
           path: measure-base
           merge-multiple: true
+      # The merged sides, under the names every reader downloads
+      # (`gh run download -n measure-head`), uploaded before the summary so a
+      # summary over GitHub's limit cannot lose them.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: measure-head
+          path: measure-head
+          if-no-files-found: error
+          overwrite: true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: needs.plan.outputs.base == 'true'
+        with:
+          name: measure-base
+          path: measure-base
+          if-no-files-found: error
+          overwrite: true
       - name: Summary
         run: |
           {
@@ -496,7 +522,7 @@ jobs:
               echo
               echo "### Times"
               echo
-              echo "These jobs check what the exports hold. They run exports and scorers several at once, on two runners whose speed alone differs by up to about 1.7x, so their times are not benchmarks. Dispatch with \`timing\` to time both refs' exports on one runner (tools/ci/measure-timing.sh)."
+              echo "These jobs check what the exports hold. They run exports and scorers several at once, on several runners whose speed alone differs by up to about 1.7x, so their times are not benchmarks. Dispatch with \`timing\` to time both refs' exports on one runner (tools/ci/measure-timing.sh)."
               echo
               echo "### Scorer differences (base → head)"
               echo
@@ -527,23 +553,12 @@ jobs:
           fi
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: ${{ hashFiles('scorer-diff.txt') != '' }}
+        # Also when the summary failed for its size: the diff is then the
+        # only place the scorer differences are.
+        if: ${{ !cancelled() && hashFiles('scorer-diff.txt') != '' }}
         with:
           name: compare-scorer-diff
           path: scorer-diff.txt
-      # The merged sides, under the names every reader downloads
-      # (`gh run download -n measure-head`).
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: measure-head
-          path: measure-head
-          if-no-files-found: error
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: needs.plan.outputs.base == 'true'
-        with:
-          name: measure-base
-          path: measure-base
-          if-no-files-found: error
 
   # B81: the base and head jobs above run on different runners, so their wall
   # times compare machines as much as code. With `timing`, one runner builds
