@@ -99,17 +99,23 @@ a `stage`, a `reason` code, the `class` the aggregate counts it under, the
 `stream` and byte `offset` its record was read from where known (the bytes
 `rvt-dump` writes as `Partitions_NN.decomp`), and a `detail`. The `reasons`
 object gives each reason's `stage`, its `total` and how many were `recorded` and
-`dropped`; the log keeps at most 5,000 entries a reason, in ElementId order, and
+`dropped`; the log keeps at most 5,000 entries a reason, in ElementId order
+(then partition number, so `Partitions/99` comes before `Partitions/100`), and
 counts the rest. `ExportOptions::with_export_decisions(true)` and Python's
 `export_diagnostics(export_decisions=True)` do the same, and the MCP server turns
 it on for the models it opens and returns an element's entries from
 `explain_element`. Without the flag the field is absent and the sidecar is the
-bytes it was. The IFC is the same file either way.
+bytes it was. The IFC is the same file either way. `--anonymize` scrubs the log
+as it scrubs `skipped`: the phase named in a left-out room's `detail` becomes
+`<redacted>`, as `skipped[].phase` does, and any `detail` that is not a code
+rvt-rs writes is replaced; reason codes, classes, streams, offsets and
+ElementIds, which are the file's structure, stay.
 
 The `skipped` items are counted from the same decisions, so the two agree: for
 every reason of `skipped` the log's `total` is the sum of the items' counts and,
 for a reason that dropped none, the entries by class are the item's `classes`.
-`tests/export_decisions_counts.rs` checks this on Core Interior, the RE1 models,
+`tests/export_decisions_counts.rs` checks this on Core Interior, the RE1 models
+(the default export, and the first phase, which leaves the 11 rooms out),
 Einhoven and the BIM4LCA as-built office. The one item it leaves out is
 `stream_not_read_resource_limit`, which counts streams, not elements. Core
 Interior has nothing left out (its `skipped` section is empty and the three
@@ -133,6 +139,26 @@ A frame with no ElementId (`element_record_without_element_id`) has an entry wit
 its stream and offset and no ElementId. An entry about a geometry gap or a body
 or outline decision takes its stream and offset from the element's provenance
 (see `--element-provenance`), when the walk decoded the element.
+
+What an entry's `offset` is, and what has been measured:
+
+- For the reasons made from the element-record frames
+  (`element_record_without_element_id`, `element_record_without_volume`,
+  `element_record_in_non_primary_design_option`,
+  `element_record_not_in_export_phase`, `room_not_in_export_phase`,
+  `element_record_empty_curtain_panel`) it is the frame the scan read. A scan that
+  finds an element framed in several partitions keeps the last frame in scan
+  order, partition number and then offset, with no test of vertical extent. The
+  frame `decoded.element_provenance` names for an exported element is the one
+  the exporter selected (`select_instance_records`: on Revit 2024 and later the
+  greatest vertical extent), so the two can name different frames of the same
+  element.
+- `tests/export_decisions_counts.rs` re-reads the bytes at the entries of those
+  seven frame reasons (the six above and `element_record_family_space_without_body`)
+  on Revit 2024 and later, and finds the element's id there or a second-prologue
+  frame inside its record. It does not read the offsets of Revit 2015 to 2023
+  files or of `Global/Latest`, and it checks the entries placed from the
+  provenance table only against that table. Those are not verified.
 
 Why a switch of its own, not `--element-provenance`: the log is bounded (at most
 5,000 entries a reason, whatever the model) where the provenance table lists

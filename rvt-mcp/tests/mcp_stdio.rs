@@ -589,6 +589,17 @@ async fn explain_checks(client: &Client, model_id: &str, row: &Value, model: &Pa
     assert!(explained["decisions"].is_array());
     assert!(explained["capped_reasons"].is_array());
 
+    // `model_id` and `id` name the model and the element as in the other tools.
+    let aliased = answer(
+        &call(
+            client,
+            "explain_element",
+            json!({ "model_id": model_id, "id": id }),
+        )
+        .await,
+    );
+    assert_eq!(aliased, explained);
+
     let missing = call(
         client,
         "explain_element",

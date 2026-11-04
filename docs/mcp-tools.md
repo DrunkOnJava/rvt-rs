@@ -49,7 +49,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | `model_id` | string | yes |  |
 | `name` | string \| null | no | The element's name in the export, where it is exported. |
 | `provenance` | [ElementProvenance](#elementprovenance) \| null | no | Where the element's record was read from, where the export holds it. |
-| `trust_markers` | object | yes | Every `...Source`, `...Resolved` and `...Refusal` property of the element's record. Absent where the export has no record for it. |
+| `trust_markers` | object | yes | Every `...Source`, `...Resolved` and `...Refusal` property of the element's record. Empty (`{}`) where the export has no record for it. |
 
 ## export_gltf
 
@@ -167,7 +167,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | `property_sets` | array of [PropertySetOut](#propertysetout) | yes |  |
 | `provenance` | [ElementProvenance](#elementprovenance) | yes |  |
 | `rotation_degrees` | number \| null | no |  |
-| `trust_markers` | object | yes | Every `...Source`, `...Resolved` and `...Refusal` property of the element's record: how its body, profile, thickness, level and family name were derived. Absent where the export has no record for it. |
+| `trust_markers` | object | yes | Every `...Source`, `...Resolved` and `...Refusal` property of the element's record: how its body, profile, thickness, level and family name were derived. Empty (`{}`) where the export has no record for it. |
 
 ## get_summary
 
@@ -308,7 +308,7 @@ One fail-closed decision about an element (#1326).
 |---|---|---|---|
 | `class` | string \| null | no | The class the diagnostics count it under: a Revit class, or an IFC entity such as `IFCDOOR`. |
 | `detail` | string \| null | no | What tells the reason apart: a phase's name, why an Area has no body, the `BodySource` of a box body. |
-| `offset` | integer \| null | no | The byte offset of the record in that stream inflated, where known. |
+| `offset` | integer \| null | no | The byte offset of the record in that stream inflated, where known. For the element-record reasons it is the element's last frame in scan order (partition number, then offset), which can differ from the frame `get_element`'s provenance names. |
 | `reason` | string | yes | The reason code: the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box` or `area_body_refused`. |
 | `stage` | string | yes | The step that made it: `element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read` or `storey_not_bound`. |
 | `stream` | string \| null | no | The stream its record was read from, where known. |

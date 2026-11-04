@@ -134,8 +134,9 @@ struct Args {
     #[arg(long, value_name = "PATH")]
     diagnostics: Option<PathBuf>,
     /// Replace every name the diagnostics sidecar takes from the project
-    /// with a placeholder: the file and project names, levels, materials and
-    /// sample element names. Counts and ElementIds stay, so the sidecar can
+    /// with a placeholder: the file and project names, levels, materials,
+    /// sample element names and the phase a left-out room sits in, in the
+    /// list of decisions too. Counts and ElementIds stay, so the sidecar can
     /// be posted publicly.
     #[arg(long, requires = "diagnostics")]
     anonymize: bool,

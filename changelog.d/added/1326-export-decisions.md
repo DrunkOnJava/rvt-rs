@@ -29,7 +29,11 @@
   reasons that dropped entries). `tests/export_decisions_counts.rs` checks, on
   Core Interior, the RE1 models, Einhoven and the BIM4LCA as-built office, that
   every reason of `skipped` has equal counts in the log and that the entries by
-  class are its classes, re-reads the bytes at each frame an entry names, and
-  prints the counts per reason (CI's `export-decisions` artifact). Core
-  Interior has nothing left out, so its log is empty; the other models name
-  reasons that must have entries.
+  class are its classes, re-reads the bytes at the frame of each entry of the
+  seven element-record frame reasons on Revit 2024 and later, and prints the
+  counts per reason (CI's `export-decisions` artifact). The offsets of Revit 2015
+  to 2023 files and of `Global/Latest` entries are not verified, and a scan that
+  finds an element in several partitions names its last frame, which can differ
+  from the frame the provenance table names. `--anonymize` scrubs the log's
+  phase names as it scrubs `skipped`. Core Interior has nothing left out, so its
+  log is empty; the other models name reasons that must have entries.

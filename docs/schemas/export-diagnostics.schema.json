@@ -703,7 +703,7 @@
                   "storey_not_bound",
                   "value_left_out_exporters_disagree"
                 ],
-                "description": "The stage of every decision of the reason."
+                "description": "The stage of every decision of the reason. value_left_out_exporters_disagree records nothing yet, so no reason has it."
               },
               "total": {
                 "type": "integer",
@@ -725,7 +725,7 @@
         },
         "entries": {
           "type": "array",
-          "description": "The kept decisions, by reason and then ElementId, stream and offset.",
+          "description": "The kept decisions, by reason and then ElementId, partition number, stream and offset.",
           "items": {
             "type": "object",
             "required": ["stage", "reason"],
@@ -740,7 +740,8 @@
                   "outline_not_read",
                   "storey_not_bound",
                   "value_left_out_exporters_disagree"
-                ]
+                ],
+                "description": "The step that made the decision. value_left_out_exporters_disagree records nothing yet."
               },
               "reason": {
                 "type": "string",
@@ -762,11 +763,11 @@
               "offset": {
                 "type": "integer",
                 "minimum": 0,
-                "description": "The byte offset of the record in that stream inflated (the bytes rvt-dump writes as Partitions_NN.decomp), where known."
+                "description": "The byte offset of the record in that stream inflated (the bytes rvt-dump writes as Partitions_NN.decomp), where known. For the element-record reasons it is the element's last frame in scan order (partition number, then offset), which can differ from the frame decoded.element_provenance names for it. Only the offsets of those frames on Revit 2024 and later have been re-read from the bytes."
               },
               "detail": {
                 "type": "string",
-                "description": "What tells the reason apart: the phase's name for room_not_in_export_phase, why an Area's body is not proven for area_without_proven_body and area_body_refused, the BodySource for body_is_record_box."
+                "description": "What tells the reason apart: the phase's name for room_not_in_export_phase (replaced by <redacted> under --anonymize), why an Area's body is not proven for area_without_proven_body and area_body_refused, the BodySource for body_is_record_box."
               }
             }
           }

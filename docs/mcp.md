@@ -270,7 +270,11 @@ made from the same decisions, and, like the table, the log is not part of
 `get_diagnostics`. A left-out element has decisions and no provenance
 (`exported: false`); a frame with no ElementId has no entry. The values Revit's
 exporters disagree about are left out by a rule for a whole class and have no
-per-element decision to return. The log holds at most 5,000 entries a reason
+per-element decision to return. A decision's `stream` and `offset` for an
+element-record reason are the element's last frame in scan order (partition
+number, then offset), which can differ from the frame `provenance` names; only
+those frames on Revit 2024 and later have been re-read from the bytes. The log
+holds at most 5,000 entries a reason
 whatever the model; its size in JSON is printed per model by
 `tests/export_decisions_counts.rs` (Corpus health's `export-decisions`
 artifact), and no figure for it, or for the time it adds to a decode, is stated

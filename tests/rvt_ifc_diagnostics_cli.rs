@@ -286,6 +286,17 @@ fn diagnostics_of(
     name: &str,
     anonymize: bool,
 ) -> Value {
+    diagnostics_with(model, dir, name, anonymize, &[])
+}
+
+/// [`diagnostics_of`] with more `rvt-ifc` arguments.
+fn diagnostics_with(
+    model: &std::path::Path,
+    dir: &std::path::Path,
+    name: &str,
+    anonymize: bool,
+    extra: &[&str],
+) -> Value {
     let path = dir.join(name);
     let mut command = Command::new(env!("CARGO_BIN_EXE_rvt-ifc"));
     command
@@ -293,7 +304,8 @@ fn diagnostics_of(
         .arg("-o")
         .arg(dir.join(format!("{name}.ifc")))
         .arg("--diagnostics")
-        .arg(&path);
+        .arg(&path)
+        .args(extra);
     if anonymize {
         command.arg("--anonymize");
     }
@@ -356,6 +368,101 @@ fn anonymized_project_diagnostics_and_inspect_report_hide_every_project_name() {
         None,
         "anonymized project inspect report still names the project"
     );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The entries of the diagnostics' log of decisions that are of `reason`, or,
+/// with `matching` false, those that are not.
+fn log_entries(diagnostics: &Value, reason: &str, matching: bool) -> Vec<Value> {
+    diagnostics["export_decisions"]["entries"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|entry| (entry["reason"] == reason) == matching)
+        .cloned()
+        .collect()
+}
+
+/// #1326: `--anonymize` scrubs the log of decisions as it scrubs `skipped`.
+/// RE1 Architecture has two phases, Existing and New Construction (the last);
+/// exporting the first leaves its 11 rooms out, and the plain log names the
+/// second as the detail of each of their entries. The anonymized log keeps
+/// every entry and every count, and none of the phase names, project names,
+/// level and material names or element names that the plain diagnostics hold.
+#[test]
+fn anonymized_decision_log_hides_the_phases_and_every_name() {
+    let Some(corpus) = std::env::var_os("RVT_PROJECT_CORPUS_DIR") else {
+        eprintln!(
+            "skipping the decision log --anonymize assertion: RVT_PROJECT_CORPUS_DIR is unset"
+        );
+        return;
+    };
+    let model = std::path::PathBuf::from(corpus).join("RE1-Architecture.rvt");
+    if !model.exists() {
+        eprintln!(
+            "skipping the decision log --anonymize assertion: {} is missing",
+            model.display()
+        );
+        return;
+    }
+    let dir = temp_diagnostics_dir("rvt-rs-anonymize-log");
+    let default_args = ["--export-decisions"];
+    let first_phase_args = ["--phase", "Existing", "--export-decisions"];
+    let plain_default = diagnostics_with(&model, &dir, "plain-default.json", false, &default_args);
+    let plain_phase = diagnostics_with(&model, &dir, "plain-phase.json", false, &first_phase_args);
+
+    // What the plain diagnostics name, so the check below has something to find.
+    let rooms = log_entries(&plain_phase, "room_not_in_export_phase", true);
+    assert_eq!(rooms.len(), 11, "the first phase leaves the 11 rooms out");
+    assert!(
+        rooms
+            .iter()
+            .all(|entry| entry["detail"] == "New Construction"),
+        "the plain log names the room's phase: {rooms:?}"
+    );
+    let sample_names: usize = plain_default["skipped"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|item| item["sample_names"].as_array().map_or(0, Vec::len))
+        .sum();
+    assert!(sample_names > 0, "the plain diagnostics name no element");
+    let mut names = project_names(&plain_default);
+    names.extend(project_names(&plain_phase));
+    names.extend(["New Construction".to_string(), "Existing".to_string()]);
+    names.push("RE1-Architecture".to_string());
+
+    for (tag, plain, args) in [
+        ("default", &plain_default, &default_args[..]),
+        ("phase", &plain_phase, &first_phase_args[..]),
+    ] {
+        let anonymized =
+            diagnostics_with(&model, &dir, &format!("anonymized-{tag}.json"), true, args);
+        for section in ["export_decisions", "skipped"] {
+            assert_eq!(
+                leaked(&anonymized[section], &names),
+                None,
+                "{tag}: the anonymized {section} still name the project"
+            );
+        }
+        assert_eq!(
+            plain["export_decisions"]["reasons"], anonymized["export_decisions"]["reasons"],
+            "{tag}: the counts by reason"
+        );
+        assert_eq!(
+            log_entries(plain, "room_not_in_export_phase", false),
+            log_entries(&anonymized, "room_not_in_export_phase", false),
+            "{tag}: the entries that name nothing are unchanged"
+        );
+        let plain_rooms = log_entries(plain, "room_not_in_export_phase", true);
+        let scrubbed = log_entries(&anonymized, "room_not_in_export_phase", true);
+        assert_eq!(scrubbed.len(), plain_rooms.len(), "{tag}: the room entries");
+        assert!(
+            scrubbed.iter().all(|entry| entry["detail"] == "<redacted>"),
+            "{tag}: {scrubbed:?}"
+        );
+    }
 
     let _ = std::fs::remove_dir_all(&dir);
 }

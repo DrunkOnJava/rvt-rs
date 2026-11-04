@@ -21,7 +21,28 @@
 //! `rvt-ifc --export-decisions`) and bounded: it keeps at most
 //! [`MAX_DECISIONS_PER_REASON`] entries of a reason, in ElementId order, and
 //! counts the rest as dropped. It goes in the diagnostics and the decoded
-//! model, never in the IFC.
+//! model, never in the IFC. `rvt-ifc --anonymize` scrubs it as it scrubs the
+//! `skipped` items ([`ExportDecisionLog::anonymize`]).
+//!
+//! Where an entry's stream and offset come from:
+//!
+//! - The reasons made from the element-record frames
+//!   (`element_record_without_element_id`, `element_record_without_volume`,
+//!   `element_record_in_non_primary_design_option`,
+//!   `element_record_not_in_export_phase`, `room_not_in_export_phase`,
+//!   `element_record_empty_curtain_panel`) name the frame their scan read. A
+//!   scan that finds an element framed in several partitions keeps the last
+//!   frame in scan order, partition number and then offset, with no test of
+//!   vertical extent. The frame the provenance table names for an exported
+//!   element ([`super::element_provenance`], `select_instance_records`) is
+//!   the one with the greatest extent, so the two can name different frames
+//!   of the same element.
+//! - The reasons made from the model (the geometry gaps, `body_is_record_box`,
+//!   `space_outline_is_record_box`, `area_body_refused`) take the table's
+//!   stream and offset for the element.
+//! - Only the offsets of the element-record frames on Revit 2024 and later have
+//!   been re-read from the bytes (`tests/export_decisions_counts.rs`). Those
+//!   of Revit 2015 to 2023 files and of `Global/Latest` are not verified.
 //!
 //! Not recorded: [`DecisionStage::ValueLeftOutExportersDisagree`]. The values
 //! left out because Revit's exporters disagree are left out by a rule for a
@@ -34,10 +55,19 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use super::element_provenance::ElementProvenanceTable;
+use crate::partition_room_parameters::partition_number;
 
 /// The most entries the log keeps of one reason. The rest are counted in
 /// [`ExportDecisionReason::dropped`].
 pub const MAX_DECISIONS_PER_REASON: usize = 5_000;
+
+/// The reasons whose `detail` is a code rvt-rs writes, not text from the
+/// project, so [`ExportDecisionLog::anonymize`] keeps it.
+const CODE_DETAIL_REASONS: [&str; 3] = [
+    "area_without_proven_body",
+    "area_body_refused",
+    "body_is_record_box",
+];
 
 /// Which fail-closed step made a decision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -59,8 +89,8 @@ pub enum DecisionStage {
     OutlineNotRead,
     /// The element is written outside any storey.
     StoreyNotBound,
-    /// A value is left out because Revit's exporters disagree about it. Not
-    /// recorded yet: see the module documentation.
+    /// A value is left out because Revit's exporters disagree about it. Nothing
+    /// is recorded under this stage yet: see the module documentation.
     ValueLeftOutExportersDisagree,
 }
 
@@ -102,13 +132,17 @@ pub struct ExportDecision {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream: Option<String>,
     /// The byte offset of the record in that stream inflated, where known (the
-    /// bytes `rvt-dump` writes as `Partitions_NN.decomp`).
+    /// bytes `rvt-dump` writes as `Partitions_NN.decomp`). For the
+    /// element-record reasons it is the element's last frame in scan order
+    /// (partition number, then offset), which can differ from the frame the
+    /// provenance table names; see the module documentation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub offset: Option<usize>,
     /// What tells the reason apart: the phase's name for
-    /// `room_not_in_export_phase`, why an Area's body is not proven for
-    /// `area_without_proven_body` and `area_body_refused`, the `BodySource`
-    /// for `body_is_record_box`.
+    /// `room_not_in_export_phase` (text from the project, which
+    /// [`ExportDecisionLog::anonymize`] replaces), why an Area's body is not
+    /// proven for `area_without_proven_body` and `area_body_refused`, the
+    /// `BodySource` for `body_is_record_box` (codes rvt-rs writes).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
 }
@@ -153,7 +187,8 @@ pub struct ExportDecisionLog {
     pub dropped: usize,
     /// Each reason with decisions, with its counts.
     pub reasons: BTreeMap<String, ExportDecisionReason>,
-    /// The kept decisions, by reason and then ElementId, stream and offset.
+    /// The kept decisions, by reason and then ElementId, partition number,
+    /// stream and offset.
     pub entries: Vec<ExportDecision>,
 }
 
@@ -165,14 +200,27 @@ impl ExportDecisionLog {
         mut decisions: Vec<ExportDecision>,
         provenance: Option<&ElementProvenanceTable>,
     ) -> Self {
+        // A partition's number, not its name as text: `Partitions/99` comes
+        // before `Partitions/100`.
+        let number =
+            |decision: &ExportDecision| decision.stream.as_deref().map_or(0, partition_number);
         decisions.sort_by(|a, b| {
-            (&a.reason, a.element_id, &a.stream, a.offset, &a.detail).cmp(&(
-                &b.reason,
-                b.element_id,
-                &b.stream,
-                b.offset,
-                &b.detail,
-            ))
+            (
+                &a.reason,
+                a.element_id,
+                number(a),
+                &a.stream,
+                a.offset,
+                &a.detail,
+            )
+                .cmp(&(
+                    &b.reason,
+                    b.element_id,
+                    number(b),
+                    &b.stream,
+                    b.offset,
+                    &b.detail,
+                ))
         });
         let mut log = Self {
             cap_per_reason: MAX_DECISIONS_PER_REASON,
@@ -208,6 +256,24 @@ impl ExportDecisionLog {
             log.entries.push(decision);
         }
         log
+    }
+
+    /// Replace what an entry takes from the project, as
+    /// [`super::ExportDiagnostics::anonymize`] does the `skipped` items'
+    /// phases: the phase name in the `detail` of a
+    /// `room_not_in_export_phase` entry becomes
+    /// [`crate::redact::ANONYMIZED`]. A `detail` is kept only for the reasons
+    /// whose detail is a code rvt-rs writes (`area_without_proven_body`,
+    /// `area_body_refused`, `body_is_record_box`); any other reason's is
+    /// replaced, so a reason added later cannot leak a name. The reason codes,
+    /// classes (Revit classes and IFC entities), streams, offsets, ElementIds
+    /// and counts are the file's structure, not its text, and stay.
+    pub fn anonymize(&mut self) {
+        for entry in &mut self.entries {
+            if entry.detail.is_some() && !CODE_DETAIL_REASONS.contains(&entry.reason.as_str()) {
+                entry.detail = Some(crate::redact::ANONYMIZED.to_string());
+            }
+        }
     }
 
     /// The kept decisions about the element with `element_id`.

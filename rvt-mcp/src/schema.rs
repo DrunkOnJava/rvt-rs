@@ -333,7 +333,7 @@ pub struct ElementDetail {
     pub file: FileProvenance,
     /// Every `...Source`, `...Resolved` and `...Refusal` property of the
     /// element's record: how its body, profile, thickness, level and family
-    /// name were derived. Absent where the export has no record for it.
+    /// name were derived. Empty (`{}`) where the export has no record for it.
     pub trust_markers: BTreeMap<String, Value>,
     pub property_sets: Vec<PropertySetOut>,
     /// The element's type object and its sets, where the model has them.
@@ -356,7 +356,7 @@ pub struct DecisionOut {
     /// The stream its record was read from, where known.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream: Option<String>,
-    /// The byte offset of the record in that stream inflated, where known.
+    /// The byte offset of the record in that stream inflated, where known. For the element-record reasons it is the element's last frame in scan order (partition number, then offset), which can differ from the frame `get_element`'s provenance names.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub offset: Option<usize>,
     /// What tells the reason apart: a phase's name, why an Area has no body, the `BodySource` of a box body.
@@ -379,7 +379,7 @@ pub struct ExplainElementOut {
     /// Where the element's record was read from, where the export holds it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provenance: Option<ElementProvenance>,
-    /// Every `...Source`, `...Resolved` and `...Refusal` property of the element's record. Absent where the export has no record for it.
+    /// Every `...Source`, `...Resolved` and `...Refusal` property of the element's record. Empty (`{}`) where the export has no record for it.
     pub trust_markers: BTreeMap<String, Value>,
     /// Every decision recorded for the element, by reason.
     pub decisions: Vec<DecisionOut>,

@@ -23,7 +23,9 @@
 //! - where the log took an entry's stream and offset from the provenance
 //!   table, the table has the same;
 //! - an empty log cannot pass: each model names reasons its own diagnostics
-//!   count (measured on the model, in `REQUIRED`), and each must have entries.
+//!   count (measured on the model, in `CASES`), and each must have entries, and
+//!   for the office and for RE1 Architecture at its first phase the frames of
+//!   Revit 2024 and later must have been re-read (`frames_checked > 0`).
 //!   Core Interior names none, because it has nothing left out: its `skipped`
 //!   section is empty and its box body, box room and Area refusal counts are
 //!   0, so its log is empty and equal to that.
@@ -63,40 +65,71 @@ const FRAME_REASONS: [&str; 7] = [
     "element_record_family_space_without_body",
 ];
 
-/// The reasons each model's diagnostics count, which its log must hold entries
-/// for, as measured on `rvt-ifc` with no switch: RE1-Architecture, Einhoven and
-/// the BIM4LCA office. Core Interior has none to name. With `RVT_REQUIRE_CORPUS`
-/// set, a named model that is not in the corpus fails the test.
-const REQUIRED: [(&str, &[&str]); 4] = [
-    ("2024_Core_Interior", &[]),
-    (
-        "RE1-Architecture",
-        &[
+/// One export of a model, and what its log must show.
+struct Case {
+    model: &'static str,
+    /// The `--phase` to export, or the project's last.
+    phase: Option<&'static str>,
+    /// Reasons its diagnostics count, which the log must hold entries for, as
+    /// measured on `rvt-ifc` with the switch off.
+    reasons: &'static [&'static str],
+    /// Whether frames of Revit 2024 or later must have been re-read, so that
+    /// the evidence check cannot pass having read nothing.
+    frames: bool,
+}
+
+/// What each model's log must show. Core Interior has nothing left out, so it
+/// names nothing and its log must be empty. RE1 Architecture has no frame
+/// reason in its default export; exported at its first phase it leaves out its
+/// 11 rooms, which are frames to re-read. A model of the corpus that is not
+/// named here is checked against its diagnostics alone.
+const CASES: [Case; 5] = [
+    Case {
+        model: "2024_Core_Interior",
+        phase: None,
+        reasons: &[],
+        frames: false,
+    },
+    Case {
+        model: "RE1-Architecture",
+        phase: None,
+        reasons: &[
             "body_is_record_box",
             "low_confidence_schema_scan_candidate",
             "unsupported_geometry_missing_dimensions",
             "unsupported_geometry_profile",
             "unsupported_geometry_unresolved_host",
         ],
-    ),
-    (
-        "Revit_IFC5_Einhoven",
-        &[
+        frames: false,
+    },
+    Case {
+        model: "RE1-Architecture",
+        phase: Some("Existing"),
+        reasons: &["room_not_in_export_phase"],
+        frames: true,
+    },
+    Case {
+        model: "Revit_IFC5_Einhoven",
+        phase: None,
+        reasons: &[
             "body_is_record_box",
             "low_confidence_schema_scan_candidate",
             "unsupported_geometry_missing_level",
         ],
-    ),
-    (
-        "nordic-office-as-built",
-        &[
+        frames: false,
+    },
+    Case {
+        model: "nordic-office-as-built",
+        phase: None,
+        reasons: &[
             "body_is_record_box",
             "element_record_empty_curtain_panel",
             "element_record_without_volume",
             "space_outline_is_record_box",
             "unsupported_geometry_unresolved_host",
         ],
-    ),
+        frames: true,
+    },
 ];
 
 /// The reasons made from the model, whose evidence the log reads from the
@@ -160,9 +193,17 @@ fn counted<'a>(
     counts
 }
 
-fn check_model(name: &str, path: &Path, required: &[&str]) {
+fn check_model(model: &str, path: &Path, case: Option<&Case>) {
+    let phase = case.and_then(|case| case.phase);
+    let required = case.map_or(&[][..], |case| case.reasons);
+    let label = match phase {
+        Some(phase) => format!("{model}-{phase}"),
+        None => model.to_string(),
+    };
+    let name = label.as_str();
+    let options = ExportOptions::default().with_phase(phase.map(str::to_string));
     let mut rf = RevitFile::open(path).expect("open the model");
-    let off = run_export(&mut rf, &ExportOptions::default()).expect("export the model");
+    let off = run_export(&mut rf, &options).expect("export the model");
     assert!(
         off.diagnostics.export_decisions.is_none(),
         "{name}: the log is made without the switch"
@@ -173,11 +214,8 @@ fn check_model(name: &str, path: &Path, required: &[&str]) {
         "{name}: the diagnostics name the log without the switch"
     );
 
-    let mut on = run_export(
-        &mut rf,
-        &ExportOptions::default().with_export_decisions(true),
-    )
-    .expect("export the model with the log");
+    let mut on = run_export(&mut rf, &options.with_export_decisions(true))
+        .expect("export the model with the log");
     let log = on
         .diagnostics
         .export_decisions
@@ -346,6 +384,12 @@ fn check_model(name: &str, path: &Path, required: &[&str]) {
         }
     }
 
+    if case.is_some_and(|case| case.frames) {
+        assert!(
+            frames_checked > 0,
+            "{name}: no frame was re-read ({frames_unlocated} entries without a place)"
+        );
+    }
     for reason in required {
         assert!(
             log.reasons
@@ -419,27 +463,30 @@ fn check_model(name: &str, path: &Path, required: &[&str]) {
         .expect("write the summary");
 }
 
-/// Check each model, against the reasons `REQUIRED` names for it. With
-/// `RVT_REQUIRE_CORPUS` set, a model of `must_hold` that the corpus lacks fails
-/// the test, so a corpus that lost a model cannot pass it.
-fn check_all(models: Vec<(String, PathBuf)>, must_hold: &[&str]) {
+/// Check each model against its cases, or against its diagnostics alone when
+/// `CASES` names none. With `dir_variable` set, a model of `must_hold` that the
+/// corpus lacks fails the test, whether or not any other model is there, so a
+/// corpus that lost a model cannot pass it.
+fn check_all(dir_variable: &str, models: Vec<(String, PathBuf)>, must_hold: &[&str]) {
+    if std::env::var_os(dir_variable).is_some() {
+        for model in must_hold {
+            assert!(
+                models.iter().any(|(name, _)| name == model),
+                "{model} is not in the corpus, and {dir_variable} is set"
+            );
+        }
+    }
     if models.is_empty() {
         eprintln!("skipping: no model to read");
         return;
     }
     for (name, path) in &models {
-        let required = REQUIRED
-            .iter()
-            .find(|(model, _)| *model == name.as_str())
-            .map_or(&[][..], |(_, reasons)| *reasons);
-        check_model(name, path, required);
-    }
-    if std::env::var("RVT_REQUIRE_CORPUS").is_ok_and(|value| value == "1") {
-        for model in must_hold {
-            assert!(
-                models.iter().any(|(name, _)| name == model),
-                "{model} is not in the corpus, and RVT_REQUIRE_CORPUS is set"
-            );
+        let cases: Vec<&Case> = CASES.iter().filter(|case| case.model == name).collect();
+        if cases.is_empty() {
+            check_model(name, path, None);
+        }
+        for case in cases {
+            check_model(name, path, Some(case));
         }
     }
 }
@@ -447,6 +494,7 @@ fn check_all(models: Vec<(String, PathBuf)>, must_hold: &[&str]) {
 #[test]
 fn project_corpus_decisions_match_the_aggregate() {
     check_all(
+        "RVT_PROJECT_CORPUS_DIR",
         project_models(),
         &[
             "2024_Core_Interior",
@@ -458,5 +506,9 @@ fn project_corpus_decisions_match_the_aggregate() {
 
 #[test]
 fn nordic_office_decisions_match_the_aggregate() {
-    check_all(office_model(), &["nordic-office-as-built"]);
+    check_all(
+        "RVT_NORDIC_LCA_DIR",
+        office_model(),
+        &["nordic-office-as-built"],
+    );
 }

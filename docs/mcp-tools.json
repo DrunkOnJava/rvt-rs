@@ -61,7 +61,7 @@
               ]
             },
             "offset": {
-              "description": "The byte offset of the record in that stream inflated, where known.",
+              "description": "The byte offset of the record in that stream inflated, where known. For the element-record reasons it is the element's last frame in scan order (partition number, then offset), which can differ from the frame `get_element`'s provenance names.",
               "format": "uint",
               "minimum": 0,
               "type": [
@@ -426,7 +426,7 @@
         },
         "trust_markers": {
           "additionalProperties": true,
-          "description": "Every `...Source`, `...Resolved` and `...Refusal` property of the element's record. Absent where the export has no record for it.",
+          "description": "Every `...Source`, `...Resolved` and `...Refusal` property of the element's record. Empty (`{}`) where the export has no record for it.",
           "type": "object"
         }
       },
@@ -1512,7 +1512,7 @@
         },
         "trust_markers": {
           "additionalProperties": true,
-          "description": "Every `...Source`, `...Resolved` and `...Refusal` property of the\nelement's record: how its body, profile, thickness, level and family\nname were derived. Absent where the export has no record for it.",
+          "description": "Every `...Source`, `...Resolved` and `...Refusal` property of the\nelement's record: how its body, profile, thickness, level and family\nname were derived. Empty (`{}`) where the export has no record for it.",
           "type": "object"
         }
       },

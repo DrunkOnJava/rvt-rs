@@ -395,7 +395,10 @@ impl ExportDiagnostics {
     /// [`crate::redact::ANONYMIZED`], the levels' and the material sample's
     /// names `Level 1`, `Material 1` and so on in their order, and each
     /// skipped element's sample name, which can name its family and type,
-    /// `element-<ElementId>`, and the phase a left-out room sits in. The warning listing "Export to IFC As" values
+    /// `element-<ElementId>`, and the phase a left-out room sits in, here and
+    /// in the log of decisions ([`export_decisions::ExportDecisionLog::anonymize`]:
+    /// the phase named in the detail of a left-out room's entry, and any other
+    /// detail that is not a code rvt-rs writes). The warning listing "Export to IFC As" values
     /// the export does not apply keeps their count and drops the values,
     /// which the project writes; no other warning carries project text
     /// (counts, releases, type ElementIds, unit identifiers), so none is
@@ -430,6 +433,9 @@ impl ExportDiagnostics {
                     format!("element-{id}")
                 };
             }
+        }
+        if let Some(log) = self.export_decisions.as_mut() {
+            log.anonymize();
         }
         for warning in &mut self.warnings {
             if let Some(at) = warning.find(UNAPPLIED_EXPORT_VALUES) {
