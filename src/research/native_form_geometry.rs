@@ -77,6 +77,16 @@ pub struct Document {
     pub streams: Vec<String>,
 }
 
+impl std::fmt::Debug for Document {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Document")
+            .field("release", &self.release)
+            .field("classes", &self.registry.classes.len())
+            .field("streams", &self.streams)
+            .finish()
+    }
+}
+
 /// A record of a plain group, borrowed for the length of the callback.
 pub struct Entry<'a> {
     pub id: u64,
@@ -85,6 +95,18 @@ pub struct Entry<'a> {
     /// The class its body's tag names in the file's schema.
     pub class: Option<&'a str>,
     pub body: &'a [u8],
+}
+
+impl std::fmt::Debug for Entry<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Entry")
+            .field("id", &self.id)
+            .field("channel", &self.channel)
+            .field("stream", &self.stream)
+            .field("class", &self.class)
+            .field("body_bytes", &self.body.len())
+            .finish()
+    }
 }
 
 /// How many groups [`walk`] met.
@@ -1011,10 +1033,16 @@ impl Extrusion {
 
     /// The solid between the two offsets, read as [`Convention::COLUMNS`]
     /// with the normal reversed where [`Extrusion::down_facing_unreferenced`].
-    /// Errs as [`Extrusion::solid`] does, and for a down-facing plane that is
-    /// not flipped whose `m_alwaysRefPlaneNorm` is not read: the rule is
-    /// measured on the field's values, not on its absence.
+    /// Errs as [`Extrusion::solid`] does, for a down-facing plane that is
+    /// not flipped whose `m_alwaysRefPlaneNorm` is not read (the rule is
+    /// measured on the field's values, not on its absence), and for an
+    /// up-facing plane that is flipped: of the 165 flipped planes with a
+    /// complete saved mesh, the one up-facing flipped plane that has a mesh
+    /// at the head matches without its flip, which no other does.
     pub fn default_solid(&self) -> Result<ExtrusionSolid, String> {
+        if self.matrix[2][2] > 0.999 && self.plane_flipped {
+            return Err("up-facing sketch plane that is flipped".into());
+        }
         if self.matrix[2][2] < -0.999 && !self.plane_flipped && self.always_ref_plane_norm.is_none()
         {
             return Err("down-facing sketch plane whose m_alwaysRefPlaneNorm is not read".into());
@@ -1176,6 +1204,15 @@ pub struct FormDocument {
     graphs: BTreeMap<u64, ObjectGraph>,
     /// The `CurveElem` records of each sketch, by the sketch's ElementId.
     sketch_curves: BTreeMap<u64, Vec<u64>>,
+}
+
+impl std::fmt::Debug for FormDocument {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FormDocument")
+            .field("records", &self.graphs.len())
+            .field("sketches", &self.sketch_curves.len())
+            .finish()
+    }
 }
 
 impl FormDocument {

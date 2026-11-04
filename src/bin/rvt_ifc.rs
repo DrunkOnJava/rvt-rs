@@ -282,7 +282,7 @@ fn run(args: Args) -> anyhow::Result<()> {
             Ok(report) => {
                 rvt::ifc::recount_exported(&mut diagnostics, &model);
                 eprintln!(
-                    "rvt-ifc: {} of {} saved-mesh bodies drawn from their family's extrusions ({} families found, {} rebuilt; {} had no rebuilt family, {} no instance transform, {} a mesh too large to compare; the extrusions did not reproduce the mesh of {} by volume, {} by vertices and {} by surface; {} left alone for sharing a Tag)",
+                    "rvt-ifc: {} of {} saved-mesh bodies drawn from their family's extrusions ({} families found, {} rebuilt; {} had no rebuilt family, {} no instance transform, {} a mesh too large to compare; the extrusions did not reproduce the mesh of {} by volume, {} by vertices and {} by surface; {} reproduced but not writable; {} left alone for sharing a Tag)",
                     report.replaced,
                     report.candidates,
                     report.families,
@@ -293,6 +293,7 @@ fn run(args: Args) -> anyhow::Result<()> {
                     report.volume_differs,
                     report.vertices_differ,
                     report.surface_differs,
+                    report.unwritable,
                     report.ambiguous
                 );
             }
