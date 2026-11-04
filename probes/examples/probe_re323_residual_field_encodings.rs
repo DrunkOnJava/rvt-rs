@@ -428,6 +428,34 @@ fn main() -> Result<()> {
                     }
                 }
             }
+            let mut scan_flagged: BTreeSet<&str> = BTreeSet::new();
+            let mut scan_count = 0usize;
+            for class in &table.classes {
+                for field in &class.fields {
+                    if let Some(FieldType::Flagged { flags, .. }) = &field.field_type {
+                        if flags & 2 != 0 {
+                            scan_count += 1;
+                            scan_flagged.insert(field.name.as_str());
+                        }
+                    }
+                }
+            }
+            let missing: Vec<String> = flagged
+                .iter()
+                .filter(|(class, field)| {
+                    registry
+                        .named(class)
+                        .and_then(|c| c.fields.iter().find(|f| &f.name == field))
+                        .is_some_and(|f| f.uninterpreted_flags & 2 != 0)
+                        && !scan_flagged.contains(field.as_str())
+                })
+                .map(|(class, field)| format!("{class}::{field}"))
+                .collect();
+            println!(
+                "scan-flagged fields {scan_count} grammar-flagged-names-not-in-scan {} e.g. {:?}",
+                missing.len(),
+                &missing[..missing.len().min(16)]
+            );
         }
         Err(error) => println!("old schema: {error}"),
     }
