@@ -199,7 +199,7 @@ today, each present only where the model has it:
 | `class` | The Revit class the element's record names (`Wall`). |
 | `body_source` | How the element's body was derived. `partition_element_record_bbox` means only the element record's bounding box: placed and sized, shape not decoded. |
 | `profile_source` | Where the plan profile of the body came from. |
-| `space_outline_source` | For a room or space: `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `record_box`, `saved_mesh`, `family_body`, and for an Area `area_boundary` or `none`. |
+| `space_outline_source` | For a room or space: `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `record_box`, `saved_mesh`, `family_body`, and for an Area `area_boundary`, `area_boundary_joined` or `none`. |
 | `area_body_refusal` | For an Area with no body, why. |
 
 `get_element` and the summary add the file's: the Revit release and build from

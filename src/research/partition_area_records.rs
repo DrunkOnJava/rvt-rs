@@ -183,6 +183,10 @@ pub const AREA_BODY_BASE_FIELD: &str = "m_area_body_base";
 /// The field of an Area that holds its body's height, feet.
 pub const AREA_BODY_HEIGHT_FIELD: &str = "m_area_body_height";
 
+/// The field of an Area, true where its outline runs along a stretch of a line
+/// carried on past the extent its record gives, or along a connector (RE-330).
+pub const AREA_JOINED_FIELD: &str = "m_area_body_joined";
+
 /// How far a boundary line's height may lie from its Level's, feet.
 pub const AREA_LEVEL_TOLERANCE_FEET: f64 = 1e-3;
 
@@ -488,27 +492,17 @@ impl AreaRecord {
 }
 
 /// One area boundary line as its record holds it.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct LineRecord {
     from: (f64, f64),
     to: (f64, f64),
     height: f64,
     key: (u32, u32),
     /// The ElementIds its reference list names: its Level, its scheme, the
-    /// lines it is joined to (RE-330).
+    /// lines it is joined to (RE-330). Two copies of a line that differ here
+    /// make it a conflicted one, as two that differ in box do: the joins read
+    /// this list.
     names: BTreeSet<u32>,
-}
-
-/// Two copies of a line agree when their box, height and group do (RE-317): the
-/// reference list is not compared, so a copy that names more does not make the
-/// line a conflicted one.
-impl PartialEq for LineRecord {
-    fn eq(&self, other: &Self) -> bool {
-        self.from == other.from
-            && self.to == other.to
-            && self.height == other.height
-            && self.key == other.key
-    }
 }
 
 /// The area boundary lines of a file, and what could not be read of them.
@@ -539,6 +533,7 @@ struct AreaBody {
     face: AreaFace,
     base_feet: f64,
     height_feet: f64,
+    joined: bool,
 }
 
 /// What is known of the file around its Areas.
@@ -1042,6 +1037,7 @@ fn draw_area(
         face: face.clone(),
         base_feet,
         height_feet,
+        joined: face.joined,
     })
 }
 
@@ -1293,6 +1289,9 @@ pub fn areas_from_partition_chain_records(
                         size: 8,
                     },
                 ));
+                if body.joined {
+                    fields.push((AREA_JOINED_FIELD.into(), InstanceField::Bool(true)));
+                }
             }
             DecodedElement {
                 id: Some(id),

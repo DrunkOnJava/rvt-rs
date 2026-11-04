@@ -221,7 +221,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 ## list_rooms
 
-List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_boundary for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
+List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_boundary or area_boundary_joined for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
 
 Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
@@ -323,7 +323,7 @@ Where one element's answer comes from. Every element in an answer carries one. F
 | `element_id` | string \| null | no | The Revit ElementId, which the IFC export writes as the `Tag`. |
 | `global_id` | string \| null | no | The IFC GlobalId the export writes: Revit's own where the file yields it, otherwise one derived from the document's identity and the ElementId. |
 | `profile_source` | string \| null | no | Where the plan profile of the body came from. |
-| `space_outline_source` | string \| null | no | For a room or space, where its outline came from: `record_box` (the area of its box, not of the room), `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`, `family_body`, and for an Area `area_boundary` or `none`. |
+| `space_outline_source` | string \| null | no | For a room or space, where its outline came from: `record_box` (the area of its box, not of the room), `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`, `family_body`, and for an Area `area_boundary`, `area_boundary_joined` or `none`. |
 
 ### ElementRow
 
@@ -460,7 +460,7 @@ One room.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `area_square_feet` | number \| null | no | The plan area of the room's outline, where the outline is one read exactly (`space_outline_source` is `stored_solid`, `stored_solid_faces` or, for an Area, `area_boundary`). Absent for `record_box`, where the area of a box is not the area of a room, and for `stored_solid_approximate`. |
+| `area_square_feet` | number \| null | no | The plan area of the room's outline, where the outline is one read exactly (`space_outline_source` is `stored_solid`, `stored_solid_faces` or, for an Area, `area_boundary` or `area_boundary_joined`). Absent for `record_box`, where the area of a box is not the area of a room, and for `stored_solid_approximate`. |
 | `area_square_metres` | number \| null | no |  |
 | `id` | string \| null | no |  |
 | `level` | string \| null | no |  |

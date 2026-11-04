@@ -283,6 +283,9 @@ struct AreaDrawn {
     location: [f64; 3],
     body: Extrusion,
     profile: crate::element_record_plan_profiles::PlanProfile,
+    /// Whether its outline needed a line carried on past its record or a
+    /// connector (RE-330).
+    joined: bool,
 }
 
 /// The body an Area's decoded fields hold: the profile its boundary lines
@@ -314,6 +317,10 @@ fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
     if !(base.is_finite() && height.is_finite() && height > 0.0) {
         return None;
     }
+    let joined = decoded.fields.iter().any(|(field, value)| {
+        field == crate::partition_area_records::AREA_JOINED_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
     let bounds = profile.plan_bounds_feet()?;
     let centre = ((bounds[0] + bounds[2]) / 2.0, (bounds[1] + bounds[3]) / 2.0);
     let relative = |ring: &[(f64, f64)]| -> Vec<(f64, f64)> {
@@ -337,6 +344,7 @@ fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
             profile_override: Some(section),
         },
         profile,
+        joined,
     })
 }
 
@@ -455,10 +463,10 @@ fn area_property_set(decoded: &DecodedElement, drawn: Option<&AreaDrawn>) -> Pro
     properties.push(Property {
         name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
         value: PropertyValue::Text(
-            if drawn.is_some() {
-                SPACE_OUTLINE_AREA_BOUNDARY
-            } else {
-                SPACE_OUTLINE_NONE
+            match drawn {
+                Some(drawn) if drawn.joined => SPACE_OUTLINE_AREA_BOUNDARY_JOINED,
+                Some(_) => SPACE_OUTLINE_AREA_BOUNDARY,
+                None => SPACE_OUTLINE_NONE,
             }
             .into(),
         ),
@@ -4033,7 +4041,8 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             set.properties.iter().any(|p| {
                 p.name == SPACE_OUTLINE_SOURCE_PROPERTY
                     && matches!(&p.value, PropertyValue::Text(source)
-                        if source == SPACE_OUTLINE_AREA_BOUNDARY)
+                        if source == SPACE_OUTLINE_AREA_BOUNDARY
+                            || source == SPACE_OUTLINE_AREA_BOUNDARY_JOINED)
             })
         })
     };
@@ -4401,6 +4410,14 @@ pub const SPACE_OUTLINE_NONE: &str = "none";
 /// scheme's boundary lines enclose around its point, from its Level to the
 /// Level above, when both are building stories (RE-317).
 pub const SPACE_OUTLINE_AREA_BOUNDARY: &str = "area_boundary";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area drawn as
+/// [`SPACE_OUTLINE_AREA_BOUNDARY`] is, whose outline runs along a stretch of a
+/// boundary line carried on past the extent its record gives, or along a
+/// connector between two parallel lines that stop at the same place (RE-330).
+/// The only external check of those Areas is an IFC2X3 export by a third-party
+/// build of Revit's 2021 exporter, of Autodesk's `rac_advanced` project.
+pub const SPACE_OUTLINE_AREA_BOUNDARY_JOINED: &str = "area_boundary_joined";
 
 /// `BodyHeightSource` of an Area's body: from its Level up to the Level above
 /// it, when both are building stories (RE-317).

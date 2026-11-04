@@ -77,6 +77,10 @@ pub struct AreaFace {
     pub holes: Vec<Vec<(f64, f64)>>,
     /// The ElementIds of the lines that bound the region, its holes' too.
     pub line_ids: BTreeSet<u32>,
+    /// Whether the outline, a hole's too, runs along a stretch of a line that
+    /// was carried on past the extent its record gives, or along a connector
+    /// (RE-330): a region that needed a join to be drawn.
+    pub joined: bool,
 }
 
 /// A straight line along an axis.
@@ -87,6 +91,9 @@ struct AxisLine {
     fixed: f64,
     low: f64,
     high: f64,
+    /// The extent the line's record gives, before any end is carried on.
+    stored_low: f64,
+    stored_high: f64,
 }
 
 impl AxisLine {
@@ -104,20 +111,26 @@ impl AxisLine {
             return None;
         }
         if dy <= NODE_TOLERANCE_FEET {
+            let (low, high) = (line.from.0.min(line.to.0), line.from.0.max(line.to.0));
             Some(AxisLine {
                 id: line.id,
                 horizontal: true,
                 fixed: (line.from.1 + line.to.1) / 2.0,
-                low: line.from.0.min(line.to.0),
-                high: line.from.0.max(line.to.0),
+                low,
+                high,
+                stored_low: low,
+                stored_high: high,
             })
         } else if dx <= NODE_TOLERANCE_FEET {
+            let (low, high) = (line.from.1.min(line.to.1), line.from.1.max(line.to.1));
             Some(AxisLine {
                 id: line.id,
                 horizontal: false,
                 fixed: (line.from.0 + line.to.0) / 2.0,
-                low: line.from.1.min(line.to.1),
-                high: line.from.1.max(line.to.1),
+                low,
+                high,
+                stored_low: low,
+                stored_high: high,
             })
         } else {
             None
@@ -244,12 +257,15 @@ fn resolve_joins(axis: &mut Vec<AxisLine>, joined: &BTreeMap<u32, BTreeSet<u32>>
             continue;
         }
         let (line, other) = (original[end.0], original[other_index]);
+        let (low, high) = (line.fixed.min(other.fixed), line.fixed.max(other.fixed));
         connectors.push(AxisLine {
             id: CONNECTOR_ID,
             horizontal: !line.horizontal,
             fixed: line.end(end.1),
-            low: line.fixed.min(other.fixed),
-            high: line.fixed.max(other.fixed),
+            low,
+            high,
+            stored_low: low,
+            stored_high: high,
         });
     }
 
@@ -311,6 +327,9 @@ struct Ring {
     bounds: [f64; 4],
     area: f64,
     ids: BTreeSet<u32>,
+    /// Whether an edge of the ring is carried on past its line's record, or a
+    /// connector.
+    joined: bool,
     component: usize,
     simple: bool,
 }
@@ -458,27 +477,31 @@ impl Arrangement {
             return None;
         }
         let mut nodes = Nodes::default();
-        let mut edges: BTreeMap<(usize, usize), u32> = BTreeMap::new();
+        let mut edges: BTreeMap<(usize, usize), (u32, bool)> = BTreeMap::new();
         for (line, cut) in axis.iter().zip(cuts.iter_mut()) {
             cut.push(line.low);
             cut.push(line.high);
             cut.sort_by(|p, q| p.partial_cmp(q).unwrap_or(std::cmp::Ordering::Equal));
-            let mut previous: Option<usize> = None;
+            let mut previous: Option<(usize, f64)> = None;
             for &along in cut.iter() {
                 let along = along.clamp(line.low, line.high);
                 let node = nodes.intern(line.point_at(along));
-                if let Some(last) = previous {
+                if let Some((last, last_along)) = previous {
                     if last != node {
                         let key = (last.min(node), last.max(node));
-                        if let Some(&held) = edges.get(&key) {
+                        if let Some(&(held, _)) = edges.get(&key) {
                             if held != line.id {
                                 return None;
                             }
                         }
-                        edges.insert(key, line.id);
+                        let middle = (last_along + along) / 2.0;
+                        let carried = line.id == CONNECTOR_ID
+                            || middle < line.stored_low - NODE_TOLERANCE_FEET
+                            || middle > line.stored_high + NODE_TOLERANCE_FEET;
+                        edges.insert(key, (line.id, carried));
                     }
                 }
-                previous = Some(node);
+                previous = Some((node, along));
             }
         }
 
@@ -486,8 +509,8 @@ impl Arrangement {
         // Leave out the lines with a free end, and then those that the removal
         // frees, by a worklist of points with one line left: each line is
         // removed once, so the pass is linear in the lines.
-        let candidates: Vec<((usize, usize), u32)> =
-            edges.iter().map(|(&ends, &id)| (ends, id)).collect();
+        let candidates: Vec<((usize, usize), (u32, bool))> =
+            edges.iter().map(|(&ends, &edge)| (ends, edge)).collect();
         let mut alive = vec![true; candidates.len()];
         let mut degree = vec![0usize; count];
         let mut incident: Vec<Vec<usize>> = vec![Vec::new(); count];
@@ -514,14 +537,14 @@ impl Arrangement {
                 free.push(other);
             }
         }
-        let edge_list: Vec<(usize, usize, u32)> = candidates
+        let edge_list: Vec<(usize, usize, u32, bool)> = candidates
             .iter()
             .zip(&alive)
             .filter(|&(_, &kept)| kept)
-            .map(|(&((u, v), id), _)| (u, v, id))
+            .map(|(&((u, v), (id, carried)), _)| (u, v, id, carried))
             .collect();
         let origin = |half: usize| {
-            let (u, v, _) = edge_list[half / 2];
+            let (u, v, _, _) = edge_list[half / 2];
             if half.is_multiple_of(2) { u } else { v }
         };
         let target = |half: usize| origin(half ^ 1);
@@ -547,7 +570,7 @@ impl Arrangement {
         }
 
         let mut parent: Vec<usize> = (0..count).collect();
-        for &(u, v, _) in &edge_list {
+        for &(u, v, _, _) in &edge_list {
             let ru = find(&mut parent, u);
             let rv = find(&mut parent, v);
             parent[ru] = rv;
@@ -561,11 +584,13 @@ impl Arrangement {
             }
             let mut walk = Vec::new();
             let mut ids = BTreeSet::new();
+            let mut joined = false;
             let mut at = start;
             loop {
                 visited[at] = true;
                 walk.push(origin(at));
                 ids.insert(edge_list[at / 2].2);
+                joined |= edge_list[at / 2].3;
                 let here = target(at);
                 let around = &outgoing[here];
                 let back = slot[at ^ 1];
@@ -593,6 +618,7 @@ impl Arrangement {
                 polygon: points,
                 bounds,
                 ids,
+                joined,
                 component,
             });
         }
@@ -709,10 +735,12 @@ impl Arrangement {
             hole_corners.push(self.corners(hole)?);
         }
         line_ids.remove(&CONNECTOR_ID);
+        let joined = face.joined || holes.iter().any(|hole| hole.joined);
         Some(AreaFace {
             outer: self.corners(face)?,
             holes: hole_corners,
             line_ids,
+            joined,
         })
     }
 }
