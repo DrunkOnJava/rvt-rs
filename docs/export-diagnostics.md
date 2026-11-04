@@ -52,7 +52,7 @@ so it is off unless asked for (#1325):
 rvt-ifc model.rvt -o model.ifc --diagnostics model.diagnostics.json --element-provenance
 ```
 
-adds `decoded.element_provenance` to the sidecar. On the BIM4LCA office as built the table, with its value sources (#1360, #1368), is 6,128,625 bytes of compact JSON (what the library and Python write) against 38,640 bytes of diagnostics without it, about 159 times; the CLI's pretty-printed sidecar grows from 52,677 to 10,920,400 bytes (207 times) and Core Interior's from 27,588 to 1,500,700 (Measure run 41875078758). The `parts` of #1368 added 2.4% to the office's table (5,987,841 bytes before, measured on main in the same run) and 62% to Core Interior's (440,909 to 715,966), where the sketch-line profiles are listed line by line. RE1 Architecture's grew from 13,956 to 85,470 before the value sources and has not been measured since. Without the flag the sidecar has no such field and is the bytes it
+adds `decoded.element_provenance` to the sidecar. On the BIM4LCA office as built the table, with its value sources (#1360, #1368), is 6,131,584 bytes of compact JSON (what the library and Python write) against 38,640 bytes of diagnostics without it, about 159 times; the CLI's pretty-printed sidecar grows from 52,677 to 10,927,629 bytes (207 times) and Core Interior's from 27,588 to 1,511,498 (Measure run 41882133812). The `parts` of #1368 added 2.4% to the office's table (5,987,841 bytes before, measured on main in the same run) and 63% to Core Interior's (440,909 to 718,828), where the sketch-line profiles are listed line by line. RE1 Architecture's grew from 13,956 to 85,470 before the value sources and has not been measured since. Without the flag the sidecar has no such field and is the bytes it
 was before the flag existed. `ExportOptions::with_element_provenance(true)`
 and Python's `export_diagnostics(element_provenance=True)` (and
 `rvt_to_ifc_diagnostics(..., element_provenance=True)`) do the same, and the MCP
@@ -145,7 +145,7 @@ counts, by reader, the elements with a source, those whose value is held in
 another partition than their frame, and those whose copy was chosen as the
 current partition's (`current`), so a run on any model shows whether it
 exercises that rule. On Core Interior and the BIM4LCA office as built no source
-has the rule `current` (Measure run 41875078758: no `current` count). That does
+has the rule `current` (Measure run 41882133812: no `current` count). That does
 not say every copy set agreed: a set that disagreed and could not be resolved is
 dropped by its reader and leaves no source and no count.
 

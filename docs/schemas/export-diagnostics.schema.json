@@ -195,7 +195,7 @@
         },
         "element_provenance": {
           "type": "object",
-          "description": "Where each decoded element was read from, by ElementId (#1325): the carrier of its record, the stream and byte offset in that stream inflated (the bytes rvt-dump writes as Partitions_NN.decomp), where its ElementId is stored, its class tag and the class that names in the file's own schema, and its native record. Not written in the IFC file. Present only when asked for (rvt-ifc --element-provenance): it is about 159 times the rest of the diagnostics in compact JSON on the BIM4LCA office as built (6,128,625 bytes against 38,640), and 207 times in the CLI's pretty-printed sidecar. Absent for a placeholder export. An element whose offset cannot be given is listed without one and counted in by_carrier.",
+          "description": "Where each decoded element was read from, by ElementId (#1325): the carrier of its record, the stream and byte offset in that stream inflated (the bytes rvt-dump writes as Partitions_NN.decomp), where its ElementId is stored, its class tag and the class that names in the file's own schema, and its native record. Not written in the IFC file. Present only when asked for (rvt-ifc --element-provenance): it is about 159 times the rest of the diagnostics in compact JSON on the BIM4LCA office as built (6,131,584 bytes against 38,640), and 207 times in the CLI's pretty-printed sidecar. Absent for a placeholder export. An element whose offset cannot be given is listed without one and counted in by_carrier.",
           "properties": {
             "layout_release": {
               "type": "integer",

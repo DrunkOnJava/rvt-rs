@@ -18,10 +18,10 @@
   one and counted by carrier (`by_carrier`, `unkeyed_elements`, `native`);
   the table lists at most 250,000 elements and counts the rest. It is off by
   default, since it is large: on the BIM4LCA office as built the table is
-  6,128,625 bytes of compact JSON against 38,640 bytes of diagnostics
+  6,131,584 bytes of compact JSON against 38,640 bytes of diagnostics
   without it (about 159 times, with the value sources of #1360 and #1368), and
-  the CLI's pretty-printed sidecar grows from 52,677 to 10,920,400 bytes and
-  Core Interior's from 27,588 to 1,500,700 (Measure run 41875078758); RE1
+  the CLI's pretty-printed sidecar grows from 52,677 to 10,927,629 bytes and
+  Core Interior's from 27,588 to 1,511,498 (Measure run 41882133812); RE1
   Architecture's grew from 13,956 to 85,470 before the value sources.
   Without the switch the diagnostics lack the field and are the bytes they
   were, and the table is never written into the IFC. It is built from the

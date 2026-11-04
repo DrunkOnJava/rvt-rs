@@ -15,8 +15,10 @@
   and a landing slab `landing_lines`, `native_landing` and
   `native_landing_type` (the landing type's record gives the thickness). A
   source made of several records lists them in `parts`, at most 64, with
-  `parts_left_out` counting the rest; the table's size is stated in
-  `docs/export-diagnostics.md`. The table's `value_source_counts` also counts,
+  `parts_left_out` counting the rest. The sources add 2.4% to the BIM4LCA
+  office's table (5,987,841 to 6,131,584 bytes of compact JSON) and 63% to
+  Core Interior's (440,909 to 718,828; Measure run 41882133812). The table's
+  `value_source_counts` also counts,
   by reader, the elements whose copy was chosen as the current partition's,
   so a run on any model shows whether the rule is exercised. The readers
   still without a source, and the elements that keep `selected_frame_box`
