@@ -166,6 +166,8 @@ pub struct RevitFile {
     design_options: Option<Arc<crate::partition_design_options::DesignOptions>>,
     /// Memoised phase order and the elements not in the export phase (#328).
     phase_filter: Option<Arc<crate::native_phases::PhaseFilter>>,
+    /// The ElementId of the phase [`RevitFile::set_export_phase`] chose.
+    chosen_export_phase: Option<i64>,
     /// The Areas of a Revit 2015 to 2023 file the reader left unwritten, by
     /// why (RE-324), set when the Areas are read.
     unwritten_areas: BTreeMap<String, usize>,
@@ -442,6 +444,7 @@ impl RevitFile {
             element_names: None,
             design_options: None,
             phase_filter: None,
+            chosen_export_phase: None,
             unwritten_areas: BTreeMap::new(),
             walk: None,
             arc_wall_scan: None,
@@ -909,14 +912,14 @@ impl RevitFile {
     /// before the first export or element read of this handle. It fails,
     /// naming the phases the file lists, when none matches, and for a file
     /// whose phases are not read or whose release applies no export phase.
-    /// Returns the ElementId of the phase chosen, which `phase` may have named
-    /// by its name or by that id.
+    /// [`Self::export_phase`] then reports the ElementId of the phase chosen,
+    /// which `phase` may have named by its name or by that id.
     ///
     /// # Errors
     ///
     /// [`Error::InvalidInput`] when the phase is not one of the file's, or
     /// the file's phases cannot be chosen from.
-    pub fn set_export_phase(&mut self, phase: &str) -> Result<i64> {
+    pub fn set_export_phase(&mut self, phase: &str) -> Result<()> {
         if let Ok(release) = self.layout_release() {
             if crate::partition_element_records_2023::is_32bit_release(release)
                 && !crate::partition_element_records_2023::applies_export_filters(release)
@@ -948,7 +951,15 @@ impl RevitFile {
             )));
         };
         self.phase_filter = Some(Arc::new(filter.with_export_phase(id)));
-        Ok(id)
+        self.chosen_export_phase = Some(id);
+        Ok(())
+    }
+
+    /// The ElementId of the phase [`Self::set_export_phase`] chose, whether it
+    /// was given by name or by that id; `None` while the last phase is in
+    /// effect, as it is until a phase is chosen.
+    pub fn export_phase(&self) -> Option<i64> {
+        self.chosen_export_phase
     }
 
     /// Record the Areas of a Revit 2015 to 2023 file that were left unwritten,

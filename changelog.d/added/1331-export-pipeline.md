@@ -11,7 +11,9 @@
   step did not run). `run_export_with_limits` adds the walker limits and
   `run_export_with_limits_and_control` a `WalkerControl`, as the exporters'
   own `..._with_limits` and `..._with_control` entry points do.
-  `RevitFile::set_export_phase` now returns the chosen phase's ElementId.
+  `RevitFile::export_phase` reports the ElementId that `set_export_phase`
+  resolved from a phase's name or number (`None` while the last phase is in
+  effect).
   The callers keep their defaults and their signatures. `rvt-rs-mcp` gains an
   optional `phase` argument on its tools that take a path: a model is opened
   at a phase, has its own `model_id` (keyed by the phase's ElementId, so a

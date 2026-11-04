@@ -379,7 +379,11 @@ impl Store {
         let mut file = self.open_file(identity)?;
         let resolved = file
             .set_export_phase(spec)
-            .map_err(|error| error.to_string());
+            .map_err(|error| error.to_string())
+            .and_then(|()| {
+                file.export_phase()
+                    .ok_or_else(|| "the export phase was not recorded".to_string())
+            });
         self.remember(identity, spec, resolved.clone());
         resolved.map(|id| (id, Some(file)))
     }
