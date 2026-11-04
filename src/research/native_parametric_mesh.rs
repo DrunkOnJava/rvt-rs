@@ -452,7 +452,9 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         let mut a = (0..=count)
             .map(|i| min[k] + (max[k] - min[k]) * i as f64 / count as f64)
             .collect::<Vec<_>>();
-        a.extend(trim.iter().map(|p| p[k]));
+        if ring.is_none() {
+            a.extend(trim.iter().map(|p| p[k]));
+        }
         a.sort_by(f64::total_cmp);
         a.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
         Ok(a)
