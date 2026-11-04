@@ -167,7 +167,6 @@ struct Census {
     recovered: Vec<PartitionLevel>,
     levels: BTreeMap<u32, (String, f64, Option<bool>)>,
     categories: BTreeMap<i64, (usize, usize, usize)>,
-    category_of: BTreeMap<u32, i64>,
     scheme_ids: BTreeSet<u32>,
     line_ids: BTreeSet<u32>,
     areas: BTreeMap<u32, Area>,
@@ -240,7 +239,6 @@ fn build(path: &str) -> anyhow::Result<(RevitFile, Census)> {
     };
 
     let mut categories: BTreeMap<i64, (usize, usize, usize)> = BTreeMap::new();
-    let mut category_of: BTreeMap<u32, i64> = BTreeMap::new();
     let mut scheme_ids = BTreeSet::new();
     let mut line_ids = BTreeSet::new();
     let mut copies: BTreeMap<u32, Vec<AreaCopy>> = BTreeMap::new();
@@ -259,7 +257,6 @@ fn build(path: &str) -> anyhow::Result<(RevitFile, Census)> {
             entry.0 += 1;
             entry.1 = entry.1.min(size);
             entry.2 = entry.2.max(size);
-            category_of.entry(span.id).or_insert(category);
             match category {
                 OST_AREA_SCHEMES => {
                     scheme_ids.insert(span.id);
@@ -347,7 +344,6 @@ fn build(path: &str) -> anyhow::Result<(RevitFile, Census)> {
             recovered,
             levels,
             categories,
-            category_of,
             scheme_ids,
             line_ids,
             areas,
