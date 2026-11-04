@@ -118,7 +118,9 @@ pub struct FamilyExtrusionReport {
     /// Candidates the extrusions reproduce whose profile cannot be written: a
     /// solid of no depth.
     pub unwritable: usize,
-    /// Of `replaced`, instances with an arc in a profile.
+    /// Of `replaced`, instances with an arc written in a profile: an
+    /// `IfcArcIndex` segment, not an arc of the sketch that was too flat to
+    /// survive the writer's rounding and came out as a line.
     pub with_arcs: usize,
 }
 
@@ -285,6 +287,23 @@ fn indexed_curve(source: &Loop, counter_clockwise: bool, handed: f64) -> Option<
         }
     }
     Some(IndexedCurve { points, segments })
+}
+
+/// Whether a written profile has an arc: an `IfcArcIndex` segment in its outline
+/// or in a hole.
+fn profile_has_arc(profile: &ProfileDef) -> bool {
+    let arcs = |segments: &[CurveSegment]| {
+        segments
+            .iter()
+            .any(|segment| matches!(segment, CurveSegment::Arc(_)))
+    };
+    match profile {
+        ProfileDef::IndexedPolyCurve { segments, .. } => arcs(segments),
+        ProfileDef::IndexedPolyCurveWithVoids { outer, voids } => {
+            arcs(&outer.segments) || voids.iter().any(|hole| arcs(&hole.segments))
+        }
+        _ => false,
+    }
 }
 
 /// A solid as `IfcExtrudedAreaSolid`s, one for each outline of its profile
@@ -494,16 +513,14 @@ pub fn attach_with_control(
             report.surface_differs += 1;
             continue;
         }
-        let with_arcs = local
-            .iter()
-            .flat_map(|solid| solid.profile.loops.iter())
-            .flat_map(|profile_loop| profile_loop.curves.iter())
-            .any(|curve| matches!(curve, Curve::Arc { .. }));
         let placed: Option<Vec<Vec<SolidShape>>> = local.iter().map(placed_extrusions).collect();
         let Some(placed) = placed else {
             report.unwritable += 1;
             continue;
         };
+        let with_arcs = placed.iter().flatten().any(|shape| {
+            matches!(shape, SolidShape::PlacedExtrusion { profile, .. } if profile_has_arc(profile))
+        });
         let IfcEntity::BuildingElement {
             solid_shape,
             property_set: Some(set),

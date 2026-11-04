@@ -18,9 +18,12 @@
   scorers no longer count that as a miss, since a body both files write as
   true curves is judged in a fine tessellation, where the forms coincide
   (RE-327 section 11, RE-331). On Core Interior, RE1 and the BIM4LCA office
-  files the first run, which drew every arc, replaced 335 bodies; the body
-  scorer scored 251 and all 251 hold the bar, 187 judged in the fine
-  tessellation and 64 in the default one (run 41871114299). The default export is unchanged
-  (111 of 111 models of an unfiltered byte-identity run, held-out ones
-  included). Revit 2024 to 2027 files, measured on 2024 and 2025: a file
+  files, measured at `34750454` (runs 41884078892 and 41884639625), 335 bodies
+  are replaced; the body scorer scores 251 of them and all 251 hold the bar,
+  187 judged in the fine tessellation and 64 in the default one, and 6 of 53
+  exports move against `main`'s, none of them held-out. The extrusions are
+  smaller than the meshes they replace: the BIM4LCA office's IFC is 77.9 MB
+  instead of 82.2 MB, and its terrain files' 0.17 MB instead of 0.92 MB. The
+  default export is unchanged (34 of 34 models, run 41884073888). Revit 2024
+  to 2027 files, measured on 2024 and 2025: a file
   before 2024 has no instance transform that reads, so nothing is replaced.

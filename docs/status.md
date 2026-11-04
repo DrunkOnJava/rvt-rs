@@ -1122,10 +1122,10 @@ sketches (26), sweeps, revolutions, blends and voids' cuts are not drawn. The 20
 the native releases, so its 85 of 86 is not reproduced. The 79 are
 reversed by default, a rule found on them and not held out; every instance in
 an export is checked against its own mesh. `rvt-ifc --family-extrusions`
-(opt-in; the default export is unchanged, hash for hash on 111 of 111 models) draws an
+(opt-in; the default export is unchanged, hash for hash on 34 of 34 models of Measure run 41884073888, 111 of 111 at the earlier heads) draws an
 instance from its family's extrusions where they reproduce its saved mesh.
-On Core Interior, RE1 and the BIM4LCA office files the first run, which drew
-arcs as arcs, replaced 335 bodies; of the 251 the body scorer matched, 250 had
+On Core Interior, RE1 and the BIM4LCA office files the first run (`aaa38de8`, before
+the flat-arc rule), which drew arcs as arcs, replaced 335 bodies; of the 251 the body scorer matched, 250 had
 Revit's vertices within 0.001 ft of their surface and one did not: Revit 26.2's
 IFC2X3 export draws that circle (0.2292 ft) as an `IfcCircleProfileDef`, which
 IfcOpenShell cuts into 27 chords, and two half arcs of it come out as 28, so
@@ -1133,15 +1133,27 @@ no vertex coincides (a count mismatch, reproduced and measured in
 `reports/element-framing/RE-327-family-extrusions.md` §11). That count
 mismatch is the default tessellation's, not a difference of shape: the bar for
 a body both files write as true curves is the fine tessellation (RE-331 §8,
-the maintainer's decision on #1355): all 251 hold, 187 decided by the fine
-tessellation and 64 by the default one (Measure run 41871114299). Revit
-24.0.5's IFC4 export of the office writes a circle as half arcs and Revit
-26.2's IFC2X3 export as an `IfcCircleProfileDef`. Every arc is written as the
-arc, whatever its radius (#1366): 335 bodies are replaced (Core Interior 37,
-each office file 129, each terrain file 11, RE1 Architecture 8, Electrical 8,
-Mechanical 1, Plumbing 1), 251 of them scored by `mesh_bodies_vs_ifc`, the
-other 84 being office `IfcSpace` instances that `space_profiles_vs_ifc`
-scores. The flag reads Revit 2024 to 2027
+the maintainer's decision on #1355). Revit 24.0.5's IFC4 export of the office
+writes a circle as half arcs and Revit 26.2's IFC2X3 export as an
+`IfcCircleProfileDef`. Every arc is written as the arc, whatever its radius
+(#1366). Measured at `34750454` (Measure runs 41884078892 and 41884639625,
+RE-331 §9.1): 335 bodies are replaced (Core Interior 37, each office file 129,
+each terrain file 11, RE1 Architecture 8, Electrical 8, Mechanical 1, Plumbing
+1), where the 0.12 ft rule of #1352 replaced 66 and kept 269; 251 of them are
+scored by `mesh_bodies_vs_ifc` (the 42 per office file written as `IfcSpace`
+are scored by `space_profiles_vs_ifc`), and all 251 hold "ref on ours", both
+directions within 0.001 ft and the volume within 0.01%: 187 are decided by the
+fine tessellation, the bar for a body both files write as true curves (the
+arcs: 78 in each office file, 11 in each terrain file, 6 in RE1 Electrical and
+1 in RE1 Architecture, and 2 circles of 0.12 ft or less), and 64 by
+IfcOpenShell's default one; 6 of the 53 exports move against `main`'s (the
+office files, the terrain files, RE1 Architecture and Electrical), each only by
+the bodies the rule kept, none held-out, and no row that passed on `main`
+fails. At `aaa38de8`, before the flat-arc rule, the first arc run had 250 of
+the 251 within the default tessellation's bar, the one that did not being a
+count mismatch between its default tessellation of Revit 26.2's IFC2X3 circle
+profile (27 chords) and of two half arcs of it (28) (run 41805333248, RE-327
+§11). The flag reads Revit 2024 to 2027
 (measured on 2024 and 2025); an earlier file has no instance transform that
 reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions.md`
 §9).
