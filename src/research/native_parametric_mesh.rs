@@ -536,24 +536,33 @@ pub fn face(g: &ObjectGraph, fi: usize) -> Result<FaceMesh> {
 }
 
 /// The part of `ring` on one side of `p[axis] = at`: at or above it where
-/// `lower`, else at or below it (Sutherland–Hodgman against one line).
+/// `lower`, else at or below it (Sutherland–Hodgman against one line), with a
+/// vertex a cut repeats dropped.
 fn clip_axis(ring: &[[f64; 2]], axis: usize, at: f64, lower: bool) -> Vec<[f64; 2]> {
     let keep = |p: [f64; 2]| if lower { p[axis] >= at } else { p[axis] <= at };
-    let mut out = Vec::new();
+    let mut out: Vec<[f64; 2]> = Vec::new();
+    let mut push = |p: [f64; 2]| {
+        if out.last() != Some(&p) {
+            out.push(p);
+        }
+    };
     for (&a, &b) in ring
         .iter()
         .zip(ring.iter().cycle().skip(1))
         .take(ring.len())
     {
         if keep(a) {
-            out.push(a);
+            push(a);
         }
         if keep(a) != keep(b) {
             let t = (at - a[axis]) / (b[axis] - a[axis]);
             let mut p = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
             p[axis] = at;
-            out.push(p);
+            push(p);
         }
+    }
+    while out.len() > 1 && out.first() == out.last() {
+        out.pop();
     }
     out
 }
@@ -563,11 +572,47 @@ fn cross_uv(a: [f64; 2], b: [f64; 2], c: [f64; 2]) -> f64 {
     (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
 }
 
+/// Twice the signed area of a UV polygon.
+fn double_area(ring: &[[f64; 2]]) -> f64 {
+    (0..ring.len())
+        .map(|i| {
+            let (a, b) = (ring[i], ring[(i + 1) % ring.len()]);
+            a[0] * b[1] - b[0] * a[1]
+        })
+        .sum()
+}
+
+/// The UV range of `ring` along `axis`.
+fn extent(ring: &[[f64; 2]], axis: usize) -> (f64, f64) {
+    ring.iter()
+        .map(|p| p[axis])
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), x| {
+            (lo.min(x), hi.max(x))
+        })
+}
+
+/// The triangles of one grid cell's piece of a trim loop, as indices into
+/// `piece`: a fan where the piece is convex, else earcut.
+fn triangulate_piece(piece: &[[f64; 2]], sign: f64) -> Vec<[u32; 3]> {
+    let n = piece.len();
+    let convex =
+        (0..n).all(|i| sign * cross_uv(piece[i], piece[(i + 1) % n], piece[(i + 2) % n]) >= -1e-15);
+    if convex {
+        return (1..n as u32 - 1).map(|k| [0, k, k + 1]).collect();
+    }
+    let mut ts = Vec::<u32>::new();
+    earcut::Earcut::new().earcut(piece.iter().copied(), &[], &mut ts);
+    ts.chunks_exact(3).map(|t| [t[0], t[1], t[2]]).collect()
+}
+
 /// A parametric face trimmed by a loop that is not its UV box (RE-302): the
-/// loop is earcut in UV, and each triangle, being convex, is cut exactly at
-/// the grid's U and V values, so each piece lies in one cell of the grid the
-/// rectangular path would draw, and is fanned. The pieces must cover the
-/// loop's own UV area, or the loop is taken as self-intersecting.
+/// loop is clipped to each grid cell it covers (Sutherland–Hodgman against the
+/// cell's four lines, a column of cells first), so each piece lies in one cell
+/// of the grid the rectangular path would draw, and is fanned where convex,
+/// else earcut. A cell the loop covers whole gives its two triangles, as the
+/// rectangular path's, and the pieces' corners are shared across cells. The
+/// pieces must cover the loop's own UV area, or the loop is taken as
+/// self-intersecting.
 pub fn tessellate_trimmed(
     surface: &ParametricSurface,
     u_knots: &[f64],
@@ -576,8 +621,13 @@ pub fn tessellate_trimmed(
     orient: bool,
     max_triangles: usize,
 ) -> Result<ParametricMesh> {
+    // Each cell clips a column of the loop: bound the work a hostile file can ask.
+    const MAX_CLIP_WORK: usize = 200_000_000;
     ensure!(
-        ring.len() >= 3 && u_knots.len() >= 2 && v_knots.len() >= 2,
+        ring.len() >= 3
+            && u_knots.len() >= 2
+            && v_knots.len() >= 2
+            && ring.iter().flatten().all(|x| x.is_finite()),
         "invalid trimmed parametric face"
     );
     let surface_orient = match surface {
@@ -586,90 +636,93 @@ pub fn tessellate_trimmed(
         }
     };
     let winding = surface_orient == orient;
-    let mut ts = Vec::<u32>::new();
-    earcut::Earcut::new().earcut(ring.iter().copied(), &[], &mut ts);
-    let expected = (0..ring.len())
-        .map(|i| {
-            let (a, b) = (ring[i], ring[(i + 1) % ring.len()]);
-            a[0] * b[1] - b[0] * a[1]
-        })
-        .sum::<f64>()
-        .abs()
-        / 2.;
+    let expected = double_area(ring).abs() / 2.;
+    ensure!(expected > 1e-15, "degenerate parametric trim");
     let mut covered = 0.;
+    let mut work = 0usize;
     let mut vertices = Vec::new();
     let mut normals = Vec::new();
     let mut triangles = Vec::new();
-    let windows = |knots: &[f64], lo: f64, hi: f64| {
+    let mut shared = std::collections::HashMap::<[u64; 2], u32>::new();
+    let windows = |knots: &[f64], (lo, hi): (f64, f64)| {
         let first = knots.partition_point(|&k| k <= lo).saturating_sub(1);
         let last = knots.partition_point(|&k| k < hi).min(knots.len() - 1);
         first..last.max(first)
     };
-    for t in ts.chunks_exact(3) {
+    for i in windows(u_knots, extent(ring, 0)) {
+        work = work.saturating_add(ring.len());
         ensure!(
-            t.iter().all(|&k| (k as usize) < ring.len()),
-            "triangle bounds"
+            work <= MAX_CLIP_WORK,
+            "parametric trim clip budget exceeded"
         );
-        let tri = [
-            ring[t[0] as usize],
-            ring[t[1] as usize],
-            ring[t[2] as usize],
-        ];
-        if cross_uv(tri[0], tri[1], tri[2]).abs() <= 1e-15 {
+        let column = clip_axis(
+            &clip_axis(ring, 0, u_knots[i], true),
+            0,
+            u_knots[i + 1],
+            false,
+        );
+        if column.len() < 3 || double_area(&column).abs() <= 1e-15 {
             continue;
         }
-        let lo = |k: usize| tri.iter().map(|p| p[k]).fold(f64::INFINITY, f64::min);
-        let hi = |k: usize| tri.iter().map(|p| p[k]).fold(f64::NEG_INFINITY, f64::max);
-        for i in windows(u_knots, lo(0), hi(0)) {
-            let column = clip_axis(
-                &clip_axis(&tri, 0, u_knots[i], true),
-                0,
-                u_knots[i + 1],
+        for j in windows(v_knots, extent(&column, 1)) {
+            work = work.saturating_add(column.len());
+            ensure!(
+                work <= MAX_CLIP_WORK,
+                "parametric trim clip budget exceeded"
+            );
+            let piece = clip_axis(
+                &clip_axis(&column, 1, v_knots[j], true),
+                1,
+                v_knots[j + 1],
                 false,
             );
-            if column.len() < 3 {
+            let double = double_area(&piece);
+            if piece.len() < 3 || double.abs() <= 1e-15 {
                 continue;
             }
-            for j in windows(v_knots, lo(1), hi(1)) {
-                let piece = clip_axis(
-                    &clip_axis(&column, 1, v_knots[j], true),
-                    1,
-                    v_knots[j + 1],
-                    false,
+            let mut index = Vec::with_capacity(piece.len());
+            for p in &piece {
+                let key = [(p[0] + 0.).to_bits(), (p[1] + 0.).to_bits()];
+                let at = match shared.get(&key) {
+                    Some(&at) => at,
+                    None => {
+                        let at = u32::try_from(vertices.len())
+                            .context("parametric vertex count overflow")?;
+                        vertices.push(surface.evaluate(p[0], p[1])?);
+                        let mut n = surface.normal(p[0], p[1])?;
+                        if !orient {
+                            for value in &mut n {
+                                *value = -*value;
+                            }
+                        }
+                        normals.push(n);
+                        shared.insert(key, at);
+                        at
+                    }
+                };
+                index.push(at);
+            }
+            for t in triangulate_piece(&piece, double.signum()) {
+                ensure!(
+                    t.iter().all(|&k| (k as usize) < piece.len()),
+                    "triangle bounds"
                 );
-                if piece.len() < 3 {
+                let (a, b, c) = (t[0] as usize, t[1] as usize, t[2] as usize);
+                let area = cross_uv(piece[a], piece[b], piece[c]);
+                if area.abs() <= 1e-15 {
                     continue;
                 }
-                let base =
-                    u32::try_from(vertices.len()).context("parametric vertex count overflow")?;
-                for p in &piece {
-                    vertices.push(surface.evaluate(p[0], p[1])?);
-                    let mut n = surface.normal(p[0], p[1])?;
-                    if !orient {
-                        for value in &mut n {
-                            *value = -*value;
-                        }
-                    }
-                    normals.push(n);
-                }
-                for k in 1..piece.len() - 1 {
-                    let a = cross_uv(piece[0], piece[k], piece[k + 1]);
-                    if a.abs() <= 1e-15 {
-                        continue;
-                    }
-                    covered += a.abs() / 2.;
-                    let k = k as u32;
-                    triangles.push(if (a > 0.) == winding {
-                        [base, base + k, base + k + 1]
-                    } else {
-                        [base, base + k + 1, base + k]
-                    });
-                }
-                ensure!(
-                    triangles.len() <= max_triangles,
-                    "parametric triangle count overflow"
-                );
+                covered += area.abs() / 2.;
+                triangles.push(if (area > 0.) == winding {
+                    [index[a], index[b], index[c]]
+                } else {
+                    [index[a], index[c], index[b]]
+                });
             }
+            ensure!(
+                triangles.len() <= max_triangles,
+                "parametric triangle count overflow"
+            );
         }
     }
     ensure!(
