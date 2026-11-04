@@ -18,14 +18,15 @@ takes puzzbobb's speed-up of the native record reads (#1301). Thanks to all
 three.
 
 Measured against 0.12.2 on every reference model, Autodesk's sample projects
-and the held-out models (Measure run 41733089463 at #1300, before #1302,
-#1292 and #1301, which were each measured in their own run):
+and the held-out models (Measure run 41741896192, this release's code
+against v0.12.2):
 - every `IfcSpace` says where its outline came from
-  (`RvtElementRecordGeometry.SpaceOutlineSource`). On the BIM4LCA office 230
-  of 234 rooms as built and 232 of 234 at building permit have Revit's area
-  to 0.1% (221 and 222 before); the rest are labelled approximate (a column
-  Revit's export may not take off, 0.45% to 0.68% under Revit's floor area)
-  or keep their box, and say so;
+  (`RvtElementRecordGeometry.SpaceOutlineSource`). On the BIM4LCA office 229
+  of the 232 rooms paired with Revit's as built and 231 of 234 at building
+  permit have Revit's area to 0.1% (220 and 221 with 0.12.2). Of the 12 rooms
+  per file 0.12.2 drew as their box, 9 and 10 now have Revit's area; the rest
+  are labelled approximate (a column Revit's export may not take off, 0.45%
+  to 0.68% under Revit's floor area) or keep their box, and say so;
 - rooms on Revit 2026 and 2027 take their outline instead of their box: each
   of the 257 rooms of Autodesk's four sample projects with rooms gives the
   same verdict and area in its 2026 and 2027 saves as in 2025, the rooms
