@@ -311,6 +311,8 @@ pub fn scan_type_layers(
         return Ok(BTreeMap::new());
     };
     let mut found: BTreeMap<u32, Option<Vec<CompoundLayer>>> = BTreeMap::new();
+    let recording = rf.recording_value_sources();
+    let mut trail = crate::ifc::element_provenance::CopyTrail::default();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -335,12 +337,22 @@ pub fn scan_type_layers(
                 .unwrap_or(buf.len())
                 .min(hit.saturating_add(LAYER_WINDOW))
                 .min(buf.len());
+            if recording {
+                trail.named(
+                    id,
+                    crate::partition_room_parameters::partition_number(&stream),
+                );
+            }
             let Some(layers) = buf
                 .get(id_at + 8..end)
                 .and_then(|data| find_layers(data, tag, layout, materials, declared))
             else {
                 continue;
             };
+            if recording {
+                let partition = crate::partition_room_parameters::partition_number(&stream);
+                trail.gave(id, partition, hit);
+            }
             match found.get_mut(&id) {
                 None => {
                     found.insert(id, Some(layers));
@@ -353,10 +365,14 @@ pub fn scan_type_layers(
             }
         }
     }
-    Ok(found
+    let kept: BTreeMap<u32, Vec<CompoundLayer>> = found
         .into_iter()
         .filter_map(|(id, layers)| layers.map(|l| (id, l)))
-        .collect())
+        .collect();
+    if recording {
+        trail.note(rf, "type_layers", kept.keys().copied());
+    }
+    Ok(kept)
 }
 
 /// What a wall's data says about its location line and its sides.
