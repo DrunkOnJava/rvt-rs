@@ -53,16 +53,20 @@ pub struct Options {
     pub definition_filter: Option<fn(&str) -> bool>,
     /// With [`Self::definition_filter`], whether [`extract`] leaves out a
     /// selected record whose body holds none of the ids of the definitions
-    /// the filter accepts. A record saves a value against its definition's
-    /// id, a whole little-endian integer in its body (an `Identifier`: 4
-    /// bytes from Revit 2015 to 2023, 8 from 2024), so a record that does not
-    /// hold the integer's first four bytes holds no value for the definition
-    /// and is not decoded. For a reader that takes nothing but accepted
-    /// parameters from the records it selects: not one that takes values
-    /// from the records a record names (its type's), unless they are
-    /// selected the same way. Off by default (#1237: on a Revit 2015 to 2023
-    /// project the parameters named for a property are on a handful of the
-    /// thousands of records the read decoded).
+    /// the filter accepts. It assumes that a value is saved against its
+    /// definition's id itself, a whole little-endian integer in the record's
+    /// body (an `Identifier`: 4 bytes from Revit 2015 to 2023, 8 from 2024),
+    /// so that a record without the integer's first four bytes holds no
+    /// value for the definition and is not decoded. The assumption is
+    /// measured, not proven: on Autodesk's 33 sample projects of Revit 2015
+    /// to 2023 every record that gave an accepted parameter held one of the
+    /// ids, and the exports are unchanged with the filter. It is not
+    /// measured on 2024 to 2027 by that check. For a reader that takes
+    /// nothing but accepted parameters from the records it selects: not one
+    /// that takes values from the records a record names (its type's),
+    /// unless they are selected the same way. Off by default (#1237: on a
+    /// Revit 2015 to 2023 project the parameters named for a property are on
+    /// a handful of the thousands of records the read decoded).
     pub filtered_parameters_only: bool,
     /// Whether each [`Record`] carries what is derived from it beyond its
     /// graph and saved metadata: [`RecordSource::body_sha256`], the default
