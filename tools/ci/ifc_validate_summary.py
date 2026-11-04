@@ -22,10 +22,18 @@ with its instance numbers replaced by `#`, most frequent first:
     findings <n>
     <count> <entity> <attribute or rule>: <message>     (at most 30)
 
+With --both MODEL.ifc STATEMENTS.jsonl RULES.txt it does both from one parse
+of the file: the default validation's summary on stdout and its findings in
+STATEMENTS.jsonl, and what --rules prints in RULES.txt, each exactly as its own
+run writes it.
+
 Usage: ifc_validate_summary.py [--rules] MODEL.ifc [STATEMENTS.jsonl]
+       ifc_validate_summary.py --both MODEL.ifc STATEMENTS.jsonl RULES.txt
 """
 
 import collections
+import contextlib
+import io
 import json
 import re
 import sys
@@ -43,18 +51,54 @@ def describe(statement):
     return f"{entity} {attribute}: {message}"[:300]
 
 
-def rules(path):
+def rules(path, model=None):
     logger = ifcopenshell.validate.json_logger()
-    ifcopenshell.express.rule_executor.run(ifcopenshell.open(path), logger)
+    ifcopenshell.express.rule_executor.run(model if model is not None else ifcopenshell.open(path), logger)
     kinds = collections.Counter(re.sub(r"#\d+", "#", describe(s)) for s in logger.statements)
     print(f"findings {len(logger.statements)}")
     for kind, count in sorted(kinds.items(), key=lambda item: (-item[1], item[0]))[:30]:
         print(f"{count} {kind}")
 
 
-def main(path, statements=None):
+def unreadable(error):
+    return f"unreadable: {type(error).__name__}: {json.dumps(str(error))[:300]}"
+
+
+def both(path, statements, rules_out):
+    """The default validation on stdout and the rules check in RULES_OUT, each
+    exactly what its own run prints, from one parse of the file: a file that
+    does not open, or a check that fails, is the finding of both or of that
+    one, as it is when they run apart. It returns 1 when anything failed, which
+    the apart runs do not (they print the failure and exit 0), so that Measure's
+    cache never keeps a failure that a rerun could mend, a MemoryError say."""
+    try:
+        model = ifcopenshell.open(path)
+    except Exception as error:
+        print(unreadable(error))
+        with open(rules_out, "w", encoding="utf-8") as out:
+            out.write(unreadable(error) + "\n")
+        return 1
+    failed = 0
+    try:
+        main(path, statements, model)
+    except Exception as error:
+        print(unreadable(error))
+        failed = 1
+    captured = io.StringIO()
+    failure = None
+    with contextlib.redirect_stdout(captured):
+        try:
+            rules(path, model)
+        except Exception as error:
+            failure = error
+    with open(rules_out, "w", encoding="utf-8") as out:
+        out.write(captured.getvalue() + (unreadable(failure) + "\n" if failure else ""))
+    return 1 if failed or failure else 0
+
+
+def main(path, statements=None, model=None):
     logger = ifcopenshell.validate.json_logger()
-    ifcopenshell.validate.validate(ifcopenshell.open(path), logger)
+    ifcopenshell.validate.validate(model if model is not None else ifcopenshell.open(path), logger)
     if statements:
         with open(statements, "w", encoding="utf-8") as out:
             for statement in logger.statements:
@@ -67,6 +111,10 @@ def main(path, statements=None):
 
 if __name__ == "__main__":
     args = sys.argv[1:]
+    if args[:1] == ["--both"]:
+        if len(args) != 4:
+            sys.exit(__doc__)
+        sys.exit(both(args[1], args[2], args[3]))
     with_rules = args[:1] == ["--rules"]
     if with_rules:
         args = args[1:]
@@ -78,4 +126,4 @@ if __name__ == "__main__":
         else:
             main(args[0], args[1] if len(args) == 2 else None)
     except Exception as error:  # an unreadable file is a finding too
-        print(f"unreadable: {type(error).__name__}: {json.dumps(str(error))[:300]}")
+        print(unreadable(error))
