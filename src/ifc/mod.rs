@@ -14,8 +14,8 @@
 //! To build the model as `rvt-ifc` builds it (the exporter, the project phase,
 //! the bodies drawn from saved graphics, Revit's property sets, the
 //! base-quantity switch and the record of unread streams), call
-//! [`run_export`] with [`ExportOptions`]: `rvt-ifc`, the Python package, the
-//! viewer and `rvt-rs-mcp` all do.
+//! [`run_export`] with [`ExportOptions`]: `rvt-ifc`, `rvt-gltf`, the Python
+//! package, the viewer and `rvt-rs-mcp` all do.
 //!
 //! What is read on which release and input, category by category, is in
 //! `docs/supported-profile.md`, and every export's diagnostics name what was

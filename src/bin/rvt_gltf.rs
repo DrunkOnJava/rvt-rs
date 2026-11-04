@@ -1,9 +1,9 @@
 //! `rvt-gltf` — convert a Revit file to a glTF 2.0 binary (.glb).
 //!
-//! The command-line front end of `rvt::ifc::gltf`. Reads `src`, runs the
-//! `RvtDocExporter` to produce an `IfcModel` (project metadata +
-//! whatever per-element info the walker can resolve), then emits
-//! the glb via `ifc::gltf::model_to_glb`.
+//! The command-line front end of `rvt::ifc::gltf`. Reads `src`, runs
+//! `ifc::run_export` (the build `rvt-ifc` runs) to produce an `IfcModel`
+//! (project metadata + whatever per-element info the walker can resolve),
+//! then emits the glb via `ifc::gltf::model_to_glb`.
 //!
 //! Usage:
 //!
@@ -15,7 +15,7 @@
 
 use clap::Parser;
 use rvt::RevitFile;
-use rvt::ifc::{ExportQualityMode, RvtDocExporter, gltf::model_to_glb};
+use rvt::ifc::{ExportOptions, SavedMeshChoice, gltf::model_to_glb, run_export};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -170,34 +170,32 @@ fn run(cli: &Cli) -> Result<(), Failure> {
     } else {
         rvt::control::WalkerControl::new()
     };
-    let mut model = RvtDocExporter
-        .export_with_mode_limits_and_control(
-            &mut rf,
-            ExportQualityMode::Scaffold,
-            walker_limits,
-            &control,
-        )
-        .map_err(|e| format!("export {}: {e}", input.display()))?;
-    let scope = if cli.no_saved_meshes {
-        None
+    let saved_meshes = if cli.no_saved_meshes {
+        SavedMeshChoice::Off
     } else if cli.saved_meshes {
-        Some(rvt::ifc::saved_meshes::SavedMeshScope::All)
+        SavedMeshChoice::All
     } else {
-        rvt::ifc::saved_meshes::default_scope(&mut rf)
+        SavedMeshChoice::Default
     };
-    if let Some(scope) = scope {
-        if let Err(e) =
-            rvt::ifc::saved_meshes::attach_scoped_with_control(&mut rf, &mut model, scope, &control)
-        {
-            eprintln!("rvt-gltf: saved graphics not read, bodies unchanged: {e}");
-        }
+    let run = run_export(
+        &mut rf,
+        &ExportOptions::default().with_saved_meshes(saved_meshes),
+        walker_limits,
+        &control,
+    )
+    .map_err(|e| format!("export {}: {e}", input.display()))?;
+    // The saved graphics only improve bodies: when they cannot be read, the
+    // glb is written with the bodies it has, and says so.
+    for note in run.notes.iter().filter(|note| note.skipped.is_some()) {
+        eprintln!("rvt-gltf: {}", note.text);
     }
-    let unread = rf.unread_streams().len();
-    if unread > 0 {
+    let model = run.model;
+    if !run.unread.is_empty() {
         eprintln!(
-            "rvt-gltf: {unread} stream(s) not read whole, so the model is missing what they hold:"
+            "rvt-gltf: {} stream(s) not read whole, so the model is missing what they hold:",
+            run.unread.len()
         );
-        for line in rvt::cli::unread_stream_report(rf.unread_streams()) {
+        for line in rvt::cli::unread_stream_report(&run.unread) {
             eprintln!("{line}");
         }
         if !cli.allow_partial {

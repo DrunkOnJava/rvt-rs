@@ -1,7 +1,7 @@
 //! The export every front end runs: [`run_export`].
 //!
-//! `rvt-ifc`, the Python package, the viewer's WebAssembly bindings and
-//! `rvt-rs-mcp` all build their IFC model from this one function, so the
+//! `rvt-ifc`, `rvt-gltf`, the Python package, the viewer's WebAssembly
+//! bindings and `rvt-rs-mcp` all build their model from this one function, so the
 //! steps and their order are written once: the exporter, the phase, the
 //! bodies drawn from saved graphics, Revit's own property sets and their
 //! placement, the base-quantity switch, and the record of streams a resource

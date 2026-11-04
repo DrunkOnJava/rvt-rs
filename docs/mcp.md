@@ -15,8 +15,8 @@ as IFC4 or glTF, with no Revit install and no network.
   the model its exporter builds and the diagnostics that go with it, and keeps
   that model. Every query tool reads it, and the exports are written from it, so
   an answer and the IFC cannot disagree. The decode is one library function,
-  `rvt::ifc::run_export`, which `rvt-ifc`, the Python package and the viewer
-  call as well, so the steps are written once.
+  `rvt::ifc::run_export`, which `rvt-ifc`, `rvt-gltf`, the Python package and
+  the viewer call as well, so the steps are written once.
 - **Honest about gaps.** It reports what it left out the way the CLIs do:
   unread streams, skipped items, diagnostics. A field the model does not have is
   absent from an answer, never guessed.
