@@ -23,6 +23,14 @@ a transform.
 Only the rvt-rs elements with a wanted `BodySource`, and the reference's
 elements with their Tags, are meshed.
 
+With RVT_SCORER_FINE_MESH=1 (#1355, RE-331) it then meshes an even stride of at
+most 300 of each class's paired elements again in both files at one equal, fine
+deflection (fine_mesh.py) and prints, after the table above, `fine` rows for
+them: the same buckets, with one for a box within 0.001 ft, beside the count
+within 0.001 ft in the default tessellation for the same elements. A box is
+the extent of a tessellated body, so a curved body's differs by the chords'
+sagitta between tessellations. The output without it is as it was.
+
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 
 Usage:
@@ -44,6 +52,7 @@ import ifcopenshell.geom
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import fine_mesh  # noqa: E402
 from ifc_common import mesh_parts, site_frame  # noqa: E402
 
 FT = 0.3048
@@ -59,14 +68,15 @@ def body_sources(element):
     return None
 
 
-def world_boxes(path, tags=None, transform=None, wanted=None, frame=True):
+def world_boxes(path, tags=None, transform=None, wanted=None, frame=True, settings=None):
     """Tag -> (class, box in feet, BodySource) for elements with a body: in
     the file's internal feet through its site placement (`frame`), else in
     its world feet, moved by `transform` when given. With `wanted`, only the
     elements with one of those BodySources are meshed."""
     model = ifcopenshell.open(path)
-    settings = ifcopenshell.geom.settings()
-    settings.set("use-world-coords", True)
+    if settings is None:
+        settings = ifcopenshell.geom.settings()
+        settings.set("use-world-coords", True)
     elements = [
         e
         for e in model.by_type("IfcElement")
@@ -100,6 +110,54 @@ def world_boxes(path, tags=None, transform=None, wanted=None, frame=True):
             box = [float(v) for v in points.min(axis=0)] + [float(v) for v in points.max(axis=0)]
             out[element.Tag] = (element.is_a(), box, sources.get(element.Tag))
     return out
+
+
+FINE_CAP = 300
+
+
+def box_error(box, other, offset):
+    return max(abs(box[k] - offset[k] - other[k]) for k in range(6))
+
+
+def fine_table(args, wanted, frames, to_shared, ours, ref, offset):
+    """The `fine` rows (#1355): an even stride of at most FINE_CAP paired elements of each class,
+    meshed again in both files at the fine deflection."""
+    paired = collections.defaultdict(list)
+    for tag, (cls, _, _) in ours.items():
+        if tag in ref:
+            paired[cls].append(tag)
+    sample = set()
+    for tags in paired.values():
+        tags = sorted(tags, key=lambda t: (len(t), t))
+        sample.update(tags[:: max(1, -(-len(tags) // FINE_CAP))])
+    settings = fine_mesh.settings()
+    ours_fine = world_boxes(args.ours, tags=sample, transform=None if frames else to_shared, wanted=wanted, frame=frames, settings=settings)
+    ref_fine = world_boxes(args.reference, tags=set(ours_fine), frame=frames, settings=settings)
+    pairs = [(ours_fine[t][1], ref_fine[t][1]) for t in ours_fine if t in ref_fine]
+    if args.offset_ft:
+        fine_offset = offset
+    else:
+        fine_offset = [statistics.median(a[k] - b[k] for a, b in pairs) for k in range(3)] * 2 if pairs else [0.0] * 6
+    print()
+    print(f"fine tessellation: {fine_mesh.LABEL}, both files; {len(ours_fine)} of {len(sample)} sampled elements meshed")
+    print("fine file-wide offset removed (ft):", [round(v, 4) for v in fine_offset[:3]])
+    rows = collections.defaultdict(lambda: [0] * 8)
+    for tag, (cls, box, _) in ours_fine.items():
+        for key in (cls, "total"):
+            row = rows[key]
+            row[0] += 1
+            row[1] += tag in ours and tag in ref and box_error(ours[tag][1], ref[tag][1], offset) <= 0.001
+            if tag not in ref_fine:
+                row[7] += 1
+                continue
+            err = box_error(box, ref_fine[tag][1], fine_offset)
+            row[2] += err <= 0.001
+            row[3 if err <= 0.01 else 4 if err <= 0.1 else 5 if err <= 1 else 6] += 1
+    heads = ("n", "default<=.001", "<=0.001ft", "<=0.01ft", "<=0.1", "<=1", ">1", "no ref")
+    widths = (6, 14, 10, 9, 7, 6, 6, 8)
+    print(f"fine {'class':28}" + "".join(f"{h:>{w}}" for h, w in zip(heads, widths)))
+    for cls in sorted((k for k in rows if k != "total"), key=lambda c: (-rows[c][0], c)) + ["total"]:
+        print(f"fine {cls:28}" + "".join(f"{v:>{w}}" for v, w in zip(rows[cls], widths)))
 
 
 def main():
@@ -148,6 +206,8 @@ def main():
         print(f"{cls:28}" + "".join(f"{v:>{w}}" for v, w in zip(row, widths)))
         total = [a + b for a, b in zip(total, row)]
     print(f"{'total':28}" + "".join(f"{v:>{w}}" for v, w in zip(total, widths)))
+    if fine_mesh.enabled():
+        fine_table(args, wanted, frames, to_shared, ours, ref, offset)
 
 
 if __name__ == "__main__":

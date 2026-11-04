@@ -72,6 +72,11 @@
 # run. `score_cache=off` runs every step, as before.
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f score_cache=off
+#
+# `fine_mesh=true` sets RVT_SCORER_FINE_MESH for the scorers: the three body
+# scorers then also mesh both IFC files at one equal, fine deflection and print
+# their `fine` rows after the output they always print (tools/re/fine_mesh.py,
+# #1355, RE-331). The score cache keys on the variable.
 
 name: Measure
 
@@ -162,6 +167,11 @@ on:
         description: 'The score cache (tools/ci/measure-cache.py, docs/maintaining.md): empty for the shared one, off to run every step, or a name for a cache of its own that this run saves to from any ref (the shared one is read as well)'
         required: false
         default: ""
+      fine_mesh:
+        description: The body scorers (mesh_bodies_vs_ifc, saved_meshes_vs_ifc, family_extrusion_bodies_vs_ifc) also mesh both IFC files at one equal, fine deflection and print `fine` rows after their own (tools/re/fine_mesh.py, #1355); their other output is as it was
+        type: boolean
+        required: false
+        default: false
   # A change to the measurement itself measures its own PR against main.
   pull_request:
     paths:
@@ -660,6 +670,7 @@ jobs:
           MEASURE_SCORERS: ${{ inputs.scorers }}
           PSETS_MISSING: ${{ inputs.psets_missing }}
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
+          RVT_SCORER_FINE_MESH: ${{ inputs.fine_mesh && '1' || '' }}
           FAMILY_DIR: ${{ matrix.families && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           SAMPLE_DIR: ${{ matrix.samples && format('{0}/_samples', github.workspace) || '' }}
           SHARD: ${{ matrix.shard }}

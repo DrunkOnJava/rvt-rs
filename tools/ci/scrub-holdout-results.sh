@@ -41,7 +41,8 @@
 # the area of Revit's upward faces, floor or every face, never a GlobalId), the
 # totals and per-class rows of mesh_bodies_vs_ifc.py, box_bodies_vs_ifc.py and
 # saved_meshes_vs_ifc.py (RE-329: numbers beside an IFC class name, never a
-# family, type or element), and
+# family, type or element), with the `fine` rows the two body scorers print under
+# RVT_SCORER_FINE_MESH (RE-331: the same), and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
@@ -119,6 +120,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
     for f in "$dir"mesh_bodies_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E "^(saved_graphics_mesh bodies scored: [0-9]+; in Revit's export [0-9]+|Ifc[A-Za-z0-9]+: [0-9]+ bodies, every [0-9]+th scored|Ifc[A-Za-z0-9]+ +[0-9]+( +[0-9]+){5} +([0-9]+\.[0-9]+|nan|-))$" "$f" | sed 's/^/mesh bodies: /' || true
+      grep -E "^(fine tessellation: IfcOpenShell mesher-linear-deflection [0-9.e-]+ m \(1e-5 ft\) and mesher-angular-deflection [0-9.]+ rad, both files; [0-9]+ of [0-9]+ bodies meshed in both|fine (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){8}  ([0-9]+\.[0-9]+|nan|inf) [0-9]+\.[0-9]+|fine change (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){8}|fine bodies that miss 'ref on ours': [0-9]+)$" "$f" | sed 's/^/mesh bodies: /' || true
     done
     for f in "$dir"box_bodies_vs_ifc.txt; do
       [ -f "$f" ] || continue
@@ -127,6 +129,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
     for f in "$dir"saved_meshes_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E "^(Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){5}$" "$f" | sed 's/^/saved meshes: /' || true
+      grep -E "^(fine tessellation: IfcOpenShell mesher-linear-deflection [0-9.e-]+ m \(1e-5 ft\) and mesher-angular-deflection [0-9.]+ rad, both files; [0-9]+ of [0-9]+ sampled elements meshed|fine (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){7})$" "$f" | sed 's/^/saved meshes: /' || true
     done
     for f in "$dir"storeys_vs_ifc.txt; do
       [ -f "$f" ] || continue
