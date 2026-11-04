@@ -12,8 +12,8 @@
     export of the project, all 91 rooms are within 0.1% in area and 0.01 ft
     in outline (Measure run 41909372124): before, 42 of the 85 rooms drawn
     from their stored solid were, and 6 kept their box. 48 spaces have as
-    many voids as Revit's, on all six saves (read outside Measure, run
-    41900428551). A public Revit 2018 IFC4 export of `rac_basic` draws the
+    many voids as Revit's, on all six saves (read outside Measure from run
+    41900428551's kept IFC, since deleted under the counts-only rule). A public Revit 2018 IFC4 export of `rac_basic` draws the
     one column of its room 101 as a void too, and the reader moves that room
     from 1.710% to 0.628% over its area (read outside Measure, run
     41909414507). The exports of the 33 other models measured (the BIM4LCA
