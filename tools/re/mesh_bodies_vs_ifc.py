@@ -295,8 +295,10 @@ def surface_distance(points, triangles):
 
 def sample(triangles):
     """The body's distinct vertices in lexicographic order, every `step`th of them so that
-    at most VERTEX_CAP are kept (what `np.unique(axis=0)` gives, sorted without its
-    structured-array comparison)."""
+    at most VERTEX_CAP are kept: the rows of `np.unique(axis=0)`, found by a sort that
+    does not compare structured values. Vertices equal but for the sign of a zero are
+    one vertex here as there; the one kept may differ from `np.unique`'s, and a zero's
+    sign changes no distance."""
     vertices = triangles.reshape(-1, 3)
     vertices = vertices[np.lexsort((vertices[:, 2], vertices[:, 1], vertices[:, 0]))]
     points = vertices[np.r_[True, (vertices[1:] != vertices[:-1]).any(axis=1)]]
@@ -305,10 +307,18 @@ def sample(triangles):
 
 
 SCORING = {}
+WORKER = {}
+
+
+def in_worker():
+    WORKER["parent"] = os.getppid()
 
 
 def score_pair(tag):
     """(volume ratio, Revit's vertices to rvt-rs's surface, rvt-rs's to Revit's) for one body."""
+    # An OOM-killed parent leaves its workers with the queued bodies: stop at the next one.
+    if "parent" in WORKER and os.getppid() != WORKER["parent"]:
+        os._exit(1)
     our_triangles, ref_triangles = SCORING["ours"][tag][2], SCORING["ref"][tag][2]
     ref_volume, our_volume = volume(ref_triangles), volume(our_triangles)
     ratio = our_volume / ref_volume if ref_volume > 0 else float("inf")
@@ -323,7 +333,11 @@ def score_all(ours, ref, tags):
     what is printed does not depend on the number of workers."""
     SCORING.update(ours=ours, ref=ref)
     cpus = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
-    workers = min(int(os.environ.get("RVT_MESH_WORKERS") or cpus), len(tags))
+    try:
+        workers = int(os.environ.get("RVT_MESH_WORKERS") or cpus)
+    except ValueError:
+        workers = cpus
+    workers = min(workers, len(tags))
     results = None
     if workers > 1 and len(tags) >= POOL_FROM:
         # The heaviest first, so the last body does not run alone. A forked
@@ -332,7 +346,9 @@ def score_all(ours, ref, tags):
         sys.stdout.flush()
         sys.stderr.flush()
         try:
-            with concurrent.futures.ProcessPoolExecutor(workers, mp_context=multiprocessing.get_context("fork")) as pool:
+            with concurrent.futures.ProcessPoolExecutor(
+                workers, mp_context=multiprocessing.get_context("fork"), initializer=in_worker
+            ) as pool:
                 done = list(pool.map(score_pair, [tags[i] for i in order], chunksize=1))
             results = [None] * len(tags)
             for i, result in zip(order, done):
