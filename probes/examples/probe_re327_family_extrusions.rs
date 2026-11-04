@@ -424,6 +424,47 @@ fn bump(tally: &mut BTreeMap<String, usize>, key: impl Into<String>) {
     *tally.entry(key.into()).or_default() += 1;
 }
 
+/// How far each end of `curves` that no other end meets lies from the nearest
+/// other such end.
+fn dangling_gaps(curves: &[Curve3]) -> String {
+    let ends: Vec<(usize, V3)> = curves
+        .iter()
+        .enumerate()
+        .flat_map(|(i, c)| [(i, c.point_at(0.0)), (i, c.point_at(1.0))])
+        .collect();
+    let distance = |a: V3, b: V3| {
+        ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+    };
+    let dangling: Vec<&(usize, V3)> = ends
+        .iter()
+        .filter(|(i, p)| {
+            !ends
+                .iter()
+                .any(|(j, q)| (i, p) != (j, q) && distance(*p, *q) <= 1e-6)
+        })
+        .collect();
+    let mut gaps: Vec<f64> = dangling
+        .iter()
+        .map(|(i, p)| {
+            dangling
+                .iter()
+                .filter(|(j, _)| j != i)
+                .map(|(_, q)| distance(*p, *q))
+                .fold(f64::INFINITY, f64::min)
+        })
+        .collect();
+    gaps.sort_by(f64::total_cmp);
+    gaps.truncate(8);
+    format!(
+        "dangling {} gaps {}",
+        dangling.len(),
+        gaps.iter()
+            .map(|g| format!("{g:.3e}"))
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
 fn describe_curves(curves: &[Curve3]) -> String {
     let point = |p: V3| format!("({:.4},{:.4},{:.4})", p[0], p[1], p[2]);
     curves
@@ -503,8 +544,9 @@ fn judge(
             if *shown < 3 {
                 *shown += 1;
                 println!(
-                    "unbuilt-curves {label} {id} {reason} count {} {}",
+                    "unbuilt-curves {label} {id} {reason} count {} {} {}",
                     extrusion.curves.len(),
+                    dangling_gaps(&extrusion.curves),
                     describe_curves(&extrusion.curves)
                 );
             }
@@ -583,8 +625,35 @@ fn judge(
             Some(false) => "0",
             None => "-",
         };
+        let third = [
+            extrusion.matrix[0][2],
+            extrusion.matrix[1][2],
+            extrusion.matrix[2][2],
+        ];
+        let axis = (0..3)
+            .max_by(|a, b| third[*a].abs().total_cmp(&third[*b].abs()))
+            .unwrap_or(2);
+        let direction = if third[axis].abs() < 0.999 {
+            "oblique".to_string()
+        } else {
+            format!(
+                "{}{}",
+                if third[axis] > 0.0 { "+" } else { "-" },
+                ["x", "y", "z"][axis]
+            )
+        };
+        let sketch_side = match extrusion.sketch_normal {
+            Some(n) => {
+                if n[0] * third[0] + n[1] * third[1] + n[2] * third[2] > 0.0 {
+                    "same"
+                } else {
+                    "opposite"
+                }
+            }
+            None => "-",
+        };
         let attributes = format!(
-            "det {} planeflip {} norm {} sketchflips {}{} ref {} mirror {}",
+            "n {direction} sketchnormal {sketch_side} det {} planeflip {} norm {} sketchflips {}{} ref {} mirror {}",
             if extrusion.determinant < 0.0 {
                 "-1"
             } else {

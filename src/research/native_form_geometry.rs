@@ -45,7 +45,7 @@ pub const END_PARAMETER: i64 = -1_001_801;
 const TOLERANCE: f64 = 1e-6;
 /// How far from its plane a sketch curve may lie, feet.
 const PLANE_TOLERANCE: f64 = 1e-5;
-const MAX_LOOPS: usize = 64;
+const MAX_LOOPS: usize = 256;
 const MAX_POLYGON_VERTICES: usize = 20_000;
 /// The angle an arc is drawn as a chord of when a polygon is needed.
 const ARC_STEP: f64 = PI / 32.0;
@@ -891,6 +891,9 @@ pub struct Extrusion {
     /// The sketch's `m_flipXY` and `m_flipZ`, where its `VarSketch` record
     /// decodes.
     pub sketch_flips: Option<(bool, bool)>,
+    /// The cross product of the x and y vectors of the `Plane` the sketch's
+    /// `VarSketch` record holds.
+    pub sketch_normal: Option<V3>,
     /// The value of [`START_PARAMETER`] and of [`END_PARAMETER`].
     pub start: f64,
     pub end: f64,
@@ -989,49 +992,68 @@ fn dist3(a: V3, b: V3) -> f64 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
 }
 
-fn same_curve(a: &Curve3, b: &Curve3) -> bool {
-    let (a0, a1) = (a.point_at(0.0), a.point_at(1.0));
-    let (b0, b1) = (b.point_at(0.0), b.point_at(1.0));
-    let ends = (dist3(a0, b0) <= TOLERANCE && dist3(a1, b1) <= TOLERANCE)
-        || (dist3(a0, b1) <= TOLERANCE && dist3(a1, b0) <= TOLERANCE);
-    match (a, b) {
-        (Curve3::Line { .. }, Curve3::Line { .. }) => ends,
-        (
+fn cross3(a: V3, b: V3) -> V3 {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+impl Curve3 {
+    /// The distance from `p` to the curve.
+    fn distance(&self, p: V3) -> f64 {
+        match self {
+            Curve3::Line { from, to } => {
+                let d = [to[0] - from[0], to[1] - from[1], to[2] - from[2]];
+                let rel = [p[0] - from[0], p[1] - from[1], p[2] - from[2]];
+                let length2 = dot3(d, d);
+                let t = if length2 > 0.0 {
+                    (dot3(rel, d) / length2).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                };
+                dist3(
+                    p,
+                    [from[0] + t * d[0], from[1] + t * d[1], from[2] + t * d[2]],
+                )
+            }
             Curve3::Arc {
-                center: ca,
-                radius: ra,
-                ..
-            },
-            Curve3::Arc {
-                center: cb,
-                radius: rb,
-                ..
-            },
-        ) => {
-            ends && dist3(*ca, *cb) <= TOLERANCE
-                && (ra - rb).abs() <= TOLERANCE
-                && dist3(a.point_at(0.5), b.point_at(0.5)) <= TOLERANCE
+                center,
+                x_axis,
+                y_axis,
+                radius,
+                start,
+                end,
+            } => {
+                let rel = [p[0] - center[0], p[1] - center[1], p[2] - center[2]];
+                let u = dot3(rel, *x_axis);
+                let v = dot3(rel, *y_axis);
+                let w = dot3(rel, cross3(*x_axis, *y_axis));
+                let (lo, hi) = (start.min(*end), start.max(*end));
+                if (v.atan2(u) - lo).rem_euclid(TAU) <= hi - lo {
+                    (u.hypot(v) - radius).hypot(w)
+                } else {
+                    dist3(p, self.point_at(0.0)).min(dist3(p, self.point_at(1.0)))
+                }
+            }
         }
-        _ => false,
     }
 }
 
+/// Whether every sampled point of `a` lies on `b`.
+fn covers(a: &[Curve3], b: &[Curve3]) -> bool {
+    a.iter().all(|curve| {
+        (0..=8u32).all(|k| {
+            let p = curve.point_at(f64::from(k) / 8.0);
+            b.iter().any(|other| other.distance(p) <= PLANE_TOLERANCE)
+        })
+    })
+}
+
+/// Whether two sets of curves lie on one another, however they are split.
 fn same_curves(a: &[Curve3], b: &[Curve3]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut used = vec![false; b.len()];
-    for x in a {
-        let Some(j) = b
-            .iter()
-            .enumerate()
-            .position(|(j, y)| !used[j] && same_curve(x, y))
-        else {
-            return false;
-        };
-        used[j] = true;
-    }
-    true
+    covers(a, b) && covers(b, a)
 }
 
 /// The records of a family's document an extrusion is rebuilt from, by
@@ -1208,6 +1230,21 @@ impl FormDocument {
                     root.fields.get("m_flipZ")?.as_bool()?,
                 ))
             });
+        let sketch_normal = self
+            .graphs
+            .get(&sketch_id)
+            .and_then(|sketch| {
+                sketch
+                    .objects
+                    .iter()
+                    .find(|object| object.class_name == "Plane")
+            })
+            .and_then(|object| {
+                Some(cross3(
+                    triple(object.fields.get("m_xVec"))?,
+                    triple(object.fields.get("m_yVec"))?,
+                ))
+            });
         let plane_flipped = plane
             .objects
             .first()
@@ -1228,6 +1265,7 @@ impl FormDocument {
             plane_ref,
             always_ref_plane_norm,
             sketch_flips,
+            sketch_normal,
             start,
             end,
             stored_loops_agree,
