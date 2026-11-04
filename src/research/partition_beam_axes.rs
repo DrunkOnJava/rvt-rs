@@ -139,6 +139,21 @@ pub fn first_bounded_line(data: &[u8]) -> Option<BoundedLine> {
     memchr::memmem::find_iter(data, &BOUNDED_LINE_TAG).find_map(|at| bounded_line_at(data, at))
 }
 
+/// The most lines [`all_bounded_lines`] returns.
+pub const MAX_LINES_PER_ELEMENT: usize = 64;
+
+/// Every bounded line in `data`, in order, up to [`MAX_LINES_PER_ELEMENT`]
+/// and without the arcs ([`bounded_arc_at`]); `None` where it holds none
+/// (RE-328: whether a beam's data holds another line than its first).
+pub fn all_bounded_lines(data: &[u8]) -> Option<Vec<BoundedLine>> {
+    let lines: Vec<BoundedLine> = memchr::memmem::find_iter(data, &BOUNDED_LINE_TAG)
+        .filter(|&at| bounded_arc_at(data, at).is_none())
+        .filter_map(|at| bounded_line_at(data, at))
+        .take(MAX_LINES_PER_ELEMENT)
+        .collect();
+    (!lines.is_empty()).then_some(lines)
+}
+
 /// A circular arc record (RE-75): the [`BOUNDED_LINE_TAG`] record preceded
 /// by a `u64` 1 where a line's is 0, and laid out
 ///
@@ -657,6 +672,24 @@ pub fn line_copies(
         .collect())
 }
 
+/// Each copy's partition and every line it holds ([`all_line_copies`]).
+pub type AllLineCopies = BTreeMap<u32, Vec<(u32, Vec<BoundedLine>)>>;
+
+/// What [`all_bounded_lines`] finds in each copy of each id's element data in
+/// `ids`, without choosing among copies (RE-328). Empty for a release this
+/// layout is not measured on.
+pub fn all_line_copies(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    ids: &BTreeSet<u32>,
+) -> Result<AllLineCopies> {
+    if !supports_revit_version(revit_version) {
+        return Ok(BTreeMap::new());
+    }
+    let (found, _) = collect_copies(rf, revit_version, ids, all_bounded_lines)?;
+    Ok(found)
+}
+
 /// An element's copies of its element data ([`line_copies`]).
 #[derive(Debug, Clone)]
 pub struct LineCopies {
@@ -787,31 +820,94 @@ pub fn i_section_body(
 /// The box along the line from `start` to `end` whose axis-aligned extent is
 /// the record box `bbox` (`[min x, min y, min z, max x, max y, max z]`, model
 /// feet), or `None` when the line leaves the box, is too steep for a
-/// horizontal width axis, or no such box reproduces the box's extents.
+/// horizontal width axis, or no such box reproduces the box's extents
+/// ([`beam_check`] says which).
 pub fn beam_body(bbox: [f64; 6], start: [f64; 3], end: [f64; 3]) -> Option<BeamBody> {
+    beam_check(bbox, start, end).ok()
+}
+
+/// Why [`beam_check`] declines a line (RE-328), in the order it tests them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum BeamReject {
+    /// A value of the box or the line is not finite.
+    NotFinite,
+    /// The box's low bound on some axis is above its high one.
+    InvertedBox,
+    /// An end lies outside the box by more than [`END_TOLERANCE_FEET`]: the
+    /// greatest distance past a face on any axis, feet.
+    EndOutside { feet: f64 },
+    /// The line has no length.
+    ZeroLength,
+    /// The line leaves less than [`MIN_PLAN_SHARE`] of its length in plan.
+    TooSteep,
+    /// The solved width or depth is not positive.
+    NoSection,
+    /// The plan extent the solve does not use is `feet` off the solved box's,
+    /// more than [`CLOSURE_TOLERANCE_FEET`].
+    OpenClosure { feet: f64 },
+}
+
+/// How far `point` lies outside `bbox` on each axis, feet, signed: negative
+/// below the box's low bound, positive above its high one, 0 inside it.
+pub fn box_overshoot(bbox: [f64; 6], point: [f64; 3]) -> [f64; 3] {
+    [0, 1, 2].map(|axis| {
+        if point[axis] < bbox[axis] {
+            point[axis] - bbox[axis]
+        } else if point[axis] > bbox[axis + 3] {
+            point[axis] - bbox[axis + 3]
+        } else {
+            0.0
+        }
+    })
+}
+
+/// The greatest distance `point` lies past a face of `bbox` on any axis,
+/// feet; 0 inside the box ([`box_overshoot`]).
+pub fn box_overshoot_feet(bbox: [f64; 6], point: [f64; 3]) -> f64 {
+    box_overshoot(bbox, point)
+        .iter()
+        .fold(0.0, |most, v| f64::max(most, v.abs()))
+}
+
+/// [`beam_body`], saying why it declines a line (RE-328).
+pub fn beam_check(bbox: [f64; 6], start: [f64; 3], end: [f64; 3]) -> Result<BeamBody, BeamReject> {
     if !bbox.iter().chain(&start).chain(&end).all(|v| v.is_finite()) {
-        return None;
+        return Err(BeamReject::NotFinite);
     }
-    for axis in 0..3 {
-        let (low, high) = (bbox[axis], bbox[axis + 3]);
-        if low > high {
-            return None;
-        }
-        for point in [start, end] {
-            if point[axis] < low - END_TOLERANCE_FEET || point[axis] > high + END_TOLERANCE_FEET {
-                return None;
-            }
-        }
+    if (0..3).any(|axis| bbox[axis] > bbox[axis + 3]) {
+        return Err(BeamReject::InvertedBox);
+    }
+    let outside = f64::max(
+        box_overshoot_feet(bbox, start),
+        box_overshoot_feet(bbox, end),
+    );
+    if outside > END_TOLERANCE_FEET {
+        return Err(BeamReject::EndOutside { feet: outside });
+    }
+    beam_section_fit(bbox, start, end)
+}
+
+/// [`beam_check`] without its test that both ends lie in the box: the box
+/// along the line whose extents reproduce the record box's, where the line is
+/// level enough, has a length and the plan extent the solve does not use
+/// closes (RE-328 measures what the ends test alone keeps from a body).
+pub fn beam_section_fit(
+    bbox: [f64; 6],
+    start: [f64; 3],
+    end: [f64; 3],
+) -> Result<BeamBody, BeamReject> {
+    if !bbox.iter().chain(&start).chain(&end).all(|v| v.is_finite()) {
+        return Err(BeamReject::NotFinite);
     }
     let delta = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];
     let length = (delta[0] * delta[0] + delta[1] * delta[1] + delta[2] * delta[2]).sqrt();
     if length <= 0.0 {
-        return None;
+        return Err(BeamReject::ZeroLength);
     }
     let d = [delta[0] / length, delta[1] / length, delta[2] / length];
     let plan = d[0].hypot(d[1]);
     if plan < MIN_PLAN_SHARE {
-        return None;
+        return Err(BeamReject::TooSteep);
     }
     // Width axis: horizontal, across the line. Depth axis: the line's
     // vertical plane, across the line (d × u).
@@ -827,10 +923,14 @@ pub fn beam_body(bbox: [f64; 6], start: [f64; 3], end: [f64; 3]) -> Option<BeamB
     };
     let width = (extent[solve] - length * d[solve].abs() - depth * w[solve].abs()) / u[solve].abs();
     let closure = length * d[check].abs() + width * u[check].abs() + depth * w[check].abs();
-    if !(width > 0.0 && depth > 0.0) || (closure - extent[check]).abs() > CLOSURE_TOLERANCE_FEET {
-        return None;
+    if !(width > 0.0 && depth > 0.0) {
+        return Err(BeamReject::NoSection);
     }
-    Some(BeamBody {
+    let miss = (closure - extent[check]).abs();
+    if miss > CLOSURE_TOLERANCE_FEET {
+        return Err(BeamReject::OpenClosure { feet: miss });
+    }
+    Ok(BeamBody {
         centre: [
             (bbox[0] + bbox[3]) / 2.0,
             (bbox[1] + bbox[4]) / 2.0,
@@ -841,4 +941,51 @@ pub fn beam_body(bbox: [f64; 6], start: [f64; 3], end: [f64; 3]) -> Option<BeamB
         width_feet: width,
         depth_feet: depth,
     })
+}
+
+/// The box along the unit `direction` whose axis-aligned extent is the record
+/// box `bbox`, its length free: `[length, width, depth]` in feet (RE-328).
+/// [`beam_section_fit`] takes the length from the line and checks one plan
+/// extent; this takes all three from the three extents, so nothing checks it:
+/// a box that is not a box along the line (end cuts square to something
+/// else) gets a section that is not the beam's. `None` for a direction with
+/// less than [`MIN_PLAN_SHARE`] of its length in plan, for a singular solve
+/// (a level line at 45 degrees to the axes) and for a non-positive result.
+pub fn box_along(bbox: [f64; 6], direction: [f64; 3]) -> Option<[f64; 3]> {
+    if !bbox.iter().chain(&direction).all(|v| v.is_finite()) {
+        return None;
+    }
+    let d = direction;
+    let plan = d[0].hypot(d[1]);
+    if plan < MIN_PLAN_SHARE {
+        return None;
+    }
+    let u = [-d[1] / plan, d[0] / plan, 0.0];
+    let w = [-d[2] * d[0] / plan, -d[2] * d[1] / plan, plan];
+    let a = [
+        [d[0].abs(), u[0].abs(), w[0].abs()],
+        [d[1].abs(), u[1].abs(), w[1].abs()],
+        [d[2].abs(), u[2].abs(), w[2].abs()],
+    ];
+    let extent = [bbox[3] - bbox[0], bbox[4] - bbox[1], bbox[5] - bbox[2]];
+    let det = |m: [[f64; 3]; 3]| {
+        m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+            - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+            + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+    };
+    let whole = det(a);
+    if whole.abs() < 1e-6 {
+        return None;
+    }
+    let solved = [0, 1, 2].map(|column| {
+        let mut m = a;
+        for (row, value) in m.iter_mut().zip(extent) {
+            row[column] = value;
+        }
+        det(m) / whole
+    });
+    solved
+        .iter()
+        .all(|v| v.is_finite() && *v > 0.0)
+        .then_some(solved)
 }
