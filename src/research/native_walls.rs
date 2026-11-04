@@ -81,11 +81,6 @@ pub struct NativeWall {
     /// The elements whose faces the `JoinEndGStep.m_exposedFaceMap` of the
     /// curve's start and of its end names, in its order.
     pub exposed: [Vec<u64>; 2],
-    /// The walls the `JoinEndGStep.m_geomJoined` of the curve's start and of
-    /// its end names, each with the end it joins by (0 or 1 its ends, 2 or 3
-    /// its sides), in the step's order: those whose geometry the end is cut
-    /// against, which can differ from the walls the join lists name (#1396).
-    pub geometry_joined: [Vec<(u64, u32)>; 2],
     /// The walls whose end meets this wall's middle, from its `CDJoinInfo`
     /// objects, each with that end (0 or 1).
     pub side_joins: Vec<(u64, u32)>,
@@ -667,7 +662,6 @@ pub fn native_walls_and_top_joins_into(
                 .map(|object| &object.fields)
                 .collect();
             let mut exposed = [Vec::new(), Vec::new()];
-            let mut geometry_joined: [Vec<(u64, u32)>; 2] = [Vec::new(), Vec::new()];
             let mut stepped = [false, false];
             for step in graph
                 .objects
@@ -690,18 +684,6 @@ pub fn native_walls_and_top_joins_into(
                         .into_iter()
                         .flatten()
                         .filter_map(|face| element_id(face.pointer("/second/m_elemId")?))
-                        .collect();
-                    geometry_joined[slot] = step
-                        .get("m_geomJoined")
-                        .and_then(Value::as_array)
-                        .into_iter()
-                        .flatten()
-                        .filter_map(|member| {
-                            let other = element_id(member.get("m_elemId")?)?;
-                            let joined =
-                                u32::try_from(member.get("m_joinedEnd")?.as_u64()?).ok()?;
-                            Some((other, joined))
-                        })
                         .collect();
                 }
             }
@@ -745,7 +727,6 @@ pub fn native_walls_and_top_joins_into(
                 shells: None,
                 faces: face_offsets(&planes, start, direction),
                 exposed,
-                geometry_joined,
                 side_joins,
                 partners,
                 type_id: None,
@@ -796,70 +777,18 @@ pub fn tee_reach(
     walls: &BTreeMap<u64, NativeWall>,
     thickness: impl Fn(u64) -> Option<f64>,
 ) -> Option<f64> {
-    let host = tee_host(id, end, walls)?;
-    thickness(host)
-        .filter(|t| t.is_finite() && *t > 0.0)
-        .map(|t| -t / 2.0)
-}
-
-/// The host of the T joint at the `end` of wall `id`'s curve: the one wall its
-/// join lists name there that meets the end with its middle. `None` where the
-/// join is not a T joint with exactly one host.
-pub fn tee_host(id: u64, end: usize, walls: &BTreeMap<u64, NativeWall>) -> Option<u64> {
     let join = walls.get(&id)?.joins.get(end)?.as_ref()?;
     let tees: Vec<u64> = join
         .iter()
         .filter(|(other, joined)| *other != id && matches!(joined, 2 | 3))
         .map(|(other, _)| *other)
         .collect();
-    match tees.as_slice() {
-        [host] => Some(*host),
-        _ => None,
-    }
-}
-
-/// How far past the `end` of wall `id`'s curve its body reaches where it stops
-/// at the face of wall `other`, which crosses it at right angles and is
-/// `thickness` thick about its own curve (#1396): the far face of `other`, as
-/// a distance along the wall from that end, negated. [`tee_reach`] is this for
-/// a host whose curve lies at the end. `None` where `other` does not cross the
-/// wall at a right angle.
-pub fn tee_face_reach(
-    id: u64,
-    end: usize,
-    other: u64,
-    walls: &BTreeMap<u64, NativeWall>,
-    thickness: f64,
-) -> Option<f64> {
-    let wall = walls.get(&id)?;
-    let (near, far) = if end == 0 {
-        (wall.start, wall.end)
-    } else {
-        (wall.end, wall.start)
+    let [host] = tees.as_slice() else {
+        return None;
     };
-    let crossing = walls.get(&other)?;
-    let length = (far[0] - near[0]).hypot(far[1] - near[1]);
-    let across = (crossing.end[0] - crossing.start[0]).hypot(crossing.end[1] - crossing.start[1]);
-    if !(length.is_finite()
-        && length > 1e-9
-        && across.is_finite()
-        && across > 1e-9
-        && thickness.is_finite()
-        && thickness > 0.0)
-    {
-        return None;
-    }
-    let along = [(far[0] - near[0]) / length, (far[1] - near[1]) / length];
-    let direction = [
-        (crossing.end[0] - crossing.start[0]) / across,
-        (crossing.end[1] - crossing.start[1]) / across,
-    ];
-    if (along[0] * direction[0] + along[1] * direction[1]).abs() > 1e-6 {
-        return None;
-    }
-    let offset =
-        (crossing.start[0] - near[0]) * along[0] + (crossing.start[1] - near[1]) * along[1];
-    Some(-(offset + thickness / 2.0))
+    thickness(*host)
+        .filter(|t| t.is_finite() && *t > 0.0)
+        .map(|t| -t / 2.0)
 }
 
 /// The walls joined at each end of each of `walls`: those its record's join

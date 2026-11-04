@@ -190,62 +190,10 @@ pub(super) fn attach_wall_lengths(
     }
 }
 
-/// How far a wall's elevation range may lie outside another's and still
-/// contain its base, feet (#1396).
-const BASE_ELEVATION_TOLERANCE_FEET: f64 = 1e-3;
-
-/// How much further than the host's a face must reach to replace it, feet
-/// (#1396): a wall whose end is cut at a face that agrees with the host's to
-/// within this keeps the host's.
-const FACE_REPLACEMENT_MINIMUM_FEET: f64 = 1e-3;
-
-/// The reach of the end of wall `id` at a T joint whose host lies wholly above
-/// the wall's base, where the end is cut against another wall instead (#1396,
-/// RE-337): the one wall the end's `JoinEndGStep.m_geomJoined` names, other
-/// than the host, that meets it with its side and holds the wall's base. The
-/// host cuts only the top of such a wall, and Revit's body at the base stops
-/// at that wall's face, a step below where it stops at the host's. `None`
-/// where the host holds the base, where no wall or several others do, or where
-/// that wall does not cross at a right angle.
-fn tee_reach_at_base(
-    id: u64,
-    end: usize,
-    host: u64,
-    native: &BTreeMap<u64, crate::native_walls::NativeWall>,
-    thickness: &BTreeMap<u64, f64>,
-    spans: &BTreeMap<u64, (f64, f64)>,
-) -> Option<f64> {
-    let (base, _) = *spans.get(&id)?;
-    let holds = |other: u64| {
-        spans.get(&other).map(|&(low, high)| {
-            low - BASE_ELEVATION_TOLERANCE_FEET <= base
-                && base <= high + BASE_ELEVATION_TOLERANCE_FEET
-        })
-    };
-    if holds(host)? {
-        return None;
-    }
-    let mut holding = native
-        .get(&id)?
-        .geometry_joined
-        .get(end)?
-        .iter()
-        .filter(|&&(other, at)| {
-            other != id && other != host && matches!(at, 2 | 3) && holds(other) == Some(true)
-        })
-        .map(|&(other, _)| other);
-    let (Some(other), None) = (holding.next(), holding.next()) else {
-        return None;
-    };
-    crate::native_walls::tee_face_reach(id, end, other, native, *thickness.get(&other)?)
-}
-
 /// At each end of a wall with a centreline where its native record says
 /// another wall meets that end with its middle, the body stops half that
 /// wall's thickness short ([`crate::native_walls::tee_reach`], RE-222),
-/// in place of the reach its join lists give. Where that host lies wholly
-/// above the wall's base, the end stops at the face of the wall that holds the
-/// base ([`tee_reach_at_base`], #1396). An end whose layers each end
+/// in place of the reach its join lists give. An end whose layers each end
 /// on their own line (RE-71, RE-74) keeps them, and so does one whose other
 /// wall's thickness is not known: its type's, or its record box's thin
 /// extent where it runs along a model axis.
@@ -278,22 +226,6 @@ pub(super) fn attach_native_tee_reaches(
             Some((id, thickness))
         })
         .collect();
-    // Each wall's elevation range: its base and its record box's top.
-    let spans: BTreeMap<u64, (f64, f64)> = walls
-        .iter()
-        .filter_map(|wall| {
-            let float = |wanted: &str| {
-                wall.fields.iter().find_map(|(name, value)| match value {
-                    InstanceField::Float { value, .. } if name == wanted => Some(*value),
-                    _ => None,
-                })
-            };
-            let base = float("m_locationZ")?;
-            let top = base + float("m_bboxHeight")?;
-            (base.is_finite() && top.is_finite() && top > base)
-                .then_some((u64::from(wall.id?), (base, top)))
-        })
-        .collect();
     let near = |a: [f64; 2], b: [f64; 2]| {
         (a[0] - b[0]).hypot(a[1] - b[1]) <= NATIVE_WALL_LINE_TOLERANCE_FEET
     };
@@ -324,15 +256,9 @@ pub(super) fn attach_native_tee_reaches(
             {
                 continue;
             }
-            if let Some(mut reach) = crate::native_walls::tee_reach(id, end, native, |other| {
+            if let Some(reach) = crate::native_walls::tee_reach(id, end, native, |other| {
                 thickness.get(&other).copied()
             }) {
-                if let Some(at_base) = crate::native_walls::tee_host(id, end, native)
-                    .and_then(|host| tee_reach_at_base(id, end, host, native, &thickness, &spans))
-                    .filter(|at_base| (at_base - reach).abs() > FACE_REPLACEMENT_MINIMUM_FEET)
-                {
-                    reach = at_base;
-                }
                 wall.fields
                     .retain(|(name, _)| name != WALL_JOIN_REACH_FIELDS[slot]);
                 wall.fields.push((
