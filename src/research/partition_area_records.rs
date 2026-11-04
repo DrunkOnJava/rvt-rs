@@ -47,13 +47,21 @@
 //!
 //! - An Area has a body only where its point lies in exactly one region of
 //!   its scheme's lines on its Level, the lines it names bound that region,
-//!   every line of the scheme on the Level is a straight line along the plan
-//!   axes and in the primary design option, and every declared area boundary
-//!   line of the file was read and placed on a Level. The lines its record
-//!   names must be declared lines of that scheme on that Level whose copies
-//!   agree. An Area whose region another placed Area of its scheme and Level
-//!   shares has none, whatever stops the other from being drawn. Otherwise it
-//!   has none, as before, and says why in [`AREA_BODY_REFUSAL_FIELD`].
+//!   every line of the scheme on the Level is in the primary design option,
+//!   no line that is not a straight line along the plan axes lies where the
+//!   region does (RE-330), and every declared area boundary line of the file
+//!   was read and placed on a Level. The lines its record names must be
+//!   declared lines of that scheme on that Level whose copies agree. An Area
+//!   whose region another placed Area of its scheme and Level shares has none,
+//!   whatever stops the other from being drawn. Otherwise it has none, as
+//!   before, and says why in [`AREA_BODY_REFUSAL_FIELD`].
+//! - Lines that stop short of the line they join are carried on to it, and
+//!   parallel lines that stop at the same place a wall's thickness apart are
+//!   joined by a connector, where their records name each other and the gap is
+//!   at most 1 ft (RE-330; the premise is inferred from one IFC2X3 export). A
+//!   line that is not a straight line along an axis (its record holds its box
+//!   and no more) is left out of the arrangement, and so is an Area whose
+//!   region its box touches, or a line that names it bounds.
 //! - A line in a non-primary design option makes its group unreadable: no area
 //!   boundary line of the office or of Autodesk's 2024 samples has a design
 //!   option, so how Revit treats one is not measured.
@@ -65,8 +73,9 @@
 //!   measured. An Area on the top storey has none.
 //! - The base offset of the Area is read as zero, which is what the office
 //!   measures.
-//! - An Area bounded partly by walls is not read: its point lies in no region
-//!   of the lines alone.
+//! - An Area whose lines do not close, even with their joins, is not read: its
+//!   point lies in no region. No Revit export of an Area bounded by a wall is
+//!   measured.
 //! - Revit 2024 and 2015 to 2023 (RE-324) are read; elsewhere nothing is read
 //!   (fail closed).
 //!
@@ -175,8 +184,16 @@ pub const AREA_BODY_BASE_FIELD: &str = "m_area_body_base";
 /// The field of an Area that holds its body's height, feet.
 pub const AREA_BODY_HEIGHT_FIELD: &str = "m_area_body_height";
 
+/// The field of an Area, true where its outline runs along a stretch of a line
+/// carried on past the extent its record gives, or along a connector (RE-330).
+pub const AREA_JOINED_FIELD: &str = "m_area_body_joined";
+
 /// How far a boundary line's height may lie from its Level's, feet.
 pub const AREA_LEVEL_TOLERANCE_FEET: f64 = 1e-3;
+
+/// How near the box of a line that cannot be read must come to the box of an
+/// Area's region for the Area to be refused, feet (RE-330).
+pub const UNREAD_MARGIN_FEET: f64 = 0.01;
 
 /// The least distance to the Level above that gives an Area a body, feet.
 pub const AREA_MIN_HEIGHT_FEET: f64 = 1e-3;
@@ -207,7 +224,9 @@ pub const REFUSED_LINES: &str = "named_lines_not_in_scheme_and_level";
 pub const REFUSED_HEIGHT: &str = "next_storey_not_proven";
 /// The lines of the Area's scheme on its Level cannot be read as an arrangement
 /// of straight lines along the axes, one of them may be missing, or one is in a
-/// non-primary design option.
+/// non-primary design option; or a line that is not a straight line along an
+/// axis (a slanted line, an arc, a point) lies where the Area's region does, or
+/// is joined to a line that bounds it (RE-330).
 pub const REFUSED_GROUP: &str = "boundary_lines_not_readable";
 /// The Area's point lies in no single region of the lines.
 pub const REFUSED_REGION: &str = "point_in_no_single_region";
@@ -474,12 +493,17 @@ impl AreaRecord {
 }
 
 /// One area boundary line as its record holds it.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 struct LineRecord {
     from: (f64, f64),
     to: (f64, f64),
     height: f64,
     key: (u32, u32),
+    /// The ElementIds its reference list names: its Level, its scheme, the
+    /// lines it is joined to (RE-330). Two copies of a line that differ here
+    /// make it a conflicted one, as two that differ in box do: the joins read
+    /// this list.
+    names: BTreeSet<u32>,
 }
 
 /// The area boundary lines of a file, and what could not be read of them.
@@ -510,6 +534,7 @@ struct AreaBody {
     face: AreaFace,
     base_feet: f64,
     height_feet: f64,
+    joined: bool,
 }
 
 /// What is known of the file around its Areas.
@@ -613,6 +638,11 @@ fn boundary_lines(
             to: (x1, y1),
             height: z0,
             key,
+            names: record
+                .references
+                .iter()
+                .filter_map(|reference| u32::try_from(*reference).ok())
+                .collect(),
         };
         match out.by_id.get(&record.element_id) {
             None => {
@@ -808,13 +838,59 @@ fn level_and_storey_height(levels: &[PartitionLevel], level: u32) -> Option<(f64
     ))
 }
 
+/// The box `[min_x, min_y, max_x, max_y]` of the segment from `from` to `to`.
+fn segment_box(from: (f64, f64), to: (f64, f64)) -> [f64; 4] {
+    [
+        from.0.min(to.0),
+        from.1.min(to.1),
+        from.0.max(to.0),
+        from.1.max(to.1),
+    ]
+}
+
+/// The arrangement of the lines of one scheme on one Level that can be read, and
+/// the boxes of those that cannot (RE-330).
+struct GroupArrangement {
+    arrangement: Arrangement,
+    /// The box of each line left out of the arrangement because it is not a
+    /// straight line along an axis (a slanted line, an arc or a point: its record
+    /// holds only its box), and of each line that names one, which may be joined
+    /// to it.
+    blocked: Vec<[f64; 4]>,
+}
+
+impl GroupArrangement {
+    /// Whether a line left out of the arrangement may lie in, or bound, `face`:
+    /// its box is within [`UNREAD_MARGIN_FEET`] of the box of the face's outline.
+    /// A line outside that box cannot change the region.
+    fn blocks(&self, face: &AreaFace) -> bool {
+        let bounds = face.outer.iter().fold(
+            [
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+            ],
+            |b, p| [b[0].min(p.0), b[1].min(p.1), b[2].max(p.0), b[3].max(p.1)],
+        );
+        self.blocked.iter().any(|line| {
+            line[0] <= bounds[2] + UNREAD_MARGIN_FEET
+                && line[2] >= bounds[0] - UNREAD_MARGIN_FEET
+                && line[1] <= bounds[3] + UNREAD_MARGIN_FEET
+                && line[3] >= bounds[1] - UNREAD_MARGIN_FEET
+        })
+    }
+}
+
 /// The arrangement of the lines of one scheme on one Level, or `None` where a
-/// line cannot be read or may be missing.
+/// line may be missing, its copies disagree, or none can be read. A line that is
+/// not a straight line along an axis is not read, and an Area whose region it
+/// may change is refused ([`GroupArrangement::blocks`], RE-330).
 fn group_arrangement(
     lines: &BoundaryLines,
     key: (u32, u32),
     base_feet: f64,
-) -> Option<Arrangement> {
+) -> Option<GroupArrangement> {
     if lines
         .stray_heights
         .iter()
@@ -826,7 +902,10 @@ fn group_arrangement(
         return None;
     }
     let ids = lines.groups.get(&key)?;
-    let mut group = Vec::with_capacity(ids.len());
+    let mut readable = Vec::with_capacity(ids.len());
+    let mut joined: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    let mut unread: BTreeSet<u32> = BTreeSet::new();
+    let mut blocked = Vec::new();
     for id in ids {
         let line = lines.by_id.get(id)?;
         if lines.conflicted.contains(id)
@@ -834,13 +913,35 @@ fn group_arrangement(
         {
             return None;
         }
-        group.push(BoundaryLine {
+        let boundary = BoundaryLine {
             id: *id,
             from: line.from,
             to: line.to,
-        });
+        };
+        if Arrangement::reads(&boundary) {
+            joined.insert(*id, line.names.clone());
+            readable.push(boundary);
+        } else {
+            unread.insert(*id);
+            blocked.push(segment_box(line.from, line.to));
+        }
     }
-    Arrangement::new(&group)
+    if readable.is_empty() {
+        return None;
+    }
+    for boundary in &readable {
+        let names_unread = joined
+            .get(&boundary.id)
+            .is_some_and(|names| names.iter().any(|name| unread.contains(name)));
+        if names_unread {
+            blocked.push(segment_box(boundary.from, boundary.to));
+        }
+    }
+    let arrangement = Arrangement::new(&readable, &joined)?;
+    Some(GroupArrangement {
+        arrangement,
+        blocked,
+    })
 }
 
 /// The Areas of a file that have a body, and why the others have none.
@@ -881,7 +982,7 @@ fn locate(
     point: Option<(f64, f64)>,
     lines: &BoundaryLines,
     surroundings: &Surroundings<'_>,
-    arrangements: &mut BTreeMap<GroupKey, Option<Arrangement>>,
+    arrangements: &mut BTreeMap<GroupKey, Option<GroupArrangement>>,
 ) -> Result<Located, &'static str> {
     let point = point.ok_or(REFUSED_NO_POINT)?;
     let (Some(level), Some(scheme)) = (
@@ -896,7 +997,11 @@ fn locate(
         .entry(key)
         .or_insert_with(|| group_arrangement(lines, key, base_feet))
     {
-        Some(arrangement) => arrangement.face_at(point).ok_or(REFUSED_REGION),
+        Some(group) => match group.arrangement.face_at(point) {
+            None => Err(REFUSED_REGION),
+            Some(face) if group.blocks(&face) => Err(REFUSED_GROUP),
+            Some(face) => Ok(face),
+        },
         None => Err(REFUSED_GROUP),
     };
     Ok(Located { key, face })
@@ -933,6 +1038,7 @@ fn draw_area(
         face: face.clone(),
         base_feet,
         height_feet,
+        joined: face.joined,
     })
 }
 
@@ -973,7 +1079,7 @@ fn area_bodies(
         return out;
     }
     let points = area_points(rf, revit_version, placed, surroundings.level_ids);
-    let mut arrangements: BTreeMap<GroupKey, Option<Arrangement>> = BTreeMap::new();
+    let mut arrangements: BTreeMap<GroupKey, Option<GroupArrangement>> = BTreeMap::new();
     let mut located: BTreeMap<u32, Result<Located, &'static str>> = BTreeMap::new();
     for (&id, record) in placed {
         let point = points.get(&id).copied();
@@ -1194,6 +1300,9 @@ pub fn areas_from_partition_chain_records(
                         size: 8,
                     },
                 ));
+                if body.joined {
+                    fields.push((AREA_JOINED_FIELD.into(), InstanceField::Bool(true)));
+                }
             }
             DecodedElement {
                 id: Some(id),
