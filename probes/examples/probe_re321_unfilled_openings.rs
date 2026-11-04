@@ -109,8 +109,7 @@ fn refs(args: &str) -> Vec<u64> {
 /// digits.
 fn tag(args: &str) -> Option<u64> {
     args.split('\'')
-        .filter(|s| !s.is_empty() && s.len() <= 10 && s.chars().all(|c| c.is_ascii_digit()))
-        .next_back()?
+        .rfind(|s| !s.is_empty() && s.len() <= 10 && s.chars().all(|c| c.is_ascii_digit()))?
         .parse()
         .ok()
 }
