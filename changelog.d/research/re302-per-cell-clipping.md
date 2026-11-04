@@ -3,8 +3,8 @@
   (#1247, RE-302).** RE-302's readers (ellipse profiles, curved ruled
   surfaces, trimmed parametric faces) draw the office's 43 `WC-istuin:WC-1`
   toilets, which `main` keeps as boxes. With each earcut sliver cut at every
-  grid knot they took the office as built from 568,885 to 2,097,501
-  triangles and its IFC from 82.1 to 181.8 MB, over the 120 MB below which
+  grid knot they took the office as built from 568,965 to 2,097,501
+  triangles (against the `main` of the time) and its IFC from 82.1 to 181.8 MB, over the 120 MB below which
   the schema step validates. With each loop clipped to the grid cells it
   covers and the pieces' corners shared they take it to 1,191,138 triangles
   and 104.6 MB (the permit file to 1,195,576 and 104.6 MB), validated again
