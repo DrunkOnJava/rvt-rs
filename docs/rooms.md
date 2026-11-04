@@ -7,7 +7,7 @@ This page is for the importer of an rvt-rs export: what an `IfcSpace` holds for 
 | Source | `IfcSpace` | Body |
 |---|---|---|
 | A Revit room | `Name` is the room's number, `LongName` its name, `PredefinedType` `SPACE`, in the storey of the Level its record names | the outline of the room's stored solid, or the record's bounding box (below) |
-| A Revit area (Revit 2024; Revit 2015 to 2023 only where the body is proven, RE-324) | the same naming | the region its area boundary lines enclose around its point, else the region of Revit's own plan topology for the Area (RE-330), up to the Level above it (below); none where neither is proven: the space then has no `Representation` |
+| A Revit area (Revit 2024 to 2027; Revit 2015 to 2023 only where the body is proven, RE-324, RE-330) | the same naming | the region its area boundary lines enclose around its point, else the region of Revit's own plan topology for the Area (RE-330), up to the Level above it (below); none where neither is proven: the space then has no `Representation` |
 | A Revit Space (MEP), in a model that has one | `IfcSpace` without a predefined type; no measurement singles one out | its record's box (`record_box`) unless a carrier draws more (`family_body`) |
 | A family instance whose "Export to IFC As" names `IfcSpace` (#763) | named `Family:Type:ElementId` as Revit's export names other family instances | its record's box, turned with the instance (`record_box`), until a carrier draws its family. Where its family draws no model form, Revit's export leaves the instance out, and rvt-rs will too once PR #1279 (RE-312, for #1262, parking bays) lands |
 
@@ -44,10 +44,10 @@ The export also counts the spaces drawn as their record's box (rooms and family 
 | 2022 | stored solid | 8 held-out rooms |
 | 2023 | stored solid | 9 of 9 rooms of one project, local only (RE-102) |
 | 2024 | stored solid; Areas as spaces with a body where their boundary lines prove one | Core Interior, the BIM4LCA office, held-out models (below) |
-| 2025 | stored solid | RE1 Architecture, six purpose-made R2025 models, held-out models (below) |
-| 2026, 2027 | stored solid, as on 2025 (RE-314, #1260) | 16 held-out rooms, all rectangles, and a held-out house (below) |
+| 2025 | stored solid; Areas as on 2024 (RE-330) | RE1 Architecture, six purpose-made R2025 models, held-out models (below) |
+| 2026, 2027 | stored solid, as on 2025 (RE-314, #1260); Areas as on 2024 (RE-330) | 16 held-out rooms, all rectangles, and a held-out house (below) |
 
-Areas as spaces, with a body where their boundary lines prove one, are read on Revit 2024. Where the lines give an Area no region, its region is the loop Revit's own plan topology keeps for it, where that is read and checked (RE-330): its area boundary lines moved by their area rule's offsets, arcs included, with the area Revit saves for the loop. On Revit 2015 to 2023 an Area is written only where its region and body are proven; the others are not written and are counted by reason in `skipped` (`area_without_proven_body`, RE-324). They are measured against the same project's 2024 save on Autodesk's samples, and against no Revit export: the first rule, writing every placed Area as 2024 does, wrote spaces Revit's export lacks on a held-out project (below).
+Areas as spaces, with a body where their boundary lines prove one, are read on Revit 2024 to 2027; on 2025 to 2027 they are checked against the same project's 2024 save (Autodesk's `rac_advanced`: the same 25 Areas, numbers, names, storeys and bodies on each), and on Snowdon Towers Architectural against a Revit 2025 export (local only): all 101 of its Area spaces, and 95 of 96 bodies within 0.1% of Revit's area (RE-330). Where the lines give an Area no region, its region is the loop Revit's own plan topology keeps for it, where that is read and checked (RE-330): its area boundary lines moved by their area rule's offsets, arcs included, with the area Revit saves for the loop. On Revit 2015 to 2023 an Area is written only where its region and body are proven; the others are not written and are counted by reason in `skipped` (`area_without_proven_body`, RE-324). They are measured against the same project's 2024 save on Autodesk's samples, and against no Revit export: the first rule, writing every placed Area as 2024 does, wrote spaces Revit's export lacks on a held-out project (below).
 
 `ROOM_SOLID_SUPPORTED_REVIT_VERSIONS` in `src/research/partition_room_boundaries.rs` is the list of releases whose room solids are read.
 

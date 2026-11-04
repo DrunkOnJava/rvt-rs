@@ -49,6 +49,10 @@ pub const ARC_STEP_RADIANS: f64 = PI / 90.0;
 /// area Revit saves for its circuit.
 pub const CIRCUIT_AREA_TOLERANCE: f64 = 1e-6;
 
+/// How close, along a line from 0 to 1, a change of offset may lie to a
+/// segment's end and still cut it.
+pub const PARAMETER_TOLERANCE: f64 = 1e-9;
+
 /// How far, feet, the curve of a segment may lie from the points its plan
 /// topology saves for it.
 pub const SEGMENT_POINT_TOLERANCE_FEET: f64 = 1e-6;
@@ -403,11 +407,18 @@ impl BoundaryCurve {
     }
 
     /// The edges of the curve from `u0` to `u1`, each moved to the curve's
-    /// right by its offset, cut where the offset changes.
+    /// right by its offset, cut where the offset changes. Parts of the line
+    /// with the same offset are one edge: a cut where nothing changes, at a
+    /// segment's end, would leave an edge too short to have a direction.
     fn edges(&self, u0: f64, u1: f64) -> Option<Vec<Edge>> {
         let mut cuts = vec![u0, u1];
         for &(from, to, _) in &self.offsets {
-            cuts.extend([from, to].into_iter().filter(|u| u0 < *u && *u < u1));
+            cuts.extend([from, to].into_iter().filter(|&u| {
+                u - u0 > PARAMETER_TOLERANCE
+                    && u1 - u > PARAMETER_TOLERANCE
+                    && self.offset_at(u - PARAMETER_TOLERANCE)
+                        != self.offset_at(u + PARAMETER_TOLERANCE)
+            }));
         }
         cuts.sort_by(f64::total_cmp);
         cuts.dedup();
@@ -541,6 +552,33 @@ fn crossings(a: &Edge, b: &Edge) -> Vec<(f64, f64)> {
 
 /// The edges of one circuit, each moved by its offset and met by its
 /// neighbours where their curves cross, or `None` where a side is not read.
+/// A segment key with its direction left out: the segment a side runs.
+fn segment_of(side: SegmentKey) -> SegmentKey {
+    let (line, major, sub) = side;
+    (line, major, if sub < 0 { -sub - 1 } else { sub })
+}
+
+/// `sides` without its spurs: a segment run one way and, by the next side,
+/// straight back, a line that ends inside the loop. Its two sides enclose
+/// nothing, and once moved by its offset it would leave a notch that
+/// Revit's area does not have (on Snowdon Towers, RE-330).
+fn without_spurs(sides: &[SegmentKey]) -> Vec<SegmentKey> {
+    let mut out = sides.to_vec();
+    'removed: while out.len() > 2 {
+        for k in 0..out.len() {
+            let next = (k + 1) % out.len();
+            let (a, b) = (out[k], out[next]);
+            if segment_of(a) == segment_of(b) && (a.2 < 0) != (b.2 < 0) {
+                out.remove(k.max(next));
+                out.remove(k.min(next));
+                continue 'removed;
+            }
+        }
+        break;
+    }
+    out
+}
+
 fn circuit_edges(
     plan: &Plan,
     circuit: &Circuit,
@@ -548,7 +586,7 @@ fn circuit_edges(
 ) -> Option<Vec<Edge>> {
     // Each side's edges, and where its unmoved line ends.
     let mut pieces: Vec<(Vec<Edge>, (f64, f64))> = Vec::new();
-    for &(line, major, sub) in &circuit.sides {
+    for (line, major, sub) in without_spurs(&circuit.sides) {
         let backwards = sub < 0;
         let index = if backwards { -sub - 1 } else { sub };
         let segment = plan.segments.get(&(line, major, index))?;

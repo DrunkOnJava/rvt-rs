@@ -71,3 +71,36 @@ cargo run --profile ci -p rvt-probes --example probe_re330_area_plan_topology --
 rvt-ifc rac_advanced_sample_project.rvt -o out.ifc --diagnostics out.json
 python3 tools/re/space_profiles_vs_ifc.py office.ifc office_Revit.ifc --match globalid
 ```
+
+## 6. Revit 2025 to 2027
+
+The Area's partition chain record, which gives its number, name, Level and height, was read on 2015 to 2024 only. On 2025 and 2026 it is the 2024 record. Admitting both releases gives Autodesk's `rac_advanced` the 25 Areas of its 2024 save, each with the same GlobalId, number, name, storey, body area and height.
+
+On 2027, and on some 2025 files, the same records are behind a block of entries. A 2024 and later chain record opens with its ElementId (`u64`), its size (`u32`) and `ElementHeader`'s tag (`u16`, `+0x0c`). The `u16` after the tag (`+0x0e`) is a count:
+
+- On the 2024 files read (the BIM4LCA office, Core Interior) and Autodesk's 2025 and 2026 `rac_advanced` the count is 0 on every record. RE1 Architecture (2025) has records with up to 11 entries, Snowdon Towers Architectural (2025) up to 1,815, and 2027 `rac_advanced` up to 15.
+- On 2027 the record has that many 22-byte entries from `+0x12`: an `i64` BuiltInParameter (negative), an `i64` -1, a `u16` and a `u32`.
+- After the entries comes the 2026 body, opening with the `BuiltInCategory`.
+
+On 2027 `rac_advanced` all 17,247 chain records have well-formed entries, from 0 to 15 of them (6,972 with none), and with the entries skipped their categories give the census of the 2026 copy: 169 categories, 25 Areas, 127 area boundary lines. The 2026 copy's 17,231 records all have a count of 0.
+
+The Area reader reads a 2024 and later record after its entries. A 2027 `rac_advanced` export then gives the 25 Areas of the 2024 save, with the same GlobalIds, numbers, names, storeys, body areas and heights.
+
+Not measured: no Revit 2025 to 2027 export with Areas is available, so these releases are checked only against the 2024 save of the same project. Readers other than the Area reader that read a chain record's category at `+0x12` are not changed here.
+
+## 7. Snowdon Towers Architectural, against Revit's own 2025 export
+
+Snowdon Towers Architectural, Revit 2025, with a Revit 2025 IFC export of it (exporter 25.4.50.6, local only: neither file is redistributable here, as for RE-101). The export has 101 `IfcSpace` whose `Category` is `Areas`.
+
+- **Spaces:** rvt-rs writes 101 Area spaces, all of them Revit's by GlobalId, with the same number and name, and none that Revit's export lacks. `main` writes none: 2025 Areas were not read.
+- **Bodies:** rvt-rs writes 96 bodies. 95 have the area of Revit's within 0.1% (worst 2.1e-4, Revit's arcs traced in chords to compare). The other is `P4` (Common), which Revit's export writes with no `Representation`, though the other Areas of its Level have one. Why is not found.
+- **No body:** 5 Areas have no body in rvt-rs where Revit's export draws one. On each, the loop rebuilt here differs from the area Revit saves for it, by 4e-6 to 1.6e-3 relative, and Revit's export has the saved area.
+  - Each has a sub-millimetre piece of a line with an offset of its own, and how Revit treats that is not found.
+  - The area check refuses them, as it is meant to, and they keep their partition refusals: `point_not_read` for 4 and `boundary_lines_not_readable` for 1.
+
+Two rules came from this file and change nothing on `rac_advanced` or the office:
+
+- **A spur is left out.** A spur is a segment that the loop runs one way and, by the next side, straight back: a line that ends inside the Area. Once offset its two sides would leave a notch that Revit's area does not have.
+- **Where an Area's partition point is not read**, the plan topology's region stands, checked against the point the topology's own Area saves. 48 of Snowdon's Areas were refused only for `point_not_read`.
+
+A line's offset parts with the same offset are one edge, which avoids an edge of no length where a part ends at a segment's end.
