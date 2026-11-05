@@ -1519,12 +1519,13 @@ pub fn append_typed_production_elements(
         }
     }
 
-    // #1396: a wall with an edited elevation profile that stops short of the
-    // wall beneath it is drawn to that wall's face, where its base is still cut.
-    let end_steps = wall_tops::extend_wall_ends(entities, &pending_bases, &slab_shapes);
-
     // RE-267: a wall's top is cut at the underside of the floor that covers it.
     wall_tops::cut_wall_tops(entities, &pending_tops);
+
+    // #1396: a wall with an edited elevation profile that stops short of the
+    // wall beneath it is drawn to that wall's face, where its base is still cut.
+    // After the tops, so that the walls beneath it have their final tops.
+    let end_steps = wall_tops::extend_wall_ends(entities, &pending_bases, &slab_shapes);
 
     // #1384: a wall's base is cut at the top of the floor or footing it stands
     // on, level or following that element's shape-edited top.
@@ -4428,8 +4429,9 @@ pub const WALL_END_AT_BASE_WALL_BODY_END_SOURCE: &str = "wall_end_extended_to_ba
 /// with an edited elevation profile, whose end stops short of walls beneath it,
 /// keeps the end its record gives: the walls that hold its base lie at
 /// different faces, the cut of its base would not resolve over the longer
-/// plan, or a wall beneath it that would reach the end is not one rectangle
-/// (#1396, RE-337). A wall with one end drawn and the other kept carries this
+/// plan, a wall beneath it that would reach the end is not one rectangle, or
+/// another wall stands in the stretch the end would be drawn over (#1396,
+/// RE-337). A wall with one end drawn and the other kept carries this
 /// and `BodyEndSource` both.
 pub const WALL_END_REFUSAL_PROPERTY: &str = "BodyEndRefusal";
 

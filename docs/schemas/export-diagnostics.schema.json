@@ -615,7 +615,7 @@
             "type": "integer",
             "minimum": 0
           },
-          "description": "Of the exported walls with an edited elevation profile that stop short of the wall beneath them and keep the end their record gives, why, by reason (RvtElementRecordGeometry.BodyEndRefusal, RE-337): walls_beneath_reach_the_end_at_different_faces, base_cut_lost_on_extended_plan, base_not_cut_over_the_extended_plan, wall_beneath_not_one_rectangle. Empty when no such wall keeps its end."
+          "description": "Of the exported walls with an edited elevation profile that stop short of the wall beneath them and keep the end their record gives, why, by reason (RvtElementRecordGeometry.BodyEndRefusal, RE-337): walls_beneath_reach_the_end_at_different_faces, base_cut_lost_on_extended_plan, base_not_cut_over_the_extended_plan, wall_beneath_not_one_rectangle, wall_stands_in_the_added_end. Empty when no such wall keeps its end."
         },
         "resolved_outline_spaces": {
           "type": "integer",
