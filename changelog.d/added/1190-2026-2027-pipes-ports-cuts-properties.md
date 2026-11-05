@@ -10,13 +10,16 @@
   catch an error the 2025 save shares. Revit's own exports of the held-out 2026
   and 2027 projects disagreed in two places, so a door's or window's Area is
   not written on 2027, where Revit's export gives it a value
-  that is not its Width times its Height, and a stair's family and type are not
-  read on 2026 and 2027, where Revit's export writes no `Family:Type` object
-  type; their Width, Height and the stairs' names are written and equal. No
+  that is not its Width times its Height, and a stair's, its flights' and its
+  stringers' `ObjectType` is not written on 2026 and 2027, where Revit's export
+  writes no `Family:Type` there (the `ObjectType` of every other class differs on
+  those releases as well, #1472); their Width, Height and the stairs' names and
+  types are written and equal. No
   held-out model holds a pipe, a duct or a port. On the 2026 saves of Measure
   run 42063046730 (head 3149973f) the bodies that differ from the 2025 save fall
   from 490 and 493 to 0 on `rme_advanced` and `rme_basic`, and every port of the
   four Autodesk samples that hold one, 14,095 in all, is the 2025 save's; the
-  2027 saves are puzzbobb's local figures, not a Measure run, and the run that
-  scores the shipped head is not yet made. Every 2015 to 2025 file exports as
+  2027 saves, scored on the IFC files of run 42107917715 (head f1460b32), give
+  the same numbers but for two doors of `rac_basic` that write no Width and
+  Height (#1489), and the run that scores the shipped head is not yet made. Every 2015 to 2025 file exports as
   before on puzzbobb's local run.

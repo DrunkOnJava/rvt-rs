@@ -208,7 +208,8 @@ outlines to the 2024 save, the 2026 and 2027 stair runs to the 2025 save. A 2025
 save is held to the 2024 save alone: its stair runs are the 2026 and 2027
 reference, so they are not compared, though the number it draws is still
 checked. Since RE-346 it also holds the 2026 and 2027 saves of those and
-`rme_advanced` and `rme_basic` to the 2025 save for each pipe drawn from its axis,
+`rme_advanced` and `rme_basic` to the 2025 save for each pipe drawn from its axis
+(as a cylinder, below),
 each door and window cut in its host (the opening, and the volume the openings take
 out of the host), each port, the properties and quantities the release lists add,
 each door's and window's size and type, and a census of every body
@@ -261,21 +262,37 @@ not remove Compare's report.
   Shaft openings are cut on 2024 only, for the same reason: the only two measured on
   2025 cut nothing.
 - **Products that share a Tag** (a floor Revit writes as several, a stair once for each
-  storey) are paired by storey, then the volume and the centre of the body, and the
-  GlobalId of such a Tag is not compared: all but the first copy carry a GlobalId
-  derived from the export, which differs between two saves (RE-346).
+  storey) are paired by storey, then the volume and the centre of the body. All but
+  the first copy carry a GlobalId derived from the export, which differs between two
+  saves, so those are not compared; the two saves must share exactly one GlobalId
+  under such a Tag, and it must be on the two products paired by what they are, so an
+  identity swapped between two pieces fails (RE-346).
+- **Pipes are held as cylinders** (Griffin, 2026-11-05, "Compare the cylinder itself").
+  A pipe that is a circular extrusion in both saves is compared by the two ends of its
+  axis (in either order), its radius and its length, each to 0.001 ft, and not by the
+  vertices of the polygon its circle meshes to: Revit 2027's save writes the extrusion
+  of 115 of `rme_basic`'s 491 pipe segments from the other end or with the profile
+  turned about its axis (110 and 5), the same cylinder, and 15 of those polygons lay
+  0.0038 to 0.0063 ft from the 2025 save's. All pipes are held the same way, a pipe
+  that really moved still fails, no list was added, and the 15 stay drawn. A pipe that
+  is not a circular extrusion in both saves keeps the vertex check. The output counts
+  how many were compared by each (`CYLINDER_LEAST` holds the least).
 - **A difference** is a reader that is wrong or a project that really differs
   between saves. Narrow the reader until it is never wrong and let what it
   leaves out stay a box, counted (`left as boxes`); do not allowlist. The one
   exception (Griffin, 2026-11-05) is `PINNED_WALLS` in `readers_across_saves.py`:
   16 walls of `rac_basic` that both saves draw from the same source, of another
   extent, as on `main` (#1471 is the lane fixing them). It can only shrink and no
-  entry is ever added. Each wall is pinned for each release to its source pair and
-  the volume of each body, so a wall that moves at all fails, and one that heals
-  fails too, which forces its pin out. A roof a save leaves as a record box where
-  the 2025 save draws it is counted, not listed. Any other body that differs from
-  the 2025 save fails; a difference on a release or sample not pinned is the
-  maintainer's decision, not a new entry.
+  entry is ever added: `tools/ci/check_same_project_projects.py` (a CI step) holds the
+  16 tags and fails on a release with more than 16 or with a tag not among them. Each
+  wall is pinned for each release to its source pair, the volume of each body and the
+  world box of each body (1e-6), so a wall whose source, volume or box moves fails,
+  and one that heals fails too, which forces its pin out. A roof a save leaves as a
+  record box where the 2025 save draws it is counted, not scored, and exactly:
+  `ROOFS_LEFT_AS_BOXES` names `rac_advanced`'s 201262 and `rac_basic`'s 243274, and one
+  more or one fewer fails. Any other body that differs from the 2025 save fails; a
+  difference on a release or sample not pinned is the maintainer's decision, not a new
+  entry.
 - The output carries, for rac_advanced's ceiling 147534, floor 139803 and roof
   201262 and the other elements whose sketch holds an arc (`ARC_OWNERS`), the
   class, `BodySource`, `ProfileResolved`, volume and vertex count in every save,

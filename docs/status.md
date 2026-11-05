@@ -124,15 +124,19 @@ exports. Since RE-346 pipes are drawn as their cylinders there, family
 instances' ports are placed, walls are cut to their doors' and windows'
 outlines, and `IsExternal`, railing heights and lengths, stair names, rooms'
 height and net volume and the pipe and duct quantities are written, as on 2025,
-except a door's or window's Area on 2027 and a stair's family and type, which
-Revit's own exports write otherwise (held-out counts, RE-346 section 5). Each
+except a door's or window's Area on 2027 and the ObjectType of a stair, its
+flights and its stringers on 2026 and 2027, which Revit's own exports write
+otherwise (held-out counts, RE-346 section 5; the ObjectType of every other class
+differs there as well, #1472). Each
 is held to the same Autodesk project's 2025 save, on the MEP samples too
 (`tools/re/bodies_across_saves.py`, which Measure fails on a difference), and
 not to a Revit export: no held-out model holds a pipe, a duct or a port, and
 that cannot catch an error the 2025 save shares. On the 2026 saves of Measure
 run 42063046730 (head 3149973f) 0 of 6,605 and of 6,650 bodies differ on the MEP
-samples (490 and 493 before); the 2027 figures are puzzbobb's local ones, and the
-Measure run of the shipped head is not yet made. Sloped
+samples (490 and 493 before); the 2027 saves, scored on the IFC files of run
+42107917715 (head f1460b32), give the 2026 saves' numbers but for two doors of
+`rac_basic` that write no Width and Height (#1489), and the Measure run of the
+shipped head is not yet made. Sloped
 roofs, spiral runs, a wall's profile openings, `IsExternal` on walls, curtain
 walls, members and plates (2025 writes it, 2026 and 2027 do not), IFC export
 overrides and the opening index stay unread there.
