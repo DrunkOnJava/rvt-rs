@@ -213,7 +213,7 @@ wanted() { # step
 # Whether a step is in a scorer list or is one of the steps run by name.
 listed() { # step
   local s
-  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc mcp_answers_vs_ifc none; do
+  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc mcp_answers_vs_ifc bodies_across_saves none; do
     [ "$s" = "$1" ] && return 0
   done
   return 1
@@ -537,6 +537,15 @@ pair_key() {
   name=${name//_/}
   echo "${name%sampleproject}"
 }
+# RE-341: bodies_across_saves.py holds the 2026 and 2027 saves of the three
+# projects below to their 2024 and 2025 saves, so those saves keep their
+# exports until it has run, after every sample item.
+saves_gate_keeps() { # sample
+  wanted bodies_across_saves || return 1
+  case "$(basename "$1" | cut -c1-4)" in 2024 | 2025 | 2026 | 2027) ;; *) return 1 ;; esac
+  case "$(pair_key "$1")" in racadvanced | racbasic | rstbasic) return 0 ;; esac
+  return 1
+}
 measure_sample() { # sample
   local sample="$1" dir item_started copy
   item_started=$(date +%s%N)
@@ -557,9 +566,42 @@ measure_sample() { # sample
     schema "$dir" 31457280
     grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
   fi
-  [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
+  if [ -z "${KEEP_IFC:-}" ] && ! saves_gate_keeps "$sample"; then rm -f "$dir/model.ifc"; fi
   rm -f "$dir/validation.jsonl"
   finished "$dir" "$(basename "$sample")" "$item_started"
+}
+
+# RE-341: each 2026 and 2027 save of rac_advanced, rac_basic and rst_basic is
+# held to the same project's 2024 and 2025 saves, whose exports the samples
+# kept (tools/re/bodies_across_saves.py). It writes bodies_across_saves.txt
+# beside the sample, ending with its exit status; the Measure workflow turns a
+# failure on the head side into a red run (tools/ci/check-bodies-across-saves.sh).
+bodies_across_saves() {
+  local candidate earlier sample dir references
+  if ! wanted bodies_across_saves; then
+    echo "::notice::bodies_across_saves skipped: the scorers asked for exclude it"
+    return 0
+  fi
+  for candidate in "$SAMPLE_DIR"/202[67]-*.rvt; do
+    [ -f "$candidate" ] || continue
+    case "$(pair_key "$candidate")" in racadvanced | racbasic | rstbasic) ;; *) continue ;; esac
+    references=()
+    for earlier in "$SAMPLE_DIR"/202[45]-*.rvt; do
+      [ -f "$earlier" ] && [ "$(pair_key "$earlier")" = "$(pair_key "$candidate")" ] || continue
+      references+=("$(basename "$earlier" | cut -c1-4)=$(sample_dir "$earlier")/model.ifc")
+    done
+    dir=$(sample_dir "$candidate")
+    if [ "${#references[@]}" -eq 0 ]; then
+      echo "::notice::$(basename "$dir"): no 2024 or 2025 save of its project is in this run, so bodies_across_saves compared nothing"
+      printf 'bodies across saves: SKIPPED (no 2024 or 2025 save of the project is in this run)\nexit 0\n' > "$dir/bodies_across_saves.txt"
+      continue
+    fi
+    score "$dir/bodies_across_saves.txt" "$SCORERS/bodies_across_saves.py" "$dir/model.ifc" "${references[@]}"
+  done
+  for sample in "$SAMPLE_DIR"/*.rvt; do
+    [ -f "$sample" ] || continue
+    if [ -z "${KEEP_IFC:-}" ] && saves_gate_keeps "$sample"; then rm -f "$(sample_dir "$sample")/model.ifc"; fi
+  done
 }
 
 # The Areas of Autodesk's rac_advanced across its 2024 to 2027 saves (the
@@ -713,6 +755,7 @@ wait
 while IFS='|' read -r _ run first _; do
   [ "$run" = measure_model ] && model_done "$first"
 done <<< "$items"
+[ -d "${SAMPLE_DIR:-}" ] && bodies_across_saves
 for i in "${!PROBES[@]}"; do
   name=${PROBES[$i]}
   scorer=${PROBE_SCORERS[$i]:--}

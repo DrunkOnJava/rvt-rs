@@ -84,6 +84,28 @@ Revit 2019 (for 2015 to 2018, RE-181), 2023 (for 2019 to 2022, RE-180) and
 projects against Revit's own export of their release: BIMcollab's 2015
 structural example (RE-198) and Vitoria's 2018 `ALD26 Before` (RE-315, RE-319);
 2015's `rst_basic` is another model than its 2019 copy, so it is not measured.
+On 2026 and 2027 (RE-341) beams are drawn along their axes as on 2024 (on 2025
+they are not), stair runs as their steps and treads from their native records
+as on 2025, with the stair property sets and quantities read from them, and
+tread landings (not monolithic ones, which stay boxes) as on 2024 (not drawn on 2025); and the sketch lines' exact ends,
+curves and Sketch curve lists are read, so sketch-driven floors, ceilings and
+slabs take their outline from their lines and shaft openings are cut from
+floors and ceilings, as on 2024 and 2025. A roof there keeps the record-box
+solve alone, as on `main` (RE-341 section 5): without its slope, so a sloped
+roof can still be drawn as its outline at the box's full height, a level
+block, which no 2026 or 2027 scorer checks. No beam, landing, stair run, sketch
+outline or shaft void there is scored against a Revit export: each is held to
+the same Autodesk project's earlier save (`tools/re/bodies_across_saves.py`,
+which Measure runs and fails on), and that cannot catch an error the earlier
+save shares; it compares bodies, not quantities or property sets. No 2026 or
+2027 held-out model holds a beam, so the beam reader has run only on two
+Autodesk samples saved from earlier releases, never on a natively authored
+2026 beam. The 2025 save draws a sketch's arcs as chords (its arc readers are not
+enabled, #1440), so a floor of rac_advanced has 24 vertices there against 170
+on the 2024, 2026 and 2027 saves. One stair flight is scored against Revit's own 2026 and 2027
+exports. Sloped roofs, spiral runs, stair names,
+railing heights and lengths, a wall's profile openings, IFC export overrides
+and the opening index stay unread there.
 Conduits, conduit fittings and gutters export on every release the exporter
 reads and are measured against Revit's own export on `ALD26 Before` only (all
 178 it holds are Revit's elements, RE-319); Autodesk's MEP samples and Snowdon
