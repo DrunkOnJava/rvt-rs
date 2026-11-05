@@ -116,7 +116,7 @@ and of the 7 elements whose sketch holds an arc, 2 (a floor and a roof of
 rac_advanced) are compared as drawn outlines and equal, the ceiling and a
 railing being record boxes in both saves and 3 more having no body. None of
 the 19 held-out and spent models changes. That check cannot catch an error the
-2024 saves share (Measure run 42062038214, head 6ea88323). The floor of
+2024 saves share (Measure run 42091457764, head 830a4d94). The floor of
 rac_advanced, drawn with chords on the 2025 save before (24 vertices), has the
 170 vertices of the 2024, 2026 and 2027 saves. One stair flight is scored against Revit's own 2026 and 2027
 exports. Sloped roofs, spiral runs, stair names,
