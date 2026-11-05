@@ -336,7 +336,7 @@ fn read_loop(
     let Some(points) = ring(&order, geom) else {
         return Err("a line has no ends");
     };
-    let mut counter_clockwise = order.clone();
+    let mut counter_clockwise = order;
     if signed_area(&points) < 0.0 {
         counter_clockwise[1..].reverse();
     }
