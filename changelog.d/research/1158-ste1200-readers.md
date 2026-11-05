@@ -22,20 +22,24 @@
   scale the matrix does not carry, a mesh drawn through it is wrong and nothing
   in the file says so. In one held-out model 57 owners pass the scale check and
   end with no primitive, and what they hold is not known. Saved graphics stay a
-  research reading on Revit 2015 to 2022 and no export reads them. At
-  `997d5da1`, before later changes that the head has not been measured with
-  (the route gates, the allocation and the strict winding count), the changes
-  altered no export and drew no body through a set flag on the files CI
-  fetches: 92 of 92 export
-  hashes were identical to `main`'s, with and without `--saved-meshes` (Measure
-  runs 42054602432 and 42054606416), and the owners drawn whole and their
-  triangles were unchanged in the pairs and the 8 held-out scenes (42054610905,
-  42054620459). Their stop histograms do move against #1436, and owners gain a
-  partial primitive, with none drawn whole: 29 owners change their stops in 15
-  of the 24 pair files (21 leave the scale-check stop, 8 gain a `GText` stop and
-  a partial primitive), and in 3 of the 8 held-out scenes 1, 58 and 2 owners do,
-  two models gaining a partial primitive and 57 of the 58 in one model going from
-  partial to `decoded_saved_graphics` with no primitive (182 to 239). No file CI
-  fetches holds a deferred pointer or a `FacetedTopology9` object (0 of 92 open
-  files and 18 held-out models), so nothing in CI reaches those two paths and
-  nothing in CI will catch a regression in them.
+  research reading on Revit 2015 to 2022 and no export reads them. On
+  the files CI fetches the changes alter no export and draw no body through a
+  set flag: the unfiltered Measure run 42067738690 holds 111 of 111 export
+  hashes identical to `main`'s (the default export; with `--saved-meshes`, 92
+  of 92 at an earlier head, run 42054606416) and the
+  same-project gates pass, and the owners drawn whole and their triangles are
+  unchanged in the pairs and the 8 held-out scenes (42067745903, 42067762581).
+  Their stop histograms do move against #1436, and owners gain a partial
+  primitive, with none drawn whole: 29 owners change their stops in 15 of the
+  24 pair files (21 leave the scale-check stop, 8 gain a `GText` stop and a
+  partial primitive), and in 3 of the 8 held-out scenes 1, 58 and 2 owners do,
+  two models gaining a partial primitive and 57 of the 58 in one model going
+  from partial to `decoded_saved_graphics` with no primitive (182 to 239). No
+  file CI fetches holds a deferred pointer or a `FacetedTopology9` object (0 of
+  92 open files and 18 held-out models), so nothing in CI reaches those two
+  paths and nothing in CI will catch a regression in them. The winding rule
+  keeps 182 of the 185 `FacetedTopology0` objects and 336 of 336
+  `FacetedTopology8` under binding 2 and refuses 3, all in one Revit 2024
+  sample; its count on a mesh the reader would refuse for a malformed row or
+  index is `refuses`, so a run on the contributor's family reads 325 only if
+  all 325 of its meshes are well-formed.
