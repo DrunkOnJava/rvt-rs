@@ -9,9 +9,9 @@
 //! - A **level**, inherited from the host wall's level
 //! - A **location point** with a rotation angle
 //!
-//! Plus element-level overrides: `m_sill_height` for windows,
-//! `m_flip_hand` and `m_flip_facing` for doors (left-swing vs
-//! right-swing, interior vs exterior).
+//! Plus element-level overrides: `m_sill_height` for windows, and for doors
+//! the hand flip and facing flip (`m_hand_flipped` and `m_facing_flipped`,
+//! RE-343; the hinge side itself is not read).
 //!
 //! # Typical Revit field shape (stable 2016–2026)
 //!
@@ -24,8 +24,8 @@
 //! | `m_symbol_id` | ElementId | FamilySymbol (door type: "Single-Flush 36\" x 84\"") |
 //! | `m_location_x`, `m_location_y`, `m_location_z` | f64 | Door location in project coords |
 //! | `m_rotation` | f64 | Rotation angle in radians (usually aligned to host wall) |
-//! | `m_flip_hand` | bool | Hinge on opposite side |
-//! | `m_flip_facing` | bool | Swings into opposite space |
+//! | `m_hand_flipped` | bool | `HandFlipped`: the native record's `m_flippedX` |
+//! | `m_facing_flipped` | bool | `FacingFlipped`: its `m_flippedY` |
 //!
 //! Window:
 //!
@@ -112,8 +112,8 @@ impl Door {
         };
         for (field_name, value) in &decoded.fields {
             match (normalise_field_name(field_name).as_str(), value) {
-                ("fliphand", InstanceField::Bool(b)) => out.flip_hand = Some(*b),
-                ("flipfacing", InstanceField::Bool(b)) => out.flip_facing = Some(*b),
+                ("handflipped", InstanceField::Bool(b)) => out.flip_hand = Some(*b),
+                ("facingflipped", InstanceField::Bool(b)) => out.flip_facing = Some(*b),
                 _ => {}
             }
         }

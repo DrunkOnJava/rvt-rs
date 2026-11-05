@@ -16,8 +16,10 @@ IfcWindow of the export, it takes:
   export's site placement, and how each compares with the stored axis: the
   same, the reverse, a right angle from it, or none;
 - the host wall's side: the sign of each placement axis against the wall's
-  direction and against its exterior normal, the wall being the one rvt-rs's
-  native record (RE-222) gives for the wall Revit's export voids;
+  direction and against its exterior normal, the wall being the one rvt-rs
+  binds the element to (its export's host, a plain wall: an element whose only
+  candidate is a curtain wall keeps none) and its native record (RE-222)
+  reads; an element bound to none is counted apart;
 - the door's `OperationType` (the instance's, or its type's IfcDoorType or
   IfcDoorStyle) and the type object the export gives it. revit-ifc's
   `DoorWindowInfo` reverses a type's operation when `HandFlipped` differs from
@@ -172,13 +174,16 @@ def op_side(op):
 
 def flag_fields(items):
     """Scalar root fields of the native records whose names speak of a flip,
-    a mirror, a hand, a facing or an orientation and that take few values."""
+    a mirror, a hand, a facing or an orientation and that take few values,
+    each a boolean or a whole number under 100 (so a count line can carry no
+    ElementId)."""
     seen = collections.defaultdict(set)
     for row in items.values():
         for record in row.get("records", ())[:1]:
             for name, value in record.get("root", {}).items():
                 lower = name.lower()
-                if any(word in lower for word in FLAG_WORDS) and isinstance(value, (bool, int, float)):
+                small = isinstance(value, bool) or (isinstance(value, int) and 0 <= value < 100)
+                if any(word in lower for word in FLAG_WORDS) and small:
                     seen[name].add(value)
     return sorted(name for name, values in seen.items() if 0 < len(values) <= FLAG_VALUES)
 
@@ -318,8 +323,8 @@ def rule_lines(rows):
     for kind in ("door", "window"):
         mine = [r for r in rows if r["kind"] == kind and r["x_rel"] != "none"]
         for label, subset in (
-            ("with a host wall record", [r for r in mine if r["rvt_x_wall"] in ("+", "-")]),
-            ("without one", [r for r in mine if r["rvt_x_wall"] not in ("+", "-")]),
+            ("bound to a plain wall", [r for r in mine if r["rvt_x_wall"] in ("+", "-")]),
+            ("bound to none", [r for r in mine if r["rvt_x_wall"] not in ("+", "-")]),
         ):
             wrong = 0
             for r in subset:
@@ -351,12 +356,18 @@ def rule_lines(rows):
             for r in carried
         )
         stray = sum(1 for r in mine if r not in native and ("m_hand_flipped" in r["decoded"] or "m_facing_flipped" in r["decoded"]))
+        typed = [r for r in carried if r["decoded"].get("typed_flip_hand") is not None and r["decoded"].get("typed_flip_facing") is not None]
+        typed_equal = sum(
+            r["decoded"]["typed_flip_hand"] == r["state"]["m_flippedX"] and r["decoded"]["typed_flip_facing"] == r["state"]["m_flippedY"]
+            for r in typed
+        )
         facing = [r for r in mine if r["read"]]
         lines.append(
             f"door flips: decoded records: {kind}s {len(mine)}; native flags read {len(native)}; "
             f"carry m_hand_flipped and m_facing_flipped {len(carried)}; equal to the native booleans {equal}; "
             f"carry them with no native flags {stray}; transform read {len(facing)}; carry m_opening_facing "
-            f"{sum(1 for r in facing if 'm_opening_facing_x' in r['decoded'])}"
+            f"{sum(1 for r in facing if 'm_opening_facing_x' in r['decoded'])}; "
+            f"typed Door view carries the flips {len(typed)}; equal {typed_equal}"
         )
     doors = [r for r in rows if r["kind"] == "door" and r["op_side"] in ("L", "R") and r["symbol"] is not None]
     groups = collections.defaultdict(list)

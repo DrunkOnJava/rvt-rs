@@ -26,6 +26,7 @@
 # their `native readers example:` lines name ElementIds and are dropped), the
 # `door flips:` count lines of tools/re/door_flips_vs_ifc.py (RE-343: counts of
 # doors and windows by flag state and by how their placements compare; its
+# `field ... values` lines only with values true, false, null or under 100; its
 # `row` and `sample` lines name ElementIds and are dropped) and
 # of its quantity census (the totals and each quantity's counts, the walls it
 # counts apart for their two lengths (RE-252), for each value that
@@ -78,7 +79,8 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       [ -f "$f" ] || continue
       grep -E '^native levels: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
-      grep -E '^door flips: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      grep -E '^door flips: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" | grep -v -E '^door flips: field ' || true
+      grep -E '^door flips: field [A-Za-z0-9_]+ values ((true|false|null|[0-9]{1,2})=[0-9]+(, )?)+$' "$f" || true
     done
     for f in "$dir"psets_vs_ifc.txt; do
       [ -f "$f" ] || continue

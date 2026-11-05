@@ -34,7 +34,8 @@
 //!     `m_Trf`, the transform the cut readers place a symbol by) and objects
 //!     (the other non-graphics objects of the first records, for the first 40
 //!     elements of the model), decoded (the flip and facing fields the decoded
-//!     Door or Window record of `iter_elements` carries, or null)
+//!     Door or Window record of `iter_elements` carries, and the `flip_hand` and
+//!     `flip_facing` of a Door's typed view, or null)
 //!   kind "wall"     id, start, end, flipped and cross_section of each host
 //!                   wall's native record (RE-222)
 //!
@@ -48,6 +49,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
+use rvt::elements::openings::Door;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
 use rvt::research::native_document::{NATIVE_RELEASES, Options, extract_graphs};
@@ -221,6 +223,11 @@ fn main() -> anyhow::Result<()> {
             continue;
         };
         let fields = decoded.entry(id).or_default();
+        if element.class == "Door" {
+            let typed = Door::from_decoded(&element);
+            fields.insert("typed_flip_hand".into(), json!(typed.flip_hand));
+            fields.insert("typed_flip_facing".into(), json!(typed.flip_facing));
+        }
         for (name, value) in &element.fields {
             if !OPENING_FLIP_FIELDS.contains(&name.as_str())
                 && !OPENING_FACING_FIELDS.contains(&name.as_str())

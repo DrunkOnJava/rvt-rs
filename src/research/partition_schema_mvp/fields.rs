@@ -105,8 +105,12 @@ pub const OPENING_FACING_FIELDS: [&str; 2] = ["m_opening_facing_x", "m_opening_f
 /// `m_flippedX` and `m_flippedY` booleans of its native record. The stored
 /// transform is never a reflection, so neither flip is in it: its X and Y axes
 /// (and [`OPENING_FACING_FIELDS`]) are a half turn from the unflipped ones
-/// where `m_flippedX` is set, and the direction the door faces is that Y axis
-/// reversed where the two flips differ.
+/// where `m_flippedX` is set. For an element set in a plain wall rvt-rs binds
+/// (`OPENING_HOST_FIELD`), Revit's own placement is the stored axes reversed
+/// where the two flips differ, so the direction it faces, the placement's +Y,
+/// is the Y axis reversed there; that was exact on every such door and window
+/// measured. For a door rvt-rs binds to no plain wall it was not (49 of 160
+/// doors disagree), and nothing is claimed.
 pub const OPENING_FLIP_FIELDS: [&str; 2] = ["m_hand_flipped", "m_facing_flipped"];
 
 /// Field carrying a family instance's original symbol (RE-167): the
