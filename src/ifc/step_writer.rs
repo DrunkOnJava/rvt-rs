@@ -60,8 +60,22 @@ pub fn write_step(model: &IfcModel) -> String {
 /// function of `(model, t)` — no wall-clock access. Use this in
 /// tests and regression fixtures.
 pub fn write_step_with_options(model: &IfcModel, options: &StepOptions) -> String {
+    write_step_string(model, options, false)
+}
+
+/// [`write_step_with_options`], also associating a material with every
+/// `IfcSpace` that has one, as Revit's own export does (`rvt-ifc
+/// --revit-set-placement`). IFC4's `IfcRelAssociatesMaterial.AllowedElements`
+/// takes no `IfcSpace`, so this output breaks that rule, as Revit's does;
+/// [`write_step_with_options`] leaves those associations out (#1430).
+pub fn write_step_with_space_materials(model: &IfcModel, options: &StepOptions) -> String {
+    write_step_string(model, options, true)
+}
+
+fn write_step_string(model: &IfcModel, options: &StepOptions, space_materials: bool) -> String {
     let now = options.timestamp.unwrap_or_else(unix_seconds);
     let mut w = StepWriter::new(now);
+    w.space_materials = space_materials;
     w.emit_header(model);
     w.emit_data(model);
     w.finish()
@@ -78,10 +92,34 @@ pub fn write_step_with_options(model: &IfcModel, options: &StepOptions) -> Strin
 pub fn write_step_to<W: std::io::Write>(
     model: &IfcModel,
     options: &StepOptions,
+    out: W,
+) -> std::io::Result<u64> {
+    write_step_to_sink(model, options, false, out)
+}
+
+/// [`write_step_to`], also associating a material with every `IfcSpace` that
+/// has one, as [`write_step_with_space_materials`] does.
+///
+/// # Errors
+///
+/// The first error `out` returns. What was written before it stays written.
+pub fn write_step_to_with_space_materials<W: std::io::Write>(
+    model: &IfcModel,
+    options: &StepOptions,
+    out: W,
+) -> std::io::Result<u64> {
+    write_step_to_sink(model, options, true, out)
+}
+
+fn write_step_to_sink<W: std::io::Write>(
+    model: &IfcModel,
+    options: &StepOptions,
+    space_materials: bool,
     mut out: W,
 ) -> std::io::Result<u64> {
     let now = options.timestamp.unwrap_or_else(unix_seconds);
     let mut w = StepWriter::new(now);
+    w.space_materials = space_materials;
     w.sink = Some(Sink {
         writer: &mut out,
         written: 0,
@@ -750,6 +788,10 @@ struct StepWriter<'a> {
     /// Injected at construction so the output is a pure function of
     /// `(model, timestamp)` when a fixed timestamp is supplied.
     timestamp: i64,
+    /// Whether an `IfcSpace` keeps its material association, which IFC4's
+    /// `IfcRelAssociatesMaterial.AllowedElements` does not allow and Revit's
+    /// export writes (#1430): [`write_step_with_space_materials`].
+    space_materials: bool,
 }
 
 /// A writer [`write_step_to`] streams to, the bytes it took and its first
@@ -882,6 +924,7 @@ impl StepWriter<'_> {
             sink: None,
             next_id: 1,
             timestamp,
+            space_materials: false,
         }
     }
 
@@ -3087,12 +3130,15 @@ impl StepWriter<'_> {
                 // IfcRelAssociatesMaterial.AllowedElements takes (elements,
                 // element types, door and window styles, structural members
                 // and ports), so a space is associated with no material
-                // (#1430), though Revit's own export associates one.
-                let material_index = material_index.as_ref().filter(|_| !is_space);
-                let material_profile_set_index =
-                    material_profile_set_index.as_ref().filter(|_| !is_space);
+                // (#1430), though Revit's own export associates one, which
+                // `write_step_with_space_materials` also does.
+                let holds_material = !is_space || self.space_materials;
+                let material_index = material_index.as_ref().filter(|_| holds_material);
+                let material_profile_set_index = material_profile_set_index
+                    .as_ref()
+                    .filter(|_| holds_material);
                 let material_layer_set_index =
-                    material_layer_set_index.as_ref().filter(|_| !is_space);
+                    material_layer_set_index.as_ref().filter(|_| holds_material);
                 let profile_set_applied = if let Some(ps_idx) = material_profile_set_index {
                     if let Some(&ps_id) = profile_set_ids.get(*ps_idx) {
                         let usage_id = self.id();
@@ -3176,8 +3222,9 @@ impl StepWriter<'_> {
                         if *m_idx < material_ids.len() {
                             element_material_pairs.push((el_id, *m_idx));
                         }
-                    } else if let Some(&set) =
-                        constituent_set_of.get(&entity_idx).filter(|_| !is_space)
+                    } else if let Some(&set) = constituent_set_of
+                        .get(&entity_idx)
+                        .filter(|_| holds_material)
                     {
                         element_constituent_pairs.push((el_id, set));
                     }

@@ -77,7 +77,12 @@ write:
    finds 1,194 in the BIM4LCA office's As-Built export, among them `USERDEFINED`
    types with no `ElementType` and a material on an `IfcSpace`; IfcOpenShell
    0.9.0.post1, 2026-11-05), so a value rvt-rs writes as Revit does is not
-   evidence that it holds them.
+   evidence that it holds them. The gate and Measure's `rules:` section read
+   the default output. With `rvt-ifc --revit-set-placement` an `IfcSpace`
+   keeps the material Revit's export associates with it, which breaks
+   `IfcRelAssociatesMaterial.AllowedElements` as Revit's export does (Griffin,
+   2026-11-05: valid IFC4 by default, Revit's behind the flag), so that
+   output is not held to it.
 
 ## What is measured against Revit's own exports
 
