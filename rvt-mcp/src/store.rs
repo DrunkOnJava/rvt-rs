@@ -164,8 +164,9 @@ pub struct Computed {
     /// Where each decoded element was read from (#1325). The decode asks for
     /// it and it is taken out of `diagnostics`, so the diagnostics the tools
     /// return and the exports' summaries stay what `rvt-ifc --diagnostics`
-    /// writes without `--element-provenance`: the table is 4.5 MB of compact
-    /// JSON on the BIM4LCA office.
+    /// writes without `--element-provenance`: the table is megabytes of
+    /// compact JSON on a large model (docs/export-diagnostics.md, "Provenance
+    /// table size").
     pub element_provenance: Option<ElementProvenanceTable>,
     /// Why each element, body, opening or outline was left out (#1326), taken
     /// out of `diagnostics` as the provenance table is: `explain_element`
