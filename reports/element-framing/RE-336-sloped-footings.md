@@ -52,8 +52,10 @@ The top cut (RE-267, RE-320) no longer takes a floor drawn along its sloped top 
 ```bash
 gh workflow run measure.yml --ref fix/1384-sloped-footings -f ref=cea566574bfb3efe3395fc81da5ff9cf708e2c75 -f base=main -f nordic=true \
   -f models="nordic-office-as-built nordic-office-permit core-interior re1-architecture" \
-  -f scorers="wall_heights_vs_ifc wall_top_cover_vs_ifc slab_bodies_vs_ifc wall_quantities_vs_ifc"
+  -f scorers="wall_heights_vs_ifc wall_top_cover_vs_ifc slab_bodies_vs_ifc wall_quantities_vs_ifc qtos_vs_ifc wall_layers_vs_ifc"
 ```
+
+`qtos_vs_ifc` and `wall_layers_vs_ifc` were not in the runs above, and the release Measure (run 41944962415) found what they would have. The 8 floors lost their `Qto_SlabBaseQuantities` `GrossArea` and `NetVolume`, Revit's on all 8 before (16 values from equal to missing on each office file). The 14 one-layer walls cut at their base (16 at permit) were drawn in the GLB in the category colour, not in their layer. #1405 restores both, as `main`'s values (run 41949652150).
 
 `-f scorers=schema` on the two offices, `-f r2025=true -f samples=true`, `-f holdout=true` and `-f samples=true -f sample_years=2024 -f keep_ifc=true -f scorers=none` are the other four runs.
 
