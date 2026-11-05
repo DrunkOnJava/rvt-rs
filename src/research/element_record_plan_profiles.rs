@@ -123,14 +123,16 @@ pub const PLAN_PROFILE_VOID_OPENINGS_FIELD: &str = "m_plan_profile_void_openings
 
 /// A void loop of a sketch and the sketch line that tags it (RE-151). Revit's
 /// export writes a floor's void as an `IfcOpeningElement` voiding the floor,
-/// with the loop's outline, and the `Tag` the lowest ElementId of the sketch
-/// lines on the loop.
+/// with the loop's outline, and the `Tag` the ElementId of the sketch line
+/// the loop starts at once Revit has turned it counter-clockwise (RE-339).
 #[derive(Debug, Clone, PartialEq)]
 pub struct VoidOpening {
     /// The piece the void is in: 0 the first, `n` the `n`th of
     /// [`PlanProfile::pieces`].
     pub piece: usize,
-    /// The lowest ElementId of the sketch lines on the loop.
+    /// The ElementId of the sketch line the loop starts at: the lowest of the
+    /// lines on it where they run counter-clockwise in ElementId order, the
+    /// highest where they run clockwise.
     pub tag: u32,
     /// The loop, counter-clockwise.
     pub outline_xy: Vec<(f64, f64)>,
@@ -460,12 +462,13 @@ pub fn plan_profiles_from_sketch_line_records(
 /// it (RE-151), feet.
 pub const ON_LOOP_EPS_FEET: f64 = 1e-4;
 
-/// Tag each void of `profile` with the lowest ElementId of the sketch lines
-/// on it (RE-151), `lines` each sketch line's ElementId and a point of it on
-/// the edge it makes: a straight line's box centre, its midpoint, or the
-/// midpoint of the first chord a curve is drawn with. A line is on a loop
-/// where that point lies on one of the loop's edges. A void with no line on
-/// it is left untagged.
+/// Tag each void of `profile` with the ElementId of the sketch line its loop
+/// starts at (RE-151, RE-339), `lines` each sketch line's ElementId and a
+/// point of it on the edge it makes: a straight line's box centre, its
+/// midpoint, or the midpoint of the first chord a curve is drawn with. A line
+/// is on a loop where that point lies on one of the loop's edges. A void with
+/// no line on it, or whose lines do not run once round it in ElementId order,
+/// is left untagged.
 pub fn tag_voids(profile: &mut PlanProfile, lines: &[(u32, (f64, f64))]) {
     let voids = std::iter::once(&profile.inner_xy)
         .chain(profile.pieces.iter().map(|piece| &piece.inner_xy))
@@ -473,12 +476,7 @@ pub fn tag_voids(profile: &mut PlanProfile, lines: &[(u32, (f64, f64))]) {
         .flat_map(|(piece, inner)| inner.iter().map(move |ring| (piece, ring)));
     let mut tagged = Vec::new();
     for (piece, ring) in voids {
-        let tag = lines
-            .iter()
-            .filter(|(_, point)| on_loop(ring, *point))
-            .map(|(id, _)| *id)
-            .min();
-        if let Some(tag) = tag {
+        if let Some(tag) = void_tag(ring, lines) {
             let mut outline_xy = ring.clone();
             outline_xy.reverse();
             tagged.push(VoidOpening {
@@ -491,10 +489,52 @@ pub fn tag_voids(profile: &mut PlanProfile, lines: &[(u32, (f64, f64))]) {
     profile.void_openings = tagged;
 }
 
-/// Whether `point` lies on an edge of the closed loop `ring`, to within
+/// The ElementId Revit's export tags a void with: the line its loop starts
+/// at, once the loop is counter-clockwise (RE-339). Sketch lines are indexed
+/// in the order they were drawn, which on every sketch measured is the order
+/// of their ElementIds, and a loop drawn clockwise is turned round, so its
+/// first line is the last drawn. The lines on `ring`, taken in ElementId
+/// order, must each lie on the next edge round the loop (or the previous one
+/// all the way) for the direction to be read; otherwise `None`.
+fn void_tag(ring: &[(f64, f64)], lines: &[(u32, (f64, f64))]) -> Option<u32> {
+    let mut on: Vec<(u32, usize)> = lines
+        .iter()
+        .filter_map(|(id, point)| edge_of(ring, *point).map(|edge| (*id, edge)))
+        .collect();
+    on.sort_unstable();
+    let (first, last) = (on.first()?.0, on.last()?.0);
+    if first == last {
+        return Some(first);
+    }
+    let edges = ring.len();
+    let mut forward = true;
+    let mut backward = true;
+    for pair in on.windows(2) {
+        let step = (pair[1].1 + edges - pair[0].1) % edges;
+        if step == 0 || 2 * step == edges {
+            return None;
+        }
+        if 2 * step < edges {
+            backward = false;
+        } else {
+            forward = false;
+        }
+    }
+    if !(forward || backward) {
+        return None;
+    }
+    let ring_counter_clockwise = signed_area(ring) > 0.0;
+    Some(if ring_counter_clockwise == forward {
+        first
+    } else {
+        last
+    })
+}
+
+/// The first edge of the closed loop `ring` that `point` lies on, to within
 /// [`ON_LOOP_EPS_FEET`].
-fn on_loop(ring: &[(f64, f64)], point: (f64, f64)) -> bool {
-    (0..ring.len()).any(|index| {
+fn edge_of(ring: &[(f64, f64)], point: (f64, f64)) -> Option<usize> {
+    (0..ring.len()).find(|&index| {
         let (a, b) = (ring[index], ring[(index + 1) % ring.len()]);
         let (dx, dy) = (b.0 - a.0, b.1 - a.1);
         let length = dx * dx + dy * dy;
