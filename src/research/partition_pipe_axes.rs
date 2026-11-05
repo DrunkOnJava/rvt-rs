@@ -37,8 +37,9 @@ use std::collections::{BTreeMap, HashMap};
 
 /// Releases where this layout is measured: the RE1 models (2025), and the
 /// BIM4LCA office (2024), whose 12 pipes and their 24 ports it places as
-/// Revit's export does (#869).
-pub const PIPE_AXIS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// Revit's export does (#869). 2026 and 2027 (RE-346): Autodesk's MEP
+/// samples saved by them draw their pipes as their 2025 saves do.
+pub const PIPE_AXIS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// Whether `revit_version` is a release this layout is measured on.
 pub fn supports_revit_version(revit_version: u32) -> bool {

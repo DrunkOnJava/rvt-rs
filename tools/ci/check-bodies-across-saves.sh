@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Fail when a Revit 2025, 2026 or 2027 sample's bodies are not its earlier save's
-# (RE-341, RE-345).
+# Fail when a Revit 2025, 2026 or 2027 sample's bodies, door and window cuts, ports
+# and properties are not its earlier save's (RE-341, RE-345, RE-346).
 #
 # Usage:
 #   tools/ci/check-bodies-across-saves.sh RESULTS_DIR
@@ -8,7 +8,9 @@
 # tools/re/bodies_across_saves.py holds the beams, tread landings, stair runs
 # and sketch outlines of each 2025, 2026 and 2027 save of rac_advanced,
 # rac_basic and rst_basic to the same project's earlier 2024 and 2025 saves
-# (the 2025 save to the 2024 save alone), and Measure's script
+# (the 2025 save to the 2024 save alone), and the pipes, door and window cuts,
+# ports and properties of the 2026 and 2027 saves of those and rme_advanced and
+# rme_basic to the 2025 save, and Measure's script
 # writes its output beside each sample as bodies_across_saves.txt. This reads
 # those files from RESULTS_DIR (the head side's results, merged or one directory
 # for each shard) and fails on any
@@ -38,7 +40,7 @@ note() { # text: a notice in the log and a line in the run summary
   printf -- '- %s\n' "$1" >> "$summary"
 }
 
-printf '### Bodies across saves (RE-341)\n\n' >> "$summary"
+printf '### Bodies, cuts, ports and properties across saves (RE-341, RE-346)\n\n' >> "$summary"
 
 if [ -n "${SCORERS:-}" ] && ! grep -qw bodies_across_saves <<< "$SCORERS"; then
   note "Not checked: the scorers asked for (${SCORERS}) exclude bodies_across_saves."
@@ -55,7 +57,7 @@ high="${range[1]:-9999}"
 expected=()
 for year in 2025 2026 2027; do
   { [ "$year" -ge "$low" ] && [ "$year" -le "$high" ]; } || continue
-  for project in racadvancedsampleproject racbasicsampleproject rstbasicsampleproject; do
+  for project in racadvancedsampleproject racbasicsampleproject rmeadvancedsampleproject rmebasicsampleproject rstbasicsampleproject; do
     expected+=("sample-$year-$project")
   done
 done
@@ -80,8 +82,13 @@ for name in "${expected[@]}"; do
   if grep -qx 'exit 0' "$file" && grep -qx 'bodies across saves: PASS' "$file"; then
     passed=$((passed + 1))
     echo "$name: PASS"
-    grep -E '^(beams and landings|stair runs|sketch outlines|named elements|named [0-9]+, [0-9]+ save): ' "$file" || true
+    # What each check compared, in the log and under the sample in the run summary.
+    counts=$(grep -E '^(beams and landings|stair runs|sketch outlines|named elements|pipes|cut openings|ports|properties|door and window sizes|census|named [0-9]+, [0-9]+ save): ' "$file" || true)
+    echo "$counts"
     printf -- '- %s: PASS\n' "$name" >> "$summary"
+    while IFS= read -r line; do
+      [ -n "$line" ] && printf -- '  - %s\n' "$line" >> "$summary"
+    done <<< "$counts"
   elif grep -qx 'exit 0' "$file" && grep -q '^bodies across saves: PARTIAL' "$file"; then
     partial=$((partial + 1))
     note "$name: $(grep '^bodies across saves: PARTIAL' "$file")"

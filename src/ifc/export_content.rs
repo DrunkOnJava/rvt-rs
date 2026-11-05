@@ -30,7 +30,7 @@ use crate::geometry::{
 };
 use crate::partition_area_boundaries::ArcMids;
 use crate::walker::{DecodedElement, InstanceField};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 mod column_quantities;
 mod wall_areas;
@@ -712,6 +712,12 @@ pub fn append_typed_production_elements(
     // top of each floor, roof and ceiling: flat, a plane, or not known.
     let mut pending_bases: Vec<wall_tops::PendingBase> = Vec::new();
     let mut slab_shapes: HashMap<u32, wall_tops::SlabTop> = HashMap::new();
+    // RE-351: the roofs whose record box is exactly their type's layers and
+    // whose plan outline is read, the only roofs whose underside a wall's top
+    // may be cut at: the layers prove the underside level, and a roof without
+    // its outline is drawn over its box's rectangle, which an L-shaped roof
+    // does not fill.
+    let mut plate_roofs: HashSet<u32> = HashSet::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
     // entity; `None` once two of its elements disagree.
@@ -1427,6 +1433,16 @@ pub fn append_typed_production_elements(
                     None => wall_tops::SlabTop::Flat,
                 };
                 slab_shapes.insert(id, top);
+                if decoded.class == "Roof"
+                    && crate::element_record_plan_profiles::plan_profile_from_fields(
+                        &decoded.fields,
+                    )
+                    .is_some()
+                    && crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+                        .is_some_and(|layers| layers.stacked)
+                {
+                    plate_roofs.insert(id);
+                }
             }
         }
         // RE-291: a column whose type is a plain rectangle, with the elements its pairs name.
@@ -1680,7 +1696,7 @@ pub fn append_typed_production_elements(
     }
 
     // RE-267: a wall's top is cut at the underside of the floor that covers it.
-    wall_tops::cut_wall_tops(entities, &pending_tops);
+    wall_tops::cut_wall_tops(entities, &pending_tops, &plate_roofs);
 
     // #1396: a wall with an edited elevation profile that stops short of the
     // wall beneath it is drawn to that wall's face, where its base is still cut.
@@ -2895,7 +2911,8 @@ fn add_railing_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Dec
 
 /// Add a door's `Qto_DoorBaseQuantities` or a window's
 /// `Qto_WindowBaseQuantities` to `sets`: the Width and Height of the symbol
-/// that draws it, and their product as its Area. revit-ifc's
+/// that draws it, and their product as its Area (on 2024 to 2026 files, see
+/// `DOOR_WINDOW_AREA_REVIT_VERSIONS`). revit-ifc's
 /// `WidthCalculator`, `HeightCalculator` and `AreaCalculator` (CLEANROOM.md
 /// source 5) read a door's or window's Width and Height parameters, its own
 /// or its type's, where no opening profile gives them (#1016); an instance
@@ -2915,22 +2932,27 @@ fn add_door_window_quantities(
     let Some([width, height]) = mvp::drawn_size_from_fields(&decoded.fields) else {
         return;
     };
+    let mut properties = vec![
+        Property {
+            name: "Width".into(),
+            value: PropertyValue::PositiveLengthFeet(width),
+        },
+        Property {
+            name: "Height".into(),
+            value: PropertyValue::PositiveLengthFeet(height),
+        },
+    ];
+    // Revit 2027's export gives the Width and Height and an Area that is not
+    // their product (RE-346).
+    if !mvp::drawn_area_left_out(&decoded.fields) {
+        properties.push(Property {
+            name: "Area".into(),
+            value: PropertyValue::AreaSquareFeet(width * height),
+        });
+    }
     sets.push(PropertySet {
         name: set.into(),
-        properties: vec![
-            Property {
-                name: "Width".into(),
-                value: PropertyValue::PositiveLengthFeet(width),
-            },
-            Property {
-                name: "Height".into(),
-                value: PropertyValue::PositiveLengthFeet(height),
-            },
-            Property {
-                name: "Area".into(),
-                value: PropertyValue::AreaSquareFeet(width * height),
-            },
-        ],
+        properties,
     });
 }
 
