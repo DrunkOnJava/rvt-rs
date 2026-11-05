@@ -1,4 +1,4 @@
-//! RE-352 (#1185, W7): where Revit's export of the BIM4LCA office takes a
+//! RE-354 (#1185, W7): where Revit's export of the BIM4LCA office takes a
 //! door type's `FireRating` and `ThermalTransmittance` from.
 //!
 //! FACT under test: Revit's export writes `Pset_DoorCommon.FireRating` on six
@@ -16,7 +16,7 @@
 //!   tpar <type id> <parameter id>:<name|->:<kind>:<storage>=<value>   its type's, once per type
 //!
 //! Usage:
-//!   cargo run --profile ci -p rvt-probes --example probe_re352_door_type_parameters -- MODEL.rvt
+//!   cargo run --profile ci -p rvt-probes --example probe_re354_door_type_parameters -- MODEL.rvt
 
 use std::collections::{BTreeMap, BTreeSet};
 

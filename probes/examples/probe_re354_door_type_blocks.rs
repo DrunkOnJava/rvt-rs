@@ -1,10 +1,10 @@
-//! RE-352 (#1185, W7): where the texts and the number Revit's export of the
+//! RE-354 (#1185, W7): where the texts and the number Revit's export of the
 //! BIM4LCA office writes on its door type objects are in the file.
 //!
 //! FACT under test: Revit's export writes `Pset_DoorCommon.FireRating`
 //! (`EI30`, `EI60`, `-`) on six door type objects and `ThermalTransmittance`
 //! (3.7021) on a seventh, and none of the saved parameters of those types
-//! (RE-207, `probe_re352_door_type_parameters`) holds any of them. This lists
+//! (RE-207, `probe_re354_door_type_parameters`) holds any of them. This lists
 //! every `EI30`, `EI60` and `EI90` text and every 3.7021 of the partitions
 //! with the bytes around it and the value block it lies in, and the
 //! printable texts of the seven types' own value blocks.
@@ -16,7 +16,7 @@
 //!   str <stream> <owner> +<offset in block> prev_i64 <id> <text>
 //!
 //! Usage:
-//!   cargo run --profile ci -p rvt-probes --example probe_re352_door_type_blocks -- MODEL.rvt
+//!   cargo run --profile ci -p rvt-probes --example probe_re354_door_type_blocks -- MODEL.rvt
 
 use rvt::RevitFile;
 use rvt::research::partition_type_parameters::VALUE_BLOCK_MARK;
