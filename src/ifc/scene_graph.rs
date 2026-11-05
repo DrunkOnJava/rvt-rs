@@ -33,7 +33,7 @@
 
 use super::IfcModel;
 use super::entities::IfcEntity;
-use super::step_writer::{Placement, placements, storey_of};
+use super::step_writer::{Placement, associates_material, placements, storey_of};
 use serde::{Deserialize, Serialize};
 
 /// A single node in the rendered scene graph.
@@ -354,7 +354,11 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         Some(s) => (Some(s.name.clone()), Some(s.elevation_feet)),
         None => (None, None),
     };
+    // The materials the export associates with the element: an `IfcSpace`
+    // has none by default (`step_writer::associates_material`, #1430).
+    let holds_material = associates_material(ifc_type);
     let material = material_index
+        .filter(|_| holds_material)
         .and_then(|i| model.materials.get(i).map(|m| (i, m)))
         .map(|(index, m)| PanelMaterial {
             index,
@@ -363,6 +367,7 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         });
     let material_name = material.as_ref().map(|m| m.name.clone());
     let layers = material_layer_set_index
+        .filter(|_| holds_material)
         .and_then(|i| model.material_layer_sets.get(i))
         .filter(|set| !set.layers.is_empty())
         .map(|set| PanelLayers {
@@ -565,7 +570,8 @@ fn wall_joins(
 
 /// How many `BuildingElement`s use `material_index`, directly or as one of
 /// their layers (RE-58) — the population the viewer's material highlight
-/// lights up.
+/// lights up. An `IfcSpace` uses none: the export associates it with no
+/// material (`step_writer::associates_material`, #1430).
 fn count_elements_using_material(model: &IfcModel, material_index: usize) -> usize {
     let in_set = |set: &usize| {
         model.material_layer_sets.get(*set).is_some_and(|set| {
@@ -579,10 +585,14 @@ fn count_elements_using_material(model: &IfcModel, material_index: usize) -> usi
         .iter()
         .filter(|e| match e {
             IfcEntity::BuildingElement {
+                ifc_type,
                 material_index: direct,
                 material_layer_set_index: set,
                 ..
-            } => *direct == Some(material_index) || set.as_ref().is_some_and(in_set),
+            } => {
+                associates_material(ifc_type)
+                    && (*direct == Some(material_index) || set.as_ref().is_some_and(in_set))
+            }
             _ => false,
         })
         .count()
@@ -885,6 +895,7 @@ pub fn build_schedule(model: &IfcModel) -> Schedule {
                 .map(|s| (s.name.clone(), s.elevation_feet))
                 .unwrap_or_else(|| ("".into(), f64::INFINITY));
             let material = material_index
+                .filter(|_| associates_material(ifc_type))
                 .and_then(|i| model.materials.get(i))
                 .map(|m| m.name.clone())
                 .unwrap_or_default();
