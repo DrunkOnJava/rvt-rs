@@ -187,18 +187,22 @@ CYLINDER_LEAST = {
 # ran on 2024 and 2025 only: rac_advanced's 2026 save left 28 (22 doors, 6 windows)
 # and its 2027 save 42 (36, 6) on the default axes, 28 of them because the host
 # rebinding (RE-245) is on `CUT_LOOP_REVIT_VERSIONS`. #1454 widens that list to 2026
-# and 2027, so the 2026 save leaves none, and the 2027 save the 14 of 8 host walls
+# and 2027, so the 2026 save leaves none, and the 2027 save the 15 doors of 8 host walls
 # with no native straight-line row (#1475): 2026 holds the 2025 save's 83 doors and 24
-# windows, 2027 at least 69 doors (83 less 14) and the 18 windows it held. rme_advanced
+# windows, 2027 the 68 doors and 24 windows run 42124273032 (head ac922cd9) counted. rme_advanced
 # and rme_basic hold 107 placed doors per file (the second read of #1456, 59 with
 # unequal flips), held here for each year and left on the default axes by none;
 # their windows are not floored until a run has counted them. rst_basic holds none.
-# Set before the Measure run of the merged head, which prints what each really is.
+# Run 42124273032 (head ac922cd9) counted 83 doors and 24 windows compared and none left
+# out on rac_advanced 2026, 107 doors and none left out on each rme save of 2025 to 2027,
+# and on rac_advanced 2027 68 doors and 24 windows compared and 15 doors left out, in the
+# 8 host walls of #1475: 14 whose frame differs from the 2024 save's and one whose frame
+# is the same. Only the 2027 numbers were set differently from what was predicted.
 OPENINGS_LEAST = {
     "racadvancedsampleproject": {
         2025: {"IfcDoor": 83, "IfcWindow": 24},
         2026: {"IfcDoor": 83, "IfcWindow": 24},
-        2027: {"IfcDoor": 69, "IfcWindow": 18},
+        2027: {"IfcDoor": 68, "IfcWindow": 18},
     },
     "racbasicsampleproject": {
         2025: {"IfcDoor": 10, "IfcWindow": 7},
@@ -217,7 +221,7 @@ OPENINGS_LEAST = {
     },
 }
 OPENINGS_LEFT_OUT_MOST = {
-    "racadvancedsampleproject": {2025: 0, 2026: 0, 2027: 14},
+    "racadvancedsampleproject": {2025: 0, 2026: 0, 2027: 15},
     "racbasicsampleproject": {2025: 0, 2026: 0, 2027: 0},
     "rmeadvancedsampleproject": {2025: 0, 2026: 0, 2027: 0},
     "rmebasicsampleproject": {2025: 0, 2026: 0, 2027: 0},

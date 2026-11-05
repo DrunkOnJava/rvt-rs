@@ -219,7 +219,7 @@ the change that drops it. #1456 set 28 on the 2026 and 42 on the 2027 save of
 and reads its flips ran on `CUT_LOOP_REVIT_VERSIONS`, 2024 and 2025, so on 2026
 and 2027 a nearest wall that is not the door's own failed the along-the-wall
 test; and on 2027, 14 more, set in 8 host walls with no native straight-line row
-(#1475). That list now runs to 2027, so the ceilings are 0 and 14 and each of
+(#1475). That list now runs to 2027, so the ceilings are 0 and 15 (the 14 and one door whose frame is the same) and each of
 `rme_advanced` and `rme_basic` (107 placed doors per file, 59 with unequal flips)
 is held with a floor of 107 doors and a ceiling of 0 left out, for each year; the
 Measure run of the merged head prints what each really is. It exercises four
