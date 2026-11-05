@@ -509,7 +509,7 @@
           "type": "string"
         },
         "name": {
-          "description": "The element's name in the export, where it is exported.",
+          "description": "The `Name` the export writes for the element, as in `list_elements`:\nabsent where the element is not exported, and for a room whose name is\nexactly the exporter's `<class>-<ElementId>` placeholder.",
           "type": [
             "string",
             "null"
@@ -1074,7 +1074,7 @@
   },
   {
     "name": "get_element",
-    "description": "One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance (the carrier its record was read from, its stream and byte offset, and in value_sources the copy each reader took a value of its body from), and the file's: Revit release and build, schema class count, partition count and ElemTable record layout. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "description": "One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its name and long_name as list_elements gives them, its type object as the export writes it (element_type: the IFC entity as ifc_type, name and element_id, the type object's Tag, and the sets it holds; absent where the export writes none), its provenance (the carrier its record was read from, its stream and byte offset, and in value_sources the copy each reader took a value of its body from), and the file's: Revit release and build, schema class count, partition count and ElemTable record layout. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {
       "$defs": {
         "IdArg": {
@@ -1536,10 +1536,19 @@
           "description": "The type object an element is typed by.",
           "properties": {
             "element_id": {
-              "description": "The type's Revit ElementId.",
+              "description": "The type object's `Tag`: the type's Revit ElementId, or the ElementId\nof the room an `IfcSpaceType` is made for.",
+              "type": "string"
+            },
+            "ifc_type": {
+              "description": "The type object's IFC entity, such as `IFCWALLTYPE`.",
+              "type": "string"
+            },
+            "name": {
+              "description": "The type object's `Name`.",
               "type": "string"
             },
             "property_sets": {
+              "description": "The sets the export writes on the type object, `Other` and\n`Identity Data` among them.",
               "items": {
                 "$ref": "#/$defs/PropertySetOut"
               },
@@ -1548,6 +1557,8 @@
           },
           "required": [
             "element_id",
+            "ifc_type",
+            "name",
             "property_sets"
           ],
           "type": "object"
@@ -1636,7 +1647,7 @@
               "type": "null"
             }
           ],
-          "description": "The element's type object and its sets, where the model has them."
+          "description": "The type object the export writes for the element, with its sets;\nabsent where the export writes none for it."
         },
         "file": {
           "$ref": "#/$defs/FileProvenance",
@@ -1679,11 +1690,22 @@
             "null"
           ]
         },
+        "long_name": {
+          "description": "An `IfcSpace`'s `LongName`, its room name, as in `list_elements`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "model_id": {
           "type": "string"
         },
         "name": {
-          "type": "string"
+          "description": "The `Name` the IFC export writes, as in `list_elements`: absent only\nfor a room whose name is exactly the exporter's `<class>-<ElementId>`.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "other_entities": {
           "description": "Other entities with the same ElementId.",
@@ -1722,7 +1744,6 @@
       },
       "required": [
         "model_id",
-        "name",
         "body",
         "provenance",
         "file",
@@ -2153,7 +2174,7 @@
   },
   {
     "name": "list_elements",
-    "description": "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. The rows leave out value_sources, the copy each reader took a value of the body from: get_element lists them. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "description": "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name and long_name (the IFC Name and LongName: an IfcSpace's are its room number (or <room name>:<ElementId> for a room with a name and no number) and its room name; name is absent only for a room with neither whose name is exactly the exporter's <Revit class>-<ElementId> placeholder, and the placeholder names of other elements are still served as name), level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. The rows leave out value_sources, the copy each reader took a value of the body from: get_element lists them. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -2374,8 +2395,19 @@
                 "null"
               ]
             },
+            "long_name": {
+              "description": "An `IfcSpace`'s `LongName`, its room name. Absent for any other\nelement and for a room whose name was not read.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "name": {
-              "type": "string"
+              "description": "The `Name` the IFC export writes. An `IfcSpace`'s is its room number,\nor `<room name>:<ElementId>` for a room with a name and no number.\nAbsent only for a room with neither whose name is exactly the\nexporter's `<Revit class>-<ElementId>`, made where no source named\nit: that placeholder is not served as a name. The placeholder names\nof other elements (a wall nothing named is `Wall-<ElementId>`) are\nstill served.",
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "predefined_type": {
               "description": "The IFC4 `PredefinedType` the export writes.",
@@ -2389,7 +2421,6 @@
             }
           },
           "required": [
-            "name",
             "provenance"
           ],
           "type": "object"
