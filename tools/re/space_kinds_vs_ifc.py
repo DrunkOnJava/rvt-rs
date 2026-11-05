@@ -11,7 +11,8 @@ the file:
 - the spaces with no `SpaceKind`, and those whose value is not one of the four;
 - the spaces whose kind and outline source disagree. `area` holds exactly where
   the outline source is `area_boundary`, `area_boundary_joined`,
-  `area_plan_topology` or `none`, and no other kind may hold one of those:
+  `area_plan_topology`, `area_plan_topology_unchecked` or `none`, and no other
+  kind may hold one of those:
   an `area` without such a source and a space of another kind with one are
   each counted. An export with no geometry (`typed_no_geometry`) has no
   `SpaceOutlineSource` on any space; the agreement is then not checked, and
@@ -52,7 +53,15 @@ SET = "RvtElementRecordGeometry"
 KIND_PROPERTY = "SpaceKind"
 SOURCE_PROPERTY = "SpaceOutlineSource"
 KINDS = ("room", "area", "mep_space", "family_instance")
-AREA_SOURCES = ("area_boundary", "area_boundary_joined", "area_plan_topology", "none")
+AREA_SOURCES = (
+    "area_boundary",
+    "area_boundary_joined",
+    "area_plan_topology",
+    # #1428 (Griffin, 2026-11-05, "Mark 2025 to 2027 in the file"): the Areas of
+    # Revit 2025 to 2027. A reader that never writes it, as main's, cannot fail on it.
+    "area_plan_topology_unchecked",
+    "none",
+)
 LIST_LIMIT = 25
 PREFIX = "space kinds: "
 

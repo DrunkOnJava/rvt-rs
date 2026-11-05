@@ -162,7 +162,8 @@ Every model and every Autodesk sample whose export is not empty is checked by
 `tools/re/space_kinds_vs_ifc.py` (#1437), which reads the export alone: each
 `IfcSpace` carries `RvtElementRecordGeometry.SpaceKind`, `area` holds exactly
 where `SpaceOutlineSource` is an Area value (`area_boundary`,
-`area_boundary_joined`, `area_plan_topology` or `none`), and no other kind holds
+`area_boundary_joined`, `area_plan_topology`, `area_plan_topology_unchecked` or
+`none`), and no other kind holds
 one. It writes `space_kinds_vs_ifc.txt` (fixed words and integers, so the
 held-out models keep it as counts; `tools/ci/scrub-holdout-results.sh`) and
 exits 1 on any space without a kind, with another value, or in disagreement. The
