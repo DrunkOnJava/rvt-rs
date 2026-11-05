@@ -22,8 +22,9 @@
   `main` writes. A wall whose base join names an element that covers the whole plan is decided by
   those alone, as before, and one that covers part counts only where none
   covers the whole; a cut that resolves and whose solid cannot be made keeps the
-  prism and says so (`BaseCoverRefusal` `base_cut_solid_not_made`). Every other
-  model is not yet measured on this head. The level top of a partial cover, a
+  prism and says so (`BaseCoverRefusal` `base_cut_solid_not_made`). No other
+  model takes the rule (Measure 42111477633, 111 exports, and 42119702779, 68
+  exports: only the two office files differ from `main` there). The level top of a partial cover, a
   partially covered wall with no end extension, a footing with an opening under
   a wall and a wall whose ring is clockwise or concave are exercised by no
   measured wall. The measured effect is in
