@@ -9,8 +9,9 @@
   identifier (an issue, a report, a hash, a date, a Revit release, a Measure
   run id, a tool's version), and a number that is not a measurement carries
   `<!-- w10: reason -->`, which fails without a reason or with nothing to
-  excuse. On the pages as they were, 51 clauses failed it (39 with no model,
-  12 on a local-only model that did not say so); each now names its model,
+  excuse. On the pages as they were at `f009976e`, 51 clauses failed it (39
+  with no model, 12 on a local-only model that did not say so; the check run
+  on them with the final index); each now names its model,
   and the Snowdon Towers, 255ribeiro, flowbim, pre-2015 and client-model
   figures say "local only" or "not shared". The one figure that traced to no
   committed report, Snowdon Towers' 1,030 of 1,078 walls with faces exactly
