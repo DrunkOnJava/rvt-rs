@@ -25,7 +25,10 @@ and the wall rvt-rs binds it to has a native record whose curve is read (the
 definition of RE-343 Rule 1), `bound to none` where it read the transform and
 no such wall, and `no stored transform` where it read none (a Revit 2023 or
 older project). `rvt-rs voids a wall` counts the elements rvt-rs's own export
-fills a wall opening for.
+fills a wall opening for. `rule` lines count the elements whose rvt-rs export
+carries `RvtElementRecordGeometry.PlacementAxesSource`, the ones placed as
+Revit's export places them (the rule of RE-347), and how they compare with
+Revit's: all of them should be `same`.
 
 It prints count lines beginning `door flips:` (counts only, never an id or a
 name, in a restricted alphabet, so a held-out model's lines can leave the
@@ -48,6 +51,7 @@ import os
 import sys
 
 import ifcopenshell
+import ifcopenshell.util.element
 import ifcopenshell.util.placement
 import ifcopenshell.util.unit
 import numpy as np
@@ -60,6 +64,7 @@ BINDINGS = ("bound to a plain wall", "bound to none", "no stored transform")
 KINDS = ("door", "window")
 VERDICTS = ("same", "half turn", "quarter turn", "other")
 UP = np.array([0.0, 0.0, 1.0])
+RECORD_SET = "RvtElementRecordGeometry"
 ORIGIN_BANDS = ((0.01, "within 0.01 ft"), (0.5, "within 0.5 ft"), (3.0, "within 3 ft"))
 
 
@@ -114,6 +119,12 @@ def binding_of(row):
     if not row["read"]:
         return "no stored transform"
     return "bound to a plain wall" if row["rvt_x_wall"] in ("+", "-") else "bound to none"
+
+
+def placement_source(element):
+    """The `PlacementAxesSource` rvt-rs wrote on the element (RE-347), or None."""
+    value = ifcopenshell.util.element.get_psets(element).get(RECORD_SET, {}).get("PlacementAxesSource")
+    return str(value) if value else None
 
 
 def has_host(element):
@@ -197,6 +208,7 @@ def main(argv):
                 "ours_vs_stored": flips.relation(ours_axes[0], stored) if stored is not None else "none",
                 "origin": band(float(np.linalg.norm((ours_origin - theirs_origin)[:2]))),
                 "voids": has_host(ours_element),
+                "rule": placement_source(ours_element) is not None,
                 "theirs_voids": has_host(theirs_element),
                 "inputs": all(k in r["decoded"] for k in ("m_hand_flipped", "m_facing_flipped", "m_opening_facing_x", "m_opening_facing_y")),
                 "ours_class": ours_element.is_a(),
@@ -222,6 +234,11 @@ def main(argv):
                 f"decoded record carries both flips and the opening facing {sum(r['inputs'] for r in mine)}; "
                 f"rvt-rs voids a wall {sum(r['voids'] for r in mine)}; Revit voids a wall {sum(r['theirs_voids'] for r in mine)}"
             )
+            ruled = [r for r in mine if r["rule"]]
+            print(
+                f"door flips: placements {kind}s {binding} rule: rvt-rs writes Revit axes for {len(ruled)} of {len(mine)}; "
+                f"of those {tally(ruled)}; the other {len(mine) - len(ruled)} {tally([r for r in mine if not r['rule']])}"
+            )
             for st in STATES:
                 cell = [r for r in mine if r["st"] == st]
                 if not cell:
@@ -244,9 +261,12 @@ def main(argv):
         print(f"door flips: placements {kind}s rvt-rs Z axis is up: {sum(r['ours_up'] for r in of_kind)} of {len(of_kind)}")
 
     print(f"door flips: placements all: checked {len(compared)}; {tally(compared)}")
+    ruled = [r for r in compared if r["rule"]]
+    wrong = [r for r in ruled if r["verdict"] != "same"]
+    print(f"door flips: placements rule: written for {len(ruled)}; differ from Revit {len(wrong)}")
 
     if not held_out:
-        keys = ("id", "kind", "binding", "st", "verdict", "ours_x", "theirs_x", "ours_vs_stored", "origin", "voids", "theirs_voids", "ours_axes", "theirs_axes")
+        keys = ("id", "kind", "binding", "st", "verdict", "rule", "ours_x", "theirs_x", "ours_vs_stored", "origin", "voids", "theirs_voids", "ours_axes", "theirs_axes")
         for r in compared:
             print("row " + json.dumps({k: r[k] for k in keys}, sort_keys=True))
 

@@ -25,6 +25,13 @@ lists change:
   named elements       the elements NAMED_TAGS lists, whatever their source,
                        held to the 2024 save; their sources and volumes in
                        every save are printed
+  doors and windows    an IfcDoor or IfcWindow that carries
+                       RvtElementRecordGeometry.PlacementAxesSource, placed as
+                       Revit's export places a door or window set in a plain
+                       wall (RE-347); held to the 2024 save, where its axes,
+                       GlobalId and body must be the same, and the number of
+                       them compared, and of those not on the default axes, is
+                       printed
 
 Each is paired by `Tag` (the ElementId, which a project keeps across saves)
 with the earlier save's element, and fails on any difference in: its IFC
@@ -78,6 +85,8 @@ BEAMS_AND_LANDINGS = "beams and landings"
 STAIR_RUNS = "stair runs"
 SKETCH_OUTLINES = "sketch outlines"
 NAMED_ELEMENTS = "named elements"
+DOORS_AND_WINDOWS = "doors and windows"
+OPENING_CLASSES = {"IfcDoor", "IfcWindow"}
 
 SOURCE_GROUP = {
     "partition_beam_axis": BEAMS_AND_LANDINGS,
@@ -87,7 +96,7 @@ SOURCE_GROUP = {
     "partition_stair_run_sketch": STAIR_RUNS,
 }
 OUTLINE_CLASSES = {"IfcSlab", "IfcCovering", "IfcRoof"}
-REFERENCE_YEAR = {BEAMS_AND_LANDINGS: 2024, STAIR_RUNS: 2025, SKETCH_OUTLINES: 2024, NAMED_ELEMENTS: 2024}
+REFERENCE_YEAR = {BEAMS_AND_LANDINGS: 2024, STAIR_RUNS: 2025, SKETCH_OUTLINES: 2024, NAMED_ELEMENTS: 2024, DOORS_AND_WINDOWS: 2024}
 
 # Bodies the sample is known to draw by BodySource (Measure run 41988011289,
 # head 1d5bbf03, exported diagnostics), and outlines by group.
@@ -106,6 +115,9 @@ MINIMUMS = {
     },
     "racbasicsampleproject": {STAIR_RUNS: {"partition_stair_run_sketch": 2}},
 }
+# At least this many doors and windows placed by the rule compared with the 2024
+# save, by project and class (RE-347).
+OPENINGS_LEAST = {}
 # At least this many sketch outlines compared (Measure run 42010304828, head
 # e56d31b5: rac_advanced 82, rac_basic 12, rst_basic 5).
 OUTLINE_LEAST = {"racadvancedsampleproject": 82, "racbasicsampleproject": 12, "rstbasicsampleproject": 5}
@@ -142,6 +154,17 @@ def properties(element):
     return source, resolved
 
 
+def placement_source(element):
+    """The `PlacementAxesSource` of a door or window (RE-347), or None."""
+    for rel in element.IsDefinedBy:
+        if not rel.is_a("IfcRelDefinesByProperties"):
+            continue
+        for prop in getattr(rel.RelatingPropertyDefinition, "HasProperties", None) or []:
+            if prop.Name == "PlacementAxesSource" and prop.NominalValue is not None:
+                return prop.NominalValue.wrappedValue
+    return None
+
+
 def group_of(element, source, resolved, named=False):
     if named:
         return NAMED_ELEMENTS
@@ -149,6 +172,8 @@ def group_of(element, source, resolved, named=False):
         return SOURCE_GROUP[source]
     if element.is_a() in OUTLINE_CLASSES and resolved:
         return SKETCH_OUTLINES
+    if element.is_a() in OPENING_CLASSES and placement_source(element):
+        return DOORS_AND_WINDOWS
     return None
 
 
@@ -315,7 +340,7 @@ def main():
         print(f"named {tag}, {own_year} save: {describe(settings, candidate.get(tag))}")
         for year, (_, reference) in sorted(earlier.items()):
             print(f"named {tag}, {year} save: {describe(settings, reference.get(tag))}")
-    for group in (BEAMS_AND_LANDINGS, STAIR_RUNS, SKETCH_OUTLINES, NAMED_ELEMENTS):
+    for group in (BEAMS_AND_LANDINGS, STAIR_RUNS, SKETCH_OUTLINES, NAMED_ELEMENTS, DOORS_AND_WINDOWS):
         year = REFERENCE_YEAR[group]
         chosen = {
             tag: [item for item in items if item[2] == group]
@@ -326,6 +351,11 @@ def main():
         for source, least in minimums.get(group, {}).items():
             if by_source.get(source, 0) < least:
                 fail(f"{group}: {by_source.get(source, 0)} drawn as {source}, fewer than the {least} it holds")
+        if group == DOORS_AND_WINDOWS:
+            by_class = collections.Counter(item[0].is_a() for items in chosen.values() for item in items)
+            for cls, least in OPENINGS_LEAST.get(project, {}).items():
+                if by_class.get(cls, 0) < least:
+                    fail(f"{group}: {by_class.get(cls, 0)} {cls} placed by the rule, fewer than the {least} it holds")
         if year not in earlier_paths:
             not_compared.append(f"{group} ({len(chosen)} here; the {year} save is not in this run)")
             print(f"{group}: not compared, the {year} save is not in this run ({len(chosen)} drawn here)")
@@ -336,6 +366,7 @@ def main():
         earlier_model, reference = earlier[year]
         scale_earlier = ifcopenshell.util.unit.calculate_unit_scale(earlier_model)
         compared = collections.Counter()
+        off_axes = 0
         compared_tags = set()
         for tag in sorted(chosen, key=lambda t: (0, int(t)) if t.isdigit() else (1, t)):
             counterparts = reference.get(tag)
@@ -354,6 +385,9 @@ def main():
                     detail = f"{mine} here, {theirs} in the {year} save" if theirs != "" else mine
                     fail(f"{group}: {tag} {left[0].is_a()} differs in {field}: {detail}")
                 compared[left[0].is_a()] += 1
+                if group == DOORS_AND_WINDOWS:
+                    frame = placement(left[0], scale_candidate)
+                    off_axes += frame is None or not np.allclose(frame[:3, :3], np.eye(3), atol=ANGLE_TOLERANCE)
             if ok:
                 compared_tags.add(tag)
         total += sum(compared.values())
@@ -375,6 +409,7 @@ def main():
             f"{group}: compared {sum(compared.values())} against the {year} save ({', '.join(f'{c} {n}' for c, n in sorted(compared.items())) or 'none'}); "
             f"left as boxes here, drawn in the {year} save, not scored: {sum(left_out.values())}"
             + (f" ({', '.join(f'{c} {n}' for c, n in sorted(left_out.items()))})" if left_out else "")
+            + (f"; of those compared, placed on axes other than the default: {off_axes}" if group == DOORS_AND_WINDOWS else "")
         )
         other = OTHER_YEAR.get(group)
         if other in earlier and chosen:
