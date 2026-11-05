@@ -10,7 +10,11 @@ one, and every answer must validate. A field the schema requires but the
 answer leaves out fails here: the output schema is what a client that
 validates `structuredContent` holds the server to.
 
-Usage: validate-mcp-answers.py <dir>
+With `--require-all` (CI), a tool that declared a schema and gave no
+answer fails too, so a run that skipped a model cannot pass with tools left
+unchecked.
+
+Usage: validate-mcp-answers.py [--require-all] <dir>
 """
 
 import json
@@ -24,11 +28,23 @@ def load_all(folder: Path) -> list[tuple[Path, object]]:
     return [(path, json.loads(path.read_text())) for path in sorted(folder.glob("*.json"))]
 
 
+def deepest_reason(error):
+    """An `anyOf` (an optional object is `anyOf[$ref, null]`) fails as a
+    whole; follow its branches down to the deepest reason, preferring any
+    reason to a bare type mismatch (the `null` branch's)."""
+    while error.context:
+        error = max(error.context, key=lambda e: (len(e.absolute_path), e.validator != "type"))
+    return error
+
+
 def main() -> int:
-    if len(sys.argv) != 2:
+    args = sys.argv[1:]
+    require_all = "--require-all" in args
+    args = [arg for arg in args if arg != "--require-all"]
+    if len(args) != 1:
         print(__doc__.strip().splitlines()[-1], file=sys.stderr)
         return 2
-    root = Path(sys.argv[1])
+    root = Path(args[0])
     schemas_root, answers_root = root / "schemas", root / "answers"
     if not answers_root.is_dir() or not schemas_root.is_dir():
         print(f"error: no answers or no schemas under {root}: the test kept nothing")
@@ -55,6 +71,10 @@ def main() -> int:
         tool = folder.name
         schema = schemas.get(tool)
         answers = load_all(folder)
+        if not answers:
+            print(f"{tool}: an answers folder with no answer in it")
+            failures += 1
+            continue
         if schema is None:
             print(f"{tool}: {len(answers)} answers and no outputSchema")
             failures += 1
@@ -66,13 +86,18 @@ def main() -> int:
             if errors:
                 bad += 1
                 for error in errors[:5]:
-                    where = "/".join(str(part) for part in error.absolute_path) or "(root)"
-                    print(f"{tool}: {path.name}: at {where}: {error.message}")
+                    deepest = deepest_reason(error)
+                    where = "/".join(str(part) for part in deepest.absolute_path) or "(root)"
+                    print(f"{tool}: {path.name}: at {where}: {deepest.message[:300]}")
+                if len(errors) > 5:
+                    print(f"{tool}: {path.name}: and {len(errors) - 5} more errors")
         print(f"{tool}: {len(answers)} answers, {len(answers) - bad} valid against its outputSchema")
         failures += bad
     unanswered = sorted(set(schemas) - {p.name for p in answered})
     if unanswered:
         print(f"tools with a schema and no answer in this run: {', '.join(unanswered)}")
+        if require_all:
+            failures += len(unanswered)
     return 1 if failures else 0
 
 

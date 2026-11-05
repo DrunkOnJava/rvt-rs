@@ -16,6 +16,7 @@ use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
+use std::sync::Once;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, channel};
 use std::time::{Duration, Instant};
@@ -106,9 +107,12 @@ fn object(value: Value) -> serde_json::Map<String, Value> {
     }
 }
 
-/// Where the test keeps each tool's `outputSchema` and every structured
-/// answer it is given, for `tools/ci/validate-mcp-answers.py` to check each
-/// answer against its tool's schema (#1415): `RVT_MCP_ANSWERS_DIR`. Unset,
+/// Where the test keeps each tool's `outputSchema` (from the `tools/list` of
+/// each session [`drive`] runs) and every structured answer the rmcp client
+/// is given through [`call`], for `tools/ci/validate-mcp-answers.py` to check
+/// each answer against its tool's schema (#1415): `RVT_MCP_ANSWERS_DIR`, an
+/// absolute path (the test runs in `rvt-mcp/`). The raw JSON-RPC tests'
+/// answers are not kept: the same tools answer through the client too. Unset,
 /// nothing is kept.
 fn answers_dir() -> Option<PathBuf> {
     std::env::var_os("RVT_MCP_ANSWERS_DIR").map(PathBuf::from)
@@ -118,11 +122,21 @@ fn answers_dir() -> Option<PathBuf> {
 /// once never write the same name.
 static KEPT: AtomicUsize = AtomicUsize::new(0);
 
+/// The directory is emptied once per run, before the first file is written,
+/// so a run never leaves an earlier run's schemas or answers beside its own.
+static CLEARED: Once = Once::new();
+
 /// Write `value` as `<RVT_MCP_ANSWERS_DIR>/<kind>/<tool>/<pid>-<n>.json`.
 fn keep(kind: &str, tool: &str, value: &Value) {
     let Some(root) = answers_dir() else {
         return;
     };
+    CLEARED.call_once(|| {
+        if root.exists() {
+            std::fs::remove_dir_all(&root)
+                .unwrap_or_else(|error| panic!("clear {}: {error}", root.display()));
+        }
+    });
     let dir = root.join(kind).join(tool);
     std::fs::create_dir_all(&dir)
         .unwrap_or_else(|error| panic!("create {}: {error}", dir.display()));
