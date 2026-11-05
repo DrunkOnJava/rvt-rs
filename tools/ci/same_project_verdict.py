@@ -27,7 +27,7 @@ import pathlib
 import sys
 
 PROJECTS = ("racadvancedsampleproject", "racbasicsampleproject", "rstbasicsampleproject")
-YEARS = (2026, 2027)
+YEARS = (2025, 2026, 2027)
 AREAS_PASSED = "areas across saves: passed: 25 Areas, 25 with a body, on each of 4 saves"
 AREAS_2021_PASSED = "areas across saves: passed: 25 Areas, 25 with a body, on each of 2 saves"
 
@@ -103,7 +103,7 @@ def judge(bodies, areas, not_run=None, incomplete=None, areas_2021=None, expect_
 
 
 def expected_samples(sample_years):
-    """The 2026 and 2027 samples the bodies gate holds, within `sample_years`."""
+    """The 2025, 2026 and 2027 samples the bodies gate holds, within `sample_years`."""
     words = (sample_years or "").split()
     low = int(words[0]) if words else 0
     high = int(words[1]) if len(words) > 1 else 9999

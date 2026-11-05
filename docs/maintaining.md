@@ -65,11 +65,15 @@ when a release ships.
   it. The viewer's browser tests are: `ci.yml` calls `viewer-test.yml` as its
   `viewer` job in the full set (#1374), in three groups of spec files on a
   WASM built without LTO, and a change that touches only documentation skips
-  it. Deploy viewer builds and publishes the site, and runs the suite and the
-  saved-mesh measurement again on the release WASM it publishes; `CI passed`
-  does not wait for those, but the deploy job does, and it waits for `CI
-  passed` on the pushed commit. To check a draft's viewer, dispatch
-  `viewer-test.yml` on its branch.
+  it. That WASM and `gen-fixture` are built once per run, by a `build` job of
+  its own, and the three groups download them (#1457); a group fails, rather
+  than skips, when the build did not succeed. Deploy viewer builds the release
+  WASM once, uploads it, publishes the site built on it, and runs the suite and
+  the saved-mesh measurement again on the very file it uploaded (the jobs print
+  its sha256, so a run shows they match, and each checks that the site it
+  builds holds that file); `CI passed` does not wait for those,
+  but the deploy job does, and it waits for `CI passed` on the pushed commit.
+  To check a draft's viewer, dispatch `viewer-test.yml` on its branch.
 - The squash commit's title is the pull request's title plus its number and its
   body is the pull request's description, so the description is permanent
   history: fix it before merging.
@@ -193,14 +197,16 @@ PASS over a failure count, on spaces that have lost their `SpaceOutlineSource`
 in an export with geometry, and on a result that saw none of the export's
 spaces.
 
-## Bodies across saves (RE-341)
+## Bodies across saves (RE-341, RE-345)
 
-No Revit export of a 2026 or 2027 beam, tread landing, stair run or sketch
-outline exists to score them against. `tools/re/bodies_across_saves.py` holds
-each 2026 and 2027 save of `rac_advanced`, `rac_basic` and `rst_basic` to the
-same project's earlier saves, matched by `Tag`: beams, landings and sketch
-outlines to the 2024 save, stair runs to the 2025 save (the 2025 save draws no
-beam or landing). Measure's script runs it beside each such sample, and the job
+No Revit export of a 2025, 2026 or 2027 beam, tread landing, stair run or sketch
+outline of an Autodesk sample exists to score them against. `tools/re/bodies_across_saves.py` holds
+each 2025, 2026 and 2027 save of `rac_advanced`, `rac_basic` and `rst_basic` to
+the same project's earlier saves, matched by `Tag`: beams, landings and sketch
+outlines to the 2024 save, the 2026 and 2027 stair runs to the 2025 save. A 2025
+save is held to the 2024 save alone: its stair runs are the 2026 and 2027
+reference, so they are not compared, though the number it draws is still
+checked. Measure's script runs it beside each such sample, and the job
 `same-project-gates` turns the run red on a difference, a missing file, an
 unknown project, fewer bodies than the sample holds, or a check that compared
 nothing. That job also holds #1428's Areas gate (rac_advanced's Areas across its
@@ -229,17 +235,24 @@ not remove Compare's report.
   the default export, and a flag such as `--phase` makes a save refuse. Each gate
   says in a notice that it compared nothing, so the run a gate judges has no
   `ifc_flags`. A whitespace-only value is no flag.
-- **What it cannot catch**: an error the earlier save shares with the 2026 or
-  2027 read. Nothing in it is a Revit export. It compares bodies, not
-  quantities or property sets. No 2026 or 2027 held-out model holds an
-  `IfcBeam`, so the beam reader has run only on two Autodesk samples saved by
-  earlier releases.
+- **What it cannot catch**: an error the earlier save shares with the 2025,
+  2026 or 2027 read. Nothing in it is a Revit export. It compares bodies, not
+  quantities or property sets. No 2026 or 2027 held-out model, and none of the
+  25 models with Revit's own 2025 exports (the R2025 models and RE1
+  Architecture), holds an `IfcBeam` or a tread landing, so the beam and landing
+  readers have run only on two Autodesk samples saved by earlier releases; and
+  those 25 models hold no floor, ceiling or roof with an arc, so no Revit
+  export checks the arc reading on 2025 either (RE-345). Shaft openings are cut
+  on 2024 only, for the same reason: the only two measured on 2025 cut nothing.
 - **A difference** is a reader that is wrong or a project that really differs
   between saves. Narrow the reader until it is never wrong and let what it
   leaves out stay a box, counted (`left as boxes`); do not allowlist.
-- The output carries, for rac_advanced's ceiling 147534 and floor 139803, the
+- The output carries, for rac_advanced's ceiling 147534, floor 139803 and roof
+  201262 and the other elements whose sketch holds an arc (`ARC_OWNERS`), the
   class, `BodySource`, `ProfileResolved`, volume and vertex count in every save,
-  and compares sketch outlines with the 2025 save as well, without scoring.
+  counts how many of them are compared equal as outlines, and compares sketch
+  outlines of a 2026 or 2027 save with the 2025 save as well, without scoring.
+  The floor, roof and ceiling are required equal on 2025 (`REQUIRED`).
 
 ## The semantic merge check
 
@@ -593,8 +606,13 @@ pull request.
 ## Releases
 
 Tags `v*` are protected by the `release-tags` ruleset: only a maintainer can
-create one, and none can be moved or deleted. Pushing a tag runs the publish
-workflow, which builds and verifies the wheels and, through the
+create one, and none can be moved or deleted (the ruleset's bypass list is the
+repository administrator role, which a release never uses). Pushing a tag runs
+the publish workflow, whose first job refuses a tag that is lightweight, not
+verified as signed, on neither `main` nor a `hotfix/*` branch, out of step with
+a version file, or on a commit whose `CI passed` is red or that CI never ran on
+(RELEASE.md, step 10). Then it
+builds and verifies the wheels and, through the
 release-binaries workflow, the CLI archives and the container image, and
 publishes them with build-provenance attestations. Pushing the tag is the
 release decision, so the run asks for no approval: the `crates-io` and `pypi`

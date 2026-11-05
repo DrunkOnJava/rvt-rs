@@ -87,6 +87,14 @@ pub struct Options {
     /// then noted on the handle as a [`CopyRule::Native`] value source of its
     /// element (#1360), while the handle records them. `None` notes nothing.
     pub value_source: Option<&'static str>,
+    /// Whether a history whose root holds deferred `Episode` pointers is read
+    /// ([`native_index::creation_episodes_with_deferred`], RE-342). Off by
+    /// default and set by no reader of the export path: with it off such a
+    /// file fails the whole preamble as it always has (every phase, parameter
+    /// and routing reader refuses it). Only the research probe of
+    /// RE-342, which reads saved graphics on a file of Revit 2015 to 2022 with
+    /// [`Self::releases`] widened, turns it on.
+    pub deferred_history_episodes: bool,
 }
 /// The default [`Options::max_group_bytes`]: one reassembled continuation
 /// group's bytes.
@@ -137,6 +145,7 @@ impl Default for Options {
             record_extras: false,
             keep_body: false,
             value_source: None,
+            deferred_history_episodes: false,
         }
     }
 }
@@ -351,7 +360,12 @@ pub(crate) struct Preamble {
     es_catalog:
         std::result::Result<(crate::native_extensible_storage::Catalog, serde_json::Value), String>,
 }
-pub(crate) fn read_preamble(file: &mut RevitFile) -> Result<Preamble> {
+/// The preamble of `file` and the number of deferred history episode pointers
+/// it read. With `deferred` unset (every reader of the export path) a history
+/// that holds any fails the preamble, whatever the phase, parameter and
+/// routing readers built on it; with it set (the research route of RE-342,
+/// [`Options::deferred_history_episodes`]) the pointers are read.
+pub(crate) fn read_preamble(file: &mut RevitFile, deferred: bool) -> Result<(Preamble, usize)> {
     let mut global_streams = BTreeMap::new();
     let mut read = |name: &str| -> Result<Vec<u8>> {
         let (bytes, envelope) = read_single_envelope(file, name)?;
@@ -359,20 +373,28 @@ pub(crate) fn read_preamble(file: &mut RevitFile) -> Result<Preamble> {
         Ok(bytes)
     };
     let registry = schema_registry::parse(&read("Formats/Latest")?)?;
-    let episodes = native_index::creation_episodes(&read("Global/History")?, &registry)?;
+    let history = read("Global/History")?;
+    let (episodes, deferred_pointers) = if deferred {
+        native_index::creation_episodes_with_deferred(&history, &registry)?
+    } else {
+        (native_index::creation_episodes(&history, &registry)?, 0)
+    };
     let index = native_index::parse(&read("Global/ElemTable")?, &registry, &episodes)?;
     let increments =
         native_index::storage_increments(&read("Global/DocumentIncrementTable")?, &registry)?;
     let es_catalog = read("Global/Latest")
         .and_then(|bytes| crate::native_es_catalog::decode(&bytes, &registry))
         .map_err(|error| format!("{error:#}"));
-    Ok(Preamble {
-        global_streams,
-        registry,
-        index,
-        increments,
-        es_catalog,
-    })
+    Ok((
+        Preamble {
+            global_streams,
+            registry,
+            index,
+            increments,
+            es_catalog,
+        },
+        deferred_pointers,
+    ))
 }
 /// The partition each of `ids` routes to by its stored revision
 /// (`native_index::route_episode`), the partition [`extract`] reads its
@@ -383,7 +405,7 @@ pub(crate) fn routed_partitions(
     file: &mut RevitFile,
     ids: &BTreeSet<u64>,
 ) -> Result<BTreeMap<u64, u32>> {
-    let preamble = file.native_preamble()?;
+    let preamble = file.native_preamble(false)?;
     let present: BTreeSet<u32> = file
         .stream_names()
         .iter()
@@ -541,13 +563,15 @@ pub(crate) struct DefinitionPass {
 }
 
 /// The [`Options`] a [`DefinitionPass`] depends on: its budgets, graph
-/// classes and releases (it sets the channel and clears the selections).
+/// classes, releases and whether deferred history episodes are read (it sets
+/// the channel and clears the selections).
 pub(crate) type DefinitionKey = (
     usize,
     usize,
     usize,
     Option<BTreeSet<String>>,
     std::ops::RangeInclusive<u32>,
+    bool,
 );
 
 /// The handle's [`DefinitionPass`] for `options`, read if it has none.
@@ -569,6 +593,7 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
         record_extras: _,
         keep_body: _,
         value_source: _,
+        deferred_history_episodes,
     } = options;
     let key: DefinitionKey = (
         *max_group_bytes,
@@ -576,6 +601,7 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
         *max_graph_objects,
         graph_classes.clone(),
         releases.clone(),
+        *deferred_history_episodes,
     );
     if let Some(cached) = file.native_definitions(&key) {
         return Ok(cached);
@@ -768,7 +794,7 @@ fn extract_records(
         options.releases.contains(&version),
         "this native reader is not measured on Revit {version}"
     );
-    let preamble = file.native_preamble()?;
+    let preamble = file.native_preamble(options.deferred_history_episodes)?;
     let Preamble {
         global_streams,
         registry,
