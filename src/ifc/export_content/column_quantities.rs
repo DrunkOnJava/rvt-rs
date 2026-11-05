@@ -49,9 +49,9 @@
 //! the pass writes those two and no other, from the slab's plan outline
 //! clipped to the column's section.
 //!
-//! A round column (its type holds one length parameter, `Diameter`, equal to
-//! both sides of its record box) that no pair joins gets its
-//! `OuterSurfaceArea`, the circumference times the box's height, which is
+//! A round column (its type's named lengths are `Diameter`, equal to both
+//! sides of its record box, and at most the family's two zero offsets) that no
+//! pair joins gets its `OuterSurfaceArea`, the circumference times the box's height, which is
 //! Revit's exactly (RE-353). Its `CrossSectionArea`, `GrossVolume` and
 //! `NetVolume` are not the circle's and stay out: that is one column on each
 //! of the two office files, the same column.

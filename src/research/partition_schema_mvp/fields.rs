@@ -222,7 +222,7 @@ pub const COLUMN_CLEAN_PARTNERS_FIELD: &str = "m_column_clean_partners";
 pub const COLUMN_RECTANGLE_FIELDS: [&str; 2] = ["m_column_rect_b", "m_column_rect_h"];
 
 /// Field holding the diameter, feet, of a column's round section, read from
-/// its type's one length parameter `Diameter`
+/// its type's length parameter `Diameter` (with at most the family's two zero offsets)
 /// ([`crate::partition_type_parameters::round_section`], RE-353).
 pub const COLUMN_DIAMETER_FIELD: &str = "m_column_round_diameter";
 

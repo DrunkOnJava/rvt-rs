@@ -2,12 +2,16 @@
 //! round column (3053209), for finding why its `OuterSurfaceArea`, the
 //! circumference times the height, is not written.
 //!
-//! FACT under test: the column's type (3053174) holds one named length
-//! parameter, `Diameter` (RE-291), so the decode carries
-//! `m_column_round_diameter`, its pair steps are read and name nothing, and
-//! its body is the record box. The decode of run 42120085285 carried the pair
-//! fields and no diameter, so the type's named lengths are listed, with every
-//! copy of every length entry of its value blocks at full precision.
+//! FACT under test: the column's type (3053174) holds `Diameter` and no `b`
+//! or `h`, so the decode carries `m_column_round_diameter`; its pair steps
+//! are read and name nothing, and its body is the record box. The decode of
+//! run 42120085285 carried the pair fields and no diameter. Run 42121438036
+//! found why: the type's named lengths are `Diameter` (0.4921259842519685 ft)
+//! and the round column family's `Offset Base` and `Offset Top`, both 0, in
+//! each of the two partitions that hold the type, and the reader took the
+//! type to be round only if `Diameter` was its sole named length. The type's
+//! named lengths are listed, with every copy of every length entry of its
+//! value blocks at full precision.
 //!
 //! Output:
 //!   element <id> class <class>

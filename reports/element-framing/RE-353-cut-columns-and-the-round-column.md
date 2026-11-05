@@ -44,7 +44,7 @@ Expected from section 2 on the office at permit: 17 of the 18. Left out, with th
 
 ## 4. The round column
 
-`Round Column:PI-6` (3053209; type 3053174, whose one named length parameter is `Diameter`, 0.492126 ft, 150 mm; height 6,000 mm; no pair joins it) is one column on each of the two office files, the same column. Revit's export writes it as an extrusion of three arcs with:
+`Round Column:PI-6` (3053209; type 3053174, whose named lengths are `Diameter`, 0.492126 ft, 150 mm, and the round column family's `Offset Base` and `Offset Top`, both 0, in each of the two partitions that hold the type: `probe_re353_round_column`, run 42121438036, which RE-291 took to be `Diameter` alone; height 6,000 mm; no pair joins it) is one column on each of the two office files, the same column. Revit's export writes it as an extrusion of three arcs with:
 
 | quantity | Revit | the circle's | ratio |
 |---|---:|---:|---:|
@@ -54,7 +54,7 @@ Expected from section 2 on the office at permit: 17 of the 18. Left out, with th
 | `GrossVolume` | 0.10595871038880049 m³ | 0.1060287520 | 0.99934 |
 | `NetVolume` | 0.10600540431829328 m³ | 0.1060287520 | 0.99978 |
 
-- `OuterSurfaceArea` is the circumference times the height, exactly. rvt-rs writes it where the type's one named length parameter is `Diameter`, equal to both sides of the record box, and no pair joins the column. That is one column on each of the two files, the same column; no other measured file has a round column, so this is a formula checked on one column, not a rule measured across several.
+- `OuterSurfaceArea` is the circumference times the height, exactly. rvt-rs writes it where the type's named lengths are `Diameter`, equal to both sides of the record box, and at most `Offset Base` and `Offset Top` each exactly 0 (any other named length, `b` or `h` among them, leaves it out), and no pair joins the column. That is one column on each of the two files, the same column; no other measured file has a round column, so this is a formula checked on one column, not a rule measured across several.
 - `CrossSectionArea` and `GrossVolume` (which is the area times the length to 1e-15) are not the circle's: Revit's extrusion area is 0.99934 of it. No whole numbers of chords for the three arcs give a tessellation that reproduces it: a search over 1 to 400 chords of the half circle and 1 to 300 of each quarter finds the nearest at 8e-12 with 319, 13 and 48 chords, about what chance gives for 18 million combinations and not a tessellation anyone would choose. The area is the exporter's own, not a function of the diameter that rvt-rs has.
 - `NetVolume` is the element's computed volume parameter (section 1), 0.99978 of the cylinder's. It differs from `GrossVolume`, and from the circle's, by amounts no formula of the diameter and the height gives; the same column would need its joins and cuts, and none is recorded.
 
