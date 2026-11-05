@@ -663,6 +663,10 @@ sampleTest(
 sampleTest('a worker that ends without a word is found, and loading does not show for ever', async ({ page }) => {
   test.setTimeout(300_000);
   const expected = oracle();
+  // A read of Einhoven takes a quarter of a second, which the test cannot be sure to beat when
+  // it ends the worker (run 42122623374 ended a worker that had answered): the file is held
+  // back four seconds, so the worker is still reading.
+  await shapeReads(page, { delayMs: 4_000, times: 99 });
   await watchReadWorkers(page);
   await open(page, sample!);
   const [a, b] = await withParameters(page, expected, 2);
