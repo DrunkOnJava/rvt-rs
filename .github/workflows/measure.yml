@@ -7,9 +7,12 @@
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f families=true
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f samples=true -f timing=true
 #
-# Each side builds rvt-ifc, rvt-gltf and rvt-info at its ref and runs
-# tools/ci/measure-reference-models.sh (taken from the workflow's own ref,
-# so both sides are scored by the same scorers). The results are uploaded
+# Each side is built once, in a job of its own (Build), at its ref: rvt-ifc,
+# rvt-gltf and rvt-info, and the MCP server and the probes where the run needs
+# them. They go to the side's shards as the artifact measure-bin-head or
+# measure-bin-base, and each shard runs tools/ci/measure-reference-models.sh
+# on them (the script is taken from the workflow's own ref, so both sides are
+# scored by the same scorers). The results are uploaded
 # as artifacts, and the compare job writes the differences between the two
 # sides to the run summary. Local-only models (Snowdon Towers and others
 # without a redistribution licence) are never fetched here. rvt-info also
@@ -263,12 +266,14 @@ jobs:
   # included, 14.7, against 6.1 and 9.0 for the office files. A run given
   # `models`, `sample_years` or `probe_pair_release` keeps one shard, since a
   # pair probe needs both releases' samples on one runner. Compare merges the
-  # shards back into the measure-head and measure-base artifacts.
+  # shards back into the measure-head and measure-base artifacts. The build job
+  # builds each side once for all its shards.
   plan:
     name: Plan the shards
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
+      sides: ${{ steps.plan.outputs.sides }}
       timing: ${{ steps.plan.outputs.timing }}
       base: ${{ steps.plan.outputs.base }}
       head_sha: ${{ steps.refs.outputs.head }}
@@ -362,6 +367,7 @@ jobs:
           sides = ["head", "base"] if base else ["head"]
           include = [dict(side=side, **s) for side in sides for s in shards]
           print("matrix=" + json.dumps({"include": include}))
+          print("sides=" + json.dumps(sides))
           print("base=" + ("true" if base else "false"))
           # The timing jobs' files, in shards of about equal time. A unit's
           # seconds are its files' medians, base plus head, times the three
@@ -410,19 +416,27 @@ jobs:
           print("timing=" + json.dumps({"include": timing}))
           PY
 
-  measure:
-    name: Measure ${{ matrix.side }} ${{ matrix.shard }}
+  # Each side is built once, here, and every shard of the side takes the
+  # binaries from the artifact measure-bin-head or measure-bin-base. Before
+  # this, every shard installed Rust, restored rust-cache and, all of them at
+  # once on a commit the binary cache had not seen, built the same binaries:
+  # over 36 dispatched runs Build was 150 of 720 job-minutes (#1457), and a run
+  # of 12 shards built 12 times. A shard now runs no cargo, no rustc and no
+  # build script of the measured ref. A side whose build fails fails the run:
+  # that side's shards fail at the artifact download, the other side's still
+  # run, Compare (which needs every shard) is skipped, and the gates' job
+  # writes NOT MEASURED.
+  build:
+    name: Build ${{ matrix.side }}
     needs: plan
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 60
     strategy:
+      # The other side's build still finishes, and saves the binary cache.
       fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+      matrix:
+        side: ${{ fromJSON(needs.plan.outputs.sides) }}
     steps:
-      - name: Workflow tools
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
       - name: Measured source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -447,8 +461,197 @@ jobs:
           # request) does not save either: that code's build scripts run
           # here, and a cache they wrote would be restored by every later
           # main run.
-          # One shard of a side saves it; the others build the same code.
-          save-if: ${{ github.ref == 'refs/heads/main' && (matrix.shard == 'rest' || matrix.shard == 'all') && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '') }}
+          # This job is the only one of a side, so it saves.
+          save-if: ${{ github.ref == 'refs/heads/main' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '') }}
+      # The three binaries every run of a commit builds alike (about 70 s of a
+      # cold build) are kept under the commit's full SHA, the toolchain and the
+      # profile: what the cache holds is what that code builds to, so a run of
+      # any ref may save it, and only a run of that commit restores it. A ref
+      # that is not a full SHA is built each time. The probe examples are
+      # always built.
+      # #1327: the MCP server (rvt-rs-mcp, a crate of its own, rustc 1.88 or
+      # later) is built too when the run scores its answers, which a run that
+      # names other scorers does not, and the key says which set of binaries
+      # the entry holds. A ref older than the crate has none to build.
+      - name: Binary cache key
+        id: binaries-key
+        shell: bash
+        env:
+          MEASURED: ${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}
+          SCORERS: ${{ inputs.scorers }}
+        run: |
+          mcp=false
+          case " $SCORERS " in
+            "  " | *" mcp_answers_vs_ifc "*) mcp=true ;;
+          esac
+          echo "mcp=$mcp" >> "$GITHUB_OUTPUT"
+          if [[ "$MEASURED" =~ ^[0-9a-f]{40}$ ]]; then
+            suffix=""
+            [ "$mcp" = true ] && suffix="-mcp"
+            echo "key=rvt-bin-v2-$MEASURED-$RUNNER_OS-$RUNNER_ARCH-$(rustc -vV | sha256sum | cut -c1-16)-ci$suffix" >> "$GITHUB_OUTPUT"
+          else
+            echo "the measured ref is not a full SHA, so its binaries are built each time"
+          fi
+      - name: Restore the binaries
+        id: binaries
+        if: steps.binaries-key.outputs.key != ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            measured/target/ci/rvt-ifc
+            measured/target/ci/rvt-gltf
+            measured/target/ci/rvt-info
+            measured/target/ci/rvt-rs-mcp
+          key: ${{ steps.binaries-key.outputs.key }}
+      # Builds what is missing, then copies exactly what the shards run into
+      # ../bin-out: the binaries, and each probe example that exists at this
+      # ref, without cargo's hashed copies and dependency files.
+      - name: Build
+        id: build
+        working-directory: measured
+        run: |
+          if [ "$BINARIES_CACHED" = true ]; then
+            echo "rvt-ifc, rvt-gltf and rvt-info (and rvt-rs-mcp, where the key says so) restored from the binary cache"
+          else
+            cargo build --profile ci --bin rvt-ifc --bin rvt-gltf --bin rvt-info
+            # The server is optional: a ref without the crate, or one whose
+            # server does not build, leaves the answers NOT MEASURED on this
+            # side and fails no other scorer.
+            if [ "$WITH_MCP" = true ]; then
+              if [ ! -f rvt-mcp/Cargo.toml ]; then
+                echo "::warning::the measured ref has no rvt-mcp crate: the MCP server's answers are NOT MEASURED on this side"
+              elif cargo build --profile ci -p rvt-rs-mcp --bin rvt-rs-mcp; then
+                echo "mcp_built=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "::warning::rvt-rs-mcp did not build at the measured ref: the MCP server's answers are NOT MEASURED on this side"
+              fi
+            fi
+          fi
+          # A base older than a probe has no such example; it is skipped there.
+          # Probes live in the rvt-probes crate (probes/examples) since it was
+          # split out; a ref from before that has them in examples/. Both build
+          # into the workspace's target/ci/examples.
+          examples=()
+          probes=()
+          probe_names=()
+          for probe in $PROBE; do
+            if [ -f "probes/examples/$probe.rs" ]; then
+              probes+=(--example "$probe")
+              probe_names+=("$probe")
+            elif [ -f "examples/$probe.rs" ]; then
+              examples+=(--example "$probe")
+              probe_names+=("$probe")
+            else
+              echo "::notice::$probe does not exist at the measured ref: skipped on this side"
+            fi
+          done
+          if [ "${#examples[@]}" -gt 0 ]; then
+            cargo build --profile ci "${examples[@]}"
+          fi
+          if [ "${#probes[@]}" -gt 0 ]; then
+            cargo build --profile ci -p rvt-probes "${probes[@]}"
+          fi
+          out=../bin-out
+          mkdir -p "$out/examples"
+          for bin in rvt-ifc rvt-gltf rvt-info; do
+            cp "target/ci/$bin" "$out/$bin"
+          done
+          if [ "$WITH_MCP" = true ] && [ -f target/ci/rvt-rs-mcp ]; then
+            cp target/ci/rvt-rs-mcp "$out/rvt-rs-mcp"
+          fi
+          for probe in "${probe_names[@]}"; do
+            cp "target/ci/examples/$probe" "$out/examples/$probe"
+          done
+          # The commit the binaries are of, which each shard checks against its
+          # own checkout of the ref (a ref that is not a full SHA can move).
+          git rev-parse HEAD > "$out/built-commit.txt"
+          {
+            echo "### Binaries of the $SIDE side"
+            echo
+            echo "- commit: $(git log -1 --format='%H %s')"
+            echo "- rvt-ifc, rvt-gltf and rvt-info: $([ "$BINARIES_CACHED" = true ] && echo 'restored from the binary cache' || echo 'built')"
+            echo "- rvt-rs-mcp: $([ -f "$out/rvt-rs-mcp" ] && echo 'in the artifact' || echo 'not in the artifact (the run does not score it, or the ref has no server that builds)')"
+            echo "- probes: ${probe_names[*]:-none}"
+            echo
+            echo '```'
+            (cd "$out" && du -a -k . | sort -k2)
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+        env:
+          PROBE: ${{ inputs.probe }}
+          SIDE: ${{ matrix.side }}
+          BINARIES_CACHED: ${{ steps.binaries.outputs.cache-hit }}
+          WITH_MCP: ${{ steps.binaries-key.outputs.mcp }}
+      # One job a side saves the key. A run from a pull request saves nothing,
+      # its cache being its own. A key that says the server is in it is saved
+      # only when the server was built. Head and base at one commit save the
+      # same key from two jobs: the second is told it is taken.
+      - name: Save the binaries
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && steps.binaries-key.outputs.key != '' && steps.binaries.outputs.cache-hit != 'true' && (steps.binaries-key.outputs.mcp != 'true' || steps.build.outputs.mcp_built == 'true') }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            measured/target/ci/rvt-ifc
+            measured/target/ci/rvt-gltf
+            measured/target/ci/rvt-info
+            measured/target/ci/rvt-rs-mcp
+          key: ${{ steps.binaries-key.outputs.key }}
+      # Artifacts do not keep the executable bit; each shard sets it again. The
+      # names match neither measure-head-* nor measure-base-*, which Compare and
+      # the gates download.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: measure-bin-${{ matrix.side }}
+          path: bin-out
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 3
+
+  measure:
+    name: Measure ${{ matrix.side }} ${{ matrix.shard }}
+    needs: [plan, build]
+    # Also when a Build job failed: a shard of that side then fails at the
+    # artifact download, and the other side's shards still run, so its results
+    # and the gates' verdict are not lost with it. The run is red either way,
+    # and Compare, which needs every shard, is skipped.
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Workflow tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Measured source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}
+          path: measured
+      # The binaries come from this side's Build job (artifacts do not keep the
+      # executable bit). Downloaded after the measured checkout, which cleans
+      # its path. A ref that is not a full SHA can move between the two jobs;
+      # then the binaries and this source would be two commits.
+      - name: Measured binaries
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: measure-bin-${{ matrix.side }}
+          path: measured/target/ci
+      - name: Check the binaries are of this source, and make them executable
+        shell: bash
+        run: |
+          built=$(cat measured/target/ci/built-commit.txt)
+          have=$(git -C measured rev-parse HEAD)
+          if [ "$built" != "$have" ]; then
+            echo "::error::the binaries were built at $built and this shard's source is at $have: the ref moved during the run"
+            exit 1
+          fi
+          rm measured/target/ci/built-commit.txt
+          find measured/target/ci -type f -exec chmod +x {} +
+          git -C measured log -1 --format='%H %s' > measured-commit.txt
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -457,11 +660,11 @@ jobs:
       # The score cache (tools/ci/measure-cache.py, docs/maintaining.md): a
       # scorer or schema step whose every input is as it was in an earlier run
       # takes that run's output. Every run restores the newest cache of its
-      # shard, before the measured code builds; it is saved only where the
-      # Rust cache is (the workflow dispatched from main and the code measured
-      # main's, so a branch's build scripts can never write what a later main
-      # run reads), or under a name of its own that `score_cache` gives a run
-      # from any ref, which main's runs never read. Entries are named by what
+      # shard; it is saved only where the Rust cache is (the workflow
+      # dispatched from main and the code measured main's, so that code of
+      # another ref never writes what a later main run reads), or under a name
+      # of its own that `score_cache` gives a run from any ref, which main's
+      # runs never read. Entries are named by what
       # they were made from, so the sides and the flags share them. Each shard
       # keeps a cache of its own, named by the shard whatever the shard is
       # called, and ends its name with a `.` that no shard name holds, so one
@@ -511,107 +714,11 @@ jobs:
             echo "MEASURE_CACHE_WORK=$RUNNER_TEMP/score-cache-work" >> "$GITHUB_ENV"
           fi
           echo "score cache: enabled=$enabled save=$save key prefix $own$SHARD."
-      # The three binaries every shard and every run of a commit builds alike
-      # (about 70 s of each job) are kept under the commit's full SHA, the
-      # toolchain and the profile: what the cache holds is what that code
-      # builds to, so a run of any ref may save it, and only a run of that
-      # commit restores it. A ref that is not a full SHA is built each time.
-      # The probe examples are always built.
-      # #1327: the MCP server (rvt-rs-mcp, a crate of its own, rustc 1.88 or
-      # later) is built too when the run scores its answers, which a run that
-      # names other scorers does not, and the key says which set of binaries
-      # the entry holds. A ref older than the crate has none to build.
-      - name: Binary cache key
-        id: binaries-key
-        shell: bash
-        env:
-          MEASURED: ${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}
-          SCORERS: ${{ inputs.scorers }}
-        run: |
-          mcp=false
-          case " $SCORERS " in
-            "  " | *" mcp_answers_vs_ifc "*) mcp=true ;;
-          esac
-          echo "mcp=$mcp" >> "$GITHUB_OUTPUT"
-          if [[ "$MEASURED" =~ ^[0-9a-f]{40}$ ]]; then
-            suffix=""
-            [ "$mcp" = true ] && suffix="-mcp"
-            echo "key=rvt-bin-v2-$MEASURED-$RUNNER_OS-$RUNNER_ARCH-$(rustc -vV | sha256sum | cut -c1-16)-ci$suffix" >> "$GITHUB_OUTPUT"
-          else
-            echo "the measured ref is not a full SHA, so its binaries are built each time"
-          fi
-      - name: Restore the binaries
-        id: binaries
-        if: steps.binaries-key.outputs.key != ''
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            measured/target/ci/rvt-ifc
-            measured/target/ci/rvt-gltf
-            measured/target/ci/rvt-info
-            measured/target/ci/rvt-rs-mcp
-          key: ${{ steps.binaries-key.outputs.key }}
-      - name: Build
-        id: build
-        working-directory: measured
-        run: |
-          git log -1 --format='%H %s' > ../measured-commit.txt
-          if [ "$BINARIES_CACHED" = true ]; then
-            echo "rvt-ifc, rvt-gltf and rvt-info (and rvt-rs-mcp, where the key says so) restored from the binary cache"
-          else
-            cargo build --profile ci --bin rvt-ifc --bin rvt-gltf --bin rvt-info
-            # The server is optional: a ref without the crate, or one whose
-            # server does not build, leaves the answers NOT MEASURED on this
-            # side and fails no other scorer.
-            if [ "$WITH_MCP" = true ]; then
-              if [ ! -f rvt-mcp/Cargo.toml ]; then
-                echo "::warning::the measured ref has no rvt-mcp crate: the MCP server's answers are NOT MEASURED on this side"
-              elif cargo build --profile ci -p rvt-rs-mcp --bin rvt-rs-mcp; then
-                echo "mcp_built=true" >> "$GITHUB_OUTPUT"
-              else
-                echo "::warning::rvt-rs-mcp did not build at the measured ref: the MCP server's answers are NOT MEASURED on this side"
-              fi
-            fi
-          fi
-          # A base older than a probe has no such example; it is skipped there.
-          # Probes live in the rvt-probes crate (probes/examples) since it was
-          # split out; a ref from before that has them in examples/. Both build
-          # into the workspace's target/ci/examples.
-          examples=()
-          probes=()
-          for probe in $PROBE; do
-            if [ -f "probes/examples/$probe.rs" ]; then
-              probes+=(--example "$probe")
-            elif [ -f "examples/$probe.rs" ]; then
-              examples+=(--example "$probe")
-            fi
-          done
-          if [ "${#examples[@]}" -gt 0 ]; then
-            cargo build --profile ci "${examples[@]}"
-          fi
-          if [ "${#probes[@]}" -gt 0 ]; then
-            cargo build --profile ci -p rvt-probes "${probes[@]}"
-          fi
-        env:
-          PROBE: ${{ inputs.probe }}
-          BINARIES_CACHED: ${{ steps.binaries.outputs.cache-hit }}
-          WITH_MCP: ${{ steps.binaries-key.outputs.mcp }}
-      # Every shard of a commit misses at once and saves the same key; the one
-      # that reserves it first stores it and the others are told it is taken.
-      # A run from a pull request saves nothing, its cache being its own. A key
-      # that says the server is in it is saved only when the server was built.
-      - name: Save the binaries
-        if: ${{ success() && github.event_name == 'workflow_dispatch' && steps.binaries-key.outputs.key != '' && steps.binaries.outputs.cache-hit != 'true' && (steps.binaries-key.outputs.mcp != 'true' || steps.build.outputs.mcp_built == 'true') }}
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            measured/target/ci/rvt-ifc
-            measured/target/ci/rvt-gltf
-            measured/target/ci/rvt-info
-            measured/target/ci/rvt-rs-mcp
-          key: ${{ steps.binaries-key.outputs.key }}
-      # Restored after the Build step, so that no build script of the measured
-      # ref ever sees a writable score cache.
+      # No build script of the measured ref runs in a shard: the Build job
+      # runs them, on a runner that holds no score cache. What the shard does
+      # run is the measured ref's binaries and, for a probe, its scorers, with
+      # this cache writable, so the rule on saving it (main's own code only) is
+      # as it was before the build moved out of the shard.
       - name: Restore the score cache
         if: steps.score-cache-key.outputs.enabled == 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -661,8 +768,10 @@ jobs:
           esac
       - name: Save the BIM4LCA office models
         # Saved only by a job that measured main's own code, as rust-cache's
-        # save-if: a job building another ref ran that ref's build scripts
-        # before the fetch, and they could have written into the folder.
+        # save-if. The rule was made when a job building another ref ran that
+        # ref's build scripts before the fetch, which could have written into
+        # the folder; the build is a job of its own now, and the rule is kept
+        # as it was.
         if: matrix.nordic && github.ref == 'refs/heads/main' && steps.bim4lca-cache.outputs.cache-hit != 'true' && steps.bim4lca.outputs.ok == 'true' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '')
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -789,7 +898,9 @@ jobs:
           MCP_REQUIRE_SPACE_KIND: ${{ matrix.side != 'base' && '1' || '' }}
           # A run of the samples checks the Areas of rac_advanced across its
           # 2024 to 2027 saves on the head side (main writes none on 2025 to
-          # 2027) whenever all four samples are in it, and says so when not.
+          # 2027) whenever all four samples are in it, and its 2021 save against
+          # its 2022 save (main writes none on 2021) whenever both are, and says
+          # so when not.
           AREAS_ACROSS_SAVES: ${{ matrix.side != 'base' && matrix.samples && '1' || '' }}
           RVT_SCORER_FINE_MESH: ${{ inputs.fine_mesh && '1' || '' }}
           FAMILY_DIR: ${{ matrix.families && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
@@ -850,6 +961,8 @@ jobs:
           name: measure-${{ matrix.side }}-${{ matrix.shard }}
           path: results
           if-no-files-found: error
+          # A re-run of all jobs uploads the same names again.
+          overwrite: true
           # Compare re-uploads them merged as measure-head and measure-base.
           retention-days: 7
 
@@ -858,8 +971,9 @@ jobs:
   # against (RE-341, RE-345), nor of an Area on 2025 to 2027 (#1261, #1194), so
   # each 2025, 2026 and 2027 save of rac_advanced, rac_basic and rst_basic is
   # held to the same project's earlier 2024 and 2025 saves
-  # (tools/re/bodies_across_saves.py) and rac_advanced's Areas to
-  # its 2024 save's (tools/re/areas_across_saves.py). The measuring script runs
+  # (tools/re/bodies_across_saves.py) and rac_advanced's Areas to its 2024
+  # save's, its 2021 save's to its 2022 save's (#1434;
+  # tools/re/areas_across_saves.py). The measuring script runs
   # both beside the samples and writes their files; this job reads the head
   # side's shards and fails on a difference, a missing file or a check that did
   # not run for want of one. It is a job of its own, with a step for each gate
@@ -870,9 +984,15 @@ jobs:
   # 2026 or 2027 sample, the `scorers` excluding it, a run without the earlier saves,
   # a run with `ifc_flags`) says so in a notice and in the run summary. Measure is not a required check:
   # the failure is read before landing, by the landing rule.
+  # A failed Build job of the head side leaves no head results to read: the two
+  # checks are then left out (they would fail on a missing directory, which
+  # says nothing) and the verdict, written all the same, reads NOT MEASURED. A
+  # failed Build job of the base side leaves the head results, which are
+  # checked as always; the verdict then reads NOT MEASURED, or fails if a
+  # result does, since a measure shard ended red.
   same-project-gates:
     name: Same-project gates
-    needs: [plan, measure]
+    needs: [plan, build, measure]
     # Also after a red shard: a difference the other shards found still has to reach
     # the verdict, which reads such a run as NOT MEASURED unless a result fails.
     if: ${{ !cancelled() && needs.plan.result == 'success' }}
@@ -895,7 +1015,23 @@ jobs:
         with:
           pattern: measure-head-*
           path: measure-head
+      - name: Head results
+        id: results
+        shell: bash
+        env:
+          BUILD_RESULT: ${{ needs.build.result }}
+          MEASURE_RESULT: ${{ needs.measure.result }}
+        run: |
+          if [ -n "$(find measure-head -type f -print -quit 2>/dev/null)" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            msg="No head shard left a result (the Build jobs ended $BUILD_RESULT, the measure shards $MEASURE_RESULT): the same-project gates compared nothing, and their verdict reads NOT MEASURED."
+            echo "::warning::$msg"
+            printf -- '- %s\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Bodies match the same project's earlier save
+        if: ${{ steps.results.outputs.present == 'true' }}
         shell: bash
         env:
           SAMPLES: ${{ inputs.samples }}
@@ -903,7 +1039,7 @@ jobs:
           SCORERS: ${{ inputs.scorers }}
         run: tools/ci/check-bodies-across-saves.sh measure-head
       - name: The Areas agree across rac_advanced's saves
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.results.outputs.present == 'true' }}
         shell: bash
         env:
           SAMPLES: ${{ inputs.samples }}
@@ -924,7 +1060,8 @@ jobs:
           SAMPLE_YEARS: ${{ inputs.sample_years }}
           SCORERS: ${{ inputs.scorers }}
           IFC_FLAGS: ${{ inputs.ifc_flags }}
-          MEASURE_RESULT: ${{ needs.measure.result }}
+          # A shard that ended red because its side's build did is told apart.
+          MEASURE_RESULT: ${{ needs.build.result != 'success' && format('{0}, the Build jobs ended {1}', needs.measure.result, needs.build.result) || needs.measure.result }}
         run: |
           sha=$(gh api "repos/$REPO/commits/$MEASURED" --jq .sha)
           # The `=` forms: `--saved-meshes` is a value ifc_flags takes.
@@ -965,6 +1102,13 @@ jobs:
           pattern: measure-base-*
           path: measure-base
           merge-multiple: true
+      # The head side's shards one by one, for what two shards write under one
+      # name: the merged measure-head keeps one of their areas_across_saves.txt,
+      # and a shard that skipped the gate must not hide the one that ran it.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: measure-head-*
+          path: measure-head-shards
       # The merged sides, under the names every reader downloads
       # (`gh run download -n measure-head`), uploaded before the summary so a
       # summary over GitHub's limit cannot lose them.
@@ -1011,13 +1155,28 @@ jobs:
               printf '%s\n' "${mcp_lines[@]}"
               echo
             fi
-            # The gate of the Areas of Revit 2025 to 2027: counts by field.
-            if [ -s measure-head/areas_across_saves.txt ]; then
-              echo "### Areas of rac_advanced across its 2024 to 2027 saves"
+            # The gates of the Areas of Revit 2025 to 2027 and of the 2021 save:
+            # counts by field, from each shard's own directory (the shard that
+            # ran a gate, not one that skipped it).
+            ran=0
+            for f in measure-head-shards/*/areas_across_saves.txt measure-head-shards/*/areas_across_saves_2021.txt; do
+              [ -s "$f" ] || continue
+              grep -q '^areas across saves: skipped:' "$f" && continue
+              case "$f" in
+                *_2021.txt) echo "### Areas of rac_advanced on its 2021 save against its 2022 save" ;;
+                *) echo "### Areas of rac_advanced across its 2024 to 2027 saves" ;;
+              esac
               echo
               echo '```'
-              cat measure-head/areas_across_saves.txt
+              cat "$f"
               echo '```'
+              echo
+              ran=1
+            done
+            if [ "$ran" = 0 ]; then
+              echo "### Areas of rac_advanced across its saves"
+              echo
+              echo "No shard ran an Areas gate (the Same-project gates job says why)."
               echo
             fi
             if [ -d measure-base ]; then
@@ -1112,6 +1271,7 @@ jobs:
           name: semantic-diff
           path: semantic-diff
           if-no-files-found: error
+          overwrite: true
           retention-days: 7
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         # Also when the summary failed for its size: the diff is then the
@@ -1120,6 +1280,7 @@ jobs:
         with:
           name: compare-scorer-diff
           path: scorer-diff.txt
+          overwrite: true
       # #1437: every IfcSpace of every export the head side wrote says what it
       # is (tools/re/space_kinds_vs_ifc.py). The total fails the job when a
       # model has no result or failed (judged on its counts, not its verdict
@@ -1191,7 +1352,7 @@ jobs:
             head
             base
           shared-key: measure
-          # As in the measure job: only main's own code saves the cache.
+          # As in the build job: only main's own code saves the cache.
           save-if: ${{ github.ref == 'refs/heads/main' && inputs.ref == '' && (inputs.base == '' || inputs.base == 'main') }}
       - name: Build both
         id: commits
@@ -1209,6 +1370,7 @@ jobs:
             head/target/ci/rvt-ifc
           retention-days: 3
           if-no-files-found: error
+          overwrite: true
 
   timing:
     name: Timing ${{ matrix.shard }} (${{ matrix.what }})
@@ -1281,6 +1443,7 @@ jobs:
             timing.md
             runner.txt
           if-no-files-found: error
+          overwrite: true
 
   # The shards' rows in one table, the format the single job wrote, ordered as
   # it did: the models, then the samples by name. A shard that left no table
@@ -1349,6 +1512,34 @@ jobs:
               print(f"::error::timing shard {shard['shard']} ({shard['what']}) left no table")
           raise SystemExit(1 if missing or not header else 0)
           PY
+      # timing-build checks out `inputs.base || 'main'` and `inputs.ref ||
+      # github.sha` as given, when it starts, while the shards of the measuring
+      # jobs use the commits the plan job resolved once. If a branch (main, for
+      # the base) moved in between, this table times a commit those jobs did
+      # not score; say so, in the log and under the table.
+      - name: The timed commits are the measured ones
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          PLAN_HEAD: ${{ needs.plan.outputs.head_sha }}
+          PLAN_BASE: ${{ needs.plan.outputs.base_sha }}
+          TIMED_HEAD: ${{ needs.timing-build.outputs.head }}
+          TIMED_BASE: ${{ needs.timing-build.outputs.base }}
+        run: |
+          compare() { # side planned timed: the timed value is "<sha> <subject>"
+            local timed=${3%% *}
+            if [ -z "$timed" ]; then
+              echo "::notice::timing-build left no $1 commit to compare with the measured one"
+            elif [[ ! "$2" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::notice::the $1 ref was not resolved to a full SHA ($2), so the timed commit $timed cannot be compared with the measured one"
+            elif [ "$timed" != "$2" ]; then
+              msg="the timing table's $1 is $timed, not $2, the commit the measuring jobs scored: the ref moved after the plan job resolved it"
+              echo "::warning::$msg"
+              printf -- '\n**Warning:** %s.\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+          compare head "$PLAN_HEAD" "$TIMED_HEAD"
+          compare base "$PLAN_BASE" "$TIMED_BASE"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: measure-timing
@@ -1356,3 +1547,4 @@ jobs:
             timing.md
             timing-runners.txt
           if-no-files-found: error
+          overwrite: true
