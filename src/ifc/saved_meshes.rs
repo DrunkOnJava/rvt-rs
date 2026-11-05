@@ -319,10 +319,10 @@ fn has_text_property(set: &PropertySet, name: &str, text: &str) -> bool {
 }
 
 /// The walls that embed a curtain wall (`WallEmbedWallGStep`), ElementId to
-/// entity index: drawn as plain or stepped extrusions, alone in their Tag, with nothing
-/// hosted in them and not in `taken`. Nothing where the model has no curtain
-/// wall, so a file without one reads no wall record here, or where the walls'
-/// native records are not read.
+/// entity index: drawn as plain or stepped extrusions, alone in their Tag,
+/// with nothing hosted in them and not in `taken`. Nothing where the model has
+/// no curtain wall, so a file without one reads no wall record here, or where
+/// the walls' native records are not read.
 fn embed_hosts(
     rf: &mut crate::RevitFile,
     model: &IfcModel,
