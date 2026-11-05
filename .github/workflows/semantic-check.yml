@@ -1,0 +1,178 @@
+# The semantic merge check (#1334): score a Measure run's semantic diff with
+# Jev (TypeSafe's judgment API) beside the pull request's own `## Summary` and
+# `## Testing`, and write the verdict as the check run `semantic diff
+# (advisory)` on the commit Measure measured. Jev is asked whether the export
+# moves in a way they do not state specifically: a described change passes, an
+# unexplained move fails, and so does one that only a general description covers
+# (Griffin, 2026-11-05). It is not in the ruleset and nothing is posted to the
+# pull request. An agent answers a `warn` in the pull request body and fixes a
+# `fail` by changing the code or by stating the change specifically in the
+# Summary (docs/maintaining.md).
+#
+# Trust. The key (TYPESAFE_API_KEY) is an environment secret of `jev`, whose
+# deployment branch policy allows only main. A workflow_run workflow always runs
+# from main's definition, so the job that holds the key is the one reviewed
+# here. It runs no measured code: it downloads the `semantic-diff` artifact of
+# the Measure run (JSON that tools/re/semantic_diff.py wrote from the dumps of
+# openly licensed models only), reads it as data, and passes nothing from it to
+# a shell.
+#
+# Which runs are scored. Only a Measure run whose event is workflow_dispatch and
+# whose head repository is this repository: a pull request from a fork runs its
+# own measure.yml and controls everything in its artifact, so any other run
+# posts nothing, with a notice. The check is written on the commit the artifact
+# says Measure measured (found again through the API as the head of a
+# same-repository pull request, else NOT MEASURED), never on a pull request's
+# live head, which may be another pull request's or have moved. Only a run that
+# measured every open model (no `models` filter, the office and the Revit 2025
+# models on) writes a check, and it can be a pass only if every one of them is
+# compared in full (tools/ci/jev_check.py); a context without the key is scored
+# with no call: NOT MEASURED, never a pass.
+#
+# Triggers. workflow_run on Measure (every dispatched run with a base and a
+# dump on both sides); workflow_dispatch with a run id, to score an older run or
+# score one again; and a pull request that changes this check, which runs it
+# without the environment (so without the key) on the newest dispatched Measure
+# run dispatched from the pull request's head and writes its keyless check run on
+# the pull request's head, to prove the plumbing before it reaches main. That run
+# measured some other commit (the one it was dispatched for), so the check is
+# NOT MEASURED and says so in its title: a check is never more than that on a
+# commit Measure did not measure. Re-run a scored run with `gh run rerun`, e.g.
+# after the Jev credit is topped up.
+
+name: Semantic check
+
+on:
+  workflow_run: # zizmor: ignore[dangerous-triggers] reads only a data artifact; see Trust above
+    workflows: [Measure]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: The Measure run whose semantic-diff artifact is scored
+        required: true
+  pull_request:
+    paths:
+      - .github/workflows/semantic-check.yml
+      - tools/ci/jev_check.py
+      - tools/re/semantic_diff.py
+
+permissions: {}
+
+concurrency:
+  group: semantic-check-${{ github.event.workflow_run.id || inputs.run_id || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  score:
+    name: Score the semantic diff
+    # A Measure run that failed or was cancelled has nothing to score.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # The key's environment, on main only: the branch policy refuses any other ref.
+    environment: ${{ github.ref == 'refs/heads/main' && 'jev' || '' }}
+    permissions:
+      actions: read # the Measure run's artifact
+      checks: write # the check run on the measured commit
+      contents: read # the tools' checkout
+      pull-requests: read # the Summary of the pull request whose head was measured
+    steps:
+      - name: Workflow tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools/ci/jev_check.py
+            tools/re/semantic_diff.py
+          sparse-checkout-cone-mode: false
+      - name: Find the Measure run
+        id: run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          INPUT_RUN_ID: ${{ inputs.run_id }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -euo pipefail
+          run_id=""
+          check_sha=""
+          case "$EVENT" in
+            workflow_run) run_id="$WORKFLOW_RUN_ID" ;;
+            workflow_dispatch) run_id="$INPUT_RUN_ID" ;;
+            pull_request)
+              if [ "$PR_HEAD_REPO" != "$REPO" ]; then
+                echo "::notice::a pull request from a fork: nothing is scored and no check run is written"
+              elif [[ "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+                # The keyless run of a pull request that changes this check: the newest
+                # Measure run dispatched from the pull request's head, and the check lands on
+                # that head, as NOT MEASURED (jev_check.py: it is not the measured commit).
+                # The other events write on the commit the artifact names.
+                run_id=$(gh api "repos/$REPO/actions/workflows/measure.yml/runs?head_sha=$PR_HEAD_SHA&status=success&event=workflow_dispatch&per_page=1" --jq '.workflow_runs[0].id // empty')
+                check_sha="$PR_HEAD_SHA"
+              fi
+              ;;
+          esac
+          if ! [[ "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "::notice::no Measure run to score, so no check run is written"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Only a Measure run that a maintainer dispatched in this repository is scored. A
+          # pull request from a fork runs its own measure.yml and controls the whole artifact,
+          # its measured commit included, so its run is never read and posts nothing.
+          read -r head_repo run_event run_path < <(gh api "repos/$REPO/actions/runs/$run_id" --jq '[(.head_repository.full_name // "unknown"), .event, .path] | @tsv')
+          if [ "$run_event" != workflow_dispatch ] || [ "$head_repo" != "$REPO" ] || [ "$run_path" != .github/workflows/measure.yml ]; then
+            echo "::notice::run $run_id is a $run_event run of $run_path in $head_repo: only a workflow_dispatch run of measure.yml in $REPO is scored, so no check run is written"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          count=$(gh api "repos/$REPO/actions/runs/$run_id/artifacts" --jq '[.artifacts[] | select(.name == "semantic-diff" and (.expired | not))] | length')
+          if [ "$count" = 0 ]; then
+            echo "::notice::Measure run $run_id has no semantic-diff artifact (no base, or no dump on either side), so no check run is written"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "found=true"
+            echo "run_id=$run_id"
+            echo "head_sha=$check_sha"
+          } >> "$GITHUB_OUTPUT"
+          echo "scoring Measure run $run_id (dispatched in $REPO)"
+      - name: Download the semantic diff
+        if: steps.run.outputs.found == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: semantic-diff
+          path: semantic-diff
+          run-id: ${{ steps.run.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Score the diff and write the check run
+        if: steps.run.outputs.found == 'true'
+        shell: bash
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ steps.run.outputs.run_id }}
+          HEAD_SHA: ${{ steps.run.outputs.head_sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          args=(semantic-diff --run-id "$RUN_ID" --repo "$REPO" --run-url "$RUN_URL" --post --result semantic-check.json --summary semantic-check.md)
+          [ -z "$HEAD_SHA" ] || args+=(--head-sha "$HEAD_SHA")
+          python3 tools/ci/jev_check.py "${args[@]}"
+          cat semantic-check.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && steps.run.outputs.found == 'true' }}
+        with:
+          name: semantic-check
+          path: |
+            semantic-check.json
+            semantic-check.md
+          if-no-files-found: ignore
+          retention-days: 7
