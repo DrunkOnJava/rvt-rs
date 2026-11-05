@@ -8,7 +8,10 @@
 # tools/re/bodies_across_saves.py holds the beams, tread landings, stair runs
 # and sketch outlines of each 2025, 2026 and 2027 save of rac_advanced,
 # rac_basic and rst_basic to the same project's earlier 2024 and 2025 saves
-# (the 2025 save to the 2024 save alone), and Measure's script
+# (the 2025 save to the 2024 save alone), and the doors and windows placed on
+# Revit's axes by the placement rule (RE-347, a fifth group: held to the 2024
+# save per element, with a floor per class and a ceiling on those the later save
+# leaves on the default axes, set per project and year), and Measure's script
 # writes its output beside each sample as bodies_across_saves.txt. This reads
 # those files from RESULTS_DIR (the head side's results, merged or one directory
 # for each shard) and fails on any
