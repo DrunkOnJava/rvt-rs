@@ -4265,15 +4265,13 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             })
         })
     };
+    // #1437: an Area is what its kind says, taken from its class, and not one
+    // of the outline sources an earlier release happened to give Areas.
     let is_area = |set: &Option<PropertySet>| {
         set.as_ref().is_some_and(|set| {
             set.properties.iter().any(|p| {
-                p.name == SPACE_OUTLINE_SOURCE_PROPERTY
-                    && matches!(&p.value, PropertyValue::Text(source)
-                        if source == SPACE_OUTLINE_AREA_BOUNDARY
-                            || source == SPACE_OUTLINE_AREA_BOUNDARY_JOINED
-                            || source == SPACE_OUTLINE_AREA_PLAN_TOPOLOGY
-                            || source == SPACE_OUTLINE_AREA_PLAN_TOPOLOGY_UNCHECKED)
+                p.name == SPACE_KIND_PROPERTY
+                    && matches!(&p.value, PropertyValue::Text(kind) if kind == SPACE_KIND_AREA)
             })
         })
     };
