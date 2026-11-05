@@ -80,10 +80,12 @@ class ExpectedSamples(unittest.TestCase):
 
     def test_a_narrow_range_holds_only_its_years(self):
         self.assertEqual(len(v.expected_samples("2026 2026")), 5)
+        self.assertEqual(len(v.expected_samples("2025 2025")), 5)
         self.assertEqual(v.expected_samples("2008 2023"), [])
 
-    def test_no_range_holds_all_ten(self):
-        self.assertEqual(len(v.expected_samples("")), 10)
+    def test_no_range_holds_all_fifteen(self):
+        self.assertEqual(len(v.expected_samples("")), 15)
+        self.assertEqual(len(v.expected_samples("2025")), 15)
 
 
 if __name__ == "__main__":

@@ -84,25 +84,42 @@ Revit 2019 (for 2015 to 2018, RE-181), 2023 (for 2019 to 2022, RE-180) and
 projects against Revit's own export of their release: BIMcollab's 2015
 structural example (RE-198) and Vitoria's 2018 `ALD26 Before` (RE-315, RE-319);
 2015's `rst_basic` is another model than its 2019 copy, so it is not measured.
-On 2026 and 2027 (RE-341) beams are drawn along their axes as on 2024 (on 2025
-they are not), stair runs as their steps and treads from their native records
-as on 2025, with the stair property sets and quantities read from them, and
-tread landings (not monolithic ones, which stay boxes) as on 2024 (not drawn on 2025); and the sketch lines' exact ends,
-curves and Sketch curve lists are read, so sketch-driven floors, ceilings and
-slabs take their outline from their lines and shaft openings are cut from
-floors and ceilings, as on 2024 and 2025. A roof there keeps the record-box
+On 2025, 2026 and 2027 (RE-341, RE-345) beams are drawn along their axes as on
+2024, tread landings (not monolithic ones, which stay boxes) as on 2024, and the
+sketch lines' exact ends, arcs and Sketch curve lists are read, so
+sketch-driven floors, ceilings and slabs take their outline from their lines,
+arcs included, as on 2024. Shaft openings are cut from floors, ceilings and
+roofs on Revit 2024 only (RE-345, Griffin 2026-11-05): the only shafts measured
+on 2025 cut nothing, so the check against the same project's 2024 save could not
+catch a bad cut, and on 2025 to 2027 those stay whole and the export counts the
+shafts it did not cut (`shaft_opening_not_cut`); RE-341 had turned the cut on
+for 2026 and 2027, which this turns off again.
+Stair runs on 2026 and 2027 are drawn as their steps and treads from their
+native records as on 2025, with the stair property sets and quantities read
+from them. A roof on 2026 and 2027 keeps the record-box
 solve alone, as on `main` (RE-341 section 5): without its slope, so a sloped
 roof can still be drawn as its outline at the box's full height, a level
-block, which no 2026 or 2027 scorer checks. No beam, landing, stair run, sketch
-outline or shaft void there is scored against a Revit export: each is held to
+block, which no 2026 or 2027 scorer checks. No beam, landing, stair run or
+sketch outline there is scored against a Revit export: each is held to
 the same Autodesk project's earlier save (`tools/re/bodies_across_saves.py`,
 which Measure runs and fails on), and that cannot catch an error the earlier
-save shares; it compares bodies, not quantities or property sets. No 2026 or
+save shares; it compares bodies, and since RE-346 the cuts, ports and the properties
+and quantities that change adds, not the others. No 2026 or
 2027 held-out model holds a beam, so the beam reader has run only on two
 Autodesk samples saved from earlier releases, never on a natively authored
-2026 beam. The 2025 save draws a sketch's arcs as chords (its arc readers are not
-enabled, #1440), so a floor of rac_advanced has 24 vertices there against 170
-on the 2024, 2026 and 2027 saves. One stair flight is scored against Revit's own 2026 and 2027
+2026 beam. **On 2025 no Revit export checks a beam, tread landing or arc
+either** (RE-345): the 25 models with Revit's own 2025 exports (puzzbobb's
+24 and RE1 Architecture) hold 0 beams, 0 tread landings, 0 shaft openings and 0
+floors, ceilings or roofs whose sketch holds an arc, and their
+exports are byte for byte `main`'s. The 2025 saves of `rac_advanced` and
+`rst_basic` are held to their 2024 saves: 391 beams and 5 tread landings equal,
+and of the 7 elements whose sketch holds an arc, 2 (a floor and a roof of
+rac_advanced) are compared as drawn outlines and equal, the ceiling and a
+railing being record boxes in both saves and 3 more having no body. None of
+the 19 held-out and spent models changes. That check cannot catch an error the
+2024 saves share (Measure run 42091457764, head 830a4d94). The floor of
+rac_advanced, drawn with chords on the 2025 save before (24 vertices), has the
+170 vertices of the 2024, 2026 and 2027 saves. One stair flight is scored against Revit's own 2026 and 2027
 exports. Since RE-346 pipes are drawn as their cylinders there, family
 instances' ports are placed, walls are cut to their doors' and windows'
 outlines, and `IsExternal`, railing heights and lengths, stair names, rooms'

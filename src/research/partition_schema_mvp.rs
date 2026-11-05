@@ -434,7 +434,7 @@ pub fn recover_partition_schema_mvp(
     attach_connector_pairs(rf, revit_version, &mut out.products);
     // --- Roof outlines from their sketch lines (RE-50) ---
     attach_roof_profiles(rf, revit_version, &mut out.products);
-    // --- Shaft openings cut the outlines within their height (RE-99) ---
+    // --- Shaft openings cut the outlines within their height (RE-99; 2024 only, RE-345) ---
     attach_shaft_voids(rf, revit_version, [&mut out.slabs, &mut out.products]);
 
     // --- The Revit class each record names at +0x4a (RE-76, #154) ---
