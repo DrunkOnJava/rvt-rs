@@ -4,7 +4,7 @@
 **Issues:** [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-247 and RE-291 (the columns Revit draws as a cut mesh and the box-drawn columns' quantities)
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, `research/bim4lca-measure.tsv`), as Measure fetches them
 **Probe:** `probes/examples/probe_re353_column_cut_footprints.rs`, Measure runs [42112543949](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42112543949) and [42115439931](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42115439931) (commit 38d9e426)
-**Status:** the meshed columns: positive on one building (the office at permit; the office as built, the R2025 models and the held-out models hold none), reproduced offline from the probe's output to Revit's own mesh for all 18 columns; the rule written from it is not yet measured end to end on this head. The round column: `OuterSurfaceArea` is a formula that is Revit's exactly on one column on each of the two office files, the same column; its other three quantities are measured negatives (section 4).
+**Status:** positive on one building, the office. The meshed columns: reproduced offline from the probe's output to Revit's own mesh for all 18 columns, and the rule written from it gives Revit's `CrossSectionArea` and `NetVolume` on 17 of the 18 at permit (the office as built, the R2025 models and the held-out models hold none). The round column: `OuterSurfaceArea` is a formula that is Revit's exactly on one column on each of the two office files, the same column; its other three quantities are measured negatives (section 4). Neither rule is exercised by any model but the office: the held-out, R2025 and RE1 models' counts, and Core Interior's, Einhoven's and RE1 Architecture's IFC, are unchanged (section 5).
 
 ## 1. What Revit writes where there is no extrusion
 
@@ -40,7 +40,7 @@ A column is taken as cut, and gets `CrossSectionArea` and `NetVolume` as above a
 - every element its clean pairs name is a wall, a covering, a column, a slab lying clear, that slab, or another slab across its top that has no plan area inside the column's section;
 - the slab is one piece with a rectangle, a closed polyline or a polyline with voids as its outline, and the part of it inside the column's section is more than a nick and less than the whole.
 
-Expected from section 2 on the office at permit: 17 of the 18. Left out, with the reason: 1343915, whose cut pairs name a wall that only touches it (a wall that cuts a column changes its section, RE-291 section 2, so a cut wall is refused without testing where it lies).
+Measured on the office at permit: 17 of the 18 (section 5). Left out, with the reason: 1343915, whose cut pairs name a wall that only touches it (a wall that cuts a column changes its section, RE-291 section 2, so a cut wall is refused without testing where it lies). Its two quantities the same formulas give Revit's to 1e-13 offline.
 
 ## 4. The round column
 
@@ -62,7 +62,19 @@ So the three stay out. A formula has to explain both volumes or stay out, and no
 
 ## 5. Measured
 
-Not yet measured on this head. Measure runs follow: the office as built and at permit, `qtos_vs_ifc` and `psets_vs_ifc` against `main`, then the held-out models.
+Measure run [42122584803](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42122584803) (head 223968aa against `main` at 16682a7a, `qtos_vs_ifc` and `psets_vs_ifc` with `--revit-set-placement`, the office as built and at permit, the 18 held-out models, the 24 R2025 models, the four RE1 models, Core Interior and Einhoven), after [42117851460](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42117851460) (head 0a5d2ad1, before the round column's offsets were read):
+
+| | office as built | office at permit |
+|---|---:|---:|
+| quantities Revit writes on objects rvt-rs writes | 39,765 | 40,015 |
+| equal, `main` / this change | 29,760 / 29,761 | 30,002 / 30,037 |
+| missing, `main` / this change | 10,004 / 10,003 | 10,012 / 9,977 |
+| `CrossSectionArea` equal | 278 of 279, unchanged | 320 to 337 of 345 |
+| `NetVolume` equal | 199 of 279, unchanged | 265 to 282 of 345 |
+| `OuterSurfaceArea` equal | 278 to 279 of 279 | 320 to 321 of 327 |
+| different, quantities Revit does not write | 1, 0 (unchanged) | 1, 0 (unchanged) |
+
+The gains are the 17 columns' two quantities at permit (34) and the round column's `OuterSurfaceArea` on each file (1 each). The property census is identical on both files, and no other model's census text differs from `main`'s; the counts of all 18 held-out models are byte for byte `main`'s, and the IFC of Core Interior, Einhoven and RE1 Architecture has the sha256 of `main`'s. So the two rules are exercised by the office alone: the 17 cut columns and the one round column on each file are every value they write on the models measured; no held-out or reference model has a column either rule takes.
 
 ## 6. What stays out
 

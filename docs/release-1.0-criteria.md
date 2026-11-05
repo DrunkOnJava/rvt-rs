@@ -160,6 +160,8 @@ and ceilings' `GrossArea` where they are level and their record holds no step th
 spaces' `Height` where the room's record holds its solid's faces (RE-255),
 spaces' `NetVolume` where that solid is a prism of its outline (RE-296, [#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016); what remains of the spaces, [#1207](https://github.com/DrunkOnJava/rvt-rs/issues/1207)),
 stair railings' `Length` where the path is one line along the stair's runs (RE-254),
+the `CrossSectionArea` and `NetVolume` of a column one slab cuts across its top, from the box less the slab's part inside it (RE-353, [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203): 17 of the office's 18 meshed columns at permit, Measure run 42122584803),
+a round column's `OuterSurfaceArea` (RE-353: one column on each of the two office files, the same column),
 and the `Length` of each column RE-291's rule takes that a clean pair joins, its box's height (186 of 186 as built, [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203))), 1 differs (the mullion whose `Span` differs) and 9,990 are missing (Measure run 41959375917, with the cabinets', doors' and curtain walls' openings RE-338 writes; the 203 quantities Revit's export writes on openings rvt-rs does not write, the doors' parallel cuts and the curtain walls' that nothing proves, are counted apart, [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165); 476 on `main`, whose openings the census now keys by their wall, and 527 before RE-321 wrote the rectangular openings'), none written that Revit's export leaves out (the maintainer,
 2026-10-26: a curtain panel's `Width` is left out,
 since Revit's export gives none on 3 panels that nothing tells apart; a joined column's `Length`, left out then for 18 meshed columns, is written since RE-291 tells those apart, the maintainer, 2026-11-03;
@@ -207,7 +209,7 @@ Most instance and type parameters are not ([#35](https://github.com/DrunkOnJava/
 [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155),
 the 0.16.0 milestone)
 Open: type objects' values ([#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185)),
-the round column and the meshed columns' values ([#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)),
+the round column's `CrossSectionArea`, `GrossVolume` and `NetVolume`, which are not the circle's, and the one meshed column a cut wall touches (RE-353, [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)),
 and the remaining values with no rule yet ([#1193](https://github.com/DrunkOnJava/rvt-rs/issues/1193)).
 
 ## Interfaces 1.0 stabilizes
