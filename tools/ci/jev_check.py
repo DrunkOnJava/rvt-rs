@@ -27,10 +27,9 @@ How a diff is scored:
 - Each chunk asks one choice per finding (how does the change described relate to this difference:
   stated, implied by a stated change, unstated, or only rounding, reordering or spelling) and one
   rating for the chunk ("how much would an importer notice?", five ordered levels). The wording
-  was chosen on the calibration runs of docs/maintaining.md: as a yes/no question ("does the change
-  fail to state it?") Jev put a move of 1e-6 in every measurement at 0.92 to 0.96, and a
-  description of the right change at up to 0.89; as this choice, the right description scored a
-  mean 0.25 and a description of another change a mean 0.94.
+  was chosen on the calibration runs of pull request #1419, which separated a described change
+  from an undescribed one better as this choice than as a yes/no question ("does the change fail
+  to state it?"); a change to the wording or to THRESHOLDS needs those runs again.
 - The verdict is a function of the answers (see THRESHOLDS), with Jev's probability of "unstated"
   for each finding and the chunk's rating: a finding at 0.85 or more is a fail in a chunk rated 1.5
   or more (between a detail a careful user finds and a visible change), a warn in a chunk rated 1.0
