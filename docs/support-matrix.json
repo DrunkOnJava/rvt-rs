@@ -680,7 +680,7 @@
       "name": "Element and room schedules as CSV (rvt-schedule, viewer, Python)",
       "status": "partial",
       "evidence": "tests/rvt_schedule_cli.rs (tier-1 shape; 2024_Core_Interior 970 elements / 360 walls / 132 hosted doors / 6 windows / 256 columns / 116 rooms); viewer Playwright download test",
-      "notes": "One row per decoded element or room, so coverage is exactly the decode coverage: typed rows on every release whose element records are read (Revit 2023 to 2025; 2015 to 2022, 2026 and 2027 experimentally), scaffold-only elsewhere. Unknown values are empty cells. A room's area is its outline's where the room's stored solid was read (RE-101) or its solid's faces close as the walk reads them (RE-316), and empty where the room keeps its box or its outline is approximate (stored_solid_approximate).",
+      "notes": "One row per element the IFC export writes, on the storey it puts it on (the elements schedule), or per room, so coverage is the decode coverage as the export writes it: typed rows on every release whose element records are read (Revit 2023 to 2025; 2015 to 2022, 2026 and 2027 experimentally), scaffold-only elsewhere. Unknown values are empty cells. A room's area is its outline's where the room's stored solid was read (RE-101) or its solid's faces close as the walk reads them (RE-316), and empty where the room keeps its box or its outline is approximate (stored_solid_approximate).",
       "user_impact": "A spreadsheet of walls, doors, windows, columns, slabs and rooms without Revit, on files whose elements decode."
     },
     {
