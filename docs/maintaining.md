@@ -580,6 +580,11 @@ shard of a commit missed the binary cache at once and built the same binaries
   writes the verdict as NOT MEASURED (`neutral`), or a failure if a result that
   did arrive fails, never a success; with no head result at all it leaves its two
   checks out. Read the Build job, not Compare.
+- **A shard waits for both Build jobs**, since a matrix job's `needs` covers every
+  leg: in a run with a base, the head shards start when the slower side has built
+  (run 42093529476: 0.6 minute, 82 s against 54 s). With few or short shards that
+  and the artifact hand-off lengthen the wall-clock; the job-minutes fall once a
+  side has more shards than builds.
 - **A ref that is not a full SHA** (`refs/pull/N/head`) is checked out as given by
   the Build job and by every shard; a shard fails if the ref moved between them,
   since the binaries and its source would be two commits.
