@@ -46,7 +46,7 @@ runs:
         DEST: ${{ inputs.path }}
       run: timeout 900 bash "${GITHUB_ACTION_PATH}/fetch.sh"
     - name: Save the RE1 models in the cache (main only)
-      if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
+      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ci/speed-wheels-codeql-re1-sarif') && steps.cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.pins.outputs.store }}

@@ -1,0 +1,16 @@
+# TEMPORARY (#1457): the full CI on this branch while the pull request is a draft, run as a push
+# event so the wheel job builds on all three systems as it does on main. Removed before ready.
+name: tmp full CI 1457
+
+on:
+  push:
+    branches: [ci/speed-wheels-codeql-re1-sarif]
+    paths:
+      - ".github/workflows/tmp-full-ci-1457.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  full:
+    uses: $/.github/workflows/ci.yml
