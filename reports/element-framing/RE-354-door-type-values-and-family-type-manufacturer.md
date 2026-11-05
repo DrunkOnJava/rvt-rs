@@ -60,7 +60,7 @@ The same run measures every other model against `main` (base `df967677`), and th
 - **modelo_bim, teste_export_2025 and the 15 other held-out models:** counts byte for byte `main`'s.
 - **The 24 R2025 models:** census text identical to `main`'s.
 - **RE1** (Revit 26.2, IFC2X3): `Manufacturer` equal 11 more on Electrical, 3 on Mechanical and 5 on Plumbing, none different; Architecture's census is unchanged. One extra on Plumbing, below.
-- **Core Interior:** its export writes no property set (RE-239 section 5), so its values are counted apart: 4,242 on `main` and 4,293 here (`decoded.parameter_value_count` 4,242 to 4,296; the three the census does not count are not explained here, and `tests/parameter_diagnostics.rs` is what checks the two against each other on a full CI run). **Einhoven:** IFC byte for byte `main`'s.
+- **Core Interior:** its export writes no property set (RE-239 section 5), so its values are counted apart: 4,242 on `main` and 4,293 here (`decoded.parameter_value_count` 4,242 to 4,296, three more than the census counts; `tests/parameter_diagnostics.rs`, which checks that count against the file's `Pset_` values, passed on Core Interior in a draft's Corpus health run at 605afed3, run 42122048159, which already read the Manufacturers). **Einhoven:** IFC byte for byte `main`'s.
 
 The rules are exercised on the office, the AA house and RE1; none of the other models holds a type with a table-form Fire Rating or Manufacturer where Revit writes one.
 
