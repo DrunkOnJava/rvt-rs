@@ -457,8 +457,18 @@ pub(super) fn select_instance_records(
 pub(super) fn without_nested_components(
     mut by_id: BTreeMap<u32, crate::partition_element_records::PartitionElementRecord>,
 ) -> BTreeMap<u32, crate::partition_element_records::PartitionElementRecord> {
+    for id in nested_component_ids(&by_id) {
+        by_id.remove(&id);
+    }
+    by_id
+}
+
+/// The ElementIds [`without_nested_components`] leaves out of `by_id`.
+pub(super) fn nested_component_ids(
+    by_id: &BTreeMap<u32, crate::partition_element_records::PartitionElementRecord>,
+) -> Vec<u32> {
     use crate::partition_element_records::NESTED_COMPONENT_CATEGORIES;
-    let nested: Vec<u32> = by_id
+    by_id
         .values()
         .filter(|child| NESTED_COMPONENT_CATEGORIES.contains(&child.builtin_category))
         .filter(|child| {
@@ -474,11 +484,7 @@ pub(super) fn without_nested_components(
             })
         })
         .map(|child| child.element_id)
-        .collect();
-    for id in nested {
-        by_id.remove(&id);
-    }
-    by_id
+        .collect()
 }
 
 /// Vertical extent of a record's bounding box, quantised to 1e-4 ft

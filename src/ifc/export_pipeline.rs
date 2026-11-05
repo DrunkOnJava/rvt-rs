@@ -507,6 +507,9 @@ pub fn run_export_with_limits_and_control(
     // #1360: the readers note the copy they take each value from only when the
     // table that lists them is asked for.
     rf.record_value_sources(options.element_provenance && options.kind != ExportKind::Placeholder);
+    // #1389: the frames of a Revit 2008 to 2023 file that stop are listed only
+    // for the log of decisions; their counts are kept either way.
+    rf.record_frame_decisions(options.export_decisions);
     let result = match options.kind {
         ExportKind::Document => RvtDocExporter.export_with_diagnostics_mode_limits_and_control(
             rf,

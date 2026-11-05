@@ -542,7 +542,7 @@ Something the export left out or approximated, with how many.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `count` | integer | yes |  |
+| `count` | integer | yes | How many the reason counts. Mostly elements; for `element_record_frame_stopped` it is frames of record markers in every category (several frames can belong to one element), not lost elements. |
 | `reason` | string | yes |  |
 
 ### SourcePartOut

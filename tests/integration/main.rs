@@ -63,6 +63,8 @@ mod element_names;
 mod element_parameters;
 #[path = "../element_provenance_offsets.rs"]
 mod element_provenance_offsets;
+#[path = "../element_record_stages.rs"]
+mod element_record_stages;
 #[path = "../element_records_2025.rs"]
 mod element_records_2025;
 #[path = "../export_decisions_counts.rs"]
