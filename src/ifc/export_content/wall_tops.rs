@@ -1447,11 +1447,10 @@ fn axis_wall(index: usize, entity: &IfcEntity) -> Option<AxisWall> {
 }
 
 /// The wall `entity` is, where its top was cut in steps by the floors that
-/// cover it in part (RE-320): the rectangle of its plan, with the height of the
-/// whole of its plan, the lowest underside, for its top. The pieces that stand
-/// higher over part of the plan are not read, so the wall is taken as low as it
-/// is anywhere (#1396).
-fn stepped_top_wall(index: usize, entity: &IfcEntity) -> Option<AxisWall> {
+/// cover it in part (RE-320), as the whole of its plan to the lowest underside:
+/// the pieces that stand higher over part of the plan are not read, so the
+/// wall is taken as low as it is anywhere (#1396).
+fn stepped_whole(entity: &IfcEntity) -> Option<IfcEntity> {
     let IfcEntity::BuildingElement {
         solid_shape: Some(SolidShape::Compound(items)),
         property_set: Some(set),
@@ -1481,15 +1480,23 @@ fn stepped_top_wall(index: usize, entity: &IfcEntity) -> Option<AxisWall> {
         *solid_shape = None;
         body.height_feet = first.height_feet;
     }
-    let mut wall = axis_wall(index, &whole)?;
+    Some(whole)
+}
+
+/// The rectangle of a wall whose top was cut in steps (see [`stepped_whole`]).
+fn stepped_top_wall(index: usize, entity: &IfcEntity) -> Option<AxisWall> {
+    let mut wall = axis_wall(index, &stepped_whole(entity)?)?;
     wall.stepped = true;
     Some(wall)
 }
 
-/// The wall `entity` is, where it is plain, turned by a quarter turn and has a
-/// profile of its own (a stepped or layered one): the bounds of its plan, in
+/// The wall `entity` is, where it is plain (or cut in steps at the top, as the
+/// whole of its plan to the lowest underside), turned by a quarter turn and has
+/// a profile of its own (a stepped or layered one): the bounds of its plan, in
 /// place of the rectangle [`axis_wall`] reads (#1396).
 fn profiled_wall(index: usize, entity: &IfcEntity) -> Option<AxisWall> {
+    let whole = stepped_whole(entity);
+    let entity = whole.as_ref().unwrap_or(entity);
     let IfcEntity::BuildingElement {
         type_guid,
         extrusion: Some(body),
