@@ -107,10 +107,11 @@ save shares; it compares bodies, not quantities or property sets. No 2026 or
 2027 held-out model holds a beam, so the beam reader has run only on two
 Autodesk samples saved from earlier releases, never on a natively authored
 2026 beam. **On 2025 no Revit export checks a beam, tread landing or arc
-either** (RE-345): the 25 models with Revit's own 2025 exports (puzzbobb's
-24 and RE1 Architecture) hold 0 beams, 0 tread landings, 0 shaft openings and 0
-floors, ceilings or roofs whose sketch holds an arc, and their
-exports are byte for byte `main`'s. The 2025 saves of `rac_advanced` and
+either** (RE-345): the 28 Revit 2025 models read (puzzbobb's 24 and RE1's four)
+hold 0 beams and 0 tread landings, and the 25 with Revit's own 2025 exports
+(puzzbobb's 24 and RE1 Architecture) hold 0 shaft openings and 0 floors,
+ceilings or roofs whose sketch holds an arc, and their exports are byte for
+byte `main`'s. The 2025 saves of `rac_advanced` and
 `rst_basic` are held to their 2024 saves: 391 beams and 5 tread landings equal,
 and of the 7 elements whose sketch holds an arc, 2 (a floor and a roof of
 rac_advanced) are compared as drawn outlines and equal, the ceiling and a
