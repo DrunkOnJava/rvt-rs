@@ -80,6 +80,16 @@
 # OUT_DIR/family-<file>/ with the same info.json and info.exit (a family
 # carries its Atom entry in a PartAtom stream) and, when PROBE is built, the
 # same probe.txt. A family has no Revit export, so nothing else is measured on it.
+# When AREAS_ACROSS_SAVES is set and SAMPLE_DIR holds Autodesk's rac_advanced
+# samples of 2024, 2025, 2026 and 2027, OUT_DIR/areas_across_saves.txt is the
+# gate of #1261 and #1194 (Griffin, 2026-11-05, "Same-project gate"): the 25
+# Areas of its 2025, 2026 and 2027 saves must equal its 2024 save's in
+# GlobalId, number, name, storey, outline source, body area, top surface,
+# height and lowest vertex (tools/re/areas_across_saves.py), ending with its
+# exit status, which the workflow turns into a failed job. It runs once every
+# export is done and before any sample's IFC is deleted. When a run holds fewer
+# than the four saves (a narrower sample_years) the file says `skipped:`, names
+# the years missing, and the workflow prints a notice: nothing was checked.
 # SAMPLE_DIR does the same for Autodesk's sample projects (.rvt), adding the
 # export's diagnostics.json, rvt-ifc.log and ifc.sha256 (hashed as a model's
 # is) under OUT_DIR/sample-<file>/, and element_stage_counts.txt, the check
@@ -575,6 +585,28 @@ measure_sample() { # sample
   finished "$dir" "$(basename "$sample")" "$item_started"
 }
 
+# The Areas of Autodesk's rac_advanced across its 2024 to 2027 saves (the
+# gate of the Areas of Revit 2025 to 2027, RE-333 section 9). With the four
+# samples in the run, a save with no IFC is a failure, not a skipped check: the
+# scorer is given all four paths and says which is missing. With fewer samples
+# than that the check is skipped, and says so.
+areas_across_saves() {
+  local year file missing="" args=()
+  for year in 2024 2025 2026 2027; do
+    file="$SAMPLE_DIR/$year-racadvancedsampleproject.rvt"
+    [ -f "$file" ] || missing="$missing $year"
+    args+=("$year=$(sample_dir "$file")/model.ifc")
+  done
+  if [ -n "$missing" ]; then
+    echo "areas across saves: skipped: no rac_advanced sample of$missing in this run, so nothing was compared" > "$OUT/areas_across_saves.txt"
+    return 0
+  fi
+  {
+    timeout "$STEP_TIMEOUT" python "$SCORERS/areas_across_saves.py" "${args[@]}"
+    echo "exit $?"
+  } > "$OUT/areas_across_saves.txt" 2>&1
+}
+
 # Every probe runs after the items, alone, one at a time: a probe is cut off
 # after 20 minutes, and items running beside it would slow it by up to about
 # 2x, so a probe would stop sooner than it always has.
@@ -674,6 +706,10 @@ while IFS='|' read -r _ run first second _; do
   esac
 done <<< "$items"
 wait
+# Before any sample's IFC is deleted at the end of its measure_sample.
+if [ -n "${AREAS_ACROSS_SAVES:-}" ] && [ -d "${SAMPLE_DIR:-}" ]; then
+  areas_across_saves
+fi
 tasks=""
 while IFS='|' read -r rank run first second third; do
   case "$run" in

@@ -401,7 +401,8 @@ pub fn room_rows(model: &IfcModel) -> Vec<RoomRow> {
             == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE
             || property("ProfileSource")
                 == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE_FACES
-            || property("ProfileSource") == crate::partition_area_records::AREA_BOUNDARY_SOURCE)
+            || property("ProfileSource") == crate::partition_area_records::AREA_BOUNDARY_SOURCE
+            || property("ProfileSource") == crate::partition_area_records::AREA_TOPOLOGY_SOURCE)
             .then(|| extrusion.as_ref().and_then(outline_area_square_feet))
             .flatten();
         rows.push(RoomRow {
@@ -442,6 +443,22 @@ fn outline_area_square_feet(extrusion: &Extrusion) -> Option<f64> {
         ProfileDef::ArbitraryClosed { points } => Some(ring(points)),
         ProfileDef::ArbitraryWithVoids { points, voids } => {
             Some(ring(points) - voids.iter().map(|void| ring(void)).sum::<f64>())
+        }
+        // Lines and arcs: the arcs count as themselves, not as their chords.
+        ProfileDef::IndexedPolyCurve { points, segments } => {
+            let outer = super::entities::IndexedCurve {
+                points: points.clone(),
+                segments: segments.clone(),
+            };
+            super::export_content::curve_area_length(&outer).map(|(area, _)| area.abs())
+        }
+        ProfileDef::IndexedPolyCurveWithVoids { outer, voids } => {
+            let (area, _) = super::export_content::curve_area_length(outer)?;
+            let mut net = area.abs();
+            for void in voids {
+                net -= super::export_content::curve_area_length(void)?.0.abs();
+            }
+            Some(net)
         }
         _ => None,
     }

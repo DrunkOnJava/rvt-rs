@@ -74,13 +74,23 @@ pub struct BoundaryLine {
     pub to: (f64, f64),
 }
 
+/// For each edge of a loop, from a vertex to the next (the last to the first),
+/// the middle point of the arc it is, or `None` for a line (RE-333).
+pub type ArcMids = Vec<Option<(f64, f64)>>;
+
 /// The region of the plane around a point, bounded by lines.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AreaFace {
     /// The outer loop, counter-clockwise, without a repeated closing vertex.
     pub outer: Vec<(f64, f64)>,
+    /// The arcs of the outer loop. Empty where every edge is a line, as the
+    /// arrangement of straight lines gives it; the plan topology's region
+    /// (RE-333) may have arcs.
+    pub outer_arcs: ArcMids,
     /// The loops directly inside it, clockwise, the largest first.
     pub holes: Vec<Vec<(f64, f64)>>,
+    /// The arcs of each hole; empty where every hole's edges are lines.
+    pub hole_arcs: Vec<ArcMids>,
     /// The ElementIds of the lines that bound the region, its holes' too.
     pub line_ids: BTreeSet<u32>,
     /// Whether the outline, a hole's too, runs along a stretch of a line that
@@ -794,7 +804,9 @@ impl Arrangement {
         let joined = face.joined || holes.iter().any(|hole| hole.joined);
         Some(AreaFace {
             outer: self.corners(face)?,
+            outer_arcs: Vec::new(),
             holes: hole_corners,
+            hole_arcs: Vec::new(),
             line_ids,
             joined,
         })

@@ -28,6 +28,7 @@ use crate::geometry::{
     recover_door_host, recover_floor_boundary, recover_level_elevation,
     recover_wall_location_curve_from_wall, recover_window_host,
 };
+use crate::partition_area_boundaries::ArcMids;
 use crate::walker::{DecodedElement, InstanceField};
 use std::collections::{BTreeMap, HashMap};
 
@@ -286,6 +287,11 @@ struct AreaDrawn {
     /// Whether its outline needed a line carried on past its record or a
     /// connector (RE-330).
     joined: bool,
+    /// Whether its region is the loop of Revit's plan topology (RE-333).
+    topology: bool,
+    /// Whether it is of a release whose topology Areas are marked unchecked
+    /// (`partition_area_records::area_release_unchecked`).
+    topology_unchecked: bool,
 }
 
 /// The body an Area's decoded fields hold: the profile its boundary lines
@@ -294,7 +300,8 @@ fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
     let from_lines = decoded.fields.iter().any(|(field, value)| {
         field == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD
             && matches!(value, InstanceField::String(source)
-                if source == crate::partition_area_records::AREA_BOUNDARY_SOURCE)
+                if source == crate::partition_area_records::AREA_BOUNDARY_SOURCE
+                    || source == crate::partition_area_records::AREA_TOPOLOGY_SOURCE)
     });
     if !from_lines {
         return None;
@@ -321,19 +328,71 @@ fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
         field == crate::partition_area_records::AREA_JOINED_FIELD
             && matches!(value, InstanceField::Bool(true))
     });
-    let bounds = profile.plan_bounds_feet()?;
+    let topology = decoded.fields.iter().any(|(field, value)| {
+        field == crate::partition_area_records::AREA_TOPOLOGY_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
+    let topology_unchecked = decoded.fields.iter().any(|(field, value)| {
+        field == crate::partition_area_records::AREA_TOPOLOGY_UNCHECKED_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
+    let arcs = area_arcs(&decoded.fields, &profile)?;
+    let mut bounds = profile.plan_bounds_feet()?;
+    // An arc bulges past its chord: the box takes in its extreme points.
+    for (ring, mids) in std::iter::once((&profile.outer_xy, &arcs[0]))
+        .chain(profile.inner_xy.iter().zip(&arcs[1..]))
+    {
+        for (index, mid) in mids.iter().enumerate() {
+            let Some(mid) = *mid else {
+                continue;
+            };
+            let end = ring[(index + 1) % ring.len()];
+            let extent = crate::native_area_regions::arc_bounds(ring[index], mid, end)?;
+            bounds = [
+                bounds[0].min(extent[0]),
+                bounds[1].min(extent[1]),
+                bounds[2].max(extent[2]),
+                bounds[3].max(extent[3]),
+            ];
+        }
+    }
     let centre = ((bounds[0] + bounds[2]) / 2.0, (bounds[1] + bounds[3]) / 2.0);
     let relative = |ring: &[(f64, f64)]| -> Vec<(f64, f64)> {
         ring.iter()
             .map(|(px, py)| (px - centre.0, py - centre.1))
             .collect()
     };
-    let points = relative(&profile.outer_xy);
-    let voids: Vec<Vec<(f64, f64)>> = profile.inner_xy.iter().map(|ring| relative(ring)).collect();
-    let section = if voids.is_empty() {
-        entities::ProfileDef::ArbitraryClosed { points }
+    let curved = arcs.iter().any(|mids| mids.iter().any(Option::is_some));
+    let section = if curved {
+        // Lines and three-point arcs, as Revit's export writes a curved
+        // profile (RE-333): an `IfcIndexedPolyCurve`.
+        let curve = |ring: &[(f64, f64)], mids: &[Option<(f64, f64)>]| {
+            indexed_area_curve(&relative(ring), mids, centre)
+        };
+        let outer = curve(&profile.outer_xy, &arcs[0])?;
+        let voids: Vec<entities::IndexedCurve> = profile
+            .inner_xy
+            .iter()
+            .zip(&arcs[1..])
+            .map(|(ring, mids)| curve(ring, mids))
+            .collect::<Option<_>>()?;
+        if voids.is_empty() {
+            entities::ProfileDef::IndexedPolyCurve {
+                points: outer.points,
+                segments: outer.segments,
+            }
+        } else {
+            entities::ProfileDef::IndexedPolyCurveWithVoids { outer, voids }
+        }
     } else {
-        entities::ProfileDef::ArbitraryWithVoids { points, voids }
+        let points = relative(&profile.outer_xy);
+        let voids: Vec<Vec<(f64, f64)>> =
+            profile.inner_xy.iter().map(|ring| relative(ring)).collect();
+        if voids.is_empty() {
+            entities::ProfileDef::ArbitraryClosed { points }
+        } else {
+            entities::ProfileDef::ArbitraryWithVoids { points, voids }
+        }
     };
     Some(AreaDrawn {
         location: [centre.0, centre.1, base],
@@ -345,7 +404,95 @@ fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
         },
         profile,
         joined,
+        topology,
+        topology_unchecked,
     })
+}
+
+/// The arcs of an Area's outline and holes from its decoded fields, one list
+/// for each loop (the outline first) with an entry for each edge: the middle
+/// of its arc, or `None` for a line. `None` overall where the fields do not
+/// match the profile's loops (the Area then has no body). An Area with no arcs
+/// field has only lines.
+fn area_arcs(
+    fields: &[(String, InstanceField)],
+    profile: &crate::element_record_plan_profiles::PlanProfile,
+) -> Option<Vec<ArcMids>> {
+    let lines: Vec<ArcMids> = std::iter::once(profile.outer_xy.len())
+        .chain(profile.inner_xy.iter().map(Vec::len))
+        .map(|count| vec![None; count])
+        .collect();
+    let Some(held) = fields
+        .iter()
+        .find(|(name, _)| name == crate::partition_area_records::AREA_ARCS_FIELD)
+    else {
+        return Some(lines);
+    };
+    let InstanceField::Vector(loops) = &held.1 else {
+        return None;
+    };
+    if loops.len() != lines.len() {
+        return None;
+    }
+    let mut out = Vec::with_capacity(loops.len());
+    for (field, line) in loops.iter().zip(&lines) {
+        let InstanceField::Vector(edges) = field else {
+            return None;
+        };
+        if edges.len() != line.len() {
+            return None;
+        }
+        let mut mids = Vec::with_capacity(edges.len());
+        for edge in edges {
+            let InstanceField::Vector(mid) = edge else {
+                return None;
+            };
+            mids.push(match mid.as_slice() {
+                [] => None,
+                [
+                    InstanceField::Float { value: x, .. },
+                    InstanceField::Float { value: y, .. },
+                ] if x.is_finite() && y.is_finite() => Some((*x, *y)),
+                _ => return None,
+            });
+        }
+        out.push(mids);
+    }
+    Some(out)
+}
+
+/// One closed `IfcIndexedPolyCurve` over a loop whose points are already
+/// relative to the Area's centre `centre` (the arcs' middles, in model
+/// feet, are moved by it): each edge a line or the three-point arc through
+/// its middle, the last closing on the first point, as the family bodies write
+/// theirs.
+fn indexed_area_curve(
+    ring: &[(f64, f64)],
+    mids: &[Option<(f64, f64)>],
+    centre: (f64, f64),
+) -> Option<entities::IndexedCurve> {
+    let mut points = vec![*ring.first()?];
+    let mut segments = Vec::new();
+    let mut current = 0usize;
+    for index in 0..ring.len() {
+        let closes = index + 1 == ring.len();
+        let middle = mids.get(index).copied().flatten().map(|(x, y)| {
+            points.push((x - centre.0, y - centre.1));
+            points.len() - 1
+        });
+        let end = if closes {
+            0
+        } else {
+            points.push(ring[index + 1]);
+            points.len() - 1
+        };
+        segments.push(match middle {
+            Some(middle) => entities::CurveSegment::Arc([current, middle, end]),
+            None => entities::CurveSegment::Line([current, end]),
+        });
+        current = end;
+    }
+    Some(entities::IndexedCurve { points, segments })
 }
 
 /// An Area's ElementId, number, name and Level (#763), in the set a room's
@@ -412,16 +559,18 @@ fn area_property_set(decoded: &DecodedElement, drawn: Option<&AreaDrawn>) -> Pro
     // give it a region, and written without a body, so without an outline,
     // where they do not.
     if let Some(drawn) = drawn {
+        // An Area drawn from the loop of Revit's plan topology says so in its
+        // body and profile sources (RE-333): it was read from native records,
+        // not from the lines' frames.
+        let source = if drawn.topology {
+            crate::partition_area_records::AREA_TOPOLOGY_SOURCE
+        } else {
+            crate::partition_area_records::AREA_BOUNDARY_SOURCE
+        };
         for (name, value) in [
-            (
-                "BodySource",
-                PropertyValue::Text(crate::partition_area_records::AREA_BOUNDARY_SOURCE.into()),
-            ),
+            ("BodySource", PropertyValue::Text(source.into())),
             ("ProfileResolved", PropertyValue::Boolean(true)),
-            (
-                "ProfileSource",
-                PropertyValue::Text(crate::partition_area_records::AREA_BOUNDARY_SOURCE.into()),
-            ),
+            ("ProfileSource", PropertyValue::Text(source.into())),
             (
                 "ProfileVertexCount",
                 PropertyValue::Integer(drawn.profile.vertex_count() as i64),
@@ -464,6 +613,10 @@ fn area_property_set(decoded: &DecodedElement, drawn: Option<&AreaDrawn>) -> Pro
         name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
         value: PropertyValue::Text(
             match drawn {
+                Some(drawn) if drawn.topology && drawn.topology_unchecked => {
+                    SPACE_OUTLINE_AREA_PLAN_TOPOLOGY_UNCHECKED
+                }
+                Some(drawn) if drawn.topology => SPACE_OUTLINE_AREA_PLAN_TOPOLOGY,
                 Some(drawn) if drawn.joined => SPACE_OUTLINE_AREA_BOUNDARY_JOINED,
                 Some(_) => SPACE_OUTLINE_AREA_BOUNDARY,
                 None => SPACE_OUTLINE_NONE,
@@ -3182,7 +3335,7 @@ fn hollow_section_area_perimeter(body: &Extrusion) -> Option<(f64, f64)> {
 /// The signed area (positive counter-clockwise) and the length of a closed
 /// curve of lines and three-point arcs, by Green's theorem, so an arc counts
 /// as itself and not its chord.
-fn curve_area_length(curve: &entities::IndexedCurve) -> Option<(f64, f64)> {
+pub(super) fn curve_area_length(curve: &entities::IndexedCurve) -> Option<(f64, f64)> {
     use std::f64::consts::TAU;
     let point = |i: usize| curve.points.get(i).copied();
     let (mut area, mut length) = (0.0, 0.0);
@@ -4079,6 +4232,17 @@ fn space_plan_outline(
             let (w, d) = (extrusion.width_feet / 2.0, extrusion.depth_feet / 2.0);
             Some((place(&[(-w, -d), (w, -d), (w, d), (-w, d)]), Vec::new()))
         }
+        // An Area with arcs: its outline tessellated, which a point test takes.
+        Some(
+            entities::ProfileDef::IndexedPolyCurve { .. }
+            | entities::ProfileDef::IndexedPolyCurveWithVoids { .. },
+        ) => {
+            let (outer, holes) = super::body_geometry::extrusion_rings(extrusion)?;
+            Some((
+                place(&outer),
+                holes.iter().map(|ring| place(ring)).collect(),
+            ))
+        }
         Some(_) => None,
     }
 }
@@ -4107,7 +4271,9 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
                 p.name == SPACE_OUTLINE_SOURCE_PROPERTY
                     && matches!(&p.value, PropertyValue::Text(source)
                         if source == SPACE_OUTLINE_AREA_BOUNDARY
-                            || source == SPACE_OUTLINE_AREA_BOUNDARY_JOINED)
+                            || source == SPACE_OUTLINE_AREA_BOUNDARY_JOINED
+                            || source == SPACE_OUTLINE_AREA_PLAN_TOPOLOGY
+                            || source == SPACE_OUTLINE_AREA_PLAN_TOPOLOGY_UNCHECKED)
             })
         })
     };
@@ -4610,6 +4776,23 @@ pub const SPACE_OUTLINE_AREA_BOUNDARY: &str = "area_boundary";
 /// 2021's exporter whose string ends "IU alternativa 21.0.0.383" (publisher not
 /// established), showing the project's 2015 to 2020 state.
 pub const SPACE_OUTLINE_AREA_BOUNDARY_JOINED: &str = "area_boundary_joined";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area drawn as the loop of Revit's
+/// own plan topology: its area boundary lines moved by their area rule's
+/// offsets and arcs drawn, checked against the area Revit saves for the loop
+/// and against the Area's point (RE-333). Where the plan topology is read it
+/// comes before the lines' arrangement, so on a file it reads every Area says
+/// this.
+pub const SPACE_OUTLINE_AREA_PLAN_TOPOLOGY: &str = "area_plan_topology";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area of Revit 2025, 2026 or 2027
+/// drawn as the loop of Revit's plan topology: the same region as
+/// [`SPACE_OUTLINE_AREA_PLAN_TOPOLOGY`], marked apart because nothing outside
+/// the file checks these Areas: no Revit export of one exists, and the only
+/// check is that the same project's 2024 save gives the same Areas
+/// (`partition_area_records::area_release_unchecked`; Griffin, 2026-11-05,
+/// "Mark 2025 to 2027 in the file").
+pub const SPACE_OUTLINE_AREA_PLAN_TOPOLOGY_UNCHECKED: &str = "area_plan_topology_unchecked";
 
 /// `BodyHeightSource` of an Area's body: from its Level up to the Level above
 /// it, when both are building stories (RE-317).
