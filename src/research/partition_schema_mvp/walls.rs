@@ -710,6 +710,30 @@ pub(super) fn attach_wall_layers(
         Default::default()
     };
     for wall in walls.iter_mut() {
+        // RE-347: a straight wall's native line and flip, so a door or
+        // window set in it is one RE-343's Rule 1 measures.
+        let line = wall
+            .id
+            .and_then(|id| native.get(&u64::from(id)))
+            .filter(|record| record.flipped.is_some())
+            .map(|record| {
+                (
+                    record.end[0] - record.start[0],
+                    record.end[1] - record.start[1],
+                )
+            });
+        if let Some((dx, dy)) = line {
+            let length = dx.hypot(dy);
+            if length.is_finite() && length > 1e-9 {
+                for (name, value) in WALL_NATIVE_DIRECTION_FIELDS
+                    .iter()
+                    .zip([dx / length, dy / length])
+                {
+                    wall.fields
+                        .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+                }
+            }
+        }
         if let Some(joined) = wall.id.and_then(|id| top_joined.get(&u64::from(id))) {
             wall.fields
                 .push((WALL_TOP_JOINED_FIELD.into(), InstanceField::Bool(*joined)));
