@@ -11,18 +11,26 @@ Area by Area, paired by GlobalId:
 
 - GlobalId: every Area of the first save is in the other, and no other is;
 - number (`IfcSpace.Name`) and name (`IfcSpace.LongName`);
-- storey: the name of the `IfcBuildingStorey` that contains it;
+- storey: the name of the `IfcBuildingStorey` the space is aggregated under
+  (rvt-rs writes an `IfcSpace` under its storey with `IfcRelAggregates`, as
+  Revit's export does); an Area with no storey is a failure;
+- outline source: `RvtElementRecordGeometry.SpaceOutlineSource`;
 - body area: the plan area of its top surface, within 1e-6 relative;
-- height: its lowest to its highest vertex, within 1e-5 ft.
-
-An Area without a body must be without one on both saves.
+- top surface: the area of the symmetric difference of the two top surfaces,
+  in Revit's internal frame, within 1e-6 relative of the body area, so a
+  translation, a rotation or a shear that keeps the area is a difference;
+- height: its lowest to its highest vertex, within 1e-5 ft;
+- lowest vertex: the height of its lowest vertex, within 1e-5 ft, so a raised
+  base is a difference.
 
 It exits 1, and prints why, when any of these holds, so a Measure run turns red
-and a failed check blocks landing:
+(and a pull request that does not pass it is not landed, by the landing rule):
 
 - a save is missing, or cannot be read;
-- a save has fewer than 25 Areas (the project has 25, so a save that reads
-  fewer than that, none included, is a failure and never a pass on nothing);
+- a save does not have exactly 25 Areas, or exactly 25 with a body (the project
+  has 25, and each has one, so a save that reads fewer or more than that, none
+  included, is a failure and never a pass on nothing);
+- an Area has no storey;
 - any Area differs in any field, or is missing from or extra in a later save.
 
 What it cannot catch: an error that the 2024 read shares with the later reads
@@ -50,13 +58,37 @@ SET = "RvtElementRecordGeometry"
 AREA_VALUES = ("area_boundary", "area_boundary_joined", "area_plan_topology", "none")
 EXPECTED_AREAS = 25
 AREA_TOLERANCE = 1e-6
+SURFACE_TOLERANCE = 1e-6
 HEIGHT_TOLERANCE_FEET = 1e-5
-FIELDS = ("GlobalId", "number", "name", "storey", "body area", "height")
+FIELDS = (
+    "GlobalId",
+    "number",
+    "name",
+    "storey",
+    "outline source",
+    "body area",
+    "top surface",
+    "height",
+    "lowest vertex",
+)
+
+
+def storey_of(space):
+    """The name of the storey a space is aggregated under, or contained in;
+    None where it has neither."""
+    import ifcopenshell.util.element
+
+    parent = ifcopenshell.util.element.get_aggregate(space)
+    while parent is not None and not parent.is_a("IfcBuildingStorey"):
+        parent = ifcopenshell.util.element.get_aggregate(parent)
+    if parent is None:
+        parent = ifcopenshell.util.element.get_container(space)
+    return parent.Name if parent is not None and parent.is_a("IfcBuildingStorey") else None
 
 
 def read_areas(path):
-    """GlobalId -> {number, name, storey, area, height} of each Area in an IFC.
-    `area` and `height` are None where the Area has no body."""
+    """GlobalId -> {number, name, storey, source, area, surface, height, low} of
+    each Area in an IFC. The last four are None where the Area has no body."""
     import ifcopenshell
     import ifcopenshell.util.element
 
@@ -68,30 +100,43 @@ def read_areas(path):
     areas = {}
     for space in model.by_type("IfcSpace"):
         props = ifcopenshell.util.element.get_psets(space).get(SET, {})
-        if props.get("SpaceOutlineSource") not in AREA_VALUES:
+        source = props.get("SpaceOutlineSource")
+        if source not in AREA_VALUES:
             continue
-        container = ifcopenshell.util.element.get_container(space)
         top = tops.get(space.GlobalId)
         low_high = extents.get(space.GlobalId)
         areas[space.GlobalId] = {
             "number": space.Name,
             "name": space.LongName,
-            "storey": getattr(container, "Name", None),
+            "storey": storey_of(space),
+            "source": source,
             "area": top[0] if top is not None else None,
+            "surface": top[3] if top is not None else None,
             "height": (low_high[1] - low_high[0]) if low_high is not None else None,
+            "low": low_high[0] if low_high is not None else None,
         }
     return areas
 
 
 def differs(field, a, b):
-    """Whether one field of the same Area differs between two saves."""
-    if field in ("body area", "height"):
+    """Whether one field of the same Area differs between two saves. A missing
+    body is a difference in every field of the body, whether or not the other
+    save has one: it is counted as a failure of its own as well."""
+    if field in ("body area", "height", "lowest vertex"):
         if a is None or b is None:
-            return (a is None) != (b is None)
+            return True
         if field == "body area":
             return abs(a - b) > AREA_TOLERANCE * max(abs(a), abs(b), 1.0)
         return abs(a - b) > HEIGHT_TOLERANCE_FEET
     return a != b
+
+
+def surface_gap(a, b):
+    """The area of the symmetric difference of two top surfaces and the larger
+    of their areas, or (None, None) where either has no body."""
+    if a is None or b is None:
+        return None, None
+    return float(a.symmetric_difference(b).area), max(float(a.area), float(b.area))
 
 
 def compare(reference, other):
@@ -99,20 +144,31 @@ def compare(reference, other):
     compared (in both), how many are missing from `other` or extra in it, and
     for each field how many are equal and how many differ."""
     common = sorted(set(reference) & set(other))
-    keys = {
-        "number": "number",
-        "name": "name",
-        "storey": "storey",
-        "body area": "area",
-        "height": "height",
-    }
     equal = {field: 0 for field in FIELDS}
     different = {field: 0 for field in FIELDS}
     # Paired by GlobalId, so it is equal for every Area compared.
     equal["GlobalId"] = len(common)
     for gid in common:
-        for field, key in keys.items():
-            if differs(field, reference[gid][key], other[gid][key]):
+        a, b = reference[gid], other[gid]
+        gap, larger = surface_gap(a["surface"], b["surface"])
+        values = {
+            "number": (a["number"], b["number"]),
+            "name": (a["name"], b["name"]),
+            "storey": (a["storey"], b["storey"]),
+            "outline source": (a["source"], b["source"]),
+            "body area": (a["area"], b["area"]),
+            "top surface": (gap, larger),
+            "height": (a["height"], b["height"]),
+            "lowest vertex": (a["low"], b["low"]),
+        }
+        for field, (x, y) in values.items():
+            if field == "top surface":
+                bad = gap is None or gap > SURFACE_TOLERANCE * max(larger, 1.0)
+            elif field == "storey":
+                bad = x is None or y is None or x != y
+            else:
+                bad = differs(field, x, y)
+            if bad:
                 different[field] += 1
             else:
                 equal[field] += 1
@@ -137,8 +193,13 @@ def judge(labels, saves):
             continue
         bodies = sum(a["area"] is not None for a in areas.values())
         report.append(f"areas across saves: {label}: {len(areas)} Areas, {bodies} with a body")
-        if len(areas) < EXPECTED_AREAS:
-            failures.append(f"{label}: {len(areas)} Areas, fewer than {EXPECTED_AREAS}")
+        if len(areas) != EXPECTED_AREAS:
+            failures.append(f"{label}: {len(areas)} Areas, not {EXPECTED_AREAS}")
+        if bodies != EXPECTED_AREAS:
+            failures.append(f"{label}: {bodies} Areas with a body, not {EXPECTED_AREAS}")
+        unplaced = sum(a["storey"] is None for a in areas.values())
+        if unplaced:
+            failures.append(f"{label}: {unplaced} Areas without a storey")
     first = labels[0]
     reference = saves.get(first)
     for label in labels[1:]:
@@ -193,10 +254,9 @@ def main(argv):
         print(f"areas across saves: FAILED: {line}")
     if failures:
         return 1
-    areas = len(saves[labels[0]])
     print(
-        f"areas across saves: passed: {areas} Areas on each of {len(labels)} saves,"
-        f" every field equal"
+        f"areas across saves: passed: {EXPECTED_AREAS} Areas, {EXPECTED_AREAS} with a body,"
+        f" on each of {len(labels)} saves, every field equal"
     )
     return 0
 

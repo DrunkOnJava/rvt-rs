@@ -67,16 +67,21 @@ pub const PARAMETER_TOLERANCE: f64 = 1e-9;
 pub const SEGMENT_POINT_TOLERANCE_FEET: f64 = 1e-6;
 
 /// The most sides a circuit may have to be read: a loop of a room is never
-/// near this many. Also the most edges its sides may make once cut where
-/// their area rule's offset changes: a circuit over it is refused before it
-/// is built, so that a crafted topology cannot ask for sides times parts
-/// edges.
+/// near this many. Also the most edges the sides of one Area's region, its
+/// outer loop and its holes together, may make once cut where their area
+/// rule's offset changes: a region over it is refused before it is built, so
+/// that a crafted topology cannot ask for sides times parts edges.
 pub const MAX_CIRCUIT_SIDES: usize = 10_000;
 
-/// The most offset parts the lines of one circuit may have, summed over its
-/// sides (a line run twice counts twice). Cutting a side is quadratic in its
-/// parts, so this bounds the work of one circuit.
+/// The most offset parts the lines of one Area's region may have, summed over
+/// the sides of its outer loop and its holes (a line run twice counts twice).
+/// Cutting a side is quadratic in its parts, so this bounds the work of a
+/// region.
 pub const MAX_CIRCUIT_OFFSET_PARTS: usize = 20_000;
+
+/// The most holes a region may have to be read. A component enclosed by the
+/// circuit is a hole once, however often a plan topology lists it.
+pub const MAX_REGION_HOLES: usize = 1_000;
 
 /// How close, feet, two segments' ends must be to be the same node of a plan
 /// topology (RE-317's node tolerance).
@@ -105,6 +110,9 @@ pub const REFUSED_AREA: &str = "area_circuit_area_differs";
 pub const REFUSED_ARC: &str = "area_arc_not_finite";
 /// The Area's point is not inside the rebuilt region.
 pub const REFUSED_POINT: &str = "area_point_outside_circuit";
+/// The region is over the bounds of [`MAX_CIRCUIT_SIDES`],
+/// [`MAX_CIRCUIT_OFFSET_PARTS`] or [`MAX_REGION_HOLES`], so it is not built.
+pub const REFUSED_TOO_LARGE: &str = "area_circuit_too_large";
 
 /// An Area's region: its outer loop and holes in plan feet, and the
 /// ElementIds of the lines that bound it.
@@ -550,10 +558,13 @@ fn plan(fields: &Value) -> Option<Plan> {
         let area = circuit.get("m_area")?.as_f64()?;
         out.circuits.insert(id, Circuit { area, sides });
     }
+    // A hole is listed once, in the order its plan lists it, however often a
+    // crafted plan repeats the component.
+    let mut listed: BTreeSet<(i64, i64)> = BTreeSet::new();
     for component in fields.get("m_components")?.as_array()? {
         let enclosing = circuit_id(component.get("m_enclosingCircuit")?)?;
         let outer = circuit_id(component.get("m_outerCircuit")?)?;
-        if enclosing >= 0 {
+        if enclosing >= 0 && listed.insert((enclosing, outer)) {
             out.holes.entry(enclosing).or_default().push(outer);
         }
     }
@@ -826,21 +837,35 @@ struct Loop {
     keep: Vec<bool>,
 }
 
+/// What the circuits of one Area's region have used of the bounds on a
+/// region ([`MAX_CIRCUIT_SIDES`], [`MAX_CIRCUIT_OFFSET_PARTS`]): shared by its
+/// outer loop and its holes, so that many holes cannot each ask for a full
+/// budget.
+#[derive(Default)]
+struct Budget {
+    edges: usize,
+    parts: usize,
+    /// Whether a bound stopped a circuit, as opposed to a side not read.
+    exceeded: bool,
+}
+
 /// The edges of one circuit, each moved by its offset and met by its
-/// neighbours where their curves cross, or `None` where a side is not read.
+/// neighbours where their curves cross, or `None` where a side is not read or
+/// `budget` is used up (`budget.exceeded` says which).
 fn circuit_edges(
     plan: &Plan,
     circuit: &Circuit,
     curves: &BTreeMap<i64, BoundaryCurve>,
+    budget: &mut Budget,
 ) -> Option<Loop> {
     if circuit.sides.len() > MAX_CIRCUIT_SIDES {
+        budget.exceeded = true;
         return None;
     }
     // How many edges a side made, and the end of its unmoved line.
     type Side = (usize, (f64, f64));
     let mut pieces: Vec<Side> = Vec::new();
     let mut edges: Vec<Edge> = Vec::new();
-    let mut parts = 0usize;
     for (line, major, sub) in without_spurs(&circuit.sides) {
         let backwards = sub < 0;
         let index = if backwards { !sub } else { sub };
@@ -857,8 +882,9 @@ fn circuit_edges(
         {
             return None;
         }
-        parts = parts.checked_add(curve.offsets.len())?;
-        if parts > MAX_CIRCUIT_OFFSET_PARTS {
+        budget.parts = budget.parts.saturating_add(curve.offsets.len());
+        if budget.parts > MAX_CIRCUIT_OFFSET_PARTS {
+            budget.exceeded = true;
             return None;
         }
         let mut side_edges = curve.edges(u0, u1)?;
@@ -867,7 +893,9 @@ fn circuit_edges(
             side_edges = side_edges.into_iter().rev().map(reversed).collect();
             unmoved_end = start;
         }
-        if edges.len().checked_add(side_edges.len())? > MAX_CIRCUIT_SIDES {
+        budget.edges = budget.edges.saturating_add(side_edges.len());
+        if budget.edges > MAX_CIRCUIT_SIDES {
+            budget.exceeded = true;
             return None;
         }
         pieces.push((side_edges.len(), unmoved_end));
@@ -1076,7 +1104,12 @@ fn region(
         .circuits
         .get(&place.circuit)
         .ok_or(REFUSED_NO_CIRCUIT)?;
-    let outline = circuit_edges(plan, circuit, curves).ok_or(REFUSED_SIDE)?;
+    let mut budget = Budget::default();
+    let outline = circuit_edges(plan, circuit, curves, &mut budget).ok_or(if budget.exceeded {
+        REFUSED_TOO_LARGE
+    } else {
+        REFUSED_SIDE
+    })?;
     let written = written_loop(&outline.edges, &outline.keep)?;
     // The loop as the edges are rebuilt, and as it is written, arcs as arcs,
     // must each have the area Revit saves for the circuit.
@@ -1092,9 +1125,21 @@ fn region(
     let mut test_holes = Vec::new();
     let mut line_ids: BTreeSet<u32> = BTreeSet::new();
     add_line_ids(&mut line_ids, circuit)?;
-    for hole_id in plan.holes.get(&place.circuit).into_iter().flatten() {
+    let hole_ids = plan
+        .holes
+        .get(&place.circuit)
+        .map_or(&[][..], Vec::as_slice);
+    if hole_ids.len() > MAX_REGION_HOLES {
+        return Err(REFUSED_TOO_LARGE);
+    }
+    for hole_id in hole_ids {
         let hole = plan.circuits.get(hole_id).ok_or(REFUSED_NO_CIRCUIT)?;
-        let hole_outline = circuit_edges(plan, hole, curves).ok_or(REFUSED_SIDE)?;
+        let hole_outline =
+            circuit_edges(plan, hole, curves, &mut budget).ok_or(if budget.exceeded {
+                REFUSED_TOO_LARGE
+            } else {
+                REFUSED_SIDE
+            })?;
         let hole_written = written_loop(&hole_outline.edges, &hole_outline.keep)?;
         let rebuilt = edges_area(&hole_outline.edges);
         let area = written_area(&hole_written.points, &hole_written.arcs).ok_or(REFUSED_ARC)?;

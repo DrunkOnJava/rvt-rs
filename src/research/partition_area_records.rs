@@ -47,12 +47,16 @@
 //! ([`crate::native_area_regions`], RE-333): the loop Revit computed for the
 //! Area, with each line moved by its area rule's offset and arcs drawn, checked
 //! against the area Revit saves for it and against the Area's point. Where it
-//! is not read or fails a check, the region is the lines' arrangement with its
-//! joins (RE-317, RE-330). Neither is asked of a group of lines that cannot be
+//! is not read (no plan, no circuit, a side not read), the region is the lines'
+//! arrangement with its joins (RE-317, RE-330). Where it is read and fails a
+//! check of its own (the loop is not the saved area, the point is outside it,
+//! an arc is not finite, or it is too large to build) and the lines draw the
+//! Area, it has no body and says why, since Revit's saved area does not vouch
+//! for the lines' region. Neither is asked of a group of lines that cannot be
 //! read as a whole (a non-primary design option, a stray height, copies that
 //! disagree, a missing line). The topology draws the Areas whose lines meet
 //! only once offset, or include an arc or a slanted line. Where both give a
-//! region they must be the same one (the same net area and the same corners,
+//! region they must be the same one (the same net area and the same outline,
 //! `regions_agree`); an Area whose two regions differ has no body and says
 //! `area_regions_disagree`, so that a file nothing was measured on cannot
 //! disagree silently. Every other check below applies to it as to the lines'
@@ -1148,16 +1152,24 @@ struct Located {
     records: Vec<SourcePart>,
 }
 
+/// Whether a refusal of Revit's plan topology says it was read and failed a
+/// check of its own, as against not being read at all (RE-333).
+fn topology_failed_a_check(reason: &str) -> bool {
+    use crate::native_area_regions::{REFUSED_ARC, REFUSED_AREA, REFUSED_POINT, REFUSED_TOO_LARGE};
+    matches!(
+        reason,
+        REFUSED_AREA | REFUSED_ARC | REFUSED_POINT | REFUSED_TOO_LARGE
+    )
+}
+
 /// The relative difference in net area within which Revit's plan topology and
 /// the arrangement of the lines give the same region (RE-333).
 const REGION_AREA_TOLERANCE: f64 = 1e-6;
 
-/// How close, feet, two corners are to be the same corner.
-const REGION_CORNER_TOLERANCE_FEET: f64 = 1e-4;
-
-/// The most corners a ring may have to be compared with another: the
-/// comparison is quadratic. A ring over it is not the same region.
-const REGION_CORNERS_COMPARED: usize = 5_000;
+/// How close, feet, the outline of one reader's region must be to the other's
+/// at every vertex of either: a step of a few micrometres where two offset
+/// curves meet is the same outline, and so is a vertex on a straight edge.
+const REGION_OUTLINE_TOLERANCE_FEET: f64 = 1e-4;
 
 /// The signed area of a ring of straight edges (positive counter-clockwise).
 fn ring_area(ring: &[(f64, f64)]) -> f64 {
@@ -1171,43 +1183,56 @@ fn ring_area(ring: &[(f64, f64)]) -> f64 {
         / 2.0
 }
 
-/// The corners of a ring: its vertices but those where two straight edges
-/// continue on in the same direction, which one reader keeps where a third
-/// line meets and the other does not.
-fn ring_corners(ring: &[(f64, f64)]) -> Vec<(f64, f64)> {
-    let n = ring.len();
-    (0..n)
-        .filter(|&index| {
-            let (a, b, c) = (
-                ring[(index + n - 1) % n],
-                ring[index],
-                ring[(index + 1) % n],
-            );
-            let (u, v) = ((b.0 - a.0, b.1 - a.1), (c.0 - b.0, c.1 - b.1));
-            let cross = u.0 * v.1 - u.1 * v.0;
-            let dot = u.0 * v.0 + u.1 * v.1;
-            !(dot > 0.0 && cross.abs() <= 1e-9 * u.0.hypot(u.1) * v.0.hypot(v.1))
+/// The length of a closed ring of straight edges, feet.
+fn ring_perimeter(ring: &[(f64, f64)]) -> f64 {
+    ring.iter()
+        .enumerate()
+        .map(|(index, &(x, y))| {
+            let (next_x, next_y) = ring[(index + 1) % ring.len()];
+            (next_x - x).hypot(next_y - y)
         })
-        .map(|index| ring[index])
-        .collect()
+        .sum()
 }
 
-/// Whether two rings of straight edges have the same corners.
-fn same_corners(a: &[(f64, f64)], b: &[(f64, f64)]) -> bool {
-    let (a, b) = (ring_corners(a), ring_corners(b));
-    if a.len() != b.len() || a.len() > REGION_CORNERS_COMPARED {
-        return false;
-    }
-    let near = |p: &(f64, f64), q: &(f64, f64)| {
-        (p.0 - q.0).hypot(p.1 - q.1) <= REGION_CORNER_TOLERANCE_FEET
+/// The distance from the point `p` to the segment from `a` to `b`, feet.
+fn point_segment_distance(p: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let length_squared = dx * dx + dy * dy;
+    let along = if length_squared > 0.0 {
+        (((p.0 - a.0) * dx + (p.1 - a.1) * dy) / length_squared).clamp(0.0, 1.0)
+    } else {
+        0.0
     };
-    a.iter().all(|p| b.iter().any(|q| near(p, q))) && b.iter().all(|q| a.iter().any(|p| near(p, q)))
+    (p.0 - (a.0 + along * dx)).hypot(p.1 - (a.1 + along * dy))
+}
+
+/// Whether every vertex of `points` lies within [`REGION_OUTLINE_TOLERANCE_FEET`]
+/// of the closed outline `ring`. False for an empty outline and for a vertex
+/// that is not finite.
+fn near_outline(points: &[(f64, f64)], ring: &[(f64, f64)]) -> bool {
+    !ring.is_empty()
+        && points.iter().all(|&p| {
+            ring.iter().enumerate().any(|(index, &a)| {
+                point_segment_distance(p, a, ring[(index + 1) % ring.len()])
+                    <= REGION_OUTLINE_TOLERANCE_FEET
+            })
+        })
+}
+
+/// Whether two rings of straight edges are the same outline: every vertex of
+/// each within the tolerance of the other's edges. Neither the number of
+/// vertices nor the vertex a ring starts at matters, so a step of a few
+/// micrometres, a vertex on a straight edge, a ring of thousands of vertices
+/// and a ring turned to start elsewhere are each the same outline.
+fn same_outline(a: &[(f64, f64)], b: &[(f64, f64)]) -> bool {
+    near_outline(a, b) && near_outline(b, a)
 }
 
 /// Whether the region of Revit's plan topology and the region of the lines'
 /// arrangement are the same one: no arc in the topology's (the arrangement
-/// reads straight lines only), the same net area, the same corners of the
-/// outline and each hole of one a hole of the other (RE-333).
+/// reads straight lines only), the same net area, the same outline and each
+/// hole of one the same outline as a hole of the other (RE-333). An outline
+/// moved, turned or sheared is not the same region, whatever its area.
 fn regions_agree(region: &AreaRegion, face: &AreaFace) -> bool {
     let curved = region.outer_arcs.iter().any(Option::is_some)
         || region.hole_arcs.iter().flatten().any(Option::is_some);
@@ -1219,18 +1244,22 @@ fn regions_agree(region: &AreaRegion, face: &AreaFace) -> bool {
     };
     let lines_area = ring_area(&face.outer) + face.holes.iter().map(|h| ring_area(h)).sum::<f64>();
     let scale = topology_area.abs().max(lines_area.abs()).max(1.0);
+    // Outlines within the tolerance of each other differ in area by at most a
+    // band of that width along them.
+    let band = REGION_OUTLINE_TOLERANCE_FEET
+        * (ring_perimeter(&face.outer) + face.holes.iter().map(|h| ring_perimeter(h)).sum::<f64>());
     let difference = (topology_area - lines_area).abs();
-    if difference.is_nan() || difference > REGION_AREA_TOLERANCE * scale {
+    if difference.is_nan() || difference > REGION_AREA_TOLERANCE * scale + band {
         return false;
     }
-    if !same_corners(&region.outer, &face.outer) {
+    if !same_outline(&region.outer, &face.outer) {
         return false;
     }
     let mut taken = vec![false; face.holes.len()];
     for hole in &region.holes {
         let mut matched = false;
         for (index, other) in face.holes.iter().enumerate() {
-            if !taken[index] && same_corners(hole, other) {
+            if !taken[index] && same_outline(hole, other) {
                 taken[index] = true;
                 matched = true;
                 break;
@@ -1327,6 +1356,16 @@ fn locate(
             true,
             region.records,
         ),
+        // The topology was read and failed a check (its loop is not the circuit's
+        // saved area, the Area's point is outside it, an arc is not finite, or
+        // it is too large to build): the lines' region, which Revit's saved
+        // area does not vouch for, is not drawn in its place. The reason is
+        // counted in `exported.area_body_refusals`.
+        Some(Err(reason)) if by_lines.is_ok() && topology_failed_a_check(reason) => {
+            (Err(reason), false, Vec::new())
+        }
+        // Not read (no plan, no circuit, a side not read): the lines' region,
+        // as before the topology was read.
         Some(Err(reason)) => (by_lines.map_err(|_| reason), false, Vec::new()),
         None => (by_lines, false, Vec::new()),
     };
@@ -1798,4 +1837,178 @@ pub fn areas_from_partition_chain_records(
             }
         })
         .collect()
+}
+
+/// The pure helpers that compare two regions, tested for the ways they could be
+/// wrong first: a region that is not the same called the same, then the same
+/// region called different.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn square(side: f64) -> Vec<(f64, f64)> {
+        vec![(0.0, 0.0), (side, 0.0), (side, side), (0.0, side)]
+    }
+
+    fn region(outer: Vec<(f64, f64)>, holes: Vec<Vec<(f64, f64)>>) -> AreaRegion {
+        let hole_arcs = holes.iter().map(|_| Vec::new()).collect();
+        AreaRegion {
+            outer,
+            outer_arcs: Vec::new(),
+            holes,
+            hole_arcs,
+            line_ids: BTreeSet::new(),
+            records: Vec::new(),
+        }
+    }
+
+    fn face(outer: Vec<(f64, f64)>, holes: Vec<Vec<(f64, f64)>>) -> AreaFace {
+        AreaFace {
+            outer,
+            outer_arcs: Vec::new(),
+            holes,
+            hole_arcs: Vec::new(),
+            line_ids: BTreeSet::new(),
+            joined: false,
+        }
+    }
+
+    fn clockwise(ring: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
+        ring.into_iter().rev().collect()
+    }
+
+    #[test]
+    fn a_region_of_another_area_is_not_the_same() {
+        assert!(!regions_agree(
+            &region(square(10.0), vec![]),
+            &face(square(10.5), vec![])
+        ));
+    }
+
+    #[test]
+    fn a_shifted_region_of_the_same_area_is_not_the_same() {
+        let shifted: Vec<(f64, f64)> = square(10.0).iter().map(|&(x, y)| (x + 0.5, y)).collect();
+        assert!(!regions_agree(
+            &region(square(10.0), vec![]),
+            &face(shifted, vec![])
+        ));
+    }
+
+    #[test]
+    fn a_sheared_region_of_the_same_area_is_not_the_same() {
+        let sheared = vec![(0.0, 0.0), (10.0, 0.0), (13.0, 10.0), (3.0, 10.0)];
+        assert!(!regions_agree(
+            &region(square(10.0), vec![]),
+            &face(sheared, vec![])
+        ));
+    }
+
+    #[test]
+    fn a_region_with_an_arc_is_not_the_lines_region() {
+        let mut curved = region(square(10.0), vec![]);
+        curved.outer_arcs = vec![None, Some((10.5, 5.0)), None, None];
+        assert!(!regions_agree(&curved, &face(square(10.0), vec![])));
+    }
+
+    #[test]
+    fn a_hole_one_reader_lacks_is_not_the_same() {
+        let hole = clockwise(vec![(2.0, 2.0), (4.0, 2.0), (4.0, 4.0), (2.0, 4.0)]);
+        assert!(!regions_agree(
+            &region(square(10.0), vec![hole.clone()]),
+            &face(square(10.0), vec![])
+        ));
+        assert!(!regions_agree(
+            &region(square(10.0), vec![]),
+            &face(square(10.0), vec![hole])
+        ));
+    }
+
+    #[test]
+    fn two_holes_are_not_matched_to_one() {
+        let hole = clockwise(vec![(2.0, 2.0), (4.0, 2.0), (4.0, 4.0), (2.0, 4.0)]);
+        let other = clockwise(vec![(6.0, 6.0), (8.0, 6.0), (8.0, 8.0), (6.0, 8.0)]);
+        assert!(!regions_agree(
+            &region(square(10.0), vec![hole.clone(), hole.clone()]),
+            &face(square(10.0), vec![hole, other])
+        ));
+    }
+
+    #[test]
+    fn a_region_with_the_same_holes_is_the_same() {
+        let first = clockwise(vec![(2.0, 2.0), (4.0, 2.0), (4.0, 4.0), (2.0, 4.0)]);
+        let second = clockwise(vec![(6.0, 6.0), (8.0, 6.0), (8.0, 8.0), (6.0, 8.0)]);
+        let reversed_order = vec![second.clone(), first.clone()];
+        assert!(regions_agree(
+            &region(square(10.0), vec![first, second]),
+            &face(square(10.0), reversed_order)
+        ));
+    }
+
+    #[test]
+    fn an_outline_that_is_not_finite_is_not_the_same() {
+        let mut broken = square(10.0);
+        broken[2] = (f64::NAN, 10.0);
+        assert!(!same_outline(&broken, &square(10.0)));
+        assert!(!same_outline(&square(10.0), &broken));
+        assert!(!same_outline(&[], &square(10.0)));
+    }
+
+    #[test]
+    fn a_region_agrees_with_itself_whichever_vertex_it_starts_at() {
+        let turned = vec![(10.0, 10.0), (0.0, 10.0), (0.0, 0.0), (10.0, 0.0)];
+        assert!(regions_agree(
+            &region(square(10.0), vec![]),
+            &face(turned, vec![])
+        ));
+    }
+
+    #[test]
+    fn a_vertex_on_a_straight_edge_is_the_same_region() {
+        let with_vertex = vec![
+            (0.0, 0.0),
+            (5.0, 0.0),
+            (10.0, 0.0),
+            (10.0, 10.0),
+            (0.0, 10.0),
+        ];
+        assert!(regions_agree(
+            &region(with_vertex, vec![]),
+            &face(square(10.0), vec![])
+        ));
+    }
+
+    #[test]
+    fn a_step_of_a_few_micrometres_is_the_same_region() {
+        // Two offset curves that do not quite meet leave a step 5e-5 ft wide
+        // half way along a side; its two vertices are corners of the topology's
+        // ring and of no corner of the lines'.
+        let jogged = vec![
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (10.0, 5.0),
+            (10.00005, 5.0),
+            (10.00005, 10.0),
+            (0.0, 10.0),
+        ];
+        assert!(regions_agree(
+            &region(jogged, vec![]),
+            &face(square(10.0), vec![])
+        ));
+    }
+
+    #[test]
+    fn a_ring_of_thousands_of_vertices_is_the_same_region() {
+        let sides = 6_000usize;
+        let radius = 100.0;
+        let ring: Vec<(f64, f64)> = (0..sides)
+            .map(|k| {
+                let angle = std::f64::consts::TAU * k as f64 / sides as f64;
+                (radius * angle.cos(), radius * angle.sin())
+            })
+            .collect();
+        assert!(regions_agree(
+            &region(ring.clone(), vec![]),
+            &face(ring, vec![])
+        ));
+    }
 }
