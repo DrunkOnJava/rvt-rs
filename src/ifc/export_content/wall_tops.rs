@@ -85,7 +85,8 @@ use super::{
     ELEMENT_RECORD_PROPERTY_SET, FLOOR_SHAPE_BODY_SOURCE, WALL_BASE_COVER_BODY_BASE_SOURCE,
     WALL_BASE_REFUSAL_PROPERTY, WALL_BASE_SLOPED_BODY_BASE_SOURCE, WALL_BASE_SOURCE_PROPERTY,
     WALL_END_AT_BASE_WALL_BODY_END_SOURCE, WALL_END_REFUSAL_PROPERTY, WALL_END_SOURCE_PROPERTY,
-    WALL_TOP_COVER_BODY_HEIGHT_SOURCE, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    WALL_END_UPPER_STEP_OMITTED_BODY_END_SOURCE, WALL_TOP_COVER_BODY_HEIGHT_SOURCE,
+    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use crate::ifc::body_geometry::{
     Body, Placement, PlanPlane, Point2, Ring, between_surfaces_mesh, extrusion_rings, plan_outline,
@@ -1312,6 +1313,8 @@ pub(super) fn finish_wall_ends(entities: &mut [IfcEntity], steps: &HashMap<usize
             .iter()
             .map(|(_, top)| *top)
             .fold(f64::INFINITY, f64::min);
+        // `decide_ends` let the wall through only with every piece above its
+        // base, so this is a guard and not a path.
         if !(low.is_finite() && low > 1e-9) {
             continue;
         }
@@ -1575,10 +1578,13 @@ struct WallEnds {
     plan: Option<SteppedPlan>,
 }
 
-/// A wall whose ends are drawn to the walls beneath it, whose body is its own
-/// plan to its top and a block at each end that stops at the top of the wall
-/// it reaches, where that is below the wall's top: Revit steps the end up, and
-/// the steps above the lower wall are not drawn (#1396). Model feet.
+/// A wall whose ends are drawn to the walls beneath it where a block stops
+/// below the wall's top: its body is its own plan to its top and a block at
+/// each end, which stops at the lowest of the top of the walls it reaches, the
+/// base of any wall it would lie inside and the wall's top. Revit steps the end
+/// up further, and those steps are not drawn: a labelled approximation
+/// (`BodyEndSource` `wall_end_to_base_wall_upper_step_omitted`; #1396). Model
+/// feet.
 #[derive(Debug)]
 pub(super) struct SteppedPlan {
     /// The wall's plan before its ends moved.
@@ -1764,9 +1770,9 @@ fn shift_profile_openings(entities: &mut [IfcEntity], host: usize, moved: &Moved
 }
 
 /// Write how the wall at `index` was drawn at `ends` to its record's
-/// properties: one `BodyEndSource`, and the least ElementId of the walls its
-/// ends reach.
-fn mark_ends(entities: &mut [IfcEntity], index: usize, ends: &[End]) {
+/// properties: one `BodyEndSource`, `source`, and the least ElementId of the
+/// walls its ends reach.
+fn mark_ends(entities: &mut [IfcEntity], index: usize, ends: &[End], source: &str) {
     let Some(IfcEntity::BuildingElement {
         property_set: Some(set),
         ..
@@ -1779,7 +1785,7 @@ fn mark_ends(entities: &mut [IfcEntity], index: usize, ends: &[End]) {
     }
     set.properties.push(Property {
         name: WALL_END_SOURCE_PROPERTY.into(),
-        value: PropertyValue::Text(WALL_END_AT_BASE_WALL_BODY_END_SOURCE.into()),
+        value: PropertyValue::Text(source.into()),
     });
     if let Some(id) = ends.iter().filter_map(|end| end.reached).min() {
         set.properties.push(Property {
@@ -1952,6 +1958,27 @@ fn decide_ends(
         if move_ends(&mut trial, wall.turned, &ends).is_none() {
             continue;
         }
+        // Every piece of the stepped body must have a height above the base:
+        // `finish_wall_ends` and the base pass make nothing of one that has not.
+        if let (
+            Some(plan),
+            IfcEntity::BuildingElement {
+                extrusion: Some(body),
+                location_feet: Some(location),
+                rotation_radians,
+                ..
+            },
+        ) = (&plan, &trial)
+        {
+            let placement = Placement::new(Some(*location), *rotation_radians);
+            let pieces = plan.pieces(&placement, location[2], location[2] + body.height_feet);
+            if !pieces.iter().all(|(_, top)| *top > END_TOLERANCE_FEET) {
+                refused
+                    .entry(wall.index)
+                    .or_insert(WALL_END_REFUSAL_IN_THE_WAY);
+                continue;
+            }
+        }
         let named = pending
             .iter()
             .find(|base| base.index == wall.index)
@@ -2080,10 +2107,17 @@ pub(super) fn extend_wall_ends(
             continue;
         };
         shift_profile_openings(entities, index, &moved);
+        // A block that stops below the wall's top leaves Revit's steps above it
+        // out: its own label.
+        let source = if plan.is_some() {
+            WALL_END_UPPER_STEP_OMITTED_BODY_END_SOURCE
+        } else {
+            WALL_END_AT_BASE_WALL_BODY_END_SOURCE
+        };
         if let Some(plan) = plan {
             stepped.insert(index, plan);
         }
-        mark_ends(entities, index, &ends);
+        mark_ends(entities, index, &ends, source);
     }
     for (index, reason) in refused {
         mark_end_refusal(entities, index, reason);

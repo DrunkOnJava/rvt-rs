@@ -4421,9 +4421,17 @@ pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_cover
 pub const WALL_END_SOURCE_PROPERTY: &str = "BodyEndSource";
 
 /// `BodyEndSource` of a wall with an edited elevation profile whose end is
-/// drawn to the face of the perpendicular wall beneath it that holds its base
-/// (#1396, RE-337).
+/// drawn to the face of the perpendicular wall beneath it that holds its base,
+/// the block added at the end reaching the wall's full height (#1396, RE-337).
 pub const WALL_END_AT_BASE_WALL_BODY_END_SOURCE: &str = "wall_end_extended_to_base_wall";
+
+/// `BodyEndSource` of such a wall where the block added at an end stops below
+/// the wall's own top: at the top of the wall beneath it, or the base of a wall
+/// it would lie inside. Revit steps the end up further, to the faces of the
+/// walls above, and those steps are not drawn: a labelled approximation
+/// (#1396, RE-337; Griffin, 2026-11-05: ship it, labelled).
+pub const WALL_END_UPPER_STEP_OMITTED_BODY_END_SOURCE: &str =
+    "wall_end_to_base_wall_upper_step_omitted";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says why a wall
 /// with an edited elevation profile, whose end stops short of walls beneath it,
