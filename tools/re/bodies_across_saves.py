@@ -78,6 +78,7 @@ BEAMS_AND_LANDINGS = "beams and landings"
 STAIR_RUNS = "stair runs"
 SKETCH_OUTLINES = "sketch outlines"
 NAMED_ELEMENTS = "named elements"
+PIPES = "pipes"
 
 SOURCE_GROUP = {
     "partition_beam_axis": BEAMS_AND_LANDINGS,
@@ -85,9 +86,13 @@ SOURCE_GROUP = {
     "native_landing_tread": BEAMS_AND_LANDINGS,
     "partition_landing_slab": BEAMS_AND_LANDINGS,
     "partition_stair_run_sketch": STAIR_RUNS,
+    "partition_pipe_axis": PIPES,
 }
 OUTLINE_CLASSES = {"IfcSlab", "IfcCovering", "IfcRoof"}
-REFERENCE_YEAR = {BEAMS_AND_LANDINGS: 2024, STAIR_RUNS: 2025, SKETCH_OUTLINES: 2024, NAMED_ELEMENTS: 2024}
+REFERENCE_YEAR = {BEAMS_AND_LANDINGS: 2024, STAIR_RUNS: 2025, SKETCH_OUTLINES: 2024, NAMED_ELEMENTS: 2024, PIPES: 2025}
+# The save readers_across_saves.py holds a save's door and window cuts, ports and
+# properties to (RE-346).
+READERS_YEAR = 2025
 
 # Bodies the sample is known to draw by BodySource (Measure run 41988011289,
 # head 1d5bbf03, exported diagnostics), and outlines by group.
@@ -105,6 +110,8 @@ MINIMUMS = {
         STAIR_RUNS: {"partition_stair_run_sketch": 1},
     },
     "racbasicsampleproject": {STAIR_RUNS: {"partition_stair_run_sketch": 2}},
+    "rmeadvancedsampleproject": {PIPES: {"partition_pipe_axis": 0}},
+    "rmebasicsampleproject": {PIPES: {"partition_pipe_axis": 0}},
 }
 # At least this many sketch outlines compared (Measure run 42010304828, head
 # e56d31b5: rac_advanced 82, rac_basic 12, rst_basic 5).
@@ -315,7 +322,7 @@ def main():
         print(f"named {tag}, {own_year} save: {describe(settings, candidate.get(tag))}")
         for year, (_, reference) in sorted(earlier.items()):
             print(f"named {tag}, {year} save: {describe(settings, reference.get(tag))}")
-    for group in (BEAMS_AND_LANDINGS, STAIR_RUNS, SKETCH_OUTLINES, NAMED_ELEMENTS):
+    for group in (BEAMS_AND_LANDINGS, STAIR_RUNS, SKETCH_OUTLINES, NAMED_ELEMENTS, PIPES):
         year = REFERENCE_YEAR[group]
         chosen = {
             tag: [item for item in items if item[2] == group]
@@ -379,6 +386,21 @@ def main():
         other = OTHER_YEAR.get(group)
         if other in earlier and chosen:
             against_other(settings, (scale_candidate, ifcopenshell.util.unit.calculate_unit_scale(earlier[other][0])), chosen, earlier[other][1], group, other)
+    if READERS_YEAR in earlier:
+        import readers_across_saves
+
+        total += readers_across_saves.check(
+            project,
+            candidate_path,
+            model,
+            earlier_paths[READERS_YEAR],
+            earlier[READERS_YEAR][0],
+            (scale_candidate, ifcopenshell.util.unit.calculate_unit_scale(earlier[READERS_YEAR][0])),
+            settings,
+            fail,
+        )
+    elif READERS_YEAR not in earlier_paths:
+        not_compared.append(f"cut openings, ports and properties (the {READERS_YEAR} save is not in this run)")
     if total == 0:
         fail("nothing was compared")
     report_and_exit(failures, not_compared)

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Failure-first tests of the pure judgement in same_project_verdict.py: what must never read as a pass."""
+import pathlib
+import re
 import unittest
 
 import same_project_verdict as v
@@ -75,15 +77,21 @@ class Worst(unittest.TestCase):
 
 class ExpectedSamples(unittest.TestCase):
     def test_one_year_means_from_it_on(self):
-        self.assertEqual(len(v.expected_samples("2027")), 3)
-        self.assertEqual(len(v.expected_samples("2026")), 6)
+        self.assertEqual(len(v.expected_samples("2027")), 5)
+        self.assertEqual(len(v.expected_samples("2026")), 10)
 
     def test_a_narrow_range_holds_only_its_years(self):
-        self.assertEqual(len(v.expected_samples("2026 2026")), 3)
+        self.assertEqual(len(v.expected_samples("2026 2026")), 5)
         self.assertEqual(v.expected_samples("2008 2023"), [])
 
-    def test_no_range_holds_all_six(self):
-        self.assertEqual(len(v.expected_samples("")), 6)
+    def test_no_range_holds_all_ten(self):
+        self.assertEqual(len(v.expected_samples("")), 10)
+
+    def test_the_check_script_expects_the_samples_the_verdict_does(self):
+        script = pathlib.Path(__file__).with_name("check-bodies-across-saves.sh").read_text()
+        match = re.search(r"for project in ([a-z ]+); do", script)
+        self.assertIsNotNone(match)
+        self.assertEqual(set(match.group(1).split()), set(v.PROJECTS))
 
 
 if __name__ == "__main__":
