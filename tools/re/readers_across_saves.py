@@ -211,20 +211,17 @@ AREA_LEFT_OUT = 2027  # the first release that leaves it out, as DOOR_WINDOW_ARE
 # The least number each check compares on a sample of the project, whatever the
 # release of the save unless a number is given by release: `PORTS` placed,
 # `CUT_OPENINGS` cut, `PROPERTIES` values equal (not counting a door's or window's
-# Area) and "areas" equal where the release writes them. From the 2026 and 2027 saves
-# of Measure run 42107917715 (head f1460b32), scored with this script on the IFC
-# files it kept: every number is the same on both releases except rac_basic's
-# properties, where two doors of the 2027 save, 431064 and 485679, write no Width
-# and no Height (#1489), 4 values fewer. rac_basic's properties are the 329 of run
-# 42063046730 for 2026, which this change gets back by reading a stair's and its
-# flights' type and family on 2026 and 2027 again (run 42107917715 scored 327 and
-# 323 without), and 4 fewer for 2027; the stairs' own values, now scored, add to them.
+# Area; a stair's and a flight's type-derived values are among them) and "areas" equal
+# where the release writes them. From the 2026 and 2027 saves of Measure run
+# 42119142486 (head 95fe042f), the numbers this script printed there: every number is
+# the same on both releases except rac_basic's properties, where two doors of the 2027
+# save, 431064 and 485679, write no Width and no Height (#1489), 4 values fewer.
 MINIMUMS = {
-    "racadvancedsampleproject": {PORTS: 30, CUT_OPENINGS: 108, PROPERTIES: 4448, "areas": 107, FILLERS: 124},
-    "racbasicsampleproject": {PORTS: 60, CUT_OPENINGS: 25, PROPERTIES: {2026: 329, 2027: 325}, "areas": 13, FILLERS: 33},
-    "rmeadvancedsampleproject": {PORTS: 6959, CUT_OPENINGS: 107, PROPERTIES: 5015, "areas": 107, FILLERS: 124},
-    "rmebasicsampleproject": {PORTS: 7046, CUT_OPENINGS: 107, PROPERTIES: 5020, "areas": 107, FILLERS: 124},
-    "rstbasicsampleproject": {PORTS: 0, CUT_OPENINGS: 0, PROPERTIES: 413, "areas": 0, FILLERS: 0},
+    "racadvancedsampleproject": {PORTS: 30, CUT_OPENINGS: 108, PROPERTIES: 4733, "areas": 107, FILLERS: 124},
+    "racbasicsampleproject": {PORTS: 60, CUT_OPENINGS: 25, PROPERTIES: {2026: 418, 2027: 414}, "areas": 13, FILLERS: 33},
+    "rmeadvancedsampleproject": {PORTS: 6959, CUT_OPENINGS: 107, PROPERTIES: 5023, "areas": 107, FILLERS: 124},
+    "rmebasicsampleproject": {PORTS: 7046, CUT_OPENINGS: 107, PROPERTIES: 5028, "areas": 107, FILLERS: 124},
+    "rstbasicsampleproject": {PORTS: 0, CUT_OPENINGS: 0, PROPERTIES: 451, "areas": 0, FILLERS: 0},
 }
 
 
