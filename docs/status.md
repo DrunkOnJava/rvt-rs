@@ -1244,6 +1244,18 @@ profile (27 chords) and of two half arcs of it (28) (run 41805333248, RE-327
 reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions.md`
 §9).
 
+**RE-352 (2026-11-05)** exports Furniture Systems (`OST_FurnitureSystems`,
+#1444) as `IfcSystemFurnitureElement` with no `PredefinedType`, from their
+element records on every release the exporter reads, where `category_map` gave
+`FurnitureSystem` the class `IfcFurniture` and nothing produced it. It rests
+on one project and 3 elements: Revit's public IFC4 export of Autodesk's 2018
+`rac_basic` holds 3 `IfcSystemFurnitureElement`, all 3 placed Furniture
+Systems frames of that save are in it and none is written that it lacks
+(counts of ids; Measure runs 42097940515 and 42108271073), and no other model
+in Measure places one. Type objects, containment in spaces and Revit's
+property sets are not written. The exports this head moves are not yet
+measured (`reports/element-framing/RE-352-furniture-systems.md`).
+
 ## Performance
 
 Opening a large project is no longer a minutes-long wait. Every partition

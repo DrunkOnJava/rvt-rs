@@ -149,7 +149,7 @@ Column definitions:
 | Area | IfcSpace | yes | no helper | n/a | no helper | n/a |
 | Space | IfcSpace | yes | no helper | n/a | no helper | n/a |
 | Furniture | IfcFurniture | yes | no helper | yes | no helper | n/a |
-| FurnitureSystem | IfcFurniture (USERDEFINED) | yes | no helper | yes | no helper | n/a |
+| FurnitureSystem | IfcSystemFurnitureElement | yes | no helper | yes | no helper | n/a |
 | Casework | IfcFurniture | yes | no helper | yes | no helper | n/a |
 | LightingFixture | IfcLightFixture | yes | no helper | yes | no helper | n/a |
 | LightingDevice | IfcLightFixture (USERDEFINED) | yes | no helper | yes | no helper | n/a |

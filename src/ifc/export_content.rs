@@ -2047,11 +2047,13 @@ fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Opt
     // RE-319: the names Revit gives a conduit's, conduit fitting's or
     // gutter's Level parameter are not measured: the one export that holds
     // them, Revit 2018's IFC2X3, writes no Revit parameter-group set on any
-    // element. So none is written.
+    // element. So none is written. RE-352: nor is a Furniture Systems
+    // element's: the name of its Level parameter is not measured.
     if matches!(
         ifc_type,
         "IFCCABLECARRIERSEGMENT" | "IFCCABLECARRIERFITTING"
     ) || decoded.class == "Gutter"
+        || decoded.class == "FurnitureSystem"
     {
         return None;
     }
