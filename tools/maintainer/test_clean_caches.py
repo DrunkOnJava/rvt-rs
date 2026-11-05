@@ -2,9 +2,10 @@
 """Failure-first tests of clean_caches.py (#1457): what must never be deleted, and when to stop.
 
 Never deleted: the newest generation of a family (the next build restores it), another family's
-caches, a live branch's own caches. Never gone on with: an empty open-pull-request list or a branch
-list without `main` (GitHub answers an empty body now and then, and every live cache would read as
-dead), a permission 403 read as a rate limit.
+caches, a live branch's own caches. Never gone on with: an empty open-pull-request list (exit 0: a
+repository can have none) or a branch list without `main` (exit 1: it cannot be true), because
+GitHub answers an empty body now and then and every live cache would read as dead; a permission
+403 read as a rate limit.
 """
 import unittest
 
@@ -81,14 +82,19 @@ class Re1(unittest.TestCase):
 
 
 class Refusal(unittest.TestCase):
-    def test_an_empty_open_pull_request_list_refuses(self):
-        self.assertIsNotNone(cc.refusal(set(), {"main", "x"}))
+    def test_an_empty_open_pull_request_list_deletes_nothing_and_is_not_a_failure(self):
+        status, why = cc.refusal(set(), {"main", "x"})
+        self.assertEqual(status, 0)
+        self.assertIn("pull request", why)
 
-    def test_a_branch_list_without_main_refuses(self):
-        self.assertIsNotNone(cc.refusal({1}, {"x"}))
-        self.assertIsNotNone(cc.refusal({1}, set()))
+    def test_a_branch_list_without_main_is_a_failure(self):
+        self.assertEqual(cc.refusal({1}, {"x"})[0], 1)
+        self.assertEqual(cc.refusal({1}, set())[0], 1)
 
-    def test_both_lists_as_the_repository_has_them_do_not(self):
+    def test_the_branch_list_is_judged_first_when_both_are_wrong(self):
+        self.assertEqual(cc.refusal(set(), set())[0], 1)
+
+    def test_both_lists_as_the_repository_has_them_do_not_refuse(self):
         self.assertIsNone(cc.refusal({1459}, {"main", "lane/1457-ci-gates"}))
 
 

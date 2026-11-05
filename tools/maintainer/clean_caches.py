@@ -22,10 +22,13 @@ least recently used cache past it, so stale generations fill the limit and leave
 no room to see a real problem: this is the chore behind the audit's "the Actions
 cache is under 90% of its 10 GB limit" line.
 
-Dry run by default: it prints what it would delete. Pass `--delete` to delete. It refuses to go on
-(exit 1, nothing deleted) when the open pull request list is empty or the branch list has no
-`main`: GitHub answers a read with an empty body now and then, and every live cache would read as
-dead. A 403 that is a permission stops the run at once; one that is a rate limit is waited out.
+Dry run by default: it prints what it would delete. Pass `--delete` to delete. Each of the three
+reads is tried three times, because GitHub answers a read with an empty body now and then. A
+branch list without `main` cannot be true, so the run stops there (exit 1, nothing deleted). An
+open pull request list that is still empty is true now and then (a release empties the queue),
+and then every pull request's cache would read as dead on a read that may be wrong: nothing is
+deleted, a `::notice::` says so, and the run exits 0, the next one cleaning. A 403 that is a
+permission stops the run at once; one that is a rate limit is waited out.
 
 Needs the GitHub CLI (`gh`), logged in with the `repo` scope.
 
@@ -97,14 +100,16 @@ def pages(path, tries=1):
 
 
 def refusal(open_prs, live_branches):
-    """Why nothing may be deleted, or None. A cache of a pull request or branch is kept only while
-    the pull request is in the open list and the branch in the branch list, so an empty list
-    would read every one as dead: the repository always has `main`, and a list without it is
-    wrong."""
+    """Why nothing may be deleted, or None: an `(exit status, why)` pair. A cache of a pull request
+    or branch is kept only while the pull request is in the open list and the branch in the branch
+    list, so an empty list would read every one as dead. The repository always has `main`, so a
+    list without it is wrong and the run fails (1). It can have no open pull request, so an empty
+    list is not a failure (0): it is a list that cannot be told from a wrong one, and nothing is
+    deleted until a run sees an open pull request."""
     if "main" not in live_branches:
-        return "the branch list has no main"
+        return 1, "the branch list has no main"
     if not open_prs:
-        return "the open pull request list is empty"
+        return 0, "the open pull request list is empty"
     return None
 
 
@@ -155,11 +160,16 @@ def main():
     caches = pages(f"repos/{repo}/actions/caches?per_page=100", tries=3)
     open_prs = {p["number"] for p in pages(f"repos/{repo}/pulls?state=open&per_page=100", tries=3)}
     live_branches = {b["name"] for b in pages(f"repos/{repo}/branches?per_page=100", tries=3)}
-    why_not = refusal(open_prs, live_branches)
-    if why_not:
-        print(f"refusing to go on: {why_not}, after three reads, so the caches of live pull requests and branches "
-              "would read as dead; nothing is deleted", file=sys.stderr)
-        return 1
+    stop = refusal(open_prs, live_branches)
+    if stop:
+        status, why = stop
+        if status:
+            print(f"refusing to go on: {why}, after three reads, so the caches of live pull requests and branches "
+                  "would read as dead; nothing is deleted", file=sys.stderr)
+        else:
+            print(f"::notice::{why} after three reads, so a cache of a pull request cannot be told live from dead; "
+                  "nothing is deleted, and the next run with an open pull request cleans")
+        return status
 
     doomed = unusable(caches, open_prs, live_branches, args.keep)
     freed = sum(c["size_in_bytes"] for c, _ in doomed)
