@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Whether the bodies a Revit 2026 or 2027 save draws are the bodies the same
-project's earlier save draws (RE-341).
+"""Whether the bodies a Revit 2025, 2026 or 2027 save draws are the bodies the
+same project's earlier save draws (RE-341, RE-345).
 
-No Revit export of a 2026 or 2027 beam, landing, stair run or sketch outline
-is available to score them against, so each is held to the same Autodesk
-sample project saved by Revit 2024 or 2025, whose export is measured against
-Revit's own. Both saves are exported by the build under test, so a difference
-is the reader's, or the project's own edit between saves. What this cannot
-catch: an error the earlier save shares with this one.
+No Revit export of a 2025, 2026 or 2027 beam, landing, stair run or sketch
+outline of an Autodesk sample is available to score them against, so each is
+held to the same Autodesk sample project saved by Revit 2024 (or, for stair
+runs, 2025), whose export is measured against Revit's own. Both saves are
+exported by the build under test, so a difference is the reader's, or the
+project's own edit between saves. What this cannot catch: an error the
+earlier save shares with this one. A 2025 save is held to the 2024 save only:
+its stair runs are what the 2026 and 2027 saves are held to, so they are not
+compared (`not applicable`), though the number it draws is still checked.
 
 The candidate's elements checked are those whose body the widened release
 lists change:
@@ -284,6 +287,7 @@ def main():
     match = re.fullmatch(r"sample-(\d{4})-(.+)", parent)
     project = match.group(2) if match else None
     own_year = match.group(1) if match else "this"
+    own_number = int(match.group(1)) if match else None
     named_tags = NAMED_TAGS.get(project, frozenset())
     failures = []
     not_compared = []
@@ -326,6 +330,9 @@ def main():
         for source, least in minimums.get(group, {}).items():
             if by_source.get(source, 0) < least:
                 fail(f"{group}: {by_source.get(source, 0)} drawn as {source}, fewer than the {least} it holds")
+        if own_number is not None and year >= own_number:
+            print(f"{group}: not applicable, the {year} save is the reference of the later saves and this is the {own_year} save ({len(chosen)} drawn here)")
+            continue
         if year not in earlier_paths:
             not_compared.append(f"{group} ({len(chosen)} here; the {year} save is not in this run)")
             print(f"{group}: not compared, the {year} save is not in this run ({len(chosen)} drawn here)")
@@ -377,7 +384,7 @@ def main():
             + (f" ({', '.join(f'{c} {n}' for c, n in sorted(left_out.items()))})" if left_out else "")
         )
         other = OTHER_YEAR.get(group)
-        if other in earlier and chosen:
+        if other in earlier and other != own_number and chosen:
             against_other(settings, (scale_candidate, ifcopenshell.util.unit.calculate_unit_scale(earlier[other][0])), chosen, earlier[other][1], group, other)
     if total == 0:
         fail("nothing was compared")

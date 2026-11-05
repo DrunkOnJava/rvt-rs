@@ -47,11 +47,18 @@ use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Releases where this layout is measured: 2024, and Revit 2026 and 2027
-/// against the same Autodesk samples saved by an earlier release (RE-341):
-/// the beams of `rst_basic` 2027 and of `rac_advanced` 2026 and 2027 are
-/// their 2024 saves'. 2025 is not measured here.
-pub const BEAM_AXIS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2026, 2027];
+/// Releases where a beam's location line is measured: 2024, and Revit 2025,
+/// 2026 and 2027 against the same Autodesk samples saved by an earlier
+/// release (RE-341, RE-345): the beams of `rst_basic` and `rac_advanced` on
+/// 2025 to 2027 are their 2024 saves'.
+pub const BEAM_AXIS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
+
+/// Releases where the arc and circle records of a sketch line, and the exact
+/// ends of a shaft's lines, are read: 2024, and Revit 2026 and 2027 against
+/// the same Autodesk samples saved by an earlier release (RE-341). Its own
+/// list, so that a release can draw beams without changing the outlines of
+/// its floors, ceilings, roofs and shaft voids (RE-345).
+pub const SKETCH_CURVE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2026, 2027];
 
 /// The bytes a bounded line starts with.
 pub const BOUNDED_LINE_TAG: [u8; 4] = [0x04, 0x00, 0x08, 0x01];
@@ -80,6 +87,12 @@ pub const HORIZONTAL_EPS: f64 = 1e-9;
 /// Whether `revit_version` is a release this layout is measured on.
 pub fn supports_revit_version(revit_version: u32) -> bool {
     BEAM_AXIS_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
+}
+
+/// Whether `revit_version` is a release a sketch line's arcs and circles, and
+/// a shaft's lines, are read on ([`SKETCH_CURVE_SUPPORTED_REVIT_VERSIONS`]).
+pub fn supports_sketch_curves(revit_version: u32) -> bool {
+    SKETCH_CURVE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
 }
 
 /// A bounded line record.
@@ -310,7 +323,7 @@ pub fn scan_sketch_circles(
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, BoundedArc>> {
-    if !supports_revit_version(revit_version) {
+    if !supports_sketch_curves(revit_version) {
         return Ok(BTreeMap::new());
     }
     scan_first_records(
@@ -348,13 +361,13 @@ pub fn first_sketch_curve(data: &[u8]) -> Option<SketchCurve> {
 
 /// The curve of each sketch line in `ids` ([`first_sketch_curve`]), read as
 /// [`scan_bounded_lines`] reads lines (RE-96). Empty for a release this
-/// layout is not measured on.
+/// layout is not measured on ([`supports_sketch_curves`]).
 pub fn scan_sketch_curves(
     rf: &mut RevitFile,
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, SketchCurve>> {
-    if !supports_revit_version(revit_version) {
+    if !supports_sketch_curves(revit_version) {
         return Ok(BTreeMap::new());
     }
     scan_first_records(

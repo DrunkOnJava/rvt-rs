@@ -718,6 +718,9 @@ pub(super) fn shaft_outlines(
 ) -> BTreeMap<u32, Vec<(f64, f64)>> {
     use crate::element_record_plan_profiles as erpp;
     use std::collections::BTreeMap;
+    if !crate::partition_beam_axes::supports_sketch_curves(revit_version) {
+        return BTreeMap::new();
+    }
     let line_ids: BTreeSet<u32> = sketch_lines.iter().map(|r| r.element_id).collect();
     let lists = erpp::scan_sketch_curve_lists(rf, revit_version, &line_ids);
     let mut members: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
