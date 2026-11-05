@@ -12,9 +12,10 @@ earlier save shares with this one. A 2025 save is held to the 2024 save only:
 its stair runs are what the 2026 and 2027 saves are held to, so they are not
 compared (`not applicable`), though the number it draws is still checked.
 The elements whose sketch holds an arc (ARC_OWNERS) are the only check of the
-arc reader on 2025 to 2027: no Revit export of a floor, ceiling, roof or shaft
-with an arc or a circle exists on those releases, and the output counts how
-many of them are compared equal as outlines.
+arc reader on 2025 to 2027: no Revit export of a floor, ceiling or roof with an
+arc exists on those releases, and the output counts how many of them are
+compared equal as outlines. A shaft opening is cut on 2024 only (RE-345), so
+no shaft void is compared on 2025 to 2027.
 
 The candidate's elements checked are those whose body the widened release
 lists change:

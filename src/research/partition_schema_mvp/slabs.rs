@@ -615,7 +615,8 @@ pub(super) type ShaftOutline = (Vec<(f64, f64)>, (f64, f64));
 /// outline is one piece, lies within the shaft's height, and holds the
 /// shaft's outline strictly inside its outer loop and clear of its voids
 /// takes the outline as a void. An element the shaft only partly overlaps
-/// is left as it is.
+/// is left as it is. Revit 2024 only
+/// ([`crate::partition_beam_axes::SHAFT_OUTLINE_SUPPORTED_REVIT_VERSIONS`]).
 pub(super) fn attach_shaft_voids(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -623,7 +624,12 @@ pub(super) fn attach_shaft_voids(
 ) {
     use crate::element_record_plan_profiles as erpp;
     use crate::partition_element_records as per;
-    if !per::supports_revit_version(revit_version) {
+    // RE-345: a shaft is cut on Revit 2024 only; a later release's floors,
+    // ceilings and roofs stay whole and the export counts the shafts
+    // (`shaft_opening_not_cut`).
+    if !per::supports_revit_version(revit_version)
+        || !crate::partition_beam_axes::supports_shaft_outlines(revit_version)
+    {
         return;
     }
     let declared = match crate::elem_table::parse_records(rf) {
@@ -718,7 +724,7 @@ pub(super) fn shaft_outlines(
 ) -> BTreeMap<u32, Vec<(f64, f64)>> {
     use crate::element_record_plan_profiles as erpp;
     use std::collections::BTreeMap;
-    if !crate::partition_beam_axes::supports_sketch_curves(revit_version) {
+    if !crate::partition_beam_axes::supports_shaft_outlines(revit_version) {
         return BTreeMap::new();
     }
     let line_ids: BTreeSet<u32> = sketch_lines.iter().map(|r| r.element_id).collect();
@@ -738,8 +744,10 @@ pub(super) fn shaft_outlines(
         members.insert(shaft, listed.unwrap_or_else(named));
     }
     let ids: BTreeSet<u32> = members.values().flatten().copied().collect();
+    // The release gate is the shafts' own, checked above, not the beams' or
+    // the arcs' (RE-345).
     let (Ok(lines), Ok(circles)) = (
-        crate::partition_beam_axes::scan_bounded_lines(rf, revit_version, &ids),
+        crate::partition_beam_axes::scan_first_bounded_lines(rf, revit_version, &ids),
         crate::partition_beam_axes::scan_sketch_circles(rf, revit_version, &ids),
     ) else {
         return BTreeMap::new();
