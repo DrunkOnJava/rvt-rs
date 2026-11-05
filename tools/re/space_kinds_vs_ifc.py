@@ -92,16 +92,36 @@ def line(words, *numbers):
     print(PREFIX + " ".join([words, *map(str, numbers)]), flush=True)
 
 
+def record_set(space):
+    """The properties of the space's own `RvtElementRecordGeometry` set, by name:
+    read from the space's `IsDefinedBy` alone, as `mcp_answers_vs_ifc.py` reads a
+    room's, so a set of its type is never taken for its own."""
+    out = {}
+    for rel in space.IsDefinedBy or ():
+        if not rel.is_a("IfcRelDefinesByProperties"):
+            continue
+        definition = rel.RelatingPropertyDefinition
+        if definition is None or not definition.is_a("IfcPropertySet") or definition.Name != SET:
+            continue
+        for prop in definition.HasProperties or ():
+            if prop.is_a("IfcPropertySingleValue") and prop.NominalValue is not None:
+                out[prop.Name] = prop.NominalValue.wrappedValue
+    return out
+
+
 def measure(path):
     """The counts of one export, and up to LIST_LIMIT failing spaces."""
     import ifcopenshell
-    import ifcopenshell.util.element
 
     counts = collections.Counter()
     failing = []
     found = []
-    for space in ifcopenshell.open(path).by_type("IfcSpace"):
-        props = ifcopenshell.util.element.get_psets(space).get(SET, {})
+    # The file is held for the whole loop: an entity of a file that has been
+    # freed reads as "Instance #N not found" or crashes the interpreter, which
+    # is what `ifcopenshell.open(path).by_type(...)` did on run 42016234086.
+    ifc = ifcopenshell.open(path)
+    for space in ifc.by_type("IfcSpace"):
+        props = record_set(space)
         found.append((space.GlobalId, props.get(KIND_PROPERTY), props.get(SOURCE_PROPERTY)))
     counts[SPACES] = len(found)
     # An export with no geometry writes no SpaceOutlineSource on any space: the

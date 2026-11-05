@@ -31,5 +31,9 @@
   CI shows it failing on copies of Core Interior's export with the property
   renamed, every room called an area, and every room's outline source made
   an Area's, and Measure's compare job fails when the run saw no `IfcSpace` at
-  all. Counts per kind on the BIM4LCA office, Autodesk's samples and the
-  held-out models: not yet measured on this head.
+  all. On Measure run 42016267367 (head a2dc72c3) the 111 models and
+  Autodesk samples exported held 3,493 `IfcSpace`s, every one with a
+  `SpaceKind`: 3,187 rooms, 214 Areas and 92 family instances, and no Revit
+  Space (`mep_space`) on any model measured. The BIM4LCA office holds 308 at
+  both stages (234 rooms, 30 Areas, 44 family instances). The check's own
+  result on every model is not yet measured on this head.
