@@ -219,7 +219,9 @@ class RevitFile:
         ``kind="elements"``: every building element the IFC export writes
         (Revit ElementId, IFC type, level, material, placement, size, host of
         a door or window), on the storey the export puts it on.
-        ``kind="rooms"``: every room (number, name, level). ``metric=True``
+        ``kind="rooms"``: every space the export writes (number, name, level,
+        area, and ``space_kind``: ``room``, ``area``, ``mep_space`` or
+        ``family_instance``). ``metric=True``
         writes lengths in metres; ``excel=True`` prefixes a UTF-8 BOM for
         Excel on Windows. Unknown values are empty cells. ``phase`` is
         ``write_ifc``'s. Raises ``ValueError`` for another ``kind``.

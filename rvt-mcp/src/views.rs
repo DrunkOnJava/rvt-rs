@@ -10,7 +10,7 @@ use rvt::ifc::ELEMENT_RECORD_PROPERTY_SET;
 use rvt::ifc::IfcModel;
 use rvt::ifc::element_provenance::ValueSource;
 use rvt::ifc::entities::{IfcEntity, Property, PropertySet, PropertyValue};
-use rvt::ifc::export_content::SPACE_OUTLINE_SOURCE_PROPERTY;
+use rvt::ifc::export_content::{SPACE_KIND_PROPERTY, SPACE_OUTLINE_SOURCE_PROPERTY};
 use rvt::ifc::schedule_csv::room_rows;
 use rvt::ifc::step_writer::written_names;
 use rvt::reader::UnreadStream;
@@ -227,6 +227,7 @@ pub fn levels_out(entry: &Entry, computed: &Computed) -> LevelsOut {
 pub fn summary(entry: &Entry, computed: &Computed) -> SummaryOut {
     let mut total = 0usize;
     let mut room_count = 0usize;
+    let mut space_kinds: BTreeMap<String, usize> = BTreeMap::new();
     let mut by_ifc_type: BTreeMap<String, usize> = BTreeMap::new();
     let mut by_revit_class: BTreeMap<String, usize> = BTreeMap::new();
     let mut folded_into_bodies: BTreeMap<String, usize> = BTreeMap::new();
@@ -250,6 +251,9 @@ pub fn summary(entry: &Entry, computed: &Computed) -> SummaryOut {
         }
         if ifc_type == "IFCSPACE" {
             room_count += 1;
+            if let Some(kind) = text_property(property_set.as_ref(), SPACE_KIND_PROPERTY) {
+                *space_kinds.entry(kind).or_insert(0) += 1;
+            }
         }
     }
     SummaryOut {
@@ -273,6 +277,7 @@ pub fn summary(entry: &Entry, computed: &Computed) -> SummaryOut {
         },
         levels: levels(computed),
         room_count,
+        space_kinds,
         diagnostics: diagnostics_summary(computed),
         not_read: NOT_READ.to_string(),
     }
@@ -718,6 +723,7 @@ pub fn rooms(entry: &Entry, computed: &Computed) -> RoomsOut {
                 id: non_empty(&row.revit_element_id),
                 number: non_empty(&row.number),
                 name: non_empty(&row.name),
+                space_kind: non_empty(&row.space_kind),
                 level: non_empty(&row.level),
                 level_elevation_feet: row.level_elevation_feet,
                 area_square_feet: row.area_square_feet,

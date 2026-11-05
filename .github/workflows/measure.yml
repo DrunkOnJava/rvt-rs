@@ -68,6 +68,14 @@
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f samples=true -f sample_years="2026 2027" -f probe=probe_re179_revit_2027 -f probe_pair_release=2026
 #
+# That run holds no 2024 or 2025 sample, so the check of the 2026 and 2027
+# bodies against the same project's earlier saves (tools/re/bodies_across_saves.py,
+# RE-341) compares nothing: it prints a notice and a line in the run summary,
+# and is not a pass. A change to a reader of Revit 2024 to 2027 is measured with
+# `samples=true` and every year (or "2024 2027"), which runs that check and
+# turns the run red on a difference; without `samples=true` it does not run,
+# and the summary says so.
+#
 # `models` keeps only the models whose names match its patterns, and
 # `scorers` runs only the steps it names on them (tools/re scorers, and info,
 # gltf, schema and witness; "none" for none), so a probe's run spends nothing
@@ -770,6 +778,11 @@ jobs:
           PSETS_MISSING: ${{ inputs.psets_missing }}
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
           MCP_REQUIRE_FOLDED_FIELD: ${{ matrix.side != 'base' && '1' || '' }}
+          MCP_REQUIRE_SPACE_KIND: ${{ matrix.side != 'base' && '1' || '' }}
+          # A run of the samples checks the Areas of rac_advanced across its
+          # 2024 to 2027 saves on the head side (main writes none on 2025 to
+          # 2027) whenever all four samples are in it, and says so when not.
+          AREAS_ACROSS_SAVES: ${{ matrix.side != 'base' && matrix.samples && '1' || '' }}
           RVT_SCORER_FINE_MESH: ${{ inputs.fine_mesh && '1' || '' }}
           FAMILY_DIR: ${{ matrix.families && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           SAMPLE_DIR: ${{ matrix.samples && format('{0}/_samples', github.workspace) || '' }}
@@ -832,20 +845,70 @@ jobs:
           # Compare re-uploads them merged as measure-head and measure-base.
           retention-days: 7
 
+  # The same-project gates. No Revit export of a 2026 or 2027 beam, tread
+  # landing, stair run or sketch outline exists to score them against (RE-341),
+  # nor of an Area on 2025 to 2027 (#1261, #1194), so each 2026 and 2027 save
+  # of rac_advanced, rac_basic and rst_basic is held to the same project's 2024
+  # and 2025 saves (tools/re/bodies_across_saves.py) and rac_advanced's Areas to
+  # its 2024 save's (tools/re/areas_across_saves.py). The measuring script runs
+  # both beside the samples and writes their files; this job reads the head
+  # side's shards and fails on a difference, a missing file or a check that did
+  # not run for want of one. It is a job of its own, with a step for each gate
+  # that runs whatever the other did, so that a failure turns the run red and
+  # Compare, which does not need it, still reports (a failed step in a measure
+  # shard would skip Compare). The base side is not gated: its files show what
+  # each check says of `main`. A check skipped on purpose (no `samples`, no 2026
+  # or 2027 sample, the `scorers` excluding it, a run without the earlier saves)
+  # says so in a notice and in the run summary. Measure is not a required check:
+  # the failure is read before landing, by the landing rule.
+  same-project-gates:
+    name: Same-project gates
+    needs: [plan, measure]
+    if: ${{ !cancelled() && needs.measure.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Workflow tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools/ci/check-bodies-across-saves.sh
+            tools/ci/check-areas-across-saves.sh
+          sparse-checkout-cone-mode: false
+      # One directory for each shard: two shards write an areas_across_saves.txt.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: measure-head-*
+          path: measure-head
+      - name: Bodies match the same project's earlier save
+        shell: bash
+        env:
+          SAMPLES: ${{ inputs.samples }}
+          SAMPLE_YEARS: ${{ inputs.sample_years }}
+          SCORERS: ${{ inputs.scorers }}
+        run: tools/ci/check-bodies-across-saves.sh measure-head
+      - name: The Areas agree across rac_advanced's saves
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          SAMPLES: ${{ inputs.samples }}
+        run: tools/ci/check-areas-across-saves.sh measure-head
+
   compare:
     name: Compare
     needs: [plan, measure]
     runs-on: ubuntu-24.04
     steps:
-      # The semantic diff's script, from the workflow's own ref (this job holds
-      # no secret and runs no measured code). First, since a checkout cleans the
-      # workspace.
+      # The semantic diff's script and the IfcSpace kinds' total (#1437), from the
+      # workflow's own ref (this job holds no secret and runs no measured code).
+      # First, since a checkout cleans the workspace.
       - name: Workflow tools
-        if: needs.plan.outputs.base == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: tools/re/semantic_diff.py
+          sparse-checkout: |
+            tools/re/semantic_diff.py
+            tools/re/space_kinds_vs_ifc.py
           sparse-checkout-cone-mode: false
       # Each side's shards hold disjoint models; merged, they are the
       # measure-head and measure-base directories one runner used to write.
@@ -904,6 +967,15 @@ jobs:
               echo "### MCP server answers against the export"
               echo
               printf '%s\n' "${mcp_lines[@]}"
+              echo
+            fi
+            # The gate of the Areas of Revit 2025 to 2027: counts by field.
+            if [ -s measure-head/areas_across_saves.txt ]; then
+              echo "### Areas of rac_advanced across its 2024 to 2027 saves"
+              echo
+              echo '```'
+              cat measure-head/areas_across_saves.txt
+              echo '```'
               echo
             fi
             if [ -d measure-base ]; then
@@ -1006,6 +1078,34 @@ jobs:
         with:
           name: compare-scorer-diff
           path: scorer-diff.txt
+      # #1437: every IfcSpace of every export the head side wrote says what it
+      # is (tools/re/space_kinds_vs_ifc.py). The total fails the job when a
+      # model has no result or failed (judged on its counts, not its verdict
+      # word), when a space has no kind or disagrees with its outline source,
+      # when a model's spaces are not the number its own export counted, and
+      # when a geometry export's spaces have no outline source to check, so a
+      # check that looked at nothing cannot pass. A run of models that hold no
+      # space, such as one filtered to two Revit 2025 roofs, passes when every
+      # export agrees it holds none. Last, so the summary, the semantic diff and
+      # the uploads are written first. A run that names `scorers` without this
+      # one has not asked for the check and is left alone; naming it runs the
+      # step that judges it. The base side is not gated: it is main, whose
+      # exports have no kind to find.
+      - name: Every IfcSpace says what it is
+        if: ${{ !cancelled() && (inputs.scorers == '' || contains(inputs.scorers, 'space_kinds_vs_ifc')) }}
+        shell: bash
+        run: |
+          status=0
+          python3 tools/re/space_kinds_vs_ifc.py --total measure-head > space-kinds-total.txt 2>&1 || status=$?
+          cat space-kinds-total.txt
+          {
+            echo "### IfcSpace kinds across the run (head)"
+            echo
+            echo '```'
+            cat space-kinds-total.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
 
   # B81: the base and head jobs above run on different runners, so their wall
   # times compare machines as much as code. With `timing`, rvt-ifc is built at

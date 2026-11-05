@@ -143,8 +143,10 @@ pub struct ElementProvenance {
     /// For a room or space, where its outline came from: `record_box`
     /// (the area of its box, not of the room), `stored_solid`,
     /// `stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,
-    /// `family_body`, and for an Area `area_boundary`,
-    /// `area_boundary_joined` or `none`.
+    /// `family_body`, and for an Area `area_plan_topology`,
+    /// `area_plan_topology_unchecked` (Revit 2025 to 2027, which nothing
+    /// outside the file checks), `area_boundary`, `area_boundary_joined` or
+    /// `none`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub space_outline_source: Option<String>,
     /// For an Area with no body, why it has none.
@@ -311,7 +313,16 @@ pub struct SummaryOut {
     pub file: FileProvenance,
     pub elements: ElementCounts,
     pub levels: Vec<LevelOut>,
+    /// The number of `IfcSpace`s the export writes, of every kind: rooms, Areas
+    /// and family instances written as spaces. It is not the number of rooms
+    /// (the name is older than `space_kinds`); `space_kinds.room` is. On the
+    /// BIM4LCA office it is 308, of which 234 are rooms.
     pub room_count: usize,
+    /// The `IfcSpace`s by `RvtElementRecordGeometry.SpaceKind` (#1437): `room`,
+    /// `area`, `mep_space` or `family_instance`. The counts sum to `room_count`
+    /// less the spaces with no kind, which `get_diagnostics` counts as
+    /// `exported.spaces_without_kind`.
+    pub space_kinds: BTreeMap<String, usize>,
     pub diagnostics: DiagnosticsSummary,
     /// What the answers do not cover.
     pub not_read: String,
@@ -491,13 +502,29 @@ pub struct RoomOut {
     pub number: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// What the space is (#1437): `room`, `area` (a Revit Area), `mep_space` (a
+    /// Revit Space, MEP) or `family_instance` (any other element, a family
+    /// instance or a mass, that its own "Export to IFC As" writes as a space),
+    /// from the Revit class of the record it was read from. Ask this to tell an
+    /// Area from a room, and never filter on the values of
+    /// `space_outline_source`, which says where an outline came from and gains
+    /// values with a release. `mep_space` is the kind of a Revit Space, which
+    /// rvt-rs does not read from a file's partition records, so none is written
+    /// today: that says what rvt-rs writes, not what the files hold. The same
+    /// value is the IFC export's `RvtElementRecordGeometry.SpaceKind` and the
+    /// room schedule's `space_kind` column. Absent only for a space whose
+    /// property set is not `RvtElementRecordGeometry`, which `get_diagnostics`
+    /// counts as `exported.spaces_without_kind`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub space_kind: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub level: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub level_elevation_feet: Option<f64>,
     /// The plan area of the room's outline, where the outline is one read
     /// exactly (`space_outline_source` is `stored_solid`, `stored_solid_faces`
-    /// or, for an Area, `area_boundary` or `area_boundary_joined`). Absent for
+    /// or, for an Area, `area_plan_topology`, `area_plan_topology_unchecked`,
+    /// `area_boundary` or `area_boundary_joined`). Absent for
     /// `record_box`, where the area of a box is not the area of a room, and for
     /// `stored_solid_approximate`.
     #[serde(skip_serializing_if = "Option::is_none")]

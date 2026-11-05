@@ -156,6 +156,70 @@ for the five lowest ElementIds of each IFC entity, the diagnostics and an
   whose server does not build, leaves the step NOT MEASURED with a warning and
   fails no other scorer. Autodesk's sample projects are not asked.
 
+## Measure and the kinds of IfcSpace
+
+Every model and every Autodesk sample whose export is not empty is checked by
+`tools/re/space_kinds_vs_ifc.py` (#1437), which reads the export alone: each
+`IfcSpace` carries `RvtElementRecordGeometry.SpaceKind`, `area` holds exactly
+where `SpaceOutlineSource` is an Area value, and no other kind holds one (the
+values are `AREA_SOURCES` and `ROOM_SOURCES` in the scorer, the one place they
+are listed, and a value in neither fails). It writes `space_kinds_vs_ifc.txt`
+(fixed words and integers, so the held-out models keep it as counts;
+`tools/ci/scrub-holdout-results.sh`) and exits 1 on any space without a kind,
+with another value, with an outline source it does not know, or in
+disagreement. The compare job sums the head side's results
+(`space_kinds_vs_ifc.py --total`), prints how many `IfcSpace`s of each kind the
+run saw, and fails the job when a model has no result, when any model's counts
+show a failure (whatever its verdict word says), when a model's spaces are not
+the number its own export counted (`diagnostics.json`, or for a model kept as
+counts only the MCP server's `rooms` count), so that a check that saw none of
+a model's spaces cannot pass, and when a geometry export's spaces have no
+`SpaceOutlineSource` to check (an export whose diagnostics say
+`typed_no_geometry` has none by design). A run of models with no spaces, such
+as a filtered one, passes when every export agrees that it has none. The step
+runs in a run that names no `scorers` or names this one, and a run that names
+others has not asked for it. The `IfcOpenShell validates exports` job of CI
+runs it on Core Interior and RE1 Architecture, shows it failing on copies of
+Core Interior's export with the property renamed, every room called an area,
+and every room's outline source made an Area's, runs it on a
+`typed-no-geometry` export, and shows `--total` failing on a result that says
+PASS over a failure count, on spaces that have lost their `SpaceOutlineSource`
+in an export with geometry, and on a result that saw none of the export's
+spaces.
+
+## Bodies across saves (RE-341)
+
+No Revit export of a 2026 or 2027 beam, tread landing, stair run or sketch
+outline exists to score them against. `tools/re/bodies_across_saves.py` holds
+each 2026 and 2027 save of `rac_advanced`, `rac_basic` and `rst_basic` to the
+same project's earlier saves, matched by `Tag`: beams, landings and sketch
+outlines to the 2024 save, stair runs to the 2025 save (the 2025 save draws no
+beam or landing). Measure's script runs it beside each such sample, and the job
+`same-project-gates` turns the run red on a difference, a missing file, an
+unknown project, fewer bodies than the sample holds, or a check that compared
+nothing. That job also holds #1428's Areas gate (rac_advanced's Areas across its
+2024 to 2027 saves, `tools/ci/check-areas-across-saves.sh`), each as a step that
+runs whatever the other did. It is a job of its own, so a failure of either does
+not remove Compare's report.
+
+- **A change to a reader of Revit 2024 to 2027 is measured with
+  `samples=true`** (every year, or `sample_years="2024 2027"`). Without it no
+  sample is exported and the check does not run; with only some years the check
+  compares what it can and reads `PARTIAL`, never `PASS`. Every such skip prints
+  a notice and a line in the run summary, so a green run that did not run the
+  check says so.
+- **What it cannot catch**: an error the earlier save shares with the 2026 or
+  2027 read. Nothing in it is a Revit export. It compares bodies, not
+  quantities or property sets. No 2026 or 2027 held-out model holds an
+  `IfcBeam`, so the beam reader has run only on two Autodesk samples saved by
+  earlier releases.
+- **A difference** is a reader that is wrong or a project that really differs
+  between saves. Narrow the reader until it is never wrong and let what it
+  leaves out stay a box, counted (`left as boxes`); do not allowlist.
+- The output carries, for rac_advanced's ceiling 147534 and floor 139803, the
+  class, `BodySource`, `ProfileResolved`, volume and vertex count in every save,
+  and compares sketch outlines with the 2025 save as well, without scoring.
+
 ## The semantic merge check
 
 Measure is the byte-level oracle: it says that an export moved. The semantic

@@ -53,14 +53,14 @@ import ifcopenshell.util.element
 import shapely
 
 import plan_profiles_vs_ifc as plan
+import space_kinds_vs_ifc as kinds
 
 SET = "RvtElementRecordGeometry"
 STORED_SOLID = "stored_solid"
 RECORD_BOX = "record_box"
-AREA_BOUNDARY = "area_boundary"
-AREA_BOUNDARY_JOINED = "area_boundary_joined"
-NO_BODY = "none"
 ROOM_SOLID_SOURCE = "partition_room_solid_faces"
+# The words this scorer prints for each `SpaceKind` (#1437).
+KIND_LABELS = {"room": "room", "area": "area", "mep_space": "space", "family_instance": "family instance"}
 
 
 def sources(path):
@@ -81,13 +81,16 @@ def sources(path):
             source = f"other: {props['ProfileSource']}"
         else:
             source = "not stated"
-        # A room has its number or its name; a family instance written as a
-        # space has neither.
-        named = "RoomNumber" in props or "RoomName" in props
-        kind = "room" if named else "family instance" if props else "space"
-        # An Area is named as a room is; its marker tells it apart (RE-317).
-        if marker in (AREA_BOUNDARY, AREA_BOUNDARY_JOINED, NO_BODY):
-            kind = "area"
+        kind = KIND_LABELS.get(props.get("SpaceKind"))
+        if kind is None:
+            # An export from before #1437 has no SpaceKind. A room has its
+            # number or its name; a family instance written as a space has
+            # neither. An Area is named as a room is; its marker tells it apart
+            # (RE-317), by the Area values of space_kinds_vs_ifc.
+            named = "RoomNumber" in props or "RoomName" in props
+            kind = "room" if named else "family instance" if props else "space"
+            if marker in kinds.AREA_SOURCES:
+                kind = "area"
         out[space.GlobalId] = (source, kind)
     return out
 

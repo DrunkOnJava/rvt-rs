@@ -369,10 +369,12 @@ pub(super) fn attach_stair_names(
     }
 }
 
-/// Give each Revit 2025 stair its actual risers, riser height and tread
-/// depth, and each run its risers, its height over its risers, its stair's
-/// tread depth and its number of treads, from their native records
-/// ([`crate::native_stairs::native_stair_counts`]).
+/// Give each Revit 2025, 2026 or 2027 stair its actual risers, riser height
+/// and tread depth, and each run its risers, its height over its risers, its
+/// stair's tread depth and its number of treads, from their native records
+/// ([`crate::native_stairs::native_stair_counts`]). On 2026 and 2027 these
+/// are the values of the standard stair property sets and quantities
+/// (RE-341).
 pub(super) fn attach_native_stair_dimensions(rf: &mut RevitFile, products: &mut [DecodedElement]) {
     let ids = |class: &str| -> BTreeSet<u64> {
         products

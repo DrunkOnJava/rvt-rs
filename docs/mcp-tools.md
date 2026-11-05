@@ -20,7 +20,7 @@ failed call has `isError` set and a text message.
 | [`get_summary`](#get_summary) | The summary open_model returns, for a model_id or a path: release and build, element counts by IFC entity and Revit class, levels, room count and the diagnostics summary (what was read, approximated, skipped and left unread). |
 | [`list_elements`](#list_elements) | List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. |
 | [`list_levels`](#list_levels) | List the levels (building storeys) of a model with their elevation in feet and metres and how many building elements the export puts on each. |
-| [`list_rooms`](#list_rooms) | List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. |
+| [`list_rooms`](#list_rooms) | List the spaces the export writes as IfcSpace: ElementId, number, name, space_kind, level, area and provenance. |
 | [`open_model`](#open_model) | Open a Revit file (.rvt, .rfa, .rte or .rft) and decode it once, with the same decode rvt-ifc runs. |
 
 ## explain_element
@@ -197,8 +197,9 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | `project_name` | string \| null | no |  |
 | `release_support` | any | no | How the file's release is read, and that row's status. |
 | `revit_release` | integer \| null | no | The Revit release that saved the file. |
-| `room_count` | integer | yes |  |
+| `room_count` | integer | yes | The number of `IfcSpace`s the export writes, of every kind: rooms, Areas and family instances written as spaces. It is not the number of rooms (the name is older than `space_kinds`); `space_kinds.room` is. On the BIM4LCA office it is 308, of which 234 are rooms. |
 | `size_bytes` | integer | yes |  |
+| `space_kinds` | object of integer by name | yes | The `IfcSpace`s by `RvtElementRecordGeometry.SpaceKind` (#1437): `room`, `area`, `mep_space` or `family_instance`. The counts sum to `room_count` less the spaces with no kind, which `get_diagnostics` counts as `exported.spaces_without_kind`. |
 
 ## list_elements
 
@@ -251,7 +252,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 ## list_rooms
 
-List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_boundary or area_boundary_joined for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
+List the spaces the export writes as IfcSpace: ElementId, number, name, space_kind, level, area and provenance. space_kind says what each is (room, area, mep_space or family_instance): read it, not space_outline_source, to tell an Area from a room, and never filter on the values of space_outline_source, which says only where an outline came from and changes with the rules that read outlines. mep_space is the kind of a Revit Space (MEP), which rvt-rs does not read from a file's partition records, so none is written today: that says what rvt-rs writes, not what the files hold. The area is present only where the outline was read exactly (space_outline_source says so); a space that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
 
 Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
@@ -296,8 +297,9 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | `project_name` | string \| null | no |  |
 | `release_support` | any | no | How the file's release is read, and that row's status. |
 | `revit_release` | integer \| null | no | The Revit release that saved the file. |
-| `room_count` | integer | yes |  |
+| `room_count` | integer | yes | The number of `IfcSpace`s the export writes, of every kind: rooms, Areas and family instances written as spaces. It is not the number of rooms (the name is older than `space_kinds`); `space_kinds.room` is. On the BIM4LCA office it is 308, of which 234 are rooms. |
 | `size_bytes` | integer | yes |  |
+| `space_kinds` | object of integer by name | yes | The `IfcSpace`s by `RvtElementRecordGeometry.SpaceKind` (#1437): `room`, `area`, `mep_space` or `family_instance`. The counts sum to `room_count` less the spaces with no kind, which `get_diagnostics` counts as `exported.spaces_without_kind`. |
 
 ## Types
 
@@ -375,7 +377,7 @@ Where one element's answer comes from. Every element in an answer carries one. F
 | `profile_source` | string \| null | no | Where the plan profile of the body came from. |
 | `provenance_omitted` | boolean \| null | no | True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`). |
 | `record_offset` | integer \| null | no | Where the ElementId is stored: the partition record header it is the first bytes of. |
-| `space_outline_source` | string \| null | no | For a room or space, where its outline came from: `record_box` (the area of its box, not of the room), `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`, `family_body`, and for an Area `area_boundary`, `area_boundary_joined` or `none`. |
+| `space_outline_source` | string \| null | no | For a room or space, where its outline came from: `record_box` (the area of its box, not of the room), `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`, `family_body`, and for an Area `area_plan_topology`, `area_plan_topology_unchecked` (Revit 2025 to 2027, which nothing outside the file checks), `area_boundary`, `area_boundary_joined` or `none`. |
 | `stream` | string \| null | no | The stream the record is in: `Partitions/NN` or `Global/Latest`. |
 | `value_sources` | array of [ValueSourceOut](#valuesourceout) | no | The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet. |
 
@@ -530,7 +532,7 @@ One room.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `area_square_feet` | number \| null | no | The plan area of the room's outline, where the outline is one read exactly (`space_outline_source` is `stored_solid`, `stored_solid_faces` or, for an Area, `area_boundary` or `area_boundary_joined`). Absent for `record_box`, where the area of a box is not the area of a room, and for `stored_solid_approximate`. |
+| `area_square_feet` | number \| null | no | The plan area of the room's outline, where the outline is one read exactly (`space_outline_source` is `stored_solid`, `stored_solid_faces` or, for an Area, `area_plan_topology`, `area_plan_topology_unchecked`, `area_boundary` or `area_boundary_joined`). Absent for `record_box`, where the area of a box is not the area of a room, and for `stored_solid_approximate`. |
 | `area_square_metres` | number \| null | no |  |
 | `id` | string \| null | no |  |
 | `level` | string \| null | no |  |
@@ -538,6 +540,7 @@ One room.
 | `name` | string \| null | no |  |
 | `number` | string \| null | no |  |
 | `provenance` | [ElementProvenance](#elementprovenance) | yes |  |
+| `space_kind` | string \| null | no | What the space is (#1437): `room`, `area` (a Revit Area), `mep_space` (a Revit Space, MEP) or `family_instance` (any other element, a family instance or a mass, that its own "Export to IFC As" writes as a space), from the Revit class of the record it was read from. Ask this to tell an Area from a room, and never filter on the values of `space_outline_source`, which says where an outline came from and gains values with a release. `mep_space` is the kind of a Revit Space, which rvt-rs does not read from a file's partition records, so none is written today: that says what rvt-rs writes, not what the files hold. The same value is the IFC export's `RvtElementRecordGeometry.SpaceKind` and the room schedule's `space_kind` column. Absent only for a space whose property set is not `RvtElementRecordGeometry`, which `get_diagnostics` counts as `exported.spaces_without_kind`. |
 
 ### SkippedOut
 
