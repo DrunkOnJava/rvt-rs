@@ -272,9 +272,8 @@ def summary_section(body, heading="summary"):
 
 
 def find_pull_request(repo, token, sha):
-    """(pull request, None) for the same-repository pull request whose head is `sha`, else the one whose
-    merge commit is, an open one before a closed one; (None, reason) when there is none or it comes from
-    a fork."""
+    """(pull request, None) for the same-repository pull request that holds the measured commit `sha`
+    (`pull_of_commit`); (None, reason) when GitHub cannot say, there is none, or it comes from a fork."""
     headers = {
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {token}",
@@ -287,14 +286,29 @@ def find_pull_request(repo, token, sha):
         pulls = None
     if not isinstance(pulls, list):
         return None, "the pull request of this commit could not be read from GitHub"
+    return pull_of_commit(pulls, repo, sha)
+
+
+def pull_of_commit(pulls, repo, sha):
+    """(pull request, None) for what GitHub lists as holding the measured commit `sha`, or (None, reason).
+
+    The pull request whose head or merge commit it is comes first, an open one before a closed one. Otherwise the
+    one open pull request that holds it: a head moves on after Measure starts (the MCP contract sync alone does),
+    and the verdict stays on the commit that was measured. Several open ones say nothing about whose it is."""
     ours = [pull for pull in pulls if ((pull.get("base") or {}).get("repo") or {}).get("full_name") == repo]
-    for pull in sorted(ours, key=lambda pull: (pull.get("state") != "open", pull["head"]["sha"] != sha, pull.get("merge_commit_sha") != sha, pull["number"])):
-        if pull["head"]["sha"] != sha and pull.get("merge_commit_sha") != sha:
-            continue
-        if ((pull["head"].get("repo") or {}).get("full_name")) != repo:
-            return None, "the pull request of this commit comes from a fork"
-        return pull, None
-    return None, "no pull request of this repository has this commit as its head"
+    exact = [pull for pull in ours if pull["head"]["sha"] == sha or pull.get("merge_commit_sha") == sha]
+    holding = [pull for pull in ours if pull.get("state") == "open"]
+    if exact:
+        pull = sorted(exact, key=lambda pull: (pull.get("state") != "open", pull["head"]["sha"] != sha, pull["number"]))[0]
+    elif len(holding) == 1:
+        pull = holding[0]
+    elif holding:
+        return None, "several open pull requests hold this commit"
+    else:
+        return None, "no open pull request of this repository holds this commit"
+    if ((pull["head"].get("repo") or {}).get("full_name")) != repo:
+        return None, "the pull request of this commit comes from a fork"
+    return pull, None
 
 
 class NotMeasured(Exception):

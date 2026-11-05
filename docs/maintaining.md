@@ -198,12 +198,14 @@ check that is **NOT MEASURED at best**, naming each model and its own reason; a
 warn or a fail found in what was compared stays. The check lands on the commit
 Measure measured, which the compare job takes from the plan job's resolved refs
 (a shard job runs the measured code, so its `commit.txt` is not trusted), and
-which is found again through the API as the head of a same-repository pull
-request. If the pull request's head has moved since, or the commit is another
-pull request's or a fork's, or no pull request has it as its head, the check is
-NOT MEASURED and says so, **an empty diff included**: a pass needs that pull
-request first. Measure the head of the pull request, not a branch name that has
-moved, and write the Summary before the run.
+which is found again through the API: the same-repository pull request whose
+head or merge commit it is, or else the one open pull request that holds it,
+since a head moves on after Measure starts (the MCP contract sync alone does).
+The verdict stays on the commit that was measured, and reads the pull request's
+Summary as it is then. If several open pull requests hold the commit, or it is a
+fork's, or none holds it, the check is NOT MEASURED and says so, **an empty diff
+included**: a pass needs that pull request first. Measure the head of the pull
+request, not a branch name that has moved, and write the Summary before the run.
 
 **Where to find the verdict.** The verdict is on the measured commit, which is
 not necessarily the pull request's head, and a pull request's page and its checks
