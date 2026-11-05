@@ -73,6 +73,7 @@ pub(super) mod reason {
     pub const DOOR_WALL_PARALLEL: &str = "door_second_wall_parallel_to_door_wall";
     pub const DOOR_NOT_IN_WALL: &str = "door_opening_not_in_second_wall";
     pub const DEGENERATE: &str = "opening_extent_not_positive";
+    pub const WALL_NOT_FRAMED: &str = "wall_body_not_an_axis_aligned_prism";
 }
 
 /// A wall the openings are cut in: its entity, name and frame, as the
@@ -481,8 +482,7 @@ pub(super) fn attach_wall_cut_openings(
     if hosts.is_empty() {
         return left_out;
     }
-    let wall_ids: BTreeSet<u64> = hosts.keys().copied().collect();
-    let Ok(steps) = native_wall_cuts::wall_cut_steps(rf, &wall_ids) else {
+    let Ok(steps) = native_wall_cuts::wall_cut_steps(rf, &walls) else {
         return left_out;
     };
     let mut framed: BTreeSet<u64> = BTreeSet::new();
@@ -550,6 +550,27 @@ pub(super) fn attach_wall_cut_openings(
     let mut openings = Vec::new();
     for (wall, list) in &steps {
         let Some(host) = hosts.get(wall) else {
+            // A wall rvt-rs does not frame as an axis-aligned prism (curved,
+            // turned off the axes, stepped otherwise than RE-320's, a body
+            // of several pieces, or an ElementId held twice) has no opening
+            // written, and each step of its record that would is counted.
+            for step in list {
+                let named = match step.kind {
+                    WallCutKind::Embed => curtains.contains_key(&step.cutter),
+                    WallCutKind::Cutout => {
+                        cabinets.contains_key(&step.cutter)
+                            || (doors.contains_key(&step.cutter)
+                                && step.cuts_something == Some(false))
+                    }
+                    WallCutKind::RectOpening => true,
+                    WallCutKind::ShadowCutout => false,
+                };
+                if named {
+                    *left_out
+                        .entry(reason::WALL_NOT_FRAMED.to_string())
+                        .or_insert(0) += 1;
+                }
+            }
             continue;
         };
         let near: Vec<[f64; 6]> = neighbours
