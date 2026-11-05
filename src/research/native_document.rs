@@ -303,7 +303,7 @@ pub struct StreamEnvelope {
 }
 /// `bytes` as lowercase hex, two digits a byte: `format!("{byte:02x}")` for
 /// each, without a `String` for every one (#1237).
-fn lower_hex(bytes: &[u8]) -> String {
+pub(crate) fn lower_hex(bytes: &[u8]) -> String {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
     let mut hex = String::with_capacity(bytes.len() * 2);
     for &byte in bytes {
