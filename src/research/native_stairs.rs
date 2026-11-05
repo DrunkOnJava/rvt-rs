@@ -1045,15 +1045,25 @@ pub fn railing_lengths(
 /// as Autodesk's samples saved by 2025 read them.
 pub const NATIVE_STAIR_NAME_REVIT_VERSIONS: &[u32] = &[2025, 2026, 2027];
 
-/// Releases a stair's and its parts' type and family are read from their
-/// native records on, which give the `Family:Type` they write as `ObjectType`:
-/// 2025 only. The `Family:Type` rvt-rs writes as `ObjectType` differs from
-/// Revit's own 2026 and 2027 exports on every class with a type the held-out
-/// pairs hold (flowbim's house and hemanth1986's pairs), and with it written a
-/// stair, its flight and its stringers measure different where the `$` they had
-/// was equal (RE-346). Their names are read on 2026 and 2027 all the same
-/// ([`NATIVE_STAIR_NAME_REVIT_VERSIONS`]), and measure equal.
-pub const NATIVE_STAIR_TYPE_REVIT_VERSIONS: &[u32] = &[2025];
+/// The families [`native_stair_parts`] gives a stair, a run and a stringer.
+pub const NATIVE_STAIR_FAMILIES: [&str; 5] = [
+    "Assembled Stair",
+    "Cast-In-Place Stair",
+    "Monolithic Run",
+    "Non-Monolithic Run",
+    "Stringer",
+];
+
+/// The first release on which a stair's, a flight's and a stringer's `ObjectType`
+/// (`Family:Type`, from the family and type [`native_stair_parts`] reads) is not
+/// written. The family and type are read on 2025 to 2027, and give the parts their
+/// Name, their reference property sets and their type objects; but the
+/// `Family:Type` rvt-rs writes as `ObjectType` differs from Revit's own 2026 and
+/// 2027 exports on every class with a type the held-out pairs hold (flowbim's house
+/// and hemanth1986's pairs), and on a stair, its flight and its stringers it
+/// turned an `ObjectType` equal at `$` into a different one (RE-346). Other classes
+/// keep theirs, which differs as well (#1472).
+pub const STAIR_OBJECT_TYPE_LEFT_OUT_FROM: u32 = 2026;
 
 /// A stair's or a stair part's type, and the stair and family Revit's export
 /// names it after (#323).
