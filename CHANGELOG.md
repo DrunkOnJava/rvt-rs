@@ -107,11 +107,34 @@ Autodesk's sample projects, the held-out models and the families (Measure run
   diagnostics carry neither.
 - `--family-extrusions` implies `--saved-meshes` and cannot be combined with
   `--no-saved-meshes`.
+- The MCP server's element `name` is the `Name` the IFC export writes (an
+  `IfcSpace`'s room number), absent only where it would be the
+  `<Revit class>-<ElementId>` placeholder of a room with neither number nor
+  name; rows and `get_element` gain `long_name`; `element_type` gains
+  `ifc_type` and `name`, its `element_id` is the type object's `Tag`, and it
+  is absent where the export writes no type object. A client that reads
+  `name` as always present or `element_type` as always served must allow for
+  both. The tool output schemas (`docs/mcp-tools.json`) say so.
 - The MCP server builds the provenance table and the decisions log each time
   it opens a model, so `open_model` takes longer than in 0.14.0 on a large
   model; neither is in `get_diagnostics`.
 
 ### Added
+
+- **`rvt::ifc::step_writer::written_names` and `type_objects` (#1327).**
+  `written_names(ifc_type, name, type_guid, property_set)` returns the
+  `Name` and `LongName` the IFC writer writes for a building element (an
+  `IfcSpace`'s room number and room name, or `<room name>:<ElementId>`
+  without a number) and whether the name is the exporter's own `<Revit
+  class>-<ElementId>` placeholder. `type_objects(model)` returns the type
+  objects the writer makes (`TypeObjects::groups`, one per type, entity and
+  predefined type of the elements named `Family:Type`, and `rooms`, one
+  `IfcSpaceType` per room whose name was read), each with its entity,
+  `Name`, `Tag`, property sets and the entities it types. `write_step`
+  writes with both, and the diagnostics' count of the type objects'
+  parameter values reads `type_objects`, which leaves out the pieces folded
+  into another element's body; a reader that wants an element's name or type
+  object asks here instead of grouping again.
 
 - **Where each decoded element was read from, down to the byte, on request
   (#1325).** `rvt-ifc --diagnostics out.json --element-provenance`
@@ -454,6 +477,52 @@ Autodesk's sample projects, the held-out models and the families (Measure run
 
 ### Fixed
 
+- **The MCP server's element names and type objects are the ones the IFC
+  export writes (#1327).** The scorer of #1327 found two disagreements on
+  every model it ran on. An `IfcSpace`'s `name` in `list_elements` and
+  `get_element` was the model's own `Room-<ElementId>`, where the export
+  writes the room number as `Name` (or `<room name>:<ElementId>` for a room
+  with a name and no number) and the room name as `LongName`; and
+  `element_type` was a parallel grouping that lacked the `Other` and
+  `Identity Data` sets the writer gives every type object and the
+  `IfcSpaceType` it makes for each room, and named a type for elements the
+  writer makes none for. Both now come from the writer:
+  `rvt::ifc::step_writer::written_names` and `type_objects` are the
+  functions it writes the `Name`, `LongName`, type objects and their sets
+  with, so the server and the IFC cannot differ on them, and the
+  diagnostics' parameter value count of the type objects' sets reads
+  `type_objects` too. A row and `get_element` gain `long_name`; `name` is
+  absent only for a room with neither a number nor a name whose model name
+  is exactly the exporter's `<Revit class>-<ElementId>` placeholder, and the
+  placeholder names of other elements are still served as `name` (Einhoven
+  23 of 37 rows, RE1 Electrical 3 of 49, the BIM4LCA office as built 52 of
+  13,021). No row of the 32 models measured lacks a name, so the absent-name
+  path is not measured. `explain_element`'s `name` and
+  `other_entities[].name` follow the same rule (they were the model's name).
+  `element_type` gains `ifc_type` and `name`, its `element_id` is the type
+  object's `Tag` (an `IfcSpaceType`'s is its room's ElementId), and it is
+  absent where the writer makes no type object, which it used to be served
+  for. The tool output schemas change, and so does the contract in
+  `docs/mcp-tools.json`.
+  Measured with the scorer of #1404, on head 34ace109 with `base=none`: run
+  41954686452 (scorer 30480145) passes 25 of 32 models, and run 41957587403
+  (scorer 9b51c1a8, tip 3c9a263e, same code) the same 25. The 6 reference
+  models (Einhoven, Core Interior, RE1) pass, where run 41949014871 (the
+  1895e771 scorer, main's server) failed all 6, and 19 of the 24 Revit 2025
+  models pass (1 before, run 41949021964); the 5 that fail are the stair
+  models, on the level of a stair's parts and the levels' counts. The
+  BIM4LCA office as built and at permit fails counts, element membership,
+  element storeys and levels: as built 158 `IfcCovering` rows against the
+  export's 111, 599 of 12,974 rows and 8 of 10 levels' counts; at permit 122
+  against 75, 599 of 13,020 rows and 7 of 10 levels. Its names, long names,
+  type objects and their sets are equal. Those failures are the levels and
+  lists #1412 fixes: with both merged (a throwaway branch, 537d88ba), run
+  41957685928 passes 32 of 32 models. The IFC text `rvt-ifc` writes is
+  unchanged by the move: in run 41954681945 (`base=main` at 07caf059,
+  `scorers=none`) the `ifc.sha256` of 34 of 34 models, the reference models,
+  the four office files and the 24 Revit 2025 models, is identical. The
+  held-out models and Autodesk's samples were not run.
+
 - **A floor's void is tagged with the sketch line Revit's export tags it with
   where the lines run clockwise (#1165, RE-339).** RE-151 tagged each void
   with the lowest ElementId of the sketch lines on its loop, which is Revit's
@@ -633,8 +702,8 @@ Autodesk's sample projects, the held-out models and the families (Measure run
   export's 111; at permit (13,067 rows, 42 s) 599 rows, 7 of 10 levels, and
   122 coverings against 75. The protocol, the rooms' areas, the sampled
   property and quantity sets, trust markers, the diagnostics and the export
-  hash were equal on every model. The two server faults are fixed by #1406,
-  which lands after this release; on its head the scorer passes 6 of 6 reference models and 19 of 24 Revit
+  hash were equal on every model. The two server faults are fixed in this
+  release by #1406 (under Fixed); on its head the scorer passes 6 of 6 reference models and 19 of 24 Revit
   2025 models (runs 41951524664, 41951554180). The scorer's later changes
   (this round's report guard, verdicts and sampling) are measured by the
   pull request's own run on its final head.
