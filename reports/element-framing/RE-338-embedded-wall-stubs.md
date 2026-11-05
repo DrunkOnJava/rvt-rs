@@ -65,7 +65,7 @@ Measure [41945943795](https://github.com/DrunkOnJava/rvt-rs/actions/runs/4194594
 - **Core Interior and RE1 Architecture: `ifc.sha256` identical to `main`'s**, and neither file has a wall that embeds a curtain wall (no note). The offices' exports differ in the 14 hosts' bodies only: a note line per office, `diagnostics.json` and the hash.
 - The cost is one extra read of the plain and stepped walls' native records in a file that has an `IfcCurtainWall` (none in a file that has none: Core Interior and RE1 took 4.41 and 1.17 s against 4.39 and 1.12 s), and the hosts' saved graphics in the pass that already reads doors' and windows'. The offices' export took 20.1 and 17.1 s against 18.3 and 15.5 s on the same CPU model, while the scorers this change does not touch took 5% to 17% longer on the same runner (`wall_bodies_vs_ifc` 126 s against 110, `saved_meshes_vs_ifc` 209 against 179): no cost beyond the pair's runner noise is shown, and none is claimed.
 
-Held-out models: see the pull request (run 41947083013).
+Held-out models (`-f holdout=true`, Measure [41947083013](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41947083013): f016fc32 against `main` at 77d71cbb, `mesh_bodies_vs_ifc` and `saved_meshes_vs_ifc`): 19 models, 18 held out and the spent Vitoria 2018 file, 46 files on each side, all identical but the export time in one log. `ifc.sha256` is the same on all 19, so no held-out export changes, and the one log kept (the spent file's) has no walls-that-embed line, so no host was drawn from a mesh there. Whether any of the 18 holds a wall that embeds a curtain wall is not known from what is kept (their logs are not), and the rule reads Revit 2023 to 2027 records only.
 
 ## 6. Not measured, and not drawn
 
