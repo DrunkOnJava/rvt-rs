@@ -88,7 +88,7 @@
 //! - [`native_symbol_cuts`]: The outline a door or window cuts in its host, from the native record of the symbol that draws it (RE-215)
 //! - [`native_stairs`]: A Revit 2025 stair run's sketch and type, read by member name from its native records (#357)
 //! - [`native_type_materials`]: The materials a family type's geometry is drawn in (RE-203, #355)
-//! - [`native_wall_cuts`]: The elements a wall's native record names as cutting it, and the rectangle of a rectangular wall opening (RE-321, #1165)
+//! - [`native_wall_cuts`]: The elements a wall's native record names as cutting it, and the boxes of those that cut an opening (RE-321, #1165)
 //! - [`native_wall_types`]: A wall's type Function, from the native records of the wall and its type (RE-185, RE-193)
 //!
 //! ## Other research

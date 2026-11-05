@@ -12,6 +12,7 @@ use rvt::ifc::element_provenance::ValueSource;
 use rvt::ifc::entities::{IfcEntity, Property, PropertySet, PropertyValue};
 use rvt::ifc::export_content::SPACE_OUTLINE_SOURCE_PROPERTY;
 use rvt::ifc::schedule_csv::room_rows;
+use rvt::ifc::step_writer::written_names;
 use rvt::reader::UnreadStream;
 use serde_json::Value;
 
@@ -131,18 +132,22 @@ fn provenance(computed: &Computed, index: usize, sources: bool) -> Option<Elemen
 
 fn element_row(computed: &Computed, index: usize) -> Option<ElementRow> {
     let IfcEntity::BuildingElement {
+        ifc_type,
         name,
         type_guid,
         predefined_type,
         storey_index,
+        property_set,
         ..
     } = computed.model.entities.get(index)?
     else {
         return None;
     };
+    let names = written_names(ifc_type, name, type_guid.as_deref(), property_set.as_ref());
     Some(ElementRow {
         id: type_guid.clone(),
-        name: name.clone(),
+        name: (!names.name_is_placeholder).then_some(names.name),
+        long_name: names.long_name,
         level: storey_name(&computed.model, *storey_index),
         predefined_type: predefined_type.clone(),
         provenance: provenance(computed, index, false)?,
@@ -430,22 +435,20 @@ fn property_set_out(set: &PropertySet) -> Option<PropertySetOut> {
     })
 }
 
-/// The type object of the element with Revit ElementId `id`, with its sets.
-fn type_out(model: &IfcModel, id: &str) -> Option<TypeOut> {
-    let tag = id.parse::<u32>().ok()?;
-    let type_id = model.element_type_ids.get(&tag)?;
-    let mut property_sets: Vec<PropertySetOut> = Vec::new();
-    if let Some(sets) = model.type_property_sets.get(type_id) {
-        property_sets.extend(sets.iter().filter_map(property_set_out));
-    }
-    if let Some(by_entity) = model.type_entity_sets.get(type_id) {
-        for sets in by_entity.values() {
-            property_sets.extend(sets.iter().filter_map(property_set_out));
-        }
-    }
+/// The type object the export writes for the entity at `index`, with its
+/// sets, as the writer decides it (`rvt::ifc::step_writer::type_objects`):
+/// none where the writer makes none.
+fn type_out(computed: &Computed, index: usize) -> Option<TypeOut> {
+    let object = computed.type_object(index)?;
     Some(TypeOut {
-        element_id: type_id.to_string(),
-        property_sets,
+        element_id: object.tag.clone(),
+        ifc_type: object.entity.clone(),
+        name: object.name.clone(),
+        property_sets: object
+            .property_sets
+            .iter()
+            .filter_map(property_set_out)
+            .collect(),
     })
 }
 
@@ -529,15 +532,16 @@ pub fn explain_element(
         .copied()
         .and_then(|index| match model.entities.get(index)? {
             IfcEntity::BuildingElement {
+                ifc_type,
                 name,
                 type_guid,
                 property_set,
                 ..
-            } => Some((index, name, type_guid, property_set)),
+            } => Some((index, ifc_type, name, type_guid, property_set)),
             _ => None,
         });
     let element_id: Option<u32> = match found {
-        Some((_, _, type_guid, _)) => type_guid.as_deref().and_then(|tag| tag.parse().ok()),
+        Some((_, _, _, type_guid, _)) => type_guid.as_deref().and_then(|tag| tag.parse().ok()),
         None => id.parse().ok(),
     };
     let log = computed.export_decisions.as_ref();
@@ -577,10 +581,11 @@ pub fn explain_element(
         });
     }
     let (name, provenance_out, trust_markers) = match found {
-        Some((index, name, _, property_set)) => {
+        Some((index, ifc_type, name, type_guid, property_set)) => {
             let property_sets = element_property_sets(model, index, property_set);
+            let names = written_names(ifc_type, name, type_guid.as_deref(), property_set.as_ref());
             (
-                Some(name.clone()),
+                (!names.name_is_placeholder).then_some(names.name),
                 provenance(computed, index, true),
                 trust_markers_of(&property_sets),
             )
@@ -609,6 +614,7 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
         ));
     };
     let Some(IfcEntity::BuildingElement {
+        ifc_type,
         name,
         type_guid,
         predefined_type,
@@ -656,19 +662,28 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
         .iter()
         .skip(1)
         .filter_map(|&other| match model.entities.get(other)? {
-            IfcEntity::BuildingElement { ifc_type, name, .. } => Some(EntityRefOut {
+            IfcEntity::BuildingElement {
+                ifc_type,
+                name,
+                type_guid,
+                property_set,
+                ..
+            } => Some(EntityRefOut {
                 ifc_type: ifc_type.clone(),
-                name: name.clone(),
+                name: written_names(ifc_type, name, type_guid.as_deref(), property_set.as_ref())
+                    .name,
                 global_id: computed.global_ids.get(other).cloned().flatten(),
             }),
             _ => None,
         })
         .collect();
 
+    let names = written_names(ifc_type, name, type_guid.as_deref(), property_set.as_ref());
     Ok(ElementDetail {
         model_id: entry.id.clone(),
         id: type_guid.clone(),
-        name: name.clone(),
+        name: (!names.name_is_placeholder).then_some(names.name),
+        long_name: names.long_name,
         level,
         predefined_type: predefined_type.clone(),
         location_feet: *location_feet,
@@ -681,7 +696,7 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
         file: computed.file.clone(),
         trust_markers,
         property_sets,
-        element_type: type_guid.as_deref().and_then(|tag| type_out(model, tag)),
+        element_type: type_out(computed, index),
         other_entities,
     })
 }
