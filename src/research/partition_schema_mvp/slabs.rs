@@ -474,9 +474,9 @@ fn solve_sketch_plan_profiles(
                 // RE-151: each line's first chord is an edge of its loop.
                 let points = curves
                     .iter()
-                    .filter_map(|(id, chords, _)| {
+                    .filter_map(|(id, chords, arc)| {
                         let c = chords.first()?;
-                        Some((*id, ((c[0] + c[2]) / 2.0, (c[1] + c[3]) / 2.0)))
+                        Some((*id, ((c[0] + c[2]) / 2.0, (c[1] + c[3]) / 2.0), !*arc))
                     })
                     .collect();
                 let chords: Vec<[f64; 4]> = curves
@@ -563,8 +563,9 @@ pub(super) fn current_sketch_records(
 }
 
 /// A sketch read from its lines' exact ends: the chords, whether any is an
-/// arc's, and each line's ElementId with a point on its edge (RE-151).
-pub(super) type ExactSketch = (Vec<[f64; 4]>, bool, Vec<(u32, (f64, f64))>);
+/// arc's, and each line's ElementId with a point on its edge and whether it
+/// is straight (RE-151, RE-339).
+pub(super) type ExactSketch = (Vec<[f64; 4]>, bool, Vec<(u32, (f64, f64), bool)>);
 
 /// One curve of a shaft's sketch as chords, and whether it is a straight
 /// line (RE-100).
