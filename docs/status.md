@@ -1257,7 +1257,7 @@ three.js IFC2X3 export of `rac_advanced`, holds neither it nor any of the
 project's 38 framing members (23 of them the system's), so neither is added.
 Furniture Systems are `IfcSystemFurnitureElement` in the public IFC4 export of
 the 2018 `rac_basic` (RE-326 section 5, read locally): the 3 placed Furniture
-Systems of that save are its 3, `Tag` for `Tag`, none written that it lacks;
+Systems of that save are all in it (3 of 3), none written that it lacks;
 the category qualifies and is not yet added, since a new category is a pull
 request of its own, and `category_map`'s `IfcFurniture` mapping for it is not
 what that export writes. Revit's exporter has code for rebar and beam systems

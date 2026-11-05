@@ -15,7 +15,7 @@
   which is when revit-ifc's exporter writes no assembly (cited by class), so
   neither is added. Revit's public IFC4 export of the 2018 `rac_basic` (RE-326)
   writes its 3 Furniture Systems as `IfcSystemFurnitureElement` with no
-  `PredefinedType`, and they are the sweep's 3 placed ones, `Tag` for `Tag`,
+  `PredefinedType`, and all 3 of the sweep's placed ones are in it (3 of 3),
   none written that the export lacks: the category now meets the rule and is
   left for a change of its own, since `category_map` maps it to
   `IfcFurniture`. The only `IfcElementAssembly` in a measured export are 3 in
