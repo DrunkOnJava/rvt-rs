@@ -42,14 +42,17 @@ pub enum ExportKind {
 #[non_exhaustive]
 pub enum SavedMeshChoice {
     /// Doors and windows of Revit 2023 to 2027, the releases whose saved
-    /// graphics are read ([`default_scope`]): `rvt-ifc` with no switch.
+    /// graphics are read ([`default_scope`]), and the walls that embed a
+    /// curtain wall where Revit raised their base, on Revit 2024 to 2027, the
+    /// releases whose wall records name what embeds in them (RE-340): `rvt-ifc`
+    /// with no switch.
     #[default]
     Default,
     /// Every element whose body would be its record's bounding box
     /// (`rvt-ifc --saved-meshes`). Slower.
     All,
-    /// None: doors and windows keep their record's box
-    /// (`rvt-ifc --no-saved-meshes`).
+    /// None: doors and windows keep their record's box, and walls that embed
+    /// a curtain wall their record's body (`rvt-ifc --no-saved-meshes`).
     Off,
 }
 
@@ -310,6 +313,26 @@ pub enum ExportNote {
         /// The reason.
         error: String,
     },
+    /// Walls that embed a curtain wall, drawn from their saved graphics where
+    /// Revit raised their base, on Revit 2024 to 2027 (#1385, RE-340).
+    #[non_exhaustive]
+    EmbedHostBodies {
+        /// Walls that embed a curtain wall, drawn as plain or stepped extrusions with
+        /// nothing hosted in them.
+        hosts: usize,
+        /// Of those, walls now drawn from their saved mesh.
+        raised: usize,
+        /// Of those, walls keeping their body because part of their saved
+        /// graphics did not decode (RE-224).
+        partial: usize,
+    },
+    /// The records of the walls that may embed a curtain wall could not be
+    /// read; their bodies are unchanged.
+    #[non_exhaustive]
+    EmbedHostBodiesSkipped {
+        /// The reason.
+        error: String,
+    },
 }
 
 impl ExportNote {
@@ -320,7 +343,8 @@ impl ExportNote {
             Self::SavedMeshesSkipped { error }
             | Self::FamilyExtrusionsSkipped { error }
             | Self::RevitPropertySetsSkipped { error }
-            | Self::RevitSetPlacementSkipped { error } => Some(error),
+            | Self::RevitSetPlacementSkipped { error }
+            | Self::EmbedHostBodiesSkipped { error } => Some(error),
             _ => None,
         }
     }
@@ -398,6 +422,18 @@ impl fmt::Display for ExportNote {
             Self::FamilyExtrusionsSkipped { error } => {
                 write!(f, "family extrusions not read, bodies unchanged: {error}")
             }
+            Self::EmbedHostBodies {
+                hosts,
+                raised,
+                partial,
+            } => write!(
+                f,
+                "{raised} of {hosts} walls that embed a curtain wall drawn from their saved graphics, Revit having raised their base; {partial} kept their body, their saved graphics not decoding whole"
+            ),
+            Self::EmbedHostBodiesSkipped { error } => write!(
+                f,
+                "walls that embed a curtain wall not read, bodies unchanged: {error}"
+            ),
         }
     }
 }
@@ -562,6 +598,16 @@ pub fn run_export_with_limits_and_control(
                         partial: report.partial,
                         triangles: report.triangles,
                     });
+                }
+                if report.embed_hosts > 0 {
+                    notes.push(ExportNote::EmbedHostBodies {
+                        hosts: report.embed_hosts,
+                        raised: report.embed_raised,
+                        partial: report.embed_partial,
+                    });
+                }
+                if let Some(error) = report.embed_error {
+                    notes.push(ExportNote::EmbedHostBodiesSkipped { error });
                 }
             }
             Err(error) => {

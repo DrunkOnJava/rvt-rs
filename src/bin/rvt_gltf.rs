@@ -58,12 +58,15 @@ struct Cli {
     /// Draw every element whose body would be its record's bounding box
     /// (furniture, fixtures, equipment and the rest) from the mesh Revit
     /// saved for display (#255). Doors and windows are drawn so by default
-    /// on Revit 2023 to 2027. Slower on large files.
+    /// on Revit 2023 to 2027, and so are the walls that embed a curtain wall
+    /// where Revit raised their base, on Revit 2024 to 2027 (RE-340). Slower
+    /// on large files.
     #[arg(long, conflicts_with = "no_saved_meshes")]
     saved_meshes: bool,
 
-    /// Keep doors and windows as their record's bounding box instead of the
-    /// mesh Revit saved for them.
+    /// Keep doors and windows as their record's bounding box, and the walls
+    /// that embed a curtain wall as their record's body, instead of the mesh
+    /// Revit saved for them.
     #[arg(long)]
     no_saved_meshes: bool,
 
