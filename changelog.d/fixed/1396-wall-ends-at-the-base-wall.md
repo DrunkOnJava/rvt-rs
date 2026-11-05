@@ -43,8 +43,9 @@
   the longer plan, and at permit the wall beneath them is drawn with a stepped
   profile, so they stay 0.044 ft off there. No other wall of either office file,
   Core Interior, RE1 Architecture, the 24 R2025 models, the 58 Autodesk sample
-  projects or the 25 held-out models changes (Measure 41978479893, 41978482673
-  and 41978485557 at `b47a9a00`). This corrects the 0.15.0 entry for #1384
+  projects or the 25 held-out models changes (Measure 41980282001, 41980285452
+  and 41980288900 at `1b3a6bd7`; the same comparisons at `b47a9a00`, runs
+  41978479893, 41978482673 and 41978485557, agree). This corrects the 0.15.0 entry for #1384
   (RE-336), which says that 2 walls as built (4 at permit) are 0.123 ft
   (0.044 ft) off Revit's lowest point because their plans end short of Revit's:
   after this, 2057668 and 2057670 have it on both files and only 2058499 and
