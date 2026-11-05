@@ -1821,6 +1821,17 @@ jobs:
         run: |
           python3 tools/ci/test_not_measured.py
           python3 tools/maintainer/test_clean_caches.py
+      # publish.yml's preflight (#1457) refuses a tag that is lightweight or
+      # unverified, on no release branch, or that disagrees with a version
+      # file; these are its pure judgements, and what must never publish.
+      - name: Release preflight's pure judgement (failure-first)
+        run: python3 tools/ci/test_release_preflight.py
+      # The same reader the preflight runs on the tagged commit, on this tree:
+      # every version file agrees (a half-finished bump fails the release pull
+      # request, not the tag) and a change to a file's layout that the reader
+      # cannot follow fails here, not at a release.
+      - name: The version files agree with each other
+        run: python3 tools/ci/release_preflight.py check --event workflow_dispatch --ref-type branch --ref-name checkout --sha HEAD
 
   # Guards the development environments' config: shellcheck the Cursor
   # install script and the devcontainer's scripts, install the
