@@ -38,7 +38,14 @@
 //! With `--records` (Measure passes it for Autodesk's samples) a `record`
 //! line also lists, for each frame of the categories in `WATCHED`, the stream
 //! and offset, the container reference, the placement kind, the design option
-//! and the three extents, so an id can be looked up.
+//! and the three extents, so an id can be looked up. Every run also prints
+//! `declared <n> framed <n> unframed <n> <ids>`: the ElementIds `Global/ElemTable`
+//! declares, how many of them a decoded frame of any category carries, and the
+//! ones none does, as runs (`a-b`) of consecutive ids. An id in no frame of any
+//! category is either not declared or declared with no frame the sweep reads.
+//! `chained without a frame <n> <ids>` lists the ids of the records the
+//! partitions open with (an element the file holds) that no decoded frame
+//! carries.
 //!
 //! ```bash
 //! cargo run --profile ci -p rvt-probes --example probe_re350_category_stages -- model.rvt [--records]
@@ -52,6 +59,10 @@ use std::collections::{BTreeMap, BTreeSet};
 type Ids = BTreeMap<i64, BTreeSet<u32>>;
 type IdsByReason = BTreeMap<(i64, &'static str), BTreeSet<u32>>;
 
+/// Autodesk's `BuiltInCategory.OST_StructuralFramingSystem` (Revit's "Structural
+/// Beam Systems"): a record of it lists the beams of the system.
+const BEAM_SYSTEMS: i64 = -2_001_327;
+
 /// The categories whose frames `--records` lists: the curtain panels, mullions
 /// and doors of #1445, and the assemblies, furniture systems, beam systems and
 /// rebar of #1444 (Autodesk's published `BuiltInCategory` values).
@@ -61,7 +72,7 @@ const WATCHED: [i64; 7] = [
     per::OST_DOORS,
     -2_000_267,
     -2_001_100,
-    -2_001_327,
+    BEAM_SYSTEMS,
     -2_009_000,
 ];
 
@@ -191,8 +202,23 @@ fn print_record(record: &PartitionElementRecord, stage: &str) {
     let option = record
         .design_option
         .map_or_else(|| "none".to_string(), |option| option.to_string());
+    let references = if record.builtin_category == BEAM_SYSTEMS {
+        let shown: Vec<String> = record
+            .references
+            .iter()
+            .take(64)
+            .map(u64::to_string)
+            .collect();
+        format!(
+            " references {} {}",
+            record.references.len(),
+            shown.join(",")
+        )
+    } else {
+        String::new()
+    };
     println!(
-        "record {} {} {stage} {} {} container {container} kind {:#x} option {option} extents {dx:.4} {dy:.4} {dz:.4} enclosing {}",
+        "record {} {} {stage} {} {} container {container} kind {:#x} option {option} extents {dx:.4} {dy:.4} {dz:.4} enclosing {}{references}",
         record.builtin_category,
         record.element_id,
         record.stream,
@@ -306,5 +332,83 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         println!("{line}");
     }
+    let declared = rvt::elem_table::parse_records(&mut rf)
+        .map(|table| rvt::elem_table::declared_ids(&table))
+        .unwrap_or_default();
+    let framed: BTreeSet<u32> = any.values().flatten().copied().collect();
+    let unframed: Vec<u32> = declared.difference(&framed).copied().collect();
+    println!(
+        "declared {} framed {} unframed {} {}",
+        declared.len(),
+        declared.intersection(&framed).count(),
+        unframed.len(),
+        runs(&unframed)
+    );
+    let bare: Vec<u32> = chained_ids(&mut rf, release, &declared)
+        .difference(&framed)
+        .copied()
+        .collect();
+    println!("chained without a frame {} {}", bare.len(), runs(&bare));
     Ok(())
+}
+
+/// The ElementIds of the records the file's partitions open with: the chain of
+/// RE-35 on Revit 2024 to 2027, the declared records `record_spans` walks on
+/// 2008 to 2023 (RE-315). A record here is an element the file holds, whether
+/// or not it has a bounding-box frame the sweep decodes.
+fn chained_ids(rf: &mut RevitFile, release: u32, declared: &BTreeSet<u32>) -> BTreeSet<u32> {
+    let mut out = BTreeSet::new();
+    let layout32 = per32::is_32bit_release(release);
+    let header_tag = per32::record_marker(rf).map(|(_, tag)| tag);
+    let marker = per::file_bbox_marker(rf, release);
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        if layout32 {
+            if let Some(tag) = header_tag {
+                out.extend(
+                    per32::record_spans(buf, tag, declared)
+                        .iter()
+                        .map(|span| span.element_id),
+                );
+            }
+        } else if let Some(marker) = &marker {
+            out.extend(
+                per::partition_record_chain(buf, marker)
+                    .iter()
+                    .filter_map(|span| u32::try_from(span.element_id).ok()),
+            );
+        }
+    }
+    out
+}
+
+/// `a-b` for each run of consecutive ids and `a` for a single id, joined by
+/// commas, for ids in ascending order.
+fn runs(ids: &[u32]) -> String {
+    let run = |start: u32, end: u32| {
+        if start == end {
+            start.to_string()
+        } else {
+            format!("{start}-{end}")
+        }
+    };
+    let mut out: Vec<String> = Vec::new();
+    let mut iter = ids.iter().copied();
+    let Some(first) = iter.next() else {
+        return String::new();
+    };
+    let (mut start, mut last) = (first, first);
+    for id in iter {
+        if last.checked_add(1) == Some(id) {
+            last = id;
+        } else {
+            out.push(run(start, last));
+            (start, last) = (id, id);
+        }
+    }
+    out.push(run(start, last));
+    out.join(",")
 }
