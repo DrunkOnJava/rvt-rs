@@ -232,6 +232,11 @@ pub struct Identity {
 }
 /// Decode the measured post-root episode section. Its start is determined by
 /// schema field traversal; it is not a fixed byte offset or byte-pattern scan.
+///
+/// A root whose `m_episodeList.m_oEpisodes` holds deferred `Episode`
+/// pointers (STE1200's Revit 2020 family: 109 of them, RE-342) is followed by
+/// their bodies in list order and then by the counted section; the two lists
+/// of GUIDs must be equal, or the history is refused.
 pub fn creation_episodes(history: &[u8], registry: &Registry) -> Result<Vec<String>> {
     let tag =
         le_bytes::u16_at(history, 0).ok_or_else(|| anyhow::anyhow!("truncated history tag"))?;
@@ -242,42 +247,61 @@ pub fn creation_episodes(history: &[u8], registry: &Registry) -> Result<Vec<Stri
         "unsupported history class"
     );
     let root = native_parameters::decode_object_fields(history, registry, 2, tag)?;
+    let inline = root.fields["m_episodeList"]["m_oEpisodes"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("history episode list absent"))?;
     ensure!(
-        root.fields["m_episodeList"]["m_oEpisodes"]
-            .as_array()
-            .is_some_and(Vec::is_empty),
-        "inline history episodes require a different contract"
+        inline.len() <= 1_000_000,
+        "history episode count budget exceeded"
     );
-    let count = le_bytes::u32_at(history, root.end)
-        .ok_or_else(|| anyhow::anyhow!("history episode count absent"))? as usize;
-    ensure!(count <= 1_000_000, "history episode count budget exceeded");
     let episode = registry
         .named("Episode")
         .ok_or_else(|| anyhow::anyhow!("Episode schema absent"))?;
-    let mut pos = root.end + 4;
-    let mut guids = Vec::new();
+    let mut pos = root.end;
+    let mut deferred = Vec::with_capacity(inline.len());
+    for entry in inline {
+        ensure!(
+            entry["class_tag"].as_u64() == Some(u64::from(episode.tag))
+                && entry["pointer_token"].as_u64() == Some(u64::from(u32::MAX)),
+            "unsupported inline history episode reference"
+        );
+        let decoded = native_parameters::decode_object_fields(history, registry, pos, episode.tag)?;
+        deferred.push(episode_guid(&decoded.fields)?);
+        pos = decoded.end;
+    }
+    let count = le_bytes::u32_at(history, pos)
+        .ok_or_else(|| anyhow::anyhow!("history episode count absent"))? as usize;
+    ensure!(count <= 1_000_000, "history episode count budget exceeded");
+    pos += 4;
+    let mut guids = Vec::with_capacity(count);
     for _ in 0..count {
         let decoded = native_parameters::decode_object_fields(history, registry, pos, episode.tag)?;
-        let raw = &decoded.fields["m_eGUID"]["m_guid"]["m_guid"]["guid_bytes"];
-        let values = raw
-            .as_array()
-            .ok_or_else(|| anyhow::anyhow!("unsupported Episode GUID shape"))?;
-        ensure!(values.len() == 16, "invalid Episode GUID width");
-        let mut bytes = [0u8; 16];
-        for (i, v) in values.iter().enumerate() {
-            bytes[i] = u8::try_from(
-                v.as_u64()
-                    .ok_or_else(|| anyhow::anyhow!("invalid GUID byte"))?,
-            )?;
-        }
-        guids.push(guid_string(bytes));
+        guids.push(episode_guid(&decoded.fields)?);
         pos = decoded.end;
     }
     ensure!(
         history.get(pos..) == Some(&[0; 4]),
         "unsupported history episode trailer"
     );
+    ensure!(
+        deferred.is_empty() || deferred == guids,
+        "inline and counted history episodes differ"
+    );
     Ok(guids)
+}
+fn episode_guid(fields: &serde_json::Value) -> Result<String> {
+    let values = fields["m_eGUID"]["m_guid"]["m_guid"]["guid_bytes"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("unsupported Episode GUID shape"))?;
+    ensure!(values.len() == 16, "invalid Episode GUID width");
+    let mut bytes = [0u8; 16];
+    for (i, v) in values.iter().enumerate() {
+        bytes[i] = u8::try_from(
+            v.as_u64()
+                .ok_or_else(|| anyhow::anyhow!("invalid GUID byte"))?,
+        )?;
+    }
+    Ok(guid_string(bytes))
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectIndex {
