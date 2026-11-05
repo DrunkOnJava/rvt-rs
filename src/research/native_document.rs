@@ -1367,7 +1367,7 @@ fn extract_records(
     }
     summary.selected_ids_without_records = selected.difference(&seen_ids).copied().collect();
     eprintln!(
-        "PASS {prof_label} total={}ms preamble={} holders={} streams={} decode={} emit={} base={} seen={prof_seen} selected={} decoded={prof_decoded} bases={prof_bases} @{}ms",
+        "PASS {prof_label} total={}ms preamble={} holders={} streams={} decode={} emit={} base={} seen={prof_seen} selected={} decoded={prof_decoded} bases={prof_bases} plan_us_cum={} plans_cum={} @{}ms",
         prof_started.elapsed().as_millis(),
         prof_preamble.as_millis(),
         prof_holders.as_millis(),
@@ -1376,6 +1376,8 @@ fn extract_records(
         prof_emit.as_millis(),
         prof_base.as_millis(),
         summary.selected_indexed_elements,
+        crate::prof::plan_totals().0,
+        crate::prof::plan_totals().1,
         crate::prof::at(),
     );
     crate::prof::dump_classes(&prof_label);

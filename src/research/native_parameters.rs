@@ -703,6 +703,7 @@ impl<'a> Cursor<'a> {
             );
             return Ok(Rc::clone(plan));
         }
+        let prof_plan_started = std::time::Instant::now();
         // The lineage borrows the registry's classes: cloning them, every
         // field name with them, for each object decoded was most of a
         // graph's allocations (#1237).
@@ -795,6 +796,7 @@ impl<'a> Cursor<'a> {
             duplicate,
         });
         self.plans.insert(tag, Rc::clone(&plan));
+        crate::prof::plan_built(prof_plan_started.elapsed().as_nanos() as u64);
         Ok(plan)
     }
     fn field<const BUILD: bool>(&mut self, f: &Field, depth: usize) -> Result<Value> {

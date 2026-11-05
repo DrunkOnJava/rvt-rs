@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
@@ -50,4 +51,19 @@ pub fn dump_classes(label: &str) {
         );
     }
     classes.retain(|key, _| !key.starts_with(&format!("{label}/")));
+}
+
+static PLAN_NS: AtomicU64 = AtomicU64::new(0);
+static PLAN_COUNT: AtomicU64 = AtomicU64::new(0);
+
+pub fn plan_built(ns: u64) {
+    PLAN_NS.fetch_add(ns, Ordering::Relaxed);
+    PLAN_COUNT.fetch_add(1, Ordering::Relaxed);
+}
+
+pub fn plan_totals() -> (u64, u64) {
+    (
+        PLAN_NS.load(Ordering::Relaxed) / 1000,
+        PLAN_COUNT.load(Ordering::Relaxed),
+    )
 }
