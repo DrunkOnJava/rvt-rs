@@ -4411,6 +4411,12 @@ pub const WALL_END_SOURCE_PROPERTY: &str = "BodyEndSource";
 /// (#1396, RE-337).
 pub const WALL_END_AT_BASE_WALL_BODY_END_SOURCE: &str = "wall_end_extended_to_base_wall";
 
+/// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says why a wall
+/// with an edited elevation profile, whose end stops short of walls beneath it,
+/// keeps the end its record gives: the walls that hold its base lie at
+/// different faces (#1396, RE-337).
+pub const WALL_END_REFUSAL_PROPERTY: &str = "BodyEndRefusal";
+
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how its base
 /// was cut (#1384, RE-336). It is not `BodyHeightSource`, which says how the
 /// top was cut and which a wall may carry as well: a property set holds one

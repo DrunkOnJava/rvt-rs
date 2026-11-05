@@ -84,7 +84,7 @@ use std::collections::{HashMap, HashSet};
 use super::{
     ELEMENT_RECORD_PROPERTY_SET, FLOOR_SHAPE_BODY_SOURCE, WALL_BASE_COVER_BODY_BASE_SOURCE,
     WALL_BASE_REFUSAL_PROPERTY, WALL_BASE_SLOPED_BODY_BASE_SOURCE, WALL_BASE_SOURCE_PROPERTY,
-    WALL_END_AT_BASE_WALL_BODY_END_SOURCE, WALL_END_SOURCE_PROPERTY,
+    WALL_END_AT_BASE_WALL_BODY_END_SOURCE, WALL_END_REFUSAL_PROPERTY, WALL_END_SOURCE_PROPERTY,
     WALL_TOP_COVER_BODY_HEIGHT_SOURCE, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use crate::ifc::body_geometry::{
@@ -1240,6 +1240,16 @@ pub(super) fn cut_wall_bases(
 /// still be spanned by it, feet (#1396).
 const END_TOLERANCE_FEET: f64 = 1e-3;
 
+/// How far a wall's rotation may lie from a quarter turn and still count as
+/// along a model axis, in quarter turns: its record box turns by the angle its
+/// record stores in single precision, which is off by about 1.5e-7 radian,
+/// 3e-5 foot over a wall 200 feet long (#1396).
+const ROTATION_TOLERANCE_QUARTERS: f64 = 1e-6;
+
+/// Why a wall with an edited elevation profile keeps its end where the walls
+/// that hold its base reach it at different faces (#1396).
+const WALL_END_REFUSAL_DIFFERENT_FACES: &str = "walls_beneath_reach_the_end_at_different_faces";
+
 /// A wall drawn as an upright rectangle along a model axis: its plan bounds
 /// (least x and y, then greatest x and y), its base and top, and which of its
 /// extrusion's two plan sides lies along x (#1396).
@@ -1275,7 +1285,7 @@ fn axis_wall(index: usize, entity: &IfcEntity) -> Option<AxisWall> {
         return None;
     }
     let quarters = rotation_radians.unwrap_or(0.0) / std::f64::consts::FRAC_PI_2;
-    if !quarters.is_finite() || (quarters - quarters.round()).abs() > 1e-9 {
+    if !quarters.is_finite() || (quarters - quarters.round()).abs() > ROTATION_TOLERANCE_QUARTERS {
         return None;
     }
     let turned = (quarters.round() as i64).rem_euclid(2) == 1;
@@ -1319,12 +1329,14 @@ fn axis_wall(index: usize, entity: &IfcEntity) -> Option<AxisWall> {
 /// Basement wall beneath, which that line ends inside (0.31 ft further as
 /// built, 0.09 ft at building permit). For a wall with an edited elevation
 /// profile (a [`IfcEntity::WallProfileOpening`] voids it) that is a rectangle
-/// along a model axis, this draws an end to the face of the one other
-/// rectangle along the perpendicular axis that holds the wall's base, spans
-/// its width, and stands beyond the end by no more than its own thickness,
-/// where no such wall touches the end already. The wall's body is one prism,
-/// so it reaches that face at every height: Revit's steps above the lower
-/// wall's top are not drawn. Every other wall is left as it was.
+/// along a model axis, this draws an end to the face of the other rectangles
+/// along the perpendicular axis that hold the wall's base, span its width, and
+/// stand beyond the end by no more than their own thickness, where no such
+/// wall touches the end already and they all end at one face. Where they end
+/// at different faces the wall keeps its end and carries `BodyEndRefusal`. The
+/// wall's body is one prism, so it reaches that face at every height: Revit's
+/// steps above the lower wall's top are not drawn. Every other wall is left as
+/// it was.
 pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
     let Gathered { profiled, .. } = gather(entities);
     if profiled.is_empty() {
@@ -1346,6 +1358,7 @@ pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
     };
     // (wall index, long axis, grows at its low end, gap, the wall reached)
     let mut extensions: Vec<(usize, usize, bool, f64, Option<u32>)> = Vec::new();
+    let mut refused: Vec<usize> = Vec::new();
     for wall in walls
         .iter()
         .filter(|wall| profiled.contains(&wall.index) && plain(wall.index))
@@ -1394,8 +1407,31 @@ pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
                     (gap > END_TOLERANCE_FEET && gap <= b - a).then_some((other, gap))
                 })
                 .collect();
-            if let [(other, gap)] = reached.as_slice() {
-                extensions.push((wall.index, long, at_low, *gap, other.id));
+            let Some(&(_, gap)) = reached.first() else {
+                continue;
+            };
+            if reached
+                .iter()
+                .all(|&(_, other_gap)| (other_gap - gap).abs() <= END_TOLERANCE_FEET)
+            {
+                let id = reached.iter().filter_map(|&(other, _)| other.id).min();
+                extensions.push((wall.index, long, at_low, gap, id));
+            } else {
+                refused.push(wall.index);
+            }
+        }
+    }
+    for index in refused {
+        if let Some(IfcEntity::BuildingElement {
+            property_set: Some(set),
+            ..
+        }) = entities.get_mut(index)
+        {
+            if set.name == ELEMENT_RECORD_PROPERTY_SET {
+                set.properties.push(Property {
+                    name: WALL_END_REFUSAL_PROPERTY.into(),
+                    value: PropertyValue::Text(WALL_END_REFUSAL_DIFFERENT_FACES.into()),
+                });
             }
         }
     }
