@@ -259,6 +259,7 @@ def paired_rows(items, by_tag, walls, names, to_internal):
                 "n_y_row": relation(iy, matrix[1, :]) if matrix is not None else "none",
                 "ifc_wall_x_rel": relation(wall_x, np.append(direction, 0.0)) if direction is not None and wall_x is not None else "none",
                 "wall_flipped": wall_flipped,
+                "decoded": item.get("decoded") or {},
                 "ifc_x": [round(float(v), 6) for v in ix],
                 "ifc_y": [round(float(v), 6) for v in iy],
                 "rvt_x": [round(float(v), 6) for v in rx] if rx is not None else None,
@@ -305,6 +306,76 @@ def parity_lines(rows, names):
                 total[(a, b)] += 1
                 agree[(a, b)] += ca == cb
     return [f"door flips: pair parity {a} against {b}: pairs={n} agree={agree[(a, b)]}" for (a, b), n in sorted(total.items())]
+
+
+def rule_lines(rows):
+    """The rules RE-343 measures, as counts: the placement Revit's export
+    gives an instance is its stored axes, reversed when `m_flippedX` and
+    `m_flippedY` differ; against its host wall, the stored axes are a half turn
+    from the wall's direction and exterior exactly where `m_flippedX` is set,
+    and the placement exactly where `m_flippedY` is."""
+    lines = []
+    for kind in ("door", "window"):
+        mine = [r for r in rows if r["kind"] == kind and r["x_rel"] != "none"]
+        for label, subset in (
+            ("with a host wall record", [r for r in mine if r["rvt_x_wall"] in ("+", "-")]),
+            ("without one", [r for r in mine if r["rvt_x_wall"] not in ("+", "-")]),
+        ):
+            wrong = 0
+            for r in subset:
+                differ = r["state"].get("m_flippedX") != r["state"].get("m_flippedY")
+                want = "reverse" if differ else "same"
+                wrong += not (r["x_rel"] == want and r["y_rel"] == want and r["z_rel"] == "same")
+            lines.append(f"door flips: rule placement is the stored axes reversed when the flags differ: {kind}s {label}: checked {len(subset)}, wrong {wrong}")
+        hosted = [r for r in mine if r["rvt_x_wall"] in ("+", "-") and r["ifc_x_wall"] in ("+", "-") and r["wall_flipped"] is not None]
+        turn = {"+": False, "-": True}
+        stored = placed = 0
+        for r in hosted:
+            exterior_flip = bool(r["wall_flipped"])
+            stored_turn = turn[r["rvt_x_wall"]]
+            placed_turn = turn[r["ifc_x_wall"]]
+            stored_y = (r["rvt_y_ext"] == ("+" if exterior_flip else "-")) if r["rvt_y_ext"] in ("+", "-") else None
+            placed_y = (r["ifc_y_ext"] == ("+" if exterior_flip else "-")) if r["ifc_y_ext"] in ("+", "-") else None
+            stored += not (stored_turn == bool(r["state"].get("m_flippedX")) and stored_y == stored_turn)
+            placed += not (placed_turn == bool(r["state"].get("m_flippedY")) and placed_y == placed_turn)
+        lines.append(
+            f"door flips: rule axes against the host wall: {kind}s checked {len(hosted)}; "
+            f"stored axes a half turn iff m_flippedX, wrong {stored}; placement a half turn iff m_flippedY, wrong {placed}"
+        )
+    for kind in ("door", "window"):
+        mine = [r for r in rows if r["kind"] == kind]
+        native = [r for r in mine if None not in (r["state"].get("m_flippedX"), r["state"].get("m_flippedY"))]
+        carried = [r for r in native if "m_hand_flipped" in r["decoded"] and "m_facing_flipped" in r["decoded"]]
+        equal = sum(
+            r["decoded"]["m_hand_flipped"] == r["state"]["m_flippedX"] and r["decoded"]["m_facing_flipped"] == r["state"]["m_flippedY"]
+            for r in carried
+        )
+        stray = sum(1 for r in mine if r not in native and ("m_hand_flipped" in r["decoded"] or "m_facing_flipped" in r["decoded"]))
+        facing = [r for r in mine if r["read"]]
+        lines.append(
+            f"door flips: decoded records: {kind}s {len(mine)}; native flags read {len(native)}; "
+            f"carry m_hand_flipped and m_facing_flipped {len(carried)}; equal to the native booleans {equal}; "
+            f"carry them with no native flags {stray}; transform read {len(facing)}; carry m_opening_facing "
+            f"{sum(1 for r in facing if 'm_opening_facing_x' in r['decoded'])}"
+        )
+    doors = [r for r in rows if r["kind"] == "door" and r["op_side"] in ("L", "R") and r["symbol"] is not None]
+    groups = collections.defaultdict(list)
+    for r in doors:
+        groups[r["symbol"]].append(r)
+    both = flips = 0
+    for group in groups.values():
+        sides = collections.defaultdict(set)
+        for r in group:
+            if None not in (r["state"].get("m_flippedX"), r["state"].get("m_flippedY")):
+                sides[r["state"]["m_flippedX"] != r["state"]["m_flippedY"]].add(r["op_side"])
+        if len(sides) == 2:
+            both += 1
+            flips += all(len(v) == 1 for v in sides.values()) and sides[True] != sides[False]
+    lines.append(
+        f"door flips: rule operation side: doors with a left or right operation {len(doors)}; symbols {len(groups)}; "
+        f"symbols with doors in both flag relations {both}; of them where one side holds in each relation and the sides differ {flips}"
+    )
+    return lines
 
 
 def main(argv):
@@ -357,6 +428,8 @@ def main(argv):
             counts = collections.Counter(str(r[feature]) for r in mine)
             print(f"door flips:   state {kind} {key} feature {feature}: {shown(counts)}")
 
+    for line in rule_lines(rows):
+        print(line)
     for line in parity_lines(rows, names):
         print(line)
 

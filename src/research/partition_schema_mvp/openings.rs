@@ -36,6 +36,64 @@ pub(super) fn attach_opening_facings(
     }
 }
 
+/// Give each door and window the hand flip and facing flip of its native
+/// `FamilyInstance` record ([`OPENING_FLIP_FIELDS`], RE-343): `m_flippedX`
+/// and `m_flippedY`, a boolean each, on Revit 2015 to 2027. An element with
+/// no such record, whose record lacks either boolean, or whose records
+/// disagree, gets neither field.
+pub(super) fn attach_opening_flips(rf: &mut RevitFile, groups: [&mut Vec<DecodedElement>; 2]) {
+    let ids: BTreeSet<u64> = groups
+        .iter()
+        .flat_map(|elements| elements.iter())
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    let options = crate::native_document::Options {
+        selected_ids: ids,
+        graph_classes: Some(BTreeSet::from(["FamilyInstance".to_string()])),
+        releases: crate::native_document::NATIVE_RELEASES,
+        ..crate::native_document::Options::default()
+    };
+    // Each element's flips, `None` once two records give it different ones.
+    let mut read: BTreeMap<u64, Option<[bool; 2]>> = BTreeMap::new();
+    let pass = crate::native_document::extract_graphs(rf, &options, |record| {
+        if record.class_name.as_deref() != Some("FamilyInstance") {
+            return Ok(());
+        }
+        let Some(root) = record
+            .graph
+            .as_ref()
+            .and_then(|graph| graph.objects.first())
+        else {
+            return Ok(());
+        };
+        let flag = |name: &str| root.fields.get(name).and_then(serde_json::Value::as_bool);
+        let flips = flag("m_flippedX")
+            .zip(flag("m_flippedY"))
+            .map(|(x, y)| [x, y]);
+        let slot = read.entry(record.identity.element_id).or_insert(flips);
+        if *slot != flips {
+            *slot = None;
+        }
+        Ok(())
+    });
+    if pass.is_err() {
+        return;
+    }
+    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        let Some(Some(flips)) = element.id.and_then(|id| read.get(&u64::from(id))) else {
+            continue;
+        };
+        for (name, value) in OPENING_FLIP_FIELDS.iter().zip(*flips) {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Bool(value)));
+        }
+    }
+}
+
 /// The plan facing [`OPENING_FACING_FIELDS`] record.
 pub fn opening_facing_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 2]> {
     let float = |wanted: &str| {

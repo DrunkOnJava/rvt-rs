@@ -33,7 +33,8 @@
 //!     (the fields of each `InstanceInfo` object of its graph, which holds
 //!     `m_Trf`, the transform the cut readers place a symbol by) and objects
 //!     (the other non-graphics objects of the first records, for the first 40
-//!     elements of the model)
+//!     elements of the model), decoded (the flip and facing fields the decoded
+//!     Door or Window record of `iter_elements` carries, or null)
 //!   kind "wall"     id, start, end, flipped and cross_section of each host
 //!                   wall's native record (RE-222)
 //!
@@ -53,6 +54,8 @@ use rvt::research::native_document::{NATIVE_RELEASES, Options, extract_graphs};
 use rvt::research::native_walls::native_walls;
 use rvt::research::partition_instance_transforms::{instance_transform, scan_instance_transforms};
 use rvt::research::partition_names::element_data_header;
+use rvt::research::partition_schema_mvp::{OPENING_FACING_FIELDS, OPENING_FLIP_FIELDS};
+use rvt::walker::{InstanceField, iter_elements};
 use serde_json::{Value, json};
 
 const SEARCH: usize = 0x4000;
@@ -209,6 +212,32 @@ fn main() -> anyhow::Result<()> {
         }
     }
     let ids: BTreeSet<u32> = kinds.keys().copied().collect();
+
+    // The fields the decoded Door and Window records carry for the flips and
+    // the facing (RE-343, RE-87), as `iter_elements` gives them.
+    let mut decoded: BTreeMap<u32, serde_json::Map<String, Value>> = BTreeMap::new();
+    for element in iter_elements(&mut rf)? {
+        let Some(id) = element.id.filter(|id| ids.contains(id)) else {
+            continue;
+        };
+        let fields = decoded.entry(id).or_default();
+        for (name, value) in &element.fields {
+            if !OPENING_FLIP_FIELDS.contains(&name.as_str())
+                && !OPENING_FACING_FIELDS.contains(&name.as_str())
+            {
+                continue;
+            }
+            match value {
+                InstanceField::Bool(flag) => {
+                    fields.insert(name.clone(), json!(flag));
+                }
+                InstanceField::Float { value, .. } => {
+                    fields.insert(name.clone(), json!(value));
+                }
+                _ => {}
+            }
+        }
+    }
     let door_count = kinds.values().filter(|(kind, _)| *kind == "door").count();
     println!(
         "{}",
@@ -409,6 +438,7 @@ fn main() -> anyhow::Result<()> {
                 "copies": element_copies,
                 "records": element_records,
                 "info": element_infos,
+                "decoded": decoded.get(id),
                 "objects": element_objects,
             })
         );

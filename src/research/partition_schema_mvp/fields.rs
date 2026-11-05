@@ -100,6 +100,15 @@ pub const MULLION_KEPT_ENDS_FIELD: &str = "m_mullion_kept_ends";
 // Tracker: B72.
 pub const OPENING_FACING_FIELDS: [&str; 2] = ["m_opening_facing_x", "m_opening_facing_y"];
 
+/// Fields holding a door's or window's hand flip and facing flip
+/// (`FamilyInstance.HandFlipped` and `FacingFlipped`, RE-343), from the
+/// `m_flippedX` and `m_flippedY` booleans of its native record. The stored
+/// transform is never a reflection, so neither flip is in it: its X and Y axes
+/// (and [`OPENING_FACING_FIELDS`]) are a half turn from the unflipped ones
+/// where `m_flippedX` is set, and the direction the door faces is that Y axis
+/// reversed where the two flips differ.
+pub const OPENING_FLIP_FIELDS: [&str; 2] = ["m_hand_flipped", "m_facing_flipped"];
+
 /// Field carrying a family instance's original symbol (RE-167): the
 /// FamilySymbol `ExporterIFCUtils.GetOriginalSymbol` returns, whose GlobalId
 /// Revit's export gives the instance's type object while its `Tag` stays the
