@@ -21,12 +21,12 @@ solved carrier: the reports under `reports/element-framing/` say what each
 negative result ruled out, and [`ROADMAP.md`](../ROADMAP.md) says what each
 milestone is for.
 
-### 0.15.0: IFC geometry and element data
+### 0.16.0: IFC geometry and element data
 
 | Issue | Remainder |
 |---|---|
 | [#1384](https://github.com/DrunkOnJava/rvt-rs/issues/1384) | The BIM4LCA office's Basement footings: drawn along their sloped tops since RE-336 (8 floors, Revit's volume), and the 14 Basement walls raised as built (4 on level floors, 10 on footings) all have Revit's lowest point, 14 of 16 at permit, since RE-337 draws a profile-edited wall's end to the face of the wall beneath it (#1396); left open are the 2 at permit whose plans end 0.09 ft short of Revit's because the wall beneath is drawn with a stepped profile, the 2 as built whose plans end 0.31 ft short because a footing covers their plan in part, floors with interior vertices, creases or corners out of one plane, and walls a footing covers in part |
-| [#1237](https://github.com/DrunkOnJava/rvt-rs/issues/1237) | Exports of Revit 2015 to 2023 files take 1.6 to 3.9 times as long as with 0.11.0: measure which native passes cost the time and narrow them |
+| [#1335](https://github.com/DrunkOnJava/rvt-rs/issues/1335) | Revit 2015 to 2023 exports: the remaining time against 0.11.0 after #1237 |
 | [#1197](https://github.com/DrunkOnJava/rvt-rs/issues/1197) | Help wanted: outputs only Revit can produce (a DWG export for the second witness edge, API fixtures for extensible storage) |
 | [#1196](https://github.com/DrunkOnJava/rvt-rs/issues/1196) | `Formats/Latest`: classify the residual field encodings and Revit 2027's flagged runtime-state fields from byte evidence |
 | [#1195](https://github.com/DrunkOnJava/rvt-rs/issues/1195) | Viewer: show real decode progress, and say clearly when a model is too large for the browser |
