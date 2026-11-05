@@ -106,6 +106,86 @@ when a release ships.
   ([`changelog.d/`](../changelog.d/README.md)) change in the same pull request
   as the capability they describe.
 
+## Numbers on the README and the supported profile
+
+W10 of the [1.0 criteria](release-1.0-criteria.md) asks that a reader can tell,
+for every number on the [README](../README.md) and the
+[supported profile](supported-profile.md), which model it was measured on and
+whether they can fetch that model (#1192). `tools/ci/measured_numbers.py` checks
+it in CI's PII guard job, on every pull request, draft or ready:
+
+    python3 tools/ci/measured_numbers.py             # the two pages as they are
+    python3 tools/ci/measured_numbers.py --refusals  # shows it failing on copies of them
+    python3 tools/ci/test_measured_numbers.py        # the pure judgement's failure-first tests
+
+**The rule.** Every number on either page names a model of the
+[model index](reference-models.md#model-index) in its own clause: the text
+between semicolons, sentence ends, table cells and list items. A continuation
+after a semicolon (`; both ends on 724`) names its model again. When the model's
+row says `local only` or `not shared`, the clause says so in those words, or an
+earlier clause of the same cell, paragraph or list item did so for that model
+(`1,030 of Snowdon's 1,078 walls (local only)`). The index row of a model says in
+one of four words who can fetch it, and the check fails on a row that does not.
+
+**What is not a number.** The check is closed, not a list of what counts as a
+measurement: every digit on the pages is a number except what its spelling alone
+marks as something else. Those are:
+
+- code spans (not one that is only a number, such as `4,321 walls`), fenced
+  blocks, link targets, URLs and comments;
+- an issue (`#1192`) or report (`RE-345`, `§8`) id, a hash, an ISO date, a
+  version with two dots or a `v`, a Revit release or any other year (`2024`), a
+  number of eight digits or more with no comma (a Measure run id) and a layout
+  width (`32-bit`);
+- the version of a named tool (`Rust 1.87`, `License 2.0`, `glTF 2.0`,
+  `Revit 26.2`) and the name of the release (`the 1.0 range`);
+- `2D`, `3D`, ordinals and a list's own numbering.
+
+A count of 1,000 or more is written with its comma, as the pages do, so a year
+is never read as a count. A number that is none of these and is not a
+measurement of a model (a default limit, a count another check pins) carries a
+marker in its clause, with its reason:
+
+    the 12 JS-callable bindings<!-- w10: a count tools/ci/wasm-api.py holds to the source -->
+
+A marker without a reason fails, and so does one with nothing to excuse (its
+clause has no number, or names its model already), so markers do not outlive
+their numbers. There is no allowlist in the script. A marker is never for a
+count of anything found in a model.
+
+**Why a closed rule and not a pattern for measurements.** A pattern for "N of M"
+or "within 0.01 ft" misses the next form someone writes (`1,019 turned or tilted
+mullions`, `all 24`, `250 of the 251`), and a miss is a number nobody checked.
+Here a new form fails until it names a model, and the few numbers that are not
+measurements say so beside themselves, with a reason a reviewer can read. The
+markers on the pages today are for project release versions, the binding count
+`tools/ci/wasm-api.py` pins, the resource-limit defaults, an exit status and a
+value rvt-rs writes.
+
+**Keeping a new number to the rule.** Write the model where the number is, using a
+name from the index (`Core Interior`, `the BIM4LCA office`, `puzzbobb`), and
+`(local only)` or `(not shared)` after the first mention in the cell when the
+index says so. A new model goes in the index first, in its own row: its names
+(each used by one row only; the longest name wins where one holds another), who
+can fetch it (`redistributable`, `fetched by Measure`, `local only` or `not
+shared`) and how. The check proves that a clause names a model, not that the
+number is true, that it belongs to that model, or that it was measured on the
+current head; the figures still name their run or report. Spelled-out counts
+("two projects") are not read, so name the model there too. The tables of other
+pages (`docs/evidence.md`, the criteria) are not read.
+
+**Other pull requests editing these two pages.** The check reads the whole of
+both pages, so a pull request opened before it landed passes its own CI, and its
+next run after it merges `main` fails the PII guard job if it adds a number with
+no model. The fix is the model's name beside the number (or a row in the index),
+not a marker. `CI passed` waits on the PII guard job, so it is the pull request
+that adds a bare number that is blocked, not `main`.
+
+**Re-running the numbers.** The command that re-runs them on the models anyone
+can fetch is a Measure dispatch, in [reference models](reference-models.md#re-run-the-numbers),
+with what it covers and what it does not. A figure on the pages that rests on a
+model marked `local only` or `not shared` cannot be re-run by anyone else.
+
 ## Measure and the MCP server's answers
 
 Measure also scores what `rvt-rs-mcp` tells an agent about each model it
