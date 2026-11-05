@@ -167,7 +167,7 @@ A described, intended change passes; an unexplained move fails, and so does a
 move that only a general description covers. The check run is `semantic diff
 (advisory)` on the measured commit, and nothing is posted to the pull request.
 It is not in the ruleset, so merging still waits on `full / CI passed`, but a
-`fail` is a red check, which `arm.sh` refuses.
+`fail` is a red check, and a pull request is not armed over one.
 
     gh workflow run measure.yml --ref main -f ref=<pull request head> -f base=main \
       -f nordic=true -f r2025=true
@@ -196,6 +196,21 @@ as the head of a same-repository pull request: if the pull request's head has
 moved since, or the commit is another pull request's, the check is NOT MEASURED
 and says so. Measure the head of the pull request, not a branch name that has
 moved, and write the Summary before the run.
+
+**Where to find the verdict.** The verdict is on the measured commit, which is
+not necessarily the pull request's head, and a pull request's page and its checks
+list show only the head's checks, so a `fail` can sit on an older commit where
+nobody looks. Look it up on the measured commit (the commit the Measure run's
+summary names as its head):
+
+    gh api "repos/<repo>/commits/<sha>/check-runs?check_name=semantic%20diff%20(advisory)"
+
+A later commit does not clear a fail: only a new score of the same pull request
+does, which is a complete Measure run of its new head, and that run writes its own
+verdict on the commit it measured. A filtered Measure run writes no verdict at
+all, so a pull request that changes output needs its final unfiltered run (no
+`models` filter), made on the head it is armed at, and the verdict that run writes
+is the one to read.
 
 **The Summary must state each change specifically.** The agent that makes a
 change also writes its Summary, so "changes how walls are drawn" could cover any
@@ -328,7 +343,7 @@ Measure's `ifc.sha256` is what says that an export is identical.
   the check is advisory for that reason; the diff itself is in the artifact for a
   human to read.
 - **The check's conclusion.** pass is `success`, warn and NOT MEASURED are
-  `neutral`, fail is `failure`: a red check on the head, which `arm.sh` refuses
+  `neutral`, fail is `failure`: a red check on the measured commit, which an agent does not arm over
   and the watcher counts as failing, as intended.
 
 ## Measure's score cache
