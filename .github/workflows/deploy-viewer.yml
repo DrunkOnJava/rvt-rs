@@ -137,7 +137,7 @@ jobs:
   tests:
     permissions:
       contents: read
-    uses: ./.github/workflows/viewer-test.yml
+    uses: $/.github/workflows/viewer-test.yml
     with:
       legs: '[{"name":"browser tests","files":"/"}]'
 
@@ -149,7 +149,7 @@ jobs:
   measure:
     permissions:
       contents: read
-    uses: ./.github/workflows/viewer-test.yml
+    uses: $/.github/workflows/viewer-test.yml
     with:
       legs: '[{"name":"saved-mesh measurement","measure":true}]'
 

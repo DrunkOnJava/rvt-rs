@@ -1512,7 +1512,7 @@ jobs:
     name: viewer tests
     needs: viewer-paths
     if: inputs.fast != true && needs.viewer-paths.outputs.run == 'true'
-    uses: ./.github/workflows/viewer-test.yml
+    uses: $/.github/workflows/viewer-test.yml
     permissions:
       contents: read
     with:
