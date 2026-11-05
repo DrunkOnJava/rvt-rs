@@ -205,7 +205,14 @@ page keeps each element's answer, up to 64 elements and the least recently
 selected going first, until a file is opened again, so an element selected a
 second time reads nothing.
 
-Measured figures: not yet measured on this head.
+Measured in the viewer tests, run 42109657349 on head d1de8adf (CI runner, WASM
+without LTO): a read's
+wasm instance took 17 MiB on Einhoven (the open's worker 23 MiB), 275 MiB on
+Core Interior (326 MiB) and 943 MiB on the BIM4LCA office as built (910 MiB),
+0.74 to 1.04 times the open's, in a median of 535 ms, 3.0 to 3.3 s and 7.4 s.
+The ten-times-size estimate (616 MiB for the office's 62 MiB) was short of it,
+which is why the page judges by the open's memory. On the office the page kept
+3 answers, 4,731 characters of JSON.
 
 ## Viewer state
 
