@@ -37,6 +37,21 @@ jobs:
           name: scorecard-results
           path: results.sarif
           retention-days: 14
-      - uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      # The upload to code scanning failed once with no finding (2026-11-05,
+      # run 42062175110, attempt 1) and passed when the job was rerun with the
+      # same file. So a failed upload is tried once more, right after, with
+      # the identical inputs; an upload that really fails (a rejected file, no
+      # permission) fails both times and fails the job. There is no wait step
+      # between the two: while publishing results, scorecard-action's API
+      # accepts only its approved actions in this job, and `run` is not one.
+      - name: Upload the results to code scanning
+        id: sarif
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: results.sarif
+      - name: Upload the results to code scanning (retry)
+        if: steps.sarif.outcome == 'failure'
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: results.sarif

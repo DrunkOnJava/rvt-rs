@@ -38,6 +38,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+      # The action uploads its SARIF to code scanning itself, as its last
+      # step, and that upload failed once with zizmor having exited 0 and no
+      # finding (2026-11-05, run 42061129888, attempt 1); the job passed when
+      # rerun. The upload cannot be retried apart from the action, and with
+      # `advanced-security: false` the action writes no SARIF at all, so the
+      # whole action is run once more after a failure: zizmor takes about 6
+      # seconds, and a zizmor error or a rejected upload fails both times and
+      # fails the job. (Findings alone do not fail it: in SARIF mode zizmor
+      # exits 0 and they become code scanning alerts.)
+      - name: zizmor
+        id: zizmor
+        continue-on-error: true
+        uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        with:
+          version: "1.30.1"
+      - name: zizmor (retry)
+        if: steps.zizmor.outcome == 'failure'
+        uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
         with:
           version: "1.30.1"
