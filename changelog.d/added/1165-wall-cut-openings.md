@@ -16,16 +16,20 @@
   13 of 38, 43 and 72 at permit), every one with Revit's box within 0.01 ft,
   GlobalId, name, type and both `Reference`s; none is wrong. Unfilled
   openings written go from 75 to 169 as built and from 69 to 156 at permit,
-  and the census gains 178 and 198 equal property values and quantities as
-  built (head 04f60dd6, Measure run 41952363750). A door's opening 10 ft
+  and the census gains 182 and 198 equal property values and quantities as
+  built (head f54b619f, Measure run 41959375917). A door's opening 10 ft
   across a wall that runs along its own wall, and a curtain wall that reaches
   its wall's end, has another wall beside it or has record copies that
   disagree, are not written: `exported.wall_cut_openings_left_out` counts each
   step left out by reason, and the counts close. Three openings as built and
   four at permit (one of them RE-321's) are written that Revit's export of
-  the same file lacks and its export of the sibling file holds, and the
-  scorer counts them apart; their records are not byte for byte the sibling
-  file's, which RE-338 section 6 gives. The thresholds were fitted on the
+  the same file lacks and its export of the sibling file holds: the
+  maintainer decided on 2026-11-04 to write them and count them apart, by a
+  rule with no ids that the opening and property scorers apply. Four of the
+  six have Revit's box in the sibling export to 0.000 ft; the cabinet 3388647
+  and the door 1728679, whose cutters moved between the saves, are 0.655 and
+  0.130 ft off it. Unlike the 2026-11-03 opening, the host walls' records are
+  not byte for byte the sibling file's (RE-338 section 6). The thresholds were fitted on the
   office pair alone: Core Interior and RE1 Architecture are unchanged, the 19
   held-out and spent models' exports are byte for byte `main`'s (Measure run
   41954664033) and the Autodesk samples' are but `rac_basic` 2024 and 2025,
