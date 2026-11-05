@@ -615,6 +615,7 @@ pub fn run_export_with_limits_and_control(
         }
         ExportKind::Placeholder => PlaceholderExporter.export_with_diagnostics(rf)?,
     };
+    crate::prof::lap("pipeline-exporter-done");
     let mut model = result.model;
     let mut diagnostics = result.diagnostics;
     let decisions = result.decisions;
@@ -645,6 +646,7 @@ pub fn run_export_with_limits_and_control(
         }
     }
 
+    crate::prof::lap("pipeline-provenance-done");
     let scope = match (options.kind, options.saved_meshes) {
         (ExportKind::Placeholder, _) | (_, SavedMeshChoice::Off) => None,
         (_, SavedMeshChoice::All) => Some(SavedMeshScope::All),
@@ -684,6 +686,7 @@ pub fn run_export_with_limits_and_control(
         }
     }
 
+    crate::prof::lap("pipeline-saved-meshes-done");
     if options.family_extrusions && options.kind != ExportKind::Placeholder {
         match super::family_extrusions::attach_with_control(rf, &mut model, control) {
             Ok(report) => {

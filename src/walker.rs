@@ -1572,9 +1572,11 @@ pub(crate) fn walk_shared(
         // Partition schema MVP: Level / Material / Room / Floor plan
         // loops / 2024 ArcWallRectOpening index. Fail closed — no
         // invented Door/Window typed success.
-        if let Ok(mvp) =
-            crate::partition_schema_mvp::recover_partition_schema_mvp(rf, version, limits)
-        {
+        crate::prof::lap("walker-before-mvp");
+        let mvp_result =
+            crate::partition_schema_mvp::recover_partition_schema_mvp(rf, version, limits);
+        crate::prof::lap("walker-after-mvp");
+        if let Ok(mvp) = mvp_result {
             for decoded in mvp.into_elements() {
                 if let Some(id) = decoded.id {
                     if !seen_ids.insert(id) {

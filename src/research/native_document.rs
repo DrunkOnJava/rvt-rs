@@ -372,19 +372,30 @@ pub(crate) fn read_preamble(file: &mut RevitFile, deferred: bool) -> Result<(Pre
         global_streams.insert(name.to_string(), envelope);
         Ok(bytes)
     };
-    let registry = schema_registry::parse(&read("Formats/Latest")?)?;
+    crate::prof::lap("pre-start");
+    let schema_bytes = read("Formats/Latest")?;
+    crate::prof::lap("pre-read-formats");
+    let registry = schema_registry::parse(&schema_bytes)?;
+    crate::prof::lap("pre-parse-schema");
     let history = read("Global/History")?;
+    crate::prof::lap("pre-read-history");
     let (episodes, deferred_pointers) = if deferred {
         native_index::creation_episodes_with_deferred(&history, &registry)?
     } else {
         (native_index::creation_episodes(&history, &registry)?, 0)
     };
-    let index = native_index::parse(&read("Global/ElemTable")?, &registry, &episodes)?;
+    crate::prof::lap("pre-episodes");
+    let elem_table = read("Global/ElemTable")?;
+    crate::prof::lap("pre-read-elemtable");
+    let index = native_index::parse(&elem_table, &registry, &episodes)?;
+    crate::prof::lap("pre-parse-index");
     let increments =
         native_index::storage_increments(&read("Global/DocumentIncrementTable")?, &registry)?;
+    crate::prof::lap("pre-increments");
     let es_catalog = read("Global/Latest")
         .and_then(|bytes| crate::native_es_catalog::decode(&bytes, &registry))
         .map_err(|error| format!("{error:#}"));
+    crate::prof::lap("pre-es-catalog");
     Ok((
         Preamble {
             global_streams,
@@ -468,12 +479,16 @@ pub fn current_partitions(
 /// Extract selected current indexed records. Unsupported individual object
 /// graphs produce explicit records and do not discard other decoded owners.
 /// Framing, identity and routing errors abort instead of choosing a candidate.
+#[track_caller]
 pub fn extract(
     file: &mut RevitFile,
     options: &Options,
     emit: impl FnMut(Record) -> Result<()>,
 ) -> Result<Summary> {
+    let label = prof_label();
+    PROF_LABEL.with(|l| *l.borrow_mut() = "definitions".into());
     let pass = definition_pass(file, options)?;
+    PROF_LABEL.with(|l| *l.borrow_mut() = format!("extract@{label}"));
     let definitions = &pass.registry;
     let defined = options.definition_filter.is_none_or(|accepts| {
         definitions
@@ -703,11 +718,14 @@ impl RecordIndex {
 /// values. Each record's saved metadata is read against no
 /// definitions.
 // Tracker: B80.
+#[track_caller]
 pub fn extract_graphs(
     file: &mut RevitFile,
     options: &Options,
     emit: impl FnMut(Record) -> Result<()>,
 ) -> Result<Summary> {
+    let label = prof_label();
+    PROF_LABEL.with(|l| *l.borrow_mut() = format!("graphs@{label}"));
     extract_records(
         file,
         options,
@@ -777,6 +795,16 @@ pub(crate) fn group_records(
     );
     Ok(records)
 }
+thread_local! {
+    static PROF_LABEL: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+}
+
+#[track_caller]
+fn prof_label() -> String {
+    let caller = std::panic::Location::caller();
+    format!("{}:{}", caller.file(), caller.line())
+}
+
 fn extract_records(
     file: &mut RevitFile,
     options: &Options,
@@ -785,6 +813,15 @@ fn extract_records(
     needles: Option<&IdNeedles>,
     mut emit: impl FnMut(Record) -> Result<()>,
 ) -> Result<Summary> {
+    let prof_label = PROF_LABEL.with(|l| l.borrow().clone());
+    let prof_started = std::time::Instant::now();
+    let mut prof_streams = std::time::Duration::ZERO;
+    let mut prof_decode = std::time::Duration::ZERO;
+    let mut prof_emit = std::time::Duration::ZERO;
+    let mut prof_base = std::time::Duration::ZERO;
+    let mut prof_seen = 0usize;
+    let mut prof_decoded = 0usize;
+    let mut prof_bases = 0usize;
     let version = file.layout_release()?;
     ensure!(
         NATIVE_RELEASES.contains(&version),
@@ -794,7 +831,10 @@ fn extract_records(
         options.releases.contains(&version),
         "this native reader is not measured on Revit {version}"
     );
+    let prof_pre = std::time::Instant::now();
     let preamble = file.native_preamble(options.deferred_history_episodes)?;
+    let prof_preamble = prof_pre.elapsed();
+    let prof_holders = std::time::Instant::now();
     let Preamble {
         global_streams,
         registry,
@@ -910,10 +950,12 @@ fn extract_records(
     });
     for name in names.iter().filter(|_| walked.is_none()) {
         let partition: u32 = name[11..].parse()?;
+        let prof_s = std::time::Instant::now();
         let Some(prepared) = read_partition(file, name)? else {
             continue;
         };
         let inflated = file.inflated_partition(name).ok();
+        prof_streams += prof_s.elapsed();
         native_segments::walk_inflated(
             &prepared,
             inflated.as_deref(),
@@ -950,6 +992,7 @@ fn extract_records(
     if let Some(records) = indexed {
         file.remember_native_record_index(RecordIndex { records });
     }
+    let prof_holders = prof_holders.elapsed();
     let mut seen = BTreeSet::new();
     let mut seen_ids = BTreeSet::new();
     let mut definition_owners: BTreeMap<u16, bool> = BTreeMap::new();
@@ -965,10 +1008,12 @@ fn extract_records(
         {
             continue;
         }
+        let prof_s = std::time::Instant::now();
         let Some(prepared) = read_partition(file, &name)? else {
             continue;
         };
         let inflated = file.inflated_partition(&name).ok();
+        prof_streams += prof_s.elapsed();
         let stats = native_segments::walk_inflated(
             &prepared,
             inflated.as_deref(),
@@ -988,6 +1033,7 @@ fn extract_records(
                     return Ok(());
                 }
                 for (id, offset, start, end) in records {
+                    prof_seen += 1;
                     if !is_selected(id, &bytes[start..end]) {
                         continue;
                     }
@@ -1082,8 +1128,10 @@ fn extract_records(
                             .as_ref()
                             .is_some_and(|c| graph_classes.contains(c))
                         {
+                            let prof_b = std::time::Instant::now();
                             let base = crate::native_element::decode_base(body, registry);
                             summary.emitted_records += 1;
+                            prof_bases += 1;
                             emit(Record {
                                 identity: identity.clone(),
                                 derived_default_ifc_guid: None,
@@ -1112,12 +1160,14 @@ fn extract_records(
                                 base: base.ok(),
                                 body: options.keep_body.then(|| body.to_vec()),
                             })?;
+                            prof_base += prof_b.elapsed();
                             continue;
                         }
                     }
                     if needles.is_some_and(|needles| !needles.occur_in(body)) {
                         continue;
                     }
+                    let prof_d = std::time::Instant::now();
                     let decoded = native_parameters::decode_graph_with_catalog_usage(
                         body,
                         registry,
@@ -1143,6 +1193,9 @@ fn extract_records(
                         }
                         Ok((graph, usage))
                     });
+                    let prof_decode_one = prof_d.elapsed();
+                    prof_decode += prof_decode_one;
+                    prof_decoded += 1;
                     let (status, diagnostic, graph) = match decoded {
                         Ok((graph, usage)) => {
                             summary.max_graph_objects_observed =
@@ -1223,6 +1276,8 @@ fn extract_records(
                         }
                         _ => (None, None),
                     };
+                    let prof_class_for_stats = class_name.clone().unwrap_or_default();
+                    let prof_e = std::time::Instant::now();
                     emit(Record {
                         identity: identity.clone(),
                         derived_default_ifc_guid,
@@ -1250,6 +1305,14 @@ fn extract_records(
                         base: None,
                         body: options.keep_body.then(|| body.to_vec()),
                     })?;
+                    let prof_emit_one = prof_e.elapsed();
+                    prof_emit += prof_emit_one;
+                    crate::prof::class(
+                        &prof_label,
+                        &prof_class_for_stats,
+                        prof_decode_one.as_nanos(),
+                        prof_emit_one.as_nanos(),
+                    );
                 }
                 Ok(())
             },
@@ -1260,5 +1323,18 @@ fn extract_records(
         file.note_value_source(element_id, source);
     }
     summary.selected_ids_without_records = selected.difference(&seen_ids).copied().collect();
+    eprintln!(
+        "PASS {prof_label} total={}ms preamble={} holders={} streams={} decode={} emit={} base={} seen={prof_seen} selected={} decoded={prof_decoded} bases={prof_bases} @{}ms",
+        prof_started.elapsed().as_millis(),
+        prof_preamble.as_millis(),
+        prof_holders.as_millis(),
+        prof_streams.as_millis(),
+        prof_decode.as_millis(),
+        prof_emit.as_millis(),
+        prof_base.as_millis(),
+        summary.selected_indexed_elements,
+        crate::prof::at(),
+    );
+    crate::prof::dump_classes(&prof_label);
     Ok(summary)
 }

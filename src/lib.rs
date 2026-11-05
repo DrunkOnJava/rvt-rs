@@ -190,6 +190,7 @@ pub mod object_graph;
 pub mod parse_mode;
 pub mod part_atom;
 pub mod partitions;
+pub mod prof;
 pub mod project_information;
 pub mod reader;
 pub mod redact;
