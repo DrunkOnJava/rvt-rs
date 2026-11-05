@@ -28,7 +28,7 @@
           "type": "string"
         },
         "phase": {
-          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
+          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). A phase named is\nexact: naming the last phase differs from leaving `phase` out where the\nlast phase holds no room, since leaving it out then reads the rooms of\nthe latest phase that holds any. It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
           "type": [
             "string",
             "null"
@@ -575,7 +575,7 @@
           "type": "boolean"
         },
         "phase": {
-          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
+          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). A phase named is\nexact: naming the last phase differs from leaving `phase` out where the\nlast phase holds no room, since leaving it out then reads the rooms of\nthe latest phase that holds any. It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
           "type": [
             "string",
             "null"
@@ -827,7 +827,7 @@
           "type": "boolean"
         },
         "phase": {
-          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
+          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). A phase named is\nexact: naming the last phase differs from leaving `phase` out where the\nlast phase holds no room, since leaving it out then reads the rooms of\nthe latest phase that holds any. It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
           "type": [
             "string",
             "null"
@@ -985,7 +985,7 @@
           "type": "string"
         },
         "phase": {
-          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
+          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). A phase named is\nexact: naming the last phase differs from leaving `phase` out where the\nlast phase holds no room, since leaving it out then reads the rooms of\nthe latest phase that holds any. It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
           "type": [
             "string",
             "null"
@@ -1101,7 +1101,7 @@
           "type": "string"
         },
         "phase": {
-          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
+          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). A phase named is\nexact: naming the last phase differs from leaving `phase` out where the\nlast phase holds no room, since leaving it out then reads the rooms of\nthe latest phase that holds any. It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
           "type": [
             "string",
             "null"
@@ -1771,7 +1771,7 @@
           "type": "string"
         },
         "phase": {
-          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
+          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). A phase named is\nexact: naming the last phase differs from leaving `phase` out where the\nlast phase holds no room, since leaving it out then reads the rooms of\nthe latest phase that holds any. It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
           "type": [
             "string",
             "null"
@@ -2243,7 +2243,7 @@
           ]
         },
         "phase": {
-          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
+          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). A phase named is\nexact: naming the last phase differs from leaving `phase` out where the\nlast phase holds no room, since leaving it out then reads the rooms of\nthe latest phase that holds any. It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
           "type": [
             "string",
             "null"
@@ -2646,7 +2646,7 @@
           "type": "string"
         },
         "phase": {
-          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
+          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). A phase named is\nexact: naming the last phase differs from leaving `phase` out where the\nlast phase holds no room, since leaving it out then reads the rooms of\nthe latest phase that holds any. It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
           "type": [
             "string",
             "null"
@@ -2733,7 +2733,7 @@
           "type": "string"
         },
         "phase": {
-          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
+          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). A phase named is\nexact: naming the last phase differs from leaving `phase` out where the\nlast phase holds no room, since leaving it out then reads the rooms of\nthe latest phase that holds any. It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
           "type": [
             "string",
             "null"
@@ -3129,7 +3129,7 @@
           "type": "string"
         },
         "phase": {
-          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
+          "description": "The project phase to read, by its name (exactly) or its ElementId,\ninstead of the project's last (`rvt-ifc --phase`). A phase named is\nexact: naming the last phase differs from leaving `phase` out where the\nlast phase holds no room, since leaving it out then reads the rooms of\nthe latest phase that holds any. It applies to a file\npath: a `model_id` names the phase its model was opened at. An unknown\nphase is an error that lists the file's phases.",
           "type": [
             "string",
             "null"
