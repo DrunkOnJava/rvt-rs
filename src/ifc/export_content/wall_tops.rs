@@ -1361,6 +1361,39 @@ pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
             ),
         ));
     }
+    for (index, entity) in entities.iter().enumerate() {
+        if walls.iter().any(|wall| wall.index == index) {
+            continue;
+        }
+        if let IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid,
+            extrusion,
+            representation_map_index,
+            location_feet,
+            rotation_radians,
+            solid_shape,
+            ..
+        } = entity
+        {
+            if matches!(ifc_type.as_str(), "IFCWALL" | "IFCWALLSTANDARDCASE") {
+                notes.push((
+                    index,
+                    format!(
+                        "rejected extrusion {} override {} map {} location {} rotation {:?} solid {} dims {:?}",
+                        extrusion.is_some(),
+                        extrusion.as_ref().is_some_and(|b| b.profile_override.is_some()),
+                        representation_map_index.is_some(),
+                        location_feet.is_some(),
+                        rotation_radians,
+                        solid_shape.is_some(),
+                        extrusion.as_ref().map(|b| (b.width_feet, b.depth_feet, b.height_feet)),
+                    ),
+                ));
+                let _ = type_guid;
+            }
+        }
+    }
     for index in &profiled {
         if !walls.iter().any(|wall| wall.index == *index) {
             notes.push((*index, "not_axis_rectangle".into()));
