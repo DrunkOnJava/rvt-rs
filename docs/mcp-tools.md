@@ -375,7 +375,7 @@ Where one element's answer comes from. Every element in an answer carries one. F
 | `record_offset` | integer \| null | no | Where the ElementId is stored: the partition record header it is the first bytes of. |
 | `space_outline_source` | string \| null | no | For a room or space, where its outline came from: `record_box` (the area of its box, not of the room), `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`, `family_body`, and for an Area `area_boundary`, `area_boundary_joined` or `none`. |
 | `stream` | string \| null | no | The stream the record is in: `Partitions/NN` or `Global/Latest`. |
-| `value_sources` | array of [ValueSourceOut](#valuesourceout) | yes | The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet. |
+| `value_sources` | array of [ValueSourceOut](#valuesourceout) | no | The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet. |
 
 ### ElementRow
 
@@ -585,9 +585,9 @@ The copy of an element's data a reader took a value from. The readers, the rules
 | `copies` | integer | yes | In how many partitions the element's data named it, so how many copies there were to choose from; for a source made of several `parts`, how many records it is made of; for one record, in how many partitions that record was held. |
 | `differs_from_frame` | boolean | yes | True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, where every copy holds the same value, so is every copy; for a source made of `parts`, none of them is in the frame's partition (`docs/export-diagnostics.md` says where a profile's records count as held there). |
 | `offset` | integer \| null | no | Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for a body read from the frame. |
-| `partitions` | array of integer | yes | Where every copy holds the same value, the numbers of the partitions that hold a copy; the copy named is the lowest-numbered partition's. |
-| `parts` | array of [SourcePartOut](#sourcepartout) | yes | The records the value is made of, where it is made of several or of another element's, at most 64. Such a source has no `stream` or `offset` of its own. |
-| `parts_left_out` | integer | yes | How many more records than the 64 listed in `parts` the value is made of. |
+| `partitions` | array of integer | no | Where every copy holds the same value, the numbers of the partitions that hold a copy; the copy named is the lowest-numbered partition's. |
+| `parts` | array of [SourcePartOut](#sourcepartout) | no | The records the value is made of, where it is made of several or of another element's, at most 64. Such a source has no `stream` or `offset` of its own. |
+| `parts_left_out` | integer | no | How many more records than the 64 listed in `parts` the value is made of. |
 | `reader` | string | yes | The name of the reader that took the value, such as the reader of a wall's location line or of a type's parameters. Each reader and the body it belongs to is listed in `docs/export-diagnostics.md`, "Value sources". |
 | `rule` | string | yes | How the copy was chosen. The rules are listed in `docs/export-diagnostics.md`, "Value sources"; for a source made of `parts` it is how each record's copy was chosen. |
 | `stream` | string \| null | no | The partition of the copy, such as `Partitions/46`. |
