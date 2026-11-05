@@ -928,6 +928,7 @@ impl PyRevitFile {
     #[pyo3(signature = (kind = "elements", metric = false, excel = false, phase = None))]
     fn schedule_csv(
         &mut self,
+        py: Python<'_>,
         kind: &str,
         metric: bool,
         excel: bool,
