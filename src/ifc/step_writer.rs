@@ -3067,13 +3067,12 @@ impl StepWriter<'_> {
             self.emit_entity(
                 opening_id,
                 format!(
-                    "IFCOPENINGELEMENT('{opening_gid}',#{owner_hist},{},$,$,#{placement_id},#{prod_shape_id},'{}',{})",
+                    "IFCOPENINGELEMENT('{opening_gid}',#{owner_hist},{},$,$,#{placement_id},#{prod_shape_id},'{}',.OPENING.)",
                     quoted_or_dollar(&escape(name)),
                     escape(tag),
-                    if *recess { ".RECESS." } else { ".OPENING." },
                 ),
             );
-            if let Some(reference) = host_references.get(reference_from) {
+            if let Some(reference) = host_references.get(host) {
                 let set = PropertySet {
                     name: "Pset_OpeningElementCommon".into(),
                     properties: vec![super::entities::Property {
@@ -3314,12 +3313,13 @@ impl StepWriter<'_> {
             self.emit_entity(
                 opening_id,
                 format!(
-                    "IFCOPENINGELEMENT('{opening_gid}',#{owner_hist},{},$,$,#{placement_id},#{prod_shape_id},'{}',.OPENING.)",
+                    "IFCOPENINGELEMENT('{opening_gid}',#{owner_hist},{},$,$,#{placement_id},#{prod_shape_id},'{}',{})",
                     quoted_or_dollar(&escape(name)),
                     escape(tag),
+                    if *recess { ".RECESS." } else { ".OPENING." },
                 ),
             );
-            if let Some(reference) = host_references.get(host) {
+            if let Some(reference) = host_references.get(reference_from) {
                 for set_name in [
                     "Pset_OpeningElementCommon",
                     "Pset_EnvironmentalImpactIndicators",
