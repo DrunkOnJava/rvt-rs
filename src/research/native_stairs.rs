@@ -1,5 +1,5 @@
-//! A Revit 2025 stair run's sketch and type, read by member name from its
-//! native records (#357).
+//! A stair run's sketch and type on Revit 2025, and on 2026 and 2027 (RE-341),
+//! read by member name from its native records (#357).
 //!
 //! RE-47 and RE-92 read a run's riser height, tread depth, riser count and
 //! ends from byte anchors measured on Revit 2024, and none of them is found

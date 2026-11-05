@@ -953,7 +953,7 @@ fn sketch_list_copies_at(
 ) -> (BTreeMap<u32, Vec<SketchListCopy>>, ListOffsets) {
     let mut found: BTreeMap<u32, Vec<SketchListCopy>> = BTreeMap::new();
     let mut offsets = ListOffsets::new();
-    if !matches!(revit_version, 2024 | 2025) || sketch_lines.is_empty() {
+    if !matches!(revit_version, 2024 | 2025 | 2026 | 2027) || sketch_lines.is_empty() {
         return (found, offsets);
     }
     let Some(header) = crate::partition_names::element_data_header(revit_version) else {
@@ -1011,7 +1011,11 @@ fn sketch_list_copies_at(
 /// whose current copy cannot be told, or a line two sketches list, is
 /// dropped.
 /// Empty for a release this layout is not measured on: Revit 2024, and 2025
-/// (RE-199, the edited roof sketches of #356's `R2025_Models.zip`).
+/// (RE-199, the edited roof sketches of #356's `R2025_Models.zip`). On 2026
+/// and 2027 the same reader is used so that a sketch edited after its first
+/// save is told from its lines, as on 2024 and 2025 (RE-341): the list is
+/// taken only where it validates (RE-97), and no 2026 or 2027 sketch is
+/// measured against a Revit export.
 pub fn scan_sketch_curve_lists(
     rf: &mut crate::RevitFile,
     revit_version: u32,
