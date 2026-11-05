@@ -1,10 +1,10 @@
 - **Revit 2026 and 2027 projects draw beams along their axes, stair runs
   and tread landings as their steps and treads, and floors, ceilings and
   slabs from their sketch lines, with shaft voids cut from floors and
-  ceilings (#1190, RE-341).** Beams are drawn as on 2024 (on 2025 they are
-  not), runs from their native records as on 2025 with the stair property
-  sets and quantities read from them, tread landings as on 2024 (a
-  monolithic landing stays its box; on 2025 neither is drawn), and the
+  ceilings (#1190, RE-341).** Beams are drawn as on 2024, runs from their
+  native records as on 2025 with the stair property sets and quantities
+  read from them, tread landings as on 2024 (a monolithic landing stays
+  its box), and the
   sketch lines' exact ends, curves and Sketch curve lists are read as on
   2024 and 2025. A roof there keeps the record-box solve as on `main`,
   without its slope, so a sloped roof can still be drawn as a level block.
@@ -21,6 +21,6 @@
   head 1d5bbf03). In run 42023546789 (head d3635bbb) 103 of 111 exports are
   unchanged and 8 change, all 2026 or 2027; the check reads PASS on all six
   samples, and the exports' `rules:` findings are 0. The one outline the 2024
-  and 2025 saves disagree on, a floor, is the 2025 save drawing its arcs as
-  chords (24 vertices against 170): the arc readers are not enabled on 2025
-  (#1440).
+  and 2025 saves disagreed on, a floor, was the 2025 save drawing its arcs
+  as chords (24 vertices against 170); the 2025 save reads them since
+  RE-345 (#1440).
