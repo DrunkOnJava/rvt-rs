@@ -56,7 +56,9 @@ The lines starting `mcp answers:` are counts only, so the Measure workflow keeps
 models it keeps only counts of (tools/ci/scrub-holdout-results.sh): `Report.line` takes words
 written in this file with `W()` and, as values, only integers and IFC entity names, and raises on
 anything else. The lines that follow with an element's id, name or value are listed under them and
-are not kept for those. A run that crashes ends with no verdict line, which the run summary reports
+are not kept for those. So that a room that differs is told apart for such a model, the rooms check
+also prints, as counts, the rooms that differ, their space kinds, whether their outline has an arc,
+and how many differ in each thing a room is checked on (`rooms differing in ...`, #1443). A run that crashes ends with no verdict line, which the run summary reports
 as such.
 
 Usage:
@@ -345,6 +347,24 @@ class Written:
                     return ring_area(profile.OuterCurve) * self.metres**2
         return None
 
+    def outline_has_arcs(self, product):
+        """Whether the extruded body's profile has an arc in its outline or a hole (an `IfcArcIndex` of an `IfcIndexedPolyCurve`)."""
+        if product.Representation is None:
+            return False
+        for representation in product.Representation.Representations or ():
+            for item in representation.Items or ():
+                if not item.is_a("IfcExtrudedAreaSolid"):
+                    continue
+                profile = item.SweptArea
+                curves = [getattr(profile, "OuterCurve", None)] + list(getattr(profile, "InnerCurves", None) or ())
+                return any(
+                    curve is not None
+                    and curve.is_a("IfcIndexedPolyCurve")
+                    and any(segment.is_a("IfcArcIndex") for segment in curve.Segments or ())
+                    for curve in curves
+                )
+        return False
+
     def placement(self, product):
         if product.ObjectPlacement is None:
             return None
@@ -596,8 +616,31 @@ def check_levels(report, answers, written, by_gid):
     report.check(W("levels"), compared, differences)
 
 
+# What a room can differ in, as a count line each (printed only where above zero), so that a model
+# kept as counts only names the cause of a difference without the room (#1443).
+ROOM_CAUSES = {
+    "set": W("rooms differing in the set of spaces list_rooms and list_elements name: {}"),
+    "absent": W("rooms differing in not being an IfcSpace of the IFC: {}"),
+    "name": W("rooms differing in the IFC Name: {}"),
+    "no name": W("rooms differing in having no number or name and an IFC Name that is not the placeholder: {}"),
+    "long name": W("rooms differing in the LongName: {}"),
+    "level": W("rooms differing in the level: {}"),
+    "outline source": W("rooms differing in the outline source: {}"),
+    "space kind": W("rooms differing in the space kind: {}"),
+    "no space kind": W("rooms differing in having no space kind: {}"),
+    "unknown space kind": W("rooms differing in a space kind that is none of the four: {}"),
+    "no outline": W("rooms differing in an area and no plan outline in the IFC: {}"),
+    "outline zero": W("rooms differing in an area and an outline of the IFC that reads an area of zero: {}"),
+    "outline near": W("rooms differing in an area within 1% of that of the outline: {}"),
+    "outline far": W("rooms differing in an area more than 1% from that of the outline: {}"),
+    "units": W("rooms differing in an area in square feet and in square metres that disagree: {}"),
+}
+
+
 def check_rooms(report, answers, written, require_space_kind=False):
     differences = []
+    causes = collections.Counter()
+    differing = {}
     compared = 0
     rooms = answers["rooms"]
     by_gid = {}
@@ -610,17 +653,31 @@ def check_rooms(report, answers, written, require_space_kind=False):
         if row["provenance"].get("category") == "IFCSPACE"
     }
     answered = set(space_rows)
+
+    def differ(cause, text, gid=None, room=None, arcs=False):
+        differences.append(text)
+        causes[cause] += 1
+        if gid is not None:
+            differing[gid] = (room.get("space_kind") if room else None, arcs)
+
     if set(by_gid) != answered:
-        differences.append(f"list_rooms names {len(by_gid)} spaces, list_elements {len(answered)}")
+        differ("set", f"list_rooms names {len(by_gid)} spaces, list_elements {len(answered)}")
     with_area = 0
+    with_arcs = 0
     for gid, found in by_gid.items():
         room = found[0]
         product = spaces.get(gid)
         label = f"room {room.get('id')} {gid}"
         if product is None:
-            differences.append(f"{label}: not an IfcSpace in the IFC")
+            differ("absent", f"{label}: not an IfcSpace in the IFC", gid, room)
             continue
         compared += 1
+        arcs = written.outline_has_arcs(product)
+        with_arcs += int(arcs)
+
+        def fail(cause, text):
+            differ(cause, text, gid, room, arcs)
+
         row_sets = {s["name"]: dict((p[0], p[2]) for p in s["properties"]) for s in object_sets(product, written.metres, written.scales)}
         record = row_sets.get(ROOM_SET, {})
         # The IFC Name is the number, or `<room name>:<ElementId>` without one, or, where neither was
@@ -634,33 +691,34 @@ def check_rooms(report, answers, written, require_space_kind=False):
         else:
             expected = (space_rows.get(gid) or {}).get("name")
         if expected is not None and (product.Name or "") != expected:
-            differences.append(f"{label}: Name {product.Name!r} is not the expected {expected!r}")
+            fail("name", f"{label}: Name {product.Name!r} is not the expected {expected!r}")
         if expected is None and not re.fullmatch(r"[A-Za-z0-9]+-" + re.escape(room.get("id") or "unnamed"), product.Name or ""):
-            differences.append(f"{label}: no number or name in the answer and the IFC Name {product.Name!r} is not <class>-<ElementId>")
+            fail("no name", f"{label}: no number or name in the answer and the IFC Name {product.Name!r} is not <class>-<ElementId>")
         if (room.get("name") or None) != (product.LongName or None):
-            differences.append(f"{label}: name {room.get('name')!r} vs LongName {product.LongName!r}")
+            fail("long name", f"{label}: name {room.get('name')!r} vs LongName {product.LongName!r}")
         if (room.get("level") or None) != written.storey_name(product):
-            differences.append(f"{label}: level {room.get('level')!r} vs storey {written.storey_name(product)!r}")
+            fail("level", f"{label}: level {room.get('level')!r} vs storey {written.storey_name(product)!r}")
         source = room["provenance"].get("space_outline_source")
         if source != record.get("SpaceOutlineSource"):
-            differences.append(f"{label}: outline source {source!r} vs {record.get('SpaceOutlineSource')!r}")
+            fail("outline source", f"{label}: outline source {source!r} vs {record.get('SpaceOutlineSource')!r}")
         kind = room.get("space_kind")
         if kind != record.get("SpaceKind"):
-            differences.append(f"{label}: space kind {kind!r} vs {record.get('SpaceKind')!r}")
+            fail("space kind", f"{label}: space kind {kind!r} vs {record.get('SpaceKind')!r}")
         elif kind is None and require_space_kind:
-            differences.append(f"{label}: no space kind in the answer or in the IFC")
+            fail("no space kind", f"{label}: no space kind in the answer or in the IFC")
         elif kind is not None and kind not in SPACE_KINDS:
-            differences.append(f"{label}: space kind {kind!r} is none of the four")
+            fail("unknown space kind", f"{label}: space kind {kind!r} is none of the four")
         area = room.get("area_square_metres")
         if area is not None:
             with_area += 1
             drawn = written.profile_area(product)
             if drawn is None:
-                differences.append(f"{label}: area {area} m2 and no plan outline in the IFC")
+                fail("no outline", f"{label}: area {area} m2 and no plan outline in the IFC")
             elif abs(area - drawn) > max(AREA_ABSOLUTE, RELATIVE * max(area, drawn)):
-                differences.append(f"{label}: area {area} m2 vs the outline's {drawn} m2")
+                cause = "outline zero" if drawn == 0 else "outline near" if abs(area - drawn) <= 0.01 * max(area, drawn) else "outline far"
+                fail(cause, f"{label}: area {area} m2 vs the outline's {drawn} m2")
             if not close(room["area_square_feet"] * 0.09290304, area):
-                differences.append(f"{label}: area in square feet and square metres disagree")
+                fail("units", f"{label}: area in square feet and square metres disagree")
     report.check(W("rooms"), compared, differences)
     report.line(W("rooms: {}"), len(rooms))
     report.line(W("rooms with an area: {}"), with_area)
@@ -669,6 +727,19 @@ def check_rooms(report, answers, written, require_space_kind=False):
     for kind in SPACE_KINDS:
         report.line(W(f"rooms of space kind {kind}: {{}}"), by_kind[kind])
     report.line(W("rooms with no space kind: {}"), by_kind[None])
+    report.line(W("rooms with an arc in their outline: {}"), with_arcs)
+    if differing:
+        report.line(W("rooms that differ: {}"), len(differing))
+        report.line(W("rooms that differ with an arc in their outline: {}"), sum(1 for _, arcs in differing.values() if arcs))
+        differing_kinds = collections.Counter(kind for kind, _ in differing.values())
+        for kind in SPACE_KINDS:
+            if differing_kinds[kind]:
+                report.line(W(f"rooms that differ of space kind {kind}: {{}}"), differing_kinds[kind])
+        if differing_kinds[None]:
+            report.line(W("rooms that differ with no space kind: {}"), differing_kinds[None])
+    for cause, template in ROOM_CAUSES.items():
+        if causes[cause]:
+            report.line(template, causes[cause])
 
 
 def compare_sets(label, answer_sets, written_sets, differences):
