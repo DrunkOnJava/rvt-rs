@@ -1,0 +1,82 @@
+# RE-353: a column cut across its top by one slab, and the round column
+
+**Date:** 2026-11-05
+**Issues:** [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-247 and RE-291 (the columns Revit draws as a cut mesh and the box-drawn columns' quantities)
+**Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, `research/bim4lca-measure.tsv`), as Measure fetches them
+**Probe:** `probes/examples/probe_re353_column_cut_footprints.rs`, Measure runs [42112543949](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42112543949) and [42115439931](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42115439931) (commit 38d9e426)
+**Status:** the meshed columns: positive on one building (the office at permit; the office as built, the R2025 models and the held-out models hold none), reproduced offline from the probe's output to Revit's own mesh for all 18 columns; the rule written from it is not yet measured end to end on this head. The round column: `OuterSurfaceArea` is a formula that is Revit's exactly on one column on each of the two office files, the same column; its other three quantities are measured negatives (section 4).
+
+## 1. What Revit writes where there is no extrusion
+
+revit-ifc's column quantities (CLEANROOM.md source 5, `Source/Revit.IFC.Export/Exporter/PropertySet/PropertyUtil.cs`, `CreateBeamColumnBaseQuantities`, tag `IFC_v24.3.40`; read and cited, no code copied) take `Length` from the extrusion its exporter finds, `CrossSectionArea` from that extrusion's profile area and, only where that is zero, from the element's computed area parameter, `OuterSurfaceArea` from the extrusion's length and outer perimeter, `GrossVolume` from the extrusion's length and area, and `NetVolume` from the element's computed volume parameter. A column Revit draws as a mesh has no extrusion, so it gets `CrossSectionArea` and `NetVolume` alone: RE-291 section 3's table (`Length`, `OuterSurfaceArea` and `GrossVolume` absent on the 18, `CrossSectionArea` and `NetVolume` the mesh's) is what that reading gives.
+
+On Revit's own export of the office at permit, the mesh (`IfcPolygonalFaceSet`) of each of the 18 meshed columns is in the file, and its coordinates are whole millimetres. For all 18, `NetVolume` is the mesh's volume and `CrossSectionArea` is half the sum of its faces' areas, both to 1e-12 relative. Three shapes of cut hold 17 of them (every column is 400 x 400 mm and 3,925 mm high, cut 55 mm down from the top by the slab's base), and the eighteenth is a column 3,350 mm high:
+
+| columns | what is cut away (plan) | `NetVolume`, m³ | `CrossSectionArea`, m² |
+|---|---|---:|---:|
+| 14 (1929241, 1929245, 1929247, 1929249, 1929253, 1929257, 1929261, 1929265, 1929269, 1929273, 1929277, 1929278, 1929281, 1929282) | 400 x 200 mm on one side | 0.6236 | 3.289 |
+| 2 (1929237, 1929238) | 370 x 200 mm, 30 mm in from one side | 0.62393 | 3.300 |
+| 1 (1929246) | an L: 400 x 200 and 200 x 200 mm | 0.6214 | 3.278 |
+| 1 (1343915, 250 mm down) | 6-sided | 0.5185 | 2.840 |
+
+The box alone has 0.628 m³ and 3.300 m², so the 370 x 200 mm cut, whose added walls are as long as the side walls it removes, is the one that leaves the box's area.
+
+## 2. The slab, and the cut
+
+Seventeen of the columns are cut by one floor, `Floor:VP-1` (1474132), 450 mm thick, which Revit's export draws as four layer solids and rvt-rs as one extrusion of its whole thickness with an outline of 28 points and three voids (of 6, 4 and 4 points); the eighteenth by slab 1498471, a six-sided polygon with a re-entrant corner. Each column holds a `CutPairGStep` and a `CleanPairGStep` for the slab, and the slab's span starts inside the column and reaches its top.
+
+The part cut away is the slab's plan region (its outline less its voids) clipped to the column's section, from the slab's base up to the column's top. With V0 and S0 the box's volume and surface, A the plan area of the part, d its depth, Lb the length of the section's sides inside the slab and Li the length of the slab's edges inside the section:
+
+- `NetVolume` = V0 - A d;
+- the surface of the cut box = S0 - Lb d + Li d (the top is replaced by the floor of the cut, the side walls it removes by the walls it adds), and `CrossSectionArea` is half of it.
+
+Checked offline: the probe prints each column's and each partner's plan placement and profile as rvt-rs exports them, and joined offline to Revit's mesh volumes and areas, the formulas above give all 18 within 2e-12 relative (the nearest to a miss, 1929281 and 1929282, are 1.5e-12), with the slab clipped by Sutherland-Hodgman against the column's section. Two details the formulas need, both found by the offline join and not by the first version: a slab's edge may lie along a side of the section (a void's edge on 1929246 and 1929247, the outline's on 1929246), and then the section's side is inside the slab where the section's interior just beside it is, tested 1e-3 ft inside the side; and a segment is along a side when it is within 1e-4 ft of it and parallel to 1e-9, since a slab edge 4e-13 ft off a side is not inside the section.
+
+## 3. The rule
+
+A column is taken as cut, and gets `CrossSectionArea` and `NetVolume` as above and no other quantity, when its body is the record box and its type a plain rectangle (RE-291), a clean pair joins it, and
+
+- every element its cut pairs name is a slab lying wholly above or wholly below it, except one slab whose span starts inside the column and reaches its top (a wall, a covering or any other cut partner leaves the column out);
+- every element its clean pairs name is a wall, a covering, a column, a slab lying clear, that slab, or another slab across its top that has no plan area inside the column's section;
+- the slab is one piece with a rectangle, a closed polyline or a polyline with voids as its outline, and the part of it inside the column's section is more than a nick and less than the whole.
+
+Expected from section 2 on the office at permit: 17 of the 18. Left out, with the reason: 1343915, whose cut pairs name a wall that only touches it (a wall that cuts a column changes its section, RE-291 section 2, so a cut wall is refused without testing where it lies).
+
+## 4. The round column
+
+`Round Column:PI-6` (3053209; type 3053174, whose one named length parameter is `Diameter`, 0.492126 ft, 150 mm; height 6,000 mm; no pair joins it) is one column on each of the two office files, the same column. Revit's export writes it as an extrusion of three arcs with:
+
+| quantity | Revit | the circle's | ratio |
+|---|---:|---:|---:|
+| `Length` | 6.0 m | the box's height, written since RE-247 | 1 |
+| `OuterSurfaceArea` | 2.8274333882307761 m² | π D L = 2.8274333882308 | 1 (to 1e-14) |
+| `CrossSectionArea` | 0.017659785064800041 m² | π r² = 0.0176714587 | 0.99934 |
+| `GrossVolume` | 0.10595871038880049 m³ | 0.1060287520 | 0.99934 |
+| `NetVolume` | 0.10600540431829328 m³ | 0.1060287520 | 0.99978 |
+
+- `OuterSurfaceArea` is the circumference times the height, exactly. rvt-rs writes it where the type's one named length parameter is `Diameter`, equal to both sides of the record box, and no pair joins the column. That is one column on each of the two files, the same column; no other measured file has a round column, so this is a formula checked on one column, not a rule measured across several.
+- `CrossSectionArea` and `GrossVolume` (which is the area times the length to 1e-15) are not the circle's: Revit's extrusion area is 0.99934 of it. No whole numbers of chords for the three arcs give a tessellation that reproduces it: a search over 1 to 400 chords of the half circle and 1 to 300 of each quarter finds the nearest at 8e-12 with 319, 13 and 48 chords, about what chance gives for 18 million combinations and not a tessellation anyone would choose. The area is the exporter's own, not a function of the diameter that rvt-rs has.
+- `NetVolume` is the element's computed volume parameter (section 1), 0.99978 of the cylinder's. It differs from `GrossVolume`, and from the circle's, by amounts no formula of the diameter and the height gives; the same column would need its joins and cuts, and none is recorded.
+
+So the three stay out. A formula has to explain both volumes or stay out, and none does.
+
+## 5. Measured
+
+Not yet measured on this head. Measure runs follow: the office as built and at permit, `qtos_vs_ifc` and `psets_vs_ifc` against `main`, then the held-out models.
+
+## 6. What stays out
+
+- The round column's `CrossSectionArea`, `GrossVolume` and `NetVolume` (section 4).
+- Column 1343915's two quantities (section 3), and any meshed column whose slab is not one piece, has an outline with an arc, or lies wholly across the section.
+- The three extruded columns with a slab across their top by a clean pair alone (RE-291): unchanged.
+- Every other form of cut: a column cut by a wall, a beam, a roof or a footing.
+
+## 7. Reproduce
+
+```bash
+gh workflow run measure.yml --ref main -f ref=38d9e426 -f base=none -f nordic=true \
+  -f models="nordic-office-as-built nordic-office-permit" -f scorers=none \
+  -f probe=probe_re353_column_cut_footprints -f probe_scorer=-
+```
+
+The probe's lines `col <tag> at <x> <y> <z> rot <r> prof <profile> h <height> pairs <step>:<other>:<entity>:<x>:<y>:<z>:<rot>:<profile>:<height> ...` join to Revit's mesh volumes and areas by `Tag` (the mesh is the column's `IfcPolygonalFaceSet`).
