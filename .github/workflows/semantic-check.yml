@@ -1,12 +1,13 @@
 # The semantic merge check (#1334): score a Measure run's semantic diff with
-# Jev (TypeSafe's judgment API) beside the pull request's own `## Summary`, and
-# write the verdict as the check run `semantic diff (advisory)` on the commit
-# Measure measured. Jev is asked whether the export moves in a way the Summary
-# does not state: a described change passes, an unexplained move fails (Griffin,
-# 2026-11-05). It is not in the ruleset and nothing is posted to the pull
-# request. An agent answers a `warn` in the pull request body and fixes a `fail`
-# by changing the code or by stating the change in the Summary
-# (docs/maintaining.md).
+# Jev (TypeSafe's judgment API) beside the pull request's own `## Summary` and
+# `## Testing`, and write the verdict as the check run `semantic diff
+# (advisory)` on the commit Measure measured. Jev is asked whether the export
+# moves in a way they do not state specifically: a described change passes, an
+# unexplained move fails, and so does one that only a general description covers
+# (Griffin, 2026-11-05). It is not in the ruleset and nothing is posted to the
+# pull request. An agent answers a `warn` in the pull request body and fixes a
+# `fail` by changing the code or by stating the change specifically in the
+# Summary (docs/maintaining.md).
 #
 # Trust. The key (TYPESAFE_API_KEY) is an environment secret of `jev`, whose
 # deployment branch policy allows only main. A workflow_run workflow always runs

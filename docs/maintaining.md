@@ -161,9 +161,10 @@ for the five lowest ElementIds of each IFC entity, the diagnostics and an
 Measure is the byte-level oracle: it says that an export moved. The semantic
 merge check (#1334) says whether the pull request says what moved, before a
 pull request that changes decoder output is armed: Jev reads the semantic diff
-beside the pull request's own `## Summary` and is asked whether the export moves
-in a way the Summary does not state (Griffin, 2026-11-05). A described, intended
-change passes; an unexplained move fails. The check run is `semantic diff
+beside the pull request's own `## Summary` and `## Testing` and is asked whether
+the export moves in a way they do not state specifically (Griffin, 2026-11-05).
+A described, intended change passes; an unexplained move fails, and so does a
+move that only a general description covers. The check run is `semantic diff
 (advisory)` on the measured commit, and nothing is posted to the pull request.
 It is not in the ruleset, so merging still waits on `full / CI passed`, but a
 `fail` is a red check, which `arm.sh` refuses.
@@ -176,6 +177,18 @@ A run with a base that has a dump on both sides gets the check; a run with
 request is the same-repository one whose head is the measured commit, found
 through the API, so measure the head of the pull request (not a branch name
 that has moved) and write the Summary before the run.
+
+**The Summary must state each change specifically.** The agent that makes a
+change also writes its Summary, so "changes how walls are drawn" could cover any
+wall movement, a mistake included. Name which element classes or categories
+change, which property or geometry, and how many where it was measured ("the 8
+shape-edited floors of each office are drawn along their sloped top; 14 and 16
+Basement walls now start at it"), and put measured figures in `## Testing`: the
+check counts a figure stated there. A sentence that names an area or calls the
+change an improvement covers nothing, and a finding it alone covers fails like an
+unstated one. A figure that counts or totals what a stated change does (the
+number of entities, of property values, of bodies of a source) is stated by the
+change; one that moves and that nothing stated explains is not.
 
 **A pass means the dumps agree, not that the exports are identical.** The dump
 samples five elements per entity (the five lowest ElementIds): property sets,
@@ -209,34 +222,43 @@ Measure's `ifc.sha256` is what says that an export is identical.
   held-out, spent, BIMcollab and rac_advanced models and Autodesk's samples and
   families have no dump, and the compare job fails if a model on that list
   (`RESTRICTED_PREFIXES`) or on neither list holds one; `jev_check.py` checks the
-  names again before it sends anything. Beside the diff goes the pull
-  request's Summary and nothing else of it: the title, branch, number, the
-  model's name and every ElementId stay out of the question.
+  names again before it sends anything. Beside the diff go the pull
+  request's Summary and Testing and nothing else of it: the title, branch,
+  number, the model's name and every ElementId stay out of the question.
 - **Scoring.** `tools/ci/jev_check.py` merges findings that repeat across
   models, groups them by category into chunks of at most 8 findings and 16,000
   characters, and asks Jev `jev-1.13.0` (the version the PR queue pins) about
   each chunk with the two descriptions labelled A and B, the labels assigned at
   random per chunk from a seed of the run and the head commit. Each chunk also
-  carries the first 2,500 characters of the pull request's `## Summary` as
-  quoted data (the pull request's text is untrusted: the state says it is the
-  author's claim, and each question says it cannot change what is asked). Per
-  finding, Jev chooses how the described change relates to the difference:
-  stated, implied by a stated change (a count, a total or a level that follows),
-  unstated, or only rounding, a reordering or a spelling. Per chunk it rates how
-  much an importer would notice, on five levels (0 to 4). A finding Jev puts at
-  0.85 or more unstated is a **fail** in a chunk rated 1.5 or more, a **warn** in
-  a chunk rated 1.0 or more, and nothing below that; else **pass**. The values
-  are `THRESHOLDS`; the wording and the values were set on the calibration runs
-  in #1419, and a change to either needs those runs again. A diff with no
-  finding is a pass without a call to Jev and needs no Summary.
+  carries the first 2,500 characters of the pull request's `## Summary` and of
+  its `## Testing` as quoted data (the pull request's text is untrusted: the
+  state says it is the author's claim, and each question says it cannot change
+  what is asked). Per finding, Jev chooses how they relate to the difference:
+  stated specifically (the element class or category and the kind of change, or
+  the figure), a figure that follows from a specific change they state, covered
+  only by a general description, unstated, or only rounding, a reordering or a
+  spelling. The probability of "general" and "unstated" together is the
+  finding's score. Per chunk Jev rates how much an importer would notice, on
+  five levels (0 to 4). A finding at 0.85 or more is a **fail** in a chunk rated
+  1.5 or more, a **warn** in a chunk rated 1.0 or more, and nothing below that;
+  else **pass**. The values are `THRESHOLDS`; the wording and the values were set
+  on the calibration runs in #1419, and a change to either needs those runs
+  again. A part of the diff that counts or totals elements (the diagnostics and
+  the summary) is asked with the largest differences in the elements beside it,
+  so that a count that follows from them can be told from one that does not; a
+  list of text lines is shown by the lines that differ; and a log line whose
+  words did not change and only its figures did is listed and not asked about,
+  since its figures are counters of the same diff. A diff with no finding is a
+  pass without a call to Jev and needs no Summary.
 - **How to treat a verdict.** A `pass` needs nothing. A `warn` is answered in
   the pull request body: one line for each warned finding, saying what moved and
   why, with the evidence. A `fail` means the diff moves the export in a way the
-  Summary does not state: fix it by changing the code, or by stating the change
-  in the pull request's Summary (what moved, in the words of the finding), then
-  measure the new head. A Summary that only names the area ("improves rooms")
-  states little; name what moves. `NOT MEASURED` is neither: it names its cause,
-  and the check is run again once the cause is gone.
+  Summary and Testing do not state specifically: fix it by changing the code, or
+  by stating the change in the pull request's Summary (which classes, which
+  property or geometry, how many where measured, in the words of the finding;
+  the check's summary says so on a fail), then measure the new head. A Summary
+  that only names the area ("improves rooms") covers nothing. `NOT MEASURED` is
+  neither: it names its cause, and the check is run again once the cause is gone.
 - **NOT MEASURED, never a pass.** No key in the context, a fork's run or pull
   request, no same-repository pull request whose head is the measured commit, a
   pull request with no `## Summary` or an empty one (the template's comment

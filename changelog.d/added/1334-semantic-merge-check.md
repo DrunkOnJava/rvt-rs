@@ -11,19 +11,22 @@
   and the compare job fails if one holds one. The new Semantic check workflow
   (`workflow_run` on Measure, run from main in the Actions environment `jev`
   that holds the key) gives Jev `jev-1.13.0` the diff in chunks of at most
-  16,000 characters beside the pull request's own `## Summary` (found through
-  the API from the measured head commit, quoted as untrusted data) and asks,
-  blind (the outputs are labelled A and B at random per chunk, with no model
-  name, id or direction), whether each difference is stated by the described
-  change, implied by it, unstated, or only rounding. It writes the check run
-  `semantic diff (advisory)` on the measured commit: pass (success), warn
-  (neutral), fail (failure: a move the Summary does not state) or NOT MEASURED
-  (no key, a fork, no pull request, no Summary where the diff has findings,
-  HTTP 402, a time-out), with each finding and its probability. It is not a
-  required check and posts no pull request comment. A pass means the dumps
-  agree, not that the exports are identical: the dump samples five elements
-  per entity. `docs/maintaining.md` says how an agent fixes a fail (change the
-  code, or state the change in the Summary) and answers a warn. Three
+  16,000 characters beside the pull request's own `## Summary` and `##
+  Testing` (found through the API from the measured head commit, quoted as
+  untrusted data) and asks, blind (the outputs are labelled A and B at random
+  per chunk, with no model name, id or direction), whether each difference is
+  stated specifically, follows from a specific change, is covered only by a
+  general description, is unstated, or is only rounding. A general
+  description counts as unstated, so "improves how walls are exported"
+  covers no change. It writes the check run `semantic diff (advisory)` on the
+  measured commit: pass (success), warn (neutral), fail (failure: a move the
+  Summary and Testing do not state specifically) or NOT MEASURED (no key, a
+  fork, no pull request, no Summary where the diff has findings, HTTP 402, a
+  time-out), with each finding and its probability. It is not a required
+  check and posts no pull request comment. A pass means the dumps agree, not
+  that the exports are identical: the dump samples five elements per entity.
+  `docs/maintaining.md` says how an agent fixes a fail (change the code, or
+  state the change specifically in the Summary) and answers a warn. Three
   failure-first tests of the diff (0.35 against 0.3500001, a reorder with moved
   offsets, a bulk collapse that hides a different value) run in the PII guard
   job.
