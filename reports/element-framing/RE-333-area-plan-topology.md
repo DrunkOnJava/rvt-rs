@@ -95,7 +95,7 @@ A line's offset parts with the same offset are one edge, which avoids an edge of
 
 ## 8. The merged reader
 
-The merge with main (#1351, RE-330) puts the plan topology first where it is read and passes its checks, and the lines' arrangement with RE-330's joins second; a group of lines that cannot be read as a whole gives neither (section 3). Every figure below is from the head `e9124b3a` unless it names another, and from its Measure runs against main (the scorers come from a scratch branch at the same commit, because main's `space_profiles_vs_ifc` does not know the new marker), both green:
+The merge with main (#1351, RE-330) puts the plan topology first where it is read and passes its checks, and the lines' arrangement with RE-330's joins second; a group of lines that cannot be read as a whole gives neither (section 3). Every figure below is from the head `e9124b3a` of #1371 unless it names another, and was measured before that head was rebuilt onto main (`feat/1261-area-plan-topology`: puzzbobb's two commits and the maintainer's five cherry-picked, signed, onto 182ed219, which adds the value sources of #1368, the decisions log of #1326 and the changes of #1405 and #1412). **It has not been measured on the rebuilt head**; the unfiltered Measure run on it replaces these figures. They come from the Measure runs of `e9124b3a` against main (the scorers come from a scratch branch at the same commit, because main's `space_profiles_vs_ifc` does not know the new marker), both green:
 
 - run 41894715743: the samples 2015 to 2027 with the IFC kept and the probe;
 - run 41894722135: the office with `space_profiles_vs_ifc` and the IFC kept.

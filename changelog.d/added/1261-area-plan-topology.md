@@ -36,4 +36,11 @@
   BIM4LCA office (2024) the 30 Areas have the region, vertices and area they
   had; the IFC differs from main's only in their `SpaceOutlineSource`, in the
   starting vertex of 3 outlines and the order of the holes of 6 (the same
-  rings), and in a timestamp.
+  rings), and in a timestamp. The rule is puzzbobb's (#1371), whose two
+  commits keep their authorship; the arcs, the vertex rule and the value
+  source are the maintainer's. No Revit IFC4 export of these Areas exists: the
+  IFC2X3 export is the only external check, and it is out of sample for this
+  rule because the topology's loops and the figures they are checked against
+  were not read off it. The figures above were measured on the archived head
+  `e9124b3a` of #1371 and are not yet measured on the head that lands; the
+  PR names the run that is.
