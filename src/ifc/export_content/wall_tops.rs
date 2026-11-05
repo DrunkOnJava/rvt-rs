@@ -1318,8 +1318,35 @@ fn axis_wall(index: usize, entity: &IfcEntity) -> Option<AxisWall> {
     })
 }
 
-/// Draw each wall with an edited elevation profile that stops short of the
-/// wall beneath it to that wall's face (#1396, RE-337).
+/// The trims at the low and high end of a wall drawn from its record box,
+/// feet: how far its join trim cut each end in from the box (RE-26). None for
+/// any other body.
+fn join_trims(entity: Option<&IfcEntity>) -> Option<[f64; 2]> {
+    let Some(IfcEntity::BuildingElement {
+        property_set: Some(set),
+        ..
+    }) = entity
+    else {
+        return None;
+    };
+    if set.name != ELEMENT_RECORD_PROPERTY_SET {
+        return None;
+    }
+    let read = |name: &str| {
+        set.properties
+            .iter()
+            .find_map(|property| match (&property.value, property.name == name) {
+                (PropertyValue::LengthFeet(trim), true) if trim.is_finite() && *trim >= 0.0 => {
+                    Some(*trim)
+                }
+                _ => None,
+            })
+    };
+    Some([read("JoinTrimStart")?, read("JoinTrimEnd")?])
+}
+
+/// Draw each wall with an edited elevation profile whose end its join trim cut
+/// back from inside the wall beneath it to that wall's face (#1396, RE-337).
 ///
 /// A wall's record gives its joins from the walls whose centreline lies on
 /// its line's end, however little of the wall's height they overlap: the
@@ -1329,14 +1356,18 @@ fn axis_wall(index: usize, entity: &IfcEntity) -> Option<AxisWall> {
 /// Basement wall beneath, which that line ends inside (0.31 ft further as
 /// built, 0.09 ft at building permit). For a wall with an edited elevation
 /// profile (a [`IfcEntity::WallProfileOpening`] voids it) that is a rectangle
-/// along a model axis, this draws an end to the face of the other rectangles
-/// along the perpendicular axis that hold the wall's base, span its width, and
-/// stand beyond the end by no more than their own thickness, where no such
-/// wall touches the end already and they all end at one face. Where they end
-/// at different faces the wall keeps its end and carries `BodyEndRefusal`. The
+/// along a model axis, drawn from its record box, this draws an end to the
+/// face of the other rectangles along the perpendicular axis that hold the
+/// wall's base, span its width and hold the box's own end (the end before the
+/// join trim, a T joint), and that stand beyond the body's end by no more
+/// than their own thickness, where no such wall touches the end already and
+/// they all end at one face. A wall that stops short of such a wall without a
+/// trim is left, as Revit leaves a Snowdon Towers soffit wall whose ends stop
+/// 2 inches short of the walls that hold its base. Where the walls end at
+/// different faces the wall keeps its end and carries `BodyEndRefusal`. The
 /// wall's body is one prism, so it reaches that face at every height: Revit's
-/// steps above the lower wall's top are not drawn. Every other wall is left as
-/// it was.
+/// steps above the lower wall's top are not drawn. Every other wall is left
+/// as it was.
 pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
     let Gathered { profiled, .. } = gather(entities);
     if profiled.is_empty() {
@@ -1363,6 +1394,9 @@ pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
         .iter()
         .filter(|wall| profiled.contains(&wall.index) && plain(wall.index))
     {
+        let Some(trims) = join_trims(entities.get(wall.index)) else {
+            continue;
+        };
         let [x0, y0, x1, y1] = wall.bounds;
         let long = usize::from(y1 - y0 > x1 - x0);
         let across = 1 - long;
@@ -1394,6 +1428,11 @@ pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
             .collect();
         for at_low in [true, false] {
             let end = if at_low { low } else { high };
+            let box_end = if at_low {
+                low - trims[0]
+            } else {
+                high + trims[1]
+            };
             if beneath
                 .iter()
                 .any(|&(_, a, b)| a - END_TOLERANCE_FEET <= end && end <= b + END_TOLERANCE_FEET)
@@ -1404,7 +1443,10 @@ pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
                 .iter()
                 .filter_map(|&(other, a, b)| {
                     let gap = if at_low { end - b } else { a - end };
-                    (gap > END_TOLERANCE_FEET && gap <= b - a).then_some((other, gap))
+                    let holds_box_end =
+                        a - END_TOLERANCE_FEET <= box_end && box_end <= b + END_TOLERANCE_FEET;
+                    (holds_box_end && gap > END_TOLERANCE_FEET && gap <= b - a)
+                        .then_some((other, gap))
                 })
                 .collect();
             let Some(&(_, gap)) = reached.first() else {
