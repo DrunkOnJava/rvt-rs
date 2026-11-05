@@ -1536,7 +1536,7 @@ fn note_area_levels(rf: &mut RevitFile, id: u32, levels: &[PartitionLevel]) {
         crate::partition_level_records::LEVEL_BLOCK_READER,
         id,
         AREA_LEVELS_READER,
-        CopyRule::Agreeing,
+        CopyRule::Frame,
     );
 }
 

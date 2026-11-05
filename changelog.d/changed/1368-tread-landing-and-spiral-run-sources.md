@@ -19,10 +19,14 @@
     if the office stops taking the rule.
   - No element has `selected_frame_box`, a body whose profile no profile reader
     noted, on any of the 92 models (the same run), so the text that called it a
-    missing source is now the stated fallback it is. One value still has no
-    source, with its reason in `docs/export-diagnostics.md`: a rectangular
-    column's two sides, which only decide whether its box quantities are
-    written.
+    missing source is now the stated fallback it is. Of the four values #1368
+    listed, one still has no source, with its reason in
+    `docs/export-diagnostics.md`: a rectangular column's two sides, which only
+    decide whether its box quantities are written. Other inputs of the bodies
+    have none either (a wall's top, base and end rules, its orientation and
+    flip, a tapered wall's face angle, a beam's rotation, the partner lists of
+    joins and cut-loop sizes); #1368 did not list them and they are filed
+    apart.
   - Measured on this head (ee449c3b): the 31 exports of Measure run 42118484766
     (no `ifc_flags`; Core Interior, Einhoven, the four RE1 models and
     Autodesk's samples of 2024 to 2027) are byte for byte main's
@@ -34,6 +38,6 @@
     `native_run_type` on 84 of 17 and `native_landing_type` on 82 of 8;
     `current` stays on the one permit office (the 2021 `rac_advanced`, after
     #1450, has none: its 25 Areas read `area_plan_topology`) and
-    `selected_frame_box` on none. Not yet run:
-    `tests/value_sources_offsets.rs` against the permit office and the
-    new readers.
+    `selected_frame_box` on none. The Corpus health job, which runs
+    `tests/value_sources_offsets.rs` on the permit office and the new readers,
+    passed on bd3466c8.

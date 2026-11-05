@@ -881,6 +881,7 @@ pub(super) fn attach_wall_layers(
                 wall.fields
                     .push((WALL_EXTERIOR_FACE_ANGLE_FIELD.into(), float(angle)));
             }
+            rf.attribute_value_source(type_id, "type_layers", id, "wall_type_layers");
         }
         let exterior = if flip { [dy, -dx] } else { [-dy, dx] };
         let bands = layer_bands_field(type_layers, &appearances, &names);

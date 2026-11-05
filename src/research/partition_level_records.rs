@@ -1217,7 +1217,7 @@ pub fn scan_partition_levels(
                 level.element_id,
                 ValueSource::in_partition(
                     LEVEL_BLOCK_READER,
-                    CopyRule::Agreeing,
+                    CopyRule::Frame,
                     copies,
                     number,
                     Some(at),

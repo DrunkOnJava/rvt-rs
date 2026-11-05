@@ -118,7 +118,9 @@ use rvt::research::partition_element_records::{
 use rvt::research::partition_instance_transforms::{
     INSTANCE_TRANSFORM_WINDOW, InstanceTransform, instance_transform, scan_instance_transforms,
 };
-use rvt::research::partition_level_records::recover_partition_levels;
+use rvt::research::partition_level_records::{
+    NameElevationBlock, elevation_marker, find_name_blocks_with, recover_partition_levels,
+};
 use rvt::research::partition_names::{ElementDataLayout, element_data_layout};
 use rvt::research::partition_pipe_axes::pipe_body;
 use rvt::research::partition_roof_slopes::{
@@ -454,10 +456,36 @@ const MIN_READERS: &[(&str, &[&str])] = &[
     // this test until a model of that kind is in the gate.
 ];
 
-/// The readers whose table must hold a source chosen by the `current` copy
-/// rule (the copies disagreed and the current partition's was taken), by model:
-/// a model that does not, or a reader that no longer takes the rule, fails.
-const CURRENT_PINS: &[(&str, &[&str])] = &[("nordic-office-permit", &["sketch_lines"])];
+/// The readers whose table must hold sources chosen by the `current` copy rule
+/// (the copies disagreed and the current partition's was taken), by model, and
+/// at least how many (Measure run 42118489328: 3 floors' sketch lines and 1
+/// Sketch curve list on the office at building permit): a model that has fewer,
+/// or a reader that no longer takes the rule, fails.
+const CURRENT_PINS: &[(&str, &[(&str, usize)])] = &[(
+    "nordic-office-permit",
+    &[("sketch_lines", 3), ("sketch_list", 1)],
+)];
+
+/// The readers every element with a `BodySource` must have a source from, beside
+/// `COVERAGE`'s any-of: the models of the gate hold none without them (Measure
+/// run 42118489328: 1,973 of 1,973 wall bodies of the four kinds, 483 of 483
+/// Areas, every tread landing and spiral run), so a body that loses one fails.
+const REQUIRED: &[(&str, &[&str])] = &[
+    ("partition_wall_centreline", &["wall_type_layers"]),
+    (
+        "partition_wall_centreline_layer_joins",
+        &["wall_type_layers"],
+    ),
+    ("partition_wall_tapered_section", &["wall_type_layers"]),
+    ("partition_wall_arc", &["wall_type_layers"]),
+    ("partition_area_boundary_lines", &["area_levels"]),
+    ("native_area_plan_topology", &["area_levels"]),
+    (
+        "native_landing_tread",
+        &["native_landing_type", "native_run_type"],
+    ),
+    ("native_spiral_run_treads", &["native_run_type"]),
+];
 
 /// The ElementId an `Identifier` field holds: `m_id.m_id64` from Revit 2024,
 /// `m_id.m_id` before.
@@ -1095,6 +1123,17 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
             stats.unlisted += 1;
             continue;
         };
+        if let Some((_, required)) = REQUIRED.iter().find(|(source, _)| *source == body.as_str()) {
+            for reader in *required {
+                if !entry
+                    .value_sources
+                    .iter()
+                    .any(|source| source.reader == *reader)
+                {
+                    problems.push(format!("{id}: {body} has no source from {reader}"));
+                }
+            }
+        }
         if let Some((_, Recorded { readers, rules })) = coverage {
             let found = entry.value_sources.iter().find(|source| {
                 readers.contains(&source.reader.as_str()) && rules.contains(&source.rule.as_str())
@@ -1211,6 +1250,15 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
     } else {
         BTreeSet::new()
     };
+    // The thickness of each layer set the export writes, feet, for the walls'
+    // layers read again below, and the Level blocks decoded again by partition.
+    let written_layer_totals: Vec<f64> = run
+        .model
+        .material_layer_sets
+        .iter()
+        .map(|set| set.layers.iter().map(|layer| layer.thickness_feet).sum())
+        .collect();
+    let mut level_blocks: BTreeMap<String, Vec<NameElevationBlock>> = BTreeMap::new();
     // The Levels the Areas' base and height compare (RE-317): an Area's
     // `area_levels` source lists the block of each, all of them.
     let level_ids: BTreeSet<u32> = if table.elements.values().any(|entry| {
@@ -1435,14 +1483,30 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                                     // reader, with the reader's window and anchors.
                                     ("roof_type_layers" | "wall_type_layers", Some(data)) => {
                                         match (layer_frame_tag(version), layer_layout(version)) {
-                                            (Some(tag), Some(layers)) => find_layers(
+                                            (Some(tag), Some(layers)) => match find_layers(
                                                 data,
                                                 tag,
                                                 layers,
                                                 &layer_materials,
                                                 &declared,
-                                            )
-                                            .is_some(),
+                                            ) {
+                                                // The layers' widths, read again,
+                                                // add up to the thickness of a layer
+                                                // set the export writes.
+                                                Some(found)
+                                                    if source.reader == "wall_type_layers" =>
+                                                {
+                                                    let total: f64 = found
+                                                        .iter()
+                                                        .map(|layer| layer.width_feet)
+                                                        .sum();
+                                                    written_layer_totals.iter().any(|written| {
+                                                        (written - total).abs() <= 1e-6
+                                                    })
+                                                }
+                                                Some(_) => true,
+                                                None => false,
+                                            },
                                             _ => false,
                                         }
                                     }
@@ -1631,6 +1695,37 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                                 Part::Confirmed
                             } else {
                                 Part::Failed
+                            }
+                        }
+                        // A Level's block: its owner id at the offset, and the
+                        // block decoded again there gives the elevation of a
+                        // storey the export writes where it is a building story.
+                        "area_levels" => {
+                            let blocks =
+                                level_blocks.entry(part.stream.clone()).or_insert_with(|| {
+                                    match elevation_marker(version) {
+                                        Some(marker) => {
+                                            find_name_blocks_with(bytes, &declared, &marker)
+                                        }
+                                        None => Vec::new(),
+                                    }
+                                });
+                            let block = blocks.iter().find(|block| {
+                                block.offset == part.offset && u64::from(block.element_id) == wanted
+                            });
+                            match block {
+                                None => Part::Unverified,
+                                Some(block) if block.building_story != Some(true) => {
+                                    Part::Confirmed
+                                }
+                                Some(block)
+                                    if run.model.building_storeys.iter().any(|storey| {
+                                        (storey.elevation_feet - block.elevation_feet).abs() <= 1e-6
+                                    }) =>
+                                {
+                                    Part::Confirmed
+                                }
+                                Some(_) => Part::Failed,
                             }
                         }
                         // A run type's id object: its id is the u64 there.
@@ -1989,15 +2084,14 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
         if *model != base {
             continue;
         }
-        for reader in *readers {
-            if by_rule
+        for (reader, least) in *readers {
+            let held = by_rule
                 .get(&format!("{reader}:current"))
                 .copied()
-                .unwrap_or(0)
-                == 0
-            {
+                .unwrap_or(0);
+            if held < *least {
                 problems.push(format!(
-                    "{name}: no element has a source from {reader} chosen by the current copy rule"
+                    "{name}: {held} elements have a source from {reader} chosen by the current copy rule, not {least}"
                 ));
             }
         }
