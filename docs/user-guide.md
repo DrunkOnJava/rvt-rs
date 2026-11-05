@@ -268,8 +268,8 @@ calling it a breaking change.
 | `area_ft2` | Plan area, where the room's outline was read |
 | `body_source` | Where the room's solid came from |
 
-What the schedules contain is exactly what rvt-rs decodes, so check
-`rvt-inspect model.rvt` first: Revit 2024 project files with element
+What the schedules contain is what rvt-rs decodes and the IFC export writes,
+so check `rvt-inspect model.rvt` first: Revit 2024 project files with element
 records give walls, doors, windows, columns, slabs and rooms; other files
 give few or no rows. The browser viewer has the same two schedules as
 **Download element schedule (CSV)** and **Download room schedule (CSV)**
