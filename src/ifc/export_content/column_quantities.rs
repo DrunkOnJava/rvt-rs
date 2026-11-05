@@ -107,13 +107,19 @@ fn fills_section(body_sides: [f64; 2], sides: [f64; 2]) -> bool {
     (long - wanted_long).abs() <= SIDE_FEET && (short - wanted_short).abs() <= SIDE_FEET
 }
 
+/// A slab's plan region: its outer outline less its voids.
+struct Region {
+    outer: Vec<Point>,
+    voids: Vec<Vec<Point>>,
+}
+
 /// An element's entity type, where every piece of it is drawn as one
 /// extrusion its lowest and highest point, and where it is one piece its plan
-/// outline.
+/// region.
 struct Partner {
     kind: String,
     span: Option<(f64, f64)>,
-    outline: Option<Vec<Point>>,
+    region: Option<Region>,
 }
 
 /// A rectangle centred on its origin, counter-clockwise.
@@ -122,27 +128,16 @@ fn rectangle(width: f64, depth: f64) -> Vec<Point> {
     vec![[-x, -y], [x, -y], [x, y], [-x, y]]
 }
 
-/// The plan outline of an extrusion placed at `location`, turned by
-/// `rotation` about the vertical axis, as the writer places it: the profile in
-/// the element's own frame. None for a profile that is not a rectangle or a
-/// closed polyline.
-fn outline(body: &Extrusion, location: [f64; 3], rotation: Option<f64>) -> Option<Vec<Point>> {
-    let mut local: Vec<Point> = match &body.profile_override {
-        None => rectangle(body.width_feet, body.depth_feet),
-        Some(ProfileDef::Rectangle {
-            width_feet,
-            depth_feet,
-        }) => rectangle(*width_feet, *depth_feet),
-        Some(ProfileDef::ArbitraryClosed { points }) => {
-            points.iter().map(|(x, y)| [*x, *y]).collect()
-        }
-        Some(_) => return None,
-    };
+/// A polygon in an element's own frame placed at `location`, turned by
+/// `rotation` about the vertical axis, as the writer places it, without a
+/// closing point repeated. None for fewer than three points or one that is
+/// not finite.
+fn placed(mut local: Vec<Point>, location: [f64; 3], rotation: Option<f64>) -> Option<Vec<Point>> {
     if local.len() > 3 && local.first() == local.last() {
         local.pop();
     }
     let (sin, cos) = rotation.unwrap_or(0.0).sin_cos();
-    let placed: Vec<Point> = local
+    let polygon: Vec<Point> = local
         .iter()
         .map(|[x, y]| {
             [
@@ -151,7 +146,42 @@ fn outline(body: &Extrusion, location: [f64; 3], rotation: Option<f64>) -> Optio
             ]
         })
         .collect();
-    (placed.len() >= 3 && placed.iter().flatten().all(|value| value.is_finite())).then_some(placed)
+    (polygon.len() >= 3 && polygon.iter().flatten().all(|value| value.is_finite()))
+        .then_some(polygon)
+}
+
+/// The points of a profile's polyline.
+fn points(points: &[(f64, f64)]) -> Vec<Point> {
+    points.iter().map(|(x, y)| [*x, *y]).collect()
+}
+
+/// The plan region of an extrusion placed at `location` and turned by
+/// `rotation`: a rectangle, a closed polyline, or one with voids. None for any
+/// other profile (a curve with arcs, an I section).
+fn region(body: &Extrusion, location: [f64; 3], rotation: Option<f64>) -> Option<Region> {
+    let (outer, voids) = match &body.profile_override {
+        None => (rectangle(body.width_feet, body.depth_feet), Vec::new()),
+        Some(ProfileDef::Rectangle {
+            width_feet,
+            depth_feet,
+        }) => (rectangle(*width_feet, *depth_feet), Vec::new()),
+        Some(ProfileDef::ArbitraryClosed { points: outer }) => (points(outer), Vec::new()),
+        Some(ProfileDef::ArbitraryWithVoids {
+            points: outer,
+            voids,
+        }) => (
+            points(outer),
+            voids.iter().map(|hole| points(hole)).collect(),
+        ),
+        Some(_) => return None,
+    };
+    Some(Region {
+        outer: placed(outer, location, rotation)?,
+        voids: voids
+            .into_iter()
+            .map(|hole| placed(hole, location, rotation))
+            .collect::<Option<Vec<_>>>()?,
+    })
 }
 
 /// Each exported element's entity and extent, by ElementId: the union of the
@@ -197,8 +227,8 @@ fn partners(entities: &[IfcEntity]) -> HashMap<u32, Partner> {
             None => Partner {
                 kind,
                 span,
-                outline: plain
-                    .and_then(|(body, location)| outline(body, location, *rotation_radians)),
+                region: plain
+                    .and_then(|(body, location)| region(body, location, *rotation_radians)),
             },
             Some(held) => Partner {
                 kind,
@@ -208,7 +238,7 @@ fn partners(entities: &[IfcEntity]) -> HashMap<u32, Partner> {
                     }
                     _ => None,
                 },
-                outline: None,
+                region: None,
             },
         };
         out.insert(id, merged);
@@ -293,19 +323,6 @@ fn doubled_area(polygon: &[Point]) -> f64 {
         .sum()
 }
 
-/// Whether a counter-clockwise polygon turns left at every vertex.
-fn is_convex(polygon: &[Point]) -> bool {
-    let count = polygon.len();
-    (0..count).all(|at| {
-        let (p, q, r) = (
-            polygon[at],
-            polygon[(at + 1) % count],
-            polygon[(at + 2) % count],
-        );
-        (q[0] - p[0]) * (r[1] - q[1]) - (q[1] - p[1]) * (r[0] - q[0]) >= -1e-6
-    })
-}
-
 fn distance(p: Point, q: Point) -> f64 {
     (p[0] - q[0]).hypot(p[1] - q[1])
 }
@@ -354,48 +371,150 @@ fn clip(subject: &[Point], window: &[Point; 4]) -> Vec<Point> {
     polygon
 }
 
+/// `polygon` counter-clockwise.
+fn counter_clockwise(polygon: &[Point]) -> Vec<Point> {
+    let mut out = polygon.to_vec();
+    if doubled_area(&out) < 0.0 {
+        out.reverse();
+    }
+    out
+}
+
+/// Whether `point` is inside `polygon` (even-odd).
+fn inside_polygon(point: Point, polygon: &[Point]) -> bool {
+    let mut inside = false;
+    for at in 0..polygon.len() {
+        let (p, q) = (polygon[at], polygon[(at + 1) % polygon.len()]);
+        if (p[1] > point[1]) != (q[1] > point[1])
+            && point[0] < p[0] + (point[1] - p[1]) * (q[0] - p[0]) / (q[1] - p[1])
+        {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
+impl Region {
+    /// Whether `point` is in the outline and in none of the voids.
+    fn contains(&self, point: Point) -> bool {
+        inside_polygon(point, &self.outer)
+            && !self.voids.iter().any(|hole| inside_polygon(point, hole))
+    }
+
+    /// The outline and the voids.
+    fn loops(&self) -> impl Iterator<Item = &[Point]> {
+        std::iter::once(self.outer.as_slice()).chain(self.voids.iter().map(Vec::as_slice))
+    }
+}
+
+/// The length of the segment `p..q` inside the counter-clockwise rectangle
+/// `window` (Cyrus-Beck).
+fn length_inside(p: Point, q: Point, window: &[Point; 4]) -> f64 {
+    let (dx, dy) = (q[0] - p[0], q[1] - p[1]);
+    let (mut from, mut to) = (0.0_f64, 1.0_f64);
+    for at in 0..4 {
+        let (a, b) = (window[at], window[(at + 1) % 4]);
+        let (ex, ey) = (b[0] - a[0], b[1] - a[1]);
+        let start = ex * (p[1] - a[1]) - ey * (p[0] - a[0]);
+        let rate = ex * dy - ey * dx;
+        if rate.abs() < 1e-15 {
+            if start <= 0.0 {
+                return 0.0;
+            }
+            continue;
+        }
+        let t = -start / rate;
+        if rate > 0.0 {
+            from = from.max(t);
+        } else {
+            to = to.min(t);
+        }
+        if from >= to {
+            return 0.0;
+        }
+    }
+    (to - from) * distance(p, q)
+}
+
+/// Where along the side `a..b`, from 0 at `a` to 1 at `b`, the segment `p..q`
+/// crosses it.
+fn crossing(a: Point, b: Point, p: Point, q: Point) -> Option<f64> {
+    let (ex, ey) = (b[0] - a[0], b[1] - a[1]);
+    let (dx, dy) = (q[0] - p[0], q[1] - p[1]);
+    let denominator = ex * dy - ey * dx;
+    if denominator.abs() < 1e-15 {
+        return None;
+    }
+    let t = ((p[0] - a[0]) * dy - (p[1] - a[1]) * dx) / denominator;
+    let u = ((p[0] - a[0]) * ey - (p[1] - a[1]) * ex) / denominator;
+    (t > 0.0 && t < 1.0 && (0.0..=1.0).contains(&u)).then_some(t)
+}
+
 /// The part of a slab inside a column's section.
 struct Notch {
     /// Its plan area, square feet.
     area: f64,
-    /// The length of its outline along the sides of the section, feet.
+    /// The length of the section's sides inside the slab, feet.
     along_sides: f64,
-    /// The length of its outline inside the section, feet.
+    /// The length of the slab's edges inside the section, feet.
     inside: f64,
 }
 
-/// The part of the slab with plan `outline` inside the section `window`, none
-/// where the outline is not convex, the part is no more than a nick or it is
+/// The part of the slab with plan `region` inside the section `window`, none
+/// where an edge of the slab lies along a side of the section (which side of
+/// it the slab is on is not known), the part is no more than a nick or it is
 /// the whole section.
-fn notch(window: &[Point; 4], outline: &[Point]) -> Option<Notch> {
-    let mut subject = outline.to_vec();
-    if doubled_area(&subject) < 0.0 {
-        subject.reverse();
+fn notch(window: &[Point; 4], region: &Region) -> Option<Notch> {
+    let mut area = doubled_area(&clip(&counter_clockwise(&region.outer), window)) / 2.0;
+    for hole in &region.voids {
+        area -= doubled_area(&clip(&counter_clockwise(hole), window)) / 2.0;
     }
-    if !is_convex(&subject) {
-        return None;
-    }
-    let clipped = clip(&subject, window);
-    if clipped.len() < 3 {
-        return None;
-    }
-    let area = doubled_area(&clipped) / 2.0;
     let section = doubled_area(window) / 2.0;
     if area < MIN_NOTCH_AREA || area > section - MIN_NOTCH_AREA {
         return None;
     }
-    let (mut along_sides, mut inside) = (0.0, 0.0);
-    for at in 0..clipped.len() {
-        let (p, q) = (clipped[at], clipped[(at + 1) % clipped.len()]);
-        let length = distance(p, q);
-        let middle = [(p[0] + q[0]) / 2.0, (p[1] + q[1]) / 2.0];
-        let on_side = (0..4).any(|side| {
-            distance_to_segment(middle, window[side], window[(side + 1) % 4]) < ALONG_FEET
-        });
-        if on_side {
-            along_sides += length;
-        } else {
-            inside += length;
+    let mut inside = 0.0;
+    for polygon in region.loops() {
+        for at in 0..polygon.len() {
+            let (p, q) = (polygon[at], polygon[(at + 1) % polygon.len()]);
+            if distance(p, q) < 1e-9 {
+                continue;
+            }
+            let along = (0..4).any(|side| {
+                let (a, b) = (window[side], window[(side + 1) % 4]);
+                distance_to_segment(p, a, b) < ALONG_FEET
+                    && distance_to_segment(q, a, b) < ALONG_FEET
+            });
+            if along {
+                return None;
+            }
+            inside += length_inside(p, q, window);
+        }
+    }
+    let mut along_sides = 0.0;
+    for side in 0..4 {
+        let (a, b) = (window[side], window[(side + 1) % 4]);
+        let mut cuts = vec![0.0, 1.0];
+        for polygon in region.loops() {
+            for at in 0..polygon.len() {
+                cuts.extend(crossing(
+                    a,
+                    b,
+                    polygon[at],
+                    polygon[(at + 1) % polygon.len()],
+                ));
+            }
+        }
+        cuts.sort_by(f64::total_cmp);
+        for pair in cuts.windows(2) {
+            let (from, to) = (pair[0], pair[1]);
+            if to - from < 1e-12 {
+                continue;
+            }
+            let middle = (from + to) / 2.0;
+            if region.contains([a[0] + middle * (b[0] - a[0]), a[1] + middle * (b[1] - a[1])]) {
+                along_sides += (to - from) * distance(a, b);
+            }
         }
     }
     Some(Notch {
@@ -495,23 +614,19 @@ pub(super) fn add_joined_column_quantities(entities: &mut Vec<IfcEntity>, pendin
                     .collect()
             }
             Cut::Across(slab) => {
-                let (Some((slab_base, _)), Some(slab_outline), false) =
-                    (slab.span, slab.outline.as_deref(), column.clean.is_empty())
+                let (Some((slab_base, _)), Some(slab_region), false) =
+                    (slab.span, slab.region.as_ref(), column.clean.is_empty())
                 else {
                     continue;
                 };
-                let window = {
-                    let corners = outline(
-                        &Extrusion::rectangle(width, depth, height),
-                        *location,
-                        *rotation_radians,
-                    );
-                    match corners.as_deref() {
-                        Some(&[a, b, c, d]) => [a, b, c, d],
-                        _ => continue,
-                    }
+                let Some(corners) = placed(rectangle(width, depth), *location, *rotation_radians)
+                else {
+                    continue;
                 };
-                let Some(cut) = notch(&window, slab_outline) else {
+                let Ok(window) = <[Point; 4]>::try_from(corners) else {
+                    continue;
+                };
+                let Some(cut) = notch(&window, slab_region) else {
                     continue;
                 };
                 let cut_depth = top - slab_base;
