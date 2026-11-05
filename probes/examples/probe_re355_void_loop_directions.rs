@@ -432,9 +432,10 @@ fn probe(path: &str) -> Result<()> {
     .find(|candidate| candidate.exists());
     let Some(export) = export else {
         println!("no Revit export beside the model");
+        println!("void rule: not read, no Revit export beside the model");
         return Ok(());
     };
-    let unfilled = read_export(&std::fs::read_to_string(&export)?);
+    let unfilled = read_export(&String::from_utf8_lossy(&std::fs::read(&export)?));
     let unfilled_count = unfilled.len();
     let voids: Vec<Opening> = unfilled
         .into_iter()
@@ -588,6 +589,12 @@ fn main() {
     for path in &paths {
         if let Err(error) = probe(path) {
             println!("error {path}: {error:#}");
+            let class = if format!("{error:#}").contains("not measured on Revit") {
+                "the native reader is not measured on this release"
+            } else {
+                "another error"
+            };
+            println!("void rule: not read, {class}");
         }
     }
 }
