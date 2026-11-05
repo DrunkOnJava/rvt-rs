@@ -258,6 +258,10 @@ not remove Compare's report.
   roof with an arc, so no Revit export checks the arc reading on 2025 either (RE-345).
   Shaft openings are cut on 2024 only, for the same reason: the only two measured on
   2025 cut nothing.
+- **Products that share a Tag** (a floor Revit writes as several, a stair once for each
+  storey) are paired by storey, then the volume and the centre of the body, and the
+  GlobalId of such a Tag is not compared: all but the first copy carry a GlobalId
+  derived from the export, which differs between two saves (RE-346).
 - **A difference** is a reader that is wrong or a project that really differs
   between saves. Narrow the reader until it is never wrong and let what it
   leaves out stay a box, counted (`left as boxes`); do not allowlist. The one
