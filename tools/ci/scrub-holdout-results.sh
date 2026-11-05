@@ -21,7 +21,10 @@
 # such a model (`type refs:` and `type copies:`, RE-253), the `native framing:`
 # lines of probe_re280_native_framing_pre2023 (RE-280: counts, schema class and
 # field names and normalised error text, in a restricted alphabet; its JSON
-# example lines, which carry ElementIds, are dropped), the `native readers:`
+# example lines, which carry ElementIds, are dropped), the `saved graphics
+# pre2023:` count lines of probe_re342_saved_graphics_pre2023 (RE-342: counts,
+# schema class and field names and normalised error text, in the same
+# alphabet; it prints no ElementId), the `native readers:`
 # count lines of the RE-283 to RE-285 probes and scorers (the same alphabet;
 # their `native readers example:` lines name ElementIds and are dropped), the
 # `door flips:` count lines of tools/re/door_flips_vs_ifc.py (RE-343: counts of
@@ -91,6 +94,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^type (refs|copies): [A-Za-z ,;:()-]+[0-9][0-9A-Za-z ,;:()-]*$' "$f" || true
       grep -E '^native framing: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      grep -E '^saved graphics pre2023: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
     done
     for f in "$dir"qtos_vs_ifc*.txt; do
       [ -f "$f" ] || continue
