@@ -187,50 +187,13 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      # C3: wait for CI on this commit. A commit whose every file CI's push
+      # C3: wait for CI on this commit (.github/actions/wait-for-check, which
+      # the release preflight uses too). A commit whose every file CI's push
       # filter ignores runs no CI, and deploys at once.
       - name: Wait for CI on the commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        # Each API call is retried with backoff: a GitHub 5xx (a 502 on
-        # 2026-11-04 failed the v0.14.0 deploy) is not a verdict on the
-        # commit. A call that still fails ends the step, so the deploy
-        # never goes ahead without CI's answer.
-        run: |
-          api() {
-            local try out
-            for try in 1 2 3 4 5 6; do
-              if out=$(gh api "$@"); then printf '%s\n' "$out"; return 0; fi
-              [ "$try" -eq 6 ] && break
-              echo "gh api $1 failed (try ${try}); retrying" >&2
-              sleep $((try * 10))
-            done
-            echo "gh api $1 failed 6 times" >&2
-            return 1
-          }
-          # Every page of the commit's files (the endpoint returns 300 a
-          # page). A commit that lists no file gives one empty line, which
-          # the filter below does not ignore, so it waits for CI: closed.
-          files=$(api --paginate "repos/${GH_REPO}/commits/${SHA}" --jq '.files[].filename') || {
-            echo "::error::could not list the files of ${SHA}"; exit 1; }
-          if ! grep -qvE '(\.md$|^docs/|^LICENSE|^\.gitignore$|^\.github/ISSUE_TEMPLATE/|^CITATION\.cff$)' <<<"$files"; then
-            echo "CI's push filter skips this commit; deploying it"
-            exit 0
-          fi
-          for _ in $(seq 1 80); do
-            conclusion=$(api "repos/${GH_REPO}/commits/${SHA}/check-runs?check_name=CI%20passed" \
-              --jq '[.check_runs[] | select(.status == "completed") | .conclusion] | first // ""') || {
-              echo "::error::could not read CI's check run on ${SHA}"; exit 1; }
-            case "$conclusion" in
-              success) echo "CI passed on ${SHA}"; exit 0 ;;
-              "") sleep 60 ;;
-              *) echo "::error::CI concluded ${conclusion} on ${SHA}; not publishing it"; exit 1 ;;
-            esac
-          done
-          echo "::error::CI did not finish on ${SHA} within 80 minutes"
-          exit 1
+        uses: $/.github/actions/wait-for-check
+        with:
+          sha: ${{ github.sha }}
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5.0.1

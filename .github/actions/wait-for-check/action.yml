@@ -1,0 +1,52 @@
+name: Wait for a check run on a commit
+description: >-
+  Wait for a check run (CI's `CI passed` by default) on a commit to finish, and
+  fail unless it succeeded, so a deploy or a release never goes out from a
+  commit whose CI is red, cancelled or missing.
+# C3: the viewer deploy and the release preflight both wait through this. A
+# commit that CI's push filter skips (only docs, Markdown and the like) has no
+# check to wait for and passes at once, unless the check ran on it anyway
+# because an earlier commit of the same push changed more. Each API call is
+# retried (wait.sh), so a GitHub 5xx is not read as a verdict.
+inputs:
+  sha:
+    description: The commit to wait on
+    required: true
+  check-name:
+    description: Name of the check run that must succeed
+    required: false
+    default: CI passed
+  timeout-minutes:
+    description: Minutes to wait for the check run to finish (one poll a minute)
+    required: false
+    default: "80"
+  docs-only-skips:
+    description: Let a commit CI's push filter skips, with no such check on it, pass without waiting
+    required: false
+    default: "true"
+  token:
+    description: Token that reads commits and check runs (contents and checks read)
+    required: false
+    default: ${{ github.token }}
+  repository:
+    description: owner/name of the repository the commit is in
+    required: false
+    default: ${{ github.repository }}
+outputs:
+  result:
+    description: success, or skipped-no-ci for a commit CI's push filter skips
+    value: ${{ steps.wait.outputs.result }}
+runs:
+  using: composite
+  steps:
+    - name: Wait for the check run on the commit
+      id: wait
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        GH_REPO: ${{ inputs.repository }}
+        SHA: ${{ inputs.sha }}
+        CHECK_NAME: ${{ inputs.check-name }}
+        ATTEMPTS: ${{ inputs.timeout-minutes }}
+        DOCS_ONLY_SKIPS: ${{ inputs.docs-only-skips }}
+      run: bash "${GITHUB_ACTION_PATH}/wait.sh"

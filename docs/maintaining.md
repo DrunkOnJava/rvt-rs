@@ -593,7 +593,10 @@ pull request.
 
 Tags `v*` are protected by the `release-tags` ruleset: only a maintainer can
 create one, and none can be moved or deleted. Pushing a tag runs the publish
-workflow, which builds and verifies the wheels and, through the
+workflow, whose first job refuses a tag that is lightweight, not verified as
+signed, on neither `main` nor a `hotfix/*` branch, out of step with a version
+file, or on a commit whose `CI passed` is red (RELEASE.md, step 10). Then it
+builds and verifies the wheels and, through the
 release-binaries workflow, the CLI archives and the container image, and
 publishes them with build-provenance attestations. Pushing the tag is the
 release decision, so the run asks for no approval: the `crates-io` and `pypi`

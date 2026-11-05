@@ -26,7 +26,12 @@ is repeated in `rvt-py/Cargo.toml` (the wheel's version, and its `=X.Y.Z`
 dependency on `rvt`), `rvt-mcp/Cargo.toml` (the MCP server's version, and its
 `=X.Y.Z` dependency on `rvt`), `rvt-wasm/Cargo.toml`, the `rvt` dependency of
 `tools/stream_evidence/Cargo.toml`, `viewer/package.json`, `CITATION.cff`, and the workspace crates' entries in
-`Cargo.lock` and `fuzz/Cargo.lock`. All of them must agree at tag time.
+`Cargo.lock` and `fuzz/Cargo.lock`, and the version has its own section in
+`CHANGELOG.md`. All of them must agree at tag time:
+`tools/ci/release_preflight.py` checks every one, on every pull request
+(the PII guard job) and again on the tagged commit, before `publish.yml`
+builds anything. `pyproject.toml` declares the wheel's version dynamic, so
+`rvt-py/Cargo.toml` is its one source; the check fails if that changes.
 
 ## Release cadence
 
@@ -49,9 +54,11 @@ Every `vX.Y.Z` release:
 - Has a GitHub release page for the tag, whose body is the version's
   `CHANGELOG.md` section and a link to the [user guide](docs/user-guide.md),
   carrying the CLI archives for Linux, macOS and Windows, `SHA256SUMS` and
-  the archives' build provenance, `rvt-rs-vX.Y.Z.intoto.jsonl` (the bundle
+  the archives' and `SHA256SUMS`'s build provenance,
+  `rvt-rs-vX.Y.Z.intoto.jsonl` (the bundle
   `gh attestation verify <archive> -R DrunkOnJava/rvt-rs` also reads from
-  GitHub).
+  GitHub). Verifying `SHA256SUMS` that way and then running
+  `sha256sum -c --ignore-missing SHA256SUMS` checks every archive.
 - Publishes the `rvt` crate to [crates.io](https://crates.io/crates/rvt),
   then, once the repository variable `PUBLISH_RVT_RS_MCP` is `true` (step 8),
   the MCP server's crate `rvt-rs-mcp` ([docs/mcp.md](docs/mcp.md)), which
@@ -175,18 +182,51 @@ project treats a silent skipped step the same as an untested change.
     `origin/main` is the release pull request's squash commit, then
     `git tag -s vX.Y.Z -m "rvt-rs X.Y.Z" origin/main`. The `-s` signs
     the tag with the maintainer's key, which release authenticity
-    requires. The `release-tags` ruleset lets only a maintainer create
-    a `v*` tag, and nobody can move or delete one.
-10. **Push the tag.** `git push origin vX.Y.Z` runs `publish.yml`. It
-    builds the wheels and the sdist and checks them: each wheel installed
-    and opening a model, `cargo install` of the source with the CLI
-    sample smoke, the docs.rs build preview and the viewer load smoke.
+    requires: the workflow refuses a lightweight tag and one whose
+    signature GitHub does not report as verified (so the signing key has
+    to be on the maintainer's GitHub account, as a GPG or SSH signing
+    key). The `release-tags` ruleset lets only a maintainer create
+    a `v*` tag, and nobody can move or delete one (a repository
+    administrator can bypass the ruleset, which a release never needs).
+10. **Push the tag.** `git push origin vX.Y.Z` runs `publish.yml`. Its
+    `preflight` job runs first, and every other job waits for it. It
+    refuses, within seconds, a tag that is not named `vX.Y.Z` (or with a
+    `-prerelease`), is lightweight or not verified as signed, names another
+    commit than the one pushed, whose commit is on neither `main` nor a
+    `hotfix/*` branch, or whose commit disagrees with the tag on any
+    version file above; and it waits for `CI passed` on the tagged commit,
+    up to 80 minutes, and refuses a failed, cancelled or missing one (a
+    commit whose every file CI's push filter skips needs no CI of its own).
+    Then the workflow builds the wheels and the sdist and checks them: each
+    wheel installed and opening a model, `cargo install` of the source with
+    the CLI sample smoke, the docs.rs build preview (CI's pinned nightly and
+    banner check) and the viewer load smoke.
     Once they pass, the workflow publishes the crate to crates.io, with no
     approval asked for (pushing the tag is the release decision), then the
     wheels and sdist to PyPI and, through
     `release-binaries.yml`, the CLI archives and the container image with
-    their attestations, both of which wait for the crate. If a job fails, fix its cause and
-    re-run the failed jobs.
+    their attestations, both of which wait for the crate. Releases run one
+    at a time, in the order their tags were pushed, so two tags pushed
+    together cannot race for the container image's `latest`; GitHub keeps
+    one waiting run, so a third tag pushed while two are queued cancels the
+    second, which then needs `gh run rerun <run id>`. If a job fails, fix
+    its cause and re-run the failed jobs (not all of them: the wheels would
+    be built again, differently from any already uploaded). A re-run is safe
+    after a partial publish: the crates.io steps skip a version crates.io
+    already has (a yanked one fails the run), and PyPI skips the files it has
+    from the second attempt on.
+
+    **When the preflight refuses a tag,** it names every problem and nothing
+    was built or published. A tag cannot be moved, so a problem in the tagged
+    commit (a version file or the `CHANGELOG.md` section missing, the commit
+    on no release branch, `CI passed` red) is fixed in a new commit and
+    released as the next version. Two causes are not about the commit: a CI
+    job that flaked (re-run CI's failed jobs on that commit, and once
+    `CI passed` is green re-run `publish.yml`'s failed jobs, which read the
+    check again) and GitHub being unable to verify the signature yet or the
+    API being down (re-run the failed jobs). The same version-file check runs
+    on every pull request, so a half-finished bump fails the release pull
+    request and not the tag.
 11. **Write the release page.** `release-binaries.yml` creates the
     release from the tag with GitHub's generated notes. Replace them with
     this version's `CHANGELOG.md` section, verbatim, followed by
@@ -280,7 +320,10 @@ where CI and Measure run, only when it is ready to release.
 6. **Tag the reviewed head and push the tag.** Steps 8 to 11 above,
    with that head in place of `origin/main`, once its code and witness
    files are the ones CI and Measure passed:
-   `git tag -s vX.Y.(Z+1) -m "rvt-rs X.Y.(Z+1)" <its SHA>`. Then close
+   `git tag -s vX.Y.(Z+1) -m "rvt-rs X.Y.(Z+1)" <its SHA>`. The preflight
+   accepts the tag only while `hotfix/vX.Y.(Z+1)` holds that commit, and
+   waits for CI's `CI passed` on it (the branch's push run), so keep the
+   branch until the release has finished, re-runs included. Then close
    the review-only pull request unmerged and delete
    `review/vX.Y.Z-base`.
 7. **Bring `main` up to it** through a pull request, as merging the
@@ -331,17 +374,30 @@ aspirational state. Update this section when you wire up more of it.
   when every one of them did (see
   [`docs/maintaining.md`](docs/maintaining.md#pull-requests)).
 - **Publish workflow** (`.github/workflows/publish.yml`), on `v*` tags and
-  `workflow_dispatch`: the checks and publish order of step 10. Its
+  `workflow_dispatch`: the checks and publish order of step 10, behind a
+  `preflight` job (`tools/ci/release_preflight.py` and the
+  `.github/actions/wait-for-check` composite action, which Deploy viewer
+  waits for CI through too) that every other job needs. Its
   crates.io and PyPI jobs authenticate by Trusted Publishing in the
   `crates-io` and `pypi` environments, which only `v*` tags may deploy
   to; PyPI and the release binaries wait for the crates.io job. The
   one-time registry setup
   is described at the top of the file.
-  `workflow_dispatch` with `test-pypi: true` runs the checks and
-  publishes to TestPyPI only, as a dry run.
+  `workflow_dispatch` has no tag, so the tag, signature, branch and CI
+  checks pass with a note and the version files must still agree with each
+  other; with `test-pypi: true` it runs the checks and
+  publishes to TestPyPI only, as a dry run. The preflight's judgements have
+  failure-first tests (`tools/ci/test_release_preflight.py`, run by the PII
+  guard job), and `tools/ci/release_preflight.py check` can be run by hand
+  against any tag read-only, for example
+  `tools/ci/release_preflight.py check --event push --ref-type tag
+  --ref-name v0.15.0 --sha <the tag's commit>` from a checkout that holds
+  `origin/main`.
 - **Release binaries** (`.github/workflows/release-binaries.yml`): the
   CLI archives, built with `cargo auditable`, and the multi-arch
-  container image. It also runs weekly and on changes to itself, without
+  container image. Every archive's binaries are run before it ships; the
+  Intel macOS build is cross-compiled on an arm64 runner and run there under
+  Rosetta. It also runs weekly and on changes to itself, without
   uploading anything, and uploads only when the publish workflow calls
   it for a tag.
 - **Dependabot** (`.github/dependabot.yml`): see
