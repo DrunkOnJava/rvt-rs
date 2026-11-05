@@ -12,7 +12,8 @@
 # result that read other than 25 Areas, 25 of them with a body, on any save
 # each fail; a pass needs the scorer's own `passed` line. A shard with fewer
 # than the four samples (a narrower sample_years, or the 2008 to 2023 shard)
-# checks nothing and says so in a notice.
+# checks nothing and says so in a notice, and so does a run with ifc_flags,
+# since the gate is about the default export.
 #
 # RESULTS_DIR holds the head side's shard artifacts, one directory each (the
 # files of two shards share a name, so they are not merged). This was a step of

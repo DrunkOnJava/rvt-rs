@@ -563,8 +563,14 @@ pair_key() {
 # RE-341: bodies_across_saves.py holds the 2026 and 2027 saves of the three
 # projects below to their 2024 and 2025 saves, so those saves keep their
 # exports until it has run, after every sample item.
+# Whether this run's exports take a flag. A value of only spaces is no flag:
+# export_ifc passes it unquoted, so rvt-ifc gets none.
+flagged_export() {
+  [[ ${RVT_IFC_FLAGS:-} == *[![:space:]]* ]]
+}
 saves_gate_keeps() { # sample
   wanted bodies_across_saves || return 1
+  flagged_export && return 1
   case "$(basename "$1" | cut -c1-4)" in 2024 | 2025 | 2026 | 2027) ;; *) return 1 ;; esac
   case "$(pair_key "$1")" in racadvanced | racbasic | rstbasic) return 0 ;; esac
   return 1
@@ -618,7 +624,7 @@ bodies_across_saves() {
     dir=$(sample_dir "$candidate")
     # The check is about the default export: a flag such as --phase changes
     # what a save writes, or refuses a save that has no such phase.
-    if [ -n "${RVT_IFC_FLAGS:-}" ]; then
+    if flagged_export; then
       echo "::notice::$(basename "$dir"): this run's exports used ifc_flags ($RVT_IFC_FLAGS), so bodies_across_saves compared nothing"
       printf 'bodies across saves: SKIPPED (the exports of this run used ifc_flags: %s)\nexit 0\n' "$RVT_IFC_FLAGS" > "$dir/bodies_across_saves.txt"
       continue
@@ -645,7 +651,7 @@ areas_across_saves() {
   local year file missing="" args=()
   # The gate is about the default export: a flag such as --phase changes what a
   # save writes, or refuses a save that has no such phase.
-  if [ -n "${RVT_IFC_FLAGS:-}" ]; then
+  if flagged_export; then
     echo "areas across saves: skipped: the exports of this run used ifc_flags ($RVT_IFC_FLAGS), so nothing was compared" > "$OUT/areas_across_saves.txt"
     return 0
   fi
