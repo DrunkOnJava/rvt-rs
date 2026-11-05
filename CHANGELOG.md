@@ -8,6 +8,596 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-11-04
+
+0.15.0 makes an export auditable down to the byte and draws more of what
+Revit draws. Two opt-in switches say where each decoded element's record was
+read from, and which copy a body, profile or outline took its value from where
+its reader notes one (`rvt-ifc --element-provenance`), and why each element,
+body, opening or outline was left out (`rvt-ifc --export-decisions`); the MCP
+server asks for both and gains `explain_element`. Every export of a Revit 2008
+to 2023 project counts where its element records stopped, so an export that
+writes nothing says at which stage. Rooms take off the round columns their
+stored solid holds, Areas whose boundary lines name each other are drawn to
+their joins, a floor whose shape-edited corners lie in one plane is drawn
+along that sloped top and a wall it wholly covers starts from it, and the
+opt-in `rvt-ifc --family-extrusions` draws a family instance from its family's
+own extrusions, arcs as true arcs, where they reproduce the mesh Revit saved.
+The viewer's browser tests are now part of every pull request's required
+check.
+
+### Upgrading from 0.14
+
+- Every export's IFC header names rvt-rs 0.15.0, so an export that is
+  otherwise unchanged still differs from 0.14.0's there.
+- A default export can change where these apply: a room whose stored solid
+  holds round columns loses their area (Autodesk's `rac_advanced` and
+  `rac_basic` samples); a floor whose shape-edited corners lie in one plane is
+  drawn along its sloped top (`BodySource` `native_slab_shape_edit`), and a
+  wall whose base join names one element covering its whole plan starts from
+  that element's top (`BodyBaseSource`, `BaseCoverElementId`; the BIM4LCA
+  office's Basement); and an Area of a Revit 2015 to 2024 file whose boundary
+  lines name each other is drawn to their joins (`SpaceOutlineSource`
+  `area_boundary_joined`). Partition streams are now taken in number order,
+  which moved no Measure model's export.
+- New trust markers in `RvtElementRecordGeometry`: `SlabShapeRefusal` on a
+  shape-edited floor kept as its record box and `BaseCoverRefusal` on a wall
+  that keeps its base, each naming the reason.
+- New fields in the diagnostics: `decoded.element_record_stages` on Revit 2008
+  to 2023 projects, the `skipped` reason `element_record_frame_stopped`, and
+  `exported.slab_shape_refusals` and `exported.wall_base_refusals`. With
+  `--element-provenance` or `--export-decisions` they also hold
+  `decoded.element_provenance` or `export_decisions`; without them the
+  diagnostics carry neither.
+- `--family-extrusions` implies `--saved-meshes`.
+
+### Added
+
+- **Where each decoded element was read from, down to the byte, on request
+  (#1325).** `rvt-ifc --diagnostics out.json --element-provenance`
+  (`ExportOptions::with_element_provenance(true)`, Python's
+  `export_diagnostics(element_provenance=True)`) adds
+  `decoded.element_provenance` to the diagnostics, keyed by ElementId: the
+  carrier of the element's record (a partition element record frame that
+  starts its partition record, one inside another's record as RE-30 and
+  RE-35 describe, a `Global/Latest` schema-walk instance, an ArcWall record,
+  an Area chain record, or a row with no frame of its own), its stream
+  (`Partitions/46`, `Global/Latest`) and byte offset in that stream inflated
+  (the bytes `rvt-dump` writes as `Partitions_NN.decomp`, #291), where its
+  ElementId is stored (`record_offset`, with the enclosing partition
+  record's id for a second-prologue frame), its class tag and the class that
+  names in the file's own schema, its `BuiltInCategory`, and the native
+  record the export's native passes indexed for it (its partition, offset
+  and class, and, where several partitions hold a copy, which is current:
+  RE-145, RE-216). An element whose offset cannot be given is kept without
+  one and counted by carrier (`by_carrier`, `unkeyed_elements`, `native`);
+  the table lists at most 250,000 elements and counts the rest. It is off by
+  default, since it is large: on the BIM4LCA office as built the table is
+  6,202,130 bytes of compact JSON against 38,640 bytes of diagnostics
+  without it (about 161 times, with the value sources of #1360 and #1368), and
+  the CLI's pretty-printed sidecar grows from 52,677 to 11,098,081 bytes and
+  Core Interior's from 27,588 to 1,549,080 (Measure run 41890994176); RE1
+  Architecture's grew from 13,956 to 85,470 before the value sources.
+  Without the switch the diagnostics lack the field and are the bytes they
+  were, and the table is never written into the IFC. It is built from the
+  walk, the inflated partitions and the native record index the export
+  already holds. An `offset` is the frame the exporter selected among the
+  element's frames (Revit 2024 and later: the greatest vertical extent, then
+  the greater stream and offset; 2008 to 2023: the newest, with no extent
+  test). A body reader may take another copy (the sketch-line readers take
+  the current one, RE-216), so it and the native record's stream can name
+  different partitions; the copy a reader took is in `value_sources` (#1360). `rvt-rs-mcp` asks for it when it opens a model,
+  keeps it beside the model, and returns the fields in every element's
+  `provenance` (`carrier`, `stream`, `offset`, `record_offset`,
+  `enclosing_record_id`, `class_tag`, `class_name`, `native_record`) and the
+  file's `partition_count`, `layout_release` and `omitted_entries` (an
+  element past the table's cap says `provenance_omitted`);
+  `get_diagnostics` does not carry the table. `tests/element_provenance_offsets.rs` reads the bytes at
+  every reported offset on Core Interior, the RE1 models and the BIM4LCA
+  as-built office and checks the record decodes to the same ElementId, and
+  prints the counts by carrier, the size of the table and the time to build
+  it (CI's `element-provenance` artifact). Einhoven (Revit 2023) confirmed
+  13 of 13 first-prologue frames and 71 of 71 native records; Revit 2008 to
+  2022, and the second-prologue path of 2023, are not measured. The
+  schema-walk carrier has no element on any of the seven models, so its
+  offsets (into `Global/Latest` as the walk inflates it, where `rvt-dump`
+  uses its own routine) have not been checked.
+
+- **Why an element, body, opening or outline was left out, one entry per
+  element, on request (#1326).** `rvt-ifc --diagnostics out.json
+  --export-decisions` (`ExportOptions::with_export_decisions(true)`, Python's
+  `export_diagnostics(export_decisions=True)` and `rvt_to_ifc_diagnostics`)
+  adds `export_decisions` to the diagnostics. Each fail-closed decision is an
+  entry with the element's ElementId, a stage (`element_skipped`,
+  `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read`,
+  `storey_not_bound`), a reason code, the class the diagnostics count it under,
+  and the stream and byte offset its record was read from where known (a frame
+  with no ElementId has its place and no id; an element the walk decoded takes
+  its place from its provenance). The `skipped` section is now counted from the
+  same decisions and is unchanged: every item of it, the geometry gaps among
+  them, has a reason in the log whose `total` is its count, and the decisions
+  behind `exported.bounding_box_bodies`, `bounding_box_spaces` and
+  `area_body_refusals` are in the log too (`body_is_record_box`,
+  `space_outline_is_record_box`, `area_body_refused`). The log keeps at most
+  5,000 entries a reason, by ElementId, and counts what it drops per reason and
+  in all. It is a switch of its own, not `--element-provenance`: the log is
+  bounded where the provenance table is not, and needs no table in the
+  diagnostics. Without the switch the diagnostics lack the field and are the
+  bytes they were, and neither goes into the IFC. The stage for a value left
+  out because Revit's exporters disagree exists and records nothing: those
+  omissions are rules for a whole class of element in the reader that would
+  write the value, not decisions made per element, and nothing counts them.
+  `rvt-rs-mcp` asks for the log when it opens a model, keeps it beside the model
+  and has a new tool, `explain_element(model, element)`: the element's
+  provenance and trust markers where the export holds it, and every decision
+  recorded for it, whether or not it is exported (`capped_reasons` names the
+  reasons that dropped entries). `tests/export_decisions_counts.rs` checks, on
+  Core Interior, the RE1 models, Einhoven and the BIM4LCA as-built office, that
+  every reason of `skipped` has equal counts in the log and that the entries by
+  class are its classes, re-reads the bytes at the frame of each entry of the
+  seven element-record frame reasons on Revit 2024 and later, and prints the
+  counts per reason (CI's `export-decisions` artifact). The offsets of Revit 2015
+  to 2023 files and of `Global/Latest` entries are not verified, and a scan that
+  finds an element in several partitions names its last frame, which can differ
+  from the frame the provenance table names. `--anonymize` scrubs the log's
+  phase names as it scrubs `skipped`. Core Interior has nothing left out, so its
+  log is empty; the other models name reasons that must have entries.
+
+- **The copy each body reader took its value from, in the provenance table
+  (#1360).** With `rvt-ifc --element-provenance` (and the MCP server, which
+  asks for the table), an element's entry in `decoded.element_provenance` now
+  lists `value_sources`: for each reader that took a value of its body from a
+  copy other than the frame the entry's `offset` names, the reader, the rule
+  that chose the copy (`selected`, `agreeing`, `current` or `native`), how many
+  partitions held a copy, the copy's stream and offset, and whether it is in
+  another partition than the frame. A reader notes its choice where it makes it
+  (the copy-aware scans of a wall's or beam's location line, of a sketch's
+  curves and of a family instance's transform, and the native record readers
+  of saved graphics, stair runs and landings), only while the table is being
+  built, so the default export does nothing more and its IFC and diagnostics
+  are byte for byte what they were. The table's `value_source_counts` counts,
+  by reader, the elements whose source is in another partition than their
+  frame (for an `agreeing` copy, in none of the partitions that hold one). The
+  entry lists a source only where the element's final `BodySource` is drawn
+  from that reader. A body that is the record's box but whose profile is read
+  from sketch lines or the type's section (floors, columns) names the frame as
+  `selected_frame_box`, for the box and the placement only; the profile has no
+  source yet. The MCP `get_element` and `explain_element` list
+  the sources in the element's provenance; `list_elements` does not. This
+  replaces the #1325 caveat that the offset may not be the copy a body came
+  from. `tests/value_sources_offsets.rs` reads the bytes at each recorded
+  offset on Core Interior, the RE1 models, Einhoven and the BIM4LCA as-built
+  office, and names every `BodySource` on them as covered or not yet. The
+  readers that note no copy yet are listed in `docs/export-diagnostics.md`;
+  those elements have no value source, which is not a claim
+  that they read the frame. Not measured: that the copy
+  taken is the right one (`agreeing` copies are equal; `current` is
+  `current_partitions`).
+
+- **Value sources for family instances drawn from their families' own
+  extrusions (#1368).** With `--element-provenance` and `--family-extrusions`
+  both on, an instance whose body is rebuilt from its family's extrusions lists
+  the records of the family's embedded document that it was rebuilt from
+  (`family_forms`, `parts`: each visible extrusion, its sketch plane and the
+  curves of its sketch, at the place the document's group puts them in their
+  partition), beside the `instance_transform` that places them and the
+  `selected_frame` they are drawn at. A record the file holds in several
+  partitions is named at its copy in the highest partition, the copy the
+  rebuild reads; an instance one of whose records has no place (its group's
+  bytes are not the partition's own) gets no `family_forms` source, and keeps
+  its other sources. The family document is read once, as it is embedded.
+  Where the table is not asked for, no place and no record list is collected
+  or kept (the document is read as before), and the IFC and the default
+  diagnostics are unchanged. Area boundary lines are the one body still
+  without a source.
+
+- **Value sources for room outlines, column sections and pipe axes (#1368).**
+  Under `--element-provenance` a room whose outline is read from its stored
+  solid lists the header of each solid that gave it (`room_solid_faces`,
+  `parts`, in the room's own partition), where it had only the frame for its
+  box; a column drawn as its type's hollow or I section lists the type's
+  parameter entries it took the section from (`type_hollow_section`,
+  `type_i_section`: the width, height, wall and corner radius, or the I
+  section's six values, each the first copy of an entry every copy of which
+  holds the same value); and a pipe drawn from its connector entries lists
+  the two entries that are its ends (`pipe_connectors`). The readers still
+  without a source are listed in `docs/export-diagnostics.md`. These sources add 1.2% to
+  the BIM4LCA office's table (6,131,584 to 6,202,130 bytes of compact JSON) and
+  2.0% to Core Interior's (718,828 to 733,326; Measure run 41890994176).
+  Nothing is noted unless the table is asked for, so the default export and its
+  diagnostics are unchanged.
+
+- **Value sources for profiles, stair runs and landings (#1368).** Under
+  `--element-provenance` an element whose body is its record's box but whose
+  profile was solved from sketch lines (floors, slabs, ceilings, and roofs
+  whose body is the record's box) or taken from its type symbol's box
+  (columns) now lists where the profile came from, as well as
+  `selected_frame` for the box: `sketch_lines` (`parts`: the frame of each
+  sketch line the solve was given, the first of its frames by frame order, or
+  the current partition's where they disagree) and `sketch_list` (the
+  Sketch's curve list, with the rule that chose its copy), or `type_section`
+  (`parts`: the type symbol's frame; rule `agreeing`, or `frame` where the
+  symbol's frames give different boxes and the last is taken). A stair run
+  drawn from its sketch lists `stair_run_lines`, `stair_run_ends`,
+  `stair_run_type` and `stair_run_base_cuts` (a Revit 2025 run, `native_run`
+  and `native_run_type`),
+  and a landing slab `landing_lines`, `native_landing` and
+  `native_landing_type` (the landing type's record gives the thickness). A
+  source made of several records lists them in `parts`, at most 64, with
+  `parts_left_out` counting the rest. The sources of #1368 add 3.6% to the
+  BIM4LCA office's table (5,987,841 to 6,202,130 bytes of compact JSON) and 66%
+  to Core Interior's (440,909 to 733,326; Measure run 41890994176). The table's
+  `value_source_counts` also counts,
+  by reader, the elements whose copy was chosen as the current partition's,
+  so a run on any model shows whether the rule is exercised. The readers
+  still without a source, and the elements that keep `selected_frame_box`
+  (every room, whose outline is read from its solid's faces), are listed in
+  `docs/export-diagnostics.md`. Nothing is noted unless the table is asked
+  for, so the default export and its diagnostics are unchanged.
+
+- **Value sources for roofs drawn from their slopes or from an extrusion
+  (#1368).** Under `--element-provenance` a roof drawn from its slopes lists
+  the slope block of each sketch line the slope was made from
+  (`roof_slope_edges`: the defining edges, or the slope arrow and the boundary
+  lines it rises from), those lines' own data (`roof_line_data`), its fascia
+  depth and rafter cut where they were read (`roof_fascia_depth`,
+  `roof_rafter_cut`) and the layers of its type that give its thickness
+  (`roof_type_layers`), beside the outline and the box it already listed. A
+  roof drawn from an extrusion lists the first frame of each of its sketch
+  lines (`sketch_lines`), their data and its type's layers. Each owner map is
+  built where the roof reader already resolves its sketch. CI's Corpus health
+  now fetches puzzbobb's Revit 2025 models so that
+  `tests/value_sources_offsets.rs` reads these sources and every other part
+  against the models whose roofs are drawn this way. Area boundary lines are
+  the one body still without a source (family extrusions have theirs from the
+  entry for them). Nothing is noted unless the table is asked for, so the
+  default export and its diagnostics are unchanged.
+
+- **The diagnostics of a Revit 2008 to 2023 project count where its element
+  records stop (#1389).** `decoded.element_record_stages` counts, per partition
+  stream and in total, the markers found, those with a declared ElementId, those
+  that gave a record, the placed instances, those with volume, the frames kept,
+  the elements handed to the export and the elements the IFC model holds, each
+  step exactly what the one before it passed on and left; the elements handed to
+  the export are the elements written plus those set aside, each for one cause
+  (an ElementId an earlier reader already held, a confidence below the floor, or,
+  by Revit class, an element the exporter writes nothing for), and a stream that
+  does not inflate is counted. The frames that stopped before they were records,
+  and the placed instances with no volume, are also in `skipped` as
+  `element_record_frame_stopped`, by stage (frames of every category, not lost
+  elements), and, with `--export-decisions`, in the log of decisions with the
+  place of their ElementId, 1,000 of each stage at most. When no record is
+  written, `stopped_at` names the stage they stopped at, and `rvt-ifc` prints a
+  line of its own with it. The rejected-frame reasons of 2024 and later counted
+  nothing on these layouts, so a file such as the four on #421 that exports no
+  element showed only `low_confidence_schema_scan_candidate`. The counts are
+  integers added where the scan and the recovery already decide: no further pass
+  over the file, and the default export lists no frame. Every export of a file of
+  these releases has the report, even with every count zero, but a placeholder
+  export's; `rvt-ifc` prints no line for a family file (`.rfa`, `.rft`), whose
+  elements are read from `Global/Latest`. The IFC is unchanged. On Autodesk's 33
+  sample projects of 2015 to 2023 (Measure run 41932213967), every count added
+  up, per stream and in total, and the IFC was byte-identical to main's; 192,811
+  of their 197,463 markers gave a record, 87,366 elements were handed to the
+  export and the models hold 87,315 of them. The causes for the 51 not written
+  are counted after that run and not yet measured on this head.
+  `tests/element_record_stages.rs` re-reads the markers on Einhoven and checks a
+  file with no record and a family; Measure checks the sums on each sample
+  project with `tools/re/element_stage_counts.py`.
+
+- **`rvt-ifc --family-extrusions` draws a family instance from its family's
+  own extrusions (#156, RE-327).** Off by default, and implies
+  `--saved-meshes`: an instance whose body is the mesh Revit saved for it is
+  written as `IfcExtrudedAreaSolid`s over `IfcIndexedPolyCurve` profiles,
+  placed by the instance's transform, where its family's extrusions reproduce
+  that mesh (every vertex within 0.0001 ft of their surfaces, samples of their
+  surfaces within 0.0011 ft of the mesh, volumes within the arcs' chord loss
+  and 0.01%), checked for each instance on its own; it keeps the mesh
+  otherwise, as it does for a family with a void or with an extrusion that
+  does not rebuild (an ellipse, an unclosed sketch) and for an instance with
+  no transform that reads (other forms a family holds are not read, and the
+  check against the instance's own mesh refuses what they make differ). An
+  arc in a profile is written as the arc, whatever its radius (#1366), in the
+  form Revit 24.0.5's IFC4 export gives it. Revit 26.2's IFC2X3 export writes
+  a circle as an `IfcCircleProfileDef` and IfcOpenShell's default
+  tessellation of the two forms has a chord more or fewer at some radii (27
+  against 28 for a toilet-paper dispenser of 0.2292 ft, 0.001439 ft off); the
+  scorers no longer count that as a miss, since a body both files write as
+  true curves is judged in a fine tessellation, where the forms coincide
+  (RE-327 section 11, RE-331). On Core Interior, RE1 and the BIM4LCA office
+  files, measured at `34750454` (runs 41884078892 and 41884639625), 335 bodies
+  are replaced; the body scorer scores 251 of them and all 251 hold the bar,
+  187 judged in the fine tessellation and 64 in the default one, and 6 of 53
+  exports move against `main`'s, none of them held-out. The extrusions are
+  smaller than the meshes they replace: the BIM4LCA office's IFC is 77.9 MB
+  instead of 82.2 MB, and its terrain files' 0.17 MB instead of 0.92 MB. The
+  default export is unchanged (34 of 34 models, run 41884073888). Revit 2024
+  to 2027 files, measured on 2024 and 2025: a file
+  before 2024 has no instance transform that reads, so nothing is replaced.
+
+### Changed
+
+- **More Areas of Revit 2015 to 2024 files are drawn, from area boundary
+  lines joined as their records say, and a line off the plan axes refuses
+  only the Areas it touches (#1261, RE-330).** An area boundary line often
+  stops short of the line it joins, and two parallel lines can stop at the
+  same place a wall's thickness apart. Where two lines name each other, a
+  free end is now carried on, by at most 1 ft, to the farthest perpendicular
+  line that names it and is named by it, when that line spans the place
+  reached; and the free ends of two such parallel lines, at most 1 ft apart
+  and running away on opposite sides, are joined by a short connector. An
+  Area whose outline needed either says `SpaceOutlineSource`
+  `area_boundary_joined` instead of `area_boundary`. A line that is not a
+  straight line along an axis, or whose record box is wider than the line,
+  used to make every Area of its scheme on its Level unreadable; it is now
+  left out with its box and refuses only the Areas whose region the box
+  touches. On Autodesk's `rac_advanced`, 16 of the 25 Areas are drawn on
+  every save but 2021's (3 before), 10 of them `area_boundary_joined`; the
+  four once taken to be bounded partly by walls are bounded by lines alone.
+  What this rests on: the only external check is an IFC2X3 export from the
+  three.js repository, by a build of Revit 2021's exporter whose string ends
+  "IU alternativa 21.0.0.383" (publisher not established), showing the
+  model's 2015 to 2020 state. The 16 Areas drawn on the 2020 save are within
+  0.1% in area and 0.01 ft in outline of it and none is written that it
+  lacks, but that is in-sample: the joins were read off this same export, and
+  that a reference list means a join is inferred from the fit. The 2022 and
+  2023 saves are also checked against the 2024 save's reader. No Revit IFC4
+  export of these Areas exists, and the export is not used to remove a value
+  or to settle a disagreement between exporters. The BIM4LCA office's 30
+  Areas are unchanged (the IFC is byte for byte as before); so is the
+  held-out BIM Whale project's, which draws no Area body, so it does not
+  exercise the joins. Left out: 9 Areas of `rac_advanced`, 1 to 5 (two
+  straight axis lines whose record boxes are 0.497 ft wider than the line),
+  7 and 8 (a straight line 0.016 degrees off the axis), 10 (an arc) and 6 (a
+  join its records do not name). Report:
+  `reports/element-framing/RE-330-area-joins.md`.
+
+- **The viewer's browser tests are part of `CI passed`, so a pull request
+  cannot merge before they have passed on its head (#1394, #1374).** They ran
+  in Deploy viewer's pull-request run, which `CI passed` did not wait for:
+  #1370 merged before that run had finished and Deploy viewer went red on
+  main. They are now `viewer-test.yml`, called by `ci.yml` as its `viewer`
+  job in the full set (a ready pull request, or a push to main), in three
+  parallel groups of spec files, on a WASM built without LTO (55 s warm
+  against 150 to 225 s). A change that touches only documentation skips
+  them, and a skipped job passes. The saved-mesh measurement, which took 12
+  minutes of every pull request's run, moves to Deploy viewer (pushes to
+  main and dispatch); its one assertion that gates a merge, the toggle on
+  Core Interior, stays in the suite. Deploy viewer has no `pull_request`
+  trigger; on a push to main it runs the suite and the measurement again on
+  the release WASM it publishes, and its deploy job waits for those and for
+  `CI passed`. To check a draft's viewer, dispatch `viewer-test.yml` on its
+  branch.
+
+### Fixed
+
+- **A family's embedded document is read in partition-number order (#1368).**
+  The family extrusions, the nested instances and the materials of a family
+  read the records of the family's document partition by partition. They took
+  the partitions in name order, which is not number order where the numbers
+  have unequal digit counts (`Partitions/100` before `Partitions/99`), so the
+  copy of an extrusion record held in several partitions that won, and the
+  order the records were read in, followed the names. They take the partitions
+  as `RevitFile::partition_stream_names` does, the newest copy last.
+
+- **A floor whose corners are shape-edited is drawn along its sloped top, and
+  the walls that stand on it start from that top (#1384, RE-336).** A floor's
+  native `SlabShapeEditGStep` moves its corner vertices; where they lie in one
+  plane the floor is the slab between that plane and the same surface one
+  thickness lower (`BodySource` `native_slab_shape_edit`), where its record box
+  reproduces the plane's highest point. A wall whose base join
+  (`JoinToRoofGStep`, base) names one element that covers the whole of its plan
+  is cut at that element's top over the plan, as a solid between that top and
+  the wall's own (`BodyBaseSource` `wall_base_sloped_at_covering_floor`, or
+  `wall_base_cut_at_covering_floor` for a level element), with the element in
+  `BaseCoverElementId`. Where this is not proven the element keeps its record
+  box or the wall its base, and the reason is a trust marker on the element
+  (`SlabShapeRefusal`, `BaseCoverRefusal`): edits of interior or edge vertices
+  or creases, corners not in one plane, an outline in pieces, a wall covered
+  in part, by two elements or with the top crossing its base or top. An edited floor, roof or ceiling is never taken for a flat one, and a floor whose edit is
+  found but not read leaves the walls on it as they were. The refusals are counted in
+  `exported.slab_shape_refusals` and `exported.wall_base_refusals` and are
+  decisions of the log (`slab_shape_refused`, `wall_base_cut_refused`). The top
+  cut (RE-267) no longer takes a floor drawn along a sloped top for a level
+  one. On the BIM4LCA office the 8 such floors, as built and at permit, have
+  Revit's volume to 0.01%, and 12 of the 14 Basement walls Revit raises as
+  built (the 4 on level floors and 8 of the 10 on sloped footings; 12 of 16 at
+  permit) have Revit's lowest point (598 of 607 walls with
+  Revit's base and top, from 586; 577 of 589 at permit, from 565); the other
+  2 (4) are 0.123 ft (0.044 ft) off, from 0.656 ft, because their plans end
+  short of Revit's. No wall's top moved, and no other model's export moves
+  but for the refusal markers on Autodesk's Snowdon Towers (18) and `rac_advanced`
+  (1 a save), which have no redistributable Revit IFC4 export to score them against. Details:
+  `reports/element-framing/RE-336-sloped-footings.md`.
+
+- **Partition streams are taken in the order Revit numbers them, not by
+  name.** `RevitFile::partition_stream_names` sorted the `Partitions/NN`
+  streams as text, which puts `Partitions/9` after `Partitions/46` and
+  `Partitions/189` before it. So a reader that keeps the first or last copy
+  of an element framed in several partitions could keep the wrong one
+  when the partition numbers had different digit counts. Two cases had
+  their own text comparison on top: the newest frame of an instance whose
+  copies tie on vertical extent, and the first copy of a sketch line or a
+  roof's sketch line (Revit 2024 and later).
+  - `partition_stream_names` now sorts by partition number, and
+    `partition_stream_name` returns the lowest-numbered stream.
+  - The copy pickers compare partition numbers
+    (`PartitionElementRecord::frame_order`).
+  - Revit 2023 and earlier already compared numbers when picking a frame.
+  - On every Measure model no export moves (see the pull request).
+
+- **A room's outline takes off the round columns its stored solid holds
+  (#1354, RE-334).** The walk that reads a room's outline from its stored
+  solid (RE-101) read only planar wall faces, so a vertical cylinder, a
+  round column, was ignored: the room kept the column's area, and a room
+  with columns against its walls kept its record box. The walk now reads the
+  arcs of vertical cylinders that reach the floor first, as chords within
+  0.0005 ft, and where that does not close it reads the faces as before, the
+  columns ignored; the resolved span (RE-316) reads them too, but a span with
+  a cylinder closes undirected or not at all, since an arc's direction is not
+  read. A room with more than 2,048 plan segments is left as before.
+  - On `rac_advanced`'s saves of 2015 to 2020, against the public IFC2X3
+    export of the project, all 91 rooms are within 0.1% in area and 0.01 ft
+    in outline (Measure run 41909372124): before, 42 of the 85 rooms drawn
+    from their stored solid were, and 6 kept their box. 48 spaces have as
+    many voids as Revit's, on all six saves (read outside Measure from run
+    41900428551's kept IFC, since deleted under the counts-only rule). A public Revit 2018 IFC4 export of `rac_basic` draws the
+    one column of its room 101 as a void too, and the reader moves that room
+    from 1.710% to 0.628% over its area (read outside Measure, run
+    41909414507). The exports of the 33 other models measured (the BIM4LCA
+    office, Core Interior, RE1, the R2025 models) are byte for byte as before
+    (run 41909377642), and so are the 20 held-out and BIMcollab models
+    (run 41909388707), so none of them has such a room.
+  - Measure's `racadv` input scores the 2015 to 2020 saves against that
+    export, fetched for the run and never stored or cached; only its summary
+    counts are uploaded.
+  - Revit's own area for `rac_basic` room 101 (its `GSA Space Areas`,
+    781.08 ft²) is the geometry with the column taken off, as the schedule
+    area now is; 4.95 ft² of the reader's 0.628% are in the room's outer
+    ring, which this does not change and is not explained.
+  - On Autodesk's samples (run 41909382808) the six rooms with columns
+    against their walls take an outline on all 13 `rac_advanced` releases,
+    2015 to 2027, and 2 of Snowdon Towers architectural's 7 boxed rooms do;
+    nothing scores the 2021 to 2027 saves or Snowdon's two rooms, whose
+    Revit IFC4 export holds no `IfcSpace`.
+  - Not measured: Revit's own area for the `rac_advanced` rooms (its export
+    carries none), a concave cylinder, a short column, and a prism room's
+    `NetVolume` with columns (written for Revit 2024 and 2025 only).
+
+- **A sketch's value-source notes cost nothing without
+  `--element-provenance`, and the viewer's stop-in-the-silent-stretch test
+  measures its cap (#1374).** The two notes `solve_sketch_plan_profiles`
+  kept for the value sources, the set of elements whose outline came from
+  their lines' own ends and the set of lines whose copies disagreed, were
+  built on every open. Both are now built only while the handle records
+  value sources. The viewer test that stops Core Interior's open between
+  the last partition stream and the saved graphics no longer hard-codes a
+  310 MiB cap: where the wasm memory grows between two reports moved with
+  #1370 (16.3 MiB of it now falls inside the saved meshes, with the same
+  325.4 MiB peak; the viewer measurement of Deploy viewer run 41870855196
+  at f1f80d9e against run 41885589164 at 0ca59127), so the test opens the
+  model once at the real ceiling and puts its cap between the memory at the
+  first report that reads "Building the model" and the memory at the first
+  report after those.
+
+### Research
+
+- **A wall that embeds a curtain wall is cut by it; the body is measured, not
+  drawn (#1067, RE-335).** After RE-267 and RE-320 the BIM4LCA office's walls
+  whose lowest point is not Revit's are 20 as built and 24 at building permit
+  (Measure run 41906631624, `main` at 5026d863). Fourteen of the 20 as built
+  stand on footings Revit draws sloped. The other six are raised exactly
+  8.2021 ft, and each embeds a curtain wall (`WallEmbedWallGStep`) that is
+  8.2021 ft tall from the wall's base and spans 0.90 to 1.0 of its length.
+  - All 72 walls embedded in the 57 walls that embed one are curtain walls, so
+    the step alone does not separate the six. What does in Revit's body is the
+    end stubs: 2103576 as built has the same curtain wall as 2098938 and keeps
+    its stubs (Revit's volume 32.08 ft³ against 23.42), where 2098938's are
+    gone. No byte signal that tells them apart is read.
+  - Nothing is drawn differently, and the diagnostics do not count these walls:
+    a rule that raised the base wherever the curtain wall spans the wall would
+    be wrong on 2103576 and 2177158.
+
+- **The body scorers measure shapes beside IfcOpenShell's default tessellation
+  (#1355, RE-331).** `mesh_bodies_vs_ifc`, `saved_meshes_vs_ifc` and
+  `family_extrusion_bodies_vs_ifc` mesh both IFC files with IfcOpenShell's
+  default settings, so a circle Revit 24.0.5 writes as two half arcs and one
+  Revit 26.2 writes as an `IfcCircleProfileDef` come out as 28 and 27 chords at
+  69.85 mm, 0.0014 ft apart, although both are one exact circle. With Measure's
+  new `fine_mesh` input (`RVT_SCORER_FINE_MESH=1`) the scorers also mesh both
+  files at one equal, fine deflection (1e-5 ft, 0.03 rad) and print labelled
+  `fine` rows after their own: the same columns, how many bodies are meshed
+  differently, which hold "ref on ours" in the default tessellation, the fine
+  one, both or neither, and the bodies that miss in the fine one. Without it
+  their output is as it was: the default rows of the two flag runs equal the
+  earlier runs of `main`'s scorers, 99 of 99 files in each (41850764234 and
+  41850769925 against 41843267888 and 41843276506). In the fine tessellation
+  the two forms of a circle from 0.02 to 2 ft in radius coincide within 1e-5
+  ft at every start, and RE1 Architecture's toilet-paper dispenser, redrawn the
+  way rvt-rs writes it, is 0.000002 ft off Revit's body where the default
+  tessellation has it 0.001439 ft off. Measured on the models: none of the
+  1,368 doors and windows the default export draws from saved meshes is meshed
+  differently, and none of the 66 family-extrusion bodies changes verdict (2
+  of them, circles of 0.12 ft or less, are meshed differently and hold in
+  both); of 3,816 saved-mesh bodies 295 are curved, 38 (the office's
+  waste-terminal meshes, the largest 0.001001 ft against the bar's 0.001) hold
+  "ref on ours" only in the default tessellation and 158 hold both directions
+  within 0.001 ft only in the fine one. Drawn as arcs at `aaa38de8`
+  (the first arc run's head, before the flat-arc rule), 185 of the 269 bodies
+  the 0.12 ft rule of #1352 kept as meshes are scored, and all 185 hold in the
+  fine tessellation (184 in the default one,
+  the dispenser being the exception); the other 84 are office spaces, not
+  scored by these scorers. No figure and no bar changes here. The maintainer decided the
+  bar (2026-11-04, "Fine where both draw curves"): the fine tessellation
+  decides only where both files write true curves, and saved meshes keep the
+  default bar, so no saved-mesh verdict moves; #1365 implements it in the
+  scorers and #1366 removes that 0.12 ft rule, so the 185 circles over 0.12 ft are
+  drawn as true arcs again.
+  Report:
+  `reports/element-framing/RE-331-scorer-tessellation.md`.
+
+- **The body scorers judge a curve in the fine tessellation (#1365, RE-331
+  section 8).** On #1355 the maintainer chose "Fine where both draw curves":
+  `mesh_bodies_vs_ifc`, `family_extrusion_bodies_vs_ifc` and
+  `saved_meshes_vs_ifc` now take the verdict ("ref on ours", both directions
+  within 0.001 ft, the boxes) of a body from a mesh at one equal, fine
+  deflection when both files write it as true curves (an extrusion of a circle,
+  of an outline with an arc and the like, and no mesh item, read from each
+  file's own representation items by `tools/re/true_curves.py`), and from
+  IfcOpenShell's default tessellation otherwise. A saved mesh is triangles on
+  rvt-rs's side, so it is never in the set: no saved-mesh, door or window
+  verdict moves. Only the bodies in the set are meshed finely. The rows say
+  which tessellation decided: a line counts the bodies, the class tables gain a
+  last column, the census rows end `decided by the fine tessellation`, and the
+  `fine` rows of #1355 show those bodies in both tessellations. Without such a
+  body the output is what it was. Report:
+  `reports/element-framing/RE-331-scorer-tessellation.md` section 8.
+
+- **A family's extrusions rebuild from their own sketch curves (#156, RE-327;
+  Discussion #112).** An `ExtrusionElem`'s helper names its sketch; the
+  `CurveElem` records that name it each hold one `GLine` or `GArc` in the
+  family's coordinates; chained into loops, sorted into outlines and holes,
+  placed in their `SketchPlane`'s frame (the columns of `m_3x3`, `m_flipZ`
+  reversing the normal) and swept between the extrusion's two `Double`
+  parameters (-1001800 and -1001801), they reproduce the mesh Revit saved
+  for the form: the 24 extrusions of the family corpus (2 on each of 12
+  releases, 2016 to 2027) within 0.001 ft, and all 6,172 extrusions of
+  Autodesk's 58 sample projects (Revit 2015 to 2027) whose saved mesh decodes
+  whole, by volume (1%), bounding box, vertices and surface (0.01 ft) (run
+  41805344172). 6,093 match with the plane's normal as its matrix gives it;
+  the other 79 share one signature (a down-facing plane, not flipped, whose
+  extrusion reads `m_alwaysRefPlaneNorm` false) and match with the normal
+  reversed, which the reader does by default for that signature only and
+  refuses where the field is not read. The rule was found on these 79 and is
+  not held out; the export checks every instance against its own mesh. One
+  up-facing flipped plane that differed is refused, and the refusal of an
+  unread `m_flipZ` cost none of the 6,172. `native_document` refuses every
+  family file, so the new `native_form_geometry` reads a family file's own
+  groups; `VarSketch` is refused on 2015 to 2017 (`VarParam::m_pSubst`,
+  RE-323) and the rebuild does not read it. Not reproduced: STE1200's 85 of
+  86, a Revit 2014 file outside the native releases. Report:
+  `reports/element-framing/RE-327-family-extrusions.md`.
+
+- **Clipping a trimmed loop to its grid cells takes the BIM4LCA office back
+  under the schema step's size limit, and the readers stay off `main`
+  (#1247, RE-302).** RE-302's readers (ellipse profiles, curved ruled
+  surfaces, trimmed parametric faces) draw the office's 43 `WC-istuin:WC-1`
+  toilets, which `main` keeps as boxes. With each earcut sliver cut at every
+  grid knot they took the office as built from 568,965 to 2,097,501
+  triangles (against the `main` of the time) and its IFC from 82.1 to 181.8 MB, over the 120 MB below which
+  the schema step validates. With each loop clipped to the grid cells it
+  covers and the pieces' corners shared they take it to 1,191,138 triangles
+  and 104.6 MB (the permit file to 1,195,576 and 104.6 MB), validated again
+  with the 4 rule findings `main` has; a toilet is 14,471 triangles against
+  Revit's 1,668. They do not land: the toilets are 1.006 of Revit's volume
+  but fail the 0.01 ft bar and "ref on ours" (0 of 43), and the default
+  export, which they should not change, moves on one held-out model (14
+  more of its windows drawn from saved meshes, all within the #1280 bar).
+  Measured against `main` on 19 `--saved-meshes` pairs and 111 default
+  export pairs (Measure 41849309128 and 41849313875); the readers stay on
+  the draft #1361. Report: `reports/element-framing/RE-302-ellipse-profiles-and-trimmed-parametric-faces.md`
+  (§6 and §7).
+
 ## [0.14.0] — 2026-11-04
 
 0.14.0 adds `rvt-rs-mcp`, a local, read-only MCP server that answers an
