@@ -77,8 +77,8 @@ env:
 # of that job among the last 96 runs on main and 29 pull-request runs
 # (2026-11-05) and never under 10 minutes, since a timeout that trips on a
 # slow runner is a false red: IfcOpenShell once took 22.9 minutes against a
-# median of 4.0, and has 50. No run in that window rebuilt the Rust
-# dependencies from an empty cache, so the margins of the build jobs (4 to 9
+# median of 4.0, and has 70. No run in that window rebuilt the Rust
+# dependencies from an empty cache, so the margins of the build jobs (4 to 12
 # times their longest run) are what covers one. tools/ci/check-workflows.py
 # fails on a job that runs steps without a limit.
 jobs:
@@ -166,8 +166,9 @@ jobs:
     # check name does not change when `rust-version` does.
     name: build + real files / ${{ matrix.os }} / ${{ matrix.label || matrix.rust }}
     runs-on: ${{ matrix.os }}
-    # The longest leg took 8.9 minutes (Windows), Ubuntu 4.4. A cold corpus
-    # clone adds to that (the family corpus is cached by its pinned commit).
+    # The longest leg took 8.9 minutes (Windows), Ubuntu 4.4. The family
+    # corpus fetch took 2 s on Linux and 10 s on Windows on main's first run
+    # after #1092 moved its pin (run 40957121621).
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -803,9 +804,10 @@ jobs:
     name: IfcOpenShell validates exports
     if: inputs.fast != true
     runs-on: ubuntu-24.04
-    # Longest 22.9 minutes (run 42034472131, every step slow), median 4.5.
-    # The EXPRESS rules step has a 25 minute limit of its own.
-    timeout-minutes: 50
+    # Longest 22.9 minutes (run 42034472131, every step slow), median 4.0:
+    # 3 times the longest. The EXPRESS rules step has a 25 minute limit of its
+    # own.
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
