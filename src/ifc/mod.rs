@@ -1491,10 +1491,12 @@ fn export_rvt_doc_reporting(
     attach_hosted_cut_openings(rf, &mut entities);
     // RE-321: the openings a rectangular wall opening, a cabinet, a door in
     // a second wall and a curtain wall cut in a wall, which nothing fills.
-    let wall_cut_openings_left_out = if policy.include_geometry {
-        wall_cut_openings::attach_wall_cut_openings(rf, &mut entities, &record_handoffs)
-    } else {
-        Default::default()
+    let early_opening_cuts = policy
+        .include_geometry
+        .then(|| opening_cuts_through_hosts(&entities, &record_handoffs));
+    let wall_cut_openings_left_out = match &early_opening_cuts {
+        Some(cuts) => wall_cut_openings::attach_wall_cut_openings(rf, &mut entities, cuts),
+        None => Default::default(),
     };
 
     if !policy.include_geometry {
@@ -1524,7 +1526,8 @@ fn export_rvt_doc_reporting(
     material_constituent_sets.extend(layer_constituent_sets);
     let material_profile_sets =
         material_profile_sets_from_sections(&mut entities, &mut material_constituent_sets);
-    let opening_cuts = opening_cuts_through_hosts(&entities, &record_handoffs);
+    let opening_cuts = early_opening_cuts
+        .unwrap_or_else(|| opening_cuts_through_hosts(&entities, &record_handoffs));
     let filler_sizes = filler_sizes_from_handoffs(&record_handoffs);
 
     Ok(IfcModel {

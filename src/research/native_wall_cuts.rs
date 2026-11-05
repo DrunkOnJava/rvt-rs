@@ -144,10 +144,12 @@ pub fn rect_opening_boxes(
 }
 
 /// The model bounding box of each of `ids` as its partition element record
-/// gives it, `[min_x, min_y, min_z, max_x, max_y, max_z]` in feet: the
-/// first record found for each. An id with no decodable record is left out.
-pub fn frame_boxes(rf: &mut RevitFile, ids: &BTreeSet<u64>) -> BTreeMap<u64, [f64; 6]> {
-    let mut out = BTreeMap::new();
+/// gives it, `[min_x, min_y, min_z, max_x, max_y, max_z]` in feet: one for
+/// every copy of the record found, in partition order, since an element can
+/// be framed in several partitions. An id with no decodable record is left
+/// out.
+pub fn frame_boxes(rf: &mut RevitFile, ids: &BTreeSet<u64>) -> BTreeMap<u64, Vec<[f64; 6]>> {
+    let mut out: BTreeMap<u64, Vec<[f64; 6]>> = BTreeMap::new();
     if ids.is_empty() {
         return out;
     }
@@ -161,13 +163,15 @@ pub fn frame_boxes(rf: &mut RevitFile, ids: &BTreeSet<u64>) -> BTreeMap<u64, [f6
         };
         let buf = inflated.bytes();
         for span in per::partition_record_chain(buf, &marker) {
-            if !ids.contains(&span.element_id) || out.contains_key(&span.element_id) {
+            if !ids.contains(&span.element_id) {
                 continue;
             }
             if let Some(frame) =
                 per::decode_frame_as(&stream, buf, span.start, span.element_id as u32, &marker)
             {
-                out.insert(span.element_id, frame.bbox_feet);
+                out.entry(span.element_id)
+                    .or_default()
+                    .push(frame.bbox_feet);
             }
         }
     }
@@ -183,24 +187,65 @@ fn rows(value: &Value) -> Option<[[f64; 3]; 3]> {
 }
 
 /// The vertices of the bounded faces of the solid a `FamilySymbol` graph's
-/// `m_complexCutGeoms` names (RE-225).
+/// `m_complexCutGeoms` names (RE-225). A symbol that lists several solids
+/// whose boxes do not touch cuts more than one piece, and its box is not the
+/// union of theirs: `None`.
 fn complex_cut_vertices(graph: &crate::native_parameters::ObjectGraph) -> Option<Vec<[f64; 3]>> {
     let root = graph.objects.first()?;
-    let mut vertices = Vec::new();
+    let mut solids: Vec<Vec<[f64; 3]>> = Vec::new();
     for solid in root.fields.get("m_complexCutGeoms")?.as_array()? {
         let index = pointer(graph, 0, solid).ok()??;
         let geometry = graph.objects.get(index)?;
         if geometry.class_name != "Geometry" {
             return None;
         }
+        let mut vertices = Vec::new();
         for item in geometry.fields.get("m_pFaces")?.as_array()? {
             let face_index = pointer(graph, index, item).ok()??;
             if let Some(mesh) = face(graph, face_index).ok()? {
                 vertices.extend(mesh.vertices);
             }
         }
+        if !vertices.is_empty() {
+            solids.push(vertices);
+        }
     }
+    let bounds: Vec<[f64; 6]> = solids
+        .iter()
+        .map(|vertices| vertex_bounds(vertices))
+        .collect();
+    for (at, a) in bounds.iter().enumerate() {
+        for b in &bounds[at + 1..] {
+            if (0..3).any(|axis| a[axis + 3] < b[axis] - 1e-6 || b[axis + 3] < a[axis] - 1e-6) {
+                return None;
+            }
+        }
+    }
+    let vertices: Vec<[f64; 3]> = solids.into_iter().flatten().collect();
     (!vertices.is_empty()).then_some(vertices)
+}
+
+/// The box of some vertices, `[min_x, min_y, min_z, max_x, max_y, max_z]`.
+fn vertex_bounds(vertices: &[[f64; 3]]) -> [f64; 6] {
+    let mut bounds = [
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    ];
+    for [x, y, z] in vertices {
+        bounds = [
+            bounds[0].min(*x),
+            bounds[1].min(*y),
+            bounds[2].min(*z),
+            bounds[3].max(*x),
+            bounds[4].max(*y),
+            bounds[5].max(*z),
+        ];
+    }
+    bounds
 }
 
 /// For each of `instances` (family instances' ElementIds), the box, in

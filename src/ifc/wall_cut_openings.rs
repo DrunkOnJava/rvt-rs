@@ -25,7 +25,7 @@
 //!
 //! Every step that is not written is counted with its reason.
 
-use super::entities::{IfcEntity, OpeningCut, ProfileDef, Property, PropertySet, PropertyValue};
+use super::entities::{IfcEntity, OpeningCut, ProfileDef, PropertySet, PropertyValue};
 use crate::RevitFile;
 use crate::native_wall_cuts::{self, WallCutKind};
 use std::collections::{BTreeMap, BTreeSet};
@@ -55,6 +55,12 @@ const DOOR_SLENDERNESS: f64 = 2.0;
 /// the opening where the box only touches the wall's face or end, and on the
 /// office where it lies up to 0.164 ft off.
 const DOOR_REACH_FEET: f64 = 0.25;
+/// How far a cabinet's, door's or curtain wall's box may rise above its
+/// wall's top or fall below its base, feet.
+const HEIGHT_TOLERANCE_FEET: f64 = 0.05;
+/// How far two copies of an element's record box may differ on any side for
+/// them to agree, feet.
+const COPY_TOLERANCE_FEET: f64 = 0.01;
 
 /// Why a step of a wall's record writes no opening, as the diagnostics
 /// count it (`exported.wall_cut_openings_left_out`).
@@ -75,6 +81,9 @@ pub(super) mod reason {
     pub const DEGENERATE: &str = "opening_extent_not_positive";
     pub const WALL_NOT_FRAMED: &str = "wall_body_not_an_axis_aligned_prism";
     pub const SHADOW_CUTOUT: &str = "shadow_cutout_step_not_read";
+    pub const CABINET_FLAG: &str = "cabinet_cut_flag_not_set";
+    pub const OUTSIDE_HEIGHT: &str = "opening_outside_wall_height";
+    pub const CURTAIN_COPIES: &str = "curtain_wall_record_copies_disagree";
     pub const DOOR_CUT_ELSEWHERE: &str = "door_cuts_a_wall_it_is_not_hosted_in_as_its_own";
 }
 
@@ -139,6 +148,20 @@ impl Host {
             self.location[2] + up[1],
         ]
     }
+}
+
+/// The box of an element's record where every copy of the record found gives
+/// it to within [`COPY_TOLERANCE_FEET`] on every side: the first.
+fn agreed_box(copies: &[[f64; 6]]) -> Option<[f64; 6]> {
+    let first = *copies.first()?;
+    copies
+        .iter()
+        .all(|copy| {
+            copy.iter()
+                .zip(&first)
+                .all(|(a, b)| (a - b).abs() <= COPY_TOLERANCE_FEET)
+        })
+        .then_some(first)
 }
 
 /// Whether two world boxes share volume.
@@ -433,7 +456,7 @@ fn door_cut(host: &Host, world: &[f64; 6], door: usize) -> Result<Cut, &'static 
 pub(super) fn attach_wall_cut_openings(
     rf: &mut RevitFile,
     entities: &mut Vec<IfcEntity>,
-    record_handoffs: &BTreeMap<usize, Vec<Property>>,
+    door_cuts: &BTreeMap<usize, OpeningCut>,
 ) -> BTreeMap<String, usize> {
     let mut left_out: BTreeMap<String, usize> = BTreeMap::new();
     let mut hosts: BTreeMap<u64, Host> = BTreeMap::new();
@@ -490,7 +513,6 @@ pub(super) fn attach_wall_cut_openings(
     let mut framed: BTreeSet<u64> = BTreeSet::new();
     let mut rects: BTreeSet<u64> = BTreeSet::new();
     let mut placed: BTreeSet<u64> = BTreeSet::new();
-    let mut further_doors = false;
     for step in steps.values().flatten() {
         match step.kind {
             WallCutKind::Embed if curtains.contains_key(&step.cutter) => {
@@ -501,9 +523,6 @@ pub(super) fn attach_wall_cut_openings(
             }
             WallCutKind::Cutout if cabinets.contains_key(&step.cutter) => {
                 placed.insert(step.cutter);
-            }
-            WallCutKind::Cutout if doors.contains_key(&step.cutter) => {
-                further_doors |= step.cuts_something == Some(false);
             }
             _ => {}
         }
@@ -527,7 +546,9 @@ pub(super) fn attach_wall_cut_openings(
                 )
             })
             .collect();
-        boxes.extend(native_wall_cuts::frame_boxes(rf, &unwritten));
+        for (id, copies) in native_wall_cuts::frame_boxes(rf, &unwritten) {
+            boxes.extend(copies.into_iter().map(|copy| (id, copy)));
+        }
         boxes
     };
     let frames = if framed.is_empty() {
@@ -537,11 +558,6 @@ pub(super) fn attach_wall_cut_openings(
     };
     let rectangles = native_wall_cuts::rect_opening_boxes(rf, &rects).unwrap_or_default();
     let boxes = native_wall_cuts::instance_cut_boxes(rf, &placed).unwrap_or_default();
-    let door_cuts = if further_doors {
-        super::opening_cuts_through_hosts(entities.as_slice(), record_handoffs)
-    } else {
-        BTreeMap::new()
-    };
     let global_ids = crate::revit_global_ids::revit_global_ids(rf).unwrap_or_default();
     let global_id = |id: u64| {
         u32::try_from(id)
@@ -585,16 +601,20 @@ pub(super) fn attach_wall_cut_openings(
             let cut = match step.kind {
                 WallCutKind::Embed => match curtains.get(&step.cutter) {
                     Some(curtain) => match frames.get(&step.cutter) {
-                        Some(world) => curtain_cut(host, world, *curtain, &near),
+                        Some(copies) => match agreed_box(copies) {
+                            Some(world) => curtain_cut(host, &world, *curtain, &near),
+                            None => Err(reason::CURTAIN_COPIES),
+                        },
                         None => Err(reason::CURTAIN_BOX_NOT_READ),
                     },
                     None => continue,
                 },
                 WallCutKind::Cutout => {
                     if let Some(cabinet) = cabinets.get(&step.cutter) {
-                        match boxes.get(&step.cutter) {
-                            Some(world) => cabinet_cut(host, world, *cabinet),
-                            None => Err(reason::CABINET_SOLID_NOT_READ),
+                        match (step.cuts_something, boxes.get(&step.cutter)) {
+                            (Some(true), Some(world)) => cabinet_cut(host, world, *cabinet),
+                            (Some(true), None) => Err(reason::CABINET_SOLID_NOT_READ),
+                            _ => Err(reason::CABINET_FLAG),
                         }
                     } else if let Some(door) = doors.get(&step.cutter) {
                         match step.cuts_something {
@@ -647,6 +667,15 @@ pub(super) fn attach_wall_cut_openings(
                     continue;
                 }
             };
+            if step.kind != WallCutKind::RectOpening
+                && (cut.up[0] < -HEIGHT_TOLERANCE_FEET
+                    || cut.up[1] > host.height + HEIGHT_TOLERANCE_FEET)
+            {
+                *left_out
+                    .entry(reason::OUTSIDE_HEIGHT.to_string())
+                    .or_insert(0) += 1;
+                continue;
+            }
             let extents = [
                 cut.along[1] - cut.along[0],
                 cut.left[1] - cut.left[0],
