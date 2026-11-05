@@ -230,9 +230,43 @@ pub struct Identity {
     pub partition_id: i64,
     pub unique_id: String,
 }
+/// What the default reading says of a history whose
+/// `m_episodeList.m_oEpisodes` is not empty. Every reader but the research
+/// route of RE-342 ([`creation_episodes_with_deferred`]) gets this answer, and
+/// so a file with such a history fails the whole native preamble, as it
+/// always has.
+pub const INLINE_EPISODES_REFUSED: &str = "inline history episodes require a different contract";
 /// Decode the measured post-root episode section. Its start is determined by
 /// schema field traversal; it is not a fixed byte offset or byte-pattern scan.
+///
+/// A history whose root holds deferred `Episode` pointers is refused
+/// ([`INLINE_EPISODES_REFUSED`]): every export reader goes through this
+/// reading. [`creation_episodes_with_deferred`] is the research route that
+/// reads it.
 pub fn creation_episodes(history: &[u8], registry: &Registry) -> Result<Vec<String>> {
+    Ok(read_creation_episodes(history, registry, false)?.0)
+}
+/// [`creation_episodes`], also reading a root whose `m_episodeList.m_oEpisodes`
+/// holds deferred `Episode` pointers (STE1200's Revit 2020 family: 109 of
+/// them, RE-342): their bodies follow the root in list order and then comes
+/// the counted section; the two lists of GUIDs must be equal, or the history
+/// is refused. Returns the GUIDs and the number of deferred pointers read.
+///
+/// A research route only: the saved-graphics probe sets
+/// `native_document::Options::deferred_history_episodes` to reach it. No
+/// export reader does, and a file that needs it is refused by all of them, as
+/// before. No file Measure fetches holds such a history.
+pub fn creation_episodes_with_deferred(
+    history: &[u8],
+    registry: &Registry,
+) -> Result<(Vec<String>, usize)> {
+    read_creation_episodes(history, registry, true)
+}
+fn read_creation_episodes(
+    history: &[u8],
+    registry: &Registry,
+    allow_deferred: bool,
+) -> Result<(Vec<String>, usize)> {
     let tag =
         le_bytes::u16_at(history, 0).ok_or_else(|| anyhow::anyhow!("truncated history tag"))?;
     ensure!(
@@ -242,42 +276,70 @@ pub fn creation_episodes(history: &[u8], registry: &Registry) -> Result<Vec<Stri
         "unsupported history class"
     );
     let root = native_parameters::decode_object_fields(history, registry, 2, tag)?;
+    let inline = root.fields["m_episodeList"]["m_oEpisodes"].as_array();
+    if !allow_deferred && !inline.is_some_and(Vec::is_empty) {
+        anyhow::bail!("{INLINE_EPISODES_REFUSED}");
+    }
+    let inline = inline.ok_or_else(|| anyhow::anyhow!("history episode list absent"))?;
     ensure!(
-        root.fields["m_episodeList"]["m_oEpisodes"]
-            .as_array()
-            .is_some_and(Vec::is_empty),
-        "inline history episodes require a different contract"
+        inline.len() <= 1_000_000,
+        "history episode count budget exceeded"
     );
-    let count = le_bytes::u32_at(history, root.end)
+    let episode_class = move || {
+        registry
+            .named("Episode")
+            .ok_or_else(|| anyhow::anyhow!("Episode schema absent"))
+    };
+    let mut pos = root.end;
+    let mut deferred = Vec::new();
+    // Only the research route reaches this loop: the default reading refused
+    // a root with any pointer above, and then asks for everything else in the
+    // order it always has.
+    for entry in inline {
+        let episode = episode_class()?;
+        ensure!(
+            entry["class_tag"].as_u64() == Some(u64::from(episode.tag))
+                && entry["pointer_token"].as_u64() == Some(u64::from(u32::MAX)),
+            "unsupported inline history episode reference"
+        );
+        let decoded = native_parameters::decode_object_fields(history, registry, pos, episode.tag)?;
+        deferred.push(episode_guid(&decoded.fields)?);
+        pos = decoded.end;
+    }
+    let count = le_bytes::u32_at(history, pos)
         .ok_or_else(|| anyhow::anyhow!("history episode count absent"))? as usize;
     ensure!(count <= 1_000_000, "history episode count budget exceeded");
-    let episode = registry
-        .named("Episode")
-        .ok_or_else(|| anyhow::anyhow!("Episode schema absent"))?;
-    let mut pos = root.end + 4;
+    let episode = episode_class()?;
+    pos += 4;
     let mut guids = Vec::new();
     for _ in 0..count {
         let decoded = native_parameters::decode_object_fields(history, registry, pos, episode.tag)?;
-        let raw = &decoded.fields["m_eGUID"]["m_guid"]["m_guid"]["guid_bytes"];
-        let values = raw
-            .as_array()
-            .ok_or_else(|| anyhow::anyhow!("unsupported Episode GUID shape"))?;
-        ensure!(values.len() == 16, "invalid Episode GUID width");
-        let mut bytes = [0u8; 16];
-        for (i, v) in values.iter().enumerate() {
-            bytes[i] = u8::try_from(
-                v.as_u64()
-                    .ok_or_else(|| anyhow::anyhow!("invalid GUID byte"))?,
-            )?;
-        }
-        guids.push(guid_string(bytes));
+        guids.push(episode_guid(&decoded.fields)?);
         pos = decoded.end;
     }
     ensure!(
         history.get(pos..) == Some(&[0; 4]),
         "unsupported history episode trailer"
     );
-    Ok(guids)
+    ensure!(
+        deferred.is_empty() || deferred == guids,
+        "inline and counted history episodes differ"
+    );
+    Ok((guids, deferred.len()))
+}
+fn episode_guid(fields: &serde_json::Value) -> Result<String> {
+    let values = fields["m_eGUID"]["m_guid"]["m_guid"]["guid_bytes"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("unsupported Episode GUID shape"))?;
+    ensure!(values.len() == 16, "invalid Episode GUID width");
+    let mut bytes = [0u8; 16];
+    for (i, v) in values.iter().enumerate() {
+        bytes[i] = u8::try_from(
+            v.as_u64()
+                .ok_or_else(|| anyhow::anyhow!("invalid GUID byte"))?,
+        )?;
+    }
+    Ok(guid_string(bytes))
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectIndex {

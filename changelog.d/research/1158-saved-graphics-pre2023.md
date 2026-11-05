@@ -3,7 +3,9 @@
   `InstanceInfo` has no `m_GRepId`, which Revit 2023 to 2027 set to 0 in all
   220,660 of the objects measured (44 files); the readers took its absence for
   an unsupported representation, and now take it for the default one when the
-  object holds only the three fields those releases declare. With
+  object holds only the three fields those releases declare, on the graphics
+  of a file of Revit 2015 to 2022 alone (the next entry narrows this to that
+  route; this one first let every route do it). With
   `Options::releases` widened to `NATIVE_RELEASES`, `native_saved_scene`
   draws 5,459 to 5,756 of the 6,241 to 6,433 `FamilyInstance` and
   `ImportInstance` elements of the three sample projects of each release 2015
@@ -22,6 +24,7 @@
   models, 0 of 13 families) or draws a body from the third (on the 8 held-out
   scenes, 1,592 flagged instances in 3 pre-2023 models, the owners drawn whole
   and their triangles are the same with the flag read), so none of the three
-  is in this change. The probe `probe_re342_saved_graphics_pre2023` counts what each
-  meets in a file, and runs on your own: Measure runs 42015502520,
+  was in this change; the next entry takes them, on routes no export reads. The
+  probe `probe_re342_saved_graphics_pre2023` counts what each meets in a file,
+  and runs on your own: Measure runs 42015502520,
   42015507053, 42015511974 and 42015516241.
