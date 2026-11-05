@@ -508,7 +508,7 @@ def build_chunks(findings, seed, description, testing=""):
             elsewhere = elsewhere_items(findings, head_is_a) if section not in sd.NOUNS else None
             take = []
             while pending and len(take) < MAX_FINDINGS_PER_CHUNK:
-                if take and fit(part, take + [pending[0]], head_is_a, description, testing, elsewhere) is None:
+                if take and fit(part, take + [pending[0]], head_is_a, description, testing, elsewhere, degrade=False) is None:
                     break
                 take.append(pending.pop(0))
             body = fit(part, take, head_is_a, description, testing, elsewhere)
@@ -544,11 +544,12 @@ def trimmed(item, limit=300):
     return {key: cut(value) for key, value in item.items()}
 
 
-def fit(part, findings, head_is_a, description, testing, elsewhere):
-    """The request body for these findings, within MAX_REQUEST_CHARS as sent (a character outside ASCII counts six),
-    shortening the texts in the items and then leaving out the context of `elsewhere` before it gives up; None
-    when it does not fit. Every check of the size is of the body that is sent."""
-    for limit, context in ((None, True), (300, True), (120, False)):
+def fit(part, findings, head_is_a, description, testing, elsewhere, degrade=True):
+    """The request body for these findings, within MAX_REQUEST_CHARS as sent (a character outside ASCII counts six);
+    None when it does not fit. With `degrade` it shortens the texts in the items and then leaves out the context of
+    `elsewhere` before it gives up, which only a chunk of one finding is allowed to need: a chunk of several is
+    never packed by degrading the context of them all. Every check of the size is of the body that is sent."""
+    for limit, context in ((None, True), (300, True), (120, False))[: 3 if degrade else 1]:
         items = [neutral_item(f, n, head_is_a) for n, f in enumerate(findings, 1)]
         if limit:
             items = [trimmed(item, limit) for item in items]
