@@ -12,7 +12,7 @@
 
 ## 2. What rvt-rs does
 
-`add_slab_gross_area` writes a floor's `GrossArea`, the area of its body's profile (its rectangle, or its sketch outline less its holes), where it is drawn as one extrusion. A floor whose sketch is several loops is several elements sharing its `Tag` (#331), and is left out, as is a floor drawn by another solid and a stair landing's slab.
+`add_slab_gross_area` writes a floor's `GrossArea`, the area of its body's profile (its rectangle, or its sketch outline less its holes), where it is drawn as one extrusion. A floor whose sketch is several loops is several elements sharing its `Tag` (#331), and is left out, as is a floor drawn by another solid and a stair landing's slab. The one exception is a floor drawn along the plane of its shape-edited corners (#1384, RE-336): its extrusion still holds its plan profile, and its `GrossArea` and `NetVolume` are written from it as before (Measure run 41949652150).
 
 ## 3. Measured
 
