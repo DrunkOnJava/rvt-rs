@@ -206,7 +206,7 @@ impl RvtServer {
         input_schema = rmcp::handler::server::common::schema_for_input::<ModelArgs>()
             .expect("the input schema is an object"),
         description = concat!(
-            "Open a Revit file (.rvt, .rfa, .rte or .rft) and decode it once, with the same decode rvt-ifc runs. Every other tool answers from that decoded model and the IFC export is written from it, so an answer and the export cannot disagree. Returns model_id, the Revit release and build, element counts by IFC entity and Revit class, levels, and what was left out (diagnostics, unread streams). Element counts and lists are the elements the export writes: the further pieces of an element of separate loops, which it folds into the owner's body, are not rows and not counted (elements.folded_into_bodies counts them by IFC entity, since the diagnostics' exported counts include them). ",
+            "Open a Revit file (.rvt, .rfa, .rte or .rft) and decode it once, with the same decode rvt-ifc runs. Every other tool answers from that decoded model and the IFC export is written from it, so an answer and the export cannot disagree. Returns model_id, the Revit release and build, element counts by IFC entity and Revit class, levels, and what was left out (diagnostics, unread streams). Element counts and lists are the elements the export writes: the further pieces of an element of separate loops, which it folds into the owner's body, are not rows and not counted (elements.folded_into_bodies counts them by IFC entity, as the diagnostics' exported.body_pieces_folded does). ",
             "Handle lifetime: model_id is opaque and stays valid while this server process runs and the model is among the most recently used ones the server keeps (2 by default); after an eviction or a restart a tool returns an error and you call open_model again. Every tool also takes the file path in place of the model_id. ",
             "Phase: pass phase (a phase name or ElementId) with the path to read a project phase other than the last, as rvt-ifc --phase does; the model_id then names that phase, and get_diagnostics lists the rooms it leaves out. ",
             "Reads the file only: no Revit install, no network call, nothing is written. ",
@@ -233,7 +233,7 @@ impl RvtServer {
         input_schema = rmcp::handler::server::common::schema_for_input::<ModelArgs>()
             .expect("the input schema is an object"),
         description = concat!(
-            "The summary open_model returns, for a model_id or a path: release and build, element counts by IFC entity and Revit class, levels, room count and the diagnostics summary (what was read, approximated, skipped and left unread). Element counts and lists are the elements the export writes: the further pieces of an element of separate loops, which it folds into the owner's body, are not rows and not counted (elements.folded_into_bodies counts them by IFC entity, since the diagnostics' exported counts include them). ",
+            "The summary open_model returns, for a model_id or a path: release and build, element counts by IFC entity and Revit class, levels, room count and the diagnostics summary (what was read, approximated, skipped and left unread). Element counts and lists are the elements the export writes: the further pieces of an element of separate loops, which it folds into the owner's body, are not rows and not counted (elements.folded_into_bodies counts them by IFC entity, as the diagnostics' exported.body_pieces_folded does). ",
             not_read!()
         ),
         annotations(

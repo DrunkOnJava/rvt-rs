@@ -426,18 +426,27 @@ def check_counts(report, answers, written, diagnostics):
         exported = diagnostics["exported"]
         # The diagnostics list an opening element by type but do not count it as a building element (RE-84).
         openings = elements["by_ifc_type"].get("IFCOPENINGELEMENT", 0)
-        # The diagnostics also count the pieces the export folds into another element's body, which
-        # the summary lists apart (`folded_into_bodies`) and are not rows.
+        # The pieces the export folds into another element's body are not rows. The summary lists them
+        # apart (`folded_into_bodies`) and, from #1424, so do the diagnostics (`body_pieces_folded`),
+        # whose other counts are the elements the IFC holds. The diagnostics of a build before #1424
+        # have no such field and count the pieces with the elements.
         folded = elements.get("folded_into_bodies", {})
-        folded_elements = sum(count for entity, count in folded.items() if entity != "IFCOPENINGELEMENT")
+        counted_with_elements = {}
+        if "body_pieces_folded" in exported:
+            same("diagnostics exported body_pieces_folded", folded, exported["body_pieces_folded"])
+        else:
+            counted_with_elements = folded
+        folded_elements = sum(
+            count for entity, count in counted_with_elements.items() if entity != "IFCOPENINGELEMENT"
+        )
         same(
             "diagnostics exported building_elements",
             elements["total"] - openings + folded_elements,
             exported["building_elements"],
         )
         counted = {
-            entity: elements["by_ifc_type"].get(entity, 0) + folded.get(entity, 0)
-            for entity in set(elements["by_ifc_type"]) | set(folded)
+            entity: elements["by_ifc_type"].get(entity, 0) + counted_with_elements.get(entity, 0)
+            for entity in set(elements["by_ifc_type"]) | set(counted_with_elements)
         }
         same("diagnostics exported by_ifc_type", counted, exported["by_ifc_type"])
         digest = summary["diagnostics"]

@@ -15,7 +15,7 @@
   the export contains it in, through its space, its whole or its host, and a
   folded piece is neither a row nor in `total` or `by_ifc_type`. The
   summary's `elements.folded_into_bodies` counts the folded pieces by IFC
-  entity, since the diagnostics' `exported` counts include them. The tool
+  entity (the diagnostics' `exported` counts held them until #1424). The tool
   output schemas change (`folded_into_bodies`), and so does the contract in
   `docs/mcp-tools.json`. The diagnostics' `storey_bound_elements`, the rooms
   schedule (`room_rows`) and `every_storey_holds_an_element` read

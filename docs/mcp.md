@@ -170,7 +170,8 @@ piece of an element of separate loops, which the export writes as an item of
 the owner's body and not as an element, is not a row and not in `total` or
 `by_ifc_type`; the summary counts it by IFC entity in `folded_into_bodies`
 (always present, empty where none is folded), and the diagnostics' `exported`
-counts include it. A part of several wholes takes the storey of the first,
+counts leave it out too, holding it apart in `exported.body_pieces_folded`
+(the same counts). A part of several wholes takes the storey of the first,
 which is not measured. The diagnostics' `storey_bound_elements` and the rooms
 schedule (`room_rows`) read the same placement, so a part counts as bound to
 its whole's storey in both.

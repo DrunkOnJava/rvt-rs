@@ -284,9 +284,10 @@ pub struct ElementCounts {
     /// By IFC entity: the elements the model holds that the export does not
     /// write as elements, each a further piece of an element of separate
     /// loops, written as an item of the body of the element that owns it.
-    /// They are not in `total`, `by_ifc_type` or the lists, and the
-    /// diagnostics' `exported` counts include them. Always present, empty
-    /// where the export folds none.
+    /// They are not in `total`, `by_ifc_type` or the lists, nor in the
+    /// diagnostics' `exported` counts, which hold them apart in
+    /// `exported.body_pieces_folded`. Always present, empty where the export
+    /// folds none.
     pub folded_into_bodies: BTreeMap<String, usize>,
 }
 
