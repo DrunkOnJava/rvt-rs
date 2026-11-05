@@ -15,7 +15,7 @@ After RE-341, ten more readers are still limited to 2024 and 2025 (one of them t
 | a family instance's unjoined ports (`PORT_PLACEMENT_REVIT_VERSIONS`, #869) | 2024, 2025 | each `IfcDistributionPort`'s placement |
 | a pipe's axis (`partition_pipe_axes`, RE-131) | 2024, 2025 | `IfcPipeSegment` as its cylinder, its `Qto_PipeSegmentBaseQuantities` |
 | an MEP curve's fields (`partition_curve_fields`) | 2025 | duct `Length`, pipe `InvertElevation` |
-| a door's or window's cut loop (`CUT_LOOP_REVIT_VERSIONS`, RE-215) | 2024, 2025 | the wall cut to the opening's outline, its `Qto_DoorBaseQuantities` and `Qto_WindowBaseQuantities`, and (RE-343) the door's and window's hand and facing flips |
+| a door's or window's cut loop (`CUT_LOOP_REVIT_VERSIONS`, RE-215) | 2024, 2025 | the wall cut to the opening's outline, and its `Qto_DoorBaseQuantities` and `Qto_WindowBaseQuantities` |
 | `IsExternal`'s last step (`IS_EXTERNAL_LAST_STEP_REVIT_VERSIONS`, RE-193) | 2024, 2025 | `IsExternal` in each common property set |
 | a room's height (`ROOM_HEIGHT_REVIT_VERSIONS`, RE-255) | 2024 to 2026 | `Qto_SpaceBaseQuantities.Height` |
 | a room as a prism (`ROOM_PRISM_REVIT_VERSIONS`, RE-296) | 2024, 2025 | `Qto_SpaceBaseQuantities.NetVolume` |
@@ -29,7 +29,7 @@ The ten lists gain 2026 and 2027 (room height, 2027). The records these readers 
 
 Three more lists were tried by the contributor and left alone, since widening them changes no byte of any 2026 export they held: a wall type's face angles (`WALL_FACE_ANGLES_SUPPORTED_REVIT_VERSIONS`), a sketch's splines (`SKETCH_SPLINE_SUPPORTED_REVIT_VERSIONS`) and connector pairs (`CONNECTOR_PAIR_SUPPORTED_REVIT_VERSIONS`). Nothing measures them on 2026 or 2027.
 
-Widening the door and window list also turns on #1438's hand and facing flips (RE-343) on 2026 and 2027, since they are read in the same pass. The gate holds the openings' placements to the 2025 save's, which includes them; no held-out model was scored with the flips on these releases.
+#1438's hand and facing flips (RE-343) were already read on 2026 and 2027, by a pass of their own, because the door and window cut pass (`attach_cut_loop_sizes`, which gives them on 2024 and 2025) stopped at 2025. With the list widened that pass gives them there too, so each 2026 and 2027 door and window would have carried them twice and the file been read once more: the pass of their own is dropped (`attach_opening_flips`). The flips are decoded fields, not in the IFC, so no gate sees them; the cut pass reads them as it does on 2024 and 2025, where RE-343 measured it, and on 2026 and 2027 that has not been measured.
 
 The contributor's table of the 2026 samples each reader changes (leaving one out at a time, on `main` 182ed219, before RE-341):
 
@@ -122,7 +122,7 @@ Contributor's local run, `SOURCE_DATE_EPOCH=1700000000`, 120 files exported with
 - Revit 2026 and 2027 Autodesk samples against Revit's own export: none is available.
 - Pipes, ducts and ports against any Revit export of a 2026 or 2027 file: no held-out model holds one.
 - The 2027 saves with this gate and these minimums, and the figures of puzzbobb's section 3 on our runners for 2027.
-- #1438's hand and facing flips on 2026 and 2027 (enabled by the same list), beyond the gate holding the openings' placements to the 2025 save's.
+- #1438's hand and facing flips on 2026 and 2027, now read by the cut pass instead of a pass of their own: they are not in the IFC, so nothing here compares them, and RE-343 measured that pass on 2024 and 2025.
 - `IsExternal` on walls, curtain walls, members and plates on 2026 and 2027: 2025 writes it, 2026 and 2027 do not, on either head. Some other release list or rule gates it.
 - A wall type's face angles, sketch splines and connector pairs on 2026 and 2027: no sample here changes, so they keep their lists.
 - 2015 to 2023: these readers stay at 2024 and later.

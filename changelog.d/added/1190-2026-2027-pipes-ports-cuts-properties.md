@@ -13,8 +13,10 @@
   that is not its Width times its Height, and a stair's family and type are not
   read on 2026 and 2027, where Revit's export writes no `Family:Type` object
   type; their Width, Height and the stairs' names are written and equal. No
-  held-out model holds a pipe, a duct or a port. puzzbobb's local figures, not
-  a Measure run: on `rme_advanced` and `rme_basic` 2026 and 2027 the bodies that
-  differ from the 2025 save fall from 490 and 493 to 0, and every port of the
-  four Autodesk samples that hold one, 14,095 in all, is the 2025 save's.
-  Every 2015 to 2025 file exports as before.
+  held-out model holds a pipe, a duct or a port. On the 2026 saves of Measure
+  run 42063046730 (head 3149973f) the bodies that differ from the 2025 save fall
+  from 490 and 493 to 0 on `rme_advanced` and `rme_basic`, and every port of the
+  four Autodesk samples that hold one, 14,095 in all, is the 2025 save's; the
+  2027 saves are puzzbobb's local figures, not a Measure run, and the run that
+  scores the shipped head is not yet made. Every 2015 to 2025 file exports as
+  before on puzzbobb's local run.
