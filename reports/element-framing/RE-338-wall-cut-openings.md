@@ -20,15 +20,15 @@ To be filled from the runs.
 
 ## 1. What `main` writes and Revit's export holds
 
-On `main` at 240c7d7c the office as built has 220 unfilled openings in Revit's export and rvt-rs writes 75, 58 of them Revit's. Of the 162 Revit's export holds that rvt-rs does not write, by what cuts them:
+On `main` at 240c7d7c the office as built has 220 unfilled openings in Revit's export and rvt-rs writes 75, 58 of them Revit's; at building permit 216, 69 and 52. Of those Revit's export holds that rvt-rs does not write, by what cuts them (`IfcWall` hosts unless said):
 
-| kind (cutter in host) | Revit's, as built |
-|---|---:|
-| a curtain wall in a wall | 70 |
-| a door in a wall (a second wall the door's opening reaches) | 39 |
-| a fire hose cabinet in a wall | 39 |
-| a door in a door | 4 |
-| a floor's sketch void in a floor | 9 (RE-151, not this report) |
-| a wall in a wall | 1 |
+| kind (cutter in host) | as built | at permit |
+|---|---:|---:|
+| a curtain wall | 70 | 72 |
+| a door (in a second wall its opening reaches) | 39 | 43 |
+| a fire hose cabinet (`IfcFireSuppressionTerminal`) | 39 | 38 |
+| a door in a door | 4 | 2 |
+| a wall in a wall | 1 | 1 |
+| a floor's sketch void in a floor (RE-151, RE-339) | 9 | 8 |
 
-Core Interior (63 of 63) and RE1 Architecture hold none of the three kinds, so the office is the only reference.
+Core Interior (63 of 63 written) and RE1 Architecture hold none of the first three kinds, so the office is the only reference for them here; the held-out models are in section 6.
