@@ -18,9 +18,11 @@ What the diff holds:
 - Order is not meaning: rows, rooms, property sets, properties and lists of strings are compared by
   key, not by position. An empty object or list is the same as no field (the server leaves out what
   is empty).
-- Values are compared exactly. 0.35 and 0.3500001 are different values, an integer and the equal
-  float are the same, and no tolerance hides a change; whether an importer would notice is the
-  scorer's question (tools/ci/jev_check.py), not this tool's.
+- Values are compared to the dump's precision, which is six decimals (tools/re/mcp_client.py rounds
+  a float there before it writes the dump). 0.35 and 0.3500001 are different values when a dump
+  holds both, an integer and the equal float are the same, and no tolerance is added to hide a
+  change; whether an importer would notice is the scorer's question (tools/ci/jev_check.py), not
+  this tool's. A change below the sixth decimal is not in a dump.
 - Identical changes are collapsed into one finding, grouped by the whole triple (path, value
   before, value after) within a category: 400 walls that all gain the same property are one line
   with a count, and a wall that gains another value is a line of its own. Every group is kept in the
@@ -32,14 +34,16 @@ Usage:
 
     python3 tools/re/semantic_diff.py pair <base-dump.json> <head-dump.json> [--model NAME]
         [--json OUT] [--text OUT]
-    python3 tools/re/semantic_diff.py measure <measure-base> <measure-head> <out-dir>
+    python3 tools/re/semantic_diff.py measure <measure-base> <measure-head> <out-dir> [--requested-all]
 
 `measure` is what Measure's compare job runs on its two merged result folders: for each openly
 licensed model that has a dump on both sides it writes `<out-dir>/<model>.json` and `.txt`, and a
-`manifest.json` naming the models, the models skipped and why, and the measured commits. A model on
-the restricted list (the held-out, spent, BIMcollab and rac_advanced models, Autodesk's samples and
-families) must hold no dump; a dump there, or in a model on neither list, fails the run with exit
-status 1 and no output.
+`manifest.json` naming the models, the models skipped and why, the open models no diff covers
+(`uncovered`, against OPEN_MODEL_NAMES), whether the run was asked for every open model
+(`--requested-all`: no model filter, the office and the Revit 2025 models on) and the measured
+commits. A model on the restricted list (the held-out, spent, BIMcollab and rac_advanced models,
+Autodesk's samples and families) must hold no dump; a dump there, or in a model on neither list,
+fails the run with exit status 1 and no output.
 
 Standard library only.
 """
@@ -59,6 +63,46 @@ POSITION_KEYS = frozenset(("offset", "record_offset"))
 # The models whose elements may be sent to a third party (Griffin, 2026-11-04): Core Interior,
 # Einhoven and RE1 (MIT), the BIM4LCA office (CC BY-SA 4.0), puzzbobb's Revit 2025 models (Apache-2.0).
 OPEN_MODELS = ("core-interior", "einhoven", "re1-*", "nordic-office-*", "r2025-*")
+# Every open model a complete run measures: the reference models (tools/ci/measure-reference-models.sh),
+# the BIM4LCA office (`nordic`) and puzzbobb's 24 Revit 2025 models (`r2025`). A check is written only
+# for a run that covers all of them; a model added to a fetcher is added here, or a run is judged on
+# fewer than it measured.
+OPEN_MODEL_NAMES = (
+    "core-interior",
+    "einhoven",
+    "nordic-office-as-built",
+    "nordic-office-permit",
+    "nordic-office-terrain-concrete",
+    "nordic-office-terrain-timber",
+    "r2025-00_Blank",
+    "r2025-01_Walls",
+    "r2025-02_1Slope",
+    "r2025-02_1Slope_Rafter2PlumbCut",
+    "r2025-02_1Slope_Rafter2SquareCut",
+    "r2025-02_1Slope_Rafter2SquareCut_Overhang",
+    "r2025-03_2Slope_Rafter2SquareCut",
+    "r2025-04_Gable",
+    "r2025-04_Gable_Swapped_Slopes",
+    "r2025-05_1Slope_ArrowDefined",
+    "r2025-06_1Slope_ArrowDefined_SetToSlope",
+    "r2025-07_1Slope_ArrowDefined_2Cut50mmFascia",
+    "r2025-08_LShapedHipRoof",
+    "r2025-09_LShapedHipRoof_1Edge300Offset",
+    "r2025-10_LShapedHipRoof_1Edge300Offset_Hole",
+    "r2025-11_RoofByExtrusion",
+    "r2025-12_Rooms_Door_Windows",
+    "r2025-13_Rooms_Stairs",
+    "r2025-14_Rooms_Stairs_endwithriserOFF",
+    "r2025-15_Rooms_Stairs_NoRisers",
+    "r2025-16_Rooms_Stairs_Monolithic",
+    "r2025-17_Rooms_Stairs_Spiral",
+    "r2025-18_WallJoins",
+    "r2025-20_T_U_Roof",
+    "re1-architecture",
+    "re1-electrical",
+    "re1-mechanical",
+    "re1-plumbing",
+)
 RESTRICTED_PREFIXES = ("holdout-", "spent-", "bimcollab-", "racadv-", "sample-", "family-")
 MAX_DUMP_BYTES = 400 * 1024 * 1024
 MAX_FINDINGS = 20000
@@ -610,7 +654,14 @@ def write(path, text):
         handle.write(text)
 
 
-def measure(base_dir, head_dir, out_dir):
+def uncovered_models(diffed, skipped, expected=OPEN_MODEL_NAMES):
+    """(model, reason) for each open model that no diff covers, in order: a skipped model with the reason
+    it was skipped, any other with the fact that neither side held a result folder for it."""
+    reasons = {item["model"]: item["reason"] for item in skipped}
+    return [(name, reasons.get(name, "no result folder on either side")) for name in expected if name not in set(diffed)]
+
+
+def measure(base_dir, head_dir, out_dir, requested_all=False):
     """Diff every openly licensed model that has a dump on both sides. Returns (manifest, violations);
     a violation is a dump in a model that is restricted or on neither list."""
     names = sorted(set(model_folders(base_dir)) | set(model_folders(head_dir)))
@@ -638,7 +689,15 @@ def measure(base_dir, head_dir, out_dir):
         except Exception as error:  # a diff that cannot be made is recorded, not a red run
             skipped.append({"model": name, "reason": f"the diff failed ({type(error).__name__})"})
             continue
-        models.append({"model": name, "file": f"{name}.json", "findings": len(diff["findings"]), "elements": diff["elements"]})
+        models.append(
+            {
+                "model": name,
+                "file": f"{name}.json",
+                "findings": len(diff["findings"]),
+                "dropped_groups": diff["dropped_groups"],
+                "elements": diff["elements"],
+            }
+        )
         os.makedirs(out_dir, exist_ok=True)
         write(os.path.join(out_dir, f"{name}.json"), json.dumps({"model": name, "diff": diff}, sort_keys=True, indent=1) + "\n")
         write(os.path.join(out_dir, f"{name}.txt"), render_text(diff, name))
@@ -648,6 +707,8 @@ def measure(base_dir, head_dir, out_dir):
         "head_sha": commit_of(head_dir),
         "models": models,
         "skipped": skipped,
+        "uncovered": [{"model": name, "reason": reason} for name, reason in uncovered_models([m["model"] for m in models], skipped)],
+        "requested_all": bool(requested_all),
         "folders_checked": len(names),
     }
     return manifest, violations
@@ -666,6 +727,7 @@ def main(argv):
     run.add_argument("base_dir")
     run.add_argument("head_dir")
     run.add_argument("out_dir")
+    run.add_argument("--requested-all", action="store_true")
     args = parser.parse_args(argv)
     if args.command == "pair":
         diff = diff_dumps(load_dump(args.base), load_dump(args.head))
@@ -677,7 +739,7 @@ def main(argv):
         else:
             sys.stdout.write(text)
         return 0
-    manifest, violations = measure(args.base_dir, args.head_dir, args.out_dir)
+    manifest, violations = measure(args.base_dir, args.head_dir, args.out_dir, args.requested_all)
     if violations:
         for line in violations:
             print(f"::error::semantic diff: {line}")
@@ -694,6 +756,14 @@ def main(argv):
     )
     for item in manifest["skipped"]:
         print(f"  skipped {item['model']}: {item['reason']}")
+    if manifest["uncovered"]:
+        print(
+            f"  {len(manifest['uncovered'])} of {len(OPEN_MODEL_NAMES)} open models are not covered by a diff, so the semantic check "
+            + ("is NOT MEASURED at best" if manifest["requested_all"] else "writes no check run (this run was not asked for every open model)")
+            + ": "
+            + ", ".join(item["model"] for item in manifest["uncovered"][:12])
+            + (f", and {len(manifest['uncovered']) - 12} more" if len(manifest["uncovered"]) > 12 else "")
+        )
     return 0
 
 

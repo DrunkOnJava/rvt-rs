@@ -129,5 +129,19 @@ class SemanticDiff(unittest.TestCase):
         self.assertIn("1 IFCWALL element:", diff["summary"])
 
 
+class Coverage(unittest.TestCase):
+    def test_an_open_model_no_diff_covers_is_named_with_why(self):
+        diffed = [name for name in sd.OPEN_MODEL_NAMES if name not in ("core-interior", "einhoven")]
+        got = sd.uncovered_models(diffed, [{"model": "core-interior", "reason": "the diff failed (KeyError)"}])
+        self.assertEqual(got, [("core-interior", "the diff failed (KeyError)"), ("einhoven", "no result folder on either side")])
+
+    def test_every_open_model_diffed_leaves_nothing_uncovered(self):
+        self.assertEqual(sd.uncovered_models(list(sd.OPEN_MODEL_NAMES), []), [])
+
+    def test_every_name_on_the_list_is_open_and_none_is_restricted(self):
+        for name in sd.OPEN_MODEL_NAMES:
+            self.assertEqual(sd.model_scope(name), "open", name)
+
+
 if __name__ == "__main__":
     unittest.main()

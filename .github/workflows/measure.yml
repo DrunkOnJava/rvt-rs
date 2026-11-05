@@ -108,9 +108,13 @@
 # `semantic-diff` artifact. The Semantic check workflow (semantic-check.yml)
 # scores that artifact with Jev and writes the `semantic diff (advisory)`
 # check run on the measured head commit. A model that is not openly licensed
-# has no dump and gets no diff; a dump in one fails the compare job.
+# has no dump and gets no diff; a dump in one fails the compare job. Only a run
+# of every open model writes the check: no `models` filter, and the office and
+# the Revit 2025 models on (the BIM4LCA office is where most output changes
+# land). A run with a filter gets its diffs in the artifact and no check run.
+# `scorers=mcp_answers_vs_ifc` keeps every model and leaves the other scorers out.
 #
-#   gh workflow run measure.yml -f ref=<pull request head> -f base=main -f models="core-interior einhoven re1-*" -f scorers=mcp_answers_vs_ifc
+#   gh workflow run measure.yml -f ref=<pull request head> -f base=main -f nordic=true -f r2025=true -f scorers=mcp_answers_vs_ifc
 #
 # `fine_mesh=true` sets RVT_SCORER_FINE_MESH for the scorers: the three body
 # scorers then also mesh both IFC files at one equal, fine deflection and print
@@ -959,13 +963,21 @@ jobs:
       # (tools/re/semantic_diff.py OPEN_MODELS) fails this step. A run with no
       # dump on either side (a probe run, scorers that leave the server out)
       # writes nothing, so it gets no check; one side's dump alone is written
-      # as a manifest, which the Semantic check reports as NOT MEASURED.
+      # as a manifest, which the Semantic check reports as NOT MEASURED. The
+      # check is written only for a run that was asked for every open model: a
+      # dispatched run with no `models` filter and the office and the Revit 2025
+      # models on (the manifest says so; the Semantic check does not rely on it
+      # to pass anything, it compares the models it finds with its own list).
       - name: Semantic diff of the MCP dumps
         if: needs.plan.outputs.base == 'true'
         shell: bash
+        env:
+          REQUESTED_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.models == '' && inputs.nordic && inputs.r2025 && 'true' || 'false' }}
         run: |
           status=0
-          python3 tools/re/semantic_diff.py measure measure-base measure-head semantic-diff > semantic-diff.log 2>&1 || status=$?
+          args=()
+          [ "$REQUESTED_ALL" = true ] && args+=(--requested-all)
+          python3 tools/re/semantic_diff.py measure measure-base measure-head semantic-diff ${args[@]+"${args[@]}"} > semantic-diff.log 2>&1 || status=$?
           cat semantic-diff.log
           {
             echo "### Semantic diff of the MCP dumps"
