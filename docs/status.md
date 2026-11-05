@@ -87,15 +87,20 @@ structural example (RE-198) and Vitoria's 2018 `ALD26 Before` (RE-315, RE-319);
 On 2026 and 2027 (RE-341) beams are drawn along their axes as on 2024 (on 2025
 they are not), stair runs as their steps and treads from their native records
 as on 2025, with the stair property sets and quantities read from them, and
-landings as on 2024 (not drawn on 2025); and the sketch lines' exact ends,
+tread landings (not monolithic ones, which stay boxes) as on 2024 (not drawn on 2025); and the sketch lines' exact ends,
 curves and Sketch curve lists are read, so sketch-driven floors, ceilings and
 slabs take their outline from their lines and shaft openings are cut from
 floors and ceilings, as on 2024 and 2025. A roof there keeps the record-box
-solve alone, as before (RE-341 section 5). No beam, landing, stair run, sketch
+solve alone, as on `main` (RE-341 section 5): without its slope, so a sloped
+roof can still be drawn as its outline at the box's full height, a level
+block, which no 2026 or 2027 scorer checks. No beam, landing, stair run, sketch
 outline or shaft void there is scored against a Revit export: each is held to
 the same Autodesk project's earlier save (`tools/re/bodies_across_saves.py`,
 which Measure runs and fails on), and that cannot catch an error the earlier
-save shares. One stair flight is scored against Revit's own 2026 and 2027
+save shares; it compares bodies, not quantities or property sets. No 2026 or
+2027 held-out model holds a beam, so the beam reader has run only on two
+Autodesk samples saved from earlier releases, never on a natively authored
+2026 beam. One stair flight is scored against Revit's own 2026 and 2027
 exports. Sloped roofs, spiral runs, stair names,
 railing heights and lengths, a wall's profile openings, IFC export overrides
 and the opening index stay unread there.

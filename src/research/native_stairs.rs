@@ -713,8 +713,11 @@ pub fn native_spiral_runs(
 
 /// Releases a landing's top and thickness are measured on: the BIM4LCA
 /// office (2024, #824); Revit 2026 and 2027 against the same Autodesk
-/// samples saved by an earlier release (RE-341): `rac_advanced`'s 5 landings
-/// are its 2024 save's. 2025 is not measured.
+/// samples saved by an earlier release (RE-341): `rac_advanced`'s 5 tread
+/// landings are its 2024 save's. On 2026 and 2027 only a tread landing (not
+/// monolithic) is drawn: a monolithic landing's outline lines go through
+/// [`crate::partition_stairs::scan_landing_lines`], which reads 2024 only, so
+/// it stays its box. 2025 is not measured.
 pub const NATIVE_LANDING_REVIT_VERSIONS: &[u32] = &[2024, 2026, 2027];
 
 /// A monolithic landing's top elevation and its type's thickness, feet.

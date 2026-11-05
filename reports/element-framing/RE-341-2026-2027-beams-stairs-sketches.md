@@ -1,10 +1,10 @@
-# RE-341: Revit 2026 and 2027 beams, stair runs, landings and sketch lines; roof slopes left out
+# RE-341: Revit 2026 and 2027 beams, stair runs, tread landings and sketch lines; roof slopes left out
 
 **Date:** 2026-11-04 (the contributor's measurements); maintainer changes and the Measure run, 2026-11-05.
 **Issues:** #1190 (geometry beyond the box on 2015 to 2023, 2026 and 2027); follows RE-124 and RE-179 (2026 and 2027 element records are 2025's, with 2026's own layer records).
 **Artefacts:** Autodesk's own sample projects, pinned in `research/autodesk-sample-projects.tsv` and fetched by `tools/fetch-autodesk-samples.sh`, never stored: `rac_advanced` 2024 (`ff791052…e5afc`), 2025 (`512e9188…e25d1`), 2026 (`f5fb3712…83ace`) and 2027 (`a88eb9f8…024ed`); `rac_basic` 2025 (`41f1893a…d4293`), 2026 (`bc547fe9…d99dc`) and 2027 (`c9ce4d01…91a01`); `rst_basic` 2024 (`aab838f8…c616e`), 2025 (`5089b2c6…31acb`), 2026 (`e7cf23a9…75418`) and 2027 (`01685786…d1453`). Revit's own held-out 2026 and 2027 exports (`research/holdout-models.tsv`), counts only.
 **Scorers:** `tools/re/bodies_across_saves.py` (the gate Measure runs, section 4) and `tools/re/save_pair_bodies.py` (the contributor's box and volume check, not shape equality).
-**Status:** positive for beams, stair runs, landings and the sketch-line readers against the same samples saved by Revit 2024 or 2025; **sloped roofs are left out, and roofs take neither sketch reader added for 2026 and 2027** (section 5). Against Revit's own export only one stair flight on each of two held-out models (a 2026 one and a 2027 one) is scored, as counts (section 4): its property values and quantities become equal to Revit's. **No beam, landing, stair run, sketch outline or shaft void of a 2026 or 2027 file is scored against Revit's own export.** Each is held to the same Autodesk project's earlier save by `tools/re/bodies_across_saves.py`, which Measure runs and fails on; the earlier save's export is measured against Revit's (RE-50, RE-56, #357, #824), and **the check cannot catch an error the earlier save shares with the 2026 or 2027 read.** Run 42010304828 (head e56d31b5) measured the check (section 4); the head after it, with `main` merged and the ceiling compared under its source, is **not yet read**.
+**Status:** positive for beams, stair runs, tread landings (a monolithic landing stays its box) and the sketch-line readers against the same samples saved by Revit 2024 or 2025; **sloped roofs are left out, and roofs take neither sketch reader added for 2026 and 2027** (section 5). Against Revit's own export only one stair flight on each of two held-out models (a 2026 one and a 2027 one) is scored, as counts (section 4): its property values and quantities become equal to Revit's. **No beam, landing, stair run, sketch outline or shaft void of a 2026 or 2027 file is scored against Revit's own export.** Each is held to the same Autodesk project's earlier save by `tools/re/bodies_across_saves.py`, which Measure runs and fails on; the earlier save's export is measured against Revit's (RE-50, RE-56, #357, #824), and **the check cannot catch an error the earlier save shares with the 2026 or 2027 read.** In run 42016210686 (head fec48333) the check reads PASS on all six samples (section 4). **A sloped roof can still be drawn as a level block, as on `main`** (section 5), the check compares bodies and not quantities or property sets, and **no 2026 or 2027 held-out model holds an `IfcBeam`**, so the beam reader has run only on two Autodesk samples saved from earlier releases and never on a natively authored 2026 beam. One floor is open (section 4a).
 
 ## 1. Before
 
@@ -31,7 +31,7 @@ Every body source the samples' exports report (`exported.body_sources`) on `main
 
 ## 2. The change
 
-Five lists gain 2026 and 2027: the beam axis list (`BEAM_AXIS_SUPPORTED_REVIT_VERSIONS`, 2024, 2026, 2027; 2025 is not measured), the sketch line list (`SKETCH_LINE_SUPPORTED_REVIT_VERSIONS`), the native stair run list, the run shape list and the landing list (`NATIVE_LANDING_REVIT_VERSIONS`, 2024, 2026, 2027; 2025 is not measured). The roof slope list (`ROOF_SLOPE_SUPPORTED_REVIT_VERSIONS`) stays 2024 and 2025 (section 5). A Sketch's curve list (RE-97) is read on 2026 and 2027 too (section 6), for floors, ceilings and slabs; a roof takes neither it nor the lines' exact ends (`roof_reads_exact_sketches`, section 5).
+Five lists gain 2026 and 2027: the beam axis list (`BEAM_AXIS_SUPPORTED_REVIT_VERSIONS`, 2024, 2026, 2027; 2025 is not measured), the sketch line list (`SKETCH_LINE_SUPPORTED_REVIT_VERSIONS`), the native stair run list, the run shape list and the landing list (`NATIVE_LANDING_REVIT_VERSIONS`, 2024, 2026, 2027; 2025 is not measured). On 2026 and 2027 the landing list draws only a **tread landing** (not monolithic): a monolithic landing's outline lines go through `scan_landing_lines` and `scan_run_data`, which read 2024 only (`STAIR_DIMENSIONS_SUPPORTED_REVIT_VERSIONS`), so it stays its record box. `rac_advanced`'s 5 landings are tread landings (`native_landing_tread`); `rac_basic`'s one monolithic landing slab, which the 2024 save draws (`partition_landing_slab`), is a box on 2026 and 2027 and is counted as left as a box. The roof slope list (`ROOF_SLOPE_SUPPORTED_REVIT_VERSIONS`) stays 2024 and 2025 (section 5). A Sketch's curve list (RE-97) is read on 2026 and 2027 too (section 6), for floors, ceilings and slabs; a roof takes neither it nor the lines' exact ends (`roof_reads_exact_sketches`, section 5).
 
 A wall's profile openings (RE-151) checked the beam reader's list, not one of their own. They are measured on 2024 only (Core Interior's wall 55840), so they have their own list, 2024, and take no openings on a release that only the beam reader gains.
 
@@ -113,17 +113,32 @@ Which bodies change, element for element:
 
 Its output is `bodies_across_saves.txt` beside each sample. It was first exercised on synthetic IFC pairs (a beam 1 mm deeper, one shifted by a metre, a body source that differs, a body left out, a missing 2025 save, a named element drawn as an outline here and a box there): each fails and the identical pair passes.
 
-**Run 42010304828** (head e56d31b5; filtered: samples on, held-out models only; the head side's check turned the run red). Per 2026 and 2027 sample, the two years alike:
+**Run 42010304828** (head e56d31b5; filtered: samples on, held-out models only; the head side's check turned the run red). `rst_basic` and `rac_basic` PASS; `rac_advanced` failed on one thing, ceiling 147534 required as a compared outline. The 2024 save draws that ceiling as its record box, the base 2026 save drew an outline, and the head draws a box, so the check now compares it under the source each save gives it (a named element) and prints it. On the base side (`main`) the same check fails as it should: `rac_advanced` 2026 compares no beam, tread landing or stair run (42 and 10 left as boxes, fewer than the 29, 8, 5 and 10 drawn that it holds), and floor 139803 differs in volume (440.512245 m³ here, 441.111228 m³ in the 2024 save).
 
-| sample | beams and landings against 2024 | stair runs against 2025 | sketch outlines against 2024 | left as boxes, drawn by the earlier save | verdict |
-|---|---|---|---|---|---|
-| `rst_basic` | 354 `IfcBeam` | 1 `IfcStairFlight` | 5 `IfcSlab` | 0 | PASS |
-| `rac_basic` | 0 | 2 `IfcStairFlight` | 12 (2 `IfcCovering`, 10 `IfcSlab`) | 1 `IfcSlab` (the landing slab the 2024 save draws), 1 `IfcRoof` | PASS |
-| `rac_advanced` | 42 (37 `IfcBeam`, 5 `IfcSlab`) | 10 `IfcStairFlight` | 82 (64 `IfcCovering`, 1 `IfcRoof`, 17 `IfcSlab`), floor 139803 among them | 4 `IfcRoof` | FAIL: ceiling 147534 required and not compared |
+**Run 42016210686** (head fec48333; unfiltered: `base=main`, nordic, R2025, held-out, samples; the main session's reading of the run and mine of its artifacts):
 
-Every body compared was equal in every field, and nothing else failed. On the base side (`main`) the same check fails as it should: `rac_advanced` 2026 compares no beam, landing or stair run (42 and 10 left as boxes, fewer than the 29, 8, 5 and 10 drawn that it holds), floor 139803 differs in volume (440.512245 m³ here, 441.111228 m³ in the 2024 save), and 147534 is drawn as an outline where the 2024 save draws its record box (`partition_element_record_bbox`).
+- **Which exports move.** 103 of 111 identical, 8 move: the six 2026 and 2027 samples and two held-out models (the 2026 and the 2027 one). The third held-out model, whose roof moved at f9035152, is identical to `main`'s. No release before 2026 moves.
+- **IFC rules.** The EXPRESS `rules:` findings are 0 on 90 models and on 18 held-out models: #1432 cleared the findings this PR's sloped beams showed.
+- **MCP consistency.** 0 differ on 629 lines.
+- **The check reads PASS on all six samples**, 2026 and 2027 alike. Every body compared is equal in every field.
 
-**The ceiling 147534.** The 2024 save draws it as its record box. At base the 2026 save drew an outline (no Sketch curve list was read there, so nothing held an outline made of lines the Sketch does not list to the record box). On the head it is neither compared as an outline nor counted as left out, so the 2026 and 2027 saves no longer draw it as an outline either: the guard that keeps such an outline only where it spans the record box (`profiles.retain` after `relisted` in `solve_sketch_plan_profiles`) now fires there as on 2024. That reading is an inference from these counts. The check now compares the ceiling under the source each save gives it and prints, in every save, its class, `BodySource`, `ProfileResolved` and volume (`named 147534` lines), so a run of the current head states it.
+| sample | beams and tread landings against 2024 | stair runs against 2025 | sketch outlines against 2024 | left as boxes, drawn by the earlier save |
+|---|---|---|---|---|
+| `rst_basic` | 354 `IfcBeam` | 1 `IfcStairFlight` | 5 `IfcSlab` | 0 |
+| `rac_basic` | 0 | 2 `IfcStairFlight` | 12 (2 `IfcCovering`, 10 `IfcSlab`) | 1 `IfcSlab` (the monolithic landing slab the 2024 save draws), 1 `IfcRoof` |
+| `rac_advanced` | 42 (37 `IfcBeam`, 5 `IfcSlab`, the tread landings) | 10 `IfcStairFlight` | 82 (64 `IfcCovering`, 1 `IfcRoof`, 17 `IfcSlab`), floor 139803 among them; ceiling 147534 compared as a named element | 4 `IfcRoof` |
+
+**The ceiling 147534** (`named 147534` lines of run 42016210686): the 2024 save draws a record box (`partition_element_record_bbox`, `ProfileResolved` false), 5.14728698 m³; the 2026 save the same, 5.14728698 m³; the 2025 save an outline (`ProfileResolved` true), 4.15431293 m³. So the 2026 and 2027 saves equal the 2024 save and not the 2025 one. At base the 2026 save drew the outline: no Sketch curve list was read there, so nothing held an outline of lines the Sketch does not list to the record box, which the guard (`profiles.retain` after `relisted` in `solve_sketch_plan_profiles`) now does on 2026 and 2027 as on 2024.
+
+### 4a. Floor 139803 and the 2025 save: open
+
+The 2024 save, and the 2026 and 2027 saves since this PR, draw floor 139803 at 441.111228 m³; the base 2026 save and the 2025 save at 440.512245 m³ (0.599 m³ less), with a vertex up to 9.69 ft from the other's. The check holds the floor equal to the 2024 save (`REQUIRED`). **Which is right is not shown.** What is known:
+
+- The arc and circle readers of a sketch line (`scan_sketch_curves`, `scan_sketch_circles`, RE-96, RE-100) are gated by the beam list, which was `[2024]`: the 2025 save and the base 2026 save never read an arc, and the box solve closes an arc with its chord (RE-96). A chord encloses less than its arc, which is the sign of the difference (smaller by 0.599 m³, a vertex displaced). The 2024 reading is the one measured against Revit's exports (RE-96: 17 more Snowdon slabs carry an outline, 14 of them within 0.1% of Revit's upward-face area; RE-100; the BIM4LCA office's outlines).
+- That is a reading of the code and of the sign of the difference, not a read of this floor's curves. No Revit export holds it: the only Revit export of the sample is an IFC2X3 export of its 2015 to 2020 state.
+- The check now prints the floor in every save with its volume and vertex count (`named 139803` lines) and compares every sketch outline with the 2025 save as well, without scoring (`sketch outlines against the 2025 save`), so the next run states how many outlines the two earlier saves disagree on and by what.
+
+If the floor cannot be shown to be 2024's, the rule is that it stays a box. This head does not make it one, because the arc-bearing outlines it would hold back are not known and holding them back would change the counts of section 4 blindly; it is recorded here as open.
 
 ## 5. Sloped roofs are left out, and roofs keep the record-box solve
 
@@ -144,8 +159,11 @@ Widening the beam and sketch line lists made the exact line ends readable on 202
 
 ## 7. Not measured
 
-- A beam, landing, stair run, sketch outline, shaft void or sloped roof of a 2026 or 2027 file against Revit's own export: none is scored. The held-out office models are unchanged; the only held-out elements that move are one stair flight each and the roof of section 5.
-- The current head, after run 42010304828's head e56d31b5: the ceiling 147534 compared under its source, `tools/re/save_pair_bodies.py`'s counts of bodies never paired.
+- A beam, tread landing, stair run, sketch outline, shaft void or sloped roof of a 2026 or 2027 file against Revit's own export: none is scored. No 2026 or 2027 held-out model holds an `IfcBeam`, so a natively authored 2026 beam has never been seen.
+- Quantities and property sets of the newly drawn beams and outlines: the check compares bodies only.
+- Whether a sloped roof on 2026 or 2027 is drawn as a level block: roofs keep the record-box solve, gated only by the release list of the record readers, as on `main`, and nothing scores it. The held-out office models are unchanged; the only held-out elements that move are one stair flight each and the roof of section 5.
+- `tools/re/save_pair_bodies.py`'s counts of bodies never paired, on real files.
+- Floor 139803: which of the 2024 and 2025 saves is right (section 4a).
 - How many floors, ceilings and slabs the sketch readers change on 2026 and 2027: their body sources do not differ from the box's. The check counts the ones it compares.
 - 2025's beams (RE-49) and landings (#824): left for a Revit 2025 export that can be published.
 - 2015 to 2023: these readers stay at 2024 and later.
@@ -159,8 +177,8 @@ for f in samples/*.rvt; do rvt-ifc "$f" -o "${f%.rvt}.ifc"; done
 python3 tools/re/save_pair_bodies.py samples/2027-rstbasicsampleproject.ifc samples/2024-rstbasicsampleproject.ifc
 python3 tools/re/save_pair_bodies.py samples/2026-racadvancedsampleproject.ifc samples/2024-racadvancedsampleproject.ifc \
     --sources partition_beam_axis,partition_beam_box_along_axis,native_landing_tread
-gh workflow run measure.yml --ref main -f ref=1d5bbf03d9d189cff773484ceaddb340ba4e828e -f base=main \
+gh workflow run measure.yml --ref <branch holding the scorers> -f ref=<full commit SHA> -f base=main \
     -f nordic=true -f r2025=true -f holdout=true -f samples=true
 ```
 
-Runs 41988011289 and 42004827803 were dispatched with the Measure command above, at 1d5bbf03 and f9035152. The check is part of Measure's sample shard from the head that adds it; a run of that head names its own commit.
+Runs 41988011289 (at 1d5bbf03d9d189cff773484ceaddb340ba4e828e) and 42004827803 (at f9035152) were dispatched from `main`, which had no check. The scorers and the workflow come from the dispatch ref (`--ref`), the code from `-f ref`, so a run that includes the check names a branch that holds `tools/re/bodies_across_saves.py` and `tools/ci/check-bodies-across-saves.sh` as `--ref` (runs 42010304828 and 42016210686 used `fix/1426-bodies-across-saves`). The check needs `samples=true` and the 2024 to 2027 samples: without them it prints a notice and a line in the run summary and is not a pass.
