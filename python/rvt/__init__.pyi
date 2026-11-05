@@ -336,8 +336,11 @@ class RevitFile:
         Doors and windows of Revit 2023 to 2027 files are drawn from the
         meshes Revit saved for them where all of a mesh decodes, as
         ``rvt-ifc`` draws them; ``saved_meshes=False`` keeps their
-        bounding boxes (``rvt-ifc --no-saved-meshes``). A ``RuntimeWarning``
-        says when the saved graphics could not be read.
+        bounding boxes (``rvt-ifc --no-saved-meshes``). On Revit 2024 to
+        2027 files a wall that embeds a curtain wall is drawn from its saved
+        mesh too where Revit raised its base, and ``saved_meshes=False`` keeps
+        its record's body. A ``RuntimeWarning`` says when the saved graphics
+        could not be read.
 
         ``phase`` is a project phase's name (matched exactly first) or its
         ElementId, as ``rvt-ifc --phase`` takes it, and the export shows that

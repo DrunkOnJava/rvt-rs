@@ -250,6 +250,13 @@ pub struct RevitFile {
     /// Doors and windows written as such though their type's record was not
     /// read (#1247).
     unread_type_doors_windows: BTreeSet<u32>,
+    /// Memoised steps of the walls' native records that name a cutting element
+    /// (`research::native_wall_cuts::wall_cut_steps`), by wall, and the walls
+    /// whose record was looked for, found or not: the openings the walls
+    /// carry and the walls drawn from their saved mesh (RE-340) each asked for
+    /// the same records.
+    pub(crate) wall_cut_steps_memo: BTreeMap<u64, Vec<crate::native_wall_cuts::WallCutStep>>,
+    pub(crate) wall_cut_steps_asked: BTreeSet<u64>,
     /// Family instances written as spaces that were left out because their
     /// family draws no model form (RE-312, #1262), by class.
     bodiless_family_spaces: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
@@ -485,6 +492,8 @@ impl RevitFile {
             category_style_materials: None,
             unread_streams: Vec::new(),
             unread_type_doors_windows: BTreeSet::new(),
+            wall_cut_steps_memo: BTreeMap::new(),
+            wall_cut_steps_asked: BTreeSet::new(),
             bodiless_family_spaces: BTreeMap::new(),
             bodiless_family_space_error: None,
             value_sources: None,

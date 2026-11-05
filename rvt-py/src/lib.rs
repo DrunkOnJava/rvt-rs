@@ -823,7 +823,9 @@ impl PyRevitFile {
     /// Doors and windows of Revit 2023 to 2027 files are drawn from the
     /// meshes Revit saved for them where all of a mesh decodes, as `rvt-ifc`
     /// draws them; `saved_meshes=False` keeps their bounding boxes
-    /// (`rvt-ifc --no-saved-meshes`).
+    /// (`rvt-ifc --no-saved-meshes`). On Revit 2024 to 2027 files a wall that
+    /// embeds a curtain wall is drawn from its saved mesh too where Revit
+    /// raised its base, and `saved_meshes=False` keeps its record's body.
     ///
     /// `phase` (a phase's name or its ElementId, default the project's last)
     /// exports that phase, as `rvt-ifc --phase` does: an element that does not

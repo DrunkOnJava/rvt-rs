@@ -54,7 +54,8 @@ only in a pull request that links the new evidence.
 Exact where the element's data is decoded, the record's box elsewhere;
 the diagnostics count each ([#409](https://github.com/DrunkOnJava/rvt-rs/issues/409)).
 Doors and windows are drawn by default from the mesh Revit saved, where all of it decodes (the maintainer,
-2026-10-29);
+2026-10-29), and on Revit 2024 to 2027 so are the walls that embed a curtain wall where Revit raised their base
+(RE-340: the mesh's lowest vertex is Revit's lowest point on 113 of 113 such walls of the BIM4LCA office);
 other loadable families are boxes unless `--saved-meshes` draws theirs, which is Revit's own shape where it is complete (every vertex within 0.001 ft on all 138 of Core Interior's doors and windows and 1,294 of 1,709 bodies scored on the BIM4LCA office, in IfcOpenShell's default tessellation, where a saved mesh is judged; a body both files write as true curves is judged in the fine one, RE-331 section 8) but part of the body elsewhere (RE-78).
 `--family-extrusions` (opt-in) draws an instance from its family's own extrusions where they reproduce its mesh, every arc as an arc whatever its radius (#1366): at `34750454` 335 bodies are replaced on Core Interior, RE1 and the BIM4LCA office files (the 0.12 ft rule of #1352 replaced 66), 251 of them scored against Revit's export and all 251 holding the bar, 187 judged in the fine tessellation as bodies both files write as true curves and 64 in the default one, 6 of 53 exports moving against `main`'s and none of them held-out (runs 41884078892 and 41884639625, RE-331 section 9.1).
 A face the saved graphics do not decode marks a partial mesh, which keeps its box since RE-224: on the office 1,294 of the 1,352 bodies then drawn are exact.
