@@ -1,8 +1,13 @@
-- **A probe reads which way the sketch lines of a floor's void run and whether
-  that tells which line Revit tags the void with (RE-355, #1408).**
-  `probe_re355_void_loop_directions` reads the loop of every unfilled opening in
-  Revit's export whose host is not a wall, twice: from the order its lines were
-  drawn in (their ElementIds) and from the direction each line is stored in. It
-  prints the line each reading says Revit tags, beside the tag, for the void
-  3147725 of the BIM4LCA office, the one `void_tag` gets wrong, and for every
-  other void. The export is unchanged. Not yet measured on this head.
+- **The direction a floor void's first line is stored in says which line Revit
+  tags the void with, on 133 of 133 voids (RE-355, #1408).** Of the sketch lines
+  of a void's loop, the one with the lowest ElementId runs along the loop's
+  counter-clockwise walk or against it; against it Revit tags that line, along it
+  the line after it, which gives Revit's tag on the BIM4LCA office as built (36
+  of 36) and at building permit (35 of 35) and on Core Interior (62 of 62),
+  including the void 3147725 that RE-339 left wrong. A reading from the order the
+  first two lines were drawn in is right on the office and wrong on 20 of Core
+  Interior's 62, so it does not ship. `probe_re355_void_loop_directions` prints
+  both, line by line, from Measure runs 42115473363, 42116875940 and 42118790534.
+  The export is unchanged: `void_tag` does not read a line's stored direction
+  yet, so 3147725 still takes the lowest id, 1 of 36 and 1 of 35 floor voids of
+  the office files, and the held-out models are not read.
