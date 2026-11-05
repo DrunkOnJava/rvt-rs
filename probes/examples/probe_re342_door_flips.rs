@@ -46,7 +46,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
-use rvt::research::native_document::{Options, extract_graphs};
+use rvt::research::native_document::{NATIVE_RELEASES, Options, extract_graphs};
 use rvt::research::native_walls::native_walls;
 use rvt::research::partition_instance_transforms::{instance_transform, scan_instance_transforms};
 use rvt::research::partition_names::element_data_header;
@@ -255,6 +255,7 @@ fn main() -> anyhow::Result<()> {
     let mut shown: BTreeSet<String> = BTreeSet::new();
     let options = Options {
         selected_ids: ids.iter().map(|&id| u64::from(id)).collect(),
+        releases: NATIVE_RELEASES,
         ..Options::default()
     };
     let summary = extract_graphs(&mut rf, &options, |record| {
@@ -315,18 +316,26 @@ fn main() -> anyhow::Result<()> {
             others.push(json!({ "class": object.class_name, "fields": fields }));
         }
         Ok(())
-    })?;
-    eprintln!(
-        "native records: {} emitted, {} graphs complete, {} unsupported",
-        summary.emitted_records, summary.complete_graph_records, summary.unsupported_graph_records
-    );
+    });
+    match summary {
+        Ok(summary) => eprintln!(
+            "native records: {} emitted, {} graphs complete, {} unsupported",
+            summary.emitted_records,
+            summary.complete_graph_records,
+            summary.unsupported_graph_records
+        ),
+        Err(error) => eprintln!("native records: not read: {error}"),
+    }
 
     // The host walls' native records.
     let host_ids: BTreeSet<u64> = kinds
         .values()
         .filter_map(|(_, host)| host.map(u64::from))
         .collect();
-    let host_walls = native_walls(&mut rf, &host_ids)?;
+    let host_walls = native_walls(&mut rf, &host_ids).unwrap_or_else(|error| {
+        eprintln!("host walls: not read: {error}");
+        BTreeMap::new()
+    });
     for (id, wall) in &host_walls {
         println!(
             "{}",
