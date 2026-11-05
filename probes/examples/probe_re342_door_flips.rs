@@ -29,9 +29,11 @@
 //!     transform the reader takes from that copy, and the first 1,024 bytes of
 //!     the copy's data in hex, unless `--records`), records (the root
 //!     fields of each native `FamilyInstance` record of the element, with
-//!     any value longer than 600 characters replaced by its length) and
-//!     objects (the other non-graphics objects of the first records,
-//!     for the first 40 elements of the model)
+//!     any value longer than 600 characters replaced by its length), info
+//!     (the fields of each `InstanceInfo` object of its graph, which holds
+//!     `m_Trf`, the transform the cut readers place a symbol by) and objects
+//!     (the other non-graphics objects of the first records, for the first 40
+//!     elements of the model)
 //!   kind "wall"     id, start, end, flipped and cross_section of each host
 //!                   wall's native record (RE-222)
 //!
@@ -266,6 +268,7 @@ fn main() -> anyhow::Result<()> {
     // The native `FamilyInstance` record of each door and window.
     let mut records: BTreeMap<u32, Vec<Value>> = BTreeMap::new();
     let mut objects: BTreeMap<u32, Vec<Value>> = BTreeMap::new();
+    let mut infos: BTreeMap<u32, Vec<Value>> = BTreeMap::new();
     let mut shown: BTreeSet<String> = BTreeSet::new();
     let options = Options {
         selected_ids: ids.iter().map(|&id| u64::from(id)).collect(),
@@ -313,6 +316,20 @@ fn main() -> anyhow::Result<()> {
             .push(json!({ "stream": record.source.stream, "root": fields }));
         let others = objects.entry(id).or_default();
         for object in graph.objects.iter().skip(1) {
+            if object.class_name == "InstanceInfo" {
+                let info: serde_json::Map<String, Value> = object
+                    .fields
+                    .as_object()
+                    .map(|fields| {
+                        fields
+                            .iter()
+                            .map(|(name, value)| (name.clone(), shortened(value)))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                infos.entry(id).or_default().push(Value::Object(info));
+                continue;
+            }
             if object.class_name.starts_with('G') && object.class_name != "GInstance" {
                 continue;
             }
@@ -378,6 +395,7 @@ fn main() -> anyhow::Result<()> {
             Vec::new()
         };
         let element_copies = copies.get(id).cloned().unwrap_or_default();
+        let element_infos = infos.get(id).cloned().unwrap_or_default();
         let element_read = read
             .get(id)
             .map(|t| json!({ "axes": t.axes, "origin": t.origin }));
@@ -390,6 +408,7 @@ fn main() -> anyhow::Result<()> {
                 "read": element_read,
                 "copies": element_copies,
                 "records": element_records,
+                "info": element_infos,
                 "objects": element_objects,
             })
         );

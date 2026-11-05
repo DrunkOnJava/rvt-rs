@@ -60,6 +60,11 @@ FEATURES = (
     "rvt_x_wall",
     "rvt_y_ext",
     "ifc_wall_x_rel",
+    "n_det",
+    "n_x_col",
+    "n_y_col",
+    "n_x_row",
+    "n_y_row",
     "op",
     "wall_flipped",
 )
@@ -178,6 +183,19 @@ def flag_fields(items):
     return sorted(name for name, values in seen.items() if 0 < len(values) <= FLAG_VALUES)
 
 
+def native_transform(item):
+    """The first InstanceInfo's m_Trf of the record: its 3 x 3 as rows and its
+    origin, or None."""
+    for info in item.get("info", ()):
+        trf = info.get("m_Trf")
+        if not isinstance(trf, dict):
+            continue
+        rows = trf.get("m_3x3")
+        if isinstance(rows, list) and len(rows) == 3 and all(isinstance(r, list) and len(r) == 3 for r in rows):
+            return np.array(rows, dtype=float), trf.get("m_or")
+    return None, None
+
+
 def paired_rows(items, by_tag, walls, names, to_internal):
     rows = []
     unmatched = 0
@@ -190,6 +208,8 @@ def paired_rows(items, by_tag, walls, names, to_internal):
         (ix, iy, iz), ifc_det = placement_axes(element, to_internal)
         read = item.get("read")
         rx, ry, rz = (np.array(a) for a in read["axes"]) if read else (None, None, None)
+        matrix, _ = native_transform(item)
+        n_det = round(float(np.linalg.det(matrix)), 3) if matrix is not None else None
         copies = item.get("copies", [])
         dets = sorted({"+" if (c.get("first") or {}).get("det", 0) > 0 else "-" for c in copies if c.get("first")})
         records = item.get("records", [])
@@ -232,6 +252,11 @@ def paired_rows(items, by_tag, walls, names, to_internal):
                 "ifc_y_ext": side(iy, exterior),
                 "rvt_x_wall": side(rx, direction),
                 "rvt_y_ext": side(ry, exterior),
+                "n_det": n_det,
+                "n_x_col": relation(ix, matrix[:, 0]) if matrix is not None else "none",
+                "n_y_col": relation(iy, matrix[:, 1]) if matrix is not None else "none",
+                "n_x_row": relation(ix, matrix[0, :]) if matrix is not None else "none",
+                "n_y_row": relation(iy, matrix[1, :]) if matrix is not None else "none",
                 "ifc_wall_x_rel": relation(wall_x, np.append(direction, 0.0)) if direction is not None and wall_x is not None else "none",
                 "wall_flipped": wall_flipped,
                 "ifc_x": [round(float(v), 6) for v in ix],
@@ -341,7 +366,7 @@ def main(argv):
         count = 0
         for tag, item in sorted(items.items(), key=lambda kv: int(kv[0])):
             if item.get("records") and count < 3:
-                print("sample " + json.dumps({"id": tag, "records": item["records"][:1], "objects": item.get("objects", [])[:8]}))
+                print("sample " + json.dumps({"id": tag, "records": item["records"][:1], "info": item.get("info", [])[:2], "objects": item.get("objects", [])[:8]}))
                 count += 1
 
 
