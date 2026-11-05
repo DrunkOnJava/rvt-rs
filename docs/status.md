@@ -850,9 +850,21 @@ memory the file is read only when asked. The page keeps each element's answer,
 up to 64 and the least recently selected going first, until a file is opened
 again. `viewer/tests/parameters-row.spec.ts` holds the panel's entries for an
 element to the entries `rvt-elements` prints for the same ElementId, whole, on
-Einhoven and on Core Interior. Not yet measured on this head: the figures.
-The release-outside-the-range and experimental-release states are measured with
-the worker's answer replaced, as no such file is in the viewer's job.
+Einhoven and on Core Interior. Viewer tests run 42125048710 on head 3146f14e (CI runner, WASM without LTO): all 37 of
+Einhoven's tree elements were selected, 28 with parameters (369 entries, 332
+instance, 37 type, 8 named) equal to `rvt-elements`' and 7 with none showing
+the empty state; a read took a median of 153 ms (most 210 ms) in 17 MiB of wasm
+memory, the open's worker 23 MiB. On Core Interior four elements match, each
+read 1.5 to 1.9 s in 275 MiB (the open: 326 MiB, 17.3 s). On the BIM4LCA office
+(62 MiB), not compared with `rvt-elements`, a selection read on its own: 8
+entries in 3.9 s in 943 MiB, the open's worker 910 MiB (66.6 s), and the page
+then kept 2 answers, 4,654 characters of JSON. Under a V8 cap of 927 MiB of wasm
+memory, between the office's open and its read, a read really runs out of
+memory and the file is read only when asked from then on. The page's one
+script is 40.27 kB larger (8.65 kB gzipped) than in the build of d1de8adf,
+mostly because the glue and the two workers it fetched later are inside it. The release-outside-the-range and
+experimental-release states are measured with the worker's answer replaced, as
+no such file is in the viewer's job.
 
 **RE-210 (2026-10-22)** adds `rvt-ifc --revit-property-sets` (#35). It
 writes each element's named saved parameters (RE-207) as Revit's exporter

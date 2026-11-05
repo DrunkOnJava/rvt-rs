@@ -249,7 +249,25 @@ The page keeps each element's answer, up to 64 elements and the least recently
 selected going first, until a file is opened again, so an element selected a
 second time reads nothing.
 
-Measured figures: not yet measured on this head.
+Measured in the viewer tests, run 42125048710 on head 3146f14e (CI runner, WASM without LTO): a read's wasm
+instance took 17 MiB on Einhoven (the open's worker 23 MiB), 275 MiB on Core
+Interior (326 MiB) and 943 MiB on the BIM4LCA office as built (910 MiB), 0.74
+to 1.04 times the open's, in a median of 153 ms, 1.5 to 1.9 s and 3.9 s (the
+module is handed over, so a read starts without a fetch or a compile; the
+times are a CI runner's and vary with it). On the office the page kept 2
+answers, 4,654 characters of JSON. Under a V8 cap of 927 MiB of wasm memory,
+between the office's open and its read, the open succeeds and the read runs out
+of memory for real (`viewer/tests/parameters-row.spec.ts`).
+
+**What the first page load carries.** The page's one script is 999.56 kB (271.47
+kB gzipped) where the build of d1de8adf (run 42109657349) had 959.29 kB (262.82
+kB): 40.27 kB, 8.65 kB gzipped, more. Most of it is the decoder's glue (12.91
+kB) and the two workers (12.43 and 9.82 kB), which were fetched as files the
+first time they were needed and are now inside it (a worker's base64 is a third
+larger than its script); the rest is this round's panel code. The built site
+holds the script, the stylesheet, the page and the wasm, whose one sha256
+`check-wasm-in-site.sh` finds in the site (run 42125048710, build of this
+head). The wasm is fetched once, by the first open.
 
 ## Viewer state
 

@@ -27,8 +27,13 @@
   compiled wasm the first open's worker hands over serves the next open, the
   reads and the main thread's IFC, plan and CSV exports, so selecting an
   element, exporting and opening the file again fetch nothing and a page taken
-  offline after it has loaded does all three. The first page load is heavier by
-  the size of that script (not yet measured on this head). A read has taken 0.74 to 1.04
+  offline after it has loaded does all three. The first page load is heavier:
+  the page's one script grew from 959.29 kB to 999.56 kB (262.82 kB to 271.47 kB
+  gzipped) between the build of d1de8adf and this head, 40.27 kB and 8.65 kB
+  gzipped, of which the glue and the two workers (12.91, 12.43 and 9.82 kB, a
+  third larger as base64) that used to be fetched later as files are most, and
+  this round's panel code the rest; the site holds one script, one stylesheet
+  and the wasm. A read has taken 0.74 to 1.04
   times the open's wasm memory, rising with the file, and nothing above 910 MiB
   has been measured, so a selection is read on its own only while the wasm
   memory the page holds is at most 1 GiB; above that the panel asks first,
@@ -36,8 +41,22 @@
   memory, or its worker has gone without a word, that file is read only when
   asked. The page keeps each element's answer, up to 64 elements with the least
   recently selected going first, until a file is opened again, so an element
-  selected a second time is not read again. Not yet measured on this head: all
-  figures.
+  selected a second time is not read again. Measured in the viewer tests (run
+  42125048710, head 3146f14e, CI runner, WASM without LTO): on Einhoven every
+  one of the 37 tree elements was selected and the panel held, for the 28 with
+  parameters, exactly the 369 entries `rvt-elements` prints (332 instance, 37
+  type, 8 named), and showed the empty state for the 7 with none; a read took a
+  median of 153 ms (most 210 ms) in an instance of 17 MiB, against 23 MiB for the
+  open's worker. On Core Interior four elements of four categories match
+  `rvt-elements` too; a read took 1.5 to 1.9 s in 275 MiB, against 326 MiB and
+  17.3 s for the open. On the BIM4LCA office (62 MiB) a selection read on its
+  own: 8 entries in 3.9 s in 943 MiB, against 910 MiB and 66.6 s for the open,
+  and the page then kept 2 answers, 4,654 characters of JSON. A read takes 0.74
+  to 1.04 times the open's wasm memory while it runs, which rises with the file.
+  Under a V8 cap of 927 MiB of wasm memory, between the office's open (910) and
+  its read (943), the open succeeds and the read really runs out of memory: the
+  panel says so and reads that file only when asked from then on. That office is
+  not compared with `rvt-elements`.
 - **File Status's Parameters row stops saying the rest are still to be
   decoded (#35).** It said so while `rvt-elements` and Python already listed
   every element's saved parameters (RE-207). It now counts the values written
