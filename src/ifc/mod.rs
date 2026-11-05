@@ -767,7 +767,8 @@ pub struct ExportedModelDiagnostics {
     /// of the wall beneath them and keep the end their record gives, why, by
     /// reason: the `BodyEndRefusal` property of each (#1396, RE-337), such as
     /// `walls_beneath_reach_the_end_at_different_faces`,
-    /// `base_cut_lost_on_extended_plan` or `base_not_cut_over_the_extended_plan`.
+    /// `base_cut_lost_on_extended_plan`, `base_not_cut_over_the_extended_plan`
+    /// or `wall_beneath_not_one_rectangle`.
     #[serde(default)]
     pub wall_end_refusals: std::collections::BTreeMap<String, usize>,
     /// Of the exported `IfcSpace`s, the rooms whose outline was read from the
