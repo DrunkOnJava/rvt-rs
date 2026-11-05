@@ -222,8 +222,9 @@ up to as many at once as the runner has CPUs, and the job
 `same-project-gates` turns the run red on a difference, a missing file, an
 unknown project, fewer bodies than the sample holds, or a check that compared
 nothing. That job also holds #1428's Areas gate (rac_advanced's Areas across its
-2024 to 2027 saves, `tools/ci/check-areas-across-saves.sh`), each as a step that
-runs whatever the other did. It is a job of its own, so a failure of either does
+2024 to 2027 saves, and its 2021 save against its 2022 save (#1434),
+`tools/ci/check-areas-across-saves.sh`), each as a step that runs whatever the
+other did. It is a job of its own, so a failure of either does
 not remove Compare's report.
 
 - **A change to a reader of Revit 2024 to 2027 is measured with
@@ -727,7 +728,10 @@ Configured on the repository, with the rulesets kept as code in
   is a different witness.
 - CodeQL (`.github/workflows/codeql.yml`) analyses the workflows, the
   viewer's TypeScript and JavaScript, the Python bindings and the Rust crate,
-  on every pull request, push to main and weekly. The default setup stays
+  on every push to main, weekly, and on every ready pull request that changes
+  more than documentation (`**.md`, `docs/`, `reports/`, `changelog.d/`): a
+  draft's jobs are skipped and its analysis starts when it is marked ready
+  (#1457). The default setup stays
   off: it cannot scan Rust, and GitHub refuses an advanced setup's results
   while it is on.
 - Every action is pinned to a full commit SHA and the repository requires it.
@@ -771,16 +775,34 @@ line names what to fix (its rulesets check needs an admin token). The list:
    cited commit GitHub does not have at all; whether a ref reaches it is not
    checked automatically.
 3. The Actions cache is under its 10 GB limit. `python3
-   tools/maintainer/clean_caches.py` (a dry run; `--delete` acts) removes the
+   tools/maintainer/clean_caches.py` (a dry run; `--delete` acts, and
+   `scheduled-checks.yml` runs it with `--delete` every day) removes the
    caches of closed pull requests and deleted branches, and `main`'s superseded
-   rust-cache generations and CodeQL overlay base databases (per CodeQL version): a new lockfile
-   saves a new cache under a new key, and each CodeQL analysis of `main` saves
-   a new base database, and the old ones are never read again. `main`'s newest
-   two generations of each family, live branches' and open pull requests'
-   caches are kept.
+   rust-cache generations, CodeQL overlay base databases (per CodeQL version) and
+   the RE1 models' cache (keyed by the sha256 of `research/re1-models.tsv`):
+   a new lockfile saves a new cache under a new key, each CodeQL analysis of
+   `main` saves a new base database, and a changed pin list saves a new RE1 key,
+   and the old ones are never read again.
+   `main`'s newest two generations of each family, live branches' and open pull
+   requests' caches are kept. The cache is evicted least recently used first at
+   its limit, so a key read only once a night does not last: Fuzz's corpus is an
+   artifact for that reason (`fuzz.yml`). A night that cannot read the corpus
+   (three tries) warns, starts from the seeds and saves nothing, so the corpus it
+   could not read stays the newest. With no open pull request the cleaner deletes
+   nothing and exits 0 with a notice, because that list cannot be told from an
+   empty reply.
 4. Workflow runs on `main` are green. A red check is a defect to fix, or an
    issue to file with its cause, and a check that fails only because a service
-   is down reports "not measured" rather than failing.
+   is down reports "not measured" rather than failing. A "not measured"
+   warning that is on every run of a job for a day (three runs or more) opens
+   an issue under `scheduled:not-measured-<what>`
+   (`tools/ci/not_measured.py`, in `scheduled-checks.yml`, reading `main`'s runs
+   of `ci.yml` and the daily runs of `scheduled-checks.yml`). That workflow also
+   audits the three lockfiles (the root's, the fuzz workspace's and the
+   witness's) for advisories every day and builds the docs on a floating
+   nightly every Monday, and Corpus nightly and Performance Budgets report
+   through the same piece: a failed job opens an issue under
+   `scheduled:<job name>`, or leaves the open one alone, and never comments.
 5. Open Dependabot and code scanning alerts are triaged, each fixed or
    dismissed with a reason, and Dependabot watches every lockfile (a pip
    requirements file pinned with hashes among them), Dockerfile, composite

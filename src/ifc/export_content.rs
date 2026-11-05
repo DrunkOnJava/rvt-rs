@@ -289,8 +289,9 @@ struct AreaDrawn {
     joined: bool,
     /// Whether its region is the loop of Revit's plan topology (RE-333).
     topology: bool,
-    /// Whether it is of a release whose topology Areas are marked unchecked
-    /// (`partition_area_records::area_release_unchecked`).
+    /// Whether its topology region is one nothing outside the file checks: its
+    /// release is one whose Areas are marked unchecked, or its lines have
+    /// partition copies that disagree (`partition_area_records::area_unchecked`).
     topology_unchecked: bool,
 }
 
@@ -4789,13 +4790,14 @@ pub const SPACE_OUTLINE_AREA_BOUNDARY_JOINED: &str = "area_boundary_joined";
 /// this.
 pub const SPACE_OUTLINE_AREA_PLAN_TOPOLOGY: &str = "area_plan_topology";
 
-/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area of Revit 2025, 2026 or 2027
-/// drawn as the loop of Revit's plan topology: the same region as
-/// [`SPACE_OUTLINE_AREA_PLAN_TOPOLOGY`], marked apart because nothing outside
-/// the file checks these Areas: no Revit export of one exists, and the only
-/// check is that the same project's 2024 save gives the same Areas
-/// (`partition_area_records::area_release_unchecked`; Griffin, 2026-11-05,
-/// "Mark 2025 to 2027 in the file").
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area of Revit 2025, 2026 or 2027, or
+/// of one drawn from lines whose partition copies disagree (the 2021 save of
+/// `rac_advanced`, #1434), drawn as the loop of Revit's plan topology: the same
+/// region as [`SPACE_OUTLINE_AREA_PLAN_TOPOLOGY`], marked apart because nothing
+/// outside the file checks these Areas: no Revit export of one exists, and the
+/// only check is that the same project's 2024 save (2022 save, for the 2021
+/// one) gives the same Areas (`partition_area_records::area_unchecked`;
+/// Griffin, 2026-11-05, "Mark 2025 to 2027 in the file").
 pub const SPACE_OUTLINE_AREA_PLAN_TOPOLOGY_UNCHECKED: &str = "area_plan_topology_unchecked";
 
 /// `BodyHeightSource` of an Area's body: from its Level up to the Level above
