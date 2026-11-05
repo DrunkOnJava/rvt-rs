@@ -25,6 +25,11 @@
 //!                     `VWallDriver.m_pCrv` resolves to; and the walls the
 //!                     current rule reads against the walls `m_pCrv` names one
 //!                     level `GLine` for
+//!   kind "swall"      one short line for every `SWall` of the save: its curves
+//!                     (index, class, owners, level, length), what `m_pCrv`
+//!                     names (token, class tag, the objects holding it), and
+//!                     whether the current rule and `m_pCrv` each read it, so
+//!                     that a wall is followed across the saves by its id
 //!   kind "wall"       one record in full: every object (index, class, token),
 //!                     each curve's geometry, owners and the chain from the
 //!                     root to it, `m_pCrv`, and the step classes. For each
@@ -203,6 +208,53 @@ fn named_curve(graph: &ObjectGraph) -> (Option<u64>, Vec<usize>) {
         })
         .unwrap_or_default();
     (token, indices)
+}
+
+/// The class tag the `m_pCrv` pointer itself carries, which a pointer that
+/// names no object still has.
+fn pointer_tag(graph: &ObjectGraph) -> Option<u64> {
+    graph
+        .objects
+        .iter()
+        .find(|object| object.class_name == "VWallDriver")
+        .and_then(|driver| driver.fields.pointer("/m_pCrv/class_tag")?.as_u64())
+}
+
+/// One short line of a wall: its curves, who names each, and what `m_pCrv`
+/// names, for every `SWall` of a save so that the same wall is read across the
+/// saves by its id.
+fn wall_line(id: u64, graph: &ObjectGraph) -> Value {
+    let curves: Vec<Value> = graph
+        .objects
+        .iter()
+        .enumerate()
+        .filter(|(_, object)| matches!(object.class_name.as_str(), "GLine" | "GArc"))
+        .map(|(index, object)| {
+            let named: Vec<String> = owners(graph, index)
+                .into_iter()
+                .map(|(_, class, _, field)| format!("{class}.{}", without_indices(&field)))
+                .collect();
+            let ends = level_ends(&object.fields);
+            json!({
+                "i": index,
+                "c": object.class_name,
+                "o": named,
+                "level_line": ends.is_some(),
+                "len": ends.map(|(s, e)| (e[0] - s[0]).hypot(e[1] - s[1])),
+            })
+        })
+        .collect();
+    let (token, indices) = named_curve(graph);
+    json!({
+        "kind": "swall",
+        "id": id,
+        "pcrv_token": token,
+        "pcrv_tag": pointer_tag(graph),
+        "pcrv_at": indices,
+        "curves": curves,
+        "current": current_line(graph).is_some(),
+        "pointer": pointer_line(graph).is_some(),
+    })
 }
 
 /// The level line `m_pCrv` names, where it names exactly one object and that is
@@ -446,7 +498,10 @@ fn main() -> Result<()> {
         let state = match (token, indices.as_slice()) {
             (None, _) => "no VWallDriver.m_pCrv".to_string(),
             (Some(0), _) => "m_pCrv null".to_string(),
-            (Some(_), []) => "m_pCrv names no object".to_string(),
+            (Some(_), []) => format!(
+                "m_pCrv names no object (tag {})",
+                pointer_tag(graph).map_or_else(|| "?".to_string(), |tag| tag.to_string())
+            ),
             (Some(_), [one]) => format!("m_pCrv names one {}", graph.objects[*one].class_name),
             (Some(_), _) => "m_pCrv names several objects".to_string(),
         };
@@ -481,6 +536,7 @@ fn main() -> Result<()> {
             }
             (None, None) => bump(&mut agreement, "read by neither"),
         }
+        println!("{}", wall_line(id, graph));
         let openings_here: Vec<u32> = u32::try_from(id)
             .ok()
             .and_then(|id| unread.get(&id).cloned())
