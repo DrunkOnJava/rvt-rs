@@ -160,14 +160,25 @@ fn describe_class(registry: &Registry, class: &Class) -> String {
         .iter()
         .map(|f| describe_field(registry, f))
         .collect();
-    format!("fields={}: {}", class.fields.len(), fields.join(","))
+    let parent = if class.parent_reference.tag >= 12 {
+        registry
+            .class(class.parent_reference.tag)
+            .map_or("?", |c| c.name.as_str())
+    } else {
+        "none"
+    };
+    format!(
+        "parent={parent} fields={}: {}",
+        class.fields.len(),
+        fields.join(",")
+    )
 }
 
 fn schema_lines(registry: &Registry) {
     for class in &registry.classes {
         let wanted = matches!(
             class.name.as_str(),
-            "InstanceInfo" | "GInstance" | "GPolyMesh"
+            "InstanceInfo" | "InstInfoBase" | "GInstance" | "GPolyMesh"
         ) || class.name.starts_with("FacetedTopology");
         if wanted {
             line(&format!(
