@@ -1379,10 +1379,12 @@ pub fn graphics_with_resolver_at_detail<'a>(
 /// [`graphics_with_resolver_at_detail`] for the graphics of a file of Revit
 /// 2015 to 2022, the releases no export reads saved graphics of: a
 /// `FacetedTopology9` under normal binding 2 is read there where its stored
-/// normals follow the winding ([`normals_follow_winding`], RE-342). Every
-/// other reader of this module refuses it, and so does this one on any other
-/// release's graphics, which the caller decides by the file's release. A
-/// research route: `include_hidden` and `include_filtered` are as in
+/// normals follow the winding ([`normals_follow_winding`], RE-342), and a set
+/// `m_bHasScale` on an `InstanceInfo` of the older schema with a rotation
+/// matrix is walked through (`native_graphics_traversal`). Every other reader
+/// of this module refuses both, and so does this one on any other release's
+/// graphics, which the caller decides by the file's release. A research
+/// route: `include_hidden` and `include_filtered` are as in
 /// [`graphics_including_hidden`] and [`graphics_including_filtered`].
 pub fn graphics_pre2023<'a>(
     g: &'a ObjectGraph,
@@ -1428,7 +1430,15 @@ fn graphics_impl<'a>(
     include_filtered: bool,
     pre2023: bool,
 ) -> GraphicsMeshes {
-    let selection = if include_filtered {
+    let selection = if pre2023 {
+        crate::native_graphics_traversal::select_graphics_pre2023_at_detail(
+            g,
+            resolver,
+            detail_level,
+            include_hidden || include_filtered,
+            include_filtered,
+        )
+    } else if include_filtered {
         crate::native_graphics_traversal::select_graphics_including_filtered_at_detail(
             g,
             resolver,
@@ -1519,13 +1529,16 @@ fn graphics_impl<'a>(
                     .resolve(oi, &obj.fields["m_pFacetedTopology"])?
                     .context("faceted topology")?;
                 let topology = &g.objects[ti];
-                // FacetedTopology9 has FacetedTopology0's points, normals and
-                // facets and one more array, `m_edgeVisFlagsArr`, which is not
-                // read (RE-342). It is read only in the graphics of a file of
-                // Revit 2015 to 2022 (`pre2023`, `graphics_pre2023`: no export
-                // reads those), under normal binding 2 only, and only where
-                // every stored normal follows the winding; every other class,
-                // binding and release stays refused.
+                // FacetedTopology9 derives from FacetedTopology1, which declares
+                // what FacetedTopology0 does (both derive from
+                // FloatFacetedTopology and hold `m_facetsArr`), and adds one
+                // more array, `m_edgeVisFlagsArr`, which is not read (RE-342).
+                // The same fields serve: points, normals and facets. It is read
+                // only in the graphics of a file of Revit 2015 to 2022
+                // (`pre2023`, `graphics_pre2023`: no export reads those), under
+                // normal binding 2 only, and only where every stored normal
+                // follows the winding; every other class, binding and release
+                // stays refused.
                 let topology_class = topology.class_name.as_str();
                 ensure!(
                     topology_class == "FacetedTopology0"
@@ -1716,6 +1729,13 @@ mod tests {
         assert!(follows([0., 0., 1.]));
         assert!(follows([0., 0., 2.]));
         assert!(follows(tilted(0.05)));
+    }
+
+    // Its direction is the winding's exactly: only the length guard refuses it.
+    #[test]
+    fn a_stored_normal_too_short_to_have_a_direction_is_refused() {
+        assert!(!follows([0., 0., 1e-10]));
+        assert!(follows([0., 0., 1e-8]));
     }
 
     #[test]

@@ -311,9 +311,7 @@ fn read_creation_episodes(
     ensure!(count <= 1_000_000, "history episode count budget exceeded");
     let episode = episode_class()?;
     pos += 4;
-    // An episode holds a 16-byte GUID at least: a count the stream cannot hold
-    // reserves nothing beyond what it could.
-    let mut guids = Vec::with_capacity(count.min(history.len() / 16));
+    let mut guids = Vec::new();
     for _ in 0..count {
         let decoded = native_parameters::decode_object_fields(history, registry, pos, episode.tag)?;
         guids.push(episode_guid(&decoded.fields)?);

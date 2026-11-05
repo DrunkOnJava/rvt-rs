@@ -65,7 +65,31 @@ pub fn select_graphics_with_resolver_at_detail<'a>(
     resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
     detail_level: i64,
 ) -> GraphicsSelection {
-    select_graphics_impl(graph, resolver, detail_level, false, false)
+    select_graphics_impl(graph, resolver, detail_level, false, false, false)
+}
+/// [`select_graphics_with_resolver_at_detail`] for the graphics of a file of
+/// Revit 2015 to 2022, which no export reads: a set `m_bHasScale` is read there
+/// on an `InstanceInfo` of the older schema with a rotation matrix (RE-342).
+/// Every other entry point refuses the flag, whatever the schema of the
+/// `InstanceInfo`, and the caller decides by the file's release which one to
+/// call. `include_hidden` and `include_filtered` are as in
+/// [`select_graphics_including_hidden_at_detail`] and
+/// [`select_graphics_including_filtered_at_detail`].
+pub fn select_graphics_pre2023_at_detail<'a>(
+    graph: &'a ObjectGraph,
+    resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
+    detail_level: i64,
+    include_hidden: bool,
+    include_filtered: bool,
+) -> GraphicsSelection {
+    select_graphics_impl(
+        graph,
+        resolver,
+        detail_level,
+        include_hidden,
+        include_filtered,
+        true,
+    )
 }
 /// [`select_graphics_with_resolver_at_detail`], also walking the branches
 /// whose visibility flags hide them, each selected carrier marked
@@ -76,7 +100,7 @@ pub fn select_graphics_including_hidden_at_detail<'a>(
     resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
     detail_level: i64,
 ) -> GraphicsSelection {
-    select_graphics_impl(graph, resolver, detail_level, true, false)
+    select_graphics_impl(graph, resolver, detail_level, true, false, false)
 }
 /// [`select_graphics_including_hidden_at_detail`], also walking the children
 /// of a filter whose conditions reject the context or are not read, each
@@ -87,7 +111,7 @@ pub fn select_graphics_including_filtered_at_detail<'a>(
     resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
     detail_level: i64,
 ) -> GraphicsSelection {
-    select_graphics_impl(graph, resolver, detail_level, true, true)
+    select_graphics_impl(graph, resolver, detail_level, true, true, false)
 }
 fn select_graphics_impl<'a>(
     graph: &'a ObjectGraph,
@@ -95,6 +119,7 @@ fn select_graphics_impl<'a>(
     detail_level: i64,
     include_hidden: bool,
     include_filtered: bool,
+    pre2023: bool,
 ) -> GraphicsSelection {
     let mut walk = Walker {
         graph,
@@ -109,6 +134,7 @@ fn select_graphics_impl<'a>(
         hidden_depth: 0,
         include_filtered,
         filtered_depth: 0,
+        pre2023,
     };
     if !(1..=3).contains(&detail_level) {
         walk.fail(0, "detail level must be1,2,or3");
@@ -160,6 +186,9 @@ struct Walker<'a, 'r> {
     hidden_depth: usize,
     include_filtered: bool,
     filtered_depth: usize,
+    /// Whether the graphics are a file of Revit 2015 to 2022's, the only ones
+    /// a set `m_bHasScale` is read in (RE-342).
+    pre2023: bool,
 }
 impl Walker<'_, '_> {
     fn fail(&mut self, index: usize, message: &str) {
@@ -403,7 +432,9 @@ impl Walker<'_, '_> {
             "GInstance" => {
                 let has_scale = obj.fields["m_bHasScale"].as_bool();
                 if has_scale != Some(false)
-                    && !(has_scale == Some(true) && self.unscaled_legacy_instance(index, obj))
+                    && !(self.pre2023
+                        && has_scale == Some(true)
+                        && self.unscaled_legacy_instance(index, obj))
                 {
                     return Err("scaled instance mode is not qualified".into());
                 }
@@ -471,7 +502,10 @@ impl Walker<'_, '_> {
     /// identity included (RE-342). What the flag means on that schema is not
     /// read, so only a matrix that scales, shears and mirrors nothing passes:
     /// the flag with a mirror or a scale, and the flag with the later
-    /// `InstanceInfo`, whose `m_GRepId` is present, stay refused.
+    /// `InstanceInfo`, whose `m_GRepId` is present, stay refused. Asked only
+    /// on the pre-2023 route (`Walker::pre2023`): every other walk refuses a
+    /// set flag before it gets here, whatever the schema of the
+    /// `InstanceInfo`.
     fn unscaled_legacy_instance(
         &self,
         index: usize,
@@ -763,6 +797,20 @@ mod tests {
             [1.0000001, 0., 0.],
             [0., 1.0000001, 0.],
             [0., 0., 1.0000001]
+        ])));
+    }
+
+    #[test]
+    fn a_rotation_off_by_less_than_the_tolerance_is_one() {
+        assert!(rotation(&matrix([
+            [1.0 + 1e-10, 0., 0.],
+            [0., 1., 0.],
+            [0., 0., 1.]
+        ])));
+        assert!(rotation(&matrix([
+            [1.0 - 1e-10, 0., 0.],
+            [0., 1. + 1e-10, 0.],
+            [0., 0., 1.]
         ])));
     }
 

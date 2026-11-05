@@ -279,6 +279,34 @@ fn rows<const N: usize>(value: &Value) -> Vec<[f64; N]> {
         .unwrap_or_default()
 }
 
+/// The rows of `value` as the reader takes them (`point` in
+/// `native_saved_mesh`): every one an array of `N` finite numbers, or `None`,
+/// where `rows` drops the malformed ones.
+fn strict_rows<const N: usize>(value: &Value) -> Option<Vec<[f64; N]>> {
+    value.as_array()?.iter().map(numbers::<N>).collect()
+}
+
+/// The facets of `value` as the reader takes them: every one an array of three
+/// unsigned integers that fit 32 bits and index one of `points` points, or
+/// `None`, where `facets` drops the malformed ones and saturates the indices.
+fn strict_facets(value: &Value, points: usize) -> Option<Vec<[u32; 3]>> {
+    value
+        .as_array()?
+        .iter()
+        .map(|facet| {
+            let items = facet.as_array().filter(|a| a.len() == 3)?;
+            let mut corners = [0u32; 3];
+            for (slot, item) in corners.iter_mut().zip(items) {
+                *slot = u32::try_from(item.as_u64()?).ok()?;
+                if *slot as usize >= points {
+                    return None;
+                }
+            }
+            Some(corners)
+        })
+        .collect()
+}
+
 fn facets(value: &Value) -> Vec<[usize; 3]> {
     value
         .as_array()
@@ -340,18 +368,20 @@ fn topology(object: &GraphObject, imposter: bool, tally: &mut Tally) {
         );
     }
     // The winding rule is the reader's own (`normals_follow_winding`), counted
-    // on every object under binding 2, whatever its normals: one with none, or
-    // with a count that is not its facets', is refused.
+    // on every object under binding 2, whatever its normals, and on the arrays
+    // as the reader takes them: one with no normals, with a count that is not
+    // its facets', or with a row that is malformed, an index that is not an
+    // unsigned 32-bit integer or is out of range, is refused as a whole.
     if flag == "2" {
-        let facet_indices: Vec<[u32; 3]> = facets
-            .iter()
-            .map(|t| t.map(|i| u32::try_from(i).unwrap_or(u32::MAX)))
-            .collect();
-        let rule = if normals_follow_winding(&points, &facet_indices, &normals) {
-            "keeps"
-        } else {
-            "refuses"
+        let kept = match (
+            strict_rows::<3>(&f["m_pointsArr"]),
+            strict_rows::<3>(&f["m_normalsArr"]),
+        ) {
+            (Some(points), Some(normals)) => strict_facets(&f["m_facetsArr"], points.len())
+                .is_some_and(|facets| normals_follow_winding(&points, &facets, &normals)),
+            _ => false,
         };
+        let rule = if kept { "keeps" } else { "refuses" };
         tally.add(format!("{key} objects the winding rule {rule}"), 1);
     }
     if normals.is_empty() {
