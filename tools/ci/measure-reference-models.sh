@@ -89,7 +89,9 @@
 # exit status, which the workflow turns into a failed job. It runs once every
 # export is done and before any sample's IFC is deleted. When a run holds fewer
 # than the four saves (a narrower sample_years) the file says `skipped:`, names
-# the years missing, and the workflow prints a notice: nothing was checked.
+# the years missing, and the workflow prints a notice: nothing was checked. A
+# run with ifc_flags is skipped the same way, since the gate is about the
+# default export.
 # SAMPLE_DIR does the same for Autodesk's sample projects (.rvt), adding the
 # export's diagnostics.json, rvt-ifc.log and ifc.sha256 (hashed as a model's
 # is) under OUT_DIR/sample-<file>/, and element_stage_counts.txt, the check
@@ -614,6 +616,13 @@ bodies_across_saves() {
       references+=("$(basename "$earlier" | cut -c1-4)=$(sample_dir "$earlier")/model.ifc")
     done
     dir=$(sample_dir "$candidate")
+    # The check is about the default export: a flag such as --phase changes
+    # what a save writes, or refuses a save that has no such phase.
+    if [ -n "${RVT_IFC_FLAGS:-}" ]; then
+      echo "::notice::$(basename "$dir"): this run's exports used ifc_flags ($RVT_IFC_FLAGS), so bodies_across_saves compared nothing"
+      printf 'bodies across saves: SKIPPED (the exports of this run used ifc_flags: %s)\nexit 0\n' "$RVT_IFC_FLAGS" > "$dir/bodies_across_saves.txt"
+      continue
+    fi
     if [ "${#references[@]}" -eq 0 ]; then
       echo "::notice::$(basename "$dir"): no 2024 or 2025 save of its project is in this run, so bodies_across_saves compared nothing"
       printf 'bodies across saves: SKIPPED (no 2024 or 2025 save of the project is in this run)\nexit 0\n' > "$dir/bodies_across_saves.txt"
@@ -634,6 +643,12 @@ bodies_across_saves() {
 # than that the check is skipped, and says so.
 areas_across_saves() {
   local year file missing="" args=()
+  # The gate is about the default export: a flag such as --phase changes what a
+  # save writes, or refuses a save that has no such phase.
+  if [ -n "${RVT_IFC_FLAGS:-}" ]; then
+    echo "areas across saves: skipped: the exports of this run used ifc_flags ($RVT_IFC_FLAGS), so nothing was compared" > "$OUT/areas_across_saves.txt"
+    return 0
+  fi
   for year in 2024 2025 2026 2027; do
     file="$SAMPLE_DIR/$year-racadvancedsampleproject.rvt"
     [ -f "$file" ] || missing="$missing $year"
