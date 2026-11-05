@@ -294,6 +294,7 @@ pub fn plan_profile_from_fields(fields: &[(String, InstanceField)]) -> Option<Pl
                 source_ok = text == PLAN_PROFILE_SOURCE
                     || crate::partition_room_boundaries::is_room_outline_source(text)
                     || text == crate::partition_area_records::AREA_BOUNDARY_SOURCE
+                    || text == crate::partition_area_records::AREA_TOPOLOGY_SOURCE
                     || text == crate::partition_schema_mvp::LANDING_OUTLINE_SOURCE;
             }
             (PLAN_PROFILE_OUTER_FIELD, field) => outer = points_from_field(field),
