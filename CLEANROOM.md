@@ -29,7 +29,13 @@ findings or decoders:
    Revit metadata extractor, chuongmep/revit-extractor (Python),
    the phi-ag/rvt project, and academic papers on Revit forensics
    are all public sources whose findings can be referenced.
-   Contributors should cite the source in the PR description.
+   Contributors should cite the source in the PR description. A third
+   party's capture of Revit API output, published with its findings as counts
+   or bits for a named public file, is such work (the maintainer's decision of
+   2026-11-05): it is cited and used to know where to look, a value lands only
+   when bytes of files CI can fetch, with Revit's own export or saved
+   geometry, confirm it, and a claim only the capture supports is recorded as
+   reported, not measured.
 4. **IFC / buildingSMART specifications.** Freely published by
    buildingSMART International. Fair to use for IFC export
    mapping decisions.
