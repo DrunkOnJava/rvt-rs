@@ -204,6 +204,7 @@ fn main() -> std::process::ExitCode {
 }
 
 fn run(args: Args) -> anyhow::Result<()> {
+    rvt::prof::start();
     let timestamp = source_date_epoch()?;
     let mut rf = RevitFile::open_with_limits(
         &args.input,
@@ -213,6 +214,7 @@ fn run(args: Args) -> anyhow::Result<()> {
             args.large_model,
         ),
     )?;
+    rvt::prof::lap("opened");
     let quality_mode = ExportQualityMode::from(args.mode);
     let walker_limits = walker_limits_from_args(&args);
 
@@ -227,6 +229,7 @@ fn run(args: Args) -> anyhow::Result<()> {
             walker_limits,
         )?
     };
+    rvt::prof::lap("exported");
     let mut model = result.model;
     let mut diagnostics = result.diagnostics;
     if let Some(scope) = saved_mesh_scope(&mut rf, &args) {
@@ -329,6 +332,7 @@ fn run(args: Args) -> anyhow::Result<()> {
 
     let step = write_step_with_options(&model, &StepOptions { timestamp });
     std::fs::write(&out_path, step.as_bytes())?;
+    rvt::prof::lap("written");
     eprintln!(
         "rvt-ifc: wrote {} bytes to {}",
         step.len(),

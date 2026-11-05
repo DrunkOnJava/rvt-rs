@@ -1001,12 +1001,14 @@ impl RvtDocExporter {
         limits: crate::walker::WalkerLimits,
     ) -> Result<ExportResult> {
         let model = self.export_with_mode_and_limits(rf, quality_mode, limits)?;
+        crate::prof::lap("export-model-done");
         let diagnostics = build_export_diagnostics_with_limits(
             rf,
             &model,
             ExportDiagnosticsMode::Default,
             limits,
         );
+        crate::prof::lap("export-diagnostics-done");
         Ok(ExportResult { model, diagnostics })
     }
 }
@@ -1185,6 +1187,7 @@ fn export_rvt_doc(
         walker_limits,
         control,
     )?;
+    crate::prof::lap("append_production_walker_elements");
     if mode == RvtDocExportMode::DiagnosticProxies {
         append_diagnostic_walker_proxy_candidates(rf, &mut entities, walker_limits);
     }
