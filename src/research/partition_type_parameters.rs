@@ -50,11 +50,6 @@ pub const TYPE_TEXT_PARAMETERS: &[(i64, &str)] = &[
 pub const TABLE_TEXT_PARAMETERS: &[(i64, &str)] =
     &[(-1001206, "Fire Rating"), (-1010108, "Manufacturer")];
 
-/// A door type's Heat Transfer Coefficient (U), by BuiltInParameter: the
-/// `f64 · ff × 8 · i64 parameter` entry of its value block (RE-93), in W/(m²·K)
-/// as Revit's export writes it as the type's `ThermalTransmittance` (RE-354).
-pub const THERMAL_TRANSMITTANCE_PARAMETER: i64 = -1005430;
-
 /// Longest value read, in UTF-16 units.
 const MAX_VALUE_UNITS: usize = 400;
 
@@ -161,31 +156,6 @@ fn table_text_before(buf: &[u8], at: usize) -> Option<String> {
         }
         text_at(buf, start)
     })
-}
-
-/// The Heat Transfer Coefficient (U) of each of `types` that holds one above
-/// zero, where every copy agrees ([`THERMAL_TRANSMITTANCE_PARAMETER`]). Empty
-/// for a release whose element records are not decoded.
-pub fn type_thermal_transmittances(
-    rf: &mut RevitFile,
-    revit_version: u32,
-    types: &BTreeSet<u32>,
-) -> BTreeMap<u32, f64> {
-    if !supports_revit_version(revit_version) || types.is_empty() {
-        return BTreeMap::new();
-    }
-    let Ok(records) = crate::elem_table::parse_records(rf) else {
-        return BTreeMap::new();
-    };
-    let declared = crate::elem_table::declared_ids(&records);
-    let parameters = BTreeSet::from([THERMAL_TRANSMITTANCE_PARAMETER]);
-    type_lengths(rf, &declared, types, &parameters)
-        .into_iter()
-        .filter_map(|(owner, held)| {
-            let value = *held.get(&THERMAL_TRANSMITTANCE_PARAMETER)?;
-            (value > 0.0).then_some((owner, value))
-        })
-        .collect()
 }
 
 /// A `u32`-counted UTF-16 string at `at` of printable characters.

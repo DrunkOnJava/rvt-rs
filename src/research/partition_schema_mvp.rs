@@ -666,28 +666,6 @@ pub fn recover_partition_schema_mvp(
         }
     }
 
-    // --- Door types' Heat Transfer Coefficient (U) (RE-354) ---
-    let type_of = |element: &DecodedElement| {
-        element.fields.iter().find_map(|(name, value)| match value {
-            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
-            _ => None,
-        })
-    };
-    let door_types: BTreeSet<u32> = out.doors.iter().filter_map(&type_of).collect();
-    let thermal = crate::partition_type_parameters::type_thermal_transmittances(
-        rf,
-        revit_version,
-        &door_types,
-    );
-    for door in out.doors.iter_mut() {
-        if let Some(&value) = type_of(door).and_then(|id| thermal.get(&id)) {
-            door.fields.push((
-                TYPE_THERMAL_TRANSMITTANCE_FIELD.into(),
-                InstanceField::Float { value, size: 8 },
-            ));
-        }
-    }
-
     // --- Level parameters from the per-element association record (RE-172),
     // stairs' Base and Top Level from the same record and the Level named in
     // the element record's id lists where the field holds none (RE-174) ---

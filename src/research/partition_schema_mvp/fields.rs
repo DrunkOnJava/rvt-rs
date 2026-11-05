@@ -273,13 +273,6 @@ pub const INSTANCE_AXIS_TOLERANCE: f64 = 1e-6;
 /// `m_type_parameter:Type Mark` and so on.
 pub const TYPE_PARAMETER_FIELD_PREFIX: &str = "m_type_parameter:";
 
-/// Field carrying a door's type's Heat Transfer Coefficient (U), W/(m²·K), where
-/// it holds one above zero
-/// ([`crate::partition_type_parameters::THERMAL_TRANSMITTANCE_PARAMETER`],
-/// RE-354). Only the type object takes it: Revit's export gives the doors of
-/// such a type none.
-pub const TYPE_THERMAL_TRANSMITTANCE_FIELD: &str = "m_type_thermal_transmittance";
-
 /// Give each element the text parameters of its type ([`TYPE_ID_FIELD`],
 /// RE-38 and #322), as Revit shows a type's parameters on its instances.
 /// Field carrying, once per material, the name of a material an element's
