@@ -30,6 +30,7 @@ body:
     attributes:
       label: Revit release the input file came from
       options:
+        - "2027"
         - "2026"
         - "2025"
         - "2024"
@@ -41,6 +42,7 @@ body:
         - "2018"
         - "2017"
         - "2016"
+        - "2015"
         - "Unknown"
         - "Not applicable"
     validations:
