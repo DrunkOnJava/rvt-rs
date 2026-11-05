@@ -953,7 +953,7 @@ fn sketch_list_copies_at(
 ) -> (BTreeMap<u32, Vec<SketchListCopy>>, ListOffsets) {
     let mut found: BTreeMap<u32, Vec<SketchListCopy>> = BTreeMap::new();
     let mut offsets = ListOffsets::new();
-    if !matches!(revit_version, 2024 | 2025 | 2026 | 2027) || sketch_lines.is_empty() {
+    if !matches!(revit_version, 2024..=2027) || sketch_lines.is_empty() {
         return (found, offsets);
     }
     let Some(header) = crate::partition_names::element_data_header(revit_version) else {
