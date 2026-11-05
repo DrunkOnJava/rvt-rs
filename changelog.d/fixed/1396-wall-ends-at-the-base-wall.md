@@ -11,7 +11,9 @@
   more than its own thickness, no such wall touches the end and the cut of the
   wall's base still resolves over the longer plan. The added end is a block
   drawn up to the lowest of the top of the wall it reaches, the base of any
-  other wall it would lie inside, and the wall's own top: Revit steps the end up
+  other wall the pass reads that it would lie inside (a wall turned off a
+  quarter turn or drawn as another kind of solid is not read), and the wall's
+  own top: Revit steps the end up
   further and follows a wall at each height by a join order that is not read,
   so the steps above are not drawn, and the wall's profile openings stay where
   they were. It carries `BodyEndSource` and `EndCoverElementId` (the join trims

@@ -2027,8 +2027,10 @@ fn decide_ends(
 /// which is not read. The block this adds at an end is drawn up to the lowest
 /// of: the top of the walls beneath it that it reaches (the lowest top over
 /// the whole plan of one whose top a floor cut in steps, taken after the tops
-/// are cut), the base of any other wall whose plan it overlaps (the block must
-/// not lie inside a wall), and the wall's own top. The steps above are not
+/// are cut), the base of any other wall the pass reads whose plan it overlaps
+/// (the block must not lie inside a wall; one that is turned off a quarter
+/// turn, or drawn as another kind of solid, is not read and does not stop it),
+/// and the wall's own top. The steps above are not
 /// drawn. That is a bound by the geometry the pass reads, not Revit's rule:
 /// whether any wall's top is higher than Revit's at an added end is measured,
 /// by the plan rows of `wall_top_cover_vs_ifc`. The wall's `extrusion` is its
