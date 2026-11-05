@@ -18,27 +18,32 @@
   level-elevation order, so a row whose level moves moves in the file. The
   columns do not change. The user guide says what the level column is.
   Measured with `probes/examples/probe_1417_elements_csv_levels.rs` in
-  Measure run 41981541756 (code head 6fd13029, `base=none`,
-  `scorers=none`), where every model passes the probe's checks (header,
-  cells, level-elevation order, every row's ElementId, IFC type and level
-  against the placements) and the model `rvt-ifc` writes has the same written
-  elements and storeys as the schedule's model: on the BIM4LCA office as
-  built the schedule goes from 13,021 rows to 12,974 and at building permit
-  from 13,067 to 13,020, the 47 rows left out in each being `IfcCovering`
-  pieces the export folds into another element's body, and 599 rows of each
-  change level (542 `IfcMember`, 35 `IfcStairFlight` and 22 `IfcSlab`, all
-  parts of a whole): 542 from one storey to another and 57 from none to a
-  storey. On the Revit 2025 stair models r2025-13, r2025-14 and r2025-15 the
+  Measure run 41983667731 (code head 38ddc579, `base=none`,
+  `scorers=none`), where all 8 models pass the probe's six checks (header,
+  cells, count, level-elevation order, every row's ElementId, IFC type and
+  level against the placements, and the empty size cells of an element with
+  folded pieces) and the model `rvt-ifc` writes has the same written elements
+  and storeys as the schedule's model: on the BIM4LCA office as built the
+  schedule goes from 13,021 rows to 12,974 and at building permit from 13,067
+  to 13,020, the 47 rows left out in each being `IfcCovering` pieces the
+  export folds into another element's body, and 599 rows of each change level
+  (542 `IfcMember`, 35 `IfcStairFlight` and 22 `IfcSlab`, all parts of a
+  whole): 542 from one storey to another and 57 from none to a storey. The 47
+  pieces belong to 19 ceilings as built and 20 at permit, none without an
+  ElementId, and the width, depth and height of the row of each of them are
+  empty. On the Revit 2025 stair models r2025-13, r2025-14 and r2025-15 the
   27 rows stay 27 and 3 take a level (2 `IfcMember`, 1 `IfcStairFlight`), and
   on r2025-16 and r2025-17 the 25 rows stay 25 and 1 `IfcStairFlight` takes
-  one; no row moves from a storey to none on any of them. 2024 Core Interior
-  keeps its 970 rows and none moves. The office's 12,974 and 13,020 rows are
-  the element rows the MCP server's consistency check counted on those files
-  in run 41977947391. The IFC text `rvt-ifc` writes is the same on 34 of 34
-  models, in run 41981551766 (head 6fd13029 against main b36477f1,
-  `scorers=none`, nordic and r2025 on). These figures are those of code head
-  6fd13029, before an element with folded pieces had its size cells left
-  empty; the count of those rows, and the figures on the head that has that
-  change, are not yet measured. The held-out models and Autodesk's samples
-  were not run. The viewer's Schedule panel and its info panel still read the
-  element's own storey (#1422).
+  one; no row moves from a storey to none on any of them, and none of them
+  has an element with folded pieces. 2024 Core Interior keeps its 970 rows,
+  none moves and none has folded pieces. The office's 12,974 and 13,020 rows
+  are the element rows the MCP server's consistency check counted on those
+  files in run 41977947391. The IFC text `rvt-ifc` writes is the same on 34
+  of 34 models, in run 41983679071 (head 38ddc579 against main 40b86b80,
+  `scorers=none`, nordic and r2025 on). No row moved for an element in a
+  space or an opening on these models, so those two paths are not exercised
+  by this measurement. The held-out models and Autodesk's samples were not
+  run, and `rvt-ifc --saved-meshes`, `--family-extrusions` and the viewer's
+  saved-mesh path were not measured for folding. Follow-ups: the viewer's
+  Schedule panel and its info panel, which still read the element's own
+  storey (#1422), and the diagnostics' count of folded pieces (#1424).
