@@ -25,6 +25,8 @@ jobs:
   perf-budget:
     name: Runtime and memory budgets
     runs-on: ubuntu-24.04
+    # Longest 4.2 minutes.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -74,3 +76,18 @@ jobs:
           name: perf-budget-json
           path: target/perf-budgets/perf-budget.json
           if-no-files-found: warn
+
+  # A failed run opens an issue under `scheduled:runtime-and-memory-budgets`, or
+  # leaves the open one alone (report-failure.yml). Before this nobody read a red
+  # week. A manual run is a dry run: it prints the issue it would open.
+  report:
+    name: Report a failed week
+    needs: perf-budget
+    if: ${{ !cancelled() && (needs.perf-budget.result == 'failure' || needs.perf-budget.result == 'cancelled') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    uses: $/.github/workflows/report-failure.yml
+    with:
+      dry_run: ${{ github.event_name != 'schedule' }}

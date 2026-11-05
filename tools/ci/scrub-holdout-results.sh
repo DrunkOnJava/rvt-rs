@@ -27,6 +27,13 @@
 # alphabet; it prints no ElementId), the `native readers:`
 # count lines of the RE-283 to RE-285 probes and scorers (the same alphabet;
 # their `native readers example:` lines name ElementIds and are dropped), the
+# `census stages:` count lines of probe_re350_category_stages and the
+# `category census` lines of tools/re/category_census_vs_ifc.py (RE-350: for
+# each built-in category the counts of ids by stage and reason, the export
+# classes they land on and the export's counts by class, beside the category's
+# built-in name and id and an IFC class name, never an ElementId or a name
+# from the model; the scorer's table rows, which carry the export's category
+# name, and its `not in the export` lines are dropped), the
 # `door flips:` count lines of tools/re/door_flips_vs_ifc.py (RE-343: counts of
 # doors and windows by flag state and by how their placements compare; its
 # `field ... values` lines only with values true, false, null or under 100; its
@@ -48,7 +55,10 @@
 # tools/re/native_levels_vs_ifc.py (RE-281:
 # counts, the same restricted alphabet), the totals and per property counts of
 # its property set census (standard Pset_ and Qto_ names only; RE-281),
-# the `space kinds:` count lines of tools/re/space_kinds_vs_ifc.py (#1437: how
+# the `door axes:` count lines of tools/re/door_axes_vs_ifc.py (RE-347: how many
+# doors and windows have rvt-rs's local axes the same as Revit's, a half turn or
+# a quarter turn from them, and how many placed by the rule differ, as numbers
+# beside fixed words), the `space kinds:` count lines of tools/re/space_kinds_vs_ifc.py (#1437: how
 # many `IfcSpace`s hold each `SpaceKind`, how many hold none, and how many
 # disagree with their `SpaceOutlineSource`, as numbers beside fixed words, never
 # a GlobalId; its `exit N` line stays as `space kinds: exit N`, so the run's
@@ -82,6 +92,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       [ -f "$f" ] || continue
       grep -E '^native levels: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      grep -E '^category census[A-Za-z ]*: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^door flips: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" | grep -v -E '^door flips: field ' || true
       grep -E '^door flips: field [A-Za-z0-9_]+ values ((true|false|null|[0-9]{1,2})=[0-9]+(, )?)+$' "$f" || true
     done
@@ -95,6 +106,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^native framing: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^saved graphics pre2023: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      grep -E '^census stages: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
     done
     for f in "$dir"qtos_vs_ifc*.txt; do
       [ -f "$f" ] || continue
@@ -129,6 +141,15 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     for f in "$dir"global_ids_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E "^(elements: \{((\"not in Revit's export\"|\"GlobalId = Revit's\"|'differs'): [0-9]+(, )?)*\}|storeys: [0-9]+ of [0-9]+ equal Revit's|storeys whose GlobalId is one of Revit's: [0-9]+ of [0-9]+|(IfcProject|IfcSite|IfcBuilding): [0-9]+ of [0-9]+ equal Revit's|spaces: [0-9]+ of [0-9]+ equal one of Revit's)$" "$f" | sed 's/^/global ids: /' || true
+    done
+    # The local axes of the doors and windows against Revit's (RE-347,
+    # tools/re/door_axes_vs_ifc.py): counts beside fixed words. Its `exit N`
+    # line stays, as a `door axes:` line, so a crash is told from a model
+    # that was not checked, and a rule-placed element that differs (exit 1).
+    for f in "$dir"door_axes_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E '^door axes: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      grep -E '^exit [0-9]+$' "$f" | sed -E 's/^exit ([0-9]+)$/door axes: exit \1/' || true
     done
     for f in "$dir"space_profiles_vs_ifc.txt; do
       [ -f "$f" ] || continue

@@ -359,8 +359,37 @@ exact on 653 of 653 doors and 626 of 626 windows of the open models and
 Snowdon Towers (the two office files are one building, and the case where
 the booleans differ is measured on three 2024 buildings, one 2025 door and
 one 2026 house), and not on 49 of the 160 doors rvt-rs binds to no plain
-wall, which disagree. Revit's IFC is unchanged
+wall, which disagree
 (`reports/element-framing/RE-343-door-window-flips.md`).
+**A door or window set in a plain wall is placed on Revit's axes** (#1447,
+RE-347): its `IfcLocalPlacement` X is the stored X, reversed (with Y) where
+the two flips differ, Z up, the origin unchanged; the box keeps its place in
+the world (a quarter turn swaps its two sides) and the element says so in
+`RvtElementRecordGeometry.PlacementAxesSource`. Before, rvt-rs wrote the
+default axes on every door and window, which were Revit's on 115 of the 521
+doors and 226 of the 540 windows it binds to a plain wall in the open models
+(Measure run 42066757105). Now the rule is written for all 521 and 540, and
+Revit's axes are the same on all of them, and on the 24 doors and windows of
+the R2025 models (Measure run 42106711251, head `c1a2a739`; the BIM4LCA office
+files are one building). In the held-out models of 2024 to 2027 it is written
+for 41 of 41 doors and 104 of 105 windows (the one other already had a
+rotation of its own, which is Revit's) and none differs. Every door's and
+window's body, and the opening it fills, is where it was in world
+coordinates, as a saved mesh and as a record box, and its GlobalId, type
+GlobalId and host wall are unchanged, on Core Interior, RE1 Architecture and
+the two office files (`tools/re/placed_bodies_vs_base.py`, runs 42092391898
+and 42106731054). A door bound to none, an element with no stored transform
+(Revit 2023 and older) and a turned instance keep the default axes, which say
+nothing of the direction they face; the origin is still the record box's
+centre, more than 0.5 ft from Revit's on almost all (#1465). On Revit 2025,
+2026 and 2027 the same elements are held to the 2024 save by the same-project
+check (`tools/re/bodies_across_saves.py`, run 42106711251): it compares 107,
+79 and 65 doors and windows of `rac_advanced` and 17 each of `rac_basic` (of
+them 66, 44, 31 and 14, 14, 14 not on the default axes), so two buildings,
+each saved by three releases, exercise it; 28 and 42 the 2024 save places by
+the rule are left on the default axes in the 2026 and 2027 saves of
+`rac_advanced`, not scored
+(`reports/element-framing/RE-347-door-window-placement-axes.md`).
 **Storeys on Revit 2024 are the Revit `Level` elements themselves, names
 and elevations together** (#218, RE-24). A `Level` record carries the
 same 88-byte element-record prologue with `OST_Levels` (−2000240) at
@@ -1243,6 +1272,34 @@ profile (27 chords) and of two half arcs of it (28) (run 41805333248, RE-327
 (measured on 2024 and 2025); an earlier file has no instance transform that
 reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions.md`
 §9).
+
+**RE-350 (2026-11-05)** measures why three categories stay unread, on 59
+models with a Revit export and Autodesk's samples (Measure runs 42097940515,
+42108271073; `probe_re350_category_stages`, under its earlier name
+`probe_re348_category_stages` at `32586847`; #1444, #1445, Discussion #1241).
+The files hold them as frames, the same on every save of 2020 to 2027: 346
+`Rebar` on `rst_basic` (14 on Snowdon Towers Structural), 16 Structural Beam
+Systems on `rst_basic` (15 with a body) and 1 on `rac_advanced`, 3 placed
+Furniture Systems on `rac_basic`. No Revit export measured holds a reinforcing
+bar (0 of 60), and the only export of a project with a beam system, the
+three.js IFC2X3 export of `rac_advanced`, holds neither it nor any of the
+project's 38 framing members (23 of them the system's), so neither is added.
+Furniture Systems are `IfcSystemFurnitureElement` in the public IFC4 export of
+the 2018 `rac_basic` (RE-326 section 5, read locally): the 3 placed Furniture
+Systems of that save are all in it (3 of 3), none written that it lacks;
+the category qualifies and is not yet added, since a new category is a pull
+request of its own, and `category_map`'s `IfcFurniture` mapping for it is not
+what that export writes. Revit's exporter has code for rebar and beam systems
+(revit-ifc, CLEANROOM source 5), so the absence of an export is not evidence
+that Revit never writes them. On `rac_advanced` and `rac_basic` the sweep reads
+1,349 panels, 3,276 mullions and 100 doors, and 44 panels, 144 mullions and 16
+doors, on all eight saves of 2020 to 2027, every placed frame written. The 192
+panels, 1 door, 4 mullions and 2 panels that RvtIO counts beyond them on its
+2023 files are `FamilyInstance` records in the main model that every save
+2018 to 2027 holds with no frame, so no stored bounding box; the public IFC4
+export of the 2018 `rac_basic` holds none of the 6, and the IFC2X3 export of
+`rac_advanced` none of the 193. Their family types are not read from the file
+(`reports/element-framing/RE-350-unread-categories-and-rvtio-extras.md`).
 
 ## Performance
 

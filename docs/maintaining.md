@@ -207,7 +207,23 @@ the same project's earlier saves, matched by `Tag`: beams, landings and sketch
 outlines to the 2024 save, the 2026 and 2027 stair runs to the 2025 save. A 2025
 save is held to the 2024 save alone: its stair runs are the 2026 and 2027
 reference, so they are not compared, though the number it draws is still
-checked. Measure's script runs it beside each such sample, and the job
+checked. A fifth group (RE-347) holds each door and window placed on Revit's
+axes by the placement rule, whose axes nothing but the 2024 save can check on
+these releases, to the 2024 save's: class, GlobalId, placement axes and body.
+It prints how many it compared and how many are off the default axes, fails
+below `OPENINGS_LEAST` per class and above `OPENINGS_LEFT_OUT_MOST`, the doors
+and windows the 2024 save places by the rule that a later save leaves on the
+default axes (28 on the 2026 and 42 on the 2027 save of `rac_advanced` when it
+was set: the pass that takes a door's host from its native record (RE-245) is
+run on `CUT_LOOP_REVIT_VERSIONS`, 2024 and 2025, so on 2026 and 2027 a nearest
+wall that is not the door's own fails the along-the-wall test; and on 2027, 14
+more, set in 8 host walls with no native straight-line row, #1475), which
+can only shrink: a count that drops
+moves the ceiling down in the change that drops it. It exercises two buildings
+(`rac_advanced` and `rac_basic`, each saved by each release); `rst_basic` holds
+none, and `rme_advanced` and `rme_basic` (107 placed doors per file, 59 with
+unequal flips) join it when their pipes pass, in whichever of #1454 and #1456
+lands second. Measure's script runs it beside each such sample, and the job
 `same-project-gates` turns the run red on a difference, a missing file, an
 unknown project, fewer bodies than the sample holds, or a check that compared
 nothing. That job also holds #1428's Areas gate (rac_advanced's Areas across its
@@ -747,16 +763,34 @@ line names what to fix (its rulesets check needs an admin token). The list:
    cited commit GitHub does not have at all; whether a ref reaches it is not
    checked automatically.
 3. The Actions cache is under its 10 GB limit. `python3
-   tools/maintainer/clean_caches.py` (a dry run; `--delete` acts) removes the
+   tools/maintainer/clean_caches.py` (a dry run; `--delete` acts, and
+   `scheduled-checks.yml` runs it with `--delete` every day) removes the
    caches of closed pull requests and deleted branches, and `main`'s superseded
-   rust-cache generations and CodeQL overlay base databases (per CodeQL version): a new lockfile
-   saves a new cache under a new key, and each CodeQL analysis of `main` saves
-   a new base database, and the old ones are never read again. `main`'s newest
-   two generations of each family, live branches' and open pull requests'
-   caches are kept.
+   rust-cache generations, CodeQL overlay base databases (per CodeQL version) and
+   the RE1 models' cache (keyed by the sha256 of `research/re1-models.tsv`):
+   a new lockfile saves a new cache under a new key, each CodeQL analysis of
+   `main` saves a new base database, and a changed pin list saves a new RE1 key,
+   and the old ones are never read again.
+   `main`'s newest two generations of each family, live branches' and open pull
+   requests' caches are kept. The cache is evicted least recently used first at
+   its limit, so a key read only once a night does not last: Fuzz's corpus is an
+   artifact for that reason (`fuzz.yml`). A night that cannot read the corpus
+   (three tries) warns, starts from the seeds and saves nothing, so the corpus it
+   could not read stays the newest. With no open pull request the cleaner deletes
+   nothing and exits 0 with a notice, because that list cannot be told from an
+   empty reply.
 4. Workflow runs on `main` are green. A red check is a defect to fix, or an
    issue to file with its cause, and a check that fails only because a service
-   is down reports "not measured" rather than failing.
+   is down reports "not measured" rather than failing. A "not measured"
+   warning that is on every run of a job for a day (three runs or more) opens
+   an issue under `scheduled:not-measured-<what>`
+   (`tools/ci/not_measured.py`, in `scheduled-checks.yml`, reading `main`'s runs
+   of `ci.yml` and the daily runs of `scheduled-checks.yml`). That workflow also
+   audits the three lockfiles (the root's, the fuzz workspace's and the
+   witness's) for advisories every day and builds the docs on a floating
+   nightly every Monday, and Corpus nightly and Performance Budgets report
+   through the same piece: a failed job opens an issue under
+   `scheduled:<job name>`, or leaves the open one alone, and never comments.
 5. Open Dependabot and code scanning alerts are triaged, each fixed or
    dismissed with a reason, and Dependabot watches every lockfile (a pip
    requirements file pinned with hashes among them), Dockerfile, composite

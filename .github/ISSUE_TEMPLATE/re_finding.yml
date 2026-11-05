@@ -8,7 +8,7 @@ body:
       value: |
         Use this form for byte-level format observations that may or may not become decoder work. If you already know the target decoder, the Decoder work form is usually better.
 
-        Keep claims evidence-backed: public file bytes, public symbols, reproducible probes. Do not invent offsets, markers, or IDs that are not in your evidence. For corpus files you are unsure you can share, do not attach them — see [`docs/corpus-intake.md`](../../docs/corpus-intake.md).
+        Keep claims evidence-backed: public file bytes, public symbols, reproducible probes. Do not invent offsets, markers, or IDs that are not in your evidence. For corpus files you are unsure you can share, do not attach them — see [`docs/corpus-intake.md`](https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/corpus-intake.md).
   - type: textarea
     id: observation
     attributes:
