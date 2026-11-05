@@ -143,9 +143,9 @@ struct Args {
     /// read from (#1325): the kind of record, its stream and byte offset in
     /// the inflated stream (what rvt-dump writes as Partitions_NN.decomp),
     /// where its ElementId is stored, its class and its native record. Off by
-    /// default: the list is about 140 times the rest of the pretty-printed
-    /// sidecar on a large model (7.4 MB against 53 KB on the BIM4LCA office
-    /// as built). Never written into the IFC.
+    /// default: on a large model the list is hundreds of times the rest of
+    /// the sidecar (docs/export-diagnostics.md, "Provenance table size", gives
+    /// the measured sizes). Never written into the IFC.
     #[arg(long, requires = "diagnostics", conflicts_with = "placeholder")]
     element_provenance: bool,
     /// Also list, in the diagnostics sidecar, each fail-closed decision per
