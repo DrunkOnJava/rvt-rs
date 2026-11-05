@@ -123,14 +123,16 @@ pub const PLAN_PROFILE_VOID_OPENINGS_FIELD: &str = "m_plan_profile_void_openings
 
 /// A void loop of a sketch and the sketch line that tags it (RE-151). Revit's
 /// export writes a floor's void as an `IfcOpeningElement` voiding the floor,
-/// with the loop's outline, and the `Tag` the lowest ElementId of the sketch
-/// lines on the loop.
+/// with the loop's outline, and the `Tag` the ElementId of one of the sketch
+/// lines on the loop (RE-339).
 #[derive(Debug, Clone, PartialEq)]
 pub struct VoidOpening {
     /// The piece the void is in: 0 the first, `n` the `n`th of
     /// [`PlanProfile::pieces`].
     pub piece: usize,
-    /// The lowest ElementId of the sketch lines on the loop.
+    /// The ElementId of the sketch line that tags the loop: the lowest of the
+    /// lines on it, the highest where they are read to run clockwise in
+    /// ElementId order.
     pub tag: u32,
     /// The loop, counter-clockwise.
     pub outline_xy: Vec<(f64, f64)>,
@@ -443,10 +445,10 @@ pub fn plan_profiles_from_sketch_line_records(
             })
             .collect();
         if let Some(mut profile) = plan_profile_from_segments(&boxes) {
-            let lines: Vec<(u32, (f64, f64))> = ids
+            let lines: Vec<(u32, (f64, f64), bool)> = ids
                 .iter()
                 .zip(&boxes)
-                .map(|(id, b)| (*id, ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0)))
+                .map(|(id, b)| (*id, ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0), true))
                 .collect();
             tag_voids(&mut profile, &lines);
             profile.segment_ids = ids;
@@ -460,25 +462,20 @@ pub fn plan_profiles_from_sketch_line_records(
 /// it (RE-151), feet.
 pub const ON_LOOP_EPS_FEET: f64 = 1e-4;
 
-/// Tag each void of `profile` with the lowest ElementId of the sketch lines
-/// on it (RE-151), `lines` each sketch line's ElementId and a point of it on
-/// the edge it makes: a straight line's box centre, its midpoint, or the
-/// midpoint of the first chord a curve is drawn with. A line is on a loop
-/// where that point lies on one of the loop's edges. A void with no line on
-/// it is left untagged.
-pub fn tag_voids(profile: &mut PlanProfile, lines: &[(u32, (f64, f64))]) {
+/// Tag each void of `profile` with the ElementId of the sketch line its loop
+/// starts at (RE-151, RE-339), `lines` each sketch line's ElementId, a point
+/// of it on the edge it makes (a straight line's box centre, its midpoint, or
+/// the midpoint of the first chord a curve is drawn with) and whether it is
+/// straight. A line is on a loop where that point lies on one of the loop's
+/// edges. A void with no line on it is left untagged.
+pub fn tag_voids(profile: &mut PlanProfile, lines: &[(u32, (f64, f64), bool)]) {
     let voids = std::iter::once(&profile.inner_xy)
         .chain(profile.pieces.iter().map(|piece| &piece.inner_xy))
         .enumerate()
         .flat_map(|(piece, inner)| inner.iter().map(move |ring| (piece, ring)));
     let mut tagged = Vec::new();
     for (piece, ring) in voids {
-        let tag = lines
-            .iter()
-            .filter(|(_, point)| on_loop(ring, *point))
-            .map(|(id, _)| *id)
-            .min();
-        if let Some(tag) = tag {
+        if let Some(tag) = void_tag(ring, lines) {
             let mut outline_xy = ring.clone();
             outline_xy.reverse();
             tagged.push(VoidOpening {
@@ -491,10 +488,54 @@ pub fn tag_voids(profile: &mut PlanProfile, lines: &[(u32, (f64, f64))]) {
     profile.void_openings = tagged;
 }
 
-/// Whether `point` lies on an edge of the closed loop `ring`, to within
+/// The ElementId Revit's export tags a void with (RE-151, RE-339): the lowest
+/// of the lines on it, unless they run clockwise round it in ElementId order,
+/// when it is the highest. Sketch lines are indexed in the order they were
+/// drawn, which on every sketch measured is the order of their ElementIds,
+/// and eight voids of one exporter show a clockwise loop starting at the line
+/// drawn last. The direction is read only where there are at least three
+/// lines, all straight, each on an edge of its own, and every step from one
+/// line to the next in ElementId order, the closing step from the last to the
+/// first included, is exactly the next edge round the loop or exactly the
+/// previous one; anywhere else nothing says it is clockwise and the tag is
+/// the lowest, as it is on all 62 voids of Core Interior.
+fn void_tag(ring: &[(f64, f64)], lines: &[(u32, (f64, f64), bool)]) -> Option<u32> {
+    let mut on: Vec<(u32, usize, bool)> = lines
+        .iter()
+        .filter_map(|(id, point, straight)| {
+            edge_of(ring, *point).map(|edge| (*id, edge, *straight))
+        })
+        .collect();
+    on.sort_unstable();
+    let first = on.first()?.0;
+    let last = on.last()?.0;
+    let edges = ring.len();
+    if on.len() < 3 || edges < 3 || on.iter().any(|&(_, _, straight)| !straight) {
+        return Some(first);
+    }
+    let mut forward = true;
+    let mut backward = true;
+    for (at, &(_, edge, _)) in on.iter().enumerate() {
+        let next = on[(at + 1) % on.len()].1;
+        let step = (next + edges - edge) % edges;
+        forward &= step == 1;
+        backward &= step == edges - 1;
+    }
+    if forward == backward {
+        return Some(first);
+    }
+    let ring_counter_clockwise = signed_area(ring) > 0.0;
+    Some(if ring_counter_clockwise == forward {
+        first
+    } else {
+        last
+    })
+}
+
+/// The first edge of the closed loop `ring` that `point` lies on, to within
 /// [`ON_LOOP_EPS_FEET`].
-fn on_loop(ring: &[(f64, f64)], point: (f64, f64)) -> bool {
-    (0..ring.len()).any(|index| {
+fn edge_of(ring: &[(f64, f64)], point: (f64, f64)) -> Option<usize> {
+    (0..ring.len()).find(|&index| {
         let (a, b) = (ring[index], ring[(index + 1) % ring.len()]);
         let (dx, dy) = (b.0 - a.0, b.1 - a.1);
         let length = dx * dx + dy * dy;
@@ -1178,4 +1219,86 @@ pub fn add_voids_to_fields(
     };
     *field = InstanceField::Vector(inner.iter().map(|ring| loop_field(ring)).collect());
     true
+}
+
+#[cfg(test)]
+mod void_tag_tests {
+    use super::void_tag;
+
+    fn counter_clockwise_square() -> Vec<(f64, f64)> {
+        vec![(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)]
+    }
+
+    fn clockwise_square() -> Vec<(f64, f64)> {
+        vec![(0.0, 0.0), (0.0, 4.0), (4.0, 4.0), (4.0, 0.0)]
+    }
+
+    /// The midpoint of an edge of `ring`.
+    fn middle(ring: &[(f64, f64)], edge: usize) -> (f64, f64) {
+        let (a, b) = (ring[edge], ring[(edge + 1) % ring.len()]);
+        ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0)
+    }
+
+    /// Straight lines with the ElementIds 10, 11, ... on the edges named.
+    fn lines_on(ring: &[(f64, f64)], edges: &[usize]) -> Vec<(u32, (f64, f64), bool)> {
+        edges
+            .iter()
+            .zip(10u32..)
+            .map(|(&edge, id)| (id, middle(ring, edge), true))
+            .collect()
+    }
+
+    // Two lines say nothing of the direction round the loop.
+    #[test]
+    fn two_lines_keep_the_lowest() {
+        let ring = counter_clockwise_square();
+        assert_eq!(void_tag(&ring, &lines_on(&ring, &[3, 2])), Some(10));
+    }
+
+    // A curve makes the steps between lines unreadable.
+    #[test]
+    fn a_curved_loop_keeps_the_lowest() {
+        let ring = counter_clockwise_square();
+        let mut lines = lines_on(&ring, &[3, 2, 1, 0]);
+        lines[2].2 = false;
+        assert_eq!(void_tag(&ring, &lines), Some(10));
+    }
+
+    // Three lines on three edges of four: the steps are one on, one on, and
+    // then two on to close.
+    #[test]
+    fn a_closing_step_that_disagrees_keeps_the_lowest() {
+        let ring = counter_clockwise_square();
+        assert_eq!(void_tag(&ring, &lines_on(&ring, &[0, 1, 2])), Some(10));
+    }
+
+    // Two lines on one edge are not each on an edge of their own.
+    #[test]
+    fn lines_sharing_an_edge_keep_the_lowest() {
+        let ring = counter_clockwise_square();
+        assert_eq!(void_tag(&ring, &lines_on(&ring, &[0, 0, 1])), Some(10));
+    }
+
+    // A step of two edges is neither the next nor the previous.
+    #[test]
+    fn a_step_over_an_edge_keeps_the_lowest() {
+        let ring = counter_clockwise_square();
+        assert_eq!(void_tag(&ring, &lines_on(&ring, &[0, 2, 1, 3])), Some(10));
+    }
+
+    #[test]
+    fn counter_clockwise_lines_take_the_lowest() {
+        let ring = counter_clockwise_square();
+        assert_eq!(void_tag(&ring, &lines_on(&ring, &[0, 1, 2, 3])), Some(10));
+        let ring = clockwise_square();
+        assert_eq!(void_tag(&ring, &lines_on(&ring, &[3, 2, 1, 0])), Some(10));
+    }
+
+    #[test]
+    fn clockwise_lines_take_the_highest() {
+        let ring = counter_clockwise_square();
+        assert_eq!(void_tag(&ring, &lines_on(&ring, &[3, 2, 1, 0])), Some(13));
+        let ring = clockwise_square();
+        assert_eq!(void_tag(&ring, &lines_on(&ring, &[0, 1, 2, 3])), Some(13));
+    }
 }
