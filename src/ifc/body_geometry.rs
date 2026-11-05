@@ -666,6 +666,35 @@ pub fn sloped_slab_mesh(
         .then_some(mesh)
 }
 
+/// A solid over the plan area inside `outer` and outside `holes` between the
+/// surfaces `bottom(point)` and `top(point)`, with upright sides (#1384): a
+/// wall whose base follows the top of the footing it stands on. `None`
+/// unless `top` lies above `bottom` at every vertex of the plan.
+pub fn between_surfaces_mesh(
+    outer: &[Point2],
+    holes: &[Ring],
+    bottom: impl Fn(Point2) -> f64,
+    top: impl Fn(Point2) -> f64,
+) -> Option<Mesh> {
+    let section = section(outer, holes)?;
+    let rises = section
+        .cap_points
+        .iter()
+        .all(|&p| top(p) - bottom(p) > 1e-9);
+    if !rises {
+        return None;
+    }
+    let mesh = prism(&section, |p, t| {
+        let low = bottom(p);
+        [p.0, p.1, low + t * (top(p) - low)]
+    });
+    mesh.vertices
+        .iter()
+        .flatten()
+        .all(|v| v.is_finite())
+        .then_some(mesh)
+}
+
 /// A plane `z = a·x + b·y + c` over the plan, as `[a, b, c]`.
 pub type PlanPlane = [f64; 3];
 

@@ -413,6 +413,34 @@ pub const SLAB_TYPE_LAYER_COUNT_FIELD: &str = "m_slab_type_layer_count";
 /// step that cuts its solid, a `CutPairGStep` or a `WallCutoutGStep` (RE-295).
 pub const SLAB_UNCUT_FIELD: &str = "m_slab_uncut";
 
+/// Field holding, as a vector of three floats `[a, b, c]`, the plane
+/// `z = a·x + b·y + c` (model feet) of the top of a floor whose native record
+/// shape-edits its corner vertices (`SlabShapeEditGStep`, #1384, RE-336).
+pub const SLAB_TOP_PLANE_FIELD: &str = "m_slab_top_plane";
+
+/// Field set on a floor, ceiling or roof whose native record was read, with
+/// the shape it holds (or none) given by [`SLAB_TOP_PLANE_FIELD`] or
+/// [`SLAB_SHAPE_UNREAD_FIELD`] or by neither (#1384): the mark that its top is
+/// known to be flat where it has neither. A plate without it was not read.
+pub const SLAB_SHAPE_READ_FIELD: &str = "m_slab_shape_read";
+
+/// Field holding, as a flat vector of floats `[x0, y0, x1, y1, ...]`, the plan
+/// place of each corner vertex of a floor whose shape-edited corners lie in one
+/// plane ([`SLAB_TOP_PLANE_FIELD`], #1384): the places the plane is made from,
+/// which the floor's plan outline must have as its vertices.
+pub const SLAB_SHAPE_CORNERS_FIELD: &str = "m_slab_shape_corners";
+
+/// Field holding, as a code, why a floor whose native record edits its shape
+/// (`SlabShapeEditGStep`) has no [`SLAB_TOP_PLANE_FIELD`]: the edits are not
+/// of its corners alone, or its corners do not lie in one plane (#1384).
+pub const SLAB_SHAPE_UNREAD_FIELD: &str = "m_slab_shape_unread";
+
+/// Field holding, as a vector of ElementIds, the elements a wall's base join
+/// (`JoinToRoofGStep` with `m_baseOrTop` 0) names
+/// ([`crate::native_walls::WallRecords::base_cutters`], #1384): the floors and
+/// footings the export may cut its base at.
+pub const WALL_BASE_CUTTERS_FIELD: &str = "m_wall_base_cutters";
+
 /// Field holding a railing's height, its type's top rail height, feet
 /// (RE-231).
 pub const RAILING_HEIGHT_FIELD: &str = "m_railing_height";
