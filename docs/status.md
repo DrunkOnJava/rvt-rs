@@ -959,6 +959,10 @@ storey's elements by category, type name first, with curtain-wall and
 stair parts under their whole. Elements reach their storey from the
 Level their record names (RE-59, RE-60): all 970 of Core Interior's
 building elements sit on Revit's storey, and ArcWalls bind by elevation.
+The tree, the Schedule panel and the info panel then put each element on the
+storey the IFC export writes it on (a part on its whole's, an element in a
+room on the room's, an opening on its host's) and list only the elements the
+export writes (#1422).
 RE-20 (same corpora) found **no** recoverable Level ElementId map:
 `Level` is absent from Formats schema; LevelAssociationCell / name /
 elevation proximity scans are noise-dominated — Floors/Rooms stay
