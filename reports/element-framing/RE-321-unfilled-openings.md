@@ -92,7 +92,7 @@ The 8 `none in IfcWall` extras on both files predate this change: the same 8 are
 
 - **A door in a second wall** (39 as built, 43 at permit; 37 extrusions, 2 meshes). On the doors printed, the opening is the door's cut loop (RE-215) in the door's frame, across the loop's plane by the thickness of the door's own wall (0.328 ft, 100 mm) on some and by 10 ft, 5 ft either side of the loop's plane, on others; nothing read decides which, and 2 are meshes.
 - **A door in itself** (4, 2) and **a wall in itself** (2): the openings of RE-225's symbols cut solid in the door and of the wall's own profile; no step names them.
-- **A floor's sketch voids** (9 of 36 as built are not written; they are on main's census) are RE-151's. The 8 `none in IfcWall` openings the scorer lists as written that Revit's export lacks on both office files predate this change: they are in main's export.
+- **A floor's sketch voids** (9 of 36 as built were written under another line's Tag, and 8 of 35 at permit, until RE-339 read which line Revit tags a loop with) are RE-151's and RE-339's. The 8 `none in IfcWall` openings the scorer lists as written that Revit's export lacks on both office files predate this change: they are in main's export.
 
 ## 6. Reproduce
 

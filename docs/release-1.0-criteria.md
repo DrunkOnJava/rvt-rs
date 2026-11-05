@@ -189,9 +189,9 @@ the maintainer,
 That differs from the office's on the members the cache turned false (8,579 of 10,003 mullions and 33 of 260 panels as built, RE-193), and the only model of a newer exporter with curtain members is RE1 Architecture (26.2), whose 12 members, 10 mullions and 2 panels, stand on one interior curtain wall and are false by either rule:
 the exterior members' values are checked against revit-ifc's source only, since no newer exporter's model has an exterior curtain wall.
 On the office as built, with `--revit-set-placement` (Measure run 41215480967, `main` at f9f71e68), 289 of the 45,525 property values Revit's export writes on objects rvt-rs writes are missing and 1 differs;
-without it, 1,361 are missing (Measure run 41213779326).
-At building permit, 292 of 45,704, and 1,364 without it.
-rvt-rs writes 10 values Revit's export does not as built and 16 at permit (the two more are the `Reference` of the one rectangular wall opening the permit export lacks and its sibling, the office as built, holds, RE-321):
+without it, 1,369 are missing (Measure run 41953415257, RE-339's tags; 1,361 before).
+At building permit, 292 of 45,704, and 1,371 without it (1,364).
+rvt-rs writes 2 values Revit's export does not as built and 9 at permit (10 and 16 before RE-339 tagged the floor voids with Revit's line, which took the `Reference` of 8 and 7 voids written under another line's Tag out of this count; the 9 at permit include the `Reference` of the one rectangular wall opening the permit export lacks and its sibling, the office as built, holds, RE-321):
 all but one are on elements Revit's export leaves out (openings, and at permit a column, RE-239, [#792](https://github.com/DrunkOnJava/rvt-rs/issues/792)),
 and the one, a sanitary terminal's `Pset_SanitaryTerminalTypeCommon.Reference`, follows from fixture 3095244's class, which Revit's export writes as `IfcFlowTerminal` (#792).
 RE-321 writes the 30 rectangular wall openings Revit's export holds as built and the 24 at permit, whose values the census scores: 60 and 48 property values and 90 and 72 quantities, all equal, none missing or different (Measure run 41748430211, against `main` at 0e0582e1); the openings Revit's export writes with nothing to fill them that rvt-rs does not (cabinets, curtain walls, a door's further cuts) hold 531 property values and 437 quantities as built, counted apart ([#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165)).

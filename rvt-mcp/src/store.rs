@@ -9,6 +9,7 @@
 //! eviction or a restart, and the tools then say so and ask for `open_model`
 //! again.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::UNIX_EPOCH;
@@ -18,7 +19,9 @@ use rvt::control::WalkerControl;
 use rvt::elem_table::RecordFraming;
 use rvt::ifc::element_provenance::ElementProvenanceTable;
 use rvt::ifc::export_decisions::ExportDecisionLog;
-use rvt::ifc::step_writer::{Placement, element_global_ids, placements, storey_of};
+use rvt::ifc::step_writer::{
+    Placement, TypeObject, TypeObjects, element_global_ids, placements, storey_of, type_objects,
+};
 use rvt::ifc::{
     ExportDiagnostics, ExportNote, ExportOptions, ExportRun, IfcModel,
     run_export_with_limits_and_control,
@@ -163,8 +166,9 @@ pub struct Computed {
     /// Where each decoded element was read from (#1325). The decode asks for
     /// it and it is taken out of `diagnostics`, so the diagnostics the tools
     /// return and the exports' summaries stay what `rvt-ifc --diagnostics`
-    /// writes without `--element-provenance`: the table is 4.5 MB of compact
-    /// JSON on the BIM4LCA office.
+    /// writes without `--element-provenance`: the table is megabytes of
+    /// compact JSON on a large model (docs/export-diagnostics.md, "Provenance
+    /// table size").
     pub element_provenance: Option<ElementProvenanceTable>,
     /// Why each element, body, opening or outline was left out (#1326), taken
     /// out of `diagnostics` as the provenance table is: `explain_element`
@@ -173,6 +177,11 @@ pub struct Computed {
     /// Where the IFC export puts each entity in the spatial structure, by
     /// index into the model's entities.
     pub placements: Vec<Option<Placement>>,
+    /// The type objects the IFC export writes, as the writer decides them.
+    pub type_objects: TypeObjects,
+    /// The position in `type_objects.all()` of each element's type object,
+    /// by the element's index in the model's entities.
+    type_of: HashMap<usize, usize>,
 }
 
 impl Computed {
@@ -189,6 +198,12 @@ impl Computed {
         storey_of(&self.placements, index)
     }
 
+    /// The type object the export writes for the entity at `index`.
+    pub fn type_object(&self, index: usize) -> Option<&TypeObject> {
+        let position = *self.type_of.get(&index)?;
+        self.type_objects.all().nth(position)
+    }
+
     fn new(mut run: ExportRun, mut file: FileProvenance) -> Self {
         let element_provenance = run.diagnostics.decoded.element_provenance.take();
         let export_decisions = run.diagnostics.export_decisions.take();
@@ -197,6 +212,13 @@ impl Computed {
             .map(|table| table.omitted_entries);
         let global_ids = element_global_ids(&run.model);
         let placements = placements(&run.model);
+        let type_objects = type_objects(&run.model);
+        let mut type_of = HashMap::new();
+        for (position, object) in type_objects.all().enumerate() {
+            for &element in &object.elements {
+                type_of.entry(element).or_insert(position);
+            }
+        }
         let notes = note_texts(&run.notes);
         Self {
             model: run.model,
@@ -208,6 +230,8 @@ impl Computed {
             element_provenance,
             export_decisions,
             placements,
+            type_objects,
+            type_of,
         }
     }
 }

@@ -100,12 +100,15 @@ pub struct ValueSourceOut {
     pub offset: Option<usize>,
     /// Where every copy holds the same value, the numbers of the partitions that hold a copy; the copy named is the lowest-numbered partition's.
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[schemars(default)]
     pub partitions: Vec<u32>,
     /// The records the value is made of, where it is made of several or of another element's, at most 64. Such a source has no `stream` or `offset` of its own.
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[schemars(default)]
     pub parts: Vec<SourcePartOut>,
     /// How many more records than the 64 listed in `parts` the value is made of.
     #[serde(skip_serializing_if = "is_zero")]
+    #[schemars(default)]
     pub parts_left_out: u32,
     /// True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, where every copy holds the same value, so is every copy; for a source made of `parts`, none of them is in the frame's partition (`docs/export-diagnostics.md` says where a profile's records count as held there).
     pub differs_from_frame: bool,
@@ -176,6 +179,7 @@ pub struct ElementProvenance {
     pub provenance_omitted: Option<bool>,
     /// The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[schemars(default)]
     pub value_sources: Vec<ValueSourceOut>,
 }
 
@@ -185,7 +189,19 @@ pub struct ElementRow {
     /// The Revit ElementId.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
-    pub name: String,
+    /// The `Name` the IFC export writes. An `IfcSpace`'s is its room number,
+    /// or `<room name>:<ElementId>` for a room with a name and no number.
+    /// Absent only for a room with neither whose name is exactly the
+    /// exporter's `<Revit class>-<ElementId>`, made where no source named
+    /// it: that placeholder is not served as a name. The placeholder names
+    /// of other elements (a wall nothing named is `Wall-<ElementId>`) are
+    /// still served.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// An `IfcSpace`'s `LongName`, its room name. Absent for any other
+    /// element and for a room whose name was not read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub long_name: Option<String>,
     /// The name of the storey the element is on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub level: Option<String>,
@@ -339,8 +355,15 @@ pub struct PropertySetOut {
 /// The type object an element is typed by.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct TypeOut {
-    /// The type's Revit ElementId.
+    /// The type object's `Tag`: the type's Revit ElementId, or the ElementId
+    /// of the room an `IfcSpaceType` is made for.
     pub element_id: String,
+    /// The type object's IFC entity, such as `IFCWALLTYPE`.
+    pub ifc_type: String,
+    /// The type object's `Name`.
+    pub name: String,
+    /// The sets the export writes on the type object, `Other` and
+    /// `Identity Data` among them.
     pub property_sets: Vec<PropertySetOut>,
 }
 
@@ -370,7 +393,13 @@ pub struct ElementDetail {
     /// The Revit ElementId.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
-    pub name: String,
+    /// The `Name` the IFC export writes, as in `list_elements`: absent only
+    /// for a room whose name is exactly the exporter's `<class>-<ElementId>`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// An `IfcSpace`'s `LongName`, its room name, as in `list_elements`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub long_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub level: Option<LevelRefOut>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -394,7 +423,8 @@ pub struct ElementDetail {
     /// name were derived. Empty (`{}`) where the export has no record for it.
     pub trust_markers: BTreeMap<String, Value>,
     pub property_sets: Vec<PropertySetOut>,
-    /// The element's type object and its sets, where the model has them.
+    /// The type object the export writes for the element, with its sets;
+    /// absent where the export writes none for it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub element_type: Option<TypeOut>,
     /// Other entities the export writes as elements with the same ElementId:
@@ -433,7 +463,9 @@ pub struct ExplainElementOut {
     pub id: String,
     /// Whether the export holds the element. A left-out element has decisions and no provenance.
     pub exported: bool,
-    /// The element's name in the export, where it is exported.
+    /// The `Name` the export writes for the element, as in `list_elements`:
+    /// absent where the element is not exported, and for a room whose name is
+    /// exactly the exporter's `<class>-<ElementId>` placeholder.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// Where the element's record was read from, where the export holds it.
