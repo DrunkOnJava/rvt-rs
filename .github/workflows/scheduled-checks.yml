@@ -85,12 +85,13 @@ jobs:
       # Also when the audit found something: the two read the same database,
       # but the issue should name every check that failed. deny.toml is the
       # root's for all three (its ignore list and its yanked and unmaintained
-      # policy); only advisories are checked.
+      # policy); only advisories are checked. `--config` is a global option of
+      # cargo-deny 0.20, before `check`; `--locked` audits the committed lock.
       - name: cargo deny check advisories
         if: ${{ !cancelled() }}
         env:
           MANIFEST: ${{ matrix.manifest }}
-        run: cargo deny --manifest-path "$MANIFEST" check --config deny.toml advisories
+        run: cargo deny --locked --manifest-path "$MANIFEST" --config deny.toml check advisories
 
   not-measured:
     name: NOT MEASURED streaks
