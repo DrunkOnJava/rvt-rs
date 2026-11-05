@@ -45,7 +45,21 @@
 #     lines starting `mcp answers:` leave the runner. With
 #     MCP_REQUIRE_FOLDED_FIELD set (the workflow sets it on the head side), the
 #     scorer is run with --require-folded-field: diagnostics without
-#     `exported.body_pieces_folded` (#1424) are a difference;
+#     `exported.body_pieces_folded` (#1424) are a difference. With
+#     MCP_REQUIRE_SPACE_KIND set (the same side) it is run with
+#     --require-space-kind: a room with no `space_kind` in the answer or the IFC,
+#     and a summary with no `space_kinds` (#1437), are a difference;
+#   - space_kinds_vs_ifc.txt, on every model and every sample whose export is not
+#     empty (#1437): the check (tools/re/space_kinds_vs_ifc.py) that each
+#     `IfcSpace` carries `RvtElementRecordGeometry.SpaceKind`, that `area` holds
+#     exactly where `SpaceOutlineSource` is an Area value, and how many spaces
+#     hold each kind, ending with its exit status, 1 on any space without a
+#     kind or any disagreement. Needs no Revit export. The workflow's compare
+#     job sums these over the run (`--total`) and fails on a model with no
+#     result, with a failure count, or whose spaces are not the number its own
+#     export counted, and on a geometry export that lost its outline source; of
+#     a model kept as counts only, the lines starting `space kinds:` leave the
+#     runner;
 #   - probe.txt, when PROBE names a probe (the rvt-probes crate's
 #     examples) already built in BIN_DIR/examples: its output on the model, ending with its exit status;
 #   - probe_score.txt, when PROBE_SCORER also names a scorer in
@@ -213,7 +227,7 @@ wanted() { # step
 # Whether a step is in a scorer list or is one of the steps run by name.
 listed() { # step
   local s
-  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc mcp_answers_vs_ifc bodies_across_saves none; do
+  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc mcp_answers_vs_ifc space_kinds_vs_ifc bodies_across_saves none; do
     [ "$s" = "$1" ] && return 0
   done
   return 1
@@ -381,6 +395,9 @@ model_tasks() { # name rvt ref
       echo "$name: no rvt-rs-mcp in $BIN (a ref older than the crate), mcp_answers_vs_ifc not measured" >&2
     fi
   fi
+  # #1437: each IfcSpace says what it is. Reads the export alone, so a model
+  # with no Revit export (Einhoven) is checked too.
+  wanted space_kinds_vs_ifc && echo "1 kinds"
   if [ "$ref" != "-" ]; then
     for s in $IFC_SCORERS; do
       wanted "$s" || continue
@@ -450,6 +467,9 @@ model_task() { # name rvt ref task
         score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
       fi
       ;;
+    kinds)
+      score "$dir/space_kinds_vs_ifc.txt" "$SCORERS/space_kinds_vs_ifc.py" "$dir/model.ifc"
+      ;;
     mcp)
       # The server decodes the model again and answers the fixed query set from
       # it (tools/re/mcp_client.py): a program run, so never from the score cache.
@@ -467,6 +487,7 @@ model_task() { # name rvt ref task
       esac
       require=()
       [ -n "${MCP_REQUIRE_FOLDED_FIELD:-}" ] && require=(--require-folded-field)
+      [ -n "${MCP_REQUIRE_SPACE_KIND:-}" ] && require+=(--require-space-kind)
       score "$dir/mcp_answers_vs_ifc.txt" "$SCORERS/mcp_answers_vs_ifc.py" \
         --server "$BIN/rvt-rs-mcp" --rvt "$MODELS/$rvt" \
         --diagnostics "$dir/diagnostics.json" ${dump[@]+"${dump[@]}"} \
@@ -565,6 +586,8 @@ measure_sample() { # sample
   if [ -s "$dir/model.ifc" ]; then
     schema "$dir" 31457280
     grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
+    # #1437: every space of the sample's export says what it is.
+    wanted space_kinds_vs_ifc && score "$dir/space_kinds_vs_ifc.txt" "$SCORERS/space_kinds_vs_ifc.py" "$dir/model.ifc"
   fi
   if [ -z "${KEEP_IFC:-}" ] && ! saves_gate_keeps "$sample"; then rm -f "$dir/model.ifc"; fi
   rm -f "$dir/validation.jsonl"

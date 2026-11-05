@@ -44,10 +44,9 @@ What it cannot catch: an error that the 2024 read shares with the later reads
 how the saves are exported that is the same in all of them. It does not say
 that any Area is Revit's.
 
-An Area is an `IfcSpace` whose `RvtElementRecordGeometry.SpaceOutlineSource` is
-one of the Area values (`area_boundary`, `area_boundary_joined`,
-`area_plan_topology`, `area_plan_topology_unchecked`, or `none`, the Area that
-has no body).
+An Area is an `IfcSpace` whose `RvtElementRecordGeometry.SpaceKind` is `area`
+(#1437), whatever its outline source: that is read, and the checks above are on
+it.
 
 Usage:
 
@@ -62,13 +61,6 @@ import os
 import sys
 
 SET = "RvtElementRecordGeometry"
-AREA_VALUES = (
-    "area_boundary",
-    "area_boundary_joined",
-    "area_plan_topology",
-    "area_plan_topology_unchecked",
-    "none",
-)
 CHECKED_SOURCE = "area_plan_topology"
 UNCHECKED_SOURCE = "area_plan_topology_unchecked"
 # The releases whose Areas are marked unchecked: `AREA_UNCHECKED_RELEASES` in
@@ -129,9 +121,9 @@ def read_areas(path):
     areas = {}
     for space in model.by_type("IfcSpace"):
         props = ifcopenshell.util.element.get_psets(space).get(SET, {})
-        source = props.get("SpaceOutlineSource")
-        if source not in AREA_VALUES:
+        if props.get("SpaceKind") != "area":
             continue
+        source = props.get("SpaceOutlineSource")
         top = tops.get(space.GlobalId)
         low_high = extents.get(space.GlobalId)
         areas[space.GlobalId] = {

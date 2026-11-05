@@ -21,7 +21,10 @@
 # such a model (`type refs:` and `type copies:`, RE-253), the `native framing:`
 # lines of probe_re280_native_framing_pre2023 (RE-280: counts, schema class and
 # field names and normalised error text, in a restricted alphabet; its JSON
-# example lines, which carry ElementIds, are dropped), the `native readers:`
+# example lines, which carry ElementIds, are dropped), the `saved graphics
+# pre2023:` count lines of probe_re342_saved_graphics_pre2023 (RE-342: counts,
+# schema class and field names and normalised error text, in the same
+# alphabet; it prints no ElementId), the `native readers:`
 # count lines of the RE-283 to RE-285 probes and scorers (the same alphabet;
 # their `native readers example:` lines name ElementIds and are dropped) and
 # of its quantity census (the totals and each quantity's counts, the walls it
@@ -41,6 +44,11 @@
 # tools/re/native_levels_vs_ifc.py (RE-281:
 # counts, the same restricted alphabet), the totals and per property counts of
 # its property set census (standard Pset_ and Qto_ names only; RE-281),
+# the `space kinds:` count lines of tools/re/space_kinds_vs_ifc.py (#1437: how
+# many `IfcSpace`s hold each `SpaceKind`, how many hold none, and how many
+# disagree with their `SpaceOutlineSource`, as numbers beside fixed words, never
+# a GlobalId; its `exit N` line stays as `space kinds: exit N`, so the run's
+# total tells a crash from a model that was not checked),
 # the `space profiles:` count lines of tools/re/space_profiles_vs_ifc.py
 # (RE-313: how many spaces pair, and their area and outline within a tolerance,
 # never a GlobalId), the `space overlaps:` count lines of
@@ -80,6 +88,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^type (refs|copies): [A-Za-z ,;:()-]+[0-9][0-9A-Za-z ,;:()-]*$' "$f" || true
       grep -E '^native framing: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      grep -E '^saved graphics pre2023: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
     done
     for f in "$dir"qtos_vs_ifc*.txt; do
       [ -f "$f" ] || continue
@@ -118,6 +127,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     for f in "$dir"space_profiles_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E '^space profiles: [A-Za-z0-9 %.,:()-]+$' "$f" || true
+    done
+    for f in "$dir"space_kinds_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E '^space kinds: [A-Za-z0-9 _:.,;()=%/+-]+$' "$f" || true
+      grep -E '^exit [0-9]+$' "$f" | sed -E 's/^exit ([0-9]+)$/space kinds: exit \1/' || true
     done
     for f in "$dir"space_overlaps_vs_ifc.txt; do
       [ -f "$f" ] || continue

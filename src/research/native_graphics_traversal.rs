@@ -368,7 +368,7 @@ impl Walker<'_, '_> {
                 }
                 let fields = &info_object.fields;
                 let _transform = read_transform(&fields["m_Trf"])?;
-                if fields["m_GRepId"].as_u64() != Some(0)
+                if !default_representation(fields)
                     || fields["m_cda"]["m_pDoc"]["pointer_token"].as_u64() != Some(1)
                     || !fields["m_cda"]["m_pDoc"]["class_tag"].is_null()
                 {
@@ -418,7 +418,7 @@ impl Walker<'_, '_> {
                 let embedded_pointer = &obj.fields["m_oEmbeddedSymbolGRep"];
                 if embedded_pointer["pointer_token"].as_u64() == Some(0) {
                     let info_fields = &self.graph.objects[info].fields;
-                    if info_fields["m_GRepId"].as_u64() != Some(0)
+                    if !default_representation(info_fields)
                         || info_fields["m_cda"]["m_pDoc"]["pointer_token"].as_u64() != Some(1)
                         || !info_fields["m_cda"]["m_pDoc"]["class_tag"].is_null()
                     {
@@ -487,6 +487,26 @@ fn current_graph_owner_matches(root: &crate::native_parameters::GraphObject, id:
             Some(value) => value.as_u64() == Some(id),
             None => root.fields["m_GInfo"]["m_tag"].as_u64() == Some(id),
         }
+}
+/// Whether an `InstanceInfo` names the default representation: `m_GRepId` is
+/// 0 on every file of Revit 2023 to 2027 measured. The classes of Revit 2015
+/// to 2022 declare no such field (`InstInfoBase` has `m_Trf` and `m_symbolId`,
+/// `InstanceInfo` `m_cda`, in all 30 sample projects), and an object that
+/// holds exactly those three is read as the default one (RE-342 compares
+/// those meshes with the same projects' 2023 copies); one that holds anything
+/// else is refused. The decoder drops a field flagged transient unread, so a
+/// missing key cannot say whether the class declares one: the release gate
+/// keeps those files out of every export.
+fn default_representation(info: &Value) -> bool {
+    match info.get("m_GRepId") {
+        Some(id) => id.as_u64() == Some(0),
+        None => info.as_object().is_some_and(|fields| {
+            fields.len() == 3
+                && fields.contains_key("m_Trf")
+                && fields.contains_key("m_symbolId")
+                && fields.contains_key("m_cda")
+        }),
+    }
 }
 fn graphics_visibility(flags: u64) -> u8 {
     let bits = flags & 0x1e0;
