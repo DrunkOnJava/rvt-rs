@@ -9,7 +9,7 @@ use std::io::Write;
 use rmcp::model::Resource;
 use rvt::control::WalkerControl;
 use rvt::ifc::gltf::model_to_glb;
-use rvt::ifc::step_writer::{StepOptions, write_step_to};
+use rvt::ifc::step_writer::{StepOptions, write_step_to, write_step_to_with_space_materials};
 use rvt::ifc::{ExportDiagnostics, ExportOptions, IfcModel};
 use rvt::reader::UnreadStream;
 
@@ -168,7 +168,11 @@ pub fn ifc(
     control.check().map_err(|_| Failure::Cancelled)?;
     let step_options = StepOptions { timestamp };
     let written = output::write(&target, args.overwrite, control, |writer| {
-        write_step_to(source.model, &step_options, writer).map(|_| ())
+        if switches.revit_set_placement {
+            write_step_to_with_space_materials(source.model, &step_options, writer).map(|_| ())
+        } else {
+            write_step_to(source.model, &step_options, writer).map(|_| ())
+        }
     })?;
     Ok(finish(
         &entry,
