@@ -351,7 +351,9 @@ def check_counts(report, answers, written, diagnostics):
         same(f"IFC {key_of_category(name)} count", by_category[name], written_counts[name])
     if diagnostics is not None:
         exported = diagnostics["exported"]
-        same("diagnostics exported building_elements", elements["total"], exported["building_elements"])
+        # The diagnostics list an opening element by type but do not count it as a building element (RE-84).
+        openings = elements["by_ifc_type"].get("IFCOPENINGELEMENT", 0)
+        same("diagnostics exported building_elements", elements["total"] - openings, exported["building_elements"])
         same("diagnostics exported by_ifc_type", elements["by_ifc_type"], exported["by_ifc_type"])
         digest = summary["diagnostics"]
         same("summary bounding_box_bodies", digest["bounding_box_bodies"], exported["bounding_box_bodies"])
@@ -359,6 +361,8 @@ def check_counts(report, answers, written, diagnostics):
         same("summary skipped", {s["reason"]: s["count"] for s in digest["skipped"]}, {s["reason"]: s["count"] for s in diagnostics["skipped"]})
         same("summary confidence_level", digest["confidence_level"], diagnostics["confidence"]["level"])
     report.check("counts", compared, differences)
+    openings = by_category["IFCOPENINGELEMENT"]
+    report.line(f"opening elements listed as rows, which the diagnostics do not count as building elements: {openings}")
     for name in sorted(by_category):
         report.line(f"{key_of_category(name)}: {by_category[name]} elements in the answers")
     report.line(f"elements listed: {len(rows)}")
@@ -376,15 +380,16 @@ def row_sources(rows):
 
 def check_rows(report, answers, written):
     rows = answers["rows"]
-    differences = []
+    found_in = []
+    entity, names, ids, predefined, levels = [], [], [], [], []
     compared = 0
     by_gid = row_sources(rows)
     for row in rows:
         if not row["provenance"].get("global_id"):
-            differences.append(f"element {row.get('id')}: no GlobalId")
+            found_in.append(f"element {row.get('id')}: no GlobalId")
     for gid, found in by_gid.items():
         if len(found) > 1:
-            differences.append(f"GlobalId {gid} on {len(found)} rows")
+            found_in.append(f"GlobalId {gid} on {len(found)} rows")
     cut = 0
     for gid, product in written.products.items():
         if gid in by_gid:
@@ -392,32 +397,37 @@ def check_rows(report, answers, written):
         if product.is_a(WRITER_OPENING) and (product.HasFillings or product.VoidsElements):
             cut += 1
             continue
-        differences.append(f"{product.is_a()} {gid} ({product.Name!r}) is in the IFC and in no row")
+        found_in.append(f"{product.is_a()} {gid} ({product.Name!r}) is in the IFC and in no row")
     for gid, found in by_gid.items():
         row = found[0]
         product = written.products.get(gid)
         if product is None:
-            differences.append(f"element {row.get('id')} {row['provenance'].get('category')} {gid}: not in the IFC")
+            found_in.append(f"element {row.get('id')} {row['provenance'].get('category')} {gid}: not in the IFC")
             continue
         compared += 1
         label = f"element {row.get('id')} {product.is_a()} {gid}"
         category = row["provenance"].get("category")
         if product.is_a().upper() != category:
-            differences.append(f"{label}: entity {category} vs {product.is_a().upper()}")
+            entity.append(f"{label}: entity {category} vs {product.is_a().upper()}")
         if (product.Name or "") != row["name"]:
-            differences.append(f"{label}: name {row['name']!r} vs {product.Name!r}")
+            names.append(f"{label}: name {row['name']!r} vs {product.Name!r}")
         if not product.is_a("IfcSpace"):
             tag = getattr(product, "Tag", None)
             if (tag or None) != (row.get("id") or None):
-                differences.append(f"{label}: id {row.get('id')!r} vs Tag {tag!r}")
+                ids.append(f"{label}: id {row.get('id')!r} vs Tag {tag!r}")
         if hasattr(product, "PredefinedType"):
             if (product.PredefinedType or None) != (row.get("predefined_type") or None):
-                differences.append(f"{label}: predefined type {row.get('predefined_type')!r} vs {product.PredefinedType!r}")
+                predefined.append(f"{label}: predefined type {row.get('predefined_type')!r} vs {product.PredefinedType!r}")
         elif row.get("predefined_type"):
-            differences.append(f"{label}: predefined type {row.get('predefined_type')!r} on an entity that declares none")
+            predefined.append(f"{label}: predefined type {row.get('predefined_type')!r} on an entity that declares none")
         if (row.get("level") or None) != written.storey_name(product):
-            differences.append(f"{label}: level {row.get('level')!r} vs storey {written.storey_name(product)!r}")
-    report.check("elements", compared, differences)
+            levels.append(f"{label}: level {row.get('level')!r} vs storey {written.storey_name(product)!r}")
+    report.check("element membership", len(rows), found_in)
+    report.check("element entities", compared, entity)
+    report.check("element names", compared, names)
+    report.check("element ids", compared, ids)
+    report.check("element predefined types", compared, predefined)
+    report.check("element storeys", compared, levels)
     report.line(f"openings the writer cuts for doors and windows, not rows: {cut}")
     report.line(f"IFC elements and spaces: {len(written.products)}")
     return by_gid
@@ -545,6 +555,7 @@ def check_details(report, answers, written):
     count_by_id = collections.Counter(row.get("id") for row in rows if row.get("id"))
     differences = []
     type_differences = []
+    type_presence = []
     compared = 0
     typed = 0
     sets_compared = 0
@@ -586,14 +597,14 @@ def check_details(report, answers, written):
         typed += 1
         if answered_type is None:
             if kind is not None:
-                type_differences.append(
+                type_presence.append(
                     f"{label}: no type in the answer, {kind.is_a()} {getattr(kind, 'Tag', None)!r} in the IFC"
                 )
         elif kind is None:
-            type_differences.append(f"{label}: type {answered_type['element_id']} in the answer, none in the IFC")
+            type_presence.append(f"{label}: type {answered_type['element_id']} in the answer, none in the IFC")
         else:
             if getattr(kind, "Tag", None) != answered_type["element_id"]:
-                type_differences.append(
+                type_presence.append(
                     f"{label}: type id {answered_type['element_id']!r} vs Tag {getattr(kind, 'Tag', None)!r}"
                 )
             sets_compared += compare_sets(
@@ -625,7 +636,8 @@ def check_details(report, answers, written):
         if (detail.get("host_id") or None) != (host or None):
             differences.append(f"{label}: host {detail.get('host_id')!r} vs {host!r}")
     report.check("details", compared, differences)
-    report.check("type objects", typed, type_differences)
+    report.check("type objects", typed, type_presence)
+    report.check("type object sets", typed, type_differences)
     report.line(f"get_element sets compared: {sets_compared}")
     return first
 
