@@ -208,6 +208,13 @@ not remove Compare's report.
   compares what it can and reads `PARTIAL`, never `PASS`. Every such skip prints
   a notice and a line in the run summary, so a green run that did not run the
   check says so.
+- **A landing reads the verdict.** The gates' job writes a check run,
+  `same-project gates`, on the commit Measure measured: success only where both
+  compared every save, failure on a difference or a missing result, and neutral
+  (NOT MEASURED) where they compared less. Measure is not a required check, so the
+  maintainer's landing script reads this across a pull request's commits and
+  refuses one that changes `src/` with no passing verdict at or after its last
+  change to `src/`, or with a newest verdict that fails.
 - **A run with `ifc_flags` checks neither same-project gate.** The gates are about
   the default export, and a flag such as `--phase` makes a save refuse. Each gate
   says in a notice that it compared nothing, so the run a gate judges has no

@@ -866,6 +866,9 @@ jobs:
     needs: [plan, measure]
     if: ${{ !cancelled() && needs.measure.result == 'success' }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      checks: write # the verdict, on the measured commit
     steps:
       - name: Workflow tools
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -874,6 +877,7 @@ jobs:
           sparse-checkout: |
             tools/ci/check-bodies-across-saves.sh
             tools/ci/check-areas-across-saves.sh
+            tools/ci/same_project_verdict.py
           sparse-checkout-cone-mode: false
       # One directory for each shard: two shards write an areas_across_saves.txt.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
@@ -893,6 +897,30 @@ jobs:
         env:
           SAMPLES: ${{ inputs.samples }}
         run: tools/ci/check-areas-across-saves.sh measure-head
+      # What the two found, as a check run on the commit Measure measured, which
+      # a landing reads across a pull request's commits: Griffin chose these gates
+      # to block landing, and Measure is not a required check. Only a run a
+      # maintainer dispatched writes one. success needs both gates to have compared
+      # every save; a run that compared less reads NOT MEASURED, never a pass.
+      - name: The verdict, on the measured commit
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          MEASURED: ${{ needs.plan.outputs.head_sha }}
+          SAMPLES: ${{ inputs.samples }}
+          SAMPLE_YEARS: ${{ inputs.sample_years }}
+          SCORERS: ${{ inputs.scorers }}
+          IFC_FLAGS: ${{ inputs.ifc_flags }}
+        run: |
+          sha=$(gh api "repos/$REPO/commits/$MEASURED" --jq .sha)
+          python3 tools/ci/same_project_verdict.py measure-head --flags "$IFC_FLAGS" --samples "$SAMPLES" \
+            --sample-years "$SAMPLE_YEARS" --scorers "$SCORERS" > verdict.json
+          cat verdict.json
+          jq --arg sha "$sha" '{name: "same-project gates", head_sha: $sha, status: "completed", conclusion: .conclusion,
+            output: {title: .title, summary: .summary}}' verdict.json \
+            | gh api -X POST "repos/$REPO/check-runs" --input - --jq '"wrote check run \(.id): \(.conclusion)"'
 
   compare:
     name: Compare
