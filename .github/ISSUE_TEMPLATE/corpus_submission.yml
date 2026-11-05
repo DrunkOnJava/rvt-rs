@@ -16,6 +16,7 @@ body:
     attributes:
       label: Revit release that saved the file
       options:
+        - "2027"
         - "2026"
         - "2025"
         - "2024"
@@ -27,6 +28,7 @@ body:
         - "2018"
         - "2017"
         - "2016"
+        - "2015"
     validations:
       required: true
   - type: dropdown
