@@ -2604,7 +2604,13 @@ impl TypeCommon {
                 });
             }
         }
-        if let Some(manufacturer) = self.manufacturer {
+        if let Some(manufacturer) = self.manufacturer.filter(|_| {
+            super::standard_property_sets::applies_to(
+                "Pset_ManufacturerTypeInformation",
+                occurrence,
+                None,
+            )
+        }) {
             sets.push(PropertySet {
                 name: "Pset_ManufacturerTypeInformation".into(),
                 properties: vec![Property {
