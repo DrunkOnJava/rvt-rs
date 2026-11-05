@@ -11,7 +11,10 @@
 - on `main`, the superseded generations of Measure's score cache, which a run
   restores from the newest of its prefix and saves anew, and all but the newest
   sixteen of its binary caches, one per commit built, which only runs of that
-  commit read.
+  commit read;
+- on `main`, the superseded generations of the RE1 models' cache, which is keyed by
+  what pins them (`re1-<sha256 of research/re1-models.tsv>`, and the commit-keyed
+  entries it replaced): a changed pin list saves a new key and nothing reads the old one.
 
 The caches of live branches, of open pull requests, of tags, and `main`'s newest
 generations are kept. The repository's cache limit is 10 GB and GitHub evicts the
@@ -19,7 +22,13 @@ least recently used cache past it, so stale generations fill the limit and leave
 no room to see a real problem: this is the chore behind the audit's "the Actions
 cache is under 90% of its 10 GB limit" line.
 
-Dry run by default: it prints what it would delete. Pass `--delete` to delete.
+Dry run by default: it prints what it would delete. Pass `--delete` to delete. Each of the three
+reads is tried three times, because GitHub answers a read with an empty body now and then. A
+branch list without `main` cannot be true, so the run stops there (exit 1, nothing deleted). An
+open pull request list that is still empty is true now and then (a release empties the queue),
+and then every pull request's cache would read as dead on a read that may be wrong: nothing is
+deleted, a `::notice::` says so, and the run exits 0, the next one cleaning. A 403 that is a
+permission stops the run at once; one that is a rate limit is waited out.
 
 Needs the GitHub CLI (`gh`), logged in with the `repo` scope.
 
@@ -52,6 +61,10 @@ SCORE_CACHE_KEY = re.compile(r"(measure-scores-v\d+-.+?)(?:-[0-9a-f]{40})?-\d+-\
 # the last few: the newest BINARY_GENERATIONS are kept.
 BINARY_CACHE_KEY = re.compile(r"(rvt-bin-v\d+)-[0-9a-f]{40}-.+")
 BINARY_GENERATIONS = 16
+# The RE1 models (.github/actions/fetch-re1): re1-<sha256 of the pin list>, 64 hex digits. The
+# keys it replaced, re1-<commit> and re1-oracle-<commit>, 40, are one family with it, so that
+# an entry nothing reads any more is the oldest of the family and goes with the first new key.
+RE1_CACHE_KEY = re.compile(r"(re1)-(?:oracle-)?[0-9a-f]{40,64}")
 
 
 def gh(*args):
@@ -61,17 +74,48 @@ def gh(*args):
     return p.stdout
 
 
-def pages(path):
-    """A paginated endpoint as one list, unwrapping the `actions_caches` envelope."""
-    out, decoder, i, text = [], json.JSONDecoder(), 0, gh("--paginate", path)
-    while i < len(text):
-        while i < len(text) and text[i] in " \r\n\t":
-            i += 1
-        if i >= len(text):
-            break
-        obj, i = decoder.raw_decode(text, i)
-        out.extend(obj.get("actions_caches", []) if isinstance(obj, dict) else obj)
-    return out
+def pages(path, tries=1):
+    """A paginated endpoint as one list, unwrapping the `actions_caches` envelope.
+
+    GitHub answers a read with an empty body and a success status now and then, which reads as an
+    empty list, and a server error now and then: a list that must not be empty passes `tries`."""
+    for attempt in range(tries):
+        try:
+            out, decoder, i, text = [], json.JSONDecoder(), 0, gh("--paginate", path)
+            while i < len(text):
+                while i < len(text) and text[i] in " \r\n\t":
+                    i += 1
+                if i >= len(text):
+                    break
+                obj, i = decoder.raw_decode(text, i)
+                out.extend(obj.get("actions_caches", []) if isinstance(obj, dict) else obj)
+        except RuntimeError:
+            if attempt == tries - 1:
+                raise
+            out = []
+        if out or attempt == tries - 1:
+            return out
+        time.sleep(5)
+    return []
+
+
+def refusal(open_prs, live_branches):
+    """Why nothing may be deleted, or None: an `(exit status, why)` pair. A cache of a pull request
+    or branch is kept only while the pull request is in the open list and the branch in the branch
+    list, so an empty list would read every one as dead. The repository always has `main`, so a
+    list without it is wrong and the run fails (1). It can have no open pull request, so an empty
+    list is not a failure (0): it is a list that cannot be told from a wrong one, and nothing is
+    deleted until a run sees an open pull request."""
+    if "main" not in live_branches:
+        return 1, "the branch list has no main"
+    if not open_prs:
+        return 0, "the open pull request list is empty"
+    return None
+
+
+def is_rate_limited(message):
+    """True for a rate limit (a 429, or a 403 that says so), False for a 403 that is a permission."""
+    return bool(re.search(r"\b429\b|rate limit|abuse|secondary", message, re.I))
 
 
 def unusable(caches, open_prs, live_branches, keep):
@@ -94,6 +138,7 @@ def unusable(caches, open_prs, live_branches, keep):
                     or CODEQL_OVERLAY_KEY.fullmatch(c["key"])
                     or SCORE_CACHE_KEY.fullmatch(c["key"])
                     or BINARY_CACHE_KEY.fullmatch(c["key"])
+                    or RE1_CACHE_KEY.fullmatch(c["key"])
                 )
                 if k:
                     generations.setdefault(k.group(1), []).append(c)
@@ -107,14 +152,24 @@ def unusable(caches, open_prs, live_branches, keep):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--repo", default="DrunkOnJava/rvt-rs")
-    ap.add_argument("--keep", type=int, default=2, help="newest generations of each rust-cache or CodeQL family kept on main")
+    ap.add_argument("--keep", type=int, default=2, help="newest generations of each rust-cache, CodeQL, score or RE1 family kept on main")
     ap.add_argument("--delete", action="store_true", help="delete them; without it, only print")
     args = ap.parse_args()
     repo = args.repo
 
-    caches = pages(f"repos/{repo}/actions/caches?per_page=100")
-    open_prs = {p["number"] for p in pages(f"repos/{repo}/pulls?state=open&per_page=100")}
-    live_branches = {b["name"] for b in pages(f"repos/{repo}/branches?per_page=100")}
+    caches = pages(f"repos/{repo}/actions/caches?per_page=100", tries=3)
+    open_prs = {p["number"] for p in pages(f"repos/{repo}/pulls?state=open&per_page=100", tries=3)}
+    live_branches = {b["name"] for b in pages(f"repos/{repo}/branches?per_page=100", tries=3)}
+    stop = refusal(open_prs, live_branches)
+    if stop:
+        status, why = stop
+        if status:
+            print(f"refusing to go on: {why}, after three reads, so the caches of live pull requests and branches "
+                  "would read as dead; nothing is deleted", file=sys.stderr)
+        else:
+            print(f"::notice::{why} after three reads, so a cache of a pull request cannot be told live from dead; "
+                  "nothing is deleted, and the next run with an open pull request cleans")
+        return status
 
     doomed = unusable(caches, open_prs, live_branches, args.keep)
     freed = sum(c["size_in_bytes"] for c, _ in doomed)
@@ -143,10 +198,14 @@ def main():
                 if "404" in str(error):
                     gone += 1
                     break
-                if "429" in str(error) or "403" in str(error):
+                if is_rate_limited(str(error)):
                     backoff = min(60.0, max(2.0, backoff * 2))
                     time.sleep(backoff)
                     continue
+                if "403" in str(error):
+                    print(f"  cache {c['id']}: {error}: the token cannot delete caches (it needs `actions: write`); "
+                          f"stopping after {deleted} deleted", file=sys.stderr)
+                    return 1
                 failed += 1
                 print(f"  cache {c['id']}: {error}", file=sys.stderr)
                 break
