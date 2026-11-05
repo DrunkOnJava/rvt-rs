@@ -275,8 +275,10 @@ contract: [`file-metadata.schema.json`](schemas/file-metadata.schema.json).
 schedule_csv(self, kind: str = "elements", metric: bool = False, excel: bool = False, phase: str | int | None = None) -> str
 ```
 The element (`kind="elements"`) or room (`kind="rooms"`) schedule as CSV
-text, with the columns of `rvt-schedule`. `metric=True` writes lengths in
-metres, `excel=True` prefixes a UTF-8 byte-order mark for Excel on Windows.
+text, with the columns of `rvt-schedule`: the elements the IFC export writes,
+each on the storey it puts it on (see the [user
+guide](user-guide.md#get-a-schedule-into-excel)). `metric=True` writes lengths
+in metres, `excel=True` prefixes a UTF-8 byte-order mark for Excel on Windows.
 Only decoded values are written; unknowns are empty cells. `phase` is
 `write_ifc`'s, and `rvt-schedule --phase <name|id>` is its command-line twin:
 the schedule is of the model the document exporter builds at that phase. Any

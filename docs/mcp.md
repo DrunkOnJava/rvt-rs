@@ -162,15 +162,15 @@ that says to call `open_model` again. The tool descriptions say the same.
 ### Elements and levels as the export writes them
 
 The lists, counts and levels are the elements the IFC export writes, in the
-storey it puts them in (`rvt::ifc::step_writer::placements`, which the writer
-writes with). A part of a stair, a railing or a curtain wall has the level of
-its whole, an element in a room the level of the room, and an opening the
-level of its host, as the IFC's containment and aggregation say. A further
-piece of an element of separate loops, which the export writes as an item of
-the owner's body and not as an element, is not a row and not in `total` or
-`by_ifc_type`; the summary counts it by IFC entity in `folded_into_bodies`
-(always present, empty where none is folded), and the diagnostics' `exported`
-counts include it. A part of several wholes takes the storey of the first,
+storey it puts them on (`rvt::ifc::step_writer::placements`, which the writer
+writes with). A part of a stair (a run, landing or stringer) or of a curtain
+wall has the level of its whole, an element in a room the level of the room,
+and an opening the level of its host, as the IFC's containment and
+aggregation say. A further piece of an element of separate loops, which the
+export writes as an item of the owner's body and not as an element, is not a
+row and not in `total` or `by_ifc_type`; the summary counts it by IFC entity
+in `folded_into_bodies` (always present, empty where none is folded), and the
+diagnostics' `exported` counts include it. A part of several wholes takes the storey of the first,
 which is not measured. The diagnostics' `storey_bound_elements` and the rooms
 schedule (`room_rows`) read the same placement, so a part counts as bound to
 its whole's storey in both.

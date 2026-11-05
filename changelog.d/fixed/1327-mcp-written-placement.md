@@ -1,8 +1,8 @@
 - **The MCP server's levels and element lists are the ones the IFC export
-  writes (#1327).** The scorer of #1327 found that a part of a stair, a
-  railing or a curtain wall had a level of its own in the server's rows, or
-  none, where the IFC puts it on its whole's storey, so the levels' element
-  counts differed from the export's (5 Revit 2025 models, 4 held-out, and
+  writes (#1327).** The scorer of #1327 found that a part of a stair or a
+  curtain wall had a level of its own in the server's rows, or none, where
+  the IFC puts it on its whole's storey, so the levels' element counts
+  differed from the export's (5 Revit 2025 models, 4 held-out, and
   the BIM4LCA office, 599 rows of each of its two files, 542 of them
   curtain-wall members at "Roof" where the IFC says Level_05), and that the
   office's lists held 47 `IfcCovering` rows the export does not write, the

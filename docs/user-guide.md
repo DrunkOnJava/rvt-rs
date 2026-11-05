@@ -203,8 +203,8 @@ user name everywhere it appears (Revit names a local copy
 
 ## Get A Schedule Into Excel
 
-`rvt-schedule` writes the decoded elements, or the rooms, as a CSV file that
-Excel, Google Sheets and LibreOffice open directly:
+`rvt-schedule` writes the elements the IFC export writes, or the rooms, as a
+CSV file that Excel, Google Sheets and LibreOffice open directly:
 
 ```bash
 rvt-schedule model.rvt                          # model.elements.csv next to the model
@@ -214,15 +214,25 @@ rvt-schedule model.rvt -o -                     # print the CSV instead of writi
 rvt-schedule model.rvt --phase "Existing"       # another phase than the project's last (a name or an ElementId)
 ```
 
-The element schedule has one row per decoded building element: Revit
-ElementId, IFC type, level and its elevation, material, placement, body
+The element schedule has one row per building element the IFC export writes:
+Revit ElementId, IFC type, level and its elevation, material, placement, body
 size, the host wall of each door and window, and where the body came from
 (`body_source`, `profile_resolved`). A value rvt-rs did not decode is an
-empty cell, never a guess. The room schedule gives a room's plan area
-where its outline was read from the solid Revit stores for it (RE-101), and
-an Area's where its boundary lines gave it a region (RE-317); a room that
-keeps its bounding box has an empty area, since the area of a box is not the
-area of a room.
+empty cell, never a guess. The rows and the level column are the export's own
+decision, the same the IFC file and the MCP server give: a further piece of
+an element of separate loops, which the export writes as an item of its
+owner's body, has no row; a part of a stair (a run, landing or stringer) or
+of a curtain wall (a member) is on the storey of its whole, an element in a
+room on the storey of the room, and an opening on the storey of the door,
+window or wall it is cut from. An element the export puts in the building
+only, with no storey, has empty level cells. A ceiling of separate loops is
+one row, with empty size cells, where it used to have a row for each loop
+(47 fewer rows on each BIM4LCA office file): its body is several items, which
+one width, depth and height cannot state. The room schedule gives a room's
+plan area where its outline was read from the solid Revit stores for it
+(RE-101), and an Area's where its boundary lines gave it a region (RE-317); a
+room that keeps its bounding box has an empty area, since the area of a box
+is not the area of a room.
 
 The columns, in order. Lengths are in feet; with `--metric` they are in
 metres and `_ft` in a column's name becomes `_m`. A later release may add
@@ -236,14 +246,14 @@ calling it a breaking change.
 | `ifc_type` | The IFC entity it is exported as, as the STEP file spells it, such as `IFCWALL` |
 | `predefined_type` | The IFC predefined type, where one is set |
 | `name` | The element's name |
-| `level` | The name of its level |
+| `level` | The name of the storey the IFC export puts the element on: its own, or that of its room, its whole (the stair or curtain wall a part belongs to) or its host (for an opening); empty where the export puts it in the building only, or where no storey is reached through its room, whole or host |
 | `level_elevation_ft` | That level's elevation |
 | `material` | Its material's name; for a layered wall, floor, roof or ceiling, the name of its layer set (its `Family:Type`); for a family instance of several materials, their names separated by `; ` |
 | `x_ft` | Placement, x |
 | `y_ft` | Placement, y |
 | `z_ft` | Placement, z |
 | `rotation_deg` | Its rotation in plan, in degrees |
-| `width_ft` | Width of a body written as a plain extrusion of a rectangle; empty for every other body, placed extrusions such as stair runs, sloped beams and turned boxes included |
+| `width_ft` | Width of a body written as a plain extrusion of a rectangle; empty for every other body, placed extrusions such as stair runs, sloped beams and turned boxes included, and for an element whose body holds several items (an element of separate loops, with the pieces the export folds into it) |
 | `depth_ft` | Depth of the same rectangle |
 | `height_ft` | Height of a body written as a plain extrusion; empty otherwise |
 | `host_revit_element_id` | The ElementId of a door's or window's host |
@@ -261,8 +271,8 @@ calling it a breaking change.
 | `area_ft2` | Plan area, where the room's outline was read |
 | `body_source` | Where the room's solid came from |
 
-What the schedules contain is exactly what rvt-rs decodes, so check
-`rvt-inspect model.rvt` first: Revit 2024 project files with element
+What the schedules contain is what rvt-rs decodes and the IFC export writes,
+so check `rvt-inspect model.rvt` first: Revit 2024 project files with element
 records give walls, doors, windows, columns, slabs and rooms; other files
 give few or no rows. The browser viewer has the same two schedules as
 **Download element schedule (CSV)** and **Download room schedule (CSV)**
