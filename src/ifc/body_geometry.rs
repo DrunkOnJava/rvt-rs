@@ -1277,6 +1277,36 @@ fn revolved_mesh(
     Some(mesh.two_sided())
 }
 
+/// The one layer of an element whose type has a single layer and whose body
+/// is a solid the layered splitters do not take apart (a wall whose base is cut
+/// at a sloped footing, #1384): the whole solid, where its extent along the
+/// exterior normal `exterior`, in the body's frame, is the layer's width within
+/// [`LAYER_THICKNESS_TOLERANCE_FEET`]. `None` for several layers, a solid that
+/// does not mesh, or a thickness that is not the layer's.
+pub fn one_layer_solid_meshes(
+    shape: &SolidShape,
+    exterior: [f64; 2],
+    widths: &[f64],
+) -> Option<Vec<Mesh>> {
+    let [width] = widths else {
+        return None;
+    };
+    let mesh = solid_mesh(shape)?;
+    let (min, max) = mesh
+        .vertices
+        .iter()
+        .map(|p| p[0] * exterior[0] + p[1] * exterior[1])
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), s| {
+            (lo.min(s), hi.max(s))
+        });
+    let thickness = max - min;
+    (width.is_finite()
+        && *width > 0.0
+        && thickness.is_finite()
+        && (thickness - width).abs() <= LAYER_THICKNESS_TOLERANCE_FEET)
+        .then(|| vec![mesh])
+}
+
 /// A solid shape's body in element-local feet.
 pub fn solid_mesh(shape: &SolidShape) -> Option<Mesh> {
     match shape {
