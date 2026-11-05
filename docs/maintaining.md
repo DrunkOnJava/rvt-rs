@@ -187,6 +187,39 @@ PASS over a failure count, on spaces that have lost their `SpaceOutlineSource`
 in an export with geometry, and on a result that saw none of the export's
 spaces.
 
+## Bodies across saves (RE-341)
+
+No Revit export of a 2026 or 2027 beam, tread landing, stair run or sketch
+outline exists to score them against. `tools/re/bodies_across_saves.py` holds
+each 2026 and 2027 save of `rac_advanced`, `rac_basic` and `rst_basic` to the
+same project's earlier saves, matched by `Tag`: beams, landings and sketch
+outlines to the 2024 save, stair runs to the 2025 save (the 2025 save draws no
+beam or landing). Measure's script runs it beside each such sample, and the job
+`same-project-gates` turns the run red on a difference, a missing file, an
+unknown project, fewer bodies than the sample holds, or a check that compared
+nothing. That job also holds #1428's Areas gate (rac_advanced's Areas across its
+2024 to 2027 saves, `tools/ci/check-areas-across-saves.sh`), each as a step that
+runs whatever the other did. It is a job of its own, so a failure of either does
+not remove Compare's report.
+
+- **A change to a reader of Revit 2024 to 2027 is measured with
+  `samples=true`** (every year, or `sample_years="2024 2027"`). Without it no
+  sample is exported and the check does not run; with only some years the check
+  compares what it can and reads `PARTIAL`, never `PASS`. Every such skip prints
+  a notice and a line in the run summary, so a green run that did not run the
+  check says so.
+- **What it cannot catch**: an error the earlier save shares with the 2026 or
+  2027 read. Nothing in it is a Revit export. It compares bodies, not
+  quantities or property sets. No 2026 or 2027 held-out model holds an
+  `IfcBeam`, so the beam reader has run only on two Autodesk samples saved by
+  earlier releases.
+- **A difference** is a reader that is wrong or a project that really differs
+  between saves. Narrow the reader until it is never wrong and let what it
+  leaves out stay a box, counted (`left as boxes`); do not allowlist.
+- The output carries, for rac_advanced's ceiling 147534 and floor 139803, the
+  class, `BodySource`, `ProfileResolved`, volume and vertex count in every save,
+  and compares sketch outlines with the 2025 save as well, without scoring.
+
 ## The semantic merge check
 
 Measure is the byte-level oracle: it says that an export moved. The semantic

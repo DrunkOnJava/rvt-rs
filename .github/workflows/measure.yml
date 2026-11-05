@@ -68,6 +68,14 @@
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f samples=true -f sample_years="2026 2027" -f probe=probe_re179_revit_2027 -f probe_pair_release=2026
 #
+# That run holds no 2024 or 2025 sample, so the check of the 2026 and 2027
+# bodies against the same project's earlier saves (tools/re/bodies_across_saves.py,
+# RE-341) compares nothing: it prints a notice and a line in the run summary,
+# and is not a pass. A change to a reader of Revit 2024 to 2027 is measured with
+# `samples=true` and every year (or "2024 2027"), which runs that check and
+# turns the run red on a difference; without `samples=true` it does not run,
+# and the summary says so.
+#
 # `models` keeps only the models whose names match its patterns, and
 # `scorers` runs only the steps it names on them (tools/re scorers, and info,
 # gltf, schema and witness; "none" for none), so a probe's run spends nothing
@@ -836,33 +844,55 @@ jobs:
           if-no-files-found: error
           # Compare re-uploads them merged as measure-head and measure-base.
           retention-days: 7
-      # The gate of the Areas of Revit 2025 to 2027 (#1261, #1194; Griffin,
-      # 2026-11-05, "Same-project gate"): rac_advanced's Areas on its 2025,
-      # 2026 and 2027 saves equal its 2024 save's. With the four samples in the
-      # run, a failed check, a missing result and a result that read other than
-      # 25 Areas, 25 of them with a body, on any save each turn the job red,
-      # after the results are uploaded; a pass needs the scorer's own `passed`
-      # line. A run with fewer than the four samples (a narrower sample_years)
-      # checks nothing and says so in a notice. Measure is not a required
-      # check: the failure is read before landing, by the landing rule.
-      - name: The Areas agree across rac_advanced's saves
-        if: ${{ !cancelled() && matrix.side != 'base' && matrix.samples }}
+
+  # The same-project gates. No Revit export of a 2026 or 2027 beam, tread
+  # landing, stair run or sketch outline exists to score them against (RE-341),
+  # nor of an Area on 2025 to 2027 (#1261, #1194), so each 2026 and 2027 save
+  # of rac_advanced, rac_basic and rst_basic is held to the same project's 2024
+  # and 2025 saves (tools/re/bodies_across_saves.py) and rac_advanced's Areas to
+  # its 2024 save's (tools/re/areas_across_saves.py). The measuring script runs
+  # both beside the samples and writes their files; this job reads the head
+  # side's shards and fails on a difference, a missing file or a check that did
+  # not run for want of one. It is a job of its own, with a step for each gate
+  # that runs whatever the other did, so that a failure turns the run red and
+  # Compare, which does not need it, still reports (a failed step in a measure
+  # shard would skip Compare). The base side is not gated: its files show what
+  # each check says of `main`. A check skipped on purpose (no `samples`, no 2026
+  # or 2027 sample, the `scorers` excluding it, a run without the earlier saves)
+  # says so in a notice and in the run summary. Measure is not a required check:
+  # the failure is read before landing, by the landing rule.
+  same-project-gates:
+    name: Same-project gates
+    needs: [plan, measure]
+    if: ${{ !cancelled() && needs.measure.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Workflow tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools/ci/check-bodies-across-saves.sh
+            tools/ci/check-areas-across-saves.sh
+          sparse-checkout-cone-mode: false
+      # One directory for each shard: two shards write an areas_across_saves.txt.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: measure-head-*
+          path: measure-head
+      - name: Bodies match the same project's earlier save
         shell: bash
-        run: |
-          file=results/areas_across_saves.txt
-          if [ ! -s "$file" ]; then
-            echo "::error::the Areas of rac_advanced were not compared across its saves: no result, so nothing was checked"
-            exit 1
-          fi
-          cat "$file"
-          if grep -q '^areas across saves: skipped:' "$file"; then
-            echo "::notice::$(sed -n '1p' "$file")"
-            exit 0
-          fi
-          if [ "$(sed -n '$p' "$file")" != "exit 0" ] || ! grep -q '^areas across saves: passed: 25 Areas, 25 with a body, on each of 4 saves' "$file"; then
-            echo "::error::the Areas of rac_advanced differ across its 2024 to 2027 saves, or other than 25 Areas with a body were read on a save, or a save is missing (areas_across_saves.txt)"
-            exit 1
-          fi
+        env:
+          SAMPLES: ${{ inputs.samples }}
+          SAMPLE_YEARS: ${{ inputs.sample_years }}
+          SCORERS: ${{ inputs.scorers }}
+        run: tools/ci/check-bodies-across-saves.sh measure-head
+      - name: The Areas agree across rac_advanced's saves
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          SAMPLES: ${{ inputs.samples }}
+        run: tools/ci/check-areas-across-saves.sh measure-head
 
   compare:
     name: Compare
