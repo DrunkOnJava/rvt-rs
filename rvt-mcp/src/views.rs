@@ -662,9 +662,16 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
         .iter()
         .skip(1)
         .filter_map(|&other| match model.entities.get(other)? {
-            IfcEntity::BuildingElement { ifc_type, name, .. } => Some(EntityRefOut {
+            IfcEntity::BuildingElement {
+                ifc_type,
+                name,
+                type_guid,
+                property_set,
+                ..
+            } => Some(EntityRefOut {
                 ifc_type: ifc_type.clone(),
-                name: name.clone(),
+                name: written_names(ifc_type, name, type_guid.as_deref(), property_set.as_ref())
+                    .name,
                 global_id: computed.global_ids.get(other).cloned().flatten(),
             }),
             _ => None,

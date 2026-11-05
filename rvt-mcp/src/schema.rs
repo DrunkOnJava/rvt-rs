@@ -186,10 +186,12 @@ pub struct ElementRow {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
     /// The `Name` the IFC export writes. An `IfcSpace`'s is its room number,
-    /// or `<room name>:<ElementId>` for a room with no number. Absent for a
-    /// room with neither a number nor a name: the model's own name for it
-    /// is made from its class and ElementId, where no source named it, and
-    /// is not served as a name.
+    /// or `<room name>:<ElementId>` for a room with a name and no number.
+    /// Absent only for a room with neither whose name is exactly the
+    /// exporter's `<Revit class>-<ElementId>`, made where no source named
+    /// it: that placeholder is not served as a name. The placeholder names
+    /// of other elements (a wall nothing named is `Wall-<ElementId>`) are
+    /// still served.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// An `IfcSpace`'s `LongName`, its room name. Absent for any other
@@ -379,8 +381,8 @@ pub struct ElementDetail {
     /// The Revit ElementId.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
-    /// The `Name` the IFC export writes, as in `list_elements`: absent for a
-    /// room whose model name is a placeholder.
+    /// The `Name` the IFC export writes, as in `list_elements`: absent only
+    /// for a room whose name is exactly the exporter's `<class>-<ElementId>`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// An `IfcSpace`'s `LongName`, its room name, as in `list_elements`.
@@ -447,7 +449,9 @@ pub struct ExplainElementOut {
     pub id: String,
     /// Whether the export holds the element. A left-out element has decisions and no provenance.
     pub exported: bool,
-    /// The element's name in the export, where it is exported.
+    /// The `Name` the export writes for the element, as in `list_elements`:
+    /// absent where the element is not exported, and for a room whose name is
+    /// exactly the exporter's `<class>-<ElementId>` placeholder.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// Where the element's record was read from, where the export holds it.

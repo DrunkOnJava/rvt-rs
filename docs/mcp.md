@@ -150,14 +150,27 @@ that says to call `open_model` again. The tool descriptions say the same.
 |---|---|
 | `open_model` | Decodes the file and returns the `model_id` with the summary: file kind, Revit release and build, element counts by IFC entity and Revit class, levels, room count, what the export left out and the file-level provenance. |
 | `get_summary` | The same summary for a `model_id` or a path. |
-| `list_elements` | Building elements, filtered by `category` (IFC entity: `IFCWALL`, `IfcWall` and `wall` are the same), `class` (Revit class: `Wall`, `Room`) and `level` (storey name), paged by `limit` (100 by default, at most 1000) and `offset`. Each row has the ElementId, `name` and `long_name` (the IFC `Name` and `LongName`: an IfcSpace's are its room number, or `<room name>:<ElementId>` without one, and its room name; `name` is absent for a room with neither, whose model name is a placeholder made from its class and ElementId), level, `predefined_type` and its provenance. |
-| `get_element` | One element by Revit ElementId or IFC GlobalId: its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units, each property with its IfcValue type), its trust markers, its provenance, the file's, its type object as the export writes it (`element_type`: the IFC entity, `Name` and `Tag`, and the sets it holds, `Other` and `Identity Data` among them, or the `IfcSpaceType` made for a room; absent where the export writes none) and any other entity with the same ElementId. |
+| `list_elements` | Building elements, filtered by `category` (IFC entity: `IFCWALL`, `IfcWall` and `wall` are the same), `class` (Revit class: `Wall`, `Room`) and `level` (storey name), paged by `limit` (100 by default, at most 1000) and `offset`. Each row has the ElementId, `name` and `long_name` (the IFC `Name` and `LongName`: an IfcSpace's are its room number, or `<room name>:<ElementId>` for a room with a name and no number, and its room name; `name` is absent only for a room with neither whose name is exactly the exporter's `<Revit class>-<ElementId>` placeholder, and the placeholder names of other elements are still served as `name`), level, `predefined_type` and its provenance. |
+| `get_element` | One element by Revit ElementId or IFC GlobalId: its `name` and `long_name` as `list_elements` gives them, its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units, each property with its IfcValue type), its trust markers, its provenance, the file's, its type object as the export writes it (`element_type`: the IFC entity as `ifc_type`, the `name` and the `element_id`, the type object's `Tag`, and the sets it holds, `Other` and `Identity Data` among them, or the `IfcSpaceType` made for a room; absent where the export writes none) and any other entity with the same ElementId. |
 | `explain_element` | Why one element is in the export as it is, or is not in it (#1326). `element` is a Revit ElementId, whether or not the export holds the element, or the GlobalId of an exported one. Returns the element's provenance and trust markers where it is exported, and every fail-closed decision recorded for it: a `stage` (`element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read`, `storey_not_bound`), a `reason` (the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box`, `area_body_refused`, `slab_shape_refused`, `wall_base_cut_refused`), the `stream` and byte `offset` its record was read from where known, and a `detail`. |
 | `list_rooms` | Rooms and spaces: ElementId, number, name, level, area and provenance. The area is present only where the outline was read exactly. |
 | `list_levels` | Storeys with elevation (feet and metres) and element count. |
 | `get_diagnostics` | The export diagnostics, as `rvt-ifc --diagnostics` writes them ([`export-diagnostics.schema.json`](schemas/export-diagnostics.schema.json)): what was decoded, exported, skipped, approximated and left unread, and why. |
 | `export_ifc` | Writes IFC4 to `out_path` and returns a summary and a `resource_link` to the file. `options` takes `rvt-ifc`'s switches: `mode`, `saved_meshes` (`doors_and_windows`, `all`, `off`), `revit_property_sets`, `revit_set_placement`, `no_base_quantities`, `allow_partial`. |
 | `export_gltf` | Writes binary glTF to `out_path` and returns the same kind of summary and link. |
+
+### Names
+
+A row's `name` is the `Name` the export writes (its `long_name` the `LongName`
+of a space). The exporter names an element nothing named
+`<Revit class>-<ElementId>`: a room with neither a number nor a name has that
+as its `Name`, and the server leaves it out (`name` is absent), but the same
+placeholder on any other element is still served as its `name` (a wall nothing
+named is `Wall-<ElementId>`). On the models Measure runs, 23 of Einhoven's 37
+rows, 3 of RE1 Electrical's 49 and 52 of the BIM4LCA office's 13,021 as built
+carry one. The path where a row has no `name` is not measured: no row of the
+32 models' dumps lacks one. `explain_element`'s `name` follows the same rule
+(it was the model's name, placeholder included, before).
 
 ### Exports
 
