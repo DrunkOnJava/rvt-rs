@@ -8,9 +8,9 @@
 //! the table on, then, without the reader that noted the choice:
 //!
 //! - looks up every element's `BodySource` in `COVERAGE`, which says which
-//!   reader and rule a body must have a value source from, or that no reader
-//!   notes its copy yet. A body that is in neither, on any model, fails the
-//!   test: nothing is excluded by being left out of the table;
+//!   reader and rule a body must have a value source from. A body that is not
+//!   in it, on any model, fails the test: nothing is excluded by being left
+//!   out of the table;
 //! - reads the bytes at the offset of each element-data copy (the readers of
 //!   a wall's or beam's line and of a family instance's transform): the
 //!   element-data header, then the element's own id, then a record that
@@ -18,6 +18,10 @@
 //!   asked again;
 //! - reads the bytes at the offset of each native record: the ElementId is the
 //!   first bytes there;
+//! - reads an Area's point at its `area_point` offset (after the Area's data
+//!   object on Revit 2024, its `01 00 00 00 · ElementId` header before) and
+//!   checks it lies inside the outline the export drew, since the point is what
+//!   picks the Area's region among its boundary lines;
 //! - reads the bytes at each record in a source's `parts`, by what the record
 //!   is: a sketch line's frame or a type symbol's frame has the element's id at
 //!   its first bytes, or, on a second-prologue frame (no id there), the id of
@@ -78,7 +82,7 @@
 //! `RVT_NORDIC_LCA_DIR`; each is skipped when its variable is unset.
 
 use crate::element_parameters::nordic_dir;
-use rvt::ifc::entities::{IfcEntity, PropertyValue};
+use rvt::ifc::entities::{IfcEntity, ProfileDef, PropertyValue};
 use rvt::ifc::{ExportOptions, IfcModel, run_export};
 use rvt::research::element_record_plan_profiles::SKETCH_OWNER_OFFSET;
 use rvt::research::native_document::{Options, extract_graphs};
@@ -620,6 +624,78 @@ fn element_bodies(model: &IfcModel) -> (Bodies, usize) {
     (bodies, entities)
 }
 
+/// The outline an Area drawn from its boundary lines is extruded from, in the
+/// model's plan: its profile's outer loop, relative to its placement.
+struct AreaOutline {
+    points: Vec<(f64, f64)>,
+    origin: [f64; 2],
+    rotation: f64,
+}
+
+impl AreaOutline {
+    /// Whether the model-plan point `(x, y)` lies inside the outer loop (even
+    /// and odd crossings).
+    fn contains(&self, (x, y): (f64, f64)) -> bool {
+        let (dx, dy) = (x - self.origin[0], y - self.origin[1]);
+        let (sin, cos) = self.rotation.sin_cos();
+        let (u, v) = (dx * cos + dy * sin, -dx * sin + dy * cos);
+        let mut inside = false;
+        let next = self.points.iter().cycle().skip(1);
+        for (a, b) in self.points.iter().zip(next) {
+            if (a.1 > v) != (b.1 > v) && u < a.0 + (v - a.1) * (b.0 - a.0) / (b.1 - a.1) {
+                inside = !inside;
+            }
+        }
+        self.points.len() >= 3 && inside
+    }
+}
+
+/// Each Area of `model` drawn from its boundary lines, by ElementId, with the
+/// outer loop of its profile.
+fn area_outlines(model: &IfcModel) -> BTreeMap<u32, AreaOutline> {
+    let mut out = BTreeMap::new();
+    for entity in &model.entities {
+        let IfcEntity::BuildingElement {
+            type_guid,
+            property_set,
+            location_feet: Some(location),
+            rotation_radians,
+            extrusion: Some(extrusion),
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let from_lines = property_set
+            .iter()
+            .flat_map(|set| &set.properties)
+            .any(|property| {
+                property.name == "BodySource"
+                    && matches!(&property.value, PropertyValue::Text(text)
+                    if text == "partition_area_boundary_lines")
+            });
+        let points = match &extrusion.profile_override {
+            Some(ProfileDef::ArbitraryClosed { points })
+            | Some(ProfileDef::ArbitraryWithVoids { points, .. }) => points.clone(),
+            _ => continue,
+        };
+        let Some(id) = type_guid.as_deref().and_then(|tag| tag.parse::<u32>().ok()) else {
+            continue;
+        };
+        if from_lines {
+            out.insert(
+                id,
+                AreaOutline {
+                    points,
+                    origin: [location[0], location[1]],
+                    rotation: rotation_radians.unwrap_or(0.0),
+                },
+            );
+        }
+    }
+    out
+}
+
 fn f64_at(buf: &[u8], at: usize) -> Option<f64> {
     buf.get(at..at.checked_add(8)?)
         .map(|b| f64::from_le_bytes(b.try_into().expect("8 bytes")))
@@ -768,6 +844,7 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
     // Coverage by body source: every element, listed in the table or not.
     let mut by_body: BTreeMap<String, BodyStats> = BTreeMap::new();
     let (listed_bodies, entities) = element_bodies(&run.model);
+    let area_outlines = area_outlines(&run.model);
     let distinct_ids = listed_bodies
         .keys()
         .map(|(id, _)| *id)
@@ -1439,10 +1516,14 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                                 && u32_at(bytes, offset + 4) == Some(id))
                             .then_some(offset + 8 + NARROW_POINT_OFFSET)
                         };
-                        point_at.is_some_and(|at| {
-                            f64_at(bytes, at).is_some_and(f64::is_finite)
-                                && f64_at(bytes, at + 8).is_some_and(f64::is_finite)
-                        })
+                        // The point picks the Area's region among the lines, so
+                        // it lies inside the outline the export drew.
+                        let point = point_at
+                            .and_then(|at| Some((f64_at(bytes, at)?, f64_at(bytes, at + 8)?)));
+                        match (point, area_outlines.get(&id)) {
+                            (Some(point), Some(outline)) => outline.contains(point),
+                            _ => false,
+                        }
                     }
                     _ => false,
                 }

@@ -144,9 +144,9 @@ drawn from that reader.
 | `partition_landing_slab` | `landing_lines` | `agreeing` | The element-data header of the first copy of the landing's data that gave its outline lines. |
 | `partition_landing_slab` | `native_landing` | `native` | The header of the landing's current native record, which gives its top. |
 | `partition_landing_slab` | `native_landing_type` | `native` | `parts`: the header of the landing type's current native record, which gives the thickness (monolithic types only). |
-| `partition_area_boundary_lines` | `area_boundary_lines` | `agreeing` | `parts`: the frame of each area boundary line that bounds the Area's region, its holes' too (RE-317, RE-330), the first copy by frame order; every copy of a line that is placed gives the same line, its references included, or its group of lines is not read and no Area of it is drawn. The other lines of the scheme on the Level, which bound other regions, are not listed. |
+| `partition_area_boundary_lines` | `area_boundary_lines` | `agreeing` | `parts`: the frame of each area boundary line that bounds the Area's region, its holes' too (RE-317, RE-330), the first placed copy by frame order; every copy of a line that is placed gives the same line, its references included, or its group of lines is not read and no Area of it is drawn. The other lines of the scheme on the Level, which bound other regions, are not listed. |
 | `partition_area_boundary_lines` | `area_point` | `frame` | The element data that gave the Area's point, which picks its region among the lines: on Revit 2024 the header of its data object, on 2015 to 2023 its `01 00 00 00 · ElementId` element-data header (RE-324). Every copy in the Area record's partition gives the same point; copies in other partitions are not compared. The base and height come from the Level records (RE-317), which have no source. |
-| `native_slab_shape_edit` | `native_slab_shape` | `native` | The header of the floor's current native record, whose `SlabShapeEditGStep` gives the plane of its top (#1384, RE-336). The element's `selected_frame` names the frame whose box gives its base and placement, and `sketch_lines` and `sketch_list` its outline, as for a floor. |
+| `native_slab_shape_edit` | `native_slab_shape` | `native` | The header of the floor's current native record, whose `SlabShapeEditGStep` gives the plane of its top (#1384, RE-336). The element's `selected_frame` names the frame whose box gives its base and placement, and `sketch_lines` and `sketch_list` its outline, as for a floor (`selected_frame_box` where no reader noted the outline's lines). |
 
 Every `BodySource` above has a reader that notes its copy. No reader notes one
 yet for the other values a body reads (a wall's layers, a beam's I section, the
@@ -216,7 +216,10 @@ sidecar.
 | R2025 20_T_U_Roof (T and U hip roofs) | 7,835 | 18,855 | 2.4 | 9,445 | 45,915 | 4.9 |
 
 The table has an entry for every element, so it grows with the model, and it is
-off unless asked for. The value sources of #1368 added 3.6% to the office's
+off unless asked for. The Area and shape-edited floor sources of #1368 add 0.9%
+to the office's compact diagnostics with the table (6,236,391 to 6,291,246
+bytes; CI's Corpus health on `main` at 77d71cbb, run 41944703690, against the
+change at 779ee16c). The value sources of #1368 added 3.6% to the office's
 compact table (5,987,841 bytes after #1360) and 66% to Core Interior's
 (440,909 bytes), where the sketch-line profiles are listed line by line.
 The roof sources of #1368 (run 41902619175) added 16% to the shed roof's
