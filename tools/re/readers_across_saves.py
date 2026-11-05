@@ -36,9 +36,10 @@ shares with this one cannot be caught.
   census        every body of the save with the 2025 save's, as
                 `save_pair_bodies.py` does it (world box to 3 mm, volume to
                 0.1%). A body that differs fails, except a roof left as a record
-                box where the 2025 save draws it (counted) and the PINNED_WALLS,
-                16 walls of rac_basic that must differ exactly as pinned (a wall
-                that moves or heals fails). The pins can only shrink.
+                box where the 2025 save draws it (ROOFS_LEFT_AS_BOXES, counted,
+                exactly those) and the PINNED_WALLS, 16 walls of rac_basic that
+                must differ exactly as pinned (a wall whose source, volume or
+                world box moves, or that heals, fails). The pins can only shrink.
 
 Every check prints how many it compared, and a check whose least number is
 not reached fails (MINIMUMS), so one that compared nothing is never a pass.
@@ -83,42 +84,122 @@ ADDED = [
     (r"IfcWindow", r"Qto_WindowBaseQuantities", r".*"),
     (r"IfcStair.*", r"", r"Name"),
     (r"IfcMember", r"", r"Name"),
+    # The type and family a stair and its flights are read with on 2026 and 2027 as on
+    # 2025, and what the type gives them. Not the `Family:Type` they would be written as
+    # ObjectType: that is left out on a stair part from 2026 (#1472).
+    (r"IfcStair(Flight)?", r"Pset_Stair(Flight)?Common|Pset_EnvironmentalImpactIndicators|Identity Data|Other", r".*"),
+    (r"IfcStair(Flight)?", r"RvtElementRecordGeometry", r"FamilyName|FamilyNameSource|TypeName"),
 ]
 ADDED = [tuple(re.compile(part) for part in rule) for rule in ADDED]
 
 # The only bodies that are allowed to differ from the 2025 save's: 16 walls of
 # rac_basic, which both saves draw from the same source and of another extent
 # (up to 3.19 m), as on `main` (Griffin, 2026-11-05; #1471 is the lane fixing
-# them). This list can only shrink, and no entry is ever added. Each wall is
-# pinned for each release to its exact source pair and the volume of each body,
-# so a wall that moves at all fails, one that heals included, which forces its
-# pin out. Six of them host cut openings that this change moves to exactly the
+# them). This list can only shrink, and no entry is ever added: PINNED_MOST caps
+# it, and tools/ci/check_same_project_projects.py holds the 16 tags. Each wall is
+# pinned for each release to its exact source pair, the volume of each body and
+# the world box of each body, so a wall whose source, volume or box moves by
+# more than PIN_TOLERANCE fails, one that heals included, which forces its pin
+# out. Six of them host cut openings that this change moves to exactly the
 # 2025 save's volume (the check of hosts); their bodies still differ from the
 # 2025 save's by 0.56 to 2.35 m3 without their openings too, as on `main`.
-# Roofs a save leaves as record boxes where the 2025 save draws them are counted,
-# not listed (Griffin, 2026-11-05). The 2027 values below are the 2026 ones, not
-# yet measured on 2027.
-# tag: (BodySource here, BodySource in the 2025 save, volume here, volume there), m3
+# The 2027 save's 16 are the 2026 save's, wall for wall, source, volumes and
+# boxes (Measure run 42107917715, head f1460b32, scored with this script on the
+# IFC files it kept).
+# tag: (BodySource here, BodySource in the 2025 save, volume here, volume there in m3,
+#       world box here, world box there as (low x, y, z, high x, y, z) in m)
+_LAYERS = "partition_wall_centreline_layer_joins"
+_TRIMMED = "partition_element_record_join_trimmed"
 _RAC_BASIC_WALLS = {
-    "234869": ("partition_wall_centreline_layer_joins", "partition_wall_centreline_layer_joins", 2.549528, 5.529220),
-    "428588": ("partition_element_record_join_trimmed", "partition_element_record_join_trimmed", 9.584475, 10.544400),
-    "428745": ("partition_element_record_join_trimmed", "partition_element_record_join_trimmed", 10.735875, 11.695800),
-    "429964": ("partition_wall_centreline_layer_joins", "partition_wall_centreline_layer_joins", 1.768581, 4.071177),
-    "430064": ("partition_element_record_join_trimmed", "partition_element_record_join_trimmed", 2.055400, 4.406434),
-    "430318": ("partition_wall_centreline_layer_joins", "partition_wall_centreline_layer_joins", 0.725089, 1.808131),
-    "430361": ("partition_wall_centreline_layer_joins", "partition_wall_centreline_layer_joins", 0.905749, 1.542956),
-    "430412": ("partition_wall_centreline_layer_joins", "partition_wall_centreline_layer_joins", 0.488536, 1.051978),
-    "430859": ("partition_wall_centreline_layer_joins", "partition_wall_centreline_layer_joins", 1.055402, 2.826164),
-    "497540": ("partition_wall_centreline_layer_joins", "partition_wall_centreline_layer_joins", 0.764515, 1.638923),
-    "506386": ("partition_element_record_join_trimmed", "partition_element_record_join_trimmed", 0.392618, 0.735880),
-    "506797": ("partition_wall_centreline_layer_joins", "partition_wall_centreline_layer_joins", 0.299917, 0.650437),
-    "768442": ("partition_wall_centreline_layer_joins", "partition_wall_centreline_layer_joins", 0.911475, 1.655623),
-    "937935": ("partition_wall_centreline_layer_joins", "partition_wall_centreline_layer_joins", 0.554628, 0.921333),
-    "938974": ("partition_wall_centreline_layer_joins", "partition_wall_centreline_layer_joins", 0.785455, 1.703434),
-    "939084": ("partition_wall_centreline_layer_joins", "partition_wall_centreline_layer_joins", 0.782478, 1.494859),
+    "234869": (
+        _LAYERS, _LAYERS, 2.549528, 5.529220,
+        (9.900932, -3.214594, 3.0, 10.102932, 1.418406, 5.726517),
+        (9.900932, -3.214594, 3.0, 10.102932, 1.418406, 8.91306),
+    ),
+    "428588": (
+        _TRIMMED, _TRIMMED, 9.584475, 10.544400,
+        (-6.438068, 2.798406, 2.7, 13.061932, 3.000406, 6.0),
+        (-6.438068, 2.798406, 2.7, 13.061932, 3.000406, 6.0),
+    ),
+    "428745": (
+        _TRIMMED, _TRIMMED, 10.735875, 11.695800,
+        (-6.438068, -3.403594, 2.2, 13.061932, -3.201594, 6.0),
+        (-6.438068, -3.403594, 2.2, 13.061932, -3.201594, 6.0),
+    ),
+    "429964": (
+        _LAYERS, _LAYERS, 1.768581, 4.071177,
+        (1.001931, -3.214594, 3.0, 1.121932, 2.811406, 5.726517),
+        (1.001931, -3.214594, 3.0, 1.121932, 2.811406, 8.91306),
+    ),
+    "430064": (
+        _TRIMMED, _TRIMMED, 2.055400, 4.406434,
+        (-1.318068, 1.298406, 3.0, 9.900932, 1.418406, 5.726517),
+        (-1.318068, 1.298406, 3.0, 9.900932, 1.418406, 7.472836),
+    ),
+    "430318": (
+        _LAYERS, _LAYERS, 0.725089, 1.808131,
+        (4.061932, -1.525594, 3.0, 4.181932, 1.308406, 5.726517),
+        (4.061932, -1.525594, 3.0, 4.181932, 1.308406, 8.91306),
+    ),
+    "430361": (
+        _LAYERS, _LAYERS, 0.905749, 1.542956,
+        (4.181932, -1.525594, 3.0, 6.951932, -1.405594, 5.726517),
+        (4.181932, -1.525594, 3.0, 6.951932, -1.405594, 7.644659),
+    ),
+    "430412": (
+        _LAYERS, _LAYERS, 0.488536, 1.051978,
+        (6.941931, -3.214594, 3.0, 7.061932, -1.085594, 5.726517),
+        (6.941931, -3.214594, 3.0, 7.061932, -1.085594, 7.952507),
+    ),
+    "430859": (
+        _LAYERS, _LAYERS, 1.055402, 2.826164,
+        (-1.438068, -3.214594, 3.0, -1.318068, 1.418406, 5.726517),
+        (-1.438068, -3.214594, 3.0, -1.318068, 1.418406, 8.91306),
+    ),
+    "497540": (
+        _LAYERS, _LAYERS, 0.764515, 1.638923,
+        (-1.328068, -0.021594, 3.0, 1.011932, 0.098406, 5.726517),
+        (-1.328068, -0.021594, 3.0, 1.011932, 0.098406, 8.844945),
+    ),
+    "506386": (
+        _TRIMMED, _TRIMMED, 0.392618, 0.735880,
+        (-0.788068, -1.041594, 3.0, 0.411932, -0.921594, 5.726517),
+        (-0.788068, -1.041594, 3.0, 0.411932, -0.921594, 8.110278),
+    ),
+    "506797": (
+        _LAYERS, _LAYERS, 0.299917, 0.650437,
+        (-0.248068, -0.931594, 3.0, -0.128068, -0.011594, 5.726517),
+        (-0.248068, -0.931594, 3.0, -0.128068, -0.011594, 8.91306),
+    ),
+    "768442": (
+        _LAYERS, _LAYERS, 0.911475, 1.655623,
+        (4.171932, -1.205594, 3.0, 7.051932, -1.085594, 5.726517),
+        (4.171932, -1.205594, 3.0, 7.051932, -1.085594, 7.952507),
+    ),
+    "937935": (
+        _LAYERS, _LAYERS, 0.554628, 0.921333,
+        (4.445646, -3.214594, 3.0, 4.565646, -1.515594, 5.726517),
+        (4.445646, -3.214594, 3.0, 4.565646, -1.515594, 7.529216),
+    ),
+    "938974": (
+        _LAYERS, _LAYERS, 0.785455, 1.703434,
+        (6.556832, -1.095594, 3.0, 6.676832, 1.308406, 5.726517),
+        (6.556832, -1.095594, 3.0, 6.676832, 1.308406, 8.91306),
+    ),
+    "939084": (
+        _LAYERS, _LAYERS, 0.782478, 1.494859,
+        (4.171932, 0.590406, 3.0, 6.566832, 0.710406, 5.726517),
+        (4.171932, 0.590406, 3.0, 6.566832, 0.710406, 8.208785),
+    ),
 }
 PINNED_WALLS = {"racbasicsampleproject": {2026: _RAC_BASIC_WALLS, 2027: _RAC_BASIC_WALLS}}
+PINNED_MOST = 16
 PIN_TOLERANCE = 1e-6
+# The roofs a save may leave as a record box where the 2025 save draws them (the
+# roof is cut by walls, #1471; Griffin, 2026-11-05), exactly: one in each of
+# rac_advanced's and rac_basic's 2026 and 2027 saves and none in any other.
+# Counted, not scored; one more, or one fewer, fails.
+ROOFS_LEFT_AS_BOXES = {"racadvancedsampleproject": frozenset({"201262"}), "racbasicsampleproject": frozenset({"243274"})}
 RECORD_BOX = "partition_element_record_bbox"
 
 # A door's or window's Area, which a 2027 save leaves out because Revit 2027's own
@@ -128,14 +209,19 @@ AREA = (re.compile(r"Ifc(Door|Window)"), re.compile(r"Qto_(Door|Window)BaseQuant
 AREA_LEFT_OUT = 2027  # the first release that leaves it out, as DOOR_WINDOW_AREA_REVIT_VERSIONS ends at 2026
 
 # The least number each check compares on a sample of the project, whatever the
-# release of the save: `PORTS` placed, `CUT_OPENINGS` cut, `PROPERTIES` values
-# equal (not counting a door's or window's Area) and "areas" equal where the
-# release writes them. From the 2026 saves of Measure run 42063046730 (head
-# 3149973f), scored with this script on the IFC files that run kept; the 2027
-# saves are held to the same numbers and were not scored with them.
+# release of the save unless a number is given by release: `PORTS` placed,
+# `CUT_OPENINGS` cut, `PROPERTIES` values equal (not counting a door's or window's
+# Area) and "areas" equal where the release writes them. From the 2026 and 2027 saves
+# of Measure run 42107917715 (head f1460b32), scored with this script on the IFC
+# files it kept: every number is the same on both releases except rac_basic's
+# properties, where two doors of the 2027 save, 431064 and 485679, write no Width
+# and no Height (#1489), 4 values fewer. rac_basic's properties are the 329 of run
+# 42063046730 for 2026, which this change gets back by reading a stair's and its
+# flights' type and family on 2026 and 2027 again (run 42107917715 scored 327 and
+# 323 without), and 4 fewer for 2027; the stairs' own values, now scored, add to them.
 MINIMUMS = {
     "racadvancedsampleproject": {PORTS: 30, CUT_OPENINGS: 108, PROPERTIES: 4448, "areas": 107, FILLERS: 124},
-    "racbasicsampleproject": {PORTS: 60, CUT_OPENINGS: 25, PROPERTIES: 329, "areas": 13, FILLERS: 33},
+    "racbasicsampleproject": {PORTS: 60, CUT_OPENINGS: 25, PROPERTIES: {2026: 329, 2027: 325}, "areas": 13, FILLERS: 33},
     "rmeadvancedsampleproject": {PORTS: 6959, CUT_OPENINGS: 107, PROPERTIES: 5015, "areas": 107, FILLERS: 124},
     "rmebasicsampleproject": {PORTS: 7046, CUT_OPENINGS: 107, PROPERTIES: 5020, "areas": 107, FILLERS: 124},
     "rstbasicsampleproject": {PORTS: 0, CUT_OPENINGS: 0, PROPERTIES: 413, "areas": 0, FILLERS: 0},
@@ -416,6 +502,8 @@ def check_properties(candidate, reference, fail, year, project, own_year):
         if diff or here_only:
             fail(f"{PROPERTIES}: {cls} {pset}.{name}: differ {diff}, only here {here_only} ({first[(cls, pset, name)]})")
     least = MINIMUMS.get(project, {}).get(PROPERTIES, 0)
+    if isinstance(least, dict):
+        least = least[own_year]
     if equal < least:
         fail(f"{PROPERTIES}: {equal} values equal, fewer than the {least} the sample holds")
     least = MINIMUMS.get(project, {}).get("areas", 0)
@@ -437,15 +525,31 @@ def check_properties(candidate, reference, fail, year, project, own_year):
     return equal + differ + only_here
 
 
+def pin_off(body, reference, pin):
+    """How far a pinned wall's two volumes and two world boxes are from its pin's,
+    the largest, in m3 or m."""
+    volume, other_volume, box, other_box = pin[2:]
+    return max(
+        abs(body[2] - volume),
+        abs(reference[2] - other_volume),
+        float(np.abs(np.concatenate([body[3], body[4]]) - box).max()),
+        float(np.abs(np.concatenate([reference[3], reference[4]]) - other_box).max()),
+    )
+
+
 def check_census(candidate_path, reference_path, year, project, fail, own_year):
     """Every body of the candidate against the reference's. A body that differs
-    fails, unless it is a roof the candidate leaves as a record box where the
-    reference draws it (counted), or one of the PINNED_WALLS, which must differ
-    exactly as pinned: one that moves, or heals, fails."""
+    fails, unless it is one of the ROOFS_LEFT_AS_BOXES (a roof the candidate leaves
+    as a record box where the reference draws it, counted, exactly those), or one of
+    the PINNED_WALLS, which must differ exactly as pinned: one whose source, volume
+    or box moves, or that heals, fails."""
     pinned = PINNED_WALLS.get(project, {}).get(own_year, {})
+    if len(pinned) > PINNED_MOST:
+        fail(f"census: {len(pinned)} pinned walls, more than the {PINNED_MOST} the list may hold")
     here, here_lost, _ = census.bodies(candidate_path)
     there, there_lost, _ = census.bodies(reference_path)
-    same = differ = absent = left_boxes = pinned_held = 0
+    same = differ = absent = pinned_held = 0
+    left_boxes = set()
     by_kind = collections.Counter()
     lines = []
     for tag in sorted(here, key=census.tag_order):
@@ -465,30 +569,32 @@ def check_census(candidate_path, reference_path, year, project, fail, own_year):
         by_kind[(body[0], body[1], there[tag][1])] += 1
         lines.append(f"  {body[0]} {tag} {body[1]} here, {there[tag][1]} in the {year} save: box off {box:.4f} m, volume {body[2]:.6f} here, {there[tag][2]:.6f} there")
         if body[0] == "IfcRoof" and body[1] == RECORD_BOX and there[tag][1] != RECORD_BOX:
-            left_boxes += 1
+            left_boxes.add(tag)
         else:
             fail(f"census: {body[0]} {tag} ({body[1]} here, {there[tag][1]} in the {year} save) differs from the {year} save's and is not a pinned wall")
-    for tag, (source, other, volume, other_volume) in sorted(pinned.items(), key=lambda item: census.tag_order(item[0])):
+    expected_boxes = ROOFS_LEFT_AS_BOXES.get(project, frozenset()) if own_year > REFERENCE_YEAR else frozenset()
+    if left_boxes != expected_boxes:
+        fail(
+            f"census: roofs left as record boxes where the {year} save draws them: {sorted(left_boxes, key=census.tag_order)} here, "
+            f"{sorted(expected_boxes, key=census.tag_order)} expected, and exactly those"
+        )
+    for tag, pin in sorted(pinned.items(), key=lambda item: census.tag_order(item[0])):
         body, reference = here.get(tag), there.get(tag)
         if body is None or reference is None:
             fail(f"census: pinned wall {tag} has no body {'here' if body is None else 'in the ' + str(year) + ' save'}")
         elif census.same(body, reference)[0]:
             fail(f"census: pinned wall {tag} is now the {year} save's: remove its pin")
-        elif (
-            (body[1], reference[1]) != (source, other)
-            or abs(body[2] - volume) > PIN_TOLERANCE
-            or abs(reference[2] - other_volume) > PIN_TOLERANCE
-        ):
+        elif (body[1], reference[1]) != pin[:2] or pin_off(body, reference, pin) > PIN_TOLERANCE:
             fail(
-                f"census: pinned wall {tag} moved: {body[1]} here, {reference[1]} in the {year} save, volumes {body[2]:.6f} and {reference[2]:.6f}, "
-                f"pinned {source}, {other}, {volume:.6f} and {other_volume:.6f}"
+                f"census: pinned wall {tag} moved: {body[1]} here, {reference[1]} in the {year} save, pinned {pin[0]} and {pin[1]}; "
+                f"its volumes and boxes are off the pin by up to {pin_off(body, reference, pin):.6f} (m3 or m)"
             )
         else:
             pinned_held += 1
             differ += 1
     print(
         f"census: {len(here)} bodies paired by Tag with the {year} save's: same {same}, differ {differ} "
-        f"(pinned walls as pinned {pinned_held} of {len(pinned)}; roofs left as record boxes {left_boxes}), "
+        f"(pinned walls as pinned, source, volume and box, {pinned_held} of {len(pinned)}; roofs left as record boxes {len(left_boxes)} of {len(expected_boxes)} expected), "
         f"not in the {year} save {absent}; did not mesh here {len(here_lost)}, there {len(there_lost)}"
     )
     for (cls, mine, theirs), count in sorted(by_kind.items(), key=lambda item: (-item[1], item[0])):
