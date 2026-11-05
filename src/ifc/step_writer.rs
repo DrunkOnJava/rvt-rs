@@ -3488,13 +3488,15 @@ impl StepWriter<'_> {
             void_fill_triples.push((*host, opening_id, None, opening_gid));
         }
 
-        // RE-321: the opening a rectangular wall opening cuts in a wall,
-        // which nothing fills. Placed in the wall's frame as the opening of
-        // its elevation profile is, tagged with the opening's ElementId and
-        // named for the wall. Its Reference is the wall's type name, and its
-        // GlobalId Revit's: revit-ifc's `OpeningUtil` hashes the opening's
-        // number in the wall's openings with the wall's and the opening
-        // record's GlobalIds (CLEANROOM.md source 5).
+        // RE-321: an opening an element cuts in a wall besides the one a door
+        // or window fills: a rectangular wall opening's, a cabinet's, a door's
+        // in a second wall or a curtain wall's. Placed in the wall's frame as
+        // the opening of its elevation profile is, tagged with the cutter's
+        // ElementId and named for the wall. Its Reference is the cutter's
+        // type name, and its GlobalId Revit's where the cutter is an element
+        // of the export: revit-ifc's `OpeningUtil` hashes its number in the
+        // wall's openings with the wall's and the cutter's GlobalIds
+        // (CLEANROOM.md source 5).
         for entity in &model.entities {
             let super::entities::IfcEntity::WallCutOpening {
                 host,
@@ -3502,10 +3504,13 @@ impl StepWriter<'_> {
                 tag,
                 name,
                 cutter_global_id,
+                reference_from,
                 outline_feet,
                 axis_turn_radians,
                 plane_offset_feet,
                 thickness_feet,
+                recess,
+                quantities: with_quantities,
             } = entity
             else {
                 continue;
@@ -3593,12 +3598,13 @@ impl StepWriter<'_> {
             self.emit_entity(
                 opening_id,
                 format!(
-                    "IFCOPENINGELEMENT('{opening_gid}',#{owner_hist},{},$,$,#{placement_id},#{prod_shape_id},'{}',.OPENING.)",
+                    "IFCOPENINGELEMENT('{opening_gid}',#{owner_hist},{},$,$,#{placement_id},#{prod_shape_id},'{}',{})",
                     quoted_or_dollar(&escape(name)),
                     escape(tag),
+                    if *recess { ".RECESS." } else { ".OPENING." },
                 ),
             );
-            if let Some(reference) = host_references.get(host) {
+            if let Some(reference) = host_references.get(reference_from) {
                 for set_name in [
                     "Pset_OpeningElementCommon",
                     "Pset_EnvironmentalImpactIndicators",
@@ -3624,7 +3630,7 @@ impl StepWriter<'_> {
             // which are the right way round on a rectangular opening (not on
             // a door's, RE-244). With base quantities off the wall has none
             // and the opening none either.
-            if wall_widths.contains_key(host) {
+            if *with_quantities && wall_widths.contains_key(host) {
                 let extent = |axis: fn(&(f64, f64)) -> f64| {
                     let low = outline_feet.iter().map(axis).fold(f64::INFINITY, f64::min);
                     let high = outline_feet

@@ -40,24 +40,9 @@ import ifcopenshell.util.unit
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ifc_common import site_frame  # noqa: E402
+from ifc_common import siblings, site_frame  # noqa: E402
 
 BOX_TOLERANCE_FEET = 0.01
-
-
-def siblings(path):
-    """The other Revit exports in path's directory whose names agree with its in
-    the first four words (`ARK_NordicLCA_Office_Concrete_`): the same building
-    saved in another state, as the BIM4LCA office as built and at permit."""
-    directory, name = os.path.split(os.path.abspath(path))
-    head = name.split("_")[:4]
-    if len(head) < 4 or not os.path.isdir(directory):
-        return []
-    return sorted(
-        os.path.join(directory, other)
-        for other in os.listdir(directory)
-        if other != name and other.endswith(".ifc") and other.split("_")[:4] == head
-    )
 
 
 def unfilled(path, boxes=True):
