@@ -19,7 +19,10 @@
   (`wall_beneath_not_one_rectangle`, `base_not_cut_over_the_extended_plan`)
   have measured instances, and `base_cut_lost_on_extended_plan` and
   `walls_beneath_reach_the_end_at_different_faces` have none, so nothing has
-  exercised them against a Revit export. Walls 2057668 and 2057670 have
+  exercised them against a Revit export, and no measured wall took the
+  end without a base cut, so that path of the stepped body has none either; a
+  beneath wall drawn as a solid is neither reached nor refused. Walls 2057668
+  and 2057670 have
   Revit's lowest point as built and at building permit (0.123 ft and 0.044 ft
   off before), their volume goes from 1.7 and 1.3 ft3 under Revit's to 0.1 and
   0.6 over (0.4 under to 0.2 over at permit) and the area where their top is
