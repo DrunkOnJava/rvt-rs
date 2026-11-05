@@ -15,10 +15,14 @@
   office as built against Revit's export (Measure 42099826920 at `c413f382`):
   the two walls keep Revit's lowest point (174.2126 ft), take Revit's end
   (y 75.4183 ft), and their volume goes from 4.497 ft3 over Revit's (35.302
-  against 30.805) to 0.147 ft3 under (30.658), the omitted upper step of the
-  end (RE-337). No other wall of the office as built changes (607 bodies
-  compared), and the office at building permit is byte for byte what `main`
-  writes. Every other model is not yet measured on this head. The level top of
-  a partial cover, a footing with an opening under a wall and a wall whose plan
-  is not convex are exercised by no measured wall. The measured effect is in
+  against 30.805) to 0.147 ft3 under (30.658), a net of the upper step that
+  RE-337's end then omitted and the far end's sloped top (#1473), the same as
+  wall 2057670's to 3e-5 ft3. No other wall of the office as built changes (607
+  bodies compared), and the office at building permit is byte for byte what
+  `main` writes. An element that covers the whole plan still decides first, and
+  one that covers part counts only where none covers the whole. Every other
+  model is not yet measured on this head. The level top of a partial cover, a
+  partially covered wall with no end extension, a footing with an opening under
+  a wall and a wall whose ring is clockwise or concave are exercised by no
+  measured wall. The measured effect is in
   `reports/element-framing/RE-349-wall-base-covered-in-part.md`.
