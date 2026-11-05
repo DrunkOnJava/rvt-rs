@@ -17,14 +17,16 @@
   opening hosted in it (the void its own curtain wall cuts does not count), a
   Tag shared with another entity or a base cut at a floor (#1384).
   - The base of all 14 walls Revit raises, 6 as built and 8 at permit, is now
-    Revit's (Measure run 41945943795): walls whose base and top are Revit's
+    Revit's with the curtain walls' openings (#1165) written (Measure run
+    41973316830 at 3ad0762f): walls whose base and top are Revit's
     rise from 598 to 604 of 607 as built and from 577 to 585 of 589 at permit,
     and no other wall's row moves.
   - The 0.5 ft threshold was fitted and checked on those same two files (113
     host states, 10 distinct raised walls); the held-out models and
     Autodesk's samples gave no host to score.
-  - The glTF draws these walls in one material, not in their layers (the six
-    hosts as built have two or more).
+  - The glTF draws the six hosts as built, which have two or more layers, in
+    one material, not in their layers; the hosts of one layer keep their
+    layer's colour (#1405). The IFC keeps every host's layer set.
   - `--no-saved-meshes` keeps the walls' records. A file with no curtain wall
     reads no wall record for this, and the exports of Core Interior and RE1
     Architecture are byte-identical.
