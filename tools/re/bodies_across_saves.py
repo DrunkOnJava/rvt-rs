@@ -394,12 +394,15 @@ def main():
         other = OTHER_YEAR.get(group)
         if other in earlier and chosen:
             against_other(settings, (scale_candidate, ifcopenshell.util.unit.calculate_unit_scale(earlier[other][0])), chosen, earlier[other][1], group, other)
-    if READERS_YEAR in earlier:
+    readers_own = int(own_year) if own_year.isdigit() else 0
+    if 0 < readers_own <= READERS_YEAR:
+        print(f"cut openings, ports and properties: not applicable, the {READERS_YEAR} save is the reference of the later saves and this is the {own_year} save")
+    elif READERS_YEAR in earlier:
         import readers_across_saves
 
         total += readers_across_saves.check(
             project,
-            int(own_year) if own_year.isdigit() else 0,
+            readers_own,
             candidate_path,
             model,
             earlier_paths[READERS_YEAR],
