@@ -1,4 +1,4 @@
-//! RE-352 (#1408): which way the sketch lines of a floor's void run, and
+//! RE-355 (#1408): which way the sketch lines of a floor's void run, and
 //! whether that tells which line Revit's export tags the void's opening with.
 //!
 //! FACT under test (RE-339): Revit tags a floor's void with the lowest
@@ -31,11 +31,11 @@
 //!   void <tag> host <host> irregular <why>
 //! and a last line of counts, `void tags:`, which holds no id.
 //!
-//! Reads Revit's export beside the model (`<model>.ifc`, `<model>_slim.ifc` or
-//! `<model>_Revit.ifc`).
+//! Reads Revit's export beside the model, the one Measure's scorers read:
+//! `<model>_slim.ifc`, else `<model>_Revit.ifc`, else `<model>.ifc`.
 //!
 //! Usage:
-//!   cargo run --profile ci -p rvt-probes --example probe_re352_void_loop_directions -- MODEL.rvt
+//!   cargo run --profile ci -p rvt-probes --example probe_re355_void_loop_directions -- MODEL.rvt
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -374,6 +374,7 @@ fn read_loop(
 
 #[derive(Default)]
 struct Counts {
+    no_host_tag: usize,
     voids: usize,
     irregular: usize,
     lowest: usize,
@@ -391,9 +392,9 @@ fn probe(path: &str) -> Result<()> {
     let model = PathBuf::from(path);
     let stem = model.with_extension("");
     let export = [
-        model.with_extension("ifc"),
         PathBuf::from(format!("{}_slim.ifc", stem.display())),
         PathBuf::from(format!("{}_Revit.ifc", stem.display())),
+        model.with_extension("ifc"),
     ]
     .into_iter()
     .find(|candidate| candidate.exists());
@@ -401,7 +402,9 @@ fn probe(path: &str) -> Result<()> {
         println!("no Revit export beside the model");
         return Ok(());
     };
-    let voids: Vec<Opening> = read_export(&std::fs::read_to_string(&export)?)
+    let unfilled = read_export(&std::fs::read_to_string(&export)?);
+    let unfilled_count = unfilled.len();
+    let voids: Vec<Opening> = unfilled
         .into_iter()
         .filter(|opening| opening.host_class != "IFCWALL")
         .collect();
@@ -462,6 +465,7 @@ fn probe(path: &str) -> Result<()> {
     let mut counts = Counts::default();
     for opening in &voids {
         let Some(host) = opening.host_tag else {
+            counts.no_host_tag += 1;
             continue;
         };
         counts.voids += 1;
@@ -507,7 +511,13 @@ fn probe(path: &str) -> Result<()> {
         );
     }
     println!(
-        "void tags: voids {}, irregular {}, tag is the lowest id {}, the highest {}, another {}, ids reading {} (right {}), stored reading {} (right {}), both read {} (agree {})",
+        "void tags: export {}, unfilled openings {}, off a wall {}, with no host tag {}, voids {}, irregular {}, tag is the lowest id {}, the highest {}, another {}, ids reading {} (right {}), stored reading {} (right {}), both read {} (agree {})",
+        export
+            .file_name()
+            .map_or_else(String::new, |name| name.to_string_lossy().into_owned()),
+        unfilled_count,
+        voids.len(),
+        counts.no_host_tag,
         counts.voids,
         counts.irregular,
         counts.lowest,
