@@ -489,13 +489,23 @@ fn current_graph_owner_matches(root: &crate::native_parameters::GraphObject, id:
         }
 }
 /// Whether an `InstanceInfo` names the default representation: `m_GRepId` is
-/// 0 on every file of Revit 2023 to 2027 measured, and the schema of 2015 to
-/// 2022 has no such field, where the instance is read as the default one
-/// (RE-342 compares those meshes with the same projects' 2023 copies).
+/// 0 on every file of Revit 2023 to 2027 measured. The classes of Revit 2015
+/// to 2022 declare no such field (`InstInfoBase` has `m_Trf` and `m_symbolId`,
+/// `InstanceInfo` `m_cda`, in all 30 sample projects), and an object that
+/// holds exactly those three is read as the default one (RE-342 compares
+/// those meshes with the same projects' 2023 copies); one that holds anything
+/// else is refused. The decoder drops a field flagged transient unread, so a
+/// missing key cannot say whether the class declares one: the release gate
+/// keeps those files out of every export.
 fn default_representation(info: &Value) -> bool {
     match info.get("m_GRepId") {
         Some(id) => id.as_u64() == Some(0),
-        None => info.get("m_Trf").is_some() && info.get("m_cda").is_some(),
+        None => info.as_object().is_some_and(|fields| {
+            fields.len() == 3
+                && fields.contains_key("m_Trf")
+                && fields.contains_key("m_symbolId")
+                && fields.contains_key("m_cda")
+        }),
     }
 }
 fn graphics_visibility(flags: u64) -> u8 {
