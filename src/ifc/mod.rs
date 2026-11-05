@@ -426,8 +426,8 @@ impl ExportDiagnostics {
     /// [`crate::redact::ANONYMIZED`], the levels' and the material sample's
     /// names `Level 1`, `Material 1` and so on in their order, and each
     /// skipped element's sample name, which can name its family and type,
-    /// `element-<ElementId>`, and the phase a left-out room sits in, here and
-    /// in the log of decisions ([`export_decisions::ExportDecisionLog::anonymize`]:
+    /// `element-<ElementId>`, and the phase a left-out room sits in, here, in
+    /// [`Self::room_phase_fallback`] and in the log of decisions ([`export_decisions::ExportDecisionLog::anonymize`]:
     /// the phase named in the detail of a left-out room's entry, and any other
     /// detail that is not a code rvt-rs writes). The warning listing "Export to IFC As" values
     /// the export does not apply keeps their count and drops the values,
@@ -4065,14 +4065,16 @@ pub(crate) fn build_export_diagnostics_and_decisions(
         ClassesBy::Class,
     );
     // #1359: the rooms of the fallback phase, which the last phase's lack of
-    // rooms brought in.
-    let room_phase_fallback =
-        phase_excluded
-            .fallback_rooms
-            .map(|(phase, rooms)| RoomPhaseFallback {
-                phase: rf.memoised_phase_filter().phase_label(phase),
-                rooms,
-            });
+    // rooms brought in. The handle says so, as `rvt-schedule` and the Python
+    // warnings do, and the scan above counts nothing for it, so a scan that
+    // failed leaves this as it was.
+    let room_phase_fallback = rf.room_phase_fallback().map(|phase| {
+        let filter = rf.memoised_phase_filter();
+        RoomPhaseFallback {
+            phase: filter.phase_label(phase.id),
+            rooms: filter.room_fallback_rooms,
+        }
+    });
     if !phase_excluded.rooms.is_empty() {
         let phases = rf.memoised_phase_filter();
         let mut rooms_by_phase: std::collections::BTreeMap<

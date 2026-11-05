@@ -359,9 +359,9 @@ phase you name is exact, the last included. Without `--phase`, a project whose
 last phase holds no room (Autodesk's `rac_basic_sample_project` has its 14
 rooms in Working Drawings and none in Learning Content, its last) writes the
 rooms of the latest phase that holds any, so that its rooms are not lost;
-`rvt-ifc` prints a line saying so, the diagnostics' `room_phase_fallback` names
-the phase and counts the rooms, and the Python bindings raise a
-`RuntimeWarning`. Every other element is still of the last phase. A room whose
+`rvt-ifc`, `rvt-gltf`, `rvt-schedule` and `rvt-sheet` print a line saying so, the
+diagnostics' `room_phase_fallback` names the phase and counts the rooms, and the
+Python bindings raise a `RuntimeWarning`. Every other element is still of the last phase. A room whose
 phase is unset or unread is written whatever the phase, and so is an Area or an
 MEP space, which Revit's export does not check against a phase either. The
 Python bindings and the viewer export the default phase.

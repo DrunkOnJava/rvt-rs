@@ -12,7 +12,7 @@
   earlier rooms that Revit's default might leave out.
   - The diagnostics name the phase and count its rooms in the new
     `room_phase_fallback` (`docs/schemas/export-diagnostics.schema.json`), absent
-    in every other export. `rvt-ifc` and `rvt-schedule` print a line, and the
+    in every other export. `rvt-ifc`, `rvt-gltf`, `rvt-schedule` and `rvt-sheet` print a line, and the
     Python bindings raise a `RuntimeWarning` naming the phase and saying to pass
     `phase=` (`decoded_elements()` and `element_counts()`, which take no phase,
     say to export with it). `RevitFile::room_phase_fallback` gives the phase.
@@ -20,8 +20,10 @@
     (`rvt-ifc --phase`, `phase=`, the MCP server's `phase`), the last included,
     is exact and writes none of these rooms. A project with a room in its last
     phase, and a project whose rooms are all in it, are unchanged, byte for
-    byte. A room whose phase is unset, unread or not one of the project's is
-    written as before and does not count towards the last phase holding a room.
+    byte. Only placed rooms count towards the last phase holding a room and towards
+    the latest phase that holds any: an Area or an unplaced record does not, and
+    a placed room whose phase is unset, unread or not one of the project's is
+    written as before and does not either.
   - Measured (Measure run 42011174043 at `992196c6`, 111 exports): the 2016
     to 2027 saves of `rac_basic_sample_project` each write 14 `IfcSpace` (0
     before), and the other 99 exports, held-out ones included, are byte for

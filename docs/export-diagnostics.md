@@ -557,11 +557,13 @@ could not be read"), and the export then writes every element.
 
 `room_not_in_export_phase` counts placed rooms whose own phase
 (`RoomElem.m_phaseId`, Revit's `ROOM_PHASE`) is a phase of the project other
-than the one rooms are judged against, which Revit's exporter leaves out and
-rvt-rs does too (RE-326). That phase is the export phase, the project's last
-unless `rvt-ifc --phase` names another, except where no phase is named and the
-last holds no room: then it is the latest phase that holds any
-(`room_phase_fallback`, below). There is one item for each phase the rooms sit
+than the one rooms are judged against, as Revit's exporter leaves out a room
+whose phase is not the export phase (RE-326). That phase is the export phase,
+the project's last unless `rvt-ifc --phase` names another, except where no
+phase is named and the last holds no room: then it is the latest phase that
+holds any (`room_phase_fallback`, below), and that Revit's exporter leaves out
+the rooms of the other phases at that phase is not known, because no Revit
+export made at the last phase of such a project exists. There is one item for each phase the rooms sit
 in: `count` and `classes.Room` are the rooms, and `phase` is that phase's name
 (`ElementId <n>` where the file names none; `--anonymize` replaces it). A room
 whose phase is unset or unread is written and not counted, and so is an Area or
@@ -580,11 +582,14 @@ project's last phase holds no room, so the export writes the rooms of the
 latest phase that holds any. `phase` is that phase's name (`ElementId <n>` where
 the file names none; `--anonymize` replaces it) and `rooms` the placed rooms of
 it, each counted once: the rooms the phase rule would otherwise have left out,
-each then written or left out for its own reasons, such as having no body. A
-room whose phase is unset, unread or not one of the project's does not count
-towards the last phase holding a room, because an unset phase is what an Area
-or an unplaced room carries (RE-326 §2) and the filter cannot tell it from a
-placed room's. Every other element still follows the last phase (RE-184), the
+each then written or left out for its own reasons, such as having no body. Only placed rooms
+count, both for the last phase holding a room and for the latest phase that
+holds any: an Area and an unplaced record (RE-326 §2) hold no room, so an
+unplaced record in the last phase does not stop the fallback and one in a later
+phase than the placed rooms does not move it. A placed room whose phase is
+unset, unread or not one of the project's is written as before and does not
+count either. Where a release's records cannot be scanned for placement there
+is no fallback. Every other element still follows the last phase (RE-184), the
 rooms of the other phases are left out and counted in `room_not_in_export_phase`
 as before, and a phase named (`rvt-ifc --phase`, Python's `phase=`, the MCP
 server's `phase`) is exact: naming the last phase writes none of these rooms.

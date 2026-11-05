@@ -367,6 +367,25 @@ pub enum ExportNote {
 }
 
 impl ExportNote {
+    /// The note with the project's own text replaced, as
+    /// [`ExportDiagnostics::anonymize`] replaces it in the diagnostics: the
+    /// phase a room fallback is written from. Every other note carries none.
+    #[must_use]
+    pub fn anonymized(&self) -> Self {
+        match self {
+            Self::RoomPhaseFallback { rooms, .. } => Self::RoomPhaseFallback {
+                phase: crate::redact::ANONYMIZED.to_string(),
+                rooms: *rooms,
+            },
+            other => other.clone(),
+        }
+    }
+
+    /// Whether this is the room fallback of #1359.
+    pub fn is_room_phase_fallback(&self) -> bool {
+        matches!(self, Self::RoomPhaseFallback { .. })
+    }
+
     /// Why the step did not run, for the `...Skipped` notes; `None` for a
     /// step that ran.
     pub fn skipped(&self) -> Option<&str> {
@@ -467,7 +486,7 @@ impl fmt::Display for ExportNote {
             ),
             Self::RoomPhaseFallback { phase, rooms } => write!(
                 f,
-                "the project's last phase holds no room, so the {rooms} room(s) of {phase:?}, the latest phase that holds any, are written; every other element is of the last phase. --phase NAME|ID chooses the export phase exactly (naming the last writes no room), and Python's phase= and the MCP phase argument do the same"
+                "the project's last phase holds no room, so the {rooms} room(s) of {phase:?}, the latest phase that holds any, are written; every other element is of the last phase. Naming the export phase (rvt-ifc --phase, Python's phase=, the MCP phase argument) is exact: naming the last writes no room"
             ),
         }
     }
@@ -558,7 +577,10 @@ pub fn run_export_with_limits(
 /// out ([`RevitFile::set_export_phase`]), so each export is the one a handle
 /// opened for that phase gives, and giving the phase the handle already has
 /// keeps what it read. `options.phase` of `None` leaves the handle's phase as
-/// it is; [`RevitFile::clear_export_phase`] goes back to the project's last.
+/// it is; [`RevitFile::clear_export_phase`] goes back to the default, the
+/// project's last with the rooms' fallback where the last holds no room
+/// ([`RevitFile::room_phase_fallback`], #1359), which a phase named, the last
+/// included, does not have.
 ///
 /// # Errors
 ///

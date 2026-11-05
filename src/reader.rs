@@ -1134,8 +1134,10 @@ impl RevitFile {
 
     /// The phase whose rooms an export with no phase named writes in place of
     /// the project's last phase's, which holds none (#1359, Griffin,
-    /// 2026-11-05): the latest phase that holds a room. `None` where the last
-    /// phase holds a room, where no phase does, where a phase is named
+    /// 2026-11-05): the latest phase that holds a placed room, with at least
+    /// one placed room in it. `None` where the last phase holds a placed room,
+    /// where no phase does, where the release's records cannot be scanned for
+    /// placement, where a phase is named
     /// ([`Self::set_export_phase`], the last included, is exact), and where
     /// the export applies no phase ([`Self::project_phases`] is empty). Every
     /// other element still follows the last phase.
@@ -1216,10 +1218,11 @@ impl RevitFile {
         // A named phase is exact: where the room fallback was in effect, the
         // walk made under it holds rooms this phase leaves out, even when it
         // is the last (#1359).
-        if filter.export != Some(id) || filter.room_export_phase() != Some(id) {
+        let named = filter.with_export_phase(id);
+        if filter.differs_in_effect_from(&named) {
             self.walk = None;
         }
-        self.phase_filter = Some(Arc::new(filter.with_export_phase(id)));
+        self.phase_filter = Some(Arc::new(named));
         self.chosen_export_phase = Some(id);
         Ok(())
     }
@@ -1236,9 +1239,7 @@ impl RevitFile {
         }
         let filter = self.memoised_phase_filter();
         let default = filter.with_default_export_phase();
-        if default.export != filter.export
-            || default.room_export_phase() != filter.room_export_phase()
-        {
+        if filter.differs_in_effect_from(&default) {
             self.walk = None;
         }
         self.phase_filter = Some(Arc::new(default));

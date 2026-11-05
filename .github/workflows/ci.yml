@@ -1370,6 +1370,23 @@ jobs:
           done
           echo "::error::${name} did not hash to ${sum} from either host"
           exit 1
+      # #1359: the room fallback through the Python API
+      # (tests/python/test_room_phase_fallback.py), on Autodesk's
+      # rac_basic_sample_project of Revit 2018: its 14 rooms are in the second of
+      # three phases and the last holds none, the one project known to take the
+      # fallback. Fetched from Autodesk's download host and pinned by sha256, as
+      # research/autodesk-sample-projects.tsv pins it; never stored or cached.
+      - name: Fetch Autodesk's rac_basic_sample_project (Revit 2018)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          url=https://revit.downloads.autodesk.com/download/2018RVT_RTM/Docs/InProd/rac_basic_sample_project.rvt
+          sum=8fce035abd3e5a78c68a8d6529fd5066d04c38ebf7ec3dd1de79495d85481535
+          out="${GITHUB_WORKSPACE}/_project_corpus/Autodesk/2018-rac_basic_sample_project.rvt"
+          mkdir -p "$(dirname "${out}")"
+          curl -sSfL --retry 5 --retry-all-errors --max-time 900 -o "${out}" "${url}"
+          echo "${sum}  ${out}" | sha256sum -c -
       - name: Python API integration tests on Revit files
         shell: bash
         run: |
@@ -1380,6 +1397,9 @@ jobs:
           fi
           if [ -f _project_corpus/Revit/RE1-Architecture.rvt ]; then
             export RVT_PROJECT_CORPUS_DIR="$PWD/_project_corpus/Revit"
+          fi
+          if [ -f _project_corpus/Autodesk/2018-rac_basic_sample_project.rvt ]; then
+            export RVT_SAMPLE_PROJECTS_DIR="$PWD/_project_corpus/Autodesk"
           fi
           python3 -m pytest tests/python -q -rs
       # S2 (#873): the type stubs are the Python API's listing, and

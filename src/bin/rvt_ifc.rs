@@ -275,7 +275,12 @@ fn run(args: Args) -> anyhow::Result<()> {
     let model = run.model;
     let diagnostics = run.diagnostics;
     for note in &run.notes {
-        eprintln!("rvt-ifc: {note}");
+        // The room fallback names a phase, the project's own text.
+        if args.anonymize {
+            eprintln!("rvt-ifc: {}", note.anonymized());
+        } else {
+            eprintln!("rvt-ifc: {note}");
+        }
     }
 
     let out_path = args.output.clone().unwrap_or_else(|| {

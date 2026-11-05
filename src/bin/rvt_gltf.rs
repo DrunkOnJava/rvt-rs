@@ -190,8 +190,14 @@ fn run(cli: &Cli) -> Result<(), Failure> {
     )
     .map_err(|e| format!("export {}: {e}", input.display()))?;
     // The saved graphics only improve bodies: when they cannot be read, the
-    // glb is written with the bodies it has, and says so.
-    for note in run.notes.iter().filter(|note| note.skipped().is_some()) {
+    // glb is written with the bodies it has, and says so. A project whose last
+    // phase holds no room has the rooms of an earlier phase (#1359), and says
+    // so too.
+    for note in run
+        .notes
+        .iter()
+        .filter(|note| note.skipped().is_some() || note.is_room_phase_fallback())
+    {
         eprintln!("rvt-gltf: {note}");
     }
     let model = run.model;
