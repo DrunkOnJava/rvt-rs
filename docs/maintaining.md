@@ -70,7 +70,8 @@ when a release ships.
   than skips, when the build did not succeed. Deploy viewer builds the release
   WASM once, uploads it, publishes the site built on it, and runs the suite and
   the saved-mesh measurement again on the very file it uploaded (the jobs print
-  its sha256, so a run shows they match); `CI passed` does not wait for those,
+  its sha256, so a run shows they match, and each checks that the site it
+  builds holds that file); `CI passed` does not wait for those,
   but the deploy job does, and it waits for `CI passed` on the pushed commit.
   To check a draft's viewer, dispatch `viewer-test.yml` on its branch.
 - The squash commit's title is the pull request's title plus its number and its

@@ -8,8 +8,9 @@ name: Deploy viewer
 # runs the browser tests and measures the viewer with and without saved meshes,
 # on the release WASM it publishes: `build` builds that WASM once and uploads
 # it, `tests` and `measure` download it and test it, and the site is built from
-# the same file. All three print its sha256, so a run shows that they match
-# (#1457); they used to build it three times, and tested builds of their own.
+# the same file. All three print its sha256, so a run shows that they match,
+# and each checks that the site it builds holds that file (#1457); they used
+# to build it three times, and tested builds of their own.
 # The browser tests are viewer-test.yml's: ci.yml runs them as part of
 # `CI passed` (#1374), so a pull request cannot merge before they have passed
 # on its head. To check a draft's viewer, dispatch viewer-test.yml on its
@@ -184,22 +185,11 @@ jobs:
         working-directory: viewer
         run: pnpm run build
 
-      # vite copies the WASM into the site as it is (assetsInlineLimit is 0, so
-      # nothing inlines it). The site must hold the bytes that were uploaded
-      # for the tests: this fails the build, and so the deploy, when it does
-      # not.
+      # The site is what gets published: it must hold the bytes that were
+      # uploaded for the tests, and this fails the build, and so the deploy,
+      # when it does not. The legs check their own site the same way.
       - name: The site holds the WASM that was uploaded
-        shell: bash
-        run: |
-          set -euo pipefail
-          expected=$(cut -d' ' -f1 "${RUNNER_TEMP}/viewer-build/wasm.sha256")
-          found=$(find viewer/dist -name '*.wasm' -exec sha256sum {} + | cut -d' ' -f1)
-          echo "WASM sha256 in the site: ${found:-none}"
-          echo "WASM sha256 in the site: ${found:-none}" >> "$GITHUB_STEP_SUMMARY"
-          if ! grep -qx "${expected}" <<<"${found}"; then
-            echo "::error::the site holds no WASM with sha256 ${expected}"
-            exit 1
-          fi
+        run: tools/ci/check-wasm-in-site.sh "${RUNNER_TEMP}/viewer-build/wasm.sha256" viewer/dist
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0

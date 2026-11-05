@@ -18,7 +18,8 @@ name: Viewer tests
 # viewer uploads the release WASM it publishes, and its `tests` and `measure`
 # jobs test those bytes, where each used to test a build of its own. Every leg
 # prints the sha256 of the WASM it tests and fails if it differs from the one
-# recorded when the artifact was made.
+# recorded when the artifact was made, and again for the site it builds and
+# serves (tools/ci/check-wasm-in-site.sh).
 #
 # A skipped leg must never read as a pass: `CI passed` counts a skipped job as
 # passing, and a workflow call whose jobs were all skipped is skipped itself.
@@ -429,6 +430,12 @@ jobs:
         working-directory: viewer
         run: pnpm run build
 
+      # The tests serve this site, not viewer/pkg, and Deploy viewer publishes
+      # it: a bundler that re-encoded or renamed the WASM would pass the
+      # sha256 check above and fail on a copy nobody tested.
+      - name: The site holds the WASM that was downloaded
+        run: tools/ci/check-wasm-in-site.sh "${RUNNER_TEMP}/viewer-build/wasm.sha256" viewer/dist
+
       - name: Browser regression tests
         if: ${{ !matrix.measure }}
         working-directory: viewer
@@ -466,6 +473,8 @@ jobs:
           name: viewer-saved-meshes-measurement
           path: viewer/measurements/
           if-no-files-found: ignore
+          # A rerun of every job uploads under the name of the first attempt.
+          overwrite: true
           retention-days: 30
 
       # The HTML report and each failed test's trace, kept for 14 days. The
@@ -488,6 +497,7 @@ jobs:
             viewer/playwright-report/
             viewer/test-results/
           if-no-files-found: ignore
+          overwrite: true
           retention-days: 14
 
   # `CI passed` counts a skipped job as passing, and a workflow call whose jobs
