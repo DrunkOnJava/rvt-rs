@@ -567,12 +567,13 @@ in: `count` and `classes.Room` are the rooms, and `phase` is that phase's name
 whose phase is unset or unread is written and not counted, and so is an Area or
 an MEP space, which Revit's exporter does not check against a phase. Autodesk's
 `rac_basic_sample_project` has 14 rooms in Working Drawings, the second of
-three phases, and none in its last, Learning Content: the default export
-counts none for it and holds `room_phase_fallback`, and
-`--phase "Learning Content"` counts the 14 (Measure runs 41784415396 and
-41784419457 measured `--phase "Working Drawings"` and the rule before the
-fallback). Revit 2016 to 2023 apply it as they apply the element filter; Revit
-2015 and earlier write every room, as every element (#1332).
+three phases, and none in its last, Learning Content: its default export is
+expected to hold `room_phase_fallback` and count none, and
+`--phase "Learning Content"` to count the 14 (not yet measured on this head;
+Measure runs 41784415396 and 41784419457 measured `--phase "Working Drawings"`
+and the rule before the fallback). Revit 2016 to 2023 apply it as they apply the
+element filter; Revit 2015 and earlier write every room, as every element
+(#1332).
 
 `room_phase_fallback` (#1359) is present only where no phase was named and the
 project's last phase holds no room, so the export writes the rooms of the
