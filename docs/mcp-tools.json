@@ -2152,6 +2152,7 @@
           ]
         },
         "room_count": {
+          "description": "The number of `IfcSpace`s the export writes, of every kind: rooms, Areas\nand family instances written as spaces. It is not the number of rooms\n(the name is older than `space_kinds`); `space_kinds.room` is. On the\nBIM4LCA office it is 308, of which 234 are rooms.",
           "format": "uint",
           "minimum": 0,
           "type": "integer"
@@ -2160,6 +2161,15 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "space_kinds": {
+          "additionalProperties": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "The `IfcSpace`s by `RvtElementRecordGeometry.SpaceKind` (#1437): `room`,\n`area`, `mep_space` or `family_instance`. The counts sum to `room_count`\nless the spaces with no kind, which `get_diagnostics` counts as\n`exported.spaces_without_kind`.",
+          "type": "object"
         }
       },
       "required": [
@@ -2170,6 +2180,7 @@
         "elements",
         "levels",
         "room_count",
+        "space_kinds",
         "diagnostics",
         "not_read"
       ],
@@ -2713,7 +2724,7 @@
   },
   {
     "name": "list_rooms",
-    "description": "List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_plan_topology, area_boundary or area_boundary_joined for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "description": "List the spaces the export writes as IfcSpace: ElementId, number, name, space_kind, level, area and provenance. space_kind says what each is (room, area, mep_space or family_instance): read it, not space_outline_source, to tell an Area from a room, and never filter on the values of space_outline_source, which says only where an outline came from and changes with the rules that read outlines. mep_space is the kind of a Revit Space (MEP), which rvt-rs does not read from a file's partition records, so none is written today: that says what rvt-rs writes, not what the files hold. The area is present only where the outline was read exactly (space_outline_source says so); a space that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -2972,6 +2983,13 @@
             },
             "provenance": {
               "$ref": "#/$defs/ElementProvenance"
+            },
+            "space_kind": {
+              "description": "What the space is (#1437): `room`, `area` (a Revit Area), `mep_space` (a\nRevit Space, MEP) or `family_instance` (any other element, a family\ninstance or a mass, that its own \"Export to IFC As\" writes as a space),\nfrom the Revit class of the record it was read from. Ask this to tell an\nArea from a room, and never filter on the values of\n`space_outline_source`, which says where an outline came from and gains\nvalues with a release. `mep_space` is the kind of a Revit Space, which\nrvt-rs does not read from a file's partition records, so none is written\ntoday: that says what rvt-rs writes, not what the files hold. The same\nvalue is the IFC export's `RvtElementRecordGeometry.SpaceKind` and the\nroom schedule's `space_kind` column. Absent only for a space whose\nproperty set is not `RvtElementRecordGeometry`, which `get_diagnostics`\ncounts as `exported.spaces_without_kind`.",
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "required": [
@@ -3492,6 +3510,7 @@
           ]
         },
         "room_count": {
+          "description": "The number of `IfcSpace`s the export writes, of every kind: rooms, Areas\nand family instances written as spaces. It is not the number of rooms\n(the name is older than `space_kinds`); `space_kinds.room` is. On the\nBIM4LCA office it is 308, of which 234 are rooms.",
           "format": "uint",
           "minimum": 0,
           "type": "integer"
@@ -3500,6 +3519,15 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "space_kinds": {
+          "additionalProperties": {
+            "format": "uint",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "The `IfcSpace`s by `RvtElementRecordGeometry.SpaceKind` (#1437): `room`,\n`area`, `mep_space` or `family_instance`. The counts sum to `room_count`\nless the spaces with no kind, which `get_diagnostics` counts as\n`exported.spaces_without_kind`.",
+          "type": "object"
         }
       },
       "required": [
@@ -3510,6 +3538,7 @@
         "elements",
         "levels",
         "room_count",
+        "space_kinds",
         "diagnostics",
         "not_read"
       ],
