@@ -88,7 +88,8 @@
 # height and lowest vertex (tools/re/areas_across_saves.py), ending with its
 # exit status, which the workflow turns into a failed job. With its 2021 and
 # 2022 samples, OUT_DIR/areas_across_saves_2021.txt holds the 2021 save to the
-# 2022 save the same way (#1434). Each runs once every export is done and
+# 2022 save the same way (#1434; a shard with neither save writes no such file).
+# Each runs once every export is done and
 # before any sample's IFC is deleted. When a run holds fewer than a gate's
 # saves (a narrower sample_years, or the other shard) its file says `skipped:`,
 # names the years missing, and the workflow prints a notice: nothing was
@@ -677,7 +678,12 @@ areas_across_saves() {
     return 0
   fi
   areas_gate "$OUT/areas_across_saves.txt" 2024 2025 2026 2027
-  areas_gate "$OUT/areas_across_saves_2021.txt" 2022 2021
+  # A shard that holds neither the 2021 nor the 2022 save writes no file for the
+  # 2021 gate: two shards write one name, and the artifact the shards are merged
+  # into keeps one of them, which must not be a placeholder over a result.
+  if [ -f "$SAMPLE_DIR/2021-racadvancedsampleproject.rvt" ] || [ -f "$SAMPLE_DIR/2022-racadvancedsampleproject.rvt" ]; then
+    areas_gate "$OUT/areas_across_saves_2021.txt" 2022 2021
+  fi
 }
 
 # Every probe runs after the items, alone, one at a time: a probe is cut off

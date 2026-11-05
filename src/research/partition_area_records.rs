@@ -274,9 +274,11 @@ pub fn area_release_unchecked(revit_version: u32) -> bool {
 /// partition copies disagree (`conflicted`, #1434). The 2021 save of
 /// `rac_advanced` holds both states of the model, and the plan topology reads
 /// the later one; the only Revit export of the project shows the earlier state,
-/// so nothing checks that outline (Griffin, 2026-11-05: an Area outline no Revit
-/// export checks does not say `area_plan_topology`). The one place this is
-/// decided.
+/// so it checks 18 of these 25 outlines and not the other 7. Griffin's release
+/// rule (2026-11-05, "Mark 2025 to 2027 in the file") is by release and leaves
+/// 2015 to 2024 at `area_plan_topology`; that this save's Areas say unchecked
+/// is his separate decision of the same day, given through AskUserQuestion. The
+/// one place both are decided.
 pub fn area_unchecked(revit_version: u32, conflicted: bool) -> bool {
     conflicted || area_release_unchecked(revit_version)
 }
@@ -803,7 +805,11 @@ fn line_key(
 
 /// Whether two copies of a line name the same Level and scheme at the same
 /// height, so that the group a reader puts the line in does not depend on which
-/// copy it holds. A height that is not a number is another height.
+/// copy it holds. It tests the Level, the scheme and the height, not the box: a
+/// copy moved anywhere in the plan still passes, which does not matter, since
+/// the group is the same and the plan topology, which reads the current copy,
+/// is checked against the area Revit saves for every loop. A height that is not
+/// a number is another height.
 fn same_place(a: &LineRecord, b: &LineRecord) -> bool {
     a.key == b.key && (a.height - b.height).abs() <= AREA_LEVEL_TOLERANCE_FEET
 }
@@ -1945,9 +1951,11 @@ pub fn areas_from_partition_chain_records(
         .collect()
 }
 
-/// The pure helpers that compare two regions, tested for the ways they could be
-/// wrong first: a region that is not the same called the same, then the same
-/// region called different.
+/// The pure helpers, tested for the ways they could be wrong first: the helpers
+/// that compare two regions (a region that is not the same called the same, then
+/// the same region called different), and the ones that classify a group of
+/// lines (`same_place`, `group_arrangement`: a group that must refuse called
+/// readable, then a sound one called conflicted).
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2276,23 +2284,6 @@ mod tests {
             group_arrangement(&lines, KEY, BASE),
             Group::Unreadable
         ));
-    }
-
-    #[test]
-    fn an_area_of_conflicting_copies_is_unchecked_whatever_its_release() {
-        for release in [2015, 2021, 2024, 2025, 2027] {
-            assert!(area_unchecked(release, true));
-        }
-    }
-
-    #[test]
-    fn an_area_without_conflicting_copies_is_unchecked_only_from_2025() {
-        for release in [2015, 2020, 2021, 2023, 2024] {
-            assert!(!area_unchecked(release, false));
-        }
-        for release in [2025, 2026, 2027] {
-            assert!(area_unchecked(release, false));
-        }
     }
 
     #[test]

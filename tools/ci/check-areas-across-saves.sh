@@ -36,7 +36,7 @@ note() { # text: a notice in the log and a line in the run summary
 printf '### Areas across rac_advanced saves (#1261)\n\n' >> "$summary"
 
 if [ "${SAMPLES:-}" != true ]; then
-  note "Not checked: samples=true was not set, so no rac_advanced sample was exported and the Areas were not held to its 2024 save."
+  note "Not checked: samples=true was not set, so no rac_advanced sample was exported and the Areas were not held to its other saves (2025 to 2027 to its 2024 save, 2021 to its 2022 save)."
   exit 0
 fi
 

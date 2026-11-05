@@ -967,6 +967,13 @@ jobs:
           pattern: measure-base-*
           path: measure-base
           merge-multiple: true
+      # The head side's shards one by one, for what two shards write under one
+      # name: the merged measure-head keeps one of their areas_across_saves.txt,
+      # and a shard that skipped the gate must not hide the one that ran it.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: measure-head-*
+          path: measure-head-shards
       # The merged sides, under the names every reader downloads
       # (`gh run download -n measure-head`), uploaded before the summary so a
       # summary over GitHub's limit cannot lose them.
@@ -1014,21 +1021,27 @@ jobs:
               echo
             fi
             # The gates of the Areas of Revit 2025 to 2027 and of the 2021 save:
-            # counts by field.
-            if [ -s measure-head/areas_across_saves.txt ]; then
-              echo "### Areas of rac_advanced across its 2024 to 2027 saves"
+            # counts by field, from each shard's own directory (the shard that
+            # ran a gate, not one that skipped it).
+            ran=0
+            for f in measure-head-shards/*/areas_across_saves.txt measure-head-shards/*/areas_across_saves_2021.txt; do
+              [ -s "$f" ] || continue
+              grep -q '^areas across saves: skipped:' "$f" && continue
+              case "$f" in
+                *_2021.txt) echo "### Areas of rac_advanced on its 2021 save against its 2022 save" ;;
+                *) echo "### Areas of rac_advanced across its 2024 to 2027 saves" ;;
+              esac
               echo
               echo '```'
-              cat measure-head/areas_across_saves.txt
+              cat "$f"
               echo '```'
               echo
-            fi
-            if [ -s measure-head/areas_across_saves_2021.txt ]; then
-              echo "### Areas of rac_advanced on its 2021 save against its 2022 save"
+              ran=1
+            done
+            if [ "$ran" = 0 ]; then
+              echo "### Areas of rac_advanced across its saves"
               echo
-              echo '```'
-              cat measure-head/areas_across_saves_2021.txt
-              echo '```'
+              echo "No shard ran an Areas gate (the Same-project gates job says why)."
               echo
             fi
             if [ -d measure-base ]; then

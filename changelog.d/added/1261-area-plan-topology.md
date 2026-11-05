@@ -1,22 +1,24 @@
 - **All 25 Areas of Autodesk's `rac_advanced` sample are written with their
   region on its 2015 to 2020 and 2022 to 2027 saves, from Revit's own plan
-  topology; 16 were on 2015 to 2024 (RE-330) and none on 2025 to 2027, and the
-  2021 save, which holds two states of 16 lines, is #1434's
+  topology; 16 were on 2015 to 2024 (RE-330) and none on 2025 to 2027; the
+  2021 save, which holds two states of 16 lines, is a separate entry
   (#1261).** For each area scheme on each Level Revit keeps the loops its area
   boundary lines make, each with its area, and each Area names its loop. The
   loop is rebuilt from the lines, each moved by its area rule's offset (to a
   wall's face, 0.497 ft on that sample) and met where the moved lines cross,
   and is used only where its area is the one Revit saves for it and the Area's
   point is inside. It comes first; where it is not read the region is the lines' arrangement with RE-330's joins, and where it is read and fails a check of its own the Area has no body, and a group of lines
-  that cannot be read as a whole (a design option, a stray height, conflicting
-  copies, a missing line) gives no region of either kind. It draws the 9 Areas
+  that cannot be read as a whole (a design option, a stray height, a copy that
+  names another Level or scheme or lies at another height, a missing line)
+  gives no region of either kind; copies that conflict in place give the
+  topology's region alone (the 2021 entry). It draws the 9 Areas
   the arrangement could not. An arc is written as an arc, an
   `IfcIndexedPolyCurve` with three-point arcs as Revit's export writes one (a
   span over a half turn as two arcs), and the outline is checked as it is
   written, its area with the arcs as arcs against the circuit's; an arc that
   cannot be read finitely refuses the Area (`area_arc_not_finite`). A point
   where a third line meets a straight outline stays a vertex, as in RE-317.
-  An Area drawn from the plan topology says `SpaceOutlineSource` `area_plan_topology` (`area_plan_topology_unchecked` on Revit 2025 to 2027, below), a new value that is also in the MCP tool descriptions
+  An Area drawn from the plan topology says `SpaceOutlineSource` `area_plan_topology` (`area_plan_topology_unchecked` on Revit 2025 to 2027 and on the 2021 save, below), a new value that is also in the MCP tool descriptions
   of `space_outline_source`; on `rac_advanced` the 6 that main marks
   `area_boundary` and the 10 it marks `area_boundary_joined` now say it. An
   Area whose loop fails a check has no body, as before, and says why in the

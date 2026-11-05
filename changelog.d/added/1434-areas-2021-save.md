@@ -14,9 +14,11 @@
   25 regions equal the 2022 save's in vertex count, holes, arcs and area
   (25 of 25), and differ from the 2020 save's on exactly the 7 Areas where
   the 2020 and 2022 saves differ (0.23 to 2.77 ft2), so the current copy is
-  the later state; no Revit export shows that state (the only export of the
-  project shows the earlier one), so the Areas say `area_plan_topology_unchecked`
-  and not `area_plan_topology`. A same-project gate holds the 2021 save to
+  the later state; the only Revit export of the project shows the earlier one,
+  which equals 18 of the 25 outlines and does not show the other 7, so the
+  Areas say `area_plan_topology_unchecked` and not `area_plan_topology`
+  (Griffin's decision for this save; the 2022 to 2024 saves keep
+  `area_plan_topology` by his release rule). A same-project gate holds the 2021 save to
   the 2022 save, Area by Area, in GlobalId, number, name, storey, outline
   source, body area, top surface, height and lowest vertex. Of the models of
   a Measure run of 117 exports, one moves, this one; the held-out models are
