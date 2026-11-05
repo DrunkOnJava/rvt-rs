@@ -191,6 +191,14 @@ tick();
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
+/** Whether `object` and everything above it is visible. */
+function isDrawn(object: THREE.Object3D): boolean {
+  for (let at: THREE.Object3D | null = object; at; at = at.parent) {
+    if (!at.visible) return false;
+  }
+  return true;
+}
+
 /**
  * The entity drawn under a pointer position, if any: for a piece folded into
  * another element's body, the element that owns it.
@@ -201,9 +209,11 @@ function pickEntity(ev: MouseEvent): number | null {
   pointer.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
-  const hits = raycaster.intersectObject(currentModel, true);
-  if (hits.length === 0) return null;
-  const userData = hits[0]!.object.userData as { entityIndex?: number };
+  // A raycast does not look at `visible`, so a hidden category would take the
+  // click meant for what is drawn behind it.
+  const hit = raycaster.intersectObject(currentModel, true).find((h) => isDrawn(h.object));
+  if (!hit) return null;
+  const userData = hit.object.userData as { entityIndex?: number };
   // A click on any loop of an element of separate loops picks the element.
   return userData.entityIndex === undefined ? null : writtenElementOf(userData.entityIndex);
 }

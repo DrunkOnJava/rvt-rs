@@ -39,7 +39,7 @@ on:
       legs:
         description: JSON list of the legs to run, each with a `name` and either `files` (the spec files of the suite it runs, as Playwright path filters) or `measure` true (the saved-mesh measurement)
         type: string
-        default: '[{"name":"browser tests 1/3","files":"/parameters-row\\.spec /saved-meshes-measure\\.spec /wasm-no-network-imports\\.spec /worker-failures\\.spec"},{"name":"browser tests 2/3","files":"/export-phase\\.spec /journey\\.spec /load-progress\\.spec /memory-ceiling\\.spec /memory-ceiling-capped\\.spec"},{"name":"browser tests 3/3","files":"/large-model-retry\\.spec /no-network\\.spec /viewer-regression\\.spec"}]'
+        default: '[{"name":"browser tests 1/3","files":"/folded-pieces\\.spec /parameters-row\\.spec /saved-meshes-measure\\.spec /wasm-no-network-imports\\.spec /worker-failures\\.spec"},{"name":"browser tests 2/3","files":"/export-phase\\.spec /journey\\.spec /load-progress\\.spec /memory-ceiling\\.spec /memory-ceiling-capped\\.spec"},{"name":"browser tests 3/3","files":"/large-model-retry\\.spec /no-network\\.spec /viewer-regression\\.spec"}]'
       release_wasm:
         description: Build the WASM as Deploy viewer publishes it (fat LTO, one codegen unit); false builds it in a third of the time, with no LTO and 16 codegen units
         type: boolean
@@ -49,7 +49,7 @@ on:
       legs:
         description: JSON list of the legs to run, each with a `name` and either `files` (the spec files of the suite it runs, as Playwright path filters) or `measure` true (the saved-mesh measurement)
         type: string
-        default: '[{"name":"browser tests 1/3","files":"/parameters-row\\.spec /saved-meshes-measure\\.spec /wasm-no-network-imports\\.spec /worker-failures\\.spec"},{"name":"browser tests 2/3","files":"/export-phase\\.spec /journey\\.spec /load-progress\\.spec /memory-ceiling\\.spec /memory-ceiling-capped\\.spec"},{"name":"browser tests 3/3","files":"/large-model-retry\\.spec /no-network\\.spec /viewer-regression\\.spec"}]'
+        default: '[{"name":"browser tests 1/3","files":"/folded-pieces\\.spec /parameters-row\\.spec /saved-meshes-measure\\.spec /wasm-no-network-imports\\.spec /worker-failures\\.spec"},{"name":"browser tests 2/3","files":"/export-phase\\.spec /journey\\.spec /load-progress\\.spec /memory-ceiling\\.spec /memory-ceiling-capped\\.spec"},{"name":"browser tests 3/3","files":"/large-model-retry\\.spec /no-network\\.spec /viewer-regression\\.spec"}]'
       release_wasm:
         description: Build the WASM as Deploy viewer publishes it (fat LTO, one codegen unit); false builds it in a third of the time, with no LTO and 16 codegen units
         type: boolean
@@ -140,6 +140,35 @@ jobs:
           RE1-Plumbing.rvt 03689df2aa426031a216e65051b9f19d3265d6fe96884dd47373b17435f9e54c
           RE1-Electrical.rvt 9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b
           LIST
+
+      # folded-pieces.spec.ts opens the BIM4LCA office as built, the one model with
+      # a piece folded into another element's body (CC BY-SA 4.0). A file restored
+      # is checked against its pin like a fetched one. The host being unreachable
+      # says nothing about the viewer, so that test is then not measured, and says
+      # so; a file that no longer matches its pin fails.
+      - name: Cache the BIM4LCA office as built
+        if: ${{ contains(matrix.files, 'folded-pieces') }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: _bim4lca-viewer
+          key: bim4lca-viewer-${{ hashFiles('research/bim4lca-measure.tsv', 'tools/ci/fetch-bim4lca.py') }}
+      - name: Fetch the BIM4LCA office as built
+        id: office
+        if: ${{ contains(matrix.files, 'folded-pieces') }}
+        shell: bash
+        run: |
+          name=ARK_NordicLCA_Office_Concrete_As-Built.rvt
+          awk -F'\t' -v tail="/${name}" '$1 != "entry" || substr($2, length($2) - length(tail) + 1) == tail' \
+            research/bim4lca-measure.tsv > "${RUNNER_TEMP}/office-pin.tsv"
+          set +e
+          python3 tools/ci/fetch-bim4lca.py "${RUNNER_TEMP}/office-pin.tsv" _bim4lca-viewer
+          status=$?
+          set -e
+          case "$status" in
+            0) echo "path=${GITHUB_WORKSPACE}/_bim4lca-viewer/${name}" >> "$GITHUB_OUTPUT" ;;
+            2) echo "::warning::folded-pieces.spec.ts NOT MEASURED: the host of the BIM4LCA office was unreachable" ;;
+            *) echo "::error::the BIM4LCA office no longer matches research/bim4lca-measure.tsv"; exit 1 ;;
+          esac
 
       - name: Install Rust toolchain
         shell: bash
@@ -269,6 +298,7 @@ jobs:
           RVT_VIEWER_SAMPLE: ../_project_corpus/Revit/Revit_IFC5_Einhoven.rvt
           RVT_VIEWER_REQUIRE_JOURNEYS: "1"
           RVT_VIEWER_FULLY_PARALLEL: "1"
+          RVT_VIEWER_OFFICE: ${{ steps.office.outputs.path }}
           FILES: ${{ matrix.files }}
         # `pnpm run test:browser`, on this leg's spec files.
         run: |
