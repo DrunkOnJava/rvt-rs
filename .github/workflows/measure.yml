@@ -858,8 +858,8 @@ jobs:
   # Compare, which does not need it, still reports (a failed step in a measure
   # shard would skip Compare). The base side is not gated: its files show what
   # each check says of `main`. A check skipped on purpose (no `samples`, no 2026
-  # or 2027 sample, the `scorers` excluding it, a run without the earlier saves)
-  # says so in a notice and in the run summary. Measure is not a required check:
+  # or 2027 sample, the `scorers` excluding it, a run without the earlier saves,
+  # a run with `ifc_flags`) says so in a notice and in the run summary. Measure is not a required check:
   # the failure is read before landing, by the landing rule.
   same-project-gates:
     name: Same-project gates

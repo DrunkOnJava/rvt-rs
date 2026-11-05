@@ -121,6 +121,16 @@ fn run(cli: &Cli) -> Result<(), String> {
     let model = RvtDocExporter
         .export(&mut rf)
         .map_err(|e| format!("export {}: {e}", input.display()))?;
+    // #1359: where the last phase holds no room, the plan draws the rooms of
+    // the latest phase that holds any.
+    if let Some(fallback) = rf.room_phase_fallback() {
+        let phase = fallback
+            .name
+            .unwrap_or_else(|| format!("ElementId {}", fallback.id));
+        eprintln!(
+            "rvt-sheet: the project's last phase holds no room, so the rooms of {phase:?}, the latest phase that holds any, are drawn; every other element is of the last phase"
+        );
+    }
     let options = SheetOptions {
         width_px: cli.width,
         height_px: cli.height,

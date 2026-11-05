@@ -673,7 +673,7 @@
         "properties": {
           "reason": {
             "type": "string",
-            "description": "Machine-readable reason, including unsupported_geometry_* buckets for incomplete element geometry and element_record_without_element_id for element records with no attributable ElementId (RE-30), element_record_without_volume for placed instances with no 3D body, left out as Revit's export leaves them out (#309), and element_record_in_non_primary_design_option for placed instances in a design option other than their set's primary one, also left out as Revit's export leaves them out (RE-40), element_record_not_in_export_phase for placed instances that do not exist in the export phase, the project's last or the one `rvt-ifc --phase` names, also left out as Revit's export leaves them out (RE-184), room_not_in_export_phase for placed rooms whose own phase is not the export phase, left out as Revit's export leaves them out and counted, one item for each phase, by the phase they sit in (`phase`, RE-326), and element_record_empty_curtain_panel for curtain panels of the Empty System Panel family, left out as Revit's export leaves them out (#309), and area_without_proven_body for the Areas of a Revit 2015 to 2023 file that are not written because their region and body are not proven, counted by the reason their body has none in classes (RE-324), and element_record_frame_stopped for the frames of a Revit 2008 to 2023 file's markers that did not become an element, counted by the stage they stopped at in classes: frame_outside_stream, category_out_of_range, box_not_valid, no_declared_id, and without_volume for placed instances with no 3D body, which Revit's export leaves out. They are frames of every category, not lost elements (#1389, decoded.element_record_stages)."
+            "description": "Machine-readable reason, including unsupported_geometry_* buckets for incomplete element geometry and element_record_without_element_id for element records with no attributable ElementId (RE-30), element_record_without_volume for placed instances with no 3D body, left out as Revit's export leaves them out (#309), and element_record_in_non_primary_design_option for placed instances in a design option other than their set's primary one, also left out as Revit's export leaves them out (RE-40), element_record_not_in_export_phase for placed instances that do not exist in the export phase, the project's last or the one `rvt-ifc --phase` names, also left out as Revit's export leaves them out (RE-184), room_not_in_export_phase for placed rooms whose own phase is not the export phase (where no phase was named and the last holds no room, the phase in room_phase_fallback, #1359), left out as Revit's export leaves them out and counted, one item for each phase, by the phase they sit in (`phase`, RE-326), and element_record_empty_curtain_panel for curtain panels of the Empty System Panel family, left out as Revit's export leaves them out (#309), and area_without_proven_body for the Areas of a Revit 2015 to 2023 file that are not written because their region and body are not proven, counted by the reason their body has none in classes (RE-324), and element_record_frame_stopped for the frames of a Revit 2008 to 2023 file's markers that did not become an element, counted by the stage they stopped at in classes: frame_outside_stream, category_out_of_range, box_not_valid, no_declared_id, and without_volume for placed instances with no 3D body, which Revit's export leaves out. They are frames of every category, not lost elements (#1389, decoded.element_record_stages)."
           },
           "count": {
             "type": "integer",
@@ -876,6 +876,22 @@
           ],
           "minimum": 0,
           "description": "Bytes schema parsing would scan: min(inflated_bytes, 65536), or null when inflate failed."
+        }
+      }
+    },
+    "room_phase_fallback": {
+      "type": "object",
+      "description": "Present only where no phase was named and the project's last phase holds no room, so the export writes the rooms of the latest phase that holds any (#1359, a choice by Griffin, 2026-11-05; RE-326): rooms all in one phase cannot overlap. It names that phase and counts the placed rooms of it, which the phase rule would otherwise have left out. Every other element still follows the last phase, and a phase named (rvt-ifc --phase, Python phase=), the last included, is exact and writes none of these rooms. Absent in every other export, so those diagnostics are the bytes they were.",
+      "required": ["phase", "rooms"],
+      "properties": {
+        "phase": {
+          "type": "string",
+          "description": "The phase the rooms are written from: its name, or `ElementId <n>` where the file names none. `--anonymize` replaces it."
+        },
+        "rooms": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The placed rooms of that phase, each counted once. Each is then written or left out for its own reasons, such as having no body."
         }
       }
     },

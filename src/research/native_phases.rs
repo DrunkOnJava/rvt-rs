@@ -25,6 +25,24 @@
 //! `VIEW_PHASE` of the view the export is limited to
 //! (`ExportOptionsCache.Create`). Both rules read it from there.
 //!
+//! Rooms alone have a fallback (Griffin, 2026-11-05, #1359): where no phase
+//! is named and the last phase holds no room, the rooms are judged against
+//! the latest phase that holds any ([`PhaseFilter::room_fallback`]), since
+//! rooms all in one phase cannot overlap and the only Revit export of such a
+//! project (Autodesk's `rac_basic_sample_project`) holds them. Only placed
+//! rooms count, both for "the last phase holds a room" and for "the latest
+//! phase that holds any": the records the export writes rooms from (placed
+//! instances of the rooms category, not in a non-primary design option), which
+//! `scan_phase_excluded_instances` counts the left-out rooms from by the same
+//! test. An Area and an unplaced record (RE-326 §2) hold no room, so an
+//! unplaced record in the last phase does not stop the fallback and one in a
+//! later phase than the placed rooms does not move it. A placed room whose
+//! phase is unset, unread or not one of the project's is written as before and
+//! does not count either. Where a release's records cannot be scanned for
+//! placement, or the scan fails, there is no fallback and the export is what
+//! it was. Naming a phase, the last included, is exact. Every other element
+//! follows the export phase as before.
+//!
 //! Measured (RE-184): `01_Walls_Phases` keeps its wall created in the last
 //! of three phases, and `01_Walls_Phases_Demo` leaves out its wall demolished
 //! in it. On Snowdon Towers, whose phases run Legends, Existing, New
@@ -32,9 +50,10 @@
 //! Revit's export leaves out. Measured (RE-326, ref `0d12ba0e`, Measure run
 //! 41776212669): all 621 rooms of the 12 models with a Revit export are in the
 //! last phase and in Revit's export. Autodesk's `rac_basic_sample_project` has
-//! 14 rooms in the second of its three phases; they are left out by default
-//! and come back with `--phase "Working Drawings"`, which writes the 14 rooms
-//! a public Revit 2018 export of it holds, with no other entity changed
+//! 14 rooms in the second of its three phases, and its last holds none: the
+//! rooms fall back to Working Drawings by default (#1359), are left out when
+//! the last phase is named, and `--phase "Working Drawings"` writes the 14
+//! rooms a public Revit 2018 export of it holds, with no other entity changed
 //! (Measure runs 41784415396 and 41784419457, ref `4532731d`).
 // Tracker: B46.
 
@@ -53,6 +72,10 @@ pub struct PhaseFilter {
     /// The phase the export shows: the last of [`Self::order`] until
     /// `RevitFile::set_export_phase` chooses another.
     pub(crate) export: Option<i64>,
+    /// Whether the export phase was named (`RevitFile::set_export_phase`)
+    /// rather than defaulted to the last: a named phase is exact, and the
+    /// room fallback does not apply to it.
+    pub(crate) export_named: bool,
     /// Every phased element's ElementId with its created and demolished
     /// phase, which [`Self::excluded`] is computed from for any export phase.
     pub(crate) phased: Vec<(u64, i64, i64)>,
@@ -64,6 +87,17 @@ pub struct PhaseFilter {
     /// unset (-1), whose graph was not read, or whose copies disagree is not
     /// here. An Area has no such field.
     pub room_phases: BTreeMap<u64, i64>,
+    /// The phase whose rooms the default export writes in place of the last
+    /// phase's, which holds none: the latest phase of [`Self::order`] that
+    /// holds a placed room (`room_fallback_phase`). `None` where the last
+    /// phase holds a placed room, no phase does, the release's records cannot
+    /// be scanned for placement, or no record names an earlier phase. It
+    /// applies only while the export phase is the default
+    /// ([`Self::room_fallback_in_effect`]).
+    pub room_fallback: Option<i64>,
+    /// The placed rooms in [`Self::room_fallback`]'s phase, each counted once:
+    /// the rooms the fallback brings in. Zero when there is no fallback.
+    pub room_fallback_rooms: usize,
     /// Why the phases could not be read, where a read of a release the
     /// native record path reads failed. The filter is empty then, so the
     /// export writes every element, and the export diagnostics say so.
@@ -126,23 +160,64 @@ impl PhaseFilter {
     pub fn with_export_phase(&self, export: i64) -> PhaseFilter {
         let mut filter = self.clone();
         filter.export = Some(export);
+        filter.export_named = true;
         filter.excluded = exclusions(&self.order, export, &self.phased);
         filter
     }
 
+    /// This filter at the default export phase, the project's last, with the
+    /// room fallback ([`Self::room_fallback`]): as it is before any phase is
+    /// named, whatever phase was named since.
+    pub fn with_default_export_phase(&self) -> PhaseFilter {
+        let mut filter = self.clone();
+        let export = self.order.last().copied();
+        filter.export = export;
+        filter.export_named = false;
+        filter.excluded = export.map_or_else(BTreeMap::new, |last| {
+            exclusions(&self.order, last, &self.phased)
+        });
+        filter
+    }
+
+    /// Whether `other` exports anything other than this filter does: another
+    /// export phase, or rooms judged against another. The memoised production
+    /// walk holds what the phase leaves out, so it is dropped when this is
+    /// true of the filter that replaces it.
+    pub fn differs_in_effect_from(&self, other: &PhaseFilter) -> bool {
+        self.export != other.export || self.room_export_phase() != other.room_export_phase()
+    }
+
+    /// The room fallback phase while it applies: the export phase is the
+    /// default, not one named. A named phase, the last included, is exact.
+    pub fn room_fallback_in_effect(&self) -> Option<i64> {
+        if self.export_named {
+            None
+        } else {
+            self.room_fallback
+        }
+    }
+
+    /// The phase rooms are judged against: the fallback phase while it
+    /// applies, else the export phase.
+    pub fn room_export_phase(&self) -> Option<i64> {
+        self.room_fallback_in_effect().or(self.export)
+    }
+
     /// The phase of room `id` when it is read, is one of the project's
-    /// phases and is not the export phase: Revit's exporter leaves such a
-    /// room out (`IsRoomInInvalidPhase`, RE-326). A room whose phase is
-    /// unset, unread or unknown is written.
+    /// phases and is not the phase rooms are judged against
+    /// ([`Self::room_export_phase`]): Revit's exporter leaves such a room out
+    /// (`IsRoomInInvalidPhase`, RE-326). A room whose phase is unset, unread
+    /// or unknown is written.
     pub fn room_outside_export_phase(&self, id: u64) -> Option<i64> {
-        let export = self.export?;
+        let export = self.room_export_phase()?;
         self.room_phases
             .get(&id)
             .copied()
             .filter(|phase| *phase != export && self.order.contains(phase))
     }
 
-    /// Whether some room is left out for its phase.
+    /// Whether some room is left out for its phase, against the phase rooms
+    /// are judged against ([`Self::room_export_phase`]).
     pub fn leaves_out_rooms(&self) -> bool {
         self.room_phases
             .keys()
@@ -179,6 +254,98 @@ fn exclusions(
             Some((*id, exclusion(order, export, *created, *demolished)?))
         })
         .collect()
+}
+
+/// Whether `record` is a placed instance the export can write, not in a
+/// non-primary design option: the one test the room fallback and the counts of
+/// what the phase rule leaves out share.
+fn is_placed(
+    record: &PartitionElementRecord,
+    options: &crate::partition_design_options::DesignOptions,
+) -> bool {
+    record.is_exported_instance() && !options.excludes(record)
+}
+
+/// The ElementIds of the placed rooms of the file, by the scan of its release
+/// (Revit 2016 to 2023 as `scan_phase_excluded_instances` scans them, and the
+/// releases whose element records are supported). `None` where the release's
+/// records cannot be scanned for placement or the scan fails: the room
+/// fallback then does not apply, and the export is what it was.
+fn placed_room_ids(rf: &mut RevitFile, revit_version: u32) -> Option<BTreeSet<u32>> {
+    use crate::partition_element_records::{scan_category_records_multi, supports_revit_version};
+    let filtered_32bit =
+        crate::partition_element_records_2023::applies_export_filters(revit_version);
+    if !filtered_32bit && !supports_revit_version(revit_version) {
+        return None;
+    }
+    let options = rf.memoised_design_options();
+    let records = if filtered_32bit {
+        crate::partition_element_records_2023::scan_records(rf, revit_version)
+    } else {
+        let table = crate::elem_table::parse_records(rf).ok()?;
+        let declared: BTreeSet<u32> = crate::elem_table::declared_ids(&table);
+        scan_category_records_multi(rf, revit_version, &[OST_ROOMS], &declared).ok()?
+    };
+    Some(
+        records
+            .iter()
+            .filter(|r| r.builtin_category == OST_ROOMS && is_placed(r, &options))
+            .map(|r| r.element_id)
+            .collect(),
+    )
+}
+
+/// The room fallback of a project (#1359) and the placed rooms it brings in.
+/// `room_phases` holds the phase of every `RoomElem` record, placed or not, so
+/// a project whose records name no phase before the last has no fallback and
+/// is not scanned. Otherwise the placed rooms are found
+/// ([`placed_room_ids`]) and [`room_fallback_phase`] decides from their phases.
+fn placed_room_fallback(
+    rf: &mut RevitFile,
+    order: &[i64],
+    room_phases: &BTreeMap<u64, i64>,
+) -> (Option<i64>, usize) {
+    let Some((_, earlier)) = order.split_last() else {
+        return (None, 0);
+    };
+    if !room_phases.values().any(|held| earlier.contains(held)) {
+        return (None, 0);
+    }
+    let Some(placed) = rf
+        .layout_release()
+        .ok()
+        .and_then(|release| placed_room_ids(rf, release))
+    else {
+        return (None, 0);
+    };
+    let placed_phases: BTreeMap<u64, i64> = room_phases
+        .iter()
+        .filter(|(id, _)| u32::try_from(**id).is_ok_and(|id| placed.contains(&id)))
+        .map(|(id, phase)| (*id, *phase))
+        .collect();
+    let fallback = room_fallback_phase(order, &placed_phases);
+    let rooms = fallback.map_or(0, |phase| {
+        placed_phases
+            .values()
+            .filter(|held| **held == phase)
+            .count()
+    });
+    (fallback, rooms)
+}
+
+/// The phase whose rooms the default export writes when no phase is named and
+/// the last phase of `order` holds no room (#1359): the latest phase of `order`
+/// that holds one, by the phases `room_phases` reads, which the caller gives
+/// for the placed rooms only. `None` where the last phase holds a room (nothing
+/// changes) or no phase of `order` holds any. A room whose phase is unset,
+/// unread or not in `order` is not in `room_phases` and does not count.
+fn room_fallback_phase(order: &[i64], room_phases: &BTreeMap<u64, i64>) -> Option<i64> {
+    let last = *order.last()?;
+    let holds = |phase: i64| room_phases.values().any(|held| *held == phase);
+    if holds(last) {
+        return None;
+    }
+    order.iter().rev().copied().find(|phase| holds(*phase))
 }
 
 /// An element's status in the phase at `export` of `order`, from its created
@@ -293,17 +460,21 @@ pub fn compute_phase_filter(rf: &mut RevitFile) -> anyhow::Result<PhaseFilter> {
     let order = order.unwrap_or_default();
     let export = order.last().copied();
     let excluded = export.map_or_else(BTreeMap::new, |export| exclusions(&order, export, &phases));
-    let room_phases = rooms
+    let room_phases: BTreeMap<u64, i64> = rooms
         .into_iter()
         .filter_map(|(id, phase)| Some((id, phase?)))
         .collect();
+    let (room_fallback, room_fallback_rooms) = placed_room_fallback(rf, &order, &room_phases);
     Ok(PhaseFilter {
         order,
         names,
         export,
+        export_named: false,
         phased: phases,
         excluded,
         room_phases,
+        room_fallback,
+        room_fallback_rooms,
         read_error: None,
     })
 }
@@ -360,7 +531,7 @@ pub fn scan_phase_excluded_instances(
     let mut rooms: BTreeMap<u32, (i64, &PartitionElementRecord)> = BTreeMap::new();
     for record in records
         .iter()
-        .filter(|r| r.is_exported_instance() && !options.excludes(r) && phases.excludes(r))
+        .filter(|r| is_placed(r, &options) && phases.excludes(r))
     {
         if record.builtin_category == OST_ROOMS {
             if let Some(phase) = phases.room_outside_export_phase(u64::from(record.element_id)) {
@@ -383,4 +554,176 @@ pub fn scan_phase_excluded_instances(
             .push((phase, LeftOutElement::from_record(record, "Room")));
     }
     Ok(counted)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PhaseExclusion, PhaseFilter, exclusions, room_fallback_phase};
+    use std::collections::BTreeMap;
+
+    // Existing, Working Drawings, Learning Content: the order of Autodesk's
+    // `rac_basic_sample_project`.
+    const ORDER: [i64; 3] = [12589, 86961, 961604];
+
+    fn rooms(phases: &[i64]) -> BTreeMap<u64, i64> {
+        phases
+            .iter()
+            .enumerate()
+            .map(|(index, phase)| (index as u64 + 1, *phase))
+            .collect()
+    }
+
+    // Rooms 1 and 2 in Working Drawings and room 3 in Existing, one element
+    // (500) created in the last phase, and the fallback the caller gives.
+    fn project(fallback: Option<i64>) -> PhaseFilter {
+        let phased = vec![(500, 961604, -1)];
+        PhaseFilter {
+            order: ORDER.to_vec(),
+            export: Some(961604),
+            excluded: exclusions(&ORDER, 961604, &phased),
+            phased,
+            room_phases: rooms(&[86961, 86961, 12589]),
+            room_fallback: fallback,
+            room_fallback_rooms: if fallback.is_some() { 2 } else { 0 },
+            ..PhaseFilter::default()
+        }
+    }
+
+    #[test]
+    fn a_project_with_no_phases_has_no_fallback() {
+        assert_eq!(room_fallback_phase(&[], &rooms(&[86961])), None);
+    }
+
+    #[test]
+    fn a_project_with_no_room_has_no_fallback() {
+        assert_eq!(room_fallback_phase(&ORDER, &BTreeMap::new()), None);
+    }
+
+    #[test]
+    fn a_room_in_the_last_phase_keeps_the_rule_as_it_is() {
+        assert_eq!(room_fallback_phase(&ORDER, &rooms(&[86961, 961604])), None);
+        assert_eq!(room_fallback_phase(&ORDER, &rooms(&[961604])), None);
+    }
+
+    #[test]
+    fn a_room_whose_phase_is_not_the_projects_does_not_hold_the_last_phase() {
+        assert_eq!(room_fallback_phase(&ORDER, &rooms(&[777, 888])), None);
+        assert_eq!(
+            room_fallback_phase(&ORDER, &rooms(&[777, 86961])),
+            Some(86961)
+        );
+    }
+
+    #[test]
+    fn rooms_all_in_an_earlier_phase_fall_back_to_it() {
+        assert_eq!(
+            room_fallback_phase(&ORDER, &rooms(&[86961; 14])),
+            Some(86961)
+        );
+    }
+
+    #[test]
+    fn rooms_in_two_earlier_phases_fall_back_to_the_latest() {
+        assert_eq!(
+            room_fallback_phase(&ORDER, &rooms(&[12589, 86961, 12589])),
+            Some(86961)
+        );
+        assert_eq!(
+            room_fallback_phase(&ORDER, &rooms(&[86961, 12589])),
+            Some(86961)
+        );
+    }
+
+    // The latest phase is the last in the project's order, not the greatest
+    // ElementId: here Working Drawings (86961) is listed first.
+    #[test]
+    fn the_latest_phase_is_by_the_projects_order_not_by_the_greatest_id() {
+        let order = [86961, 12589, 961604];
+        assert_eq!(
+            room_fallback_phase(&order, &rooms(&[86961, 12589])),
+            Some(12589)
+        );
+        assert_eq!(
+            room_fallback_phase(&order, &rooms(&[12589, 86961])),
+            Some(12589)
+        );
+        assert_eq!(room_fallback_phase(&order, &rooms(&[86961])), Some(86961));
+    }
+
+    #[test]
+    fn a_project_with_one_phase_has_no_other_to_fall_back_to() {
+        assert_eq!(room_fallback_phase(&[12589], &rooms(&[777])), None);
+        assert_eq!(room_fallback_phase(&[12589], &rooms(&[12589])), None);
+    }
+
+    #[test]
+    fn the_default_judges_rooms_against_the_fallback_phase() {
+        let filter = project(Some(86961));
+        assert_eq!(filter.room_fallback_in_effect(), Some(86961));
+        assert_eq!(filter.room_export_phase(), Some(86961));
+        assert_eq!(filter.room_outside_export_phase(1), None);
+        assert_eq!(filter.room_outside_export_phase(3), Some(12589));
+        // Every other element is still judged against the last phase.
+        assert_eq!(filter.export_phase(), Some(961604));
+        assert!(filter.excluded.is_empty());
+    }
+
+    #[test]
+    fn a_project_without_a_fallback_judges_rooms_against_the_last_phase() {
+        let filter = project(None);
+        assert_eq!(filter.room_export_phase(), Some(961604));
+        assert_eq!(filter.room_outside_export_phase(1), Some(86961));
+        assert_eq!(filter.room_outside_export_phase(3), Some(12589));
+    }
+
+    #[test]
+    fn naming_the_last_phase_is_exact() {
+        let named = project(Some(86961)).with_export_phase(961604);
+        assert!(named.export_named);
+        assert_eq!(named.room_fallback_in_effect(), None);
+        assert_eq!(named.room_export_phase(), Some(961604));
+        assert_eq!(named.room_outside_export_phase(1), Some(86961));
+    }
+
+    #[test]
+    fn going_back_to_the_default_restores_the_fallback_and_the_elements() {
+        let named = project(Some(86961)).with_export_phase(86961);
+        assert_eq!(named.excluded.get(&500), Some(&PhaseExclusion::Future));
+        let default = named.with_default_export_phase();
+        assert!(!default.export_named);
+        assert_eq!(default.export_phase(), Some(961604));
+        assert_eq!(default.room_fallback_in_effect(), Some(86961));
+        assert!(default.excluded.is_empty());
+    }
+
+    #[test]
+    fn a_filter_with_no_phases_has_no_default_phase() {
+        let default = PhaseFilter::default().with_default_export_phase();
+        assert_eq!(default.export_phase(), None);
+        assert_eq!(default.room_export_phase(), None);
+    }
+
+    // The walk is dropped exactly when the replacing filter exports otherwise.
+    #[test]
+    fn the_walk_is_dropped_when_the_rooms_are_judged_against_another_phase() {
+        let default = project(Some(86961));
+        // The last phase named after a default that fell back: same export
+        // phase, other rooms.
+        assert!(default.differs_in_effect_from(&default.with_export_phase(961604)));
+        // And back again.
+        let named_last = default.with_export_phase(961604);
+        assert!(named_last.differs_in_effect_from(&default.with_default_export_phase()));
+        // Another phase named.
+        assert!(default.differs_in_effect_from(&default.with_export_phase(12589)));
+    }
+
+    #[test]
+    fn the_walk_is_kept_when_nothing_exported_changes() {
+        let no_fallback = project(None);
+        assert!(!no_fallback.differs_in_effect_from(&no_fallback.with_export_phase(961604)));
+        let named = project(Some(86961)).with_export_phase(86961);
+        assert!(!named.differs_in_effect_from(&named.with_export_phase(86961)));
+        let default = project(Some(86961));
+        assert!(!default.differs_in_effect_from(&default.with_default_export_phase()));
+    }
 }
