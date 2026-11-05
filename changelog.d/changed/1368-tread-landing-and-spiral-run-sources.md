@@ -23,5 +23,17 @@
     source, with its reason in `docs/export-diagnostics.md`: a rectangular
     column's two sides, which only decide whether its box quantities are
     written.
-  - Not yet measured on this head: that the exports are byte for byte
-    unchanged, and the counts of the new sources.
+  - Measured on this head (ee449c3b): the 31 exports of Measure run 42118484766
+    (no `ifc_flags`; Core Interior, Einhoven, the four RE1 models and
+    Autodesk's samples of 2024 to 2027) are byte for byte main's
+    (`ifc.sha256`), so the default export is unchanged, and its
+    `same-project gates` job passed. Run 42118489328 (the 92 models with
+    `--element-provenance`) counts the new sources: `wall_type_layers` on
+    1,973 elements of 29 models, `area_levels` on 483 Areas of 17,
+    `type_i_section` on 557 elements of 5 (none on a CI gate model),
+    `native_run_type` on 84 of 17 and `native_landing_type` on 82 of 8;
+    `current` stays on the one permit office (the 2021 `rac_advanced`, after
+    #1450, has none: its 25 Areas read `area_plan_topology`) and
+    `selected_frame_box` on none. Not yet run:
+    `tests/value_sources_offsets.rs` against the permit office and the
+    new readers.
