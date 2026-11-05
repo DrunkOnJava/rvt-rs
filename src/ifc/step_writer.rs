@@ -4452,6 +4452,7 @@ pub enum Placement {
     Folded,
     /// The opening of a door or window that draws no geometry. It voids its
     /// host (an index into `IfcModel::entities`) and is contained nowhere.
+    #[non_exhaustive]
     Opening {
         /// The host, an index into `IfcModel::entities`.
         host: usize,
@@ -4615,36 +4616,22 @@ fn fold_body_pieces(model: &IfcModel) -> (PieceBodies<'_>, std::collections::BTr
 
 /// Whether every storey of `model` contains an element: an element written
 /// in its own `IfcRelContainedInSpatialStructure` with that storey, as the
-/// writer places it (not a space, a hosted opening, a body piece written as
-/// an item of its owner, a part of an aggregate or an element a space
-/// contains). Revit's exporter up to IFC 26.0 counts the storeys that
-/// contain an element as `NumberOfStoreys`, and from 26.1 every storey, so
-/// the two agree only here (RE-263; the maintainer, 2026-10-29).
+/// writer places it (`placements`: not a space, a hosted opening, a body
+/// piece written as an item of its owner, a part of an aggregate or an
+/// element a space contains). Revit's exporter up to IFC 26.0 counts the
+/// storeys that contain an element as `NumberOfStoreys`, and from 26.1 every
+/// storey, so the two agree only here (RE-263; the maintainer, 2026-10-29).
 pub(crate) fn every_storey_holds_an_element(model: &IfcModel) -> bool {
-    let storeys = model.building_storeys.len();
-    let in_spaces = elements_in_spaces(model);
-    let parts = aggregate_parts_of_elements(model);
-    let (_, folded) = fold_body_pieces(model);
-    let mut holding = vec![false; storeys];
-    for (index, entity) in model.entities.iter().enumerate() {
-        let super::entities::IfcEntity::BuildingElement {
-            ifc_type,
-            storey_index: Some(storey),
-            host_element_index,
-            ..
-        } = entity
-        else {
+    let mut holding = vec![false; model.building_storeys.len()];
+    for (entity, placement) in model.entities.iter().zip(placements(model)) {
+        let super::entities::IfcEntity::BuildingElement { ifc_type, .. } = entity else {
             continue;
         };
-        let ifc_upper = ifc_type.to_ascii_uppercase();
-        let contained = *storey < storeys
-            && !folded.contains(&index)
-            && !(ifc_upper == "IFCOPENINGELEMENT" && host_element_index.is_some())
-            && !in_spaces.contains_key(&index)
-            && ifc_upper != "IFCSPACE"
-            && !parts.contains(&index);
-        if contained {
-            holding[*storey] = true;
+        match placement {
+            Some(Placement::OnStorey(storey)) if !ifc_type.eq_ignore_ascii_case("IFCSPACE") => {
+                holding[storey] = true;
+            }
+            _ => {}
         }
     }
     holding.iter().all(|held| *held)

@@ -269,8 +269,8 @@ pub struct ElementCounts {
     /// write as elements, each a further piece of an element of separate
     /// loops, written as an item of the body of the element that owns it.
     /// They are not in `total`, `by_ifc_type` or the lists, and the
-    /// diagnostics' `exported` counts include them.
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    /// diagnostics' `exported` counts include them. Always present, empty
+    /// where the export folds none.
     pub folded_into_bodies: BTreeMap<String, usize>,
 }
 
@@ -352,8 +352,9 @@ pub struct LevelRefOut {
     pub elevation_feet: f64,
 }
 
-/// Another entity the export writes for the same ElementId (a slab's further
-/// pieces, a curtain wall's parts).
+/// Another entity the export writes as an element for the same ElementId (a
+/// slab's further pieces written as elements of their own, a curtain wall's
+/// parts); a piece folded into another element's body is none.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct EntityRefOut {
     pub ifc_type: String,
@@ -396,7 +397,9 @@ pub struct ElementDetail {
     /// The element's type object and its sets, where the model has them.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub element_type: Option<TypeOut>,
-    /// Other entities with the same ElementId.
+    /// Other entities the export writes as elements with the same ElementId:
+    /// not a piece folded into the body of the element, which is no entity of
+    /// its own.
     pub other_entities: Vec<EntityRefOut>,
 }
 

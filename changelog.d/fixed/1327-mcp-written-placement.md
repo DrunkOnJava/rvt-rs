@@ -17,21 +17,25 @@
   summary's `elements.folded_into_bodies` counts the folded pieces by IFC
   entity, since the diagnostics' `exported` counts include them. The tool
   output schemas change (`folded_into_bodies`), and so does the contract in
-  `docs/mcp-tools.json`. Measured with the scorer of #1404 and `base=none`,
-  on code head 349cce4a (the commits after it are this fragment and the
-  contract): run 41954411755 (scorer 30480145) finds no model failing the
-  counts, element membership, element storeys or levels checks, which failed
-  on the BIM4LCA office as built and at permit (47 coverings, and 599 of
-  12,974 and of 13,020 rows, 542 of them curtain-wall members and the rest
-  stair flights and landings) and on the 5 Revit 2025 stair models before
-  (runs 41949018446 and 41949021964). The models still failing there fail
-  the names and type object checks that #1406 fixes. With #1406 merged (a
+  `docs/mcp-tools.json`. The diagnostics' `storey_bound_elements`, the rooms
+  schedule (`room_rows`) and `every_storey_holds_an_element` read
+  `placements` too, so a part counts as bound to its whole's storey in all
+  of them, and `folded_into_bodies` is always in the summary, empty where
+  none is folded. Measured with the scorer of #1404 and `base=none`, on code
+  head 349cce4a (before the changes above that follow the summary's schema):
+  run 41954411755 (scorer 30480145) finds no model failing the counts,
+  element membership, element storeys or levels checks, which failed on the
+  BIM4LCA office as built and at permit (47 coverings, and 599 of 12,974 and
+  of 13,020 rows, 542 of them curtain-wall members and the rest stair
+  flights and landings) and on the 5 Revit 2025 stair models before (runs
+  41949018446 and 41949021964). The models still failing there fail the
+  names and type object checks that #1406 fixes. With #1406 merged (a
   throwaway branch, 537d88ba, scorer 9b51c1a8), run 41957685928 passes 32 of
   32 models: the 6 reference models, the 24 Revit 2025 models and the office
-  as built and at permit. The IFC text `rvt-ifc` writes is unchanged by the
-  move: in run 41957584014 (`base=main` at 77d71cbb, the commit this branch
-  is based on, `scorers=none`) the `ifc.sha256` of 34 of 34 models, the
-  reference models, the four office files and the 24 Revit 2025 models, is
-  identical. Run 41954408419 against main at 07caf059 had the two office
-  files differ, which was main's #1403 and #1405 and not this change. The
-  held-out models and Autodesk's samples were not run.
+  as built and at permit. The IFC text `rvt-ifc` writes was the same on 34
+  of 34 models, the reference models, the four office files and the 24 Revit
+  2025 models, in run 41957584014 (head 2d30cd8d against 77d71cbb,
+  `scorers=none`); the branch is based on 3861cc34 (#1403), which that base
+  lacks, and main has since taken #1405, so the runs of the final head
+  against main are in the pull request. The held-out models and Autodesk's
+  samples were not run.
