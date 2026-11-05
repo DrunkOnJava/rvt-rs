@@ -38,8 +38,24 @@ pub const TYPE_TEXT_PARAMETERS: &[(i64, &str)] = &[
     (-1001206, "Fire Rating"),
 ];
 
+/// The type parameters read in the form of a family type table's entries,
+/// `u32 n · UTF-16 × n · u32 0 · f64 · i64 -1 · i64 BuiltInParameter`, with
+/// the text before the parameter it belongs to (RE-185 section 3.3, RE-354).
+/// The BIM4LCA office's door types hold their Fire Rating this way and in no
+/// other: `EI30`, `EI60` and `-` on the six door types Revit's export gives a
+/// `FireRating`.
+pub const TABLE_TEXT_PARAMETERS: &[(i64, &str)] = &[(-1001206, "Fire Rating")];
+
+/// A door type's Heat Transfer Coefficient (U), by BuiltInParameter: the
+/// `f64 · ff × 8 · i64 parameter` entry of its value block (RE-93), in W/(m²·K)
+/// as Revit's export writes it as the type's `ThermalTransmittance` (RE-354).
+pub const THERMAL_TRANSMITTANCE_PARAMETER: i64 = -1005430;
+
 /// Longest value read, in UTF-16 units.
 const MAX_VALUE_UNITS: usize = 400;
+
+/// Longest text of a table entry read, in UTF-16 units.
+const MAX_TABLE_TEXT_UNITS: usize = 60;
 
 /// The bytes that follow an ElementId to open its value block.
 pub const VALUE_BLOCK_MARK: [u8; 59] = {
@@ -58,23 +74,34 @@ pub fn scan_partition(
 ) -> BTreeMap<u32, BTreeMap<&'static str, String>> {
     let blocks = value_blocks(buf, declared_ids);
     let mut values: BTreeMap<(u32, &'static str), Option<String>> = BTreeMap::new();
+    let mut note = |at: usize, name: &'static str, text: String| {
+        let index = blocks.partition_point(|(start, _)| *start < at);
+        let Some(&(_, Some(owner))) = index.checked_sub(1).and_then(|i| blocks.get(i)) else {
+            return;
+        };
+        values
+            .entry((owner, name))
+            .and_modify(|seen| {
+                if seen.as_deref() != Some(text.as_str()) {
+                    *seen = None;
+                }
+            })
+            .or_insert(Some(text));
+    };
     for (parameter, name) in TYPE_TEXT_PARAMETERS {
         for at in memchr::memmem::find_iter(buf, &parameter.to_le_bytes()) {
-            let Some(text) = text_at(buf, at + 8) else {
-                continue;
-            };
-            let index = blocks.partition_point(|(start, _)| *start < at);
-            let Some(&(_, Some(owner))) = index.checked_sub(1).and_then(|i| blocks.get(i)) else {
-                continue;
-            };
-            values
-                .entry((owner, name))
-                .and_modify(|seen| {
-                    if seen.as_deref() != Some(text.as_str()) {
-                        *seen = None;
-                    }
-                })
-                .or_insert(Some(text));
+            if let Some(text) = text_at(buf, at + 8) {
+                note(at, *name, text);
+            }
+        }
+    }
+    for (parameter, name) in TABLE_TEXT_PARAMETERS {
+        let mut mark = [0xffu8; 16];
+        mark[8..].copy_from_slice(&parameter.to_le_bytes());
+        for at in memchr::memmem::find_iter(buf, &mark) {
+            if let Some(text) = table_text_before(buf, at) {
+                note(at, *name, text);
+            }
         }
     }
     let mut out: BTreeMap<u32, BTreeMap<&'static str, String>> = BTreeMap::new();
@@ -109,6 +136,48 @@ pub fn type_text_parameters(
         }
     }
     out
+}
+
+/// The text of the table entry whose element id (`-1`) is at `at`: the
+/// `u32`-counted UTF-16 string that ends 12 bytes before it, with a zero `u32`
+/// and the `f64` between.
+fn table_text_before(buf: &[u8], at: usize) -> Option<String> {
+    let flag_at = at.checked_sub(12)?;
+    if le_bytes::u32_at(buf, flag_at)? != 0 {
+        return None;
+    }
+    (1..=MAX_TABLE_TEXT_UNITS).find_map(|units| {
+        let start = flag_at.checked_sub(4 + 2 * units)?;
+        if le_bytes::u32_at(buf, start)? as usize != units {
+            return None;
+        }
+        text_at(buf, start)
+    })
+}
+
+/// The Heat Transfer Coefficient (U) of each of `types` that holds one above
+/// zero, where every copy agrees ([`THERMAL_TRANSMITTANCE_PARAMETER`]). Empty
+/// for a release whose element records are not decoded.
+pub fn type_thermal_transmittances(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    types: &BTreeSet<u32>,
+) -> BTreeMap<u32, f64> {
+    if !supports_revit_version(revit_version) || types.is_empty() {
+        return BTreeMap::new();
+    }
+    let Ok(records) = crate::elem_table::parse_records(rf) else {
+        return BTreeMap::new();
+    };
+    let declared = crate::elem_table::declared_ids(&records);
+    let parameters = BTreeSet::from([THERMAL_TRANSMITTANCE_PARAMETER]);
+    type_lengths(rf, &declared, types, &parameters)
+        .into_iter()
+        .filter_map(|(owner, held)| {
+            let value = *held.get(&THERMAL_TRANSMITTANCE_PARAMETER)?;
+            (value > 0.0).then_some((owner, value))
+        })
+        .collect()
 }
 
 /// A `u32`-counted UTF-16 string at `at` of printable characters.

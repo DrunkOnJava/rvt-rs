@@ -2507,6 +2507,10 @@ fn add_load_bearing(
 #[derive(Clone, PartialEq)]
 struct TypeCommon {
     fire_rating: Option<String>,
+    /// A door type's Heat Transfer Coefficient (U), W/(m²·K), which Revit's
+    /// export writes as the type's `ThermalTransmittance` and gives the doors
+    /// of the type none (RE-354).
+    thermal_transmittance: Option<f64>,
     load_bearing: Option<bool>,
     /// A stair type of a stair whose data is read: revit-ifc's stair
     /// calculators, run on the type itself, give 0 (RE-286).
@@ -2560,6 +2564,15 @@ impl TypeCommon {
                 properties.push(Property {
                     name: "FireRating".into(),
                     value: PropertyValue::Label(rating),
+                });
+            }
+            if let Some(transmittance) = self
+                .thermal_transmittance
+                .filter(|_| occurrence == "IFCDOOR" && defines("ThermalTransmittance"))
+            {
+                properties.push(Property {
+                    name: "ThermalTransmittance".into(),
+                    value: PropertyValue::ThermalTransmittance(transmittance),
                 });
             }
             if let Some(bearing) = self.load_bearing.filter(|_| {
@@ -2654,6 +2667,12 @@ fn record_type_common(
         });
     let found = TypeCommon {
         fire_rating,
+        thermal_transmittance: decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == mvp::TYPE_THERMAL_TRANSMITTANCE_FIELD => {
+                Some(*value)
+            }
+            _ => None,
+        }),
         load_bearing: LOAD_BEARING_TYPE_CLASSES
             .contains(&decoded.class.as_str())
             .then_some(true),
