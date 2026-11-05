@@ -8,7 +8,7 @@
 //! owner that names another owner reaches the symbols that owner names, so the
 //! batch must read those too.
 //!
-//! Three selections of owners, each read both ways on the model and compared
+//! Four selections of owners, each read both ways on the model and compared
 //! element by element as JSON:
 //!
 //! - `doors_and_windows`: the doors and windows `rvt-ifc` draws from their saved
@@ -16,6 +16,10 @@
 //! - `owners_and_their_symbols`: those, and the symbols their meshes draw from
 //!   (the sources their primitives name) as owners too. Every door and window
 //!   then names an owner, which is the shape the batches must follow.
+//! - `owners_and_every_other_symbol`: the doors and windows, and every second
+//!   one of those symbols as an owner, so that a symbol a batch reads can name
+//!   an owner meshed, and freed, with an earlier batch (#1429); the symbols
+//!   not selected are shared, not owners.
 //! - `every_boxed_element`: every element with a Tag and a location, when there
 //!   are no more than 8,000 (a file with more is skipped).
 //!
@@ -79,8 +83,12 @@ fn main() -> anyhow::Result<()> {
     identical &= same;
 
     let mut with_symbols = doors_and_windows.clone();
-    with_symbols.extend(sources);
+    with_symbols.extend(sources.iter().copied());
     identical &= compare(&mut rf, "owners_and_their_symbols", &with_symbols)?.0;
+
+    let mut with_half = doors_and_windows.clone();
+    with_half.extend(sources.iter().copied().step_by(2));
+    identical &= compare(&mut rf, "owners_and_every_other_symbol", &with_half)?.0;
 
     let every = tagged(&model, false);
     if every.len() > MOST_OWNERS {
