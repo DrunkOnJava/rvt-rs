@@ -1,13 +1,21 @@
 #!/usr/bin/env python3
-"""Whether the bodies a Revit 2026 or 2027 save draws are the bodies the same
-project's earlier save draws (RE-341).
+"""Whether the bodies a Revit 2025, 2026 or 2027 save draws are the bodies the
+same project's earlier save draws (RE-341, RE-345).
 
-No Revit export of a 2026 or 2027 beam, landing, stair run or sketch outline
-is available to score them against, so each is held to the same Autodesk
-sample project saved by Revit 2024 or 2025, whose export is measured against
-Revit's own. Both saves are exported by the build under test, so a difference
-is the reader's, or the project's own edit between saves. What this cannot
-catch: an error the earlier save shares with this one.
+No Revit export of a 2025, 2026 or 2027 beam, landing, stair run or sketch
+outline of an Autodesk sample is available to score them against, so each is
+held to the same Autodesk sample project saved by Revit 2024 (or, for stair
+runs, 2025), whose export is measured against Revit's own. Both saves are
+exported by the build under test, so a difference is the reader's, or the
+project's own edit between saves. What this cannot catch: an error the
+earlier save shares with this one. A 2025 save is held to the 2024 save only:
+its stair runs are what the 2026 and 2027 saves are held to, so they are not
+compared (`not applicable`), though the number it draws is still checked.
+The elements whose sketch holds an arc (ARC_OWNERS) are the only check of the
+arc reader on 2025 to 2027: no Revit export of a floor, ceiling or roof with an
+arc exists on those releases, and the output counts how many of them are
+compared equal as outlines. A shaft opening is cut on 2024 only (RE-345), so
+no shaft void is compared on 2025 to 2027.
 
 The candidate's elements checked are those whose body the widened release
 lists change:
@@ -106,24 +114,49 @@ MINIMUMS = {
     },
     "racbasicsampleproject": {STAIR_RUNS: {"partition_stair_run_sketch": 2}},
 }
-# At least this many sketch outlines compared (Measure run 42010304828, head
-# e56d31b5: rac_advanced 82, rac_basic 12, rst_basic 5).
-OUTLINE_LEAST = {"racadvancedsampleproject": 82, "racbasicsampleproject": 12, "rstbasicsampleproject": 5}
+# At least this many sketch outlines compared, by candidate year (2026 and 2027:
+# Measure run 42010304828, head e56d31b5; 2025: run 42056599984, head 14a03c02,
+# the same code as this one).
+OUTLINE_LEAST = {
+    "racadvancedsampleproject": {2025: 86, 2026: 82, 2027: 82},
+    "racbasicsampleproject": {2025: 13, 2026: 12, 2027: 12},
+    "rstbasicsampleproject": {2025: 5, 2026: 5, 2027: 5},
+}
 # rac_advanced's ceiling 147534, which the 2024 save draws as its record box
 # and the 2026 save drew as an outline before a Sketch's curve list was read
 # there (run 42010304828, base side): compared under whatever source each save
 # gives it, with its source and volume printed.
 NAMED_TAGS = {"racadvancedsampleproject": {"147534"}}
-# Also printed in every save, with its vertex count: rac_advanced's floor 139803,
-# which the 2024 save and the 2026 and 2027 saves draw one way (volume 441.111228
-# m3) and the 2025 save, and the 2026 save before this change, another (440.512245).
-PRINT_TAGS = {"racadvancedsampleproject": frozenset({"139803"})}
+# The elements whose sketch holds an arc that reads inside its record box and
+# not as a line (tools/re probe_re96_sketch_arcs on the 2024 and 2025 saves,
+# run 42056599984): rac_advanced's 6 owners and rac_basic's 1. Printed in every
+# save with their class, source, volume and vertex count, and counted where they
+# are compared as sketch outlines.
+ARC_OWNERS = {
+    "racadvancedsampleproject": frozenset({"111931", "139803", "147534", "176909", "201262", "201312"}),
+    "racbasicsampleproject": frozenset({"947498"}),
+}
+# Also printed in every save, with its vertex count: rac_advanced's floor 139803
+# and roof 201262, which the 2024, 2025, 2026 and 2027 saves draw one way (floor
+# 441.111228 m3, roof 5.33213143 m3) now that the 2025 save reads their arcs;
+# before RE-345 the 2025 save drew chords (440.512245 and 6.87512864 m3).
+PRINT_TAGS = {
+    "racadvancedsampleproject": ARC_OWNERS["racadvancedsampleproject"] | {"139803", "201262"},
+    "racbasicsampleproject": ARC_OWNERS["racbasicsampleproject"],
+}
 # Sketch outlines are also compared, without scoring, with this other earlier
 # save, so that where the 2024 and 2025 saves disagree the lines say so.
 OTHER_YEAR = {SKETCH_OUTLINES: 2025}
-# Elements that must be among those compared equal, by group: rac_advanced's
-# floor the sketch lines draw as the 2024 save's, and the ceiling above.
-REQUIRED = {"racadvancedsampleproject": {SKETCH_OUTLINES: {"139803"}, NAMED_ELEMENTS: {"147534"}}}
+# Elements that must be among those compared equal, by candidate year and group:
+# rac_advanced's floor the sketch lines draw as the 2024 save's and, on 2025
+# (RE-345), its roof, which draws a 30 ft arc, and the ceiling above.
+REQUIRED = {
+    "racadvancedsampleproject": {
+        2025: {SKETCH_OUTLINES: {"139803", "201262"}, NAMED_ELEMENTS: {"147534"}},
+        2026: {SKETCH_OUTLINES: {"139803"}, NAMED_ELEMENTS: {"147534"}},
+        2027: {SKETCH_OUTLINES: {"139803"}, NAMED_ELEMENTS: {"147534"}},
+    }
+}
 
 
 def properties(element):
@@ -284,6 +317,7 @@ def main():
     match = re.fullmatch(r"sample-(\d{4})-(.+)", parent)
     project = match.group(2) if match else None
     own_year = match.group(1) if match else "this"
+    own_number = int(match.group(1)) if match else None
     named_tags = NAMED_TAGS.get(project, frozenset())
     failures = []
     not_compared = []
@@ -310,7 +344,8 @@ def main():
         earlier[year] = products(path, named_tags)
     total = 0
     minimums = MINIMUMS.get(project, {})
-    required = REQUIRED.get(project, {})
+    required = REQUIRED.get(project, {}).get(own_number, {})
+    outline_least = OUTLINE_LEAST.get(project, {}).get(own_number, 0)
     for tag in sorted(named_tags | PRINT_TAGS.get(project, frozenset())):
         print(f"named {tag}, {own_year} save: {describe(settings, candidate.get(tag))}")
         for year, (_, reference) in sorted(earlier.items()):
@@ -326,6 +361,9 @@ def main():
         for source, least in minimums.get(group, {}).items():
             if by_source.get(source, 0) < least:
                 fail(f"{group}: {by_source.get(source, 0)} drawn as {source}, fewer than the {least} it holds")
+        if own_number is not None and year >= own_number:
+            print(f"{group}: not applicable, the {year} save is the reference of the later saves and this is the {own_year} save ({len(chosen)} drawn here)")
+            continue
         if year not in earlier_paths:
             not_compared.append(f"{group} ({len(chosen)} here; the {year} save is not in this run)")
             print(f"{group}: not compared, the {year} save is not in this run ({len(chosen)} drawn here)")
@@ -369,15 +407,22 @@ def main():
         for tag in sorted(required.get(group, ())):
             if tag not in compared_tags:
                 fail(f"{group}: {tag} was not compared equal, and is required")
-        if group == SKETCH_OUTLINES and sum(compared.values()) < OUTLINE_LEAST.get(project, 0):
-            fail(f"{group}: {sum(compared.values())} compared, fewer than the {OUTLINE_LEAST[project]} it holds")
+        if group == SKETCH_OUTLINES and sum(compared.values()) < outline_least:
+            fail(f"{group}: {sum(compared.values())} compared, fewer than the {outline_least} it holds")
+        if group == SKETCH_OUTLINES and project in ARC_OWNERS:
+            arcs = ARC_OWNERS[project]
+            drawn = sorted(arcs & compared_tags, key=int)
+            print(
+                f"{group}: of the {len(arcs)} elements whose sketch holds an arc, {len(drawn)} are outlines compared equal here"
+                f" ({', '.join(drawn) or 'none'}); the other {len(arcs) - len(drawn)} are boxes here or not outlines"
+            )
         print(
             f"{group}: compared {sum(compared.values())} against the {year} save ({', '.join(f'{c} {n}' for c, n in sorted(compared.items())) or 'none'}); "
             f"left as boxes here, drawn in the {year} save, not scored: {sum(left_out.values())}"
             + (f" ({', '.join(f'{c} {n}' for c, n in sorted(left_out.items()))})" if left_out else "")
         )
         other = OTHER_YEAR.get(group)
-        if other in earlier and chosen:
+        if other in earlier and other != own_number and chosen:
             against_other(settings, (scale_candidate, ifcopenshell.util.unit.calculate_unit_scale(earlier[other][0])), chosen, earlier[other][1], group, other)
     if total == 0:
         fail("nothing was compared")

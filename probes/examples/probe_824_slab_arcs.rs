@@ -8,7 +8,8 @@
 //! are sketch lines of their own, closing loops inside the outline.
 //!
 //! Output, per owner in `RVT_PROBE_OWNERS` (default 1461758, 2991742,
-//! 1384047, 3058084) that owns sketch lines:
+//! 1384047, 3058084, and rac_advanced's floor 139803 and ceiling 147534,
+//! RE-345) that owns sketch lines:
 //!   owner <id> lines <n>
 //!   copy <id> <stream> box <min x y z> <max x y z> current <partition|none>
 //!     every record copy of a line with several, and its routed partition
@@ -41,7 +42,7 @@ fn in_box(points: &[[f64; 3]], b: &[f64; 6]) -> bool {
 fn main() -> rvt::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let wanted: BTreeSet<u32> = std::env::var("RVT_PROBE_OWNERS")
-        .unwrap_or_else(|_| "1461758,2991742,1384047,3058084".into())
+        .unwrap_or_else(|_| "1461758,2991742,1384047,3058084,139803,147534".into())
         .split(',')
         .filter_map(|id| id.trim().parse().ok())
         .collect();

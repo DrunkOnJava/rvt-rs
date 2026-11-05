@@ -278,7 +278,7 @@ for each, so an empty log cannot pass.
 
 | Stage | Reason | What was decided | Counted in |
 |---|---|---|---|
-| `element_skipped` | `below_min_element_confidence`, `low_confidence_schema_scan_candidate`, `element_record_without_element_id`, `element_record_frame_stopped` (`class`: the stage), `element_record_without_volume`, `element_record_in_non_primary_design_option`, `element_record_not_in_export_phase`, `room_not_in_export_phase`, `element_record_empty_curtain_panel`, `element_record_family_space_without_body`, `area_without_proven_body` | The element is not in the export. | the `skipped` item of the same reason |
+| `element_skipped` | `below_min_element_confidence`, `low_confidence_schema_scan_candidate`, `element_record_without_element_id`, `element_record_frame_stopped` (`class`: the stage), `element_record_without_volume`, `element_record_in_non_primary_design_option`, `element_record_not_in_export_phase`, `room_not_in_export_phase`, `element_record_empty_curtain_panel`, `element_record_family_space_without_body`, `area_without_proven_body`, `shaft_opening_not_cut` (`class`: `ShaftOpening`) | The element is not in the export. A shaft opening is no element of the IFC: it is counted because its cut from the floors, ceilings and roofs it passes through is read on Revit 2024 only (RE-345), so on a 2025 to 2027 file they stay whole. | the `skipped` item of the same reason |
 | `body_not_drawn` | `unsupported_geometry_curve`, `unsupported_geometry_profile`, `unsupported_geometry_missing_dimensions` | The element is written with no body. | the `skipped` item |
 | `opening_not_cut` | `unsupported_geometry_unresolved_host`, `opening_index_without_host_geometry` | A door or window has no host to cut, or an opening index row has no host geometry. | the `skipped` item |
 | `storey_not_bound` | `unsupported_geometry_missing_level` | The element is written outside any storey. | the `skipped` item |
@@ -527,6 +527,16 @@ out, and so does rvt-rs. They are omitted by design, not missing, so they do
 not count toward `unexported_element_records`. On Snowdon Towers all 60 of
 them (45 specialty equipment, 15 plumbing fixtures) are absent from Revit's
 export, and no element Revit does export lacks volume (#309).
+
+`shaft_opening_not_cut` counts the shaft openings (`OST_ShaftOpening`) of a
+Revit 2025, 2026 or 2027 file, one per ElementId, each with the last frame the
+scan read, under the class `ShaftOpening`. Revit's export cuts a shaft from the
+floors, ceilings and roofs it passes through; rvt-rs reads that cut on Revit 2024
+only, because the only shafts measured on 2025 (two in Autodesk's `rac_advanced`)
+cut nothing, so the check against the same project's 2024 save could not catch a
+bad cut (RE-345). On a later release those floors, ceilings and roofs stay whole.
+A shaft is no element of the IFC, so it does not count toward
+`unexported_element_records`. The item is absent on Revit 2024 and earlier.
 
 `element_record_in_non_primary_design_option` counts placed instances of a
 recovered category that belong to a design option other than their set's

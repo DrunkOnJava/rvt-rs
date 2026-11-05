@@ -560,9 +560,9 @@ pair_key() {
   name=${name//_/}
   echo "${name%sampleproject}"
 }
-# RE-341: bodies_across_saves.py holds the 2026 and 2027 saves of the three
-# projects below to their 2024 and 2025 saves, so those saves keep their
-# exports until it has run, after every sample item.
+# RE-341, RE-345: bodies_across_saves.py holds the 2025, 2026 and 2027 saves of
+# the three projects below to their earlier 2024 and 2025 saves, so those saves
+# keep their exports until it has run, after every sample item.
 # Whether this run's exports take a flag. A value of only spaces is no flag:
 # export_ifc passes it unquoted, so rvt-ifc gets none.
 flagged_export() {
@@ -602,9 +602,9 @@ measure_sample() { # sample
   finished "$dir" "$(basename "$sample")" "$item_started"
 }
 
-# RE-341: each 2026 and 2027 save of rac_advanced, rac_basic and rst_basic is
-# held to the same project's 2024 and 2025 saves, whose exports the samples
-# kept (tools/re/bodies_across_saves.py). It writes bodies_across_saves.txt
+# RE-341, RE-345: each 2025, 2026 and 2027 save of rac_advanced, rac_basic and
+# rst_basic is held to the same project's earlier 2024 and 2025 saves, whose
+# exports the samples kept (tools/re/bodies_across_saves.py). It writes bodies_across_saves.txt
 # beside the sample, ending with its exit status; the Measure workflow turns a
 # failure on the head side into a red run (tools/ci/check-bodies-across-saves.sh).
 bodies_across_saves() {
@@ -613,12 +613,14 @@ bodies_across_saves() {
     echo "::notice::bodies_across_saves skipped: the scorers asked for exclude it"
     return 0
   fi
-  for candidate in "$SAMPLE_DIR"/202[67]-*.rvt; do
+  for candidate in "$SAMPLE_DIR"/202[567]-*.rvt; do
     [ -f "$candidate" ] || continue
     case "$(pair_key "$candidate")" in racadvanced | racbasic | rstbasic) ;; *) continue ;; esac
     references=()
+    # A save is held to the project's saves of earlier years only.
     for earlier in "$SAMPLE_DIR"/202[45]-*.rvt; do
       [ -f "$earlier" ] && [ "$(pair_key "$earlier")" = "$(pair_key "$candidate")" ] || continue
+      [ "$(basename "$earlier" | cut -c1-4)" -lt "$(basename "$candidate" | cut -c1-4)" ] || continue
       references+=("$(basename "$earlier" | cut -c1-4)=$(sample_dir "$earlier")/model.ifc")
     done
     dir=$(sample_dir "$candidate")
@@ -630,8 +632,8 @@ bodies_across_saves() {
       continue
     fi
     if [ "${#references[@]}" -eq 0 ]; then
-      echo "::notice::$(basename "$dir"): no 2024 or 2025 save of its project is in this run, so bodies_across_saves compared nothing"
-      printf 'bodies across saves: SKIPPED (no 2024 or 2025 save of the project is in this run)\nexit 0\n' > "$dir/bodies_across_saves.txt"
+      echo "::notice::$(basename "$dir"): no earlier 2024 or 2025 save of its project is in this run, so bodies_across_saves compared nothing"
+      printf 'bodies across saves: SKIPPED (no earlier 2024 or 2025 save of the project is in this run)\nexit 0\n' > "$dir/bodies_across_saves.txt"
       continue
     fi
     score "$dir/bodies_across_saves.txt" "$SCORERS/bodies_across_saves.py" "$dir/model.ifc" "${references[@]}"

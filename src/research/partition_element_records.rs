@@ -1698,6 +1698,35 @@ pub fn scan_volumeless_instances(
     Ok(left_out)
 }
 
+/// The shaft openings (`OST_ShaftOpening`) of a Revit 2025, 2026 or 2027
+/// file, one per ElementId, in ElementId order, each with its class
+/// `ShaftOpening` and the frame it was read from. A shaft is cut from the
+/// floors, ceilings and roofs it passes through on Revit 2024 only
+/// ([`crate::partition_beam_axes::SHAFT_OUTLINE_SUPPORTED_REVIT_VERSIONS`],
+/// RE-345), so on a later release those stay whole, and the diagnostics count
+/// these (`shaft_opening_not_cut`). Empty on 2024, where they are cut, and on
+/// a release whose element records are not read.
+pub fn scan_shafts_not_cut(rf: &mut RevitFile, revit_version: u32) -> Result<Vec<LeftOutElement>> {
+    if !supports_revit_version(revit_version)
+        || crate::partition_beam_axes::supports_shaft_outlines(revit_version)
+    {
+        return Ok(Vec::new());
+    }
+    let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
+        Ok(records) => crate::elem_table::declared_ids(&records),
+        Err(_) => return Ok(Vec::new()),
+    };
+    let records = scan_category_records(rf, revit_version, OST_SHAFT_OPENING, &declared)?;
+    let mut by_id: BTreeMap<u32, &PartitionElementRecord> = BTreeMap::new();
+    for record in &records {
+        by_id.insert(record.element_id, record);
+    }
+    Ok(by_id
+        .into_values()
+        .map(|record| LeftOutElement::from_record(record, "ShaftOpening"))
+        .collect())
+}
+
 /// Scan every `Partitions/*` stream for records in `builtin_category`.
 ///
 /// Returns an empty vector for unsupported releases (fail closed).

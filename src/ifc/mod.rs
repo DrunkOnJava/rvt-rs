@@ -4049,6 +4049,22 @@ pub(crate) fn build_export_diagnostics_and_decisions(
         volumeless,
         ClassesBy::Class,
     );
+    // RE-345: a shaft opening is cut from the floors, ceilings and roofs it
+    // passes through on Revit 2024 only. On a later release those stay whole,
+    // so the shafts are counted, to say what the export left out. They are
+    // not elements of the IFC, so they do not count toward
+    // `unexported_element_records`.
+    let shafts_not_cut = layout
+        .and_then(|version| crate::partition_element_records::scan_shafts_not_cut(rf, version).ok())
+        .unwrap_or_default();
+    record_left_out(
+        &mut skipped,
+        &mut decisions,
+        "shaft_opening_not_cut",
+        None,
+        shafts_not_cut,
+        ClassesBy::Class,
+    );
     // #319: elements in a non-primary design option are left out as
     // Revit's own export leaves them out. They are not missing either.
     let non_primary = layout

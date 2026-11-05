@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Fail when a Revit 2026 or 2027 sample's bodies are not its earlier save's (RE-341).
+# Fail when a Revit 2025, 2026 or 2027 sample's bodies are not its earlier save's
+# (RE-341, RE-345).
 #
 # Usage:
 #   tools/ci/check-bodies-across-saves.sh RESULTS_DIR
 #
 # tools/re/bodies_across_saves.py holds the beams, tread landings, stair runs
-# and sketch outlines of each 2026 and 2027 save of rac_advanced, rac_basic and
-# rst_basic to the same project's 2024 and 2025 saves, and Measure's script
+# and sketch outlines of each 2025, 2026 and 2027 save of rac_advanced,
+# rac_basic and rst_basic to the same project's earlier 2024 and 2025 saves
+# (the 2025 save to the 2024 save alone), and Measure's script
 # writes its output beside each sample as bodies_across_saves.txt. This reads
 # those files from RESULTS_DIR (the head side's results, merged or one directory
 # for each shard) and fails on any
@@ -22,7 +24,7 @@
 #   SAMPLES      Measure's `samples` input; without `true` no sample is exported.
 #   SAMPLE_YEARS Measure's `sample_years` input, the first and last year of the
 #                samples fetched; empty is all of them.
-# A sample whose 2024 or 2025 save is not in the run is marked SKIPPED by the
+# A sample whose earlier saves are not in the run is marked SKIPPED by the
 # measuring script, and one with only some PARTIAL; both print a notice and
 # neither is a pass. A run with ifc_flags is SKIPPED too, since the check is
 # about the default export.
@@ -43,7 +45,7 @@ if [ -n "${SCORERS:-}" ] && ! grep -qw bodies_across_saves <<< "$SCORERS"; then
   exit 0
 fi
 if [ "${SAMPLES:-}" != true ]; then
-  note "Not checked: samples=true was not set, so no 2026 or 2027 sample was held to its earlier save. A change to a reader of Revit 2024 to 2027 is measured with samples=true."
+  note "Not checked: samples=true was not set, so no 2025, 2026 or 2027 sample was held to its earlier save. A change to a reader of Revit 2024 to 2027 is measured with samples=true."
   exit 0
 fi
 
@@ -51,14 +53,14 @@ read -ra range <<< "${SAMPLE_YEARS:-}"
 low="${range[0]:-0}"
 high="${range[1]:-9999}"
 expected=()
-for year in 2026 2027; do
+for year in 2025 2026 2027; do
   { [ "$year" -ge "$low" ] && [ "$year" -le "$high" ]; } || continue
   for project in racadvancedsampleproject racbasicsampleproject rstbasicsampleproject; do
     expected+=("sample-$year-$project")
   done
 done
 if [ "${#expected[@]}" -eq 0 ]; then
-  note "Not checked: sample_years (${SAMPLE_YEARS:-}) holds no 2026 or 2027 sample."
+  note "Not checked: sample_years (${SAMPLE_YEARS:-}) holds no 2025, 2026 or 2027 sample."
   exit 0
 fi
 

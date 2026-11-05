@@ -117,7 +117,10 @@ needed. In the archive names `<tag>` is the release tag with its `v`
 (`rvt-rs-v0.15.0-x86_64-unknown-linux-musl.tar.gz`); the wheel and the
 container image name the version without it (`0.15.0`). The release page also
 carries the Python wheels, the sdist and the archives' attestation bundle
-(`rvt-rs-<tag>.intoto.jsonl`).
+(`rvt-rs-<tag>.intoto.jsonl`; from v0.16.0 it covers `SHA256SUMS` too).
+`SHA256SUMS` and that attestation cover the CLI archives only, not the wheels
+and the sdist on that page (#1466); the wheels on PyPI carry PEP 740
+attestations from trusted publishing.
 
 | Platform | Archive |
 |---|---|
@@ -152,6 +155,9 @@ commit. Check it with the GitHub CLI:
 ```bash
 gh attestation verify rvt-rs-<tag>-<target>.tar.gz -R DrunkOnJava/rvt-rs
 ```
+
+From v0.16.0, `SHA256SUMS` carries one too, so verifying that single file and
+then running the `shasum` check above checks every archive.
 
 The binaries are not code-signed. On macOS, a browser download is
 quarantined by Gatekeeper; clear it for the unpacked folder with
