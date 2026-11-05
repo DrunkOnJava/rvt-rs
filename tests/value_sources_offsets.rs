@@ -65,8 +65,9 @@
 //! What it does not do: say that the copy a reader took is the right one. For
 //! the `agreeing` rule every copy holds the same value, so any of them is; for
 //! `current` the choice is `native_document::current_partitions`, whose
-//! correctness this test does not measure. The bodies marked `NotYet` are
-//! counted and printed, with how many of their elements have a source anyway.
+//! correctness this test does not measure. Every `BodySource` of the models
+//! has a reader that notes its copy (#1368): a body with none would have to be
+//! added to `COVERAGE` and is reported until it is.
 //!
 //! Per model, the counts by body source and reader go to
 //! `value-sources/<model>.json` and `summary.txt` under `CARGO_TARGET_TMPDIR`,
@@ -83,6 +84,7 @@ use rvt::research::element_record_plan_profiles::SKETCH_OWNER_OFFSET;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_family_forms::family_records_in;
 use rvt::research::native_form_geometry::FormDocument;
+use rvt::research::partition_area_records::{AREA_POINT_OFFSET, NARROW_POINT_OFFSET};
 use rvt::research::partition_beam_axes::{
     BEAM_DATA_WINDOW, BoundedArc, BoundedLine, first_bounded_arc, first_bounded_line,
     first_bounded_spline, first_circle, first_sketch_curve, scan_first_bounded_arcs,
@@ -108,6 +110,7 @@ use rvt::research::partition_room_boundaries::{
     ROOM_SOLID_TAG, ResolvedKind, is_room_outline_source, resolved_outline_of_solids,
     room_outline_at,
 };
+use rvt::research::partition_room_parameters::{DATA_OBJECT_HEADER, verified_data_object};
 use rvt::research::partition_type_parameters::{
     HOLLOW_SECTION_PARAMETER_NAMES, I_SECTION_PARAMETERS, VALUE_BLOCK_MARK,
 };
@@ -126,11 +129,9 @@ enum Coverage {
         readers: &'static [&'static str],
         rules: &'static [&'static str],
     },
-    /// No reader notes its copy yet: counted and printed, not asserted.
-    NotYet,
 }
 
-use Coverage::{NotYet, Recorded};
+use Coverage::Recorded;
 
 /// The record's box, or the box trimmed or cut by joins: read from the
 /// selected frame. `selected_frame_box` is the same where the profile is read
@@ -222,7 +223,13 @@ const COVERAGE: &[(&str, Coverage)] = &[
             rules: &["agreeing", "native"],
         },
     ),
-    ("partition_area_boundary_lines", NotYet),
+    (
+        "partition_area_boundary_lines",
+        Recorded {
+            readers: &["area_boundary_lines"],
+            rules: &["agreeing"],
+        },
+    ),
     (
         "family_type_hollow_section",
         Recorded {
@@ -265,7 +272,13 @@ const COVERAGE: &[(&str, Coverage)] = &[
             rules: &["frame"],
         },
     ),
-    ("native_slab_shape_edit", NotYet),
+    (
+        "native_slab_shape_edit",
+        Recorded {
+            readers: &["native_slab_shape"],
+            rules: &["native"],
+        },
+    ),
 ];
 
 /// The readers that at least one model of the Revit 2025 set
@@ -376,6 +389,9 @@ const MIN_READERS: &[(&str, &[&str])] = &[
             "room_solid_faces",
             "type_hollow_section",
             "pipe_connectors",
+            "area_boundary_lines",
+            "area_point",
+            "native_slab_shape",
         ],
     ),
 ];
@@ -769,79 +785,67 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
             stats.unlisted += 1;
             continue;
         };
-        match coverage {
-            None => {}
-            Some((_, Recorded { readers, rules })) => {
-                let found = entry.value_sources.iter().find(|source| {
-                    readers.contains(&source.reader.as_str())
-                        && rules.contains(&source.rule.as_str())
-                });
-                // The frame an element's box is held to: `selected_frame`
-                // where a reader sourced its profile, else `selected_frame_box`.
-                if let Some(frame) = entry
+        if let Some((_, Recorded { readers, rules })) = coverage {
+            let found = entry.value_sources.iter().find(|source| {
+                readers.contains(&source.reader.as_str()) && rules.contains(&source.rule.as_str())
+            });
+            // The frame an element's box is held to: `selected_frame`
+            // where a reader sourced its profile, else `selected_frame_box`.
+            if let Some(frame) = entry
+                .value_sources
+                .iter()
+                .find(|held| held.rule.as_str() == "selected")
+            {
+                let sourced = entry
                     .value_sources
                     .iter()
-                    .find(|held| held.rule.as_str() == "selected")
-                {
-                    let sourced = entry
-                        .value_sources
-                        .iter()
-                        .any(|held| PROFILE_FRAME_READERS.contains(&held.reader.as_str()));
-                    let expected = if profile_elsewhere && !sourced {
-                        "selected_frame_box"
-                    } else {
-                        "selected_frame"
-                    };
-                    if frame.reader != expected {
-                        problems.push(format!(
-                            "{id}: {body} has {}, and its profile {} another record",
-                            frame.reader,
-                            if profile_elsewhere {
-                                "is read from"
-                            } else {
-                                "is not read from"
-                            }
-                        ));
-                    }
+                    .any(|held| PROFILE_FRAME_READERS.contains(&held.reader.as_str()));
+                let expected = if profile_elsewhere && !sourced {
+                    "selected_frame_box"
+                } else {
+                    "selected_frame"
+                };
+                if frame.reader != expected {
+                    problems.push(format!(
+                        "{id}: {body} has {}, and its profile {} another record",
+                        frame.reader,
+                        if profile_elsewhere {
+                            "is read from"
+                        } else {
+                            "is not read from"
+                        }
+                    ));
                 }
-                match found {
-                    Some(source) => {
-                        stats.with_source += 1;
-                        stats.box_only += usize::from(source.reader == "selected_frame_box");
-                        *stats.by_reader.entry(source.reader.clone()).or_default() += 1;
-                        if source.rule.as_str() == "selected" {
-                            // The profile's own readers, by the profile's source.
-                            let profile_readers: &[&str] = match info.profile_source.as_deref() {
-                                Some("partition_element_record_sketch_lines") => &["sketch_lines"],
-                                Some("family_type_symbol_envelope") => &["type_section"],
-                                Some(source) if is_room_outline_source(source) => {
-                                    &["room_solid_faces"]
-                                }
-                                _ => &[],
-                            };
-                            if !profile_readers.is_empty() {
-                                stats.profiled += 1;
-                                let sourced = entry
-                                    .value_sources
-                                    .iter()
-                                    .any(|held| profile_readers.contains(&held.reader.as_str()));
-                                if sourced {
-                                    stats.profile_sourced += 1;
-                                } else if stats.profile_missing.len() < 10 {
-                                    stats.profile_missing.push(id);
-                                }
+            }
+            match found {
+                Some(source) => {
+                    stats.with_source += 1;
+                    stats.box_only += usize::from(source.reader == "selected_frame_box");
+                    *stats.by_reader.entry(source.reader.clone()).or_default() += 1;
+                    if source.rule.as_str() == "selected" {
+                        // The profile's own readers, by the profile's source.
+                        let profile_readers: &[&str] = match info.profile_source.as_deref() {
+                            Some("partition_element_record_sketch_lines") => &["sketch_lines"],
+                            Some("family_type_symbol_envelope") => &["type_section"],
+                            Some(source) if is_room_outline_source(source) => &["room_solid_faces"],
+                            _ => &[],
+                        };
+                        if !profile_readers.is_empty() {
+                            stats.profiled += 1;
+                            let sourced = entry
+                                .value_sources
+                                .iter()
+                                .any(|held| profile_readers.contains(&held.reader.as_str()));
+                            if sourced {
+                                stats.profile_sourced += 1;
+                            } else if stats.profile_missing.len() < 10 {
+                                stats.profile_missing.push(id);
                             }
                         }
                     }
-                    None if stats.missing.len() < 10 => stats.missing.push(id),
-                    None => {}
                 }
-            }
-            Some((_, NotYet)) => {
-                if let Some(source) = entry.value_sources.first() {
-                    stats.with_source += 1;
-                    *stats.by_reader.entry(source.reader.clone()).or_default() += 1;
-                }
+                None if stats.missing.len() < 10 => stats.missing.push(id),
+                None => {}
             }
         }
     }
@@ -854,9 +858,7 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                 stats.profile_missing
             ));
         }
-        let recorded = COVERAGE
-            .iter()
-            .any(|(source, coverage)| source == body && matches!(coverage, Recorded { .. }));
+        let recorded = COVERAGE.iter().any(|(source, _)| source == body);
         if recorded && !stats.missing.is_empty() {
             problems.push(format!(
                 "{body}: {} of {} elements have no value source from its readers, such as {:?}",
@@ -1413,6 +1415,35 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                         }
                         first == Some(u64::from(id))
                     }
+                    // An Area's point: on Revit 2024 the data object of the
+                    // Area whose header starts at the offset, on 2015 to 2023
+                    // the `01 00 00 00 · ElementId` element-data header; the
+                    // two f64s of the point after it are finite.
+                    "frame" if source.reader == "area_point" => {
+                        let (Some(stream), Some(offset)) =
+                            (source.stream.as_deref(), source.offset)
+                        else {
+                            problems.push(format!("{id}: {} has no place", source.reader));
+                            continue;
+                        };
+                        let inflated = rf
+                            .inflated_partition(stream)
+                            .unwrap_or_else(|error| panic!("{name}: {stream}: {error}"));
+                        let bytes = inflated.bytes();
+                        let point_at = if width == 8 {
+                            verified_data_object(bytes, offset)
+                                .filter(|object| object.element_id == id)
+                                .map(|_| offset + DATA_OBJECT_HEADER + AREA_POINT_OFFSET)
+                        } else {
+                            (u32_at(bytes, offset) == Some(1)
+                                && u32_at(bytes, offset + 4) == Some(id))
+                            .then_some(offset + 8 + NARROW_POINT_OFFSET)
+                        };
+                        point_at.is_some_and(|at| {
+                            f64_at(bytes, at).is_some_and(f64::is_finite)
+                                && f64_at(bytes, at + 8).is_some_and(f64::is_finite)
+                        })
+                    }
                     _ => false,
                 }
             };
@@ -1567,13 +1598,10 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
     }
     let mut bodies = serde_json::Map::new();
     for (body, stats) in &by_body {
-        let covered = COVERAGE.iter().find(|(source, _)| source == body).map_or(
-            "not in COVERAGE",
-            |(_, coverage)| match coverage {
-                Recorded { .. } => "recorded",
-                NotYet => "not yet",
-            },
-        );
+        let covered = COVERAGE
+            .iter()
+            .find(|(source, _)| source == body)
+            .map_or("not in COVERAGE", |_| "recorded");
         line.push_str(&format!(
             "  {body} ({covered}): {} elements, {} with a source ({} box only; {} of {} profiles sourced), {} not in the table\n",
             stats.elements,

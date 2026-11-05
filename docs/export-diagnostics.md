@@ -144,14 +144,16 @@ drawn from that reader.
 | `partition_landing_slab` | `landing_lines` | `agreeing` | The element-data header of the first copy of the landing's data that gave its outline lines. |
 | `partition_landing_slab` | `native_landing` | `native` | The header of the landing's current native record, which gives its top. |
 | `partition_landing_slab` | `native_landing_type` | `native` | `parts`: the header of the landing type's current native record, which gives the thickness (monolithic types only). |
+| `partition_area_boundary_lines` | `area_boundary_lines` | `agreeing` | `parts`: the frame of each area boundary line that bounds the Area's region, its holes' too (RE-317, RE-330), the first copy by frame order; every copy of a line that is placed gives the same line, its references included, or its group of lines is not read and no Area of it is drawn. The other lines of the scheme on the Level, which bound other regions, are not listed. |
+| `partition_area_boundary_lines` | `area_point` | `frame` | The element data that gave the Area's point, which picks its region among the lines: on Revit 2024 the header of its data object, on 2015 to 2023 its `01 00 00 00 · ElementId` element-data header (RE-324). Every copy in the Area record's partition gives the same point; copies in other partitions are not compared. The base and height come from the Level records (RE-317), which have no source. |
+| `native_slab_shape_edit` | `native_slab_shape` | `native` | The header of the floor's current native record, whose `SlabShapeEditGStep` gives the plane of its top (#1384, RE-336). The element's `selected_frame` names the frame whose box gives its base and placement, and `sketch_lines` and `sketch_list` its outline, as for a floor. |
 
-No reader notes its copy yet for `partition_area_boundary_lines` and
-`native_slab_shape_edit` (a floor drawn along the plane of its shape-edited
-corners, #1384), nor for the other values a body reads (a wall's layers, a beam's I section, the
-parameters of a rectangular column's section). An element of those bodies has
-no value source; an element whose box is the body but whose profile is read
-from a record no reader notes yet has `selected_frame_box` and nothing for the
-profile. Neither is a claim that it read the frame. `value_source_counts`
+Every `BodySource` above has a reader that notes its copy. No reader notes one
+yet for the other values a body reads (a wall's layers, a beam's I section, the
+parameters of a rectangular column's section, an Area's Levels); an element
+whose box is the body but whose profile is read from a record no reader notes
+yet has `selected_frame_box` and nothing for the profile. That is not a claim
+that it read the frame. `value_source_counts`
 counts, by reader, the elements with a source, those whose value is held in
 another partition than their frame, and those whose copy was chosen as the
 current partition's (`current`), so a run on any model shows whether it
