@@ -2903,7 +2903,8 @@ fn add_railing_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Dec
 
 /// Add a door's `Qto_DoorBaseQuantities` or a window's
 /// `Qto_WindowBaseQuantities` to `sets`: the Width and Height of the symbol
-/// that draws it, and their product as its Area. revit-ifc's
+/// that draws it, and their product as its Area (on 2024 to 2026 files, see
+/// `DOOR_WINDOW_AREA_REVIT_VERSIONS`). revit-ifc's
 /// `WidthCalculator`, `HeightCalculator` and `AreaCalculator` (CLEANROOM.md
 /// source 5) read a door's or window's Width and Height parameters, its own
 /// or its type's, where no opening profile gives them (#1016); an instance
@@ -2923,22 +2924,27 @@ fn add_door_window_quantities(
     let Some([width, height]) = mvp::drawn_size_from_fields(&decoded.fields) else {
         return;
     };
+    let mut properties = vec![
+        Property {
+            name: "Width".into(),
+            value: PropertyValue::PositiveLengthFeet(width),
+        },
+        Property {
+            name: "Height".into(),
+            value: PropertyValue::PositiveLengthFeet(height),
+        },
+    ];
+    // Revit 2027's export gives the Width and Height and an Area that is not
+    // their product (RE-346).
+    if !mvp::drawn_area_left_out(&decoded.fields) {
+        properties.push(Property {
+            name: "Area".into(),
+            value: PropertyValue::AreaSquareFeet(width * height),
+        });
+    }
     sets.push(PropertySet {
         name: set.into(),
-        properties: vec![
-            Property {
-                name: "Width".into(),
-                value: PropertyValue::PositiveLengthFeet(width),
-            },
-            Property {
-                name: "Height".into(),
-                value: PropertyValue::PositiveLengthFeet(height),
-            },
-            Property {
-                name: "Area".into(),
-                value: PropertyValue::AreaSquareFeet(width * height),
-            },
-        ],
+        properties,
     });
 }
 

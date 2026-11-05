@@ -821,8 +821,9 @@ pub fn native_landings_and_type_names(
     Ok((found, names))
 }
 
-/// Releases a railing type's top rail height is read on (RE-231).
-pub const RAILING_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// Releases a railing type's top rail height is read on (RE-231). 2026 and
+/// 2027 (RE-346) as Autodesk's samples saved by 2025 read them.
+pub const RAILING_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// Each railing type in `types` whose native record's `StairsRailingAttr`
 /// gives its top rail height (`m_topRailHeight`), feet: Revit's
@@ -868,8 +869,9 @@ fn sketch_line(fields: &Value) -> Option<([f64; 2], f64)> {
     (span.is_finite() && dir.iter().all(|c| c.is_finite())).then_some((dir, span))
 }
 
-/// Releases a stair railing's `Length` is read on (RE-254).
-pub const RAILING_LENGTH_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// Releases a stair railing's `Length` is read on (RE-254). 2026 and 2027
+/// (RE-346) as Autodesk's samples saved by 2025 read them.
+pub const RAILING_LENGTH_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// The `Length` Revit's export writes on each railing in `railings` that
 /// belongs to a stair (`BaseRailing.m_stairsId`) and whose path, the sketch
@@ -1039,8 +1041,19 @@ pub fn railing_lengths(
 }
 
 /// Releases a stair's and its parts' names are read from their native
-/// records on: the R2025 stair models (#323).
-pub const NATIVE_STAIR_NAME_REVIT_VERSIONS: &[u32] = &[2025];
+/// records on: the R2025 stair models (#323), and 2026 and 2027 (RE-346),
+/// as Autodesk's samples saved by 2025 read them.
+pub const NATIVE_STAIR_NAME_REVIT_VERSIONS: &[u32] = &[2025, 2026, 2027];
+
+/// Releases a stair's and its parts' type and family are read from their
+/// native records on, which give the `Family:Type` they write as `ObjectType`:
+/// 2025 only. The `Family:Type` rvt-rs writes as `ObjectType` differs from
+/// Revit's own 2026 and 2027 exports on every class with a type the held-out
+/// pairs hold (flowbim's house and hemanth1986's pairs), and with it written a
+/// stair, its flight and its stringers measure different where the `$` they had
+/// was equal (RE-346). Their names are read on 2026 and 2027 all the same
+/// ([`NATIVE_STAIR_NAME_REVIT_VERSIONS`]), and measure equal.
+pub const NATIVE_STAIR_TYPE_REVIT_VERSIONS: &[u32] = &[2025];
 
 /// A stair's or a stair part's type, and the stair and family Revit's export
 /// names it after (#323).

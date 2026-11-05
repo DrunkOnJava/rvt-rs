@@ -23,7 +23,7 @@ import json
 import pathlib
 import sys
 
-PROJECTS = ("racadvancedsampleproject", "racbasicsampleproject", "rstbasicsampleproject")
+PROJECTS = ("racadvancedsampleproject", "racbasicsampleproject", "rmeadvancedsampleproject", "rmebasicsampleproject", "rstbasicsampleproject")
 YEARS = (2025, 2026, 2027)
 AREAS_PASSED = "areas across saves: passed: 25 Areas, 25 with a body, on each of 4 saves"
 

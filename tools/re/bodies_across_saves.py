@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Whether the bodies a Revit 2025, 2026 or 2027 save draws are the bodies the
-same project's earlier save draws (RE-341, RE-345).
+same project's earlier save draws (RE-341, RE-345, RE-346).
 
 No Revit export of a 2025, 2026 or 2027 beam, landing, stair run or sketch
 outline of an Autodesk sample is available to score them against, so each is
@@ -33,6 +33,8 @@ lists change:
   named elements       the elements NAMED_TAGS lists, whatever their source,
                        held to the 2024 save; their sources and volumes in
                        every save are printed
+  pipes                `BodySource` is partition_pipe_axis (RE-131, RE-346);
+                       held to the 2025 save, which draws them so
 
 Each is paired by `Tag` (the ElementId, which a project keeps across saves)
 with the earlier save's element, and fails on any difference in: its IFC
@@ -47,6 +49,11 @@ required element not compared equal (REQUIRED), and a check that compared
 nothing, and on a directory whose project is not one of MINIMUMS'. An element
 the earlier save draws and this one leaves as a record box is counted, not
 scored: a body left out is fail closed.
+
+A save is also held to the 2025 save for what `readers_across_saves.py` checks
+(RE-346): its door and window cuts, ports and properties, and a census of every
+body. The pipes' MINIMUMS and that module's are from Measure run 42063046730
+(head 3149973f, 2026 saves).
 
 An earlier save that is not among the arguments (a run that fetched only some
 years) is not compared, and the verdict is `PARTIAL (not compared: ...)`, never
@@ -86,6 +93,7 @@ BEAMS_AND_LANDINGS = "beams and landings"
 STAIR_RUNS = "stair runs"
 SKETCH_OUTLINES = "sketch outlines"
 NAMED_ELEMENTS = "named elements"
+PIPES = "pipes"
 
 SOURCE_GROUP = {
     "partition_beam_axis": BEAMS_AND_LANDINGS,
@@ -93,12 +101,17 @@ SOURCE_GROUP = {
     "native_landing_tread": BEAMS_AND_LANDINGS,
     "partition_landing_slab": BEAMS_AND_LANDINGS,
     "partition_stair_run_sketch": STAIR_RUNS,
+    "partition_pipe_axis": PIPES,
 }
 OUTLINE_CLASSES = {"IfcSlab", "IfcCovering", "IfcRoof"}
-REFERENCE_YEAR = {BEAMS_AND_LANDINGS: 2024, STAIR_RUNS: 2025, SKETCH_OUTLINES: 2024, NAMED_ELEMENTS: 2024}
+REFERENCE_YEAR = {BEAMS_AND_LANDINGS: 2024, STAIR_RUNS: 2025, SKETCH_OUTLINES: 2024, NAMED_ELEMENTS: 2024, PIPES: 2025}
+# The save readers_across_saves.py holds a save's door and window cuts, ports and
+# properties to (RE-346).
+READERS_YEAR = 2025
 
 # Bodies the sample is known to draw by BodySource (Measure run 41988011289,
-# head 1d5bbf03, exported diagnostics), and outlines by group.
+# head 1d5bbf03, exported diagnostics; the MEP samples' pipes, run 42063046730,
+# head 3149973f), and outlines by group.
 MINIMUMS = {
     "racadvancedsampleproject": {
         BEAMS_AND_LANDINGS: {
@@ -113,6 +126,8 @@ MINIMUMS = {
         STAIR_RUNS: {"partition_stair_run_sketch": 1},
     },
     "racbasicsampleproject": {STAIR_RUNS: {"partition_stair_run_sketch": 2}},
+    "rmeadvancedsampleproject": {PIPES: {"partition_pipe_axis": 454}},
+    "rmebasicsampleproject": {PIPES: {"partition_pipe_axis": 457}},
 }
 # At least this many sketch outlines compared, by candidate year (2026 and 2027:
 # Measure run 42010304828, head e56d31b5; 2025: run 42056599984, head 14a03c02,
@@ -121,6 +136,11 @@ OUTLINE_LEAST = {
     "racadvancedsampleproject": {2025: 86, 2026: 82, 2027: 82},
     "racbasicsampleproject": {2025: 13, 2026: 12, 2027: 12},
     "rstbasicsampleproject": {2025: 5, 2026: 5, 2027: 5},
+    # The MEP samples, first held here (RE-346): 42 IfcCovering and 36 IfcSlab in each of
+    # their 2025, 2026 and 2027 saves, scored with this script on the IFC files of run
+    # 42091457764 (head 830a4d94), whose 2026 and 2027 outlines this change does not move.
+    "rmeadvancedsampleproject": {2025: 78, 2026: 78, 2027: 78},
+    "rmebasicsampleproject": {2025: 78, 2026: 78, 2027: 78},
 }
 # rac_advanced's ceiling 147534, which the 2024 save draws as its record box
 # and the 2026 save drew as an outline before a Sketch's curve list was read
@@ -197,9 +217,27 @@ def products(path, named=frozenset()):
             continue
         source, resolved = properties(element)
         out[tag].append((element, source, group_of(element, source, resolved, tag in named)))
-    for tag in out:
-        out[tag].sort(key=lambda item: item[0].GlobalId or "")
+    # Products that share a Tag (a floor Revit writes as several, one stair for each
+    # storey) are ordered by what they are, not by GlobalId: all but the first carry a
+    # GlobalId derived from the export, which differs between two saves of one project
+    # and would pair them crosswise (rme_advanced's floors, RE-346). Storey, then the
+    # volume and the centre of the body, then the GlobalId.
+    settings = ifcopenshell.geom.settings()
+    settings.set("use-world-coords", True)
+    for tag, items in out.items():
+        if len(items) > 1:
+            items.sort(key=lambda item: (storey(item[0]) or "", shape_key(settings, item[0]), item[0].GlobalId or ""))
     return model, out
+
+
+def shape_key(settings, element):
+    """The body's volume to three places and its centre to four, in metres, or
+    nothing where it does not mesh."""
+    shape = mesh(settings, element)
+    if isinstance(shape, str):
+        return (-1.0, 0.0, 0.0, 0.0)
+    centre = shape[1].mean(axis=0)
+    return (round(float(shape[0]), 3), *(round(float(c), 4) for c in centre))
 
 
 def storey(element):
@@ -350,7 +388,7 @@ def main():
         print(f"named {tag}, {own_year} save: {describe(settings, candidate.get(tag))}")
         for year, (_, reference) in sorted(earlier.items()):
             print(f"named {tag}, {year} save: {describe(settings, reference.get(tag))}")
-    for group in (BEAMS_AND_LANDINGS, STAIR_RUNS, SKETCH_OUTLINES, NAMED_ELEMENTS):
+    for group in (BEAMS_AND_LANDINGS, STAIR_RUNS, SKETCH_OUTLINES, NAMED_ELEMENTS, PIPES):
         year = REFERENCE_YEAR[group]
         chosen = {
             tag: [item for item in items if item[2] == group]
@@ -388,6 +426,8 @@ def main():
             ok = True
             for left, right in zip(chosen[tag], selected):
                 for field, mine, theirs in differences(settings, (scale_candidate, scale_earlier), left, right):
+                    if field == "GlobalId" and len(chosen[tag]) > 1:
+                        continue
                     ok = False
                     detail = f"{mine} here, {theirs} in the {year} save" if theirs != "" else mine
                     fail(f"{group}: {tag} {left[0].is_a()} differs in {field}: {detail}")
@@ -424,6 +464,24 @@ def main():
         other = OTHER_YEAR.get(group)
         if other in earlier and other != own_number and chosen:
             against_other(settings, (scale_candidate, ifcopenshell.util.unit.calculate_unit_scale(earlier[other][0])), chosen, earlier[other][1], group, other)
+    if own_number is not None and own_number <= READERS_YEAR:
+        print(f"cut openings, ports and properties: not applicable, the {READERS_YEAR} save is the reference of the later saves and this is the {own_year} save")
+    elif READERS_YEAR in earlier:
+        import readers_across_saves
+
+        total += readers_across_saves.check(
+            project,
+            own_number or 0,
+            candidate_path,
+            model,
+            earlier_paths[READERS_YEAR],
+            earlier[READERS_YEAR][0],
+            (scale_candidate, ifcopenshell.util.unit.calculate_unit_scale(earlier[READERS_YEAR][0])),
+            settings,
+            fail,
+        )
+    elif READERS_YEAR not in earlier_paths:
+        not_compared.append(f"cut openings, ports and properties (the {READERS_YEAR} save is not in this run)")
     if total == 0:
         fail("nothing was compared")
     report_and_exit(failures, not_compared)

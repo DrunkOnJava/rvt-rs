@@ -609,7 +609,9 @@ pub(super) fn attach_railing_heights(
 /// `Family:Stair:ElementId` and a part `<stair> Run 2`, numbered in
 /// ElementId order among the exported parts of its kind on its stair. A
 /// run's type is the one `OST_StairsRuns` type definition its element
-/// record names (RE-28). Measured on the five R2025 stair models.
+/// record names (RE-28). Measured on the five R2025 stair models. On 2026 and
+/// 2027 the names alone are given, with no type or family
+/// ([`crate::native_stairs::NATIVE_STAIR_TYPE_REVIT_VERSIONS`], RE-346).
 pub(super) fn attach_native_stair_names(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -619,6 +621,7 @@ pub(super) fn attach_native_stair_names(
     if !crate::native_stairs::NATIVE_STAIR_NAME_REVIT_VERSIONS.contains(&revit_version) {
         return;
     }
+    let types = crate::native_stairs::NATIVE_STAIR_TYPE_REVIT_VERSIONS.contains(&revit_version);
     let classes = ["Stair", "StairsRun", "StairsStringer"];
     let parts: BTreeSet<u64> = products
         .iter()
@@ -700,29 +703,31 @@ pub(super) fn attach_native_stair_names(
         let Ok(type_id) = u32::try_from(part.type_id) else {
             continue;
         };
-        if !has_type_id {
+        if types {
+            if !has_type_id {
+                element.fields.push((
+                    TYPE_ID_FIELD.into(),
+                    InstanceField::ElementId {
+                        tag: 0,
+                        id: type_id,
+                    },
+                ));
+            }
+            if !has_type_name {
+                element.fields.push((
+                    TYPE_NAME_FIELD.into(),
+                    InstanceField::String(part.type_name.clone()),
+                ));
+            }
             element.fields.push((
-                TYPE_ID_FIELD.into(),
-                InstanceField::ElementId {
-                    tag: 0,
-                    id: type_id,
-                },
+                FAMILY_NAME_FIELD.into(),
+                InstanceField::String(part.family.into()),
+            ));
+            element.fields.push((
+                FAMILY_NAME_SOURCE_FIELD.into(),
+                InstanceField::String(TYPE_KIND_FAMILY_SOURCE.into()),
             ));
         }
-        if !has_type_name {
-            element.fields.push((
-                TYPE_NAME_FIELD.into(),
-                InstanceField::String(part.type_name.clone()),
-            ));
-        }
-        element.fields.push((
-            FAMILY_NAME_FIELD.into(),
-            InstanceField::String(part.family.into()),
-        ));
-        element.fields.push((
-            FAMILY_NAME_SOURCE_FIELD.into(),
-            InstanceField::String(TYPE_KIND_FAMILY_SOURCE.into()),
-        ));
         if let (Some(name), false) = (name, has_name) {
             element
                 .fields

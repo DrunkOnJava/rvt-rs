@@ -1811,6 +1811,11 @@ jobs:
       # text that is not what it should be never reaches a URL, a crash or Jev.
       - name: Same-project verdict's pure judgement (failure-first)
         run: python3 tools/ci/test_same_project_verdict.py
+      # The samples the gate holds are named in five files (the verdict, the check
+      # script, the measuring script's two lists and both scorers' minimums); a sample
+      # one of them lacks is one the verdict does not see (RE-346).
+      - name: The same-project gate names the same samples everywhere
+        run: python3 tools/ci/check_same_project_projects.py
       - name: The semantic check's verdict failure modes
         run: python3 tools/ci/test_jev_check.py
       # publish.yml's preflight (#1457) refuses a tag that is lightweight or

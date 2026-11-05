@@ -161,10 +161,11 @@ for the five lowest ElementIds of each IFC entity, the diagnostics and an
   `python3 tools/re/mcp_client.py <rvt-rs-mcp> <model.rvt> [--all]` writes it
   alone, with `get_element` for the five lowest ElementIds of each entity or
   for every element; the semantic merge check (#1334) reads it.
-- The server is built (`cargo build -p rvt-rs-mcp`) only in a run that names
-  no scorers or names this one. It is optional: a ref without the crate, or
-  whose server does not build, leaves the step NOT MEASURED with a warning and
-  fails no other scorer. Autodesk's sample projects are not asked.
+- The server is built (`cargo build -p rvt-rs-mcp`, in the side's Build job)
+  only in a run that names no scorers or names this one. It is optional: a ref
+  without the crate, or whose server does not build, leaves the step NOT
+  MEASURED with a warning and fails no other scorer. Autodesk's sample projects
+  are not asked.
 
 ## Measure and the kinds of IfcSpace
 
@@ -197,7 +198,7 @@ PASS over a failure count, on spaces that have lost their `SpaceOutlineSource`
 in an export with geometry, and on a result that saw none of the export's
 spaces.
 
-## Bodies across saves (RE-341, RE-345)
+## Bodies, cuts, ports and properties across saves (RE-341, RE-345, RE-346)
 
 No Revit export of a 2025, 2026 or 2027 beam, tread landing, stair run or sketch
 outline of an Autodesk sample exists to score them against. `tools/re/bodies_across_saves.py` holds
@@ -206,7 +207,18 @@ the same project's earlier saves, matched by `Tag`: beams, landings and sketch
 outlines to the 2024 save, the 2026 and 2027 stair runs to the 2025 save. A 2025
 save is held to the 2024 save alone: its stair runs are the 2026 and 2027
 reference, so they are not compared, though the number it draws is still
-checked. Measure's script runs it beside each such sample, and the job
+checked. Since RE-346 it also holds the 2026 and 2027 saves of those and
+`rme_advanced` and `rme_basic` to the 2025 save for each pipe drawn from its axis,
+each door and window cut in its host (the opening, and the volume the openings take
+out of the host), each port, the properties and quantities the release lists add,
+each door's and window's size and type, and a census of every body
+(`tools/re/readers_across_saves.py`, imported by the first), and prints how many of
+each it compared. A new sample or check has to be added in the scorers' `MINIMUMS`,
+`measure-reference-models.sh` (`saves_gate_keeps` and `bodies_across_saves`),
+`check-bodies-across-saves.sh` and `same_project_verdict.py` (`PROJECTS`), which
+`tools/ci/check_same_project_projects.py` checks against each other in CI, or the
+verdict does not see it. Measure's script runs it beside each such sample, scoring
+up to as many at once as the runner has CPUs, and the job
 `same-project-gates` turns the run red on a difference, a missing file, an
 unknown project, fewer bodies than the sample holds, or a check that compared
 nothing. That job also holds #1428's Areas gate (rac_advanced's Areas across its
@@ -235,17 +247,34 @@ not remove Compare's report.
   says in a notice that it compared nothing, so the run a gate judges has no
   `ifc_flags`. A whitespace-only value is no flag.
 - **What it cannot catch**: an error the earlier save shares with the 2025,
-  2026 or 2027 read. Nothing in it is a Revit export. It compares bodies, not
-  quantities or property sets. No 2026 or 2027 held-out model, and none of the
-  25 models with Revit's own 2025 exports (the R2025 models and RE1
+  2026 or 2027 read, and a value Revit's exporter writes differently on 2026 or
+  2027 (hemanth1986's 2027 pair gives every door and window an Area that is not
+  its Width times its Height, which both saves of an Autodesk sample read alike,
+  RE-346). Nothing in it is a Revit export. It compares bodies, and the property
+  names `ADDED` lists, not the others. No 2026 or 2027 held-out model, and none of
+  the 25 models with Revit's own 2025 exports (the R2025 models and RE1
   Architecture), holds an `IfcBeam` or a tread landing, so the beam and landing
-  readers have run only on two Autodesk samples saved by earlier releases; and
-  those 25 models hold no floor, ceiling or roof with an arc, so no Revit
-  export checks the arc reading on 2025 either (RE-345). Shaft openings are cut
-  on 2024 only, for the same reason: the only two measured on 2025 cut nothing.
+  readers have run only on two Autodesk samples saved by earlier releases; no held-out
+  model holds a pipe, a duct or a port; and those 25 models hold no floor, ceiling or
+  roof with an arc, so no Revit export checks the arc reading on 2025 either (RE-345).
+  Shaft openings are cut on 2024 only, for the same reason: the only two measured on
+  2025 cut nothing.
+- **Products that share a Tag** (a floor Revit writes as several, a stair once for each
+  storey) are paired by storey, then the volume and the centre of the body, and the
+  GlobalId of such a Tag is not compared: all but the first copy carry a GlobalId
+  derived from the export, which differs between two saves (RE-346).
 - **A difference** is a reader that is wrong or a project that really differs
   between saves. Narrow the reader until it is never wrong and let what it
-  leaves out stay a box, counted (`left as boxes`); do not allowlist.
+  leaves out stay a box, counted (`left as boxes`); do not allowlist. The one
+  exception (Griffin, 2026-11-05) is `PINNED_WALLS` in `readers_across_saves.py`:
+  16 walls of `rac_basic` that both saves draw from the same source, of another
+  extent, as on `main` (#1471 is the lane fixing them). It can only shrink and no
+  entry is ever added. Each wall is pinned for each release to its source pair and
+  the volume of each body, so a wall that moves at all fails, and one that heals
+  fails too, which forces its pin out. A roof a save leaves as a record box where
+  the 2025 save draws it is counted, not listed. Any other body that differs from
+  the 2025 save fails; a difference on a release or sample not pinned is the
+  maintainer's decision, not a new entry.
 - The output carries, for rac_advanced's ceiling 147534, floor 139803 and roof
   201262 and the other elements whose sketch holds an arc (`ARC_OWNERS`), the
   class, `BodySource`, `ProfileResolved`, volume and vertex count in every save,
@@ -524,18 +553,21 @@ writes the cached output and a `<step> cached` line to the model's
   the unfiltered run 41748430211 the 18 held-out models took 32.8 of the 119
   task-minutes of model steps (28%); they run only with `-f holdout=true`.
 - **Where it lives.** Each shard of the run, whatever it is called, restores
-  the newest `measure-scores-v2-main-<shard>.*` cache after the measured code
-  has built (a build script never sees a writable cache) (a run given `models`
+  the newest `measure-scores-v2-main-<shard>.*` cache (a run given `models`
   is the shard `all`, with a cache of its own,
-  built by earlier runs of that kind). It is saved only where rust-cache is saved: the
+  built by earlier runs of that kind). No build script of the measured ref runs
+  in a shard (the Build job runs them, on a runner that holds no score cache),
+  but its binaries and a probe's scorers do, with the cache writable. It is
+  saved only where rust-cache is saved: the
   workflow dispatched from `main` and the side measuring `main`'s own code
-  (`inputs.ref` empty, or `base` `main`), because the build scripts of any
-  other ref run on the runner and must not write what a later `main` run
+  (`inputs.ref` empty, or `base` `main`), because code of any
+  other ref runs on the runner and must not write what a later `main` run
   reads. A pull request run, and a run of any other ref, only reads. Keying on
   the scorers makes an entry reachable only by a run whose scorers, files and
-  libraries hash alike, but that is not safe by construction: a build script of
-  the measured ref could rewrite the installed IfcOpenShell, which the key
-  names only by version, and the cache would then hold what that run produced.
+  libraries hash alike, but that is not safe by construction: code of the
+  measured ref that runs in the shard (its binaries, a probe's scorers) could
+  rewrite the installed IfcOpenShell, which the key names only by version, and
+  the cache would then hold what that run produced.
   That is why only `main`'s own code saves it. A run dispatched with `-f
   score_cache=<name>` reads and saves a cache of its own,
   `measure-scores-v2-x-<name>-<shard>.*`, from any ref (GitHub scopes a
@@ -563,11 +595,53 @@ writes the cached output and a `<step> cached` line to the model's
   psets_missing=Pset_WallCommon.Reference` must miss `psets_vs_ifc` on every
   model and hit everything else.
 
-Measure also keeps the three binaries its Build step makes (`rvt-ifc`,
+## Measure builds each side once
+
+The `Build` job of each side (`Build head`, `Build base`) builds what the
+side's shards run: `rvt-ifc`, `rvt-gltf` and `rvt-info`, `rvt-rs-mcp` in a run
+that scores the MCP server, and each `inputs.probe` example that exists at that
+ref. It uploads exactly those files, with the commit they are of, as the
+artifact `measure-bin-head` or `measure-bin-base` (kept 3 days), and every shard
+of the side downloads it into `measured/target/ci`, checks the commit against its
+own checkout of the ref, and sets the executable bit that artifacts drop. A
+shard installs no Rust and restores no rust-cache, and the script it runs
+(`tools/ci/measure-reference-models.sh`) never calls cargo. Before this each
+shard of a commit missed the binary cache at once and built the same binaries
+(over 36 dispatched runs Build was 150 of 720 job-minutes, #1457).
+
+- **A missing optional file is not an error.** The script tests
+  `-x "$BIN/rvt-rs-mcp"` and `-x "$BIN/examples/<probe>"`: a ref with no `rvt-mcp`
+  crate leaves the server's answers NOT MEASURED on that side (a warning in the
+  Build job), and a probe that does not exist at the base ref is skipped there
+  (a notice).
+- **A failed build** fails the run. That side's shards fail at the artifact
+  download and the other side's still run (its results, and the `same-project
+  gates` verdict, are not lost with it); Compare, which needs every shard, is
+  skipped, so the run never reads as a pass. The gates' job still runs and
+  writes the verdict as NOT MEASURED (`neutral`), or a failure if a result that
+  did arrive fails, never a success; with no head result at all it leaves its two
+  checks out. Read the Build job, not Compare.
+- **A shard waits for both Build jobs**, since a matrix job's `needs` covers every
+  leg: in a run with a base, the head shards start when the slower side has built
+  (run 42093529476: 0.6 minute, 82 s against 54 s). With few or short shards that
+  and the artifact hand-off lengthen the wall-clock; the job-minutes fall once a
+  side has more shards than builds.
+- **A ref that is not a full SHA** (`refs/pull/N/head`) is checked out as given by
+  the Build job and by every shard; a shard fails if the ref moved between them,
+  since the binaries and its source would be two commits.
+- **The artifact names** match neither `measure-head-*` nor `measure-base-*`, the
+  patterns Compare and the gates download; `gh run download -n measure-head`
+  still names Compare's merged artifact.
+- **`timing-build`** checks out `inputs.base || 'main'` as given when it
+  starts, where the shards use the commits the plan job resolved. When those
+  differ (`main` moved during the run) `Timing` warns in the log and under its
+  table.
+
+Measure also keeps the binaries its Build job makes (`rvt-ifc`,
 `rvt-gltf`, `rvt-info`; and `rvt-rs-mcp` in a run that scores the MCP server,
 under a key ending `-mcp`) under `rvt-bin-v2-<full SHA>-<OS>-<arch>-<toolchain
-hash>-ci`, so the shards of a run, and every run that measures `main`'s commit
-as its base, build them once (the build is about 70 seconds of each job). What
+hash>-ci`, so every run that measures `main`'s commit as its base builds them
+once (the build is about 70 seconds). What
 the cache holds is a function of its key, the code of that commit built by that
 toolchain, and only a run of that commit restores it, so a run of any ref may
 save it (a pull request's run does not: its caches are its own). A ref that is
