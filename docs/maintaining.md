@@ -635,7 +635,10 @@ Configured on the repository, with the rulesets kept as code in
   is a different witness.
 - CodeQL (`.github/workflows/codeql.yml`) analyses the workflows, the
   viewer's TypeScript and JavaScript, the Python bindings and the Rust crate,
-  on every pull request, push to main and weekly. The default setup stays
+  on every push to main, weekly, and on every ready pull request that changes
+  more than documentation (`**.md`, `docs/`, `reports/`, `changelog.d/`): a
+  draft's jobs are skipped and its analysis starts when it is marked ready
+  (#1457). The default setup stays
   off: it cannot scan Rust, and GitHub refuses an advanced setup's results
   while it is on.
 - Every action is pinned to a full commit SHA and the repository requires it.
