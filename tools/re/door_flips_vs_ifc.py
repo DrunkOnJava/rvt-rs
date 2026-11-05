@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Pair the doors and windows `probe_re342_door_flips` prints with Revit's own
-IFC export, and tabulate their hand and facing flips (RE-342, #1357).
+"""Pair the doors and windows `probe_re343_door_flips` prints with Revit's own
+IFC export, and tabulate their hand and facing flips (RE-343, #1357).
 
-Research tool for `reports/element-framing/RE-342-door-window-flips.md`. For
+Research tool for `reports/element-framing/RE-343-door-window-flips.md`. For
 every door and window of the probe whose ElementId is the Tag of an IfcDoor or
 IfcWindow of the export, it takes:
 

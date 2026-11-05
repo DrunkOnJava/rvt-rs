@@ -1,4 +1,4 @@
-//! RE-342 (#1357): what a door's or window's data holds of its hand flip and
+//! RE-343 (#1357): what a door's or window's data holds of its hand flip and
 //! facing flip.
 //!
 //! FACT under test: Revit's `FamilyInstance.HandFlipped` and `FacingFlipped`
@@ -42,7 +42,7 @@
 //! `tools/re/door_flips_vs_ifc.py` pairs the lines with Revit's export.
 //!
 //! Usage:
-//!   cargo run --profile ci -p rvt-probes --example probe_re342_door_flips -- MODEL.rvt [--records]
+//!   cargo run --profile ci -p rvt-probes --example probe_re343_door_flips -- MODEL.rvt [--records]
 
 use std::collections::{BTreeMap, BTreeSet};
 

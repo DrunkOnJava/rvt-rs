@@ -24,7 +24,7 @@
 # example lines, which carry ElementIds, are dropped), the `native readers:`
 # count lines of the RE-283 to RE-285 probes and scorers (the same alphabet;
 # their `native readers example:` lines name ElementIds and are dropped), the
-# `door flips:` count lines of tools/re/door_flips_vs_ifc.py (RE-342: counts of
+# `door flips:` count lines of tools/re/door_flips_vs_ifc.py (RE-343: counts of
 # doors and windows by flag state and by how their placements compare; its
 # `row` and `sample` lines name ElementIds and are dropped) and
 # of its quantity census (the totals and each quantity's counts, the walls it
