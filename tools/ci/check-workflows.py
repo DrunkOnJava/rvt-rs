@@ -22,8 +22,9 @@ Exits 1 with an `::error` line for each of:
   workflow names a file that exists, and its `with:` names only inputs that file declares and
   gives those it requires. actionlint does not know the `$/` form (.github/actionlint.yaml
   ignores that message), so without this a typo in one would go unreported.
-* The MSRV in prose. README.md, CONTRIBUTING.md, .cursor/install.sh, AGENTS.md and
-  docs/python.md each state it and each must state Cargo.toml's `rust-version`.
+* The MSRV in prose. README.md, CONTRIBUTING.md, .cursor/install.sh, AGENTS.md, docs/python.md,
+  RELEASE.md and docs/install.md each state it and each must state Cargo.toml's `rust-version`.
+  docs/install.md also states the MCP server's minimum, which must be rvt-mcp's `rust-version`.
 
 PENDING lists the jobs another change is still editing, if any. They are reported as warnings,
 so a job added anywhere else without a timeout still fails.
@@ -352,21 +353,32 @@ def local_use_problems(workflows, read):
     return problems
 
 
-PROSE_MSRV_FILES = ("README.md", "CONTRIBUTING.md", ".cursor/install.sh", "AGENTS.md", "docs/python.md")
+PROSE_MSRV_FILES = (
+    "README.md", "CONTRIBUTING.md", ".cursor/install.sh", "AGENTS.md", "docs/python.md", "RELEASE.md", "docs/install.md",
+)
 # The ways these files state the MSRV: "(MSRV 1.87)", `rust-version = "1.87"`, "Rust >= 1.87",
-# "Rust must be stable ≥ 1.87" and "Rust 1.87 or newer". A mention of another release (a Rust 1.83
-# the old base image shipped, the 1.88 the MCP server needs) is none of these.
+# "Rust must be stable ≥ 1.87", "Rust 1.87 or newer", "Rust toolchain (1.87 or later)" and "the
+# other tools need 1.87". A mention of another release (a Rust 1.83 the old base image shipped, the
+# 1.88 the MCP server needs) is none of these.
 PROSE_MSRV = (
     re.compile(r"\bMSRV\s+(\d+\.\d+)"),
     re.compile(r"rust-version\s*=\s*\"?(\d+\.\d+)"),
     re.compile(r"\bRust\b[^\n.]{0,24}?(?:>=|≥)\s*(\d+\.\d+)"),
     re.compile(r"\bRust\s+(\d+\.\d+)\s+or\s+newer"),
+    re.compile(r"\bRust\s+toolchain\s*\((\d+\.\d+)\s+or\s+later\)"),
+    re.compile(r"\bthe\s+other\s+tools\s+need\s+(\d+\.\d+)"),
 )
+# docs/install.md also states the MCP server's own minimum, which is the rvt-mcp crate's
+# rust-version and not the workspace's: "It is a crate of its own and needs Rust 1.88 or later".
+PROSE_MCP_FILES = ("docs/install.md",)
+PROSE_MCP = (re.compile(r"\bneeds\s+Rust\s+(\d+\.\d+)\s+or\s+later"),)
+MCP_MANIFEST = "rvt-mcp/Cargo.toml"
 
 
-def prose_msrv_problems(root, texts):
+def prose_msrv_problems(root, texts, mcp=None):
     """Where a file that states the MSRV in prose states another release than `root`, or states none
-    the patterns can read (a file reworded out of the check fails, rather than passing unread)."""
+    the patterns can read (a file reworded out of the check fails, rather than passing unread). The
+    files in PROSE_MCP_FILES also state the MCP server's minimum, which must be `mcp`."""
     problems = []
     for path in PROSE_MSRV_FILES:
         text = texts.get(path)
@@ -378,6 +390,13 @@ def prose_msrv_problems(root, texts):
             problems.append(f"{path}: states no MSRV the check can read (reworded? then change PROSE_MSRV)")
         for version in sorted({v for v in found if not same_version(v, root)}):
             problems.append(f"{path}: states Rust {version}, Cargo.toml's rust-version is {root!r}")
+        if path not in PROSE_MCP_FILES:
+            continue
+        found = [v for rx in PROSE_MCP for v in rx.findall(text)]
+        if not found:
+            problems.append(f"{path}: states no MCP server minimum the check can read (reworded? then change PROSE_MCP)")
+        for version in sorted({v for v in found if not same_version(v, mcp)}):
+            problems.append(f"{path}: says the MCP server needs Rust {version}, {MCP_MANIFEST}'s rust-version is {mcp!r}")
     return problems
 
 
@@ -437,7 +456,10 @@ def main():
     else:
         errors += msrv_problems(root, include if isinstance(include, str) else "", manifests, DELIBERATE_MSRV)
         texts = {path: (ROOT / path).read_text() if (ROOT / path).is_file() else None for path in PROSE_MSRV_FILES}
-        errors += prose_msrv_problems(root, texts)
+        mcp = manifests.get(MCP_MANIFEST)
+        if mcp is None:
+            errors.append(f"{MCP_MANIFEST}: no package rust-version")
+        errors += prose_msrv_problems(root, texts, mcp)
         print(f"msrv: rust-version {root} in Cargo.toml, {sum(v is not None for v in manifests.values())} crates, "
               f"ci.yml's test matrix, {len(PROSE_MSRV_FILES)} files of prose")
 

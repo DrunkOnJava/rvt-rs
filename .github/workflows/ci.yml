@@ -1985,7 +1985,9 @@ jobs:
       # `$/.github/...` action or workflow a job uses exists and gets the inputs
       # it declares (actionlint cannot read that form), the MSRV in the test
       # matrix, in every crate and in the README, CONTRIBUTING.md, AGENTS.md,
-      # docs/python.md and .cursor/install.sh is Cargo.toml's `rust-version`,
+      # RELEASE.md, docs/python.md, docs/install.md and .cursor/install.sh is
+      # Cargo.toml's `rust-version` (the MCP server's, in docs/install.md, is
+      # rvt-mcp's),
       # and the documentation-only path list is one list in CI's
       # `paths-ignore`, the viewer tests' path filter and Deploy viewer's wait
       # step. Its comparisons are tested first, on the ways they can fail.

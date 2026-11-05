@@ -375,12 +375,21 @@ STATEMENTS = {
     ".cursor/install.sh": "# (needs Rust >= 1.87, the MSRV)\n# edition 2024 with rust-version = 1.87;",
     "AGENTS.md": "- **Rust must be stable ≥ 1.87.** (`rust-version = \"1.87\"` in `Cargo.toml`).",
     "docs/python.md": "# Needs a Rust toolchain (>= 1.87) and maturin.\n- Rust ≥ 1.87",
+    "RELEASE.md": "matrix (ubuntu/macos/windows × stable + MSRV 1.87 on ubuntu) are all green.",
+    "docs/install.md": (
+        "It needs a stable\nRust toolchain (1.87 or later):\n\n## MCP Server\n\n"
+        "It is a crate of its own and needs Rust 1.88 or later\nto build (the other tools need 1.87)."
+    ),
 }
+
+
+def prose(root, texts, mcp="1.88"):
+    return cw.prose_msrv_problems(root, texts, mcp)
 
 
 class ProseMsrv(unittest.TestCase):
     def problems(self):
-        return cw.prose_msrv_problems("1.87", dict(STATEMENTS))
+        return prose("1.87", dict(STATEMENTS))
 
     def test_agreement_passes(self):
         self.assertEqual(self.problems(), [])
@@ -393,36 +402,83 @@ class ProseMsrv(unittest.TestCase):
             ("AGENTS.md", "- **Rust must be stable ≥ 1.86.**"),
             ("AGENTS.md", "(`rust-version = \"1.86\"` in `Cargo.toml`)."),
             ("docs/python.md", "# Needs a Rust toolchain (>= 1.86) and maturin."),
+            ("RELEASE.md", "matrix (ubuntu/macos/windows × stable + MSRV 1.86 on ubuntu) are all green."),
+            ("docs/install.md", "Rust toolchain (1.86 or later):\nneeds Rust 1.88 or later"),
+            ("docs/install.md", "(the other tools need 1.86)\nneeds Rust 1.88 or later"),
         ):
             texts = dict(STATEMENTS)
             texts[path] = wrong
-            problems = cw.prose_msrv_problems("1.87", texts)
+            problems = prose("1.87", texts)
             self.assertEqual(len(problems), 1, (path, wrong))
             self.assertIn("1.86", problems[0])
 
     def test_one_stale_statement_among_current_ones_is_found(self):
         texts = dict(STATEMENTS)
         texts["README.md"] += " Build: stable Rust 1.86 or newer."
-        self.assertEqual(len(cw.prose_msrv_problems("1.87", texts)), 1)
+        self.assertEqual(len(prose("1.87", texts)), 1)
 
     def test_a_file_that_states_nothing_it_can_read_fails(self):
         texts = dict(STATEMENTS)
         texts["README.md"] = "Needs a recent compiler."
-        problems = cw.prose_msrv_problems("1.87", texts)
+        problems = prose("1.87", texts)
         self.assertEqual(len(problems), 1)
         self.assertIn("states no MSRV", problems[0])
 
     def test_a_file_that_is_gone_fails(self):
         texts = {k: v for k, v in STATEMENTS.items() if k != "AGENTS.md"}
-        self.assertEqual(len(cw.prose_msrv_problems("1.87", texts)), 1)
+        self.assertEqual(len(prose("1.87", texts)), 1)
 
     def test_another_release_that_is_not_the_msrv_is_ignored(self):
         texts = dict(STATEMENTS)
         texts["AGENTS.md"] += " The base image shipped Rust 1.83, which cannot build it. The server needs Rust 1.88, one above."
-        self.assertEqual(cw.prose_msrv_problems("1.87", texts), [])
+        self.assertEqual(prose("1.87", texts), [])
 
     def test_the_msrv_moving_alone_fails_every_file(self):
-        self.assertEqual(len(cw.prose_msrv_problems("1.88", dict(STATEMENTS))), len(cw.PROSE_MSRV_FILES))
+        self.assertEqual(len(prose("1.88", dict(STATEMENTS))), len(cw.PROSE_MSRV_FILES))
+
+    def test_the_mcp_servers_minimum_is_read_against_its_own_crate(self):
+        for stated in ("1.87", "1.89"):
+            texts = dict(STATEMENTS)
+            texts["docs/install.md"] = f"Rust toolchain (1.87 or later)\nit needs Rust {stated} or later\n(the other tools need 1.87)"
+            problems = prose("1.87", texts)
+            self.assertEqual(len(problems), 1, stated)
+            self.assertIn(stated, problems[0])
+            self.assertIn("MCP", problems[0])
+
+    def test_the_mcp_crate_moving_alone_fails_only_the_file_that_states_it(self):
+        problems = prose("1.87", dict(STATEMENTS), mcp="1.89")
+        self.assertEqual(len(problems), 1)
+        self.assertIn("docs/install.md", problems[0])
+
+    def test_the_mcp_minimum_is_not_taken_for_the_workspaces(self):
+        texts = dict(STATEMENTS)
+        texts["docs/install.md"] = "Rust toolchain (1.87 or later)\nit needs Rust 1.88 or later\n(the other tools need 1.87)"
+        self.assertEqual(prose("1.87", texts), [])
+        stale = [p for p in prose("1.88", texts) if p.startswith("docs/install.md")]
+        self.assertEqual(len(stale), 1)
+        self.assertIn("Rust 1.87", stale[0])
+
+    def test_an_install_page_with_no_mcp_statement_fails_rather_than_passing_unread(self):
+        texts = dict(STATEMENTS)
+        texts["docs/install.md"] = "Rust toolchain (1.87 or later)\n(the other tools need 1.87)"
+        problems = prose("1.87", texts)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("MCP", problems[0])
+
+    def test_a_reworded_mcp_statement_fails_closed(self):
+        texts = dict(STATEMENTS)
+        texts["docs/install.md"] = "Rust toolchain (1.87 or later)\nthe server needs Rust 1.88 or newer\n(the other tools need 1.87)"
+        self.assertTrue(any("states no MCP" in p for p in prose("1.87", texts)))
+
+    def test_a_crate_with_no_rust_version_matches_no_statement(self):
+        problems = prose("1.87", dict(STATEMENTS), mcp=None)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("MCP", problems[0])
+
+    def test_the_mcp_wording_is_read_only_where_it_is_expected(self):
+        texts = dict(STATEMENTS)
+        texts["README.md"] += " The MCP server needs Rust 1.88 or later."
+        self.assertEqual(prose("1.87", texts), [])
 
 
 if __name__ == "__main__":
