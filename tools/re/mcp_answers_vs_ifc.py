@@ -18,7 +18,7 @@ default decode does not take):
 - the summary equals `get_summary`, and its counts equal the rows, the filtered totals, the IFC's
   entities and the export diagnostics;
 - the rows are the IFC's elements and spaces (`IfcElement` and `IfcSpace`) by GlobalId, in both
-  directions, with the same entity, Name, Tag, PredefinedType and storey; the IfcOpeningElements
+  directions, with the same entity, Name (an absent name stands for the exporter's `<class>-<ElementId>` placeholder), LongName of a space, Tag, PredefinedType and storey; the IfcOpeningElements
   the writer cuts for doors and windows are the only IFC elements a row may lack;
 - the levels are the IFC's storeys, with their elevations and the elements each holds;
 - every room is an IfcSpace with the same number, name, storey and trust marker, and an area equal
@@ -381,7 +381,7 @@ def row_sources(rows):
 def check_rows(report, answers, written):
     rows = answers["rows"]
     found_in = []
-    entity, names, ids, predefined, levels = [], [], [], [], []
+    entity, names, long_names, ids, predefined, levels = [], [], [], [], [], []
     compared = 0
     by_gid = row_sources(rows)
     for row in rows:
@@ -409,8 +409,16 @@ def check_rows(report, answers, written):
         category = row["provenance"].get("category")
         if product.is_a().upper() != category:
             entity.append(f"{label}: entity {category} vs {product.is_a().upper()}")
-        if (product.Name or "") != row["name"]:
+        if row.get("name") is None:
+            # An absent name stands for the exporter's own `<Revit class>-<ElementId>`, which no source named.
+            placeholder = f"{row['provenance'].get('class')}-{row.get('id')}"
+            if (product.Name or "") != placeholder:
+                names.append(f"{label}: no name in the answer and the IFC Name {product.Name!r} is not {placeholder!r}")
+        elif (product.Name or "") != row["name"]:
             names.append(f"{label}: name {row['name']!r} vs {product.Name!r}")
+        long_name = (product.LongName or None) if product.is_a("IfcSpace") else None
+        if (row.get("long_name") or None) != long_name:
+            long_names.append(f"{label}: long name {row.get('long_name')!r} vs {long_name!r}")
         if not product.is_a("IfcSpace"):
             tag = getattr(product, "Tag", None)
             if (tag or None) != (row.get("id") or None):
@@ -425,6 +433,7 @@ def check_rows(report, answers, written):
     report.check("element membership", len(rows), found_in)
     report.check("element entities", compared, entity)
     report.check("element names", compared, names)
+    report.check("element long names", compared, long_names)
     report.check("element ids", compared, ids)
     report.check("element predefined types", compared, predefined)
     report.check("element storeys", compared, levels)
@@ -571,7 +580,12 @@ def check_details(report, answers, written):
         label = f"element {element_id} {product.is_a()}"
         provenance = dict(detail["provenance"])
         provenance.pop("value_sources", None)
-        if provenance != row["provenance"] or detail["name"] != row["name"] or detail.get("predefined_type") != row.get("predefined_type"):
+        if (
+            provenance != row["provenance"]
+            or detail.get("name") != row.get("name")
+            or detail.get("long_name") != row.get("long_name")
+            or detail.get("predefined_type") != row.get("predefined_type")
+        ):
             differences.append(f"{label}: get_element and list_elements disagree")
         expected_level = row.get("level")
         if (detail.get("level") or {}).get("name") != expected_level:
@@ -603,6 +617,10 @@ def check_details(report, answers, written):
         elif kind is None:
             type_presence.append(f"{label}: type {answered_type['element_id']} in the answer, none in the IFC")
         else:
+            if answered_type.get("ifc_type") != kind.is_a().upper():
+                type_presence.append(f"{label}: type entity {answered_type.get('ifc_type')!r} vs {kind.is_a().upper()!r}")
+            if answered_type.get("name") != kind.Name:
+                type_presence.append(f"{label}: type name {answered_type.get('name')!r} vs {kind.Name!r}")
             if getattr(kind, "Tag", None) != answered_type["element_id"]:
                 type_presence.append(
                     f"{label}: type id {answered_type['element_id']!r} vs Tag {getattr(kind, 'Tag', None)!r}"
