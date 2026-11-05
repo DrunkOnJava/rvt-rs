@@ -207,13 +207,13 @@ outlines to the 2024 save, stair runs to the 2025 save (the 2025 save draws no
 beam or landing). Since RE-346 it also holds, for those and `rme_advanced` and
 `rme_basic`, each pipe drawn from its axis, each door and window cut in its host
 (the opening, and the volume the openings take out of the host), each port and the
-properties and quantities the release lists add (`tools/re/readers_across_saves.py`,
-imported by the first), all to the 2025 save, and prints how many of each it
-compared. A new sample or check has to be added in four places or the verdict does not
-see it: the scorer's `MINIMUMS`, `measure-reference-models.sh`
+properties and quantities the release lists add, each door's and window's size and
+type, and a census of every body (`tools/re/readers_across_saves.py`, imported by
+the first), all to the 2025 save, and prints how many of each it compared. A new
+sample or check has to be added in the scorers' `MINIMUMS`, `measure-reference-models.sh`
 (`saves_gate_keeps` and `bodies_across_saves`), `check-bodies-across-saves.sh` and
-`same_project_verdict.py` (`PROJECTS`; the last two are checked against each other
-by `test_same_project_verdict.py`). Measure's script runs it beside each such
+`same_project_verdict.py` (`PROJECTS`), which `tools/ci/check_same_project_projects.py`
+checks against each other in CI, or the verdict does not see it. Measure's script runs it beside each such
 sample, scoring up to as many at once as the runner has CPUs, and the job
 `same-project-gates` turns the run red on a difference, a missing file, an
 unknown project, fewer bodies than the sample holds, or a check that compared
@@ -252,12 +252,16 @@ not remove Compare's report.
   samples saved by earlier releases.
 - **A difference** is a reader that is wrong or a project that really differs
   between saves. Narrow the reader until it is never wrong and let what it
-  leaves out stay a box, counted (`left as boxes`); do not allowlist. The one list
-  is the census's `KNOWN_DIFFERENT` in `readers_across_saves.py`: bodies that
-  differ from the 2025 save and that no reader the gate holds draws (RE-341's
-  beams, landings and roofs the 2025 save leaves boxes, and `rac_basic`'s walls
-  of another extent), each named in RE-346 section 3. A body that differs and is
-  not on it fails, and one that no longer differs is counted.
+  leaves out stay a box, counted (`left as boxes`); do not allowlist. The one
+  exception (Griffin, 2026-11-05) is `PINNED_WALLS` in `readers_across_saves.py`:
+  16 walls of `rac_basic` that both saves draw from the same source, of another
+  extent, as on `main` (#1471 is the lane fixing them). It can only shrink and no
+  entry is ever added. Each wall is pinned for each release to its source pair and
+  the volume of each body, so a wall that moves at all fails, and one that heals
+  fails too, which forces its pin out. A roof a save leaves as a record box where
+  the 2025 save draws it is counted, not listed. Any other body that differs from
+  the 2025 save fails; a difference on a release or sample not pinned is the
+  maintainer's decision, not a new entry.
 - The output carries, for rac_advanced's ceiling 147534 and floor 139803, the
   class, `BodySource`, `ProfileResolved`, volume and vertex count in every save,
   and compares sketch outlines with the 2025 save as well, without scoring.

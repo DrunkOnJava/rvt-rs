@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 """Failure-first tests of the pure judgement in same_project_verdict.py: what must never read as a pass."""
-import pathlib
-import re
 import unittest
 
 import same_project_verdict as v
@@ -86,12 +84,6 @@ class ExpectedSamples(unittest.TestCase):
 
     def test_no_range_holds_all_ten(self):
         self.assertEqual(len(v.expected_samples("")), 10)
-
-    def test_the_check_script_expects_the_samples_the_verdict_does(self):
-        script = pathlib.Path(__file__).with_name("check-bodies-across-saves.sh").read_text()
-        match = re.search(r"for project in ([a-z ]+); do", script)
-        self.assertIsNotNone(match)
-        self.assertEqual(set(match.group(1).split()), set(v.PROJECTS))
 
 
 if __name__ == "__main__":
