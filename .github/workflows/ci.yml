@@ -845,7 +845,7 @@ jobs:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
         run: |
           ./target/ci/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/2024_Core_Interior.rvt" \
-            -o /tmp/core-interior.ifc
+            -o /tmp/core-interior.ifc --diagnostics /tmp/core-interior.diagnostics.json
           python -m ifcopenshell.validate /tmp/walker-real-project.ifc
           python -m ifcopenshell.validate /tmp/core-interior.ifc
           python tools/ci/ifc_schema_arity.py /tmp/walker-real-project.ifc /tmp/core-interior.ifc
@@ -928,6 +928,61 @@ jobs:
               || { echo "::error::the $name copy did not fail as '$expected'"; exit 1; }
             grep -qx 'space kinds: FAIL' "/tmp/kinds-$name.txt"
           done
+      # #1437: the same on an export with no geometry, which keeps SpaceKind and
+      # has no SpaceOutlineSource by design (116 rooms, none checked for
+      # agreement), and the run total (`--total`) shown to fail where it must: on
+      # a result that says PASS over a failure count, on an export with geometry
+      # whose spaces have lost their SpaceOutlineSource (the result passes alone,
+      # with the agreement not checked), and on a result that saw none of the 116
+      # spaces its export counted; and to pass on a run of models with no space,
+      # and on the typed export beside the geometry one.
+      - name: SpaceKind in an export with no geometry, and the run total fails where it must
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: |
+          set -euo pipefail
+          ./target/ci/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/2024_Core_Interior.rvt" --mode typed-no-geometry \
+            -o /tmp/core-typed.ifc --diagnostics /tmp/core-typed.diagnostics.json
+          python tools/re/space_kinds_vs_ifc.py /tmp/core-typed.ifc > /tmp/kinds-typed.txt
+          cat /tmp/kinds-typed.txt
+          for expected in 'IfcSpace 116' 'room 116' 'spaces whose outline source agreement was not checked 116' PASS; do
+            grep -qx "space kinds: $expected" /tmp/kinds-typed.txt \
+              || { echo "::error::the typed-no-geometry export did not read '$expected'"; exit 1; }
+          done
+          sed "s/IFCPROPERTYSINGLEVALUE('SpaceOutlineSource'/IFCPROPERTYSINGLEVALUE('SpaceOutlineMoved'/" \
+            /tmp/core-interior.ifc > /tmp/kinds-markers.ifc
+          python tools/re/space_kinds_vs_ifc.py /tmp/kinds-markers.ifc > /tmp/kinds-markers.txt
+          grep -qx 'space kinds: spaces whose outline source agreement was not checked 116' /tmp/kinds-markers.txt
+          python tools/re/space_kinds_vs_ifc.py /tmp/walker-real-project.ifc > /tmp/kinds-einhoven.txt
+          sed 's/^space kinds: FAIL$/space kinds: PASS/' /tmp/kinds-none.txt > /tmp/kinds-lie.txt
+          total() { # case, the exit it must have, the line it must print, then name=result,diagnostics ...
+            local case=$1 want=$2 text=$3 dir pair name rest status=0
+            shift 3
+            dir="/tmp/total-$case"
+            rm -rf "$dir"
+            for pair in "$@"; do
+              name=${pair%%=*}
+              rest=${pair#*=}
+              mkdir -p "$dir/$name"
+              : > "$dir/$name/ifc.sha256"
+              cp "${rest%%,*}" "$dir/$name/space_kinds_vs_ifc.txt"
+              cp "${rest#*,}" "$dir/$name/diagnostics.json"
+            done
+            python tools/re/space_kinds_vs_ifc.py --total "$dir" > "$dir.txt" || status=$?
+            cat "$dir.txt"
+            [ "$status" = "$want" ] || { echo "::error::--total ($case) exited $status, not $want"; exit 1; }
+            grep -qxF "space kinds across the run: $text" "$dir.txt" \
+              || { echo "::error::--total ($case) did not print '$text'"; exit 1; }
+          }
+          total geometry-and-typed 0 PASS \
+            core=/tmp/kinds-core.txt,/tmp/core-interior.diagnostics.json \
+            typed=/tmp/kinds-typed.txt,/tmp/core-typed.diagnostics.json
+          total no-spaces 0 PASS einhoven=/tmp/kinds-einhoven.txt,/tmp/walker-real-project.diagnostics.json
+          total markers-dropped 1 'FAIL, spaces of an export that has geometry have no SpaceOutlineSource to check' \
+            core=/tmp/kinds-markers.txt,/tmp/core-interior.diagnostics.json
+          total verdict-says-pass 1 'FAIL, a model failed' core=/tmp/kinds-lie.txt,/tmp/core-interior.diagnostics.json
+          total saw-nothing 1 "FAIL, a model's spaces are not the number the export itself counted" \
+            core=/tmp/kinds-einhoven.txt,/tmp/core-interior.diagnostics.json
       # #908: doors and windows are drawn from their saved graphics by
       # default (2026-10-29); every other class only with --saved-meshes, so
       # no other job reads theirs. Export both real projects with it, fail

@@ -63,13 +63,16 @@ Usage:
 
     python3 tools/re/mcp_answers_vs_ifc.py --server <rvt-rs-mcp> --rvt <model.rvt>
         [--diagnostics <diagnostics.json>] [--dump <file>] [--all-details] [--require-folded-field]
+        [--require-space-kind]
         <rvt-rs.ifc> [<revit-export.ifc>]
 
 `--dump` writes the answers as the deterministic semantic dump (mcp_client.dump), `--all-details`
 asks `get_element` for every element instead of a sample. `--require-folded-field` makes a
 diagnostics without `exported.body_pieces_folded` (a build from before #1424) a difference, where
 otherwise it is read as counting the folded pieces with the elements; Measure passes it on the head
-side. `RVT_IFC_FLAGS` is the flags the export was made with. Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins), NumPy and
+side. `--require-space-kind` (#1437) makes a room with no `space_kind`, in the answer or in the IFC's
+`SpaceKind`, a difference, and a summary with no `space_kinds`, where otherwise two absences are equal:
+Measure passes it on the head side, so a build that lacks the property cannot read as consistent. `RVT_IFC_FLAGS` is the flags the export was made with. Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins), NumPy and
 Shapely.
 """
 
@@ -395,7 +398,7 @@ def check_protocol(report, answers, status):
     report.check(W("protocol"), 5, differences)
 
 
-def check_counts(report, answers, written, diagnostics, require_folded_field=False):
+def check_counts(report, answers, written, diagnostics, require_folded_field=False, require_space_kind=False):
     summary = answers["summary"]
     rows = answers["rows"]
     differences = []
@@ -424,6 +427,14 @@ def check_counts(report, answers, written, diagnostics, require_folded_field=Fal
         expected = sum(1 for row in rows if (row.get("level") or "").lower() == name.lower())
         same(f"list_elements level {name}", total, expected)
     same("room_count", summary["room_count"], len(answers["rooms"]))
+    # #1437: the summary says how many of the spaces are of each kind (`room_count` counts them all).
+    kinds = summary.get("space_kinds")
+    listed_kinds = dict(collections.Counter(room["space_kind"] for room in answers["rooms"] if room.get("space_kind")))
+    if kinds is None:
+        if require_space_kind:
+            differences.append("summary space_kinds: absent")
+    else:
+        same("summary space_kinds", kinds, listed_kinds)
     listed = {row["provenance"].get("global_id") for row in rows}
     written_counts = collections.Counter(
         product.is_a().upper() for gid, product in written.products.items() if gid in listed
@@ -464,6 +475,9 @@ def check_counts(report, answers, written, diagnostics, require_folded_field=Fal
         same("summary bounding_box_spaces", digest["bounding_box_spaces"], exported["bounding_box_spaces"])
         same("summary skipped", {s["reason"]: s["count"] for s in digest["skipped"]}, {s["reason"]: s["count"] for s in diagnostics["skipped"]})
         same("summary confidence_level", digest["confidence_level"], diagnostics["confidence"]["level"])
+        if "space_kinds" in exported or require_space_kind:
+            same("diagnostics exported space_kinds", kinds, exported.get("space_kinds"))
+            same("diagnostics exported spaces_without_kind", len(answers["rooms"]) - sum((kinds or {}).values()), exported.get("spaces_without_kind"))
     report.check(W("counts"), compared, differences)
     openings = by_category["IFCOPENINGELEMENT"]
     report.line(
@@ -582,7 +596,7 @@ def check_levels(report, answers, written, by_gid):
     report.check(W("levels"), compared, differences)
 
 
-def check_rooms(report, answers, written):
+def check_rooms(report, answers, written, require_space_kind=False):
     differences = []
     compared = 0
     rooms = answers["rooms"]
@@ -633,6 +647,10 @@ def check_rooms(report, answers, written):
         kind = room.get("space_kind")
         if kind != record.get("SpaceKind"):
             differences.append(f"{label}: space kind {kind!r} vs {record.get('SpaceKind')!r}")
+        elif kind is None and require_space_kind:
+            differences.append(f"{label}: no space kind in the answer or in the IFC")
+        elif kind is not None and kind not in SPACE_KINDS:
+            differences.append(f"{label}: space kind {kind!r} is none of the four")
         area = room.get("area_square_metres")
         if area is not None:
             with_area += 1
@@ -1043,6 +1061,7 @@ def main(argv):
     parser.add_argument("--dump")
     parser.add_argument("--all-details", action="store_true")
     parser.add_argument("--require-folded-field", action="store_true")
+    parser.add_argument("--require-space-kind", action="store_true")
     parser.add_argument("ours")
     parser.add_argument("revit", nargs="?")
     args = parser.parse_args(argv)
@@ -1084,11 +1103,11 @@ def main(argv):
         )
         written = Written(basis)
         check_protocol(report, answers, status)
-        check_counts(report, answers, written, diagnostics, args.require_folded_field)
+        check_counts(report, answers, written, diagnostics, args.require_folded_field, args.require_space_kind)
         check_parameter_values(report, written, diagnostics)
         by_gid = check_rows(report, answers, written)
         check_levels(report, answers, written, by_gid)
-        check_rooms(report, answers, written)
+        check_rooms(report, answers, written, args.require_space_kind)
         check_details(report, answers, written)
         check_diagnostics(report, answers, diagnostics)
         check_export(report, answers, args.ours, flags)

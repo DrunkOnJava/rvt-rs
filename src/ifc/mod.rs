@@ -802,8 +802,10 @@ pub struct ExportedModelDiagnostics {
     #[serde(default)]
     pub space_kinds: std::collections::BTreeMap<String, usize>,
     /// The exported `IfcSpace`s that carry no `SpaceKind` (#1437): a space whose
-    /// class is none of a room, an Area, a Revit Space or a family instance
-    /// written as a space, which the export leaves without the property rather
+    /// property set is not `RvtElementRecordGeometry` (in principle a wall or
+    /// floor read through the schema walker, whose properties are in
+    /// `RvtWallGeometry` or `RvtFloorGeometry`, with an "Export to IFC As" that
+    /// names `IfcSpace`), which the export leaves without the property rather
     /// than guess. Zero on every model measured.
     #[serde(default)]
     pub spaces_without_kind: usize,

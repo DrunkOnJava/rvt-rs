@@ -973,7 +973,7 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool, family: bo
         // #1437: a space that says nothing of what it is.
         if exported.spaces_without_kind > 0 {
             lines.push(format!(
-                "  {} of {} spaces have no SpaceKind: their class is none of a room, an Area, a Revit Space or a family instance written as a space",
+                "  {} of {} spaces have no SpaceKind: their property set is not RvtElementRecordGeometry, so the export does not say what they are",
                 exported.spaces_without_kind,
                 exported.by_ifc_type.get("IFCSPACE").copied().unwrap_or(0)
             ));

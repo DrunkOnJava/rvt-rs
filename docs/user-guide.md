@@ -211,7 +211,7 @@ CSV file that Excel, Google Sheets and LibreOffice open directly:
 
 ```bash
 rvt-schedule model.rvt                          # model.elements.csv next to the model
-rvt-schedule model.rvt --schedule rooms         # model.rooms.csv: number, name, level, area
+rvt-schedule model.rvt --schedule rooms         # model.rooms.csv: number, name, level, area, kind
 rvt-schedule model.rvt --metric --excel         # metres, and a BOM so Excel reads non-ASCII names
 rvt-schedule model.rvt -o -                     # print the CSV instead of writing a file
 rvt-schedule model.rvt --phase "Existing"       # another phase than the project's last (a name or an ElementId)
@@ -275,7 +275,7 @@ calling it a breaking change.
 | `level_elevation_ft` | That level's elevation |
 | `area_ft2` | Plan area, where the room's outline was read |
 | `body_source` | Where the room's solid came from |
-| `space_kind` | What the space is: `room`, `area` (a Revit Area), `mep_space` (a Revit Space) or `family_instance` (a family instance written as a space); the same as `RvtElementRecordGeometry.SpaceKind` in the IFC. Filter on this, not on how the area was read |
+| `space_kind` | What the space is: `room`, `area` (a Revit Area), `mep_space` (a Revit Space) or `family_instance` (any other element that its "Export to IFC As" writes as a space, a family instance or a mass in the files measured); the same as `RvtElementRecordGeometry.SpaceKind` in the IFC. Filter on this, not on how the area was read. `mep_space` is the kind of a Revit Space (MEP), which rvt-rs does not read from a file's partition records, so none is written today; that says what rvt-rs writes, not what the files hold |
 
 What the schedules contain is what rvt-rs decodes and the IFC export writes,
 so check `rvt-inspect model.rvt` first: Revit 2024 project files with element

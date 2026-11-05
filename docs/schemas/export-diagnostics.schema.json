@@ -635,12 +635,12 @@
             "type": "integer",
             "minimum": 0
           },
-          "description": "The exported IfcSpaces by what they are (RvtElementRecordGeometry.SpaceKind, #1437): room, area, mep_space (a Revit Space) or family_instance (a family instance or a mass written as a space through its Export to IFC As), from the Revit class of the record the space was read from, not from where its outline came from. With spaces_without_kind it adds up to by_ifc_type.IFCSPACE. Empty when the export has no space."
+          "description": "The exported IfcSpaces by what they are (RvtElementRecordGeometry.SpaceKind, #1437): room, area, mep_space (a Revit Space) or family_instance (any other element, a family instance or a mass in the files measured, that its Export to IFC As writes as a space), from the Revit class of the record the space was read from, not from where its outline came from. With spaces_without_kind it adds up to by_ifc_type.IFCSPACE. Empty when the export has no space."
         },
         "spaces_without_kind": {
           "type": "integer",
           "minimum": 0,
-          "description": "The exported IfcSpaces that carry no SpaceKind (#1437): a space whose class is none of a room, an Area, a Revit Space or a family instance written as a space, which the export leaves without the property rather than guess. Expected zero."
+          "description": "The exported IfcSpaces that carry no SpaceKind (#1437): a space whose property set is not RvtElementRecordGeometry (in principle a wall or floor read through the schema walker, with an Export to IFC As that names IfcSpace), which the export leaves without the property rather than guess. Zero on every model measured."
         },
         "wall_cut_openings_left_out": {
           "type": "object",

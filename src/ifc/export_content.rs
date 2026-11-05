@@ -4489,8 +4489,12 @@ pub const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
 /// [`SPACE_KIND_MEP_SPACE`] or [`SPACE_KIND_FAMILY_INSTANCE`]. It comes from the
 /// Revit class of the record the space was read from, not from where its
 /// outline came from, so it holds whatever the outline source is and whatever
-/// a later release adds to it. A space whose class is none of these has no
-/// such property and is counted by `exported.spaces_without_kind`.
+/// a later release adds to it. A space whose property set is not
+/// [`ELEMENT_RECORD_PROPERTY_SET`] has no such property and is counted by
+/// `exported.spaces_without_kind`: in principle a wall or a floor read through
+/// the schema walker (its properties in `RvtWallGeometry` or
+/// `RvtFloorGeometry`) whose "Export to IFC As" names `IfcSpace`, of which no
+/// model measured holds one.
 pub const SPACE_KIND_PROPERTY: &str = "SpaceKind";
 
 /// [`SPACE_KIND_PROPERTY`] of a Revit room.
@@ -4499,18 +4503,24 @@ pub const SPACE_KIND_ROOM: &str = "room";
 /// [`SPACE_KIND_PROPERTY`] of a Revit Area.
 pub const SPACE_KIND_AREA: &str = "area";
 
-/// [`SPACE_KIND_PROPERTY`] of a Revit Space (MEP).
+/// [`SPACE_KIND_PROPERTY`] of a Revit Space (MEP), class `Space`. Only the
+/// schema walker names that class: no MEP space category is among those the
+/// partition records are read for, so none is written today, which says what
+/// rvt-rs writes and not what the files hold.
 pub const SPACE_KIND_MEP_SPACE: &str = "mep_space";
 
-/// [`SPACE_KIND_PROPERTY`] of a family instance (or a mass) written as an
-/// `IfcSpace` through its own "Export to IFC As" value (#763).
+/// [`SPACE_KIND_PROPERTY`] of any other element written as an `IfcSpace`
+/// through its own "Export to IFC As" value (#763): a family instance or a
+/// mass in the files measured, a wall or a floor in principle, for which it is
+/// the nearest of the four.
 pub const SPACE_KIND_FAMILY_INSTANCE: &str = "family_instance";
 
 /// What an element written as an `IfcSpace` is (#1437), from the Revit class of
 /// its record: a room, an Area, a Revit Space, or any other class that its own
 /// "Export to IFC As" value writes as a space (`by_export_value`). `None` for a
-/// class that is none of these, which the export then leaves without the
-/// property rather than guess.
+/// class the category map writes as `IfcSpace` that is none of these (a mapping
+/// added without a kind), which the export then leaves without the property
+/// rather than guess.
 fn space_kind(class: &str, by_export_value: bool) -> Option<&'static str> {
     match class {
         "Room" => Some(SPACE_KIND_ROOM),

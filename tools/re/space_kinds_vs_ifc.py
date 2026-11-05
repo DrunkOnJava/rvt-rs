@@ -10,29 +10,51 @@ the file:
 - the `IfcSpace`s, and how many hold each kind;
 - the spaces with no `SpaceKind`, and those whose value is not one of the four;
 - the spaces whose kind and outline source disagree. `area` holds exactly where
-  the outline source is `area_boundary`, `area_boundary_joined`,
-  `area_plan_topology`, `area_plan_topology_unchecked` or `none`, and no other
-  kind may hold one of those:
-  an `area` without such a source and a space of another kind with one are
-  each counted. An export with no geometry (`typed_no_geometry`) has no
-  `SpaceOutlineSource` on any space; the agreement is then not checked, and
-  the spaces it was not checked for are counted on a line of their own.
+  the outline source is one of `AREA_SOURCES`, and no other kind may hold one:
+  an `area` whose source is not one of them, and a space of another kind with
+  one, are each counted;
+- the spaces with an outline source that this scorer does not know, of any
+  kind: a value not in `AREA_SOURCES` or `ROOM_SOURCES`, which is a failure, so
+  that a release that writes a new value has it listed here, with the kind it
+  belongs to, before it passes. These two lists are the one place the values are
+  kept.
 
-The file passes (exit 0) when no space lacks a kind, none has another value
-and none disagrees; a file with no `IfcSpace` passes with a count of zero
-spaces, because there is nothing in it to check. Any other result exits 1.
-The lines starting `space kinds:` are made of fixed words and numbers, so
-the Measure workflow keeps them for the models it keeps only counts of
-(tools/ci/scrub-holdout-results.sh): `line` takes words written in this file and
-integers and raises on anything else. A space that fails is listed under them
-with its GlobalId, indented, and those lines are not kept.
+An export with no geometry (`typed_no_geometry`) has no `SpaceOutlineSource` on
+any space. The agreement is then not checked, and the spaces it was not checked
+for are counted on a line of their own (`--total` allows that only where the
+export's own diagnostics say it has no geometry).
+
+The file passes (exit 0) when no space lacks a kind, none has another value,
+none has an outline source this scorer does not know and none disagrees; a file
+with no `IfcSpace` passes with a count of zero spaces, because there is nothing
+in it to check. Any other result exits 1. The lines starting `space kinds:` are
+made of fixed words and numbers, so the Measure workflow keeps them for the
+models it keeps only counts of (tools/ci/scrub-holdout-results.sh): `line` takes
+words written in this file and integers and raises on anything else. A space
+that fails is listed under them with its GlobalId, indented, and those lines are
+not kept.
 
 A run that checks nothing must not pass. `--total` reads the results of a whole
 Measure run, `<dir>/<model>/space_kinds_vs_ifc.txt` or, for a model kept as
-counts only, the `space kinds:` lines of `<dir>/<model>/counts.txt`, and
-sums them. It exits 1 when a model that was exported has no result, when any
-model failed, when the kinds do not add up to the spaces, or when the run
-saw no `IfcSpace` at all. It prints how many of each kind the run saw.
+counts only, the `space kinds:` lines of `<dir>/<model>/counts.txt`, and sums
+them. It judges each model on its counts, not on its verdict word, and exits 1
+when:
+
+- a model that was exported has no complete result;
+- a model has any space without a kind, with another kind, with an outline
+  source this scorer does not know, or in disagreement, whatever its verdict says,
+  or the kinds do not add up to its spaces;
+- a model's spaces were not checked for agreement (no `SpaceOutlineSource`) and
+  its `diagnostics.json` does not say `confidence.level` is `typed_no_geometry`;
+- a model's spaces are not the number the export itself counted
+  (`diagnostics.json` `exported.by_ifc_type.IFCSPACE`, or for a model kept as
+  counts only the MCP server's `rooms` count): so a result that saw no space in
+  a model that has them fails, and a run of models with none, such as a filtered
+  one, does not;
+- the run saw no `IfcSpace` and some model had no count of its own to check
+  against, or no model was checked.
+
+It prints how many of each kind the run saw.
 
 Usage:
 
@@ -45,6 +67,7 @@ The first needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins);
 
 import argparse
 import collections
+import json
 import os
 import re
 import sys
@@ -53,14 +76,25 @@ SET = "RvtElementRecordGeometry"
 KIND_PROPERTY = "SpaceKind"
 SOURCE_PROPERTY = "SpaceOutlineSource"
 KINDS = ("room", "area", "mep_space", "family_instance")
+# The values of `SpaceOutlineSource` of an Area. `area_plan_topology_unchecked`
+# is #1428's value for the Areas of Revit 2025 to 2027 (Griffin, 2026-11-05,
+# "Mark 2025 to 2027 in the file"): a reader that never writes it, as main's,
+# cannot fail on it.
 AREA_SOURCES = (
     "area_boundary",
     "area_boundary_joined",
     "area_plan_topology",
-    # #1428 (Griffin, 2026-11-05, "Mark 2025 to 2027 in the file"): the Areas of
-    # Revit 2025 to 2027. A reader that never writes it, as main's, cannot fail on it.
     "area_plan_topology_unchecked",
     "none",
+)
+# The values of the others: rooms, Revit Spaces and family instances.
+ROOM_SOURCES = (
+    "stored_solid",
+    "stored_solid_faces",
+    "stored_solid_approximate",
+    "record_box",
+    "saved_mesh",
+    "family_body",
 )
 LIST_LIMIT = 25
 PREFIX = "space kinds: "
@@ -70,6 +104,7 @@ PREFIX = "space kinds: "
 SPACES = "IfcSpace"
 NO_KIND = "no SpaceKind"
 OTHER_KIND = "SpaceKind of another value"
+UNKNOWN_SOURCE = "SpaceOutlineSource this scorer does not know"
 AREA_SOURCE = "SpaceOutlineSource of an Area"
 AREA_WITHOUT_SOURCE = "area without an Area outline source"
 OTHER_WITH_SOURCE = "other kind with an Area outline source"
@@ -79,11 +114,14 @@ COUNTED = (
     *KINDS,
     NO_KIND,
     OTHER_KIND,
+    UNKNOWN_SOURCE,
     AREA_SOURCE,
     AREA_WITHOUT_SOURCE,
     OTHER_WITH_SOURCE,
     NOT_CHECKED,
 )
+# What fails a model, whatever its verdict word says.
+FAILURES = (NO_KIND, OTHER_KIND, UNKNOWN_SOURCE, AREA_WITHOUT_SOURCE, OTHER_WITH_SOURCE)
 
 WORDS = re.compile(r"[A-Za-z0-9 _:.,;()=%/+-]+")
 
@@ -118,6 +156,32 @@ def record_set(space):
     return out
 
 
+def judge(kind, source, checked, counts):
+    """Count one space and return what is wrong with it, or None."""
+    is_area_source = source in AREA_SOURCES
+    counts[AREA_SOURCE] += is_area_source
+    if kind is None:
+        counts[NO_KIND] += 1
+        return "no SpaceKind"
+    if kind not in KINDS:
+        counts[OTHER_KIND] += 1
+        return "SpaceKind of another value"
+    counts[kind] += 1
+    if not checked:
+        counts[NOT_CHECKED] += 1
+        return None
+    if source is not None and not is_area_source and source not in ROOM_SOURCES:
+        counts[UNKNOWN_SOURCE] += 1
+        return "an Area value this scorer does not know" if kind == "area" else "an outline source this scorer does not know"
+    if kind == "area" and not is_area_source:
+        counts[AREA_WITHOUT_SOURCE] += 1
+        return "area without an Area outline source"
+    if kind != "area" and is_area_source:
+        counts[OTHER_WITH_SOURCE] += 1
+        return "other kind with an Area outline source"
+    return None
+
+
 def measure(path):
     """The counts of one export, and up to LIST_LIMIT failing spaces."""
     import ifcopenshell
@@ -138,32 +202,14 @@ def measure(path):
     # space has one, a space without one is a disagreement, not an exemption.
     checked = any(source is not None for _, _, source in found)
     for gid, kind, source in found:
-        is_area_source = source in AREA_SOURCES
-        counts[AREA_SOURCE] += is_area_source
-        problem = None
-        if kind is None:
-            counts[NO_KIND] += 1
-            problem = "no SpaceKind"
-        elif kind not in KINDS:
-            counts[OTHER_KIND] += 1
-            problem = "SpaceKind of another value"
-        else:
-            counts[kind] += 1
-            if not checked:
-                counts[NOT_CHECKED] += 1
-            elif kind == "area" and not is_area_source:
-                counts[AREA_WITHOUT_SOURCE] += 1
-                problem = "area without an Area outline source"
-            elif kind != "area" and is_area_source:
-                counts[OTHER_WITH_SOURCE] += 1
-                problem = "other kind with an Area outline source"
+        problem = judge(kind, source, checked, counts)
         if problem:
             failing.append((gid, problem, kind, source))
     return counts, failing
 
 
 def failed(counts):
-    return any(counts[name] for name in (NO_KIND, OTHER_KIND, AREA_WITHOUT_SOURCE, OTHER_WITH_SOURCE))
+    return any(counts[name] for name in FAILURES)
 
 
 def check_file(path):
@@ -185,14 +231,18 @@ def check_file(path):
 
 
 LINE = re.compile(r"^" + re.escape(PREFIX) + r"(?P<words>.+?) (?P<n>[0-9]+)$")
+MCP_ROOMS = re.compile(r"^mcp answers: rooms: (?P<n>[0-9]+)$")
 
 
 def read_result(path):
-    """(counts, verdict) of a result file: its `space kinds:` lines. The verdict
-    is `PASS`, `FAIL` or None where the file holds none."""
+    """(counts, verdict, the words seen, the MCP server's count of spaces) of a
+    result file: its `space kinds:` lines, and for a model kept as counts only
+    the `mcp answers: rooms:` line. The verdict is `PASS`, `FAIL` or None where
+    the file holds none."""
     counts = collections.Counter()
     seen = set()
     verdict = None
+    mcp_rooms = None
     with open(path, encoding="utf-8", errors="replace") as handle:
         for text in handle:
             text = text.rstrip("\n")
@@ -203,12 +253,30 @@ def read_result(path):
             if found and found["words"] in COUNTED:
                 counts[found["words"]] += int(found["n"])
                 seen.add(found["words"])
-    return counts, verdict, seen
+                continue
+            found = MCP_ROOMS.match(text)
+            if found:
+                mcp_rooms = int(found["n"])
+    return counts, verdict, seen, mcp_rooms
+
+
+def read_diagnostics(directory):
+    """(the export's own count of `IfcSpace`s, whether it says it has no geometry)
+    from `diagnostics.json`, or (None, False) where there is none to read."""
+    try:
+        with open(os.path.join(directory, "diagnostics.json"), encoding="utf-8") as handle:
+            diagnostics = json.load(handle)
+        spaces = diagnostics["exported"]["by_ifc_type"].get("IFCSPACE", 0)
+        no_geometry = diagnostics.get("confidence", {}).get("level") == "typed_no_geometry"
+        return spaces, no_geometry
+    except (OSError, ValueError, KeyError, AttributeError, TypeError):
+        return None, False
 
 
 def check_total(results):
     models = 0
     with_spaces = 0
+    unchecked_counts = 0
     problems = []
     total = collections.Counter()
     for entry in sorted(os.listdir(results)):
@@ -220,14 +288,24 @@ def check_total(results):
         own = os.path.join(directory, "space_kinds_vs_ifc.txt")
         kept = os.path.join(directory, "counts.txt")
         path = own if os.path.isfile(own) else kept if os.path.isfile(kept) else None
-        counts, verdict, seen = read_result(path) if path else (collections.Counter(), None, set())
+        counts, verdict, seen, mcp_rooms = read_result(path) if path else (collections.Counter(), None, set(), None)
         if verdict is None or set(COUNTED) - seen:
             problems.append("a model has no complete result")
             continue
-        if verdict != "PASS":
+        # The model is judged on its counts: a verdict word that says PASS over a failure count is a failure.
+        if verdict != "PASS" or failed(counts):
             problems.append("a model failed")
         if sum(counts[kind] for kind in KINDS) + counts[NO_KIND] + counts[OTHER_KIND] != counts[SPACES]:
             problems.append("a model's kinds do not add up to its spaces")
+        exported, no_geometry = read_diagnostics(directory)
+        if exported is None:
+            exported = mcp_rooms
+        if counts[NOT_CHECKED] and not no_geometry:
+            problems.append("spaces of an export that has geometry have no SpaceOutlineSource to check")
+        if exported is None:
+            unchecked_counts += 1
+        elif exported != counts[SPACES]:
+            problems.append("a model's spaces are not the number the export itself counted")
         with_spaces += counts[SPACES] > 0
         total.update(counts)
     print(f"space kinds across the run: {models} models and samples checked, {with_spaces} with IfcSpaces")
@@ -235,8 +313,10 @@ def check_total(results):
         print(f"space kinds across the run: {name} {total[name]}")
     if models == 0:
         problems.append("no model was checked")
-    if total[SPACES] == 0:
-        problems.append("the run saw no IfcSpace")
+    if total[SPACES] == 0 and unchecked_counts:
+        problems.append("the run saw no IfcSpace and some models had no count of their own to check it against")
+    elif total[SPACES] == 0 and models:
+        print("space kinds across the run: no IfcSpace in the run, and the exports' own counts agree")
     for problem in sorted(set(problems)):
         print(f"space kinds across the run: FAIL, {problem}")
     if problems:

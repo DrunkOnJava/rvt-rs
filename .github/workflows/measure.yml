@@ -770,6 +770,7 @@ jobs:
           PSETS_MISSING: ${{ inputs.psets_missing }}
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
           MCP_REQUIRE_FOLDED_FIELD: ${{ matrix.side != 'base' && '1' || '' }}
+          MCP_REQUIRE_SPACE_KIND: ${{ matrix.side != 'base' && '1' || '' }}
           RVT_SCORER_FINE_MESH: ${{ inputs.fine_mesh && '1' || '' }}
           FAMILY_DIR: ${{ matrix.families && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           SAMPLE_DIR: ${{ matrix.samples && format('{0}/_samples', github.workspace) || '' }}
@@ -1009,14 +1010,19 @@ jobs:
           path: scorer-diff.txt
       # #1437: every IfcSpace of every export the head side wrote says what it
       # is (tools/re/space_kinds_vs_ifc.py). The total fails the job when a
-      # model has no result or failed, when a space has no kind or disagrees with
-      # its outline source, and when the run saw no IfcSpace at all, so a check
-      # that looked at nothing cannot pass. Last, so the summary, the semantic
-      # diff and the uploads are written first; a run that names `scorers` has
-      # not asked for the check and is left alone. The base side is not gated:
-      # it is main, whose exports have no kind to find.
+      # model has no result or failed (judged on its counts, not its verdict
+      # word), when a space has no kind or disagrees with its outline source,
+      # when a model's spaces are not the number its own export counted, and
+      # when a geometry export's spaces have no outline source to check, so a
+      # check that looked at nothing cannot pass. A run of models that hold no
+      # space, such as one filtered to two Revit 2025 roofs, passes when every
+      # export agrees it holds none. Last, so the summary, the semantic diff and
+      # the uploads are written first. A run that names `scorers` without this
+      # one has not asked for the check and is left alone; naming it runs the
+      # step that judges it. The base side is not gated: it is main, whose
+      # exports have no kind to find.
       - name: Every IfcSpace says what it is
-        if: ${{ !cancelled() && inputs.scorers == '' }}
+        if: ${{ !cancelled() && (inputs.scorers == '' || contains(inputs.scorers, 'space_kinds_vs_ifc')) }}
         shell: bash
         run: |
           status=0
