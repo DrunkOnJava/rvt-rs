@@ -182,8 +182,8 @@ against the 3-D scene even though this page documented
 The panel itself is rendered, not computed, in TypeScript. The Rust
 `element_info_panel` returns display-ready rows — name, IFC type and
 predefined type, the ElementId (`type_guid`, which the panel labels
-ElementId and pairs with Revit's GlobalId from the model), the resolved
-storey (its `index` addresses
+ElementId and pairs with Revit's GlobalId from the model), the storey the
+IFC export puts the element in (its `index` addresses
 the same `IFCBUILDINGSTOREY` scene node, so the row is clickable),
 placement and extents in feet, the property set as unit-carrying
 rows with booleans as `Yes` / `No`, and `host` / `hosted` rows for
@@ -192,7 +192,10 @@ omitted; `missing` drives a "not recovered" note only where the
 export diagnostics agree the field is a known decode gap.
 `build_schedule` likewise returns `Schedule::groups`, the per-IFC-type
 breakdown (biggest first) the schedule panel lists and highlights
-from. Keep unit formatting and index resolution on the Rust side:
+from. The schedule, the tree and the panel take the storey of each element,
+and which elements they list, from the export's own placement decision
+(`step_writer::placements`, `storey_of`), as the MCP server and the elements
+CSV do. Keep unit formatting and index resolution on the Rust side:
 the frontend should never re-derive a unit or an index to name.
 
 ## VW1-18 — Static site on GitHub Pages
