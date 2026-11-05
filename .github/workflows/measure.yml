@@ -1245,6 +1245,7 @@ jobs:
           name: semantic-diff
           path: semantic-diff
           if-no-files-found: error
+          overwrite: true
           retention-days: 7
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         # Also when the summary failed for its size: the diff is then the
@@ -1253,6 +1254,7 @@ jobs:
         with:
           name: compare-scorer-diff
           path: scorer-diff.txt
+          overwrite: true
       # #1437: every IfcSpace of every export the head side wrote says what it
       # is (tools/re/space_kinds_vs_ifc.py). The total fails the job when a
       # model has no result or failed (judged on its counts, not its verdict
@@ -1342,6 +1344,7 @@ jobs:
             head/target/ci/rvt-ifc
           retention-days: 3
           if-no-files-found: error
+          overwrite: true
 
   timing:
     name: Timing ${{ matrix.shard }} (${{ matrix.what }})
@@ -1414,6 +1417,7 @@ jobs:
             timing.md
             runner.txt
           if-no-files-found: error
+          overwrite: true
 
   # The shards' rows in one table, the format the single job wrote, ordered as
   # it did: the models, then the samples by name. A shard that left no table
@@ -1517,3 +1521,4 @@ jobs:
             timing.md
             timing-runners.txt
           if-no-files-found: error
+          overwrite: true
