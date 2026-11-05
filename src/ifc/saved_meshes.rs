@@ -38,12 +38,11 @@
 //! one whose mesh starts at its base.
 
 use super::IfcModel;
-use super::entities::{BrepTriangle, IfcEntity, Property, PropertyValue, SolidShape};
+use super::entities::{BrepTriangle, IfcEntity, Property, PropertySet, PropertyValue, SolidShape};
 use super::export_content::{
     BEAM_BOX_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE, SPACE_OUTLINE_SAVED_MESH,
-    SPACE_OUTLINE_SOURCE_PROPERTY,
+    SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
-use super::wall_cut_openings::is_stepped;
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
 use crate::native_wall_cuts::WallCutKind;
 use std::collections::{BTreeMap, BTreeSet};
@@ -307,6 +306,18 @@ pub fn attach_scoped_with_control(
     Ok(report)
 }
 
+/// Whether `set` has a property called `name`.
+fn has_property(set: &PropertySet, name: &str) -> bool {
+    set.properties.iter().any(|property| property.name == name)
+}
+
+/// Whether `set` has the text property `name` with the value `text`.
+fn has_text_property(set: &PropertySet, name: &str, text: &str) -> bool {
+    set.properties.iter().any(|property| {
+        property.name == name && matches!(&property.value, PropertyValue::Text(t) if t == text)
+    })
+}
+
 /// The walls that embed a curtain wall (`WallEmbedWallGStep`), ElementId to
 /// entity index: drawn as plain or stepped extrusions, alone in their Tag, with nothing
 /// hosted in them and not in `taken`. Nothing where the model has no curtain
@@ -363,9 +374,17 @@ fn embed_hosts(
         else {
             continue;
         };
-        // A plain extrusion, or RE-320's stepped top, which the mesh includes.
-        if hosted.contains(&index) || (solid_shape.is_some() && !is_stepped(property_set.as_ref()))
-        {
+        // A plain extrusion, or one with RE-320's stepped top, which the mesh
+        // includes. A base cut at a floor (#1384) is left as it is.
+        let body_known = match (solid_shape, property_set) {
+            (None, Some(set)) => !has_property(set, WALL_BASE_SOURCE_PROPERTY),
+            (Some(_), Some(set)) => {
+                has_text_property(set, "BodyHeightSource", WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE)
+                    && !has_property(set, WALL_BASE_SOURCE_PROPERTY)
+            }
+            _ => false,
+        };
+        if hosted.contains(&index) || !body_known {
             continue;
         }
         if let Some(id) = element_id(entity, "IFCWALL") {
