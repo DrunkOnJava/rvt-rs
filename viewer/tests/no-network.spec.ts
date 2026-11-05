@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-type NetworkPhase = 'initial-static' | 'opening-sample' | 'post-open';
+type NetworkPhase = 'initial-static' | 'opening-sample' | 'post-open' | 'selecting';
 
 interface NetworkRecord {
   url: string;
@@ -75,6 +75,22 @@ test('opens a sample without external or post-open network requests', async ({ p
   phase = 'post-open';
   await page.waitForTimeout(observationMs);
 
+  // Selecting an element reads its saved parameters in a worker of its own
+  // (#35), which loads its script and the wasm binary from the same origin and
+  // reads the file from the tab's own File: it may fetch those two assets, and
+  // nothing else.
+  phase = 'selecting';
+  const elements = page.locator('.tree-node.tree-element[data-entity-index]');
+  if ((await elements.count()) > 0) {
+    await elements.first().evaluate((row) => (row as HTMLElement).click());
+    await expect(page.locator('#info-parameters')).toHaveAttribute(
+      'data-state',
+      /^(ready|empty|unsupported|error|on-request|no-id)$/,
+      { timeout: 120_000 },
+    );
+  }
+  await page.waitForTimeout(observationMs);
+
   const base = new URL(baseURL ?? 'http://127.0.0.1:4173');
   const disallowed = records.filter((record) => isDisallowed(record, base));
   expect(disallowed, formatFailure(disallowed, records)).toEqual([]);
@@ -103,6 +119,7 @@ function isDisallowed(record: NetworkRecord, base: URL): boolean {
 
   const url = new URL(record.url);
   if (url.origin !== base.origin) return true;
+  if (record.phase === 'selecting') return !/\/assets\/[^/]+\.(js|wasm|map)$/i.test(url.pathname);
 
   return !isAllowedStaticRequest(url);
 }

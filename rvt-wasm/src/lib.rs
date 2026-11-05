@@ -40,7 +40,7 @@ use rvt::ifc::{
 };
 use rvt::reader::{OpenLimits, ProjectPhase};
 use rvt::research::native_document::NATIVE_RELEASES;
-use rvt::research::native_element_parameters::{self, ElementParameter};
+use rvt::research::native_element_parameters;
 
 fn err_str<E: std::fmt::Display>(e: E) -> JsValue {
     JsValue::from_str(&e.to_string())
@@ -488,8 +488,10 @@ struct SavedParametersJson {
     native: bool,
     /// The first and last release whose native records are read.
     native_releases: [u32; 2],
-    /// By ElementId. An element with no native record is not listed.
-    elements: BTreeMap<String, Vec<ElementParameter>>,
+    /// By ElementId. An element with no native record is not listed. Each
+    /// entry is `serde_json::to_value` of the parameter, as `rvt-elements`
+    /// prints it.
+    elements: BTreeMap<String, Vec<serde_json::Value>>,
     unresolved_family_slots: usize,
     instance_parameters_without_value: usize,
 }
@@ -552,8 +554,14 @@ pub fn saved_parameters(bytes: Vec<u8>, ids: Vec<f64>, limits: JsValue) -> Resul
         native_releases: [*NATIVE_RELEASES.start(), *NATIVE_RELEASES.end()],
         elements: read
             .elements
-            .into_iter()
-            .map(|(id, parameters)| (id.to_string(), parameters))
+            .iter()
+            .map(|(id, parameters)| {
+                let entries: Vec<serde_json::Value> = parameters
+                    .iter()
+                    .filter_map(|parameter| serde_json::to_value(parameter).ok())
+                    .collect();
+                (id.to_string(), entries)
+            })
             .collect(),
         unresolved_family_slots: read.unresolved_family_slots,
         instance_parameters_without_value: read.instance_parameters_without_value,

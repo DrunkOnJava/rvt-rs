@@ -3026,6 +3026,8 @@ function renderElementPanel(panel: ElementInfoPanel): void {
     if (box) infoEl.appendChild(box);
   }
 
+  infoEl.appendChild(savedParametersGroup(panel));
+
   const relations = relationsBox(panel);
   if (relations) infoEl.appendChild(relations);
 

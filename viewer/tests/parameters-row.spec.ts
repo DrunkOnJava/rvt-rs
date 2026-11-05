@@ -176,11 +176,23 @@ async function settled(page: Page): Promise<Shown> {
   });
 }
 
+/** A value with the keys of every object in one order, so JSON written in two orders compares equal. */
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([key, item]) => [key, canonical(item)]),
+    );
+  }
+  return value;
+}
+
 /** What differs between the panel's rows and the command line's entries for an element. */
 function differences(id: number, shown: Shown, expected: Parameter[]): string[] {
   const out: string[] = [];
-  const order = (list: Parameter[]) =>
-    list.map((p) => JSON.stringify(p)).sort();
+  const order = (list: Parameter[]) => list.map((p) => JSON.stringify(canonical(p))).sort();
   const fromPanel = shown.rows.map((row) => row.parameter);
   if (JSON.stringify(order(fromPanel)) !== JSON.stringify(order(expected))) {
     const panel = new Set(order(fromPanel));
@@ -252,13 +264,13 @@ sampleTest(
     const census = { ready: 0, empty: 0, other: 0, notInCli: 0, entries: 0, instance: 0, type: 0, named: 0 };
     const readMs: number[] = [];
     const wasmMemory: number[] = [];
-    let emptyText = '';
     for (const { index } of chosen) {
       await select(page, index);
       const shown = await settled(page);
       if (shown.elementId === null) {
+        // An entity whose Tag is no ElementId says so, and is not looked up.
         census.other += 1;
-        found.push(`entity ${index}: state ${shown.state} with no ElementId`);
+        if (shown.state !== 'no-id') found.push(`entity ${index}: state ${shown.state} with no ElementId`);
         continue;
       }
       const cli = expected.get(shown.elementId);
@@ -271,7 +283,6 @@ sampleTest(
       if (shown.wasmMemoryBytes !== null) wasmMemory.push(shown.wasmMemoryBytes);
       if (cli.length === 0) {
         census.empty += 1;
-        emptyText = shown.text;
         if (shown.state !== 'empty' || shown.rows.length > 0) {
           found.push(`${shown.elementId}: rvt-elements prints none; the panel is ${shown.state} with ${shown.rows.length} rows`);
         }
@@ -299,10 +310,37 @@ sampleTest(
         `${Math.round(loadStats.openMs)} ms in the open call, ${Math.round(loadStats.loadMs)} ms to Loaded.`,
     ]);
     expect(found, 'the panel against rvt-elements').toEqual([]);
-    // Not vacuous: elements with parameters and elements without are compared.
+    // Not vacuous: elements with parameters were compared. The empty state has
+    // a test of its own, which looks for an element to show it on.
     expect(census.ready, 'elements holding parameters that were compared').toBeGreaterThan(0);
-    expect(census.empty, 'elements holding none that were compared').toBeGreaterThan(0);
-    expect(emptyText).toMatch(/no saved parameters|no record of this element/);
+  },
+);
+
+sampleTest(
+  'an element rvt-elements prints no parameters for shows the empty state',
+  async ({ page }) => {
+    test.setTimeout(900_000);
+    const none = async (expected: Map<number, Parameter[]>) =>
+      (await treeElements(page)).find(({ id }) => id !== null && expected.get(id)?.length === 0);
+    // The sample first; the largest reference model when none of the sample's
+    // elements is one.
+    await open(page, sample!);
+    let from = path.basename(sample!);
+    let found = await none(oracle());
+    if (found === undefined && fs.existsSync(coreInteriorPath)) {
+      await open(page, coreInteriorPath);
+      from = path.basename(coreInteriorPath);
+      found = await none(rvtElements(coreInteriorPath));
+    }
+    expect(found, 'an element of the tree that rvt-elements prints no parameters for').toBeDefined();
+
+    await select(page, found!.index);
+    const shown = await settled(page);
+    report([`The empty state, on element ${found!.id} of ${from}: ${shown.state}: ${shown.text}`]);
+    expect(shown.state).toBe('empty');
+    expect(shown.elementId).toBe(found!.id);
+    expect(shown.rows).toHaveLength(0);
+    expect(shown.text).toMatch(/no saved parameters|no record of this element/);
   },
 );
 
