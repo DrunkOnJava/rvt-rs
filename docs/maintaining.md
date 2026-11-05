@@ -106,6 +106,105 @@ when a release ships.
   ([`changelog.d/`](../changelog.d/README.md)) change in the same pull request
   as the capability they describe.
 
+## Numbers on the README and the supported profile
+
+W10 of the [1.0 criteria](release-1.0-criteria.md) asks that a reader can tell,
+for every number on the [README](../README.md) and the
+[supported profile](supported-profile.md), which model it was measured on and
+whether they can fetch that model (#1192). `tools/ci/measured_numbers.py` checks
+it in CI's PII guard job, on every pull request, draft or ready:
+
+    python3 tools/ci/measured_numbers.py             # the two pages as they are
+    python3 tools/ci/measured_numbers.py --refusals  # shows it failing on copies of them
+    python3 tools/ci/test_measured_numbers.py        # the pure judgement's failure-first tests
+
+**The rule.** Every number on either page, in a heading as in a table cell,
+has a name from the [model index](reference-models.md#model-index) within 300
+characters of it in its own clause: the text between semicolons and sentence
+ends, never split inside parentheses, with each table cell, list item and
+heading a unit of its own. A continuation after a semicolon (`; both ends on
+724`) names its model again, and a number added at the far end of a long clause
+is refused with a message to split it. When the model's row says `local only` or
+`not shared`, those words stand beside that model's name (within 60 characters,
+and nearer to it than to another model's name; `both local only` and `all local
+only` reach back over the names before them) in the clause, or in an earlier
+clause of the same cell, paragraph or list item
+(`1,030 of Snowdon's 1,078 walls (local only)`). The index row of a model says in
+one of four words who can fetch it, and the check fails on a row that does not.
+
+**What is not a number.** The check is closed, not a list of what counts as a
+measurement: every digit on the pages is a number except what its spelling alone
+marks as something else. Those are:
+
+- code spans (not one that is only a number, such as `4,321 walls`), fenced
+  blocks, link targets, URLs and comments (a heading is read);
+- an issue (`#1192`) or report (`RE-345`, `§8`) id, a hash, an ISO date, a
+  version with two dots or a `v`, a Revit release or any other year (`2024`), a
+  number of eight digits or more with no comma (a Measure run id) and a layout
+  width (`32-bit`);
+- the version of a named tool (`Rust 1.87`, `License 2.0`, `glTF 2.0`,
+  `Revit 26.2`) and the name of the release (`the 1.0 range`);
+- `2D`, `3D`, ordinals and a list's own numbering.
+
+A count of 1,000 or more is written with its comma, as the pages do, so a year
+is never read as a count. A number that is none of these and is not a
+measurement of a model (a default limit, a count another check pins) carries a
+marker in its clause, with its reason:
+
+    the 12 JS-callable bindings<!-- w10: a count tools/ci/wasm-api.py holds to the source -->
+
+A marker without a reason fails, and so does one with nothing to excuse (its
+clause has no number, or every number in it is beside its model), so markers do
+not outlive their numbers. There is no allowlist in the script. A marker is for a
+number that is not a measurement, such as a default, a count another check pins,
+`macOS 14` or `Fig. 3`; the failure message says so. It is never for a count of
+anything found in a model: name the model.
+
+**Why a closed rule and not a pattern for measurements.** A pattern for "N of M"
+or "within 0.01 ft" misses the next form someone writes (`1,019 turned or tilted
+mullions`, `all 24`, `250 of the 251`), and a miss is a number nobody checked.
+Here a new form fails until it names a model, and the few numbers that are not
+measurements say so beside themselves, with a reason a reviewer can read. The
+markers on the pages today are for project release versions, the binding count
+`tools/ci/wasm-api.py` pins, the resource-limit defaults, an exit status and a
+value rvt-rs writes.
+
+**Keeping a new number to the rule.** Write the model where the number is, using a
+name from the index (`Core Interior`, `the BIM4LCA office`, `puzzbobb`), and
+`(local only)` or `(not shared)` after the first mention in the cell when the
+index says so. A new model goes in the index first, in its own row: its names
+(each used by one row only; the longest name wins where one holds another), who
+can fetch it (`redistributable`, `fetched by Measure`, `local only` or `not
+shared`) and how. The check proves that a clause names a model, not that the
+number is true, that it belongs to that model, or that it was measured on the
+current head; the figures still name their run or report. A number placed near
+the wrong model's name passes, and so does a measured count inside a code span
+that is more than a number. Spelled-out counts ("two projects") are not read, so
+name the model there too. The tables of other pages (`docs/evidence.md`, the
+criteria) are not read.
+
+**A pull request that moves a figure edits the page.** The check cannot tell
+that a figure is stale, only that it has a model. A pull request whose change
+moves a figure on either page (a count, a run, a tolerance) edits that figure in
+the same pull request, with the run and head it was measured on, or labels it as
+not re-run on the new head. A figure measured on the models that anyone can fetch
+is re-measured by the [re-run command](reference-models.md#re-run-the-numbers); one
+on a local-only model is labelled as not re-run since its run.
+
+**Other pull requests editing these two pages.** The check reads the whole of
+both pages, so a pull request opened before it landed passes its own CI, and its
+next run after it merges `main` fails the PII guard job if it adds a number with
+no model. The fix is the model's name beside the number (or a row in the index);
+a marker is only for a number that is not a measurement. `CI passed` waits on the
+PII guard job, so it is the pull request that adds a bare number that is blocked,
+not `main`. A pull request that changes a marked number (a count of bindings, a
+version) edits the marker's clause with it.
+
+**Re-running the numbers.** The command that re-runs them on the models anyone
+can fetch is a Measure dispatch, in [reference models](reference-models.md#re-run-the-numbers),
+with what it covers and what it does not. A figure on the pages that rests on a
+model marked `local only` or `not shared` cannot be re-run by anyone else.
+
 ## Measure and the MCP server's answers
 
 Measure also scores what `rvt-rs-mcp` tells an agent about each model it
@@ -255,10 +354,11 @@ not remove Compare's report.
 - **What it cannot catch**: an error the earlier save shares with the 2025,
   2026 or 2027 read. Nothing in it is a Revit export. It compares bodies, not
   quantities or property sets. No 2026 or 2027 held-out model, and none of the
-  25 models with Revit's own 2025 exports (the R2025 models and RE1
-  Architecture), holds an `IfcBeam` or a tread landing, so the beam and landing
-  readers have run only on two Autodesk samples saved by earlier releases; and
-  those 25 models hold no floor, ceiling or roof with an arc, so no Revit
+  28 Revit 2025 models read (the R2025 models and the four RE1 models), holds an
+  `IfcBeam` or a tread landing, so the beam and landing readers have run only on
+  two Autodesk samples saved by earlier releases; and the 25 with Revit's own
+  2025 exports (the R2025 models and RE1 Architecture) hold no floor, ceiling or
+  roof with an arc, so no Revit
   export checks the arc reading on 2025 either (RE-345). Shaft openings are cut
   on 2024 only, for the same reason: the only two measured on 2025 cut nothing.
 - **A difference** is a reader that is wrong or a project that really differs
@@ -664,6 +764,24 @@ PartAtom reader is measured, since the IFC export never reaches it. For the
 PartAtom reader, dispatch `fuzz.yml` on the branch as well
 (`-f target=fuzz_part_atom -f duration_seconds=300`), and cite both runs in the
 pull request.
+
+## The workflows' Rust setup
+
+Every job that needs Rust installs it with `.github/actions/setup-rust`
+(`toolchain`, one `component`, one `target`, and `make-default: "false"` for a
+toolchain a job only names with `cargo +<toolchain>`), and the three jobs that
+build the viewer's WASM install wasm-pack and the wasm-bindgen CLI `Cargo.lock`
+pins with `.github/actions/wasm-tools`. The release workflows use them too, so
+a change there is a change to the release path. A dated nightly stays in the job
+that uses it, not in the action.
+
+The action sets `CARGO_INCREMENTAL=0` and `CARGO_TERM_COLOR=always` and makes the
+toolchain rustup's default, exactly as the copies it replaced did, and that is
+not tidying: Swatinem/rust-cache hashes the default toolchain's `rustc -vV` and
+every `CARGO*`, `RUST*`, `CC*`, `CXX*`, `CFLAGS` and `CMAKE*` environment variable
+into its key. A different default toolchain or a different variable in a job
+that restores a cache starts that job from an empty cache. A change to either
+action is judged by the key the job's rust-cache step logs before and after.
 
 ## Releases
 
