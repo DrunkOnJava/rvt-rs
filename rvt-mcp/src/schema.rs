@@ -100,12 +100,15 @@ pub struct ValueSourceOut {
     pub offset: Option<usize>,
     /// Where every copy holds the same value, the numbers of the partitions that hold a copy; the copy named is the lowest-numbered partition's.
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[schemars(default)]
     pub partitions: Vec<u32>,
     /// The records the value is made of, where it is made of several or of another element's, at most 64. Such a source has no `stream` or `offset` of its own.
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[schemars(default)]
     pub parts: Vec<SourcePartOut>,
     /// How many more records than the 64 listed in `parts` the value is made of.
     #[serde(skip_serializing_if = "is_zero")]
+    #[schemars(default)]
     pub parts_left_out: u32,
     /// True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, where every copy holds the same value, so is every copy; for a source made of `parts`, none of them is in the frame's partition (`docs/export-diagnostics.md` says where a profile's records count as held there).
     pub differs_from_frame: bool,
@@ -176,6 +179,7 @@ pub struct ElementProvenance {
     pub provenance_omitted: Option<bool>,
     /// The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.
     #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[schemars(default)]
     pub value_sources: Vec<ValueSourceOut>,
 }
 
