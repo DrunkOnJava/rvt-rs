@@ -90,6 +90,11 @@ class Segments(unittest.TestCase):
         self.assertEqual(got[0][1], ["a default; set. Not measured"])
         self.assertEqual(got[1][1], [])
 
+    def test_nothing_inside_parentheses_ends_a_clause(self):
+        got = [c for c, _ in m.clauses("a (1 of 2; 3 of 4. 5) b; c (d; e")]
+        self.assertEqual(got, ["a (1 of 2; 3 of 4. 5) b", "c (d; e"])
+        self.assertEqual([c for c, _ in m.clauses("a ) b; c")], ["a ) b", "c"])
+
     def test_other_comments_are_not_text(self):
         self.assertEqual(m.clauses("a <!-- 5 files --> b"), [("a   b", [])])
 
@@ -115,6 +120,7 @@ class Segments(unittest.TestCase):
         self.assertEqual(
             m.units(text),
             [
+                (1, "Heading 1"),
                 (2, "a"),
                 (2, "b"),
                 (4, "1 of 2"),
@@ -178,6 +184,7 @@ class Pages(unittest.TestCase):
 
     def test_a_number_with_a_fetchable_model_passes_and_a_number_free_clause_needs_none(self):
         self.assertEqual(page("4 of 5 walls on Core Interior\n\nno model here and no digit\n"), [])
+        self.assertEqual(page("Snowdon and Projeto1 are named here, with no numeral.\n"), [])
 
     def test_a_continuation_after_a_semicolon_must_name_its_model_again(self):
         got = page("4 of 5 walls on Core Interior; 6 of 7 of them exact\n")
@@ -185,12 +192,21 @@ class Pages(unittest.TestCase):
         self.assertIn("6, 7", got[0][1])
 
     def test_a_local_only_model_must_say_so_and_a_flag_covers_only_that_model(self):
-        self.assertIn("does not say", page("4 of 5 walls on Snowdon\n")[0][1])
+        self.assertIn("stands beside its name", page("4 of 5 walls on Snowdon\n")[0][1])
         self.assertEqual(page("4 of 5 walls on Snowdon (local only)\n"), [])
         self.assertEqual(page("Snowdon is local only; 4 of 5 walls on Snowdon\n"), [])
         self.assertEqual(len(page("4 of 5 on Snowdon (local only); 6 of 7 on Projeto1\n")), 1)
         self.assertIn("not shared", page("8 of the client models\n")[0][1])
         self.assertEqual(page("8 of the client models (not shared)\n"), [])
+
+    def test_the_local_only_word_is_said_of_the_name_it_stands_beside(self):
+        self.assertEqual(len(page("Snowdon 7 of 8 (Projeto1 is local only)\n")), 1)
+        self.assertEqual(page("Snowdon (local only) 7 of 8 and Projeto1 (local only)\n"), [])
+        self.assertEqual(page("Snowdon and Projeto1 (both local only) 7 of 8\n"), [])
+        self.assertEqual(page("Core Interior, Snowdon and Projeto1 (all local only) 7 of 8\n"), [])
+        self.assertEqual(len(page("Core Interior and Snowdon (local only) and Projeto1 7 of 8\n")), 1)
+        far = "Snowdon " + "x " * 60 + "(local only) 7 of 8"
+        self.assertEqual(len(page(far + "\n")), 1)
 
     def test_a_flag_does_not_leave_its_cell_paragraph_or_item(self):
         text = "| 4 of 5 on Snowdon (local only) | 6 of 7 on Snowdon |\n\n- 8 of 9 on Snowdon\n"
@@ -210,7 +226,33 @@ class Pages(unittest.TestCase):
 
     def test_a_marker_with_nothing_to_excuse_is_refused(self):
         self.assertIn("no number", page("bindings<!-- w10: nothing numeric here at all -->\n")[0][1])
-        self.assertIn("names its model", page("4 of 5 on Core Interior<!-- w10: it names its model already -->\n")[0][1])
+        self.assertIn("beside its model", page("4 of 5 on Core Interior<!-- w10: it names its model already -->\n")[0][1])
+
+    def test_a_number_far_from_every_model_name_is_refused_and_one_beside_it_is_not(self):
+        filler = "the wall is exact, " * 25
+        self.assertEqual(page(f"On Core Interior, {filler}4 of 5.\n")[0][0], 1)
+        self.assertIn("more than 300 characters", page(f"On Core Interior, {filler}4 of 5.\n")[0][1])
+        self.assertIn("more than 300 characters", page(f"4 of 5, {filler}on Core Interior.\n")[0][1])
+        self.assertEqual(page(f"{filler}on Core Interior, 4 of 5.\n"), [])
+        self.assertEqual(page(f"On Core Interior, {filler[:200]}4 of 5.\n"), [])
+
+    def test_a_marker_excuses_a_number_far_from_every_model_and_not_one_beside_one(self):
+        filler = "the wall is exact, " * 25
+        self.assertEqual(page(f"On Core Interior, {filler}12 bindings<!-- w10: a count another check pins -->.\n"), [])
+        self.assertEqual(len(page(f"On Core Interior, 4 of 5 {filler}12 bindings<!-- w10: a count another check pins -->.\n")), 0)
+        self.assertIn("beside its model", page("On Core Interior 4 of 5<!-- w10: it is beside its model -->.\n")[0][1])
+
+    def test_a_refusal_says_how_to_mark_a_number_that_is_no_measurement(self):
+        self.assertIn("<!-- w10: reason -->", page("macOS 14 and 4 of 5\n")[0][1])
+
+    def test_a_heading_is_read(self):
+        got = page("## 9,999 walls\n\ntext\n")
+        self.assertEqual([line for line, _ in got], [1])
+        self.assertEqual(page("## Core Interior 9 walls\n"), [])
+
+    def test_a_parenthesis_joins_the_clause_so_a_semicolon_in_it_cannot_hide_a_number(self):
+        self.assertEqual(page("1 of 2 on Core Interior (all its windows; 48 of 269 doors)\n"), [])
+        self.assertEqual(len(page("1 of 2 on Core Interior; 48 of 269 doors\n")), 1)
 
     def test_a_marker_excuses_only_its_own_clause(self):
         got = page("12 bindings<!-- w10: a count another check pins -->; 13 others\n")

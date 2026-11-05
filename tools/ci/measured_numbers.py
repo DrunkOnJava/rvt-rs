@@ -28,18 +28,26 @@ mistake for a measurement, by its spelling alone:
 A count of 1,000 or more is written with its comma, as the pages do, so that a
 year is never mistaken for a count and a count for a year.
 
-Anything else with a digit in it is a number: a count, a ratio, a percentage, a
-tolerance, a default, a version of the project. A number that is not a
-measurement of a model (a default limit, a count another check pins, the 1.0
-release) carries `<!-- w10: why -->` in its clause, and the reason is
-required. A marker with nothing to excuse fails too, so markers do not outlive
-their numbers. Numbers spelled out in words are not read.
+Anything else with a numeral in it is a number: a count, a ratio, a percentage,
+a tolerance, a default, a version of the project, a figure in a heading. A
+number that is not a measurement of a model (a default limit, a count another
+check pins, "macOS 14", "Fig. 3") carries `<!-- w10: why -->` in its clause, and
+the reason is required. A marker with nothing to excuse fails too, so markers do
+not outlive their numbers. Numbers spelled out in words are not read.
 
-A clause is the text between semicolons, between sentences, and between table
-cells and list items. A number names its model when its own clause does: a
-continuation after a semicolon says which model again. When the model is
-`local only` or `not shared`, the clause says so, or an earlier clause of the
-same cell, paragraph or list item did for that model.
+A clause is the text between semicolons and between sentences (never inside
+parentheses), and each table cell, list item and heading is its own unit. A
+number names its model when a name of the index stands within PROXIMITY
+characters of it in its own clause, so a continuation after a semicolon says
+which model again and a number added at the far end of a long clause is refused.
+When the model is `local only` or `not shared`, the word stands beside its name
+(within FLAG_GAP characters, and nearer to it than to another model's name; "both"
+and "all" reach back over the names before them) in the clause or in an earlier
+clause of the same cell, paragraph or list item.
+
+What it cannot catch: a number placed near the wrong model's name, a number that
+is not true or not current, a measured count in a code span that is more than a
+number, and a figure spelled out in words.
 
     python3 tools/ci/measured_numbers.py            check the repository's pages
     python3 tools/ci/measured_numbers.py --root D   check the pages under D
@@ -58,10 +66,11 @@ INDEX = "docs/reference-models.md"
 HEADING = "## Model index"
 COLUMNS = ("Model", "Names the pages use", "Who can fetch it", "How")
 CLASSES = ("redistributable", "fetched by Measure", "local only", "not shared")
-SAYS = {
-    "local only": re.compile(r"\blocal[ -]only\b"),
-    "not shared": re.compile(r"\bnot shared\b"),
-}
+SAYS = ("local only", "not shared")
+PHRASE = re.compile(r"(?:\b(both|all) )?\b(local[ -]only|not shared)\b")
+FLAG_GAP = 60
+PROXIMITY = 300
+LINKS = re.compile(r"\]\([^)]*\)|<https?://[^>]*>|https?://\S+")
 
 MARKER = re.compile(r"<!--\s*w10:(.*?)-->", re.S)
 COMMENT = re.compile(r"<!--.*?-->", re.S)
@@ -97,8 +106,8 @@ MIN_REASON = 12
 
 
 def units(text):
-    """(line, text) of each table cell, paragraph and list item of a Markdown
-    page. Fenced blocks, headings and comment-only lines are not text."""
+    """(line, text) of each heading, table cell, paragraph and list item of a
+    Markdown page. Fenced blocks and comment-only lines are not text."""
     out, para, start = [], [], 0
     fenced = in_comment = False
 
@@ -128,6 +137,7 @@ def units(text):
             continue
         if re.match(r"#{1,6}\s", stripped):
             flush()
+            out.append((number, stripped.lstrip("#").strip()))
             continue
         if stripped.startswith("|"):
             flush()
@@ -150,7 +160,8 @@ def units(text):
 
 def clauses(unit):
     """The clauses of one unit, each as (text, reasons of the markers in it).
-    A marker's reason may hold a semicolon or a full stop."""
+    A marker's reason may hold a semicolon or a full stop, and nothing inside
+    parentheses ends a clause."""
     reasons = []
 
     def hold(match):
@@ -161,8 +172,18 @@ def clauses(unit):
         return f"\x01{len(reasons) - 1}\x01"
 
     held = COMMENT.sub(hold, unit)
+    depths, depth = [], 0
+    for char in held:
+        depths.append(depth)
+        depth = depth + 1 if char == "(" else max(0, depth - 1) if char == ")" else depth
+    parts, last = [], 0
+    for end in CLAUSE_END.finditer(held):
+        if depths[end.start()] == 0:
+            parts.append(held[last : end.start()])
+            last = end.end()
+    parts.append(held[last:])
     out = []
-    for part in CLAUSE_END.split(held):
+    for part in parts:
         found = [reasons[int(i)] for i in PLACEHOLDER.findall(part)]
         part = PLACEHOLDER.sub("", part).strip()
         if part or found:
@@ -170,30 +191,71 @@ def clauses(unit):
     return out
 
 
+def blank(text, patterns):
+    """text with what the patterns match replaced by spaces, so that every
+    position keeps its place."""
+    for pattern in patterns:
+        text = pattern.sub(lambda m: " " * len(m.group(0)), text)
+    return text
+
+
+def number_spans(clause):
+    """(position, text) of the numbers of a clause: its numerals once what
+    spells something else is cut out."""
+    return [(m.start(), m.group(0)) for m in NUMBER.finditer(blank(clause, IDENTIFIERS))]
+
+
 def numbers(clause):
-    """The numbers of a clause: its digits once what spells something else is
-    cut out."""
-    for pattern in IDENTIFIERS:
-        clause = pattern.sub(" ", clause)
-    return NUMBER.findall(clause)
+    return [text for _, text in number_spans(clause)]
 
 
-def named(clause, models):
-    """The models whose names the clause uses, by model index."""
-    clause = re.sub(r"\]\([^)]*\)|<https?://[^>]*>|https?://\S+", " ", clause)
+def name_spans(clause, models):
+    """(start, end, model index) of each use of a model's name in the clause.
+    The longest name wins where one name sits inside another ("Snowdon Towers
+    samples" is not "Snowdon")."""
+    view = blank(clause, [LINKS])
     found = [
         (m.start(), m.end(), i)
         for i, model in enumerate(models)
         for name in model["names"]
-        for m in re.finditer(rf"(?<![\w-]){re.escape(name)}(?!\w)", clause)
+        for m in re.finditer(rf"(?<![\w-]){re.escape(name)}(?!\w)", view)
     ]
-    # The longest name wins where one name sits inside another ("Snowdon
-    # Towers samples" is not "Snowdon").
-    return {
-        i
+    return sorted(
+        (start, end, i)
         for start, end, i in found
         if not any(s <= start and end <= e and e - s > end - start for s, e, _ in found)
-    }
+    )
+
+
+def named(clause, models):
+    """The models whose names the clause uses, by model index."""
+    return {i for _, _, i in name_spans(clause, models)}
+
+
+def gap(start, end, other_start, other_end):
+    """The characters between two spans (0 where they touch or overlap)."""
+    return max(other_start - end, start - other_end, 0)
+
+
+def flags(clause, spans, models):
+    """The models a `local only` or `not shared` in the clause is said of: the
+    one whose name stands nearest to it, within FLAG_GAP characters, or, after
+    "both" or "all", the two or every one named before it. A word beside
+    another model's name flags nothing of the first."""
+    out = set()
+    for m in PHRASE.finditer(clause):
+        word = "local only" if m.group(2).startswith("local") else "not shared"
+        if m.group(1):
+            before = []
+            for start, end, i in sorted(spans, key=lambda s: -s[1]):
+                if end <= m.start() and m.start() - end <= 2 * FLAG_GAP and i not in before:
+                    before.append(i)
+            chosen = before[:2] if m.group(1) == "both" else before
+        else:
+            near = sorted((gap(s, e, m.start(), m.end()), s, i) for s, e, i in spans)
+            chosen = [near[0][2]] if near and near[0][0] <= FLAG_GAP else []
+        out.update(i for i in chosen if models[i]["fetch"] == word)
+    return out
 
 
 def read_index(text):
@@ -237,43 +299,50 @@ def read_index(text):
 
 
 def check_page(page, text, models):
-    """(line, message) for each number of the page that breaks the rule, and
-    the counts (numbers read, clauses with a model, markers)."""
+    """(page, line, message) for each number of the page that breaks the rule,
+    and the counts (numbers read, numbers beside a model, markers)."""
     found = []
     seen = {"numbers": 0, "named": 0, "markers": 0}
+    how = "name its model beside it, split the clause with a semicolon, or, if it is not a measurement, mark it <!-- w10: reason -->"
     for line, unit in units(text):
         flagged = set()
         for clause, reasons in clauses(unit):
-            digits = numbers(clause)
-            who = named(clause, models)
-            for i in who:
-                if models[i]["fetch"] in SAYS and SAYS[models[i]["fetch"]].search(clause):
-                    flagged.add(i)
+            spans = name_spans(clause, models)
+            who = {i for _, _, i in spans}
+            flagged |= flags(clause, spans, models)
+            numerals = number_spans(clause)
+            near = [
+                (text, min((gap(p, p + len(text), s, e) for s, e, _ in spans), default=None))
+                for p, text in numerals
+            ]
+            unnamed = [(text, far) for text, far in near if far is None or far > PROXIMITY]
             shown = clause if len(clause) <= 110 else clause[:107] + "..."
             for reason in reasons:
                 seen["markers"] += 1
                 if len(reason) < MIN_REASON or not re.search(r"[A-Za-z]{3}", reason):
                     found.append((line, f"w10 marker without a reason: {reason!r} in: {shown}"))
-            if reasons and (not digits or who):
+            if reasons and not unnamed:
                 found.append(
-                    (line, "w10 marker with nothing to excuse (" + ("no number" if not digits else "the clause names its model") + f") in: {shown}")
+                    (line, "w10 marker with nothing to excuse (" + ("no number" if not numerals else "every number is beside its model") + f") in: {shown}")
                 )
                 continue
-            if not digits:
-                continue
-            seen["numbers"] += len(digits)
-            if reasons:
-                continue
-            if not who:
-                found.append((line, f"{', '.join(digits)} names no model of the model index in: {shown}"))
-                continue
-            seen["named"] += len(digits)
-            for i in sorted(who):
-                fetch = models[i]["fetch"]
-                if fetch in SAYS and i not in flagged:
-                    found.append(
-                        (line, f"{', '.join(digits)} rests on {models[i]['names'][0]}, which is {fetch}, and the clause does not say \"{fetch}\" in: {shown}")
-                    )
+            seen["numbers"] += len(numerals)
+            seen["named"] += len(numerals) - len(unnamed)
+            if unnamed and not reasons:
+                listed = ", ".join(text for text, _ in unnamed)
+                if not who:
+                    found.append((line, f"{listed} names no model of the model index; {how}, in: {shown}"))
+                else:
+                    far = min(far for _, far in unnamed if far is not None)
+                    found.append((line, f"{listed} is more than {PROXIMITY} characters from the nearest model name ({far}); {how}, in: {shown}"))
+            if len(unnamed) < len(numerals):
+                for i in sorted(who):
+                    fetch = models[i]["fetch"]
+                    if fetch in SAYS and i not in flagged:
+                        listed = ", ".join(text for text, far in near if far is not None and far <= PROXIMITY)
+                        found.append(
+                            (line, f"{listed} rests on {models[i]['names'][0]}, which is {fetch}, and no \"{fetch}\" stands beside its name in this clause or an earlier one of its cell, paragraph or list item, in: {shown}")
+                        )
     return [(page, line, message) for line, message in found], seen
 
 
@@ -329,7 +398,25 @@ REFUSALS = [
         "a number on a local-only model that does not say so",
         "docs/supported-profile.md",
         "\nOn Snowdon Towers, 4,321 of 4,322 walls were exact.\n",
-        "does not say",
+        "stands beside its name",
+    ),
+    (
+        "a local-only word that stands beside another model's name",
+        "docs/supported-profile.md",
+        "\nSnowdon Towers 7 of 8 (Projeto1 is local only).\n",
+        "stands beside its name",
+    ),
+    (
+        "a number far from its model in a long clause",
+        "docs/supported-profile.md",
+        "\nOn Core Interior, " + "the wall is exact " * 25 + "and 4,321 more beams.\n",
+        "more than 300 characters",
+    ),
+    (
+        "a number in a heading",
+        "README.md",
+        "\n## 9,999 walls\n",
+        "names no model",
     ),
     (
         "a marker with no reason",
