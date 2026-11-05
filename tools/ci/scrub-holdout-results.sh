@@ -55,7 +55,10 @@
 # tools/re/native_levels_vs_ifc.py (RE-281:
 # counts, the same restricted alphabet), the totals and per property counts of
 # its property set census (standard Pset_ and Qto_ names only; RE-281),
-# the `space kinds:` count lines of tools/re/space_kinds_vs_ifc.py (#1437: how
+# the `door axes:` count lines of tools/re/door_axes_vs_ifc.py (RE-347: how many
+# doors and windows have rvt-rs's local axes the same as Revit's, a half turn or
+# a quarter turn from them, and how many placed by the rule differ, as numbers
+# beside fixed words), the `space kinds:` count lines of tools/re/space_kinds_vs_ifc.py (#1437: how
 # many `IfcSpace`s hold each `SpaceKind`, how many hold none, and how many
 # disagree with their `SpaceOutlineSource`, as numbers beside fixed words, never
 # a GlobalId; its `exit N` line stays as `space kinds: exit N`, so the run's
@@ -138,6 +141,15 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     for f in "$dir"global_ids_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E "^(elements: \{((\"not in Revit's export\"|\"GlobalId = Revit's\"|'differs'): [0-9]+(, )?)*\}|storeys: [0-9]+ of [0-9]+ equal Revit's|storeys whose GlobalId is one of Revit's: [0-9]+ of [0-9]+|(IfcProject|IfcSite|IfcBuilding): [0-9]+ of [0-9]+ equal Revit's|spaces: [0-9]+ of [0-9]+ equal one of Revit's)$" "$f" | sed 's/^/global ids: /' || true
+    done
+    # The local axes of the doors and windows against Revit's (RE-347,
+    # tools/re/door_axes_vs_ifc.py): counts beside fixed words. Its `exit N`
+    # line stays, as a `door axes:` line, so a crash is told from a model
+    # that was not checked, and a rule-placed element that differs (exit 1).
+    for f in "$dir"door_axes_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E '^door axes: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      grep -E '^exit [0-9]+$' "$f" | sed -E 's/^exit ([0-9]+)$/door axes: exit \1/' || true
     done
     for f in "$dir"space_profiles_vs_ifc.txt; do
       [ -f "$f" ] || continue
