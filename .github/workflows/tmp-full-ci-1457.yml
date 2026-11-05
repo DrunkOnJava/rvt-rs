@@ -1,5 +1,6 @@
 # TEMPORARY (#1457): the full CI on this branch while the pull request is a draft, run as a push
 # event so the wheel job builds on all three systems as it does on main. Removed before ready.
+# (Second run: at the head that holds the retry jobs, the 15 minute bound and the fill rule.)
 name: tmp full CI 1457
 
 on:
