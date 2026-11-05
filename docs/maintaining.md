@@ -129,6 +129,12 @@ for the five lowest ElementIds of each IFC entity, the diagnostics and an
   export instead, since it takes none of the flags, and the checks that need
   the run's export (the diagnostics and the export hash) are named in the
   verdict as NOT MEASURED.
+  For a model kept as counts only (the held-out, BIMcollab and `racadv-*`
+  models) the listed differences are dropped with the rest of the scorer's
+  text, so the rooms check also prints counts of the rooms that differ: their
+  space kinds, how many have an arc in their outline, and how many differ in
+  each thing a room is checked on (`rooms differing in ...`). A cause is read
+  from those lines, never from a room.
 - **What consistency cannot catch.** The server and the IFC writer share the
   one `IfcModel` the decode builds. The check finds what either does to that
   model on the way out: a field the server projects wrongly, an element or a

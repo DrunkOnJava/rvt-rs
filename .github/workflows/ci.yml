@@ -366,19 +366,40 @@ jobs:
       # Each apt call is bounded and retried: on 2026-11-01 an Ubuntu mirror
       # stopped answering mid `apt-get update` and the hang used the whole job
       # timeout, a cancelled job that failed `CI passed` with no test run.
-      # Three failed attempts still fail the job.
+      # On 2026-11-05 the Azure mirror crawled at 30 to 40 kB/s, never idle long
+      # enough for apt's own timeout or failover, through all three attempts of two
+      # runs (42041502131, 42053988520). So each retry leads with a different mirror
+      # and keeps the others behind it, and only the download is bounded this tightly,
+      # so a kill never lands in dpkg. Three failed attempts still fail the job.
       - name: Install gcc-multilib
         timeout-minutes: 15
         run: |
           apt=(sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+          packages=(--no-install-recommends gcc-multilib)
+          azure=http://azure.archive.ubuntu.com/ubuntu/
+          archive=http://archive.ubuntu.com/ubuntu/
+          kernel=https://mirrors.edge.kernel.org/ubuntu/
+          retries=("$archive $kernel $azure" "$kernel $archive $azure")
+          if ! grep -rqs 'mirror+file:/etc/apt/apt-mirrors.txt' /etc/apt/sources.list /etc/apt/sources.list.d; then
+            echo "::warning::apt no longer reads /etc/apt/apt-mirrors.txt on this image, so a retry cannot change mirror"
+          fi
           for attempt in 1 2 3; do
-            if timeout 120 "${apt[@]}" update \
-              && timeout 180 "${apt[@]}" install -y --no-install-recommends gcc-multilib; then
-              exit 0
+            if timeout 60 "${apt[@]}" update \
+              && timeout 120 "${apt[@]}" install -y --download-only "${packages[@]}"; then
+              exec timeout 300 "${apt[@]}" install -y --no-download "${packages[@]}"
             fi
-            echo "::warning::apt attempt $attempt did not finish; retrying"
-            sleep 15
+            if (( attempt < 3 )); then
+              list=${retries[attempt - 1]}
+              echo "::warning::apt attempt $attempt did not finish; retrying, first mirror ${list%% *}"
+              priority=0
+              for mirror in $list; do
+                priority=$((priority + 1))
+                printf '%s\tpriority:%d\n' "$mirror" "$priority"
+              done | sudo tee /etc/apt/apt-mirrors.txt
+              sleep 15
+            fi
           done
+          echo "::error::apt did not finish on three mirrors"
           exit 1
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
