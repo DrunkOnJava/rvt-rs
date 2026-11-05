@@ -103,7 +103,7 @@ Autodesk samples saved from earlier releases, never on a natively authored
 2026 beam. The 2025 save draws a sketch's arcs as chords (its arc readers are not
 enabled, #1440), so a floor of rac_advanced has 24 vertices there against 170
 on the 2024, 2026 and 2027 saves. One stair flight is scored against Revit's own 2026 and 2027
-exports. Since RE-343 pipes are drawn as their cylinders there, family
+exports. Since RE-346 pipes are drawn as their cylinders there, family
 instances' ports are placed, walls are cut to their doors' and windows'
 outlines, and `IsExternal`, railing heights and lengths, stair names, rooms'
 height and net volume and the pipe and duct quantities are written, as on 2025,

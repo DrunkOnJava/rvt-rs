@@ -2868,7 +2868,7 @@ fn attach_family_instance_ports(
 
 /// Releases a family instance's unjoined ports are placed on (#869): 2025,
 /// the RE1 models', and 2024, the BIM4LCA office's, where all 43 such ports
-/// are within 0.01 ft of Revit's with its axis. 2026 and 2027 (RE-343)
+/// are within 0.01 ft of Revit's with its axis. 2026 and 2027 (RE-346)
 /// write 2025's records, and Autodesk's samples saved by them place every
 /// port as their 2025 saves do.
 const PORT_PLACEMENT_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];

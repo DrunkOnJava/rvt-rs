@@ -2,7 +2,7 @@
   instances' ports, cut walls to their doors' and windows' outlines, and
   write `IsExternal`, railing heights and lengths, stair names, rooms'
   height and net volume and the pipe and duct quantities, as 2025 projects
-  do (#1190, RE-343).** Ten readers read the 2025 records these releases
+  do (#1190, RE-346).** Ten readers read the 2025 records these releases
   write; only their release lists change. **None of it is scored against a
   Revit export of a 2026 or 2027 file**; it is held to the same Autodesk
   sample saved by Revit 2025, and that cannot catch an error the 2025 save

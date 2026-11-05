@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Each distribution port in two rvt-rs exports of the same project saved by
-two Revit releases, port for port (RE-343).
+two Revit releases, port for port (RE-346).
 
 A port is paired by its host's `Tag` (ElementId), its `Name` and its
 `FlowDirection`. A pair is the same where the world origins agree to 3 mm

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Each property and quantity in two rvt-rs exports of the same project saved
-by two Revit releases, element for element (RE-343).
+by two Revit releases, element for element (RE-346).
 
 Elements are paired by `Tag` (their ElementId, which a project keeps across
 saves), and rooms, which have no `Tag`, by `GlobalId`. For each property set

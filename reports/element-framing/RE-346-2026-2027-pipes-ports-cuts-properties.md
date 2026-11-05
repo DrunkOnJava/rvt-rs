@@ -1,4 +1,4 @@
-# RE-343: Revit 2026 and 2027 pipes, ports, door and window cuts, and the properties read on 2025
+# RE-346: Revit 2026 and 2027 pipes, ports, door and window cuts, and the properties read on 2025
 
 **Date:** 2026-11-05
 **Issues:** #1190 (each capability 2024 and 2025 have, on every release from 2015 to 2027); follows RE-341 (beams, stair runs, landings and sketch lines on 2026 and 2027), RE-124 and RE-179 (2026 and 2027 element records are 2025's).
