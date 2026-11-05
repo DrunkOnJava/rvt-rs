@@ -25,8 +25,9 @@
 //!     transform `scan_instance_transforms` takes: axes and origin), copies
 //!     (every element-data copy: partition stream, offset, the first
 //!     orthonormal 3 x 3 of either determinant within 16 KiB with its
-//!     determinant, offset, nine values and the three values after them, and
-//!     the transform the reader takes from that copy), records (the root
+//!     determinant, offset, nine values and the three values after them, the
+//!     transform the reader takes from that copy, and the first 1,024 bytes of
+//!     the copy's data in hex, unless `--records`), records (the root
 //!     fields of each native `FamilyInstance` record of the element, with
 //!     any value longer than 600 characters replaced by its length) and
 //!     objects (the other non-graphics objects of the first records,
@@ -58,6 +59,7 @@ const LONG_VALUE: usize = 600;
 const OBJECT_LIMIT: usize = 1500;
 const FULL_ELEMENTS: usize = 40;
 const COMPACT_ELEMENTS: usize = 3;
+const HEAD_BYTES: usize = 1024;
 
 fn f64_at(data: &[u8], at: usize) -> Option<f64> {
     Some(f64::from_le_bytes(
@@ -109,6 +111,16 @@ fn first_orthonormal(data: &[u8]) -> Option<Orthonormal> {
         };
         Some((at, det, flat, origin))
     })
+}
+
+fn hex(bytes: &[u8]) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(char::from(DIGITS[usize::from(byte >> 4)]));
+        out.push(char::from(DIGITS[usize::from(byte & 15)]));
+    }
+    out
 }
 
 fn tag_of(entity: &IfcEntity) -> Option<u32> {
@@ -238,12 +250,14 @@ fn main() -> anyhow::Result<()> {
                 });
                 let taken =
                     instance_transform(data).map(|t| json!({ "axes": t.axes, "origin": t.origin }));
+                let head = (!compact).then(|| hex(&data[..data.len().min(HEAD_BYTES)]));
                 copies.entry(id).or_default().push(json!({
                     "stream": stream,
                     "hit": hit,
                     "gap": next.saturating_sub(id_at + 8),
                     "first": first,
                     "taken": taken,
+                    "head": head,
                 }));
             }
         }
