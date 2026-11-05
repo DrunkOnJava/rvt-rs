@@ -6,15 +6,20 @@
 //! element's body, with the storey `step_writer::storey_of` gives it (the one
 //! it is contained in, that of its space, its whole or its host), where it
 //! used to write a row for every building element with the element's own
-//! `storey_index`.
+//! `storey_index`. An element with folded pieces has a body of several items,
+//! so its row leaves the width, depth and height cells empty; before, they
+//! stated the first loop's alone.
 //!
 //! The probe builds the model `rvt-schedule` and Python's `schedule_csv`
 //! build (the document exporter alone), counts what the old rule would have
 //! written (every building element, the level of its own `storey_index`)
 //! against what `elements_csv` writes now, and checks the CSV it writes: its
 //! header, a cell for every column, the rows in level-elevation order, and
-//! the (ElementId, IFC type, level) of every row against the placements.
-//! Then it builds the model `rvt-ifc` writes with no switch (saved meshes
+//! the (ElementId, IFC type, level) of every row against the placements (a
+//! check that derives from `placements` itself, so it shows the plumbing, not
+//! that the placements match the written file: the MCP scorer reading the
+//! written IFC shows that), and the size cells of every element with folded
+//! pieces. Then it builds the model `rvt-ifc` writes with no switch (saved meshes
 //! on for doors and windows) and says whether its written elements and
 //! storeys are the same ones. Counts and IFC types only: no name, id or
 //! coordinate is printed.
@@ -25,7 +30,12 @@
 //!   moved <n> none-to-storey <n> storey-to-none <n> storey-to-storey <n>
 //!   moved-by-type <IFC type> <n>                  the rows whose level moved
 //!   moved-by-placement <how> <n>                  and why: part, space, opening
-//!   check <name> ok | FAIL <detail>               header, cells, sorted, content
+//!   folded-owners <n> without-element-id <n> size-emptied <n>
+//!                                                 elements with folded pieces, those with no
+//!                                                 ElementId (their row is not found by the
+//!                                                 size check), and those whose size cells
+//!                                                 were non-empty before
+//!   check <name> ok | FAIL <detail>               header, cells, count, sorted, content, sizes
 //!   rvt-ifc default written <n> differing <n>     the rvt-ifc model against it
 //!
 //! Usage:
@@ -157,10 +167,19 @@ fn main() -> Result<()> {
     let (mut none_to_storey, mut storey_to_none, mut storey_to_storey) = (0usize, 0usize, 0usize);
     let mut moved_by_type: BTreeMap<String, usize> = BTreeMap::new();
     let mut moved_by_placement: BTreeMap<String, usize> = BTreeMap::new();
+    // The (ElementId, IFC type) of each element with folded pieces, and how
+    // many of them stated a size before.
+    let mut owners: Vec<(String, String)> = Vec::new();
+    let mut unkeyed_owners = 0usize;
+    let mut size_emptied = 0usize;
     for (index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
+            type_guid,
             storey_index,
+            extrusion,
+            solid_shape,
+            representation_map_index,
             ..
         } = entity
         else {
@@ -172,6 +191,20 @@ fn main() -> Result<()> {
             removed += 1;
             *removed_by_type.entry(ifc_type.clone()).or_insert(0) += 1;
             continue;
+        }
+        let has_folded_pieces = model.body_pieces.get(&index).is_some_and(|pieces| {
+            pieces
+                .iter()
+                .any(|piece| matches!(placed.get(*piece), Some(Some(Placement::Folded))))
+        });
+        if has_folded_pieces {
+            match type_guid {
+                Some(id) => owners.push((neutralised(id), neutralised(ifc_type))),
+                None => unkeyed_owners += 1,
+            }
+            if extrusion.is_some() && solid_shape.is_none() && representation_map_index.is_none() {
+                size_emptied += 1;
+            }
         }
         let old = storey_index.filter(|i| *i < model.building_storeys.len());
         let new = storey_of(&placed, index);
@@ -199,6 +232,10 @@ fn main() -> Result<()> {
     );
     print_counts("moved-by-type", &moved_by_type);
     print_counts("moved-by-placement", &moved_by_placement);
+    println!(
+        "folded-owners {} without-element-id {unkeyed_owners} size-emptied {size_emptied}",
+        owners.len() + unkeyed_owners
+    );
 
     let mut failed = false;
     let mut check = |name: &str, detail: Option<String>| match detail {
@@ -250,6 +287,20 @@ fn main() -> Result<()> {
     check(
         "content",
         (wrong > 0).then(|| format!("{wrong} (id, type, level) keys differ")),
+    );
+
+    let sized = owners
+        .iter()
+        .flat_map(|(id, ty)| {
+            rows.iter()
+                .skip(1)
+                .filter(move |r| r.len() > 13 && r[0] == *id && r[1] == *ty)
+        })
+        .filter(|r| !(r[11].is_empty() && r[12].is_empty() && r[13].is_empty()))
+        .count();
+    check(
+        "sizes",
+        (sized > 0).then(|| format!("{sized} rows of an element with folded pieces state a size")),
     );
 
     let ifc_run = run_export(&mut rf, &ExportOptions::default())?;

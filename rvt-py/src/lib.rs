@@ -855,7 +855,7 @@ impl PyRevitFile {
 
     /// Spreadsheet schedule of the decoded model as CSV text
     /// (`rvt::ifc::schedule_csv`): `kind="elements"` (every building
-    /// element the IFC export writes, on the level it puts it in: type,
+    /// element the IFC export writes, on the storey it puts it on: type,
     /// level, material, placement, size, host) or
     /// `kind="rooms"` (number, name, level). `metric=True` writes lengths in
     /// metres; `excel=True` prefixes a UTF-8 byte-order mark for Excel on

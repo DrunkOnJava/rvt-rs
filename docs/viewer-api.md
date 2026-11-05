@@ -46,7 +46,7 @@ model finishes parsing.
 exported model (`rvt::ifc::schedule_csv`): `kind` is `"elements"` or
 `"rooms"`, `metric` switches lengths to metres, `excel` prefixes a UTF-8
 byte-order mark. The element schedule lists the elements the IFC export
-writes, each on the level it puts it in, so a piece the export folds into
+writes, each on the storey it puts it on, so a piece the export folds into
 another element's body has no row. The viewer's Schedule panel downloads both
 with `excel = true`, since most people open them in Excel.
 
@@ -498,7 +498,7 @@ describing the error.
 | `openRvtBytesWithDiagnosticsModeAndOpenLimits` | `bytes`, `mode: string`, `limits: { largeModel?, maxStreamBytes?, maxInflateBytes?, savedMeshes?, phase? }` or `null`, `progress?: (stage: string, done: number, total: number \| null) => void` | `{ model, diagnostics, phases }` | `openRvtBytesWithDiagnosticsMode` under the reader's resource limits: `largeModel` is `rvt-ifc --large-model` (streams up to 2 GiB, inflating up to the 4 GiB wasm32 holds, the walker's scan cap lifted to match), `maxStreamBytes` and `maxInflateBytes` are whole numbers of bytes that win over it, and a field left out keeps its default. `savedMeshes` (default `true`) draws the doors and windows of Revit 2023 to 2027 files from the meshes Revit saved for them, as `rvt-ifc` does by default; `false` keeps their bounding boxes and skips the pass over the saved graphics. `phase` (a phase's name, matched exactly first, or its ElementId as a number) exports that project phase, as `rvt-ifc --phase` does; see [Export phase](#export-phase). A stream a limit stops is listed in the diagnostics (`stream_not_read_resource_limit`, a `Not read whole:` warning each) and the viewer offers "Retry with large-model limits"; unknown fields and fractional or negative limits throw. When the saved graphics cannot be read the model keeps its boxes and the diagnostics carry a warning. `progress`, when given, is called as the decoder works with the stage name (`schema-parse`, `candidate-scan`, `element-decode`, `partition-scan`, `saved-graphics`, `saved-meshes`) and how many of how many it has done (`total` is `null` where the stage has no count yet), at a stage's start, its end and each whole percent between; see [Decode progress](#decode-progress). A function that throws is ignored |
 | `quickSummary` | `bytes` | `Summary` | Release, build, PartAtom and the stream inventory, read without decoding the model |
 | `fileMetadata` | `bytes` | `FileMetadata` | Document identity (release, worksharing, last save, GUID, save counter), from the two identity streams only |
-| `scheduleCsv` | `model`, `kind: string`, `metric: boolean`, `excel: boolean` | `string` | The element (`kind` `"elements"`: the elements the IFC export writes, each on the level it puts it in) or room (`"rooms"`) schedule as CSV, the columns of the [user guide](user-guide.md#get-a-schedule-into-excel) |
+| `scheduleCsv` | `model`, `kind: string`, `metric: boolean`, `excel: boolean` | `string` | The element (`kind` `"elements"`: the elements the IFC export writes, each on the storey it puts it on) or room (`"rooms"`) schedule as CSV, the columns of the [user guide](user-guide.md#get-a-schedule-into-excel) |
 | `buildSceneGraph` | `model` | scene tree | The model's scene graph |
 | `distinctIfcTypes` | `scene` | `string[]` | The IFC types in a scene, for the layer toggles |
 | `elementInfoPanel` | `model`, `entity_index: number` | info panel | What the info panel shows for one element |

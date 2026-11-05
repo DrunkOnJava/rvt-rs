@@ -276,7 +276,7 @@ schedule_csv(self, kind: str = "elements", metric: bool = False, excel: bool = F
 ```
 The element (`kind="elements"`) or room (`kind="rooms"`) schedule as CSV
 text, with the columns of `rvt-schedule`: the elements the IFC export writes,
-each on the level it puts it in (see the [user
+each on the storey it puts it on (see the [user
 guide](user-guide.md#get-a-schedule-into-excel)). `metric=True` writes lengths
 in metres, `excel=True` prefixes a UTF-8 byte-order mark for Excel on Windows.
 Only decoded values are written; unknowns are empty cells. `phase` is

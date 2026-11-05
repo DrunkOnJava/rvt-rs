@@ -417,7 +417,7 @@ pub fn file_metadata(bytes: &[u8]) -> Result<JsValue, JsValue> {
 
 /// Spreadsheet schedule of an exported model as CSV
 /// ([`rvt::ifc::schedule_csv`]): `kind` is `"elements"` (every building
-/// element the IFC export writes, on the level it puts it in) or `"rooms"`;
+/// element the IFC export writes, on the storey it puts it on) or `"rooms"`;
 /// `metric` switches lengths to metres; `excel`
 /// prefixes a UTF-8 byte-order mark so Excel on Windows reads non-ASCII
 /// names correctly.

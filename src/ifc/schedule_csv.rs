@@ -108,7 +108,7 @@ pub fn room_columns(unit: LengthUnit) -> Vec<String> {
 }
 
 /// One row per building element the IFC export writes (rooms included, as
-/// `IFCSPACE`), on the storey the export puts it in.
+/// `IFCSPACE`), on the storey the export puts it on.
 ///
 /// Both follow [`step_writer::placements`](super::step_writer::placements),
 /// the writer's own decision, as the MCP server does. An element the export
@@ -116,9 +116,15 @@ pub fn room_columns(unit: LengthUnit) -> Vec<String> {
 /// separate loops, [`Placement::Folded`]) is not written as an element and has
 /// no row. The `level` and `level_elevation` cells are the storey of
 /// [`storey_of`]: the one the element is contained in, that of the space that
-/// contains it, that of the whole it is a part of (a stair's run or landing, a
-/// railing's or a curtain wall's member), or that of the host an opening cuts;
-/// empty where the export contains it in the building only.
+/// contains it, that of the whole it is a part of (a stair's run, landing or
+/// stringer, or a curtain wall's member), or that of the host an opening cuts;
+/// empty where `storey_of` gives none (the export contains the element in the
+/// building only, or its chain of spaces, wholes and hosts ends in no storey).
+///
+/// The size columns describe the body the writer emits for a plain
+/// extrusion. An element with folded pieces is written with a body of several
+/// items, which one width, depth and height cannot state, so its size cells
+/// are empty.
 ///
 /// # Examples
 ///
@@ -173,6 +179,11 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
         if matches!(placements.get(entity_index), Some(Some(Placement::Folded))) {
             continue;
         }
+        let has_folded_pieces = model.body_pieces.get(&entity_index).is_some_and(|pieces| {
+            pieces
+                .iter()
+                .any(|piece| matches!(placements.get(*piece), Some(Some(Placement::Folded))))
+        });
         let storey =
             storey_of(&placements, entity_index).and_then(|i| model.building_storeys.get(i));
         // Same precedence as the STEP writer: profile set > layer set >
@@ -216,8 +227,11 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
             })
             .unwrap_or_default();
         // Size columns describe the body the writer emits: only the
-        // extrusion path, and width / depth only for a rectangle.
-        let body_is_extrusion = solid_shape.is_none() && representation_map_index.is_none();
+        // extrusion path, and width / depth only for a rectangle. An owner
+        // with folded pieces has a body of several items, and its extrusion
+        // is the first loop alone.
+        let body_is_extrusion =
+            solid_shape.is_none() && representation_map_index.is_none() && !has_folded_pieces;
         let (width, depth, height) = match extrusion.as_ref().filter(|_| body_is_extrusion) {
             Some(e) => {
                 let (w, d) = match &e.profile_override {

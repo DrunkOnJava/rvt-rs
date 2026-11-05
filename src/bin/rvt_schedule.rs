@@ -3,8 +3,8 @@
 //!
 //! Runs the document exporter and writes one row per decoded element (or
 //! per room) with the columns documented in `rvt::ifc::schedule_csv`. The
-//! rows are the elements the IFC export writes, each on the level the export
-//! puts it in. Only decoded values are written; unknowns are empty cells.
+//! rows are the elements the IFC export writes, each on the storey the export
+//! puts it on. Only decoded values are written; unknowns are empty cells.
 //!
 //! ```bash
 //! rvt-schedule model.rvt                       # writes model.elements.csv
@@ -67,8 +67,8 @@ struct Cli {
 
 #[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
 enum Kind {
-    /// Every building element the IFC export writes, on the level it puts
-    /// it in: type, level, material, placement, size, host.
+    /// Every building element the IFC export writes, on the storey it
+    /// puts it on: type, level, material, placement, size, host.
     Elements,
     /// Every room: number, name, level.
     Rooms,
