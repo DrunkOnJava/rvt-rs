@@ -602,6 +602,14 @@
           "type": "integer",
           "minimum": 0,
           "description": "Exported IfcSpaces that are rooms whose resolved outline is the boundary of a region, a column overlapping a wall having been taken off it or an end of one wall edge lying on another, or falls up to 0.02 ft short of their record box on a side (SpaceOutlineSource stored_solid_approximate, RE-316): their area is approximate, up to 0.68% under Revit's floor area where Revit's export does not take the column off."
+        },
+        "wall_cut_openings_left_out": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "The steps of the walls' native records that name a rectangular wall opening, a fire hose cabinet, a door in a second wall or a curtain wall, and write no opening for it, by reason (RE-321, RE-338): rectangular_opening_not_read, rectangular_opening_not_in_wall, curtain_wall_box_not_read, curtain_wall_not_in_wall, curtain_wall_within_half_foot_of_wall_end, curtain_wall_box_beside_another_wall, cabinet_cut_solid_not_read, cabinet_not_reaching_wall, door_cut_flag_not_read, door_opening_box_not_read, door_wall_axis_not_read, door_second_wall_parallel_to_door_wall, door_opening_not_in_second_wall, opening_extent_not_positive. Revit's export writes an opening for most of these; they are left out because the box Revit cuts is not proven. Empty when every step is written or the export has no geometry."
         }
       }
     },

@@ -225,6 +225,12 @@ pub struct IfcModel {
     /// element with no entry gets `$` for both.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub filler_sizes: std::collections::BTreeMap<usize, entities::FillerSize>,
+    /// The steps of the walls' native records that write no further opening
+    /// (RE-321, RE-338), by why: a rectangular wall opening, a cabinet, a
+    /// door in a second wall or a curtain wall whose opening was not proven.
+    /// Counted in `exported.wall_cut_openings_left_out`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub wall_cut_openings_left_out: std::collections::BTreeMap<String, usize>,
 }
 
 /// A layered element's layers across its thickness (RE-53).
@@ -768,6 +774,16 @@ pub struct ExportedModelDiagnostics {
     /// Revit's export does not take the column off.
     #[serde(default)]
     pub approximate_outline_spaces: usize,
+    /// The steps of the walls' native records that name a rectangular wall
+    /// opening, a fire hose cabinet, a door in a second wall or a curtain
+    /// wall and write no opening for it, by why (RE-321, RE-338):
+    /// `curtain_wall_within_half_foot_of_wall_end`,
+    /// `curtain_wall_box_beside_another_wall`,
+    /// `door_second_wall_parallel_to_door_wall` and the others of
+    /// `docs/export-diagnostics.md`. Empty when every step is written or the
+    /// export has no geometry.
+    #[serde(default)]
+    pub wall_cut_openings_left_out: std::collections::BTreeMap<String, usize>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -999,6 +1015,7 @@ impl Exporter for PlaceholderExporter {
             body_pieces: Default::default(),
             storey_properties: Default::default(),
             filler_sizes: Default::default(),
+            wall_cut_openings_left_out: Default::default(),
         })
     }
 }
@@ -1460,11 +1477,13 @@ fn export_rvt_doc_reporting(
     // #824: the openings a face-hosted door's or window's symbol cuts in the
     // element whose face hosts it.
     attach_hosted_cut_openings(rf, &mut entities);
-    // RE-321: the openings rectangular wall openings cut in a wall, which
-    // nothing fills.
-    if policy.include_geometry {
-        wall_cut_openings::attach_wall_cut_openings(rf, &mut entities);
-    }
+    // RE-321: the openings a rectangular wall opening, a cabinet, a door in
+    // a second wall and a curtain wall cut in a wall, which nothing fills.
+    let wall_cut_openings_left_out = if policy.include_geometry {
+        wall_cut_openings::attach_wall_cut_openings(rf, &mut entities, &record_handoffs)
+    } else {
+        Default::default()
+    };
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);
@@ -1519,6 +1538,7 @@ fn export_rvt_doc_reporting(
         body_pieces,
         storey_properties,
         filler_sizes,
+        wall_cut_openings_left_out,
     })
 }
 
@@ -4698,6 +4718,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         area_body_refusals,
         resolved_outline_spaces,
         approximate_outline_spaces,
+        wall_cut_openings_left_out: model.wall_cut_openings_left_out.clone(),
     }
 }
 
@@ -5269,13 +5290,15 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             _ => false,
         })
         .count();
-    // RE-321: a wall's cut opening holds the wall's type name twice, in
+    // RE-321: a wall's cut opening holds its cutter's type name twice, in
     // `Pset_OpeningElementCommon` and `Pset_EnvironmentalImpactIndicators`.
     let wall_cuts = 2 * model
         .entities
         .iter()
         .filter(|entity| match entity {
-            entities::IfcEntity::WallCutOpening { host, .. } => references.contains_key(host),
+            entities::IfcEntity::WallCutOpening { reference_from, .. } => {
+                references.contains_key(reference_from)
+            }
             _ => false,
         })
         .count();
