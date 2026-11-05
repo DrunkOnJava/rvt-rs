@@ -282,19 +282,27 @@ function highlightEntity(idx: number): void {
   highlightWhere((data) => data.entityIndex !== undefined && indices.has(data.entityIndex));
 }
 
-/** The pieces the IFC export folds into the body of element `owner` (#823). */
+/**
+ * The pieces the IFC export folds into the body of element `owner` (#823). The
+ * model lists the pieces of every owner; the export folds a piece only where
+ * the owner's body and the piece's are both plain, and a piece with a body of
+ * its own stays an element with its own tree row. The tree lists exactly the
+ * elements the export writes, so a listed piece is not folded.
+ */
 function bodyPiecesOf(owner: number): number[] {
   const pieces = model?.body_pieces;
-  if (pieces instanceof Map) return pieces.get(owner) ?? [];
-  return pieces?.[String(owner)] ?? [];
+  const all = pieces instanceof Map ? pieces.get(owner) : pieces?.[String(owner)];
+  return (all ?? []).filter((piece) => !listedEntities.has(piece));
 }
 
 /**
- * The element the IFC export writes for the drawn entity `idx`: the element
- * that owns it where it is a piece folded into that element's body, else
- * `idx` itself. The info panel says the same in `entity_index`.
+ * The element the IFC export writes for the drawn entity `idx`: `idx` itself
+ * where the tree lists it, else the element that owns it where it is a piece
+ * folded into that element's body. The info panel says the same in
+ * `entity_index`.
  */
 function writtenElementOf(idx: number): number {
+  if (listedEntities.has(idx)) return idx;
   const pieces = model?.body_pieces;
   const owners: Array<[number | string, number[]]> =
     pieces instanceof Map ? [...pieces] : Object.entries(pieces ?? {});
@@ -833,7 +841,9 @@ interface IfcModel {
    * The further pieces of an element of separate loops that the IFC export
    * writes as items of the owner's body, by the owner's entity index (#823).
    * The pieces stay in `entities` and are drawn, as a `Map` from
-   * serde-wasm-bindgen and an object keyed by string in JSON.
+   * serde-wasm-bindgen and an object keyed by string in JSON. The export
+   * folds only the pieces whose body and the owner's are both plain: the
+   * scene graph lists the others.
    */
   body_pieces?: Map<number, number[]> | Record<string, number[]>;
   entities?: Array<{
@@ -1006,6 +1016,8 @@ interface ExportDiagnostics {
 
 let model: IfcModel | null = null;
 let sceneGraph: SceneNode | null = null;
+/** The entity indices of the nodes of `sceneGraph`: the elements the IFC export writes. */
+let listedEntities = new Set<number>();
 let distinctTypes: string[] = [];
 let lastGlb: Uint8Array | null = null;
 /** Retained so the schedule can re-render once the GLB is in the scene. */
@@ -1171,6 +1183,7 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
   hideScaffoldNote();
   model = null;
   sceneGraph = null;
+  listedEntities = new Set<number>();
   resetTreeFilter();
   distinctTypes = [];
   lastGlb = null;
@@ -1329,6 +1342,7 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
     }
     model = msg.model;
     sceneGraph = msg.scene;
+    listedEntities = listedIndices(msg.scene, new Set<number>());
     distinctTypes = msg.types;
     lastGlb = msg.glb;
     lastSchedule = msg.schedule;
@@ -3443,6 +3457,13 @@ function exportQualityClass(level: string): string {
     default:
       return 'scaffold';
   }
+}
+
+/** The entity indices of the nodes under and including `node`. */
+function listedIndices(node: SceneNode, out: Set<number>): Set<number> {
+  if (node.entity_index !== null) out.add(node.entity_index);
+  node.children.forEach((child) => listedIndices(child, out));
+  return out;
 }
 
 function countEntities(node: SceneNode): number {
