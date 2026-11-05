@@ -13,7 +13,9 @@
     3147725 moves on both office files, 1 void on Snowdon architectural (now
     Revit's) and 3 on Snowdon structural, with no export to check them; the
     other 50 exports, the 19 held-out and spent models among them, are byte for
-    byte `main`'s.
+    byte `main`'s. Of those 19 the probe read 11, each with no loop to read, and
+    could not read 8 (Revit 2018 to 2022): the rule is exercised on no
+    held-out model.
   - Why Revit does this is unread, and the rule for a first line stored along
     the walk rests on 9 loops of the office. `probe_re355_void_loop_directions`
     prints each loop and the counts by branch (RE-355 section 3).

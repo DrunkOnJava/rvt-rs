@@ -71,13 +71,15 @@ From Measure run 42122779912 (6d3f6c73), counts of loops read (a void's loop of 
 
 So the against branch is exercised on 3 models and the along branch on 2 (the office's two saves), of the 5 with a Revit export in that run (the two terrain offices hold no void off a wall); and no loop read ended with the direction unread. Snowdon architectural's one moved tag and the 3 on Snowdon structural are not split by branch: those runs kept no per-void reading. The 19 held-out and spent exports are byte for byte `main`'s with the rule (Measure run 42122776008), so it moved no held-out tag.
 
+The held-out and spent models, as counts (Measure run 42129836920, db0bb07b, dispatched from the branch so that its scrub script keeps the probe's count line; 18 held-out models and 1 spent pair): 11 were read, and each holds 0 loops (no void off a wall in its Revit export whose sketch lines the probe read), so the rule is exercised on no held-out model, 0 right of 0 read where an export can say; 8 were not read, because the probe's native reader is not measured on Revit 2018 to 2022 (7 held-out models and the spent pair).
+
 ## 4. What is not shown
 
 - Why is unread: nothing here says why Revit begins the loop where it does. The finding restates RE-339 §1 with the direction taken from one line instead of from all of them.
 - The notch drawn in the middle of a loop is one void in two saves of one file. The rule for a first line stored along the walk rests on 9 loops of the office (six of four lines, two notch loops of six with the notch at the closing corner and 3147725).
 - Core Interior exercises only the other branch (`a` stored against the walk): 42 four-line loops and 20 loops of 27 lines.
 - Every line read is a straight `GLine`; a curve in a loop is not read. A loop where two lines lie on one edge is not in the data. A line of zero length has no direction, and the probe does not say what it would do.
-- The held-out models: the rule moved none of their 19 exports (§3). Their loops are not counted in §3: the probe's count line came out empty for them in run 42122779912, which read a non-UTF-8 export as an error, and run 42128437517 re-reads them.
+- The held-out models exercise neither branch: 11 read hold no loop, 8 are not read (§3), and the rule moved none of their 19 exports. What the rule does on a held-out void is not measured.
 - 3 voids on Snowdon structural moved, with no export to check them; none of the moved tags there is shown right or wrong.
 
 ## 5. What changed in the exporter
