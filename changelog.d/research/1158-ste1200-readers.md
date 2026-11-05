@@ -21,10 +21,15 @@
   in the file says so. In one held-out model 57 owners pass the scale check and
   end with no primitive, and what they hold is not known. Saved graphics stay a
   research reading on Revit 2015 to 2022 and no export reads them. On the
-  files CI fetches the changes alter nothing: 92 of 92 export hashes are
-  identical to `main`'s, with and without `--saved-meshes` (Measure runs
-  42054602432 and 42054606416), and the pair tables and the 8 held-out scenes
-  are unchanged (42054610905, 42054620459). No file CI fetches holds a deferred
-  pointer or a `FacetedTopology9` object (0 of 92 open files and 18 held-out
-  models), and a set flag draws no body in any, so nothing in CI reaches the
-  three paths and nothing in CI will catch a regression in them.
+  files CI fetches the changes alter no export and no body: 92 of 92 export
+  hashes are identical to `main`'s, with and without `--saved-meshes` (Measure
+  runs 42054602432 and 42054606416), and the pair tables, the owners drawn
+  whole and their triangles are unchanged in the pairs and the 8 held-out
+  scenes (42054610905, 42054620459). Their stop histograms do move against
+  #1436: 29 owners in 15 of the 24 pair files pass the scale check, and in 3 of
+  the 8 held-out scenes 1, 58 and 2 owners change their stops, 57 of the 58 in
+  one model going from partial to `decoded_saved_graphics` with no primitive
+  (182 to 239). No file CI fetches holds a deferred pointer or a
+  `FacetedTopology9` object (0 of 92 open files and 18 held-out models), so
+  nothing in CI reaches those two paths and nothing in CI will catch a
+  regression in them.
