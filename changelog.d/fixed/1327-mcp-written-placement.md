@@ -22,21 +22,19 @@
   `placements` too, so a part counts as bound to its whole's storey in all
   of them, and `folded_into_bodies` is always in the summary, empty where
   none is folded. Measured with the scorer of #1404 and `base=none`, on code
-  head 3f49fe67 (this change merged with main da4c9141): run 41960292399
-  finds no model failing the counts, element membership, element storeys,
-  levels or rooms checks, which failed on the BIM4LCA office as built and at
-  permit (47 coverings, and 599 of 12,974 and of 13,020 rows, 542 of them
-  curtain-wall members and the rest stair flights and landings) and on the 5
-  Revit 2025 stair models before (runs 41949018446 and 41949021964); the
-  names and type object checks it still fails are the ones #1406 fixed. With
-  #1406 merged in (a throwaway branch, 33f28990), run 41960400798 passes 32
-  of 32 models: the 6 reference models, the 24 Revit 2025 models and the
-  office as built and at permit. The IFC text `rvt-ifc` writes is the same
-  on 34 of 34 models, the reference models, the four office files and the 24
-  Revit 2025 models, in run 41960289212 (head 3f49fe67 against main
-  da4c9141, `scorers=none`). In the diagnostics of those runs only
-  `exported.storey_bound_elements` moves, on 7 of the 34 models: the office
-  as built from 12,961 to 12,971 and at permit from 13,008 to 13,018, the
-  Revit 2025 stair models 13 to 15 from 24 to 27 and 16 and 17 from 24 to
-  25, the elements bound to a storey through their whole. The held-out
-  models and Autodesk's samples were not run.
+  head d0836833 (this change merged with main 6f4bc534, which has #1406):
+  run 41965720746 passes 32 of 32 models, the 6 reference models, the 24
+  Revit 2025 models and the BIM4LCA office as built and at permit. On main's
+  server before, the office failed the counts, element membership, element
+  storeys and levels checks (47 coverings, and 599 of 12,974 and of 13,020
+  rows, 542 of them curtain-wall members and the rest stair flights and
+  landings, 8 and 7 of 10 levels) and the 5 Revit 2025 stair models failed
+  element storeys and levels (runs 41949018446 and 41949021964). The IFC
+  text `rvt-ifc` writes is the same on 34 of 34 models, the reference
+  models, the four office files and the 24 Revit 2025 models, in run
+  41965717668 (head d0836833 against main 6f4bc534, `scorers=none`). In the
+  diagnostics of that run only `exported.storey_bound_elements` moves, on 7
+  of the 34 models: the office as built from 12,961 to 12,971 and at permit
+  from 13,008 to 13,018, the Revit 2025 stair models 13 to 15 from 24 to 27
+  and 16 and 17 from 24 to 25, the elements bound to a storey through their
+  whole. The held-out models and Autodesk's samples were not run.
