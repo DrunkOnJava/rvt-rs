@@ -58,6 +58,15 @@ window, and the space occupancy set, which revit-ifc's certified list for that
 view does not create, so only such a file writes them (RE-239 §1). The glazing
 set on doors and windows, where IFC4 applies it and rvt-rs writes it, is scored.
 
+An unfilled opening is keyed by its Tag and the wall it voids, since an element
+that cuts several walls leaves one in each. An unfilled opening rvt-rs writes
+that Revit's export of this file lacks but its export of a sibling file (another
+Revit export in the same directory with the same first four name words, the
+BIM4LCA office as built and at permit) holds is a pair inconsistency (RE-338, the
+maintainer, 2026-11-04, as RE-321 section 4 for a rectangular opening): its
+values are counted on their own line, neither as values Revit does not write nor
+as matches. The rule names no ids.
+
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
@@ -69,6 +78,9 @@ import ifcopenshell
 import ifcopenshell.util.element
 import ifcopenshell.util.pset
 import ifcopenshell.util.unit
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ifc_common import siblings  # noqa: E402
 
 
 def key_of(obj):
@@ -94,8 +106,30 @@ def property_key_of(obj):
         tag = getattr(obj, "Tag", None)
         if not tag:
             return None
-        return f"opening:{tag}:{'filled' if obj.HasFillings else 'void'}"
+        if obj.HasFillings:
+            return f"opening:{tag}:filled"
+        # An element that cuts several walls leaves one unfilled opening in
+        # each, with one Tag: keyed by the wall as well (RE-338).
+        host = next(
+            (getattr(rel.RelatingBuildingElement, "Tag", None) for rel in obj.VoidsElements or ()),
+            None,
+        )
+        return f"opening:{tag}:void:{host}" if host else f"opening:{tag}:void"
     return key_of(obj)
+
+
+def sibling_openings(path):
+    """The keys of the unfilled openings of the sibling exports of path (another
+    Revit export in the same directory with the same first four name words)."""
+    keys = set()
+    for other in siblings(path):
+        f = ifcopenshell.open(other)
+        for obj in f.by_type("IfcOpeningElement"):
+            if not obj.HasFillings:
+                key = property_key_of(obj)
+                if key:
+                    keys.add(key)
+    return keys
 
 
 def value_of(value, metres_per_unit, radians_per_unit=1.0):
@@ -419,7 +453,17 @@ def main(argv):
             if len(worst) < listing:
                 worst.append(f"  {key} {pset}.{prop}: rvt-rs {mine}, Revit {value}")
     totals = [sum(r[i] for r in rows.values()) for i in range(4)]
-    extra = sum(1 for k in ours if k not in theirs)
+    # An unfilled opening rvt-rs writes that Revit's export of this file lacks
+    # and its export of a sibling file (the same building in another state)
+    # holds is a pair inconsistency, not a value Revit does not write: counted
+    # apart, and never scored as a match (RE-338, the maintainer's decision of
+    # 2026-11-04, as RE-321 section 4 for a rectangular opening).
+    unmatched_voids = {
+        key for key in our_objects if key.startswith("opening:") and ":void" in key and key not in their_objects
+    }
+    apart_objects = unmatched_voids & sibling_openings(args[1]) if unmatched_voids and theirs else set()
+    apart_values = sum(1 for k in ours if k[0] in apart_objects)
+    extra = sum(1 for k in ours if k not in theirs and k[0] not in apart_objects)
     # Revit's export writes no standard property set at all where it was made
     # with no property sets, as Core Interior's was (RE-239 §5):
     # what rvt-rs writes cannot be scored against it, so it is counted apart.
@@ -437,6 +481,11 @@ def main(argv):
         f"Revit values on objects rvt-rs writes: {totals[0]}; equal: {totals[1]}; "
         f"different: {totals[2]}; missing: {totals[3]}; rvt-rs values Revit does not write: {extra}"
     )
+    if apart_objects:
+        print(
+            f"rvt-rs values on openings Revit's export of this file lacks but its export of a sibling file"
+            f" holds, counted apart (a pair inconsistency, RE-338): {apart_values} on {len(apart_objects)} openings"
+        )
     for (pset, prop), (n, equal, different, missing) in sorted(rows.items()):
         print(f"  {pset}.{prop}: {n}, equal {equal}, different {different}, missing {missing}")
     for (pset, prop), n in sorted(defects.items()):
@@ -477,7 +526,7 @@ def main(argv):
         print(f"IFC2X3 values no IFC4 set Revit's export writes holds, in rvt-rs's own set, not scored here: {in_own_set}")
     only = collections.defaultdict(lambda: [0, 0])
     for key, pset, prop in ours if theirs else ():
-        if (key, pset, prop) not in theirs and (pset, prop) not in beyond_ifc2x3:
+        if (key, pset, prop) not in theirs and (pset, prop) not in beyond_ifc2x3 and key not in apart_objects:
             only[(pset, prop)][0 if key in their_objects else 1] += 1
     print("rvt-rs values Revit does not write, on objects Revit writes and on others:")
     for (pset, prop), (written, other) in sorted(only.items()):
