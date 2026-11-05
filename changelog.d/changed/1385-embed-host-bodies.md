@@ -1,5 +1,5 @@
 - **A wall that embeds a curtain wall is drawn from the mesh Revit saved for
-  it where Revit raised its base (#1385, RE-338).** RE-335 found that Revit
+  it where Revit raised its base (#1385, RE-340).** RE-335 found that Revit
   draws such a wall less the curtain wall's prism and less whatever cuts its
   end stubs, and that no record read says which walls keep the stubs. The
   wall's own saved graphics do: on the BIM4LCA office, as built and at
@@ -10,7 +10,7 @@
   two, one wall at each date, are 1.0% under it). `rvt-ifc`, `rvt-gltf`, the
   Python package and the viewer now draw a wall that embeds a curtain wall
   from its saved mesh when the mesh starts at least 0.5 ft above the wall's
-  base and decodes whole, on Revit 2023 to 2027, and leave the wall as it was
+  base and decodes whole, on Revit 2024 to 2027, and leave the wall as it was
   otherwise: a wall that keeps its stubs (2103576 as built, 2177158) is
   unchanged, and so is a wall with an opening hosted in it, a Tag shared with
   another entity or a base cut at a floor (#1384). The base of all 14 walls

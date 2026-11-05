@@ -1,4 +1,4 @@
-# RE-338: which walls that embed a curtain wall keep their end stubs is in their saved mesh, not in their cut partners
+# RE-340: which walls that embed a curtain wall keep their end stubs is in their saved mesh, not in their cut partners
 
 **Date:** 2026-11-04
 **Issues:** #1385 (a byte signal for which hosts keep their end stubs); follows RE-335 (the six hosts), RE-258 (the base), RE-267 and RE-320 (the top)
@@ -39,7 +39,7 @@ Revit saves the body it drew, stubs cut or kept; that is the signal, and no fiel
 
 ## 4. The rule
 
-`saved_meshes::attach_scoped_with_control` (every scope that reads saved graphics, Revit 2023 to 2027) now also takes the walls that embed a curtain wall: a wall exported as a plain extrusion or with RE-320's stepped top (not one whose base #1384 cut at a floor), alone in its Tag, with no opening, door or window hosted in it, whose native record names a `WallEmbedWallGStep` whose `m_instId` is an `IfcCurtainWall` of the model (the 72 embedded walls of the office are all curtain walls). It reads their saved graphics in the pass that already reads doors' and windows', and when the mesh decodes whole (no diagnostic, RE-224) and its lowest vertex is at least 0.5 ft above the wall's base and at least 0.5 ft below its top, the wall's body is the mesh (`BodySource` `saved_graphics_mesh`, in the wall's frame as every saved mesh is). Any other wall keeps the body it had, and a file with no curtain wall reads no wall record for this.
+`saved_meshes::attach_scoped_with_control` (every scope that reads saved graphics, on Revit 2024 to 2027: `wall_cut_steps` reads the embed step from the walls' native records, which name the ElementId in another shape in Revit 2023 and earlier and so give no steps there) now also takes the walls that embed a curtain wall: a wall exported as a plain extrusion or with RE-320's stepped top (not one whose base #1384 cut at a floor), alone in its Tag, with no opening, door or window hosted in it, whose native record names a `WallEmbedWallGStep` whose `m_instId` is an `IfcCurtainWall` of the model (the 72 embedded walls of the office are all curtain walls). It reads their saved graphics in the pass that already reads doors' and windows', and when the mesh decodes whole (no diagnostic, RE-224) and its lowest vertex is at least 0.5 ft above the wall's base and at least 0.5 ft below its top, the wall's body is the mesh (`BodySource` `saved_graphics_mesh`, in the wall's frame as every saved mesh is). Any other wall keeps the body it had, and a file with no curtain wall reads no wall record for this.
 
 The wall's `extrusion` stays the whole prism, which the passes that read a wall's plan use, as for a stepped top (RE-320); the writer and the glTF draw the mesh. The walls carry no base quantity of their own to correct: a wall with an embed step is one whose record holds a cutting step, and gets none (`add_wall_areas_and_volumes`).
 
@@ -75,7 +75,7 @@ Held-out models (`-f holdout=true`, Measure [41947083013](https://github.com/Dru
 - Walls Revit raises for another reason (the 14 Basement walls on sloped footings, RE-335 section 1) are not touched; the saved mesh may well draw them, but the rule's scope is the embed step.
 - 2041479 at permit keeps 17% of a stub in Revit; its mesh keeps 0.0203 ft² of it, so it is not raised, and is drawn as it was.
 - The saved mesh is not always Revit's IFC body in the stubs' areas: 2103576 as built keeps 0.6656 ft² of stubs in the mesh against Revit's 0.754. That is the existing body's, left as it is.
-- Revit 2015 to 2022: the native records the rule reads are Revit 2023 to 2027's.
+- Revit 2023 and earlier: the walls' native records give no embed step, so no wall is drawn from its mesh. The rule applies on Revit 2024 to 2027, and a raised host has been seen on the two Revit 2024 office files alone.
 - The pull request's Measure runs are filtered (`-f scorers=` the seven wall and mesh scorers on the offices, Core Interior and RE1 Architecture; the held-out models with the two mesh scorers; exports only for the rest): no unfiltered Measure with every scorer on every model has been run on this change. The rule fires on any Revit 2023 to 2027 file that has an `IfcCurtainWall` and a wall that embeds one, so a model outside the ones above (Revit 2025's puzzbobb models are in the last run, but only hashed) is measured against Revit's export only if a scorer was run on it.
 
 ## 7. Reproduce

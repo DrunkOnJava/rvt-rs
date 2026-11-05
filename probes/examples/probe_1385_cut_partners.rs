@@ -7,7 +7,7 @@
 //! wall does not span, cut away by the elements it has `CutPairGStep` partners
 //! with where those stubs lie inside the partners' bodies (RE-335 section 3:
 //! 2098938 and the columns 1927726 and 1927727), and keeps them where they do
-//! not (2103576 has no partner). RE-338 found the partners' boxes cover the
+//! not (2103576 has no partner). RE-340 found the partners' boxes cover the
 //! stubs of every host Revit raises, and also of 2177158 and, at building
 //! permit, 2041479, which keep theirs: this prints what separates them.
 //!

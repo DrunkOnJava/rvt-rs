@@ -5,7 +5,7 @@
 //! away where Revit cuts them and kept where it keeps them (RE-335 section 3:
 //! 2098938 draws the strip over its curtain wall, 2103576 the strip and two end
 //! stubs), so its horizontal faces tell which hosts keep their stubs where no
-//! other record read so far does (`probe_1385_cut_partners`, RE-338).
+//! other record read so far does (`probe_1385_cut_partners`, RE-340).
 //!
 //! For each such wall it prints, in the form `tools/re/wall_stub_bodies_vs_ifc.py`
 //! prints a body, in feet and in the document frame:
