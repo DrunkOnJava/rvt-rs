@@ -267,9 +267,6 @@
               "type": "array"
             }
           },
-          "required": [
-            "value_sources"
-          ],
           "type": "object"
         },
         "FileProvenance": {
@@ -475,9 +472,6 @@
             "reader",
             "rule",
             "copies",
-            "partitions",
-            "parts",
-            "parts_left_out",
             "differs_from_frame"
           ],
           "type": "object"
@@ -1298,9 +1292,6 @@
               "type": "array"
             }
           },
-          "required": [
-            "value_sources"
-          ],
           "type": "object"
         },
         "EntityRefOut": {
@@ -1625,9 +1616,6 @@
             "reader",
             "rule",
             "copies",
-            "partitions",
-            "parts",
-            "parts_left_out",
             "differs_from_frame"
           ],
           "type": "object"
@@ -2367,9 +2355,6 @@
               "type": "array"
             }
           },
-          "required": [
-            "value_sources"
-          ],
           "type": "object"
         },
         "ElementRow": {
@@ -2543,9 +2528,6 @@
             "reader",
             "rule",
             "copies",
-            "partitions",
-            "parts",
-            "parts_left_out",
             "differs_from_frame"
           ],
           "type": "object"
@@ -2853,9 +2835,6 @@
               "type": "array"
             }
           },
-          "required": [
-            "value_sources"
-          ],
           "type": "object"
         },
         "NativeRecordOut": {
@@ -3050,9 +3029,6 @@
             "reader",
             "rule",
             "copies",
-            "partitions",
-            "parts",
-            "parts_left_out",
             "differs_from_frame"
           ],
           "type": "object"
