@@ -197,12 +197,14 @@ CYLINDER_LEAST = {
 # out on rac_advanced 2026, 107 doors and none left out on each rme save of 2025 to 2027,
 # and on rac_advanced 2027 68 doors and 24 windows compared and 15 doors left out, in the
 # 8 host walls of #1475: 14 whose frame differs from the 2024 save's and one whose frame
-# is the same. Only the 2027 numbers were set differently from what was predicted.
+# is the same. The 2027 doors floor and ceiling were set differently from what was
+# predicted, and its windows floor is the 24 measured. When #1475 is read they return
+# to 83 doors, 24 windows and a ceiling of 0.
 OPENINGS_LEAST = {
     "racadvancedsampleproject": {
         2025: {"IfcDoor": 83, "IfcWindow": 24},
         2026: {"IfcDoor": 83, "IfcWindow": 24},
-        2027: {"IfcDoor": 68, "IfcWindow": 18},
+        2027: {"IfcDoor": 68, "IfcWindow": 24},
     },
     "racbasicsampleproject": {
         2025: {"IfcDoor": 10, "IfcWindow": 7},
