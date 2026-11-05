@@ -388,6 +388,19 @@ def step_run(job, **want):
     return None
 
 
+def step_text(job, action_text, **want):
+    """The script of a step: its `run`, or where it uses one of this repository's own actions, that
+    action's script (`action_text(path)`, None where there is none)."""
+    for step in job.get("steps", []):
+        if all(step.get(k) == v for k, v in want.items()):
+            if step.get("run") is not None:
+                return step["run"]
+            match = LOCAL_USE.fullmatch(step.get("uses") or "")
+            if match and match[1].startswith(".github/actions/"):
+                return action_text(match[1])
+    return None
+
+
 def tracked_rust_versions():
     out = subprocess.run(
         ["git", "ls-files", "-z", "--", "*Cargo.toml"], cwd=ROOT, capture_output=True, text=True, check=True
@@ -428,11 +441,18 @@ def main():
         print(f"msrv: rust-version {root} in Cargo.toml, {sum(v is not None for v in manifests.values())} crates, "
               f"ci.yml's test matrix, {len(PROSE_MSRV_FILES)} files of prose")
 
+    def action_text(path):
+        """The scripts of a local composite action: its steps' `run` and the .sh files beside it."""
+        folder = ROOT / path
+        spec = yaml.safe_load((folder / "action.yml").read_text()) if (folder / "action.yml").is_file() else {}
+        runs = [step["run"] for step in ((spec or {}).get("runs") or {}).get("steps", []) if "run" in step]
+        return "\n".join(runs + [f.read_text() for f in sorted(folder.glob("*.sh"))]) or None
+
     deploy = workflows["deploy-viewer.yml"]["jobs"]["deploy"]
     errors += docs_problems(
         workflow_on(ci).get("push", {}).get("paths-ignore", []),
         step_run(ci["jobs"]["viewer-paths"], id="paths"),
-        step_run(deploy, name="Wait for CI on the commit"),
+        step_text(deploy, action_text, name="Wait for CI on the commit"),
         EXPECTED_BUILT_FROM,
     )
     print("documentation paths: ci.yml paths-ignore, viewer-paths and Deploy viewer's wait step")

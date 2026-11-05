@@ -273,6 +273,28 @@ class Docs(unittest.TestCase):
         self.assertTrue(self.problems(d=deploy(GROUP + "|.*")))
 
 
+class StepText(unittest.TestCase):
+    JOB = {"steps": [{"name": "a", "run": "echo a"}, {"name": "wait", "uses": "$/.github/actions/wait-for-check"}, {"name": "ext", "uses": "actions/checkout@v7"}]}
+
+    def text(self, name, scripts=None):
+        return cw.step_text(self.JOB, lambda path: (scripts or {}).get(path), name=name)
+
+    def test_a_run_is_its_own_text(self):
+        self.assertEqual(self.text("a"), "echo a")
+
+    def test_a_local_action_is_its_scripts(self):
+        self.assertEqual(self.text("wait", {".github/actions/wait-for-check": "grep -qvE '(x)'"}), "grep -qvE '(x)'")
+
+    def test_a_local_action_with_no_script_is_none(self):
+        self.assertIsNone(self.text("wait", {}))
+
+    def test_a_third_party_action_has_none_to_read(self):
+        self.assertIsNone(self.text("ext", {".github/actions/wait-for-check": "x"}))
+
+    def test_no_such_step_is_none(self):
+        self.assertIsNone(self.text("missing"))
+
+
 class On(unittest.TestCase):
     def test_yamls_on_key_reads_as_true(self):
         self.assertEqual(cw.workflow_on({True: {"push": 1}}), {"push": 1})
