@@ -15,6 +15,9 @@
 //!   step <wall> <index> <step class> <cutter> <digest of the step's fields>
 //!   wall <wall> <body length> <digest of the body>
 //!   cutter <cutter> <class> <body length> <digest of the body>
+//!   stepjson <wall> <cutter> <step class> <the step's fields>
+//!   wobj <wall> <index> <class> <digest of the object's fields>
+//!   cobj <cutter> <index> <class> <digest of the object's fields>
 //!   prec <id> <stream> <length> <digest of the record's bytes>
 //!
 //! Usage:
@@ -74,6 +77,10 @@ fn probe(path: &str) -> Result<()> {
             named = true;
             cutters.insert(cutter);
             println!(
+                "stepjson {wall} {cutter} {} {}",
+                object.class_name, object.fields
+            );
+            println!(
                 "step {wall} {index} {} {cutter} {}",
                 object.class_name,
                 digest(object.fields.to_string().as_bytes())
@@ -81,6 +88,13 @@ fn probe(path: &str) -> Result<()> {
         }
         if named {
             walls.insert(wall);
+            for (index, object) in graph.objects.iter().enumerate() {
+                println!(
+                    "wobj {wall} {index} {} {}",
+                    object.class_name,
+                    digest(object.fields.to_string().as_bytes())
+                );
+            }
             let body = record.body.as_deref().unwrap_or_default();
             println!("wall {wall} {} {}", body.len(), digest(body));
         }
@@ -92,6 +106,16 @@ fn probe(path: &str) -> Result<()> {
         ..Options::default()
     };
     extract_graphs(&mut rf, &options, |record: Record| {
+        if let Some(graph) = record.graph.as_ref() {
+            for (index, object) in graph.objects.iter().enumerate() {
+                println!(
+                    "cobj {} {index} {} {}",
+                    record.identity.element_id,
+                    object.class_name,
+                    digest(object.fields.to_string().as_bytes())
+                );
+            }
+        }
         let body = record.body.as_deref().unwrap_or_default();
         println!(
             "cutter {} {} {} {}",
