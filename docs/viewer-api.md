@@ -305,7 +305,10 @@ room whose own phase is not it, are left out, and the diagnostics count them
 `openRvtBytesWithDiagnosticsModeAndOpenLimits` exports another, as `rvt-ifc
 --phase` and the Python API's `phase` do: a phase's name (matched exactly
 first) or its ElementId as a number. Left out, the export is the last phase,
-so a call without it returns what it always did. A phase the file lacks
+so a call without it returns what it always did, except that a project whose
+last phase holds no room has the rooms of the latest phase that holds any
+(`diagnostics.room_phase_fallback` names the phase and counts them, #1359); a
+phase passed is exact. A phase the file lacks
 throws, and its message lists the file's phases.
 
 The result carries `phases`, the project's phases in order, `[{ id, name? }]`,

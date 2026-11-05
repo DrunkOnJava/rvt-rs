@@ -442,7 +442,15 @@ room whose own phase is not it, are left out, and the diagnostics count them
 skipped items). `phase` exports another, as `rvt-ifc --phase` does: a phase's
 name, matched exactly first, or its ElementId, as a `str` or an `int`; `None`,
 the default, is the last phase, so a call without it writes the bytes it
-always wrote. A phase the file does not have raises `ValueError` listing the
+always wrote, with one exception (#1359): a project whose last phase holds no
+room (Autodesk's `rac_basic_sample_project`) writes the rooms of the latest phase
+that holds any, and `write_ifc`, `rvt_to_ifc`, `schedule_csv`, `export_diagnostics`
+and `rvt_to_ifc_diagnostics` raise a `RuntimeWarning` naming the phase and
+saying to pass `phase=`; `decoded_elements()` and `element_counts()`, which take
+no `phase`, warn the same way when their result holds rooms, and say to export
+with `phase=`, since the handle keeps it. The diagnostics' `room_phase_fallback`
+names the phase and counts the rooms. A phase passed is exact: naming the last
+phase writes no room. A phase the file does not have raises `ValueError` listing the
 phases it does, and so does a file whose phases are not read (a family, or
 Revit 2015 and earlier). `write_ifc`, `schedule_csv`, `export_diagnostics`,
 `export_diagnostics_json`, `rvt_to_ifc` and `rvt_to_ifc_diagnostics` take it,

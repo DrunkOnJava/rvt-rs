@@ -1154,6 +1154,34 @@ impl RevitFile {
             .collect()
     }
 
+    /// The phase whose rooms an export with no phase named writes in place of
+    /// the project's last phase's, which holds none (#1359, Griffin,
+    /// 2026-11-05): the latest phase that holds a placed room, with at least
+    /// one placed room in it. `None` where the last phase holds a placed room,
+    /// where no phase does, where the release's records cannot be scanned for
+    /// placement, where a phase is named
+    /// ([`Self::set_export_phase`], the last included, is exact), and where
+    /// the export applies no phase ([`Self::project_phases`] is empty). Every
+    /// other element still follows the last phase.
+    pub fn room_phase_fallback(&mut self) -> Option<ProjectPhase> {
+        if let Ok(release) = self.layout_release() {
+            if crate::partition_element_records_2023::is_32bit_release(release)
+                && !crate::partition_element_records_2023::applies_export_filters(release)
+            {
+                return None;
+            }
+        }
+        let filter = self.memoised_phase_filter();
+        if filter.read_error.is_some() {
+            return None;
+        }
+        let id = filter.room_fallback_in_effect()?;
+        Some(ProjectPhase {
+            id,
+            name: filter.names.get(&id).cloned(),
+        })
+    }
+
     /// Choose the phase the export shows, by the phase's name (exactly) or
     /// its ElementId, instead of the project's last (RE-326). Revit's IFC
     /// export shows one phase and leaves out an element that does not exist
@@ -1168,6 +1196,11 @@ impl RevitFile {
     /// what the phase leaves out, so the next export reads again at the new
     /// phase; choosing the one in effect keeps it. [`Self::clear_export_phase`]
     /// goes back to the default.
+    ///
+    /// A phase named is exact: naming the project's last phase writes no room
+    /// where the default export falls back to an earlier phase's rooms
+    /// ([`Self::room_phase_fallback`]), and so drops the walk made under the
+    /// default.
     ///
     /// # Errors
     ///
@@ -1204,30 +1237,34 @@ impl RevitFile {
                 filter.phases_listing()
             )));
         };
-        if filter.export != Some(id) {
+        // A named phase is exact: where the room fallback was in effect, the
+        // walk made under it holds rooms this phase leaves out, even when it
+        // is the last (#1359).
+        let named = filter.with_export_phase(id);
+        if filter.differs_in_effect_from(&named) {
             self.walk = None;
         }
-        self.phase_filter = Some(Arc::new(filter.with_export_phase(id)));
+        self.phase_filter = Some(Arc::new(named));
         self.chosen_export_phase = Some(id);
         Ok(())
     }
 
-    /// Back to the default export phase, the project's last, as it is before
+    /// Back to the default export phase, the project's last with the rooms'
+    /// fallback ([`Self::room_phase_fallback`]), as it is before
     /// [`Self::set_export_phase`] chooses one: [`Self::export_phase`] is `None`
     /// again. As a choice of another phase does, going back from one drops the
-    /// memoised production walk; on a handle that has chosen none this changes
-    /// nothing.
+    /// memoised production walk where the default writes anything else; on a
+    /// handle that has chosen none this changes nothing.
     pub fn clear_export_phase(&mut self) {
         if self.chosen_export_phase.take().is_none() {
             return;
         }
         let filter = self.memoised_phase_filter();
-        if let Some(last) = filter.order.last().copied() {
-            if filter.export != Some(last) {
-                self.walk = None;
-                self.phase_filter = Some(Arc::new(filter.with_export_phase(last)));
-            }
+        let default = filter.with_default_export_phase();
+        if filter.differs_in_effect_from(&default) {
+            self.walk = None;
         }
+        self.phase_filter = Some(Arc::new(default));
     }
 
     /// The ElementId of the phase [`Self::set_export_phase`] chose, whether it
