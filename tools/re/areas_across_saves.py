@@ -21,7 +21,9 @@ Area, paired by GlobalId:
   the one its release gets, not merely an Area value: `area_plan_topology` on
   the 2024 save and `area_plan_topology_unchecked` on the 2025, 2026 and 2027
   saves (Griffin, 2026-11-05, "Mark 2025 to 2027 in the file"; the rule is
-  `partition_area_records::area_release_unchecked`). A 2025 Area that reads
+  `partition_area_records::area_unchecked`), and on the 2021 save, whose lines
+  have partition copies that disagree and whose outlines are the later state
+  of the model, which no Revit export shows (#1434). A 2025 Area that reads
   `area_plan_topology`, and a 2024 Area that reads the unchecked value, are
   failures;
 - body area: the plan area of its top surface, within 1e-6 relative;
@@ -67,9 +69,11 @@ import sys
 SET = "RvtElementRecordGeometry"
 CHECKED_SOURCE = "area_plan_topology"
 UNCHECKED_SOURCE = "area_plan_topology_unchecked"
-# The releases whose Areas are marked unchecked: `AREA_UNCHECKED_RELEASES` in
-# src/research/partition_area_records.rs.
-UNCHECKED_RELEASES = (2025, 2026, 2027)
+# The saves whose Areas are marked unchecked: `AREA_UNCHECKED_RELEASES` in
+# src/research/partition_area_records.rs (2025 to 2027), and the 2021 save of
+# rac_advanced, whose Areas are drawn from lines with conflicting partition
+# copies (`area_unchecked` there, #1434).
+UNCHECKED_RELEASES = (2021, 2025, 2026, 2027)
 EXPECTED_AREAS = 25
 AREA_TOLERANCE = 1e-6
 SURFACE_TOLERANCE = 1e-6
@@ -89,8 +93,8 @@ FIELDS = (
 
 def expected_source(label):
     """The outline source the Areas of the save labelled `label` (its release)
-    must read: the unchecked one for 2025 to 2027, `area_plan_topology` for the
-    rest. A label that is not a release gets `area_plan_topology`."""
+    must read: the unchecked one for 2021 and 2025 to 2027, `area_plan_topology`
+    for the rest. A label that is not a release gets `area_plan_topology`."""
     try:
         release = int(label)
     except ValueError:

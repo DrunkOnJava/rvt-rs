@@ -244,8 +244,10 @@ pub const AREA_JOINED_FIELD: &str = "m_area_body_joined";
 pub const AREA_TOPOLOGY_FIELD: &str = "m_area_body_plan_topology";
 
 /// The field of an Area, true where its region is the loop of Revit's plan
-/// topology and its release is one whose Areas nothing outside the file checks
-/// ([`area_release_unchecked`]).
+/// topology and nothing outside the file checks it: its release is one whose
+/// Areas no Revit export checks ([`area_release_unchecked`]), or its lines have
+/// partition copies that disagree and the loop is the later state of the model,
+/// which no Revit export shows ([`area_unchecked`], #1434).
 pub const AREA_TOPOLOGY_UNCHECKED_FIELD: &str = "m_area_body_plan_topology_unchecked";
 
 /// The releases whose Areas, read from the plan topology, are marked
@@ -261,9 +263,22 @@ pub const AREA_TOPOLOGY_UNCHECKED_FIELD: &str = "m_area_body_plan_topology_unche
 pub const AREA_UNCHECKED_RELEASES: std::ops::RangeInclusive<u32> = 2025..=2027;
 
 /// Whether the Areas of Revit `revit_version` that are read from the plan
-/// topology say `area_plan_topology_unchecked`. The one place this is decided.
+/// topology say `area_plan_topology_unchecked`.
 pub fn area_release_unchecked(revit_version: u32) -> bool {
     AREA_UNCHECKED_RELEASES.contains(&revit_version)
+}
+
+/// Whether an Area read from the plan topology says
+/// `area_plan_topology_unchecked`: its release is one of
+/// [`AREA_UNCHECKED_RELEASES`], or it was drawn from a group of lines whose
+/// partition copies disagree (`conflicted`, #1434). The 2021 save of
+/// `rac_advanced` holds both states of the model, and the plan topology reads
+/// the later one; the only Revit export of the project shows the earlier state,
+/// so nothing checks that outline (Griffin, 2026-11-05: an Area outline no Revit
+/// export checks does not say `area_plan_topology`). The one place this is
+/// decided.
+pub fn area_unchecked(revit_version: u32, conflicted: bool) -> bool {
+    conflicted || area_release_unchecked(revit_version)
 }
 
 /// The field of an Area that holds the arcs of its outline and holes, where it
@@ -728,6 +743,9 @@ struct AreaBody {
     joined: bool,
     /// Whether the region is the plan topology's (RE-333).
     topology: bool,
+    /// Whether the group's lines have partition copies that disagree, so that
+    /// the region is the plan topology's alone (#1434).
+    conflicted: bool,
     /// The native records the plan topology's region was read from, while the
     /// handle records value sources (#1368); empty otherwise.
     records: Vec<SourcePart>,
@@ -1210,6 +1228,9 @@ struct Located {
     face: Result<AreaFace, &'static str>,
     /// Whether the region is the plan topology's (RE-333).
     topology: bool,
+    /// Whether the group's lines have partition copies that disagree and the
+    /// region is the plan topology's alone (#1434).
+    conflicted: bool,
     /// The native records the plan topology's region was read from (#1368).
     records: Vec<SourcePart>,
 }
@@ -1388,6 +1409,7 @@ fn locate(
             key,
             face: Err(REFUSED_GROUP),
             topology: false,
+            conflicted: false,
             records: Vec::new(),
         });
     }
@@ -1444,6 +1466,7 @@ fn locate(
         key,
         face,
         topology: from_topology,
+        conflicted: conflicted && from_topology,
         records,
     })
 }
@@ -1486,6 +1509,7 @@ fn draw_area(
         height_feet,
         joined: face.joined,
         topology: located.topology,
+        conflicted: located.conflicted,
         records: located.records.clone(),
     })
 }
@@ -1895,7 +1919,7 @@ pub fn areas_from_partition_chain_records(
                 }
                 if body.topology {
                     fields.push((AREA_TOPOLOGY_FIELD.into(), InstanceField::Bool(true)));
-                    if area_release_unchecked(revit_version) {
+                    if area_unchecked(revit_version, body.conflicted) {
                         fields.push((
                             AREA_TOPOLOGY_UNCHECKED_FIELD.into(),
                             InstanceField::Bool(true),
@@ -2252,6 +2276,23 @@ mod tests {
             group_arrangement(&lines, KEY, BASE),
             Group::Unreadable
         ));
+    }
+
+    #[test]
+    fn an_area_of_conflicting_copies_is_unchecked_whatever_its_release() {
+        for release in [2015, 2021, 2024, 2025, 2027] {
+            assert!(area_unchecked(release, true));
+        }
+    }
+
+    #[test]
+    fn an_area_without_conflicting_copies_is_unchecked_only_from_2025() {
+        for release in [2015, 2020, 2021, 2023, 2024] {
+            assert!(!area_unchecked(release, false));
+        }
+        for release in [2025, 2026, 2027] {
+            assert!(area_unchecked(release, false));
+        }
     }
 
     #[test]

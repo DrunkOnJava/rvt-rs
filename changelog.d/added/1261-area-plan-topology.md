@@ -1,7 +1,7 @@
 - **All 25 Areas of Autodesk's `rac_advanced` sample are written with their
   region on its 2015 to 2020 and 2022 to 2027 saves, from Revit's own plan
   topology; 16 were on 2015 to 2024 (RE-330) and none on 2025 to 2027, and the
-  2021 save, which holds two states of 16 lines, still writes none
+  2021 save, which holds two states of 16 lines, is #1434's
   (#1261).** For each area scheme on each Level Revit keeps the loops its area
   boundary lines make, each with its area, and each Area names its loop. The
   loop is rebuilt from the lines, each moved by its area rule's offset (to a
