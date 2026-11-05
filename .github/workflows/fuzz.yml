@@ -129,20 +129,58 @@ jobs:
 
       # The newest corpus artifact of this target that a run on `main` saved and
       # that has not expired (a run on another branch never saves one).
+      #
+      # A corpus that cannot be read is not the target's failure: the listing and
+      # the download are tried three times, and a corpus still unread (or a zip that
+      # does not test clean) is a warning, and the night starts from the seeds as it
+      # does when there is none. The zip is unpacked beside the corpus and copied in
+      # only whole, so a bad one leaves no partial corpus. That night does not save
+      # its corpus either (`state=failed`): a seeds-only corpus saved as the newest
+      # artifact would be the one the next night restores, in place of the one that
+      # could not be read.
       - name: Restore the corpus
+        id: restore
         env:
           GH_TOKEN: ${{ github.token }}
           TARGET: ${{ matrix.target }}
         run: |
           mkdir -p "fuzz/corpus/${TARGET}"
-          id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=fuzz-corpus-${TARGET}&per_page=50" \
-            --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_branch == "main")] | sort_by(.created_at) | last | .id // empty')
-          if [ -n "$id" ]; then
-            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "${RUNNER_TEMP}/corpus.zip"
-            unzip -q -o "${RUNNER_TEMP}/corpus.zip" -d "fuzz/corpus/${TARGET}"
-            echo "restored artifact ${id}"
-          else
+          zip="${RUNNER_TEMP}/corpus.zip"
+          unpacked="${RUNNER_TEMP}/corpus-restored"
+          retry() {
+            local attempt
+            for attempt in 1 2 3; do
+              if "$@"; then
+                return 0
+              fi
+              sleep $((attempt * 10))
+            done
+            return 1
+          }
+          newest() {
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=fuzz-corpus-${TARGET}&per_page=50" \
+              --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_branch == "main")] | sort_by(.created_at) | last | .id // empty'
+          }
+          fetch() {
+            rm -rf "$unpacked"
+            mkdir -p "$unpacked"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$zip" \
+              && unzip -tq "$zip" > /dev/null \
+              && unzip -q -o "$zip" -d "$unpacked"
+          }
+          unread() {
+            echo "::warning::the corpus artifact of ${TARGET} could not be read ($1): this night starts from the seeds and does not save its corpus over the one it could not read"
+            echo "state=failed" >> "$GITHUB_OUTPUT"
+          }
+          if ! id=$(retry newest); then
+            unread "listing the artifacts failed three times"
+          elif [ -z "$id" ]; then
             echo "::warning::no corpus artifact of ${TARGET} to restore: this night starts from the seeds"
+          elif ! retry fetch; then
+            unread "downloading or unzipping artifact ${id} failed three times"
+          else
+            cp -R "$unpacked"/. "fuzz/corpus/${TARGET}/"
+            echo "restored artifact ${id}: $(find "$unpacked" -type f | wc -l) inputs"
           fi
 
       - name: Seed the corpus
@@ -184,9 +222,9 @@ jobs:
           echo "corpus after cmin: $(find "corpus/${TARGET}" -type f | wc -l) inputs"
 
       # Thirty days: the next night reads the newest, and a run that fails to save
-      # leaves the one before it.
+      # leaves the one before it. A night whose corpus could not be read saves none.
       - name: Save the corpus
-        if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && steps.restore.outputs.state != 'failed' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: fuzz-corpus-${{ matrix.target }}
