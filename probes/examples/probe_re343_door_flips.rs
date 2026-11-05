@@ -21,7 +21,8 @@
 //!   kind "fields"   a native record class and the names of its root fields,
 //!                   once per class
 //!   kind "door" or "window"
-//!     id, host (the ElementId of the wall the export voids), read (the
+//!     id, host (the ElementId of the wall the export voids), stored_host
+//!     (the ElementId its native record's `m_hostId` names, RE-361), read (the
 //!     transform `scan_instance_transforms` takes: axes and origin), copies
 //!     (every element-data copy: partition stream, offset, the first
 //!     orthonormal 3 x 3 of either determinant within 16 KiB with its
@@ -37,7 +38,8 @@
 //!     Door or Window record of `iter_elements` carries, and the `flip_hand` and
 //!     `flip_facing` of a Door's typed view, or null)
 //!   kind "wall"     id, start, end, flipped and cross_section of each host
-//!                   wall's native record (RE-222)
+//!                   wall's native record (RE-222), the wall the export voids
+//!                   and the one the element's record names (RE-361)
 //!
 //! With `--records` (the form Measure runs a probe on a sample project in)
 //! only the first three elements print their records and objects.
@@ -56,7 +58,9 @@ use rvt::research::native_document::{NATIVE_RELEASES, Options, extract_graphs};
 use rvt::research::native_walls::native_walls;
 use rvt::research::partition_instance_transforms::{instance_transform, scan_instance_transforms};
 use rvt::research::partition_names::element_data_header;
-use rvt::research::partition_schema_mvp::{OPENING_FACING_FIELDS, OPENING_FLIP_FIELDS};
+use rvt::research::partition_schema_mvp::{
+    OPENING_FACING_FIELDS, OPENING_FLIP_FIELDS, OPENING_PLACEMENT_ORIGIN_FIELDS,
+};
 use rvt::walker::{InstanceField, iter_elements};
 use serde_json::{Value, json};
 
@@ -150,6 +154,19 @@ fn shortened(value: &Value) -> Value {
     }
 }
 
+/// The ElementId the native record's `m_hostId` names, where it names one
+/// (RE-361): a door's or window's stored host, whether or not rvt-rs binds it.
+fn stored_host(records: &[Value]) -> Option<u64> {
+    records
+        .first()?
+        .get("root")?
+        .get("m_hostId")?
+        .get("m_id")?
+        .get("m_id64")?
+        .as_i64()
+        .and_then(|id| u64::try_from(id).ok())
+}
+
 /// A record's root fields whose names speak of a flip, a mirror, a hand, a
 /// facing, an orientation, an axis or a placement, for the compact form.
 fn flag_fields(record: &Value) -> Value {
@@ -231,6 +248,7 @@ fn main() -> anyhow::Result<()> {
         for (name, value) in &element.fields {
             if !OPENING_FLIP_FIELDS.contains(&name.as_str())
                 && !OPENING_FACING_FIELDS.contains(&name.as_str())
+                && !OPENING_PLACEMENT_ORIGIN_FIELDS.contains(&name.as_str())
             {
                 continue;
             }
@@ -398,6 +416,7 @@ fn main() -> anyhow::Result<()> {
     let host_ids: BTreeSet<u64> = kinds
         .values()
         .filter_map(|(_, host)| host.map(u64::from))
+        .chain(records.values().filter_map(|record| stored_host(record)))
         .collect();
     let host_walls = native_walls(&mut rf, &host_ids).unwrap_or_else(|error| {
         eprintln!("host walls: not read: {error}");
@@ -441,6 +460,7 @@ fn main() -> anyhow::Result<()> {
                 "kind": kind,
                 "id": id,
                 "host": host,
+                "stored_host": records.get(id).and_then(|record| stored_host(record)),
                 "read": element_read,
                 "copies": element_copies,
                 "records": element_records,
