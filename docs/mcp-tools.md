@@ -435,7 +435,7 @@ The `rvt-ifc` switches that change the model. The defaults are `rvt-ifc`'s.
 | `mode` | [ModeArg](#modearg) | no | Required quality (`rvt-ifc --mode`). |
 | `no_base_quantities` | boolean | no | Leave out the base quantities (`--no-base-quantities`). Default: false. |
 | `revit_property_sets` | boolean | no | Also write Revit's own parameter sets (`--revit-property-sets`). Default: false. |
-| `revit_set_placement` | boolean | no | Also place properties where Revit's exporter does (`--revit-set-placement`). Default: false. |
+| `revit_set_placement` | boolean | no | Also place properties where Revit's exporter does, and keep the material it associates with an `IfcSpace`, which IFC4 does not allow (`--revit-set-placement`). Default: false. |
 | `saved_meshes` | [MeshesArg](#meshesarg) | no | Bodies drawn from saved meshes (`rvt-ifc --saved-meshes`, `--no-saved-meshes`). |
 
 ### LevelOut
