@@ -425,7 +425,7 @@ can't be parsed far enough to build a model.
 Doors and windows of Revit 2023 to 2027 files are drawn from the meshes
 Revit saved for them where all of a mesh decodes, as `rvt-ifc` draws them
 by default; `saved_meshes=False` keeps their bounding boxes, as
-`rvt-ifc --no-saved-meshes` does. When the saved graphics cannot be read,
+`rvt-ifc --no-saved-meshes` does; a wall that embeds a curtain wall is drawn from its saved mesh the same way where Revit has raised its base (RE-338), and `saved_meshes=False` keeps its record's body. When the saved graphics cannot be read,
 the export keeps the bounding boxes and a `RuntimeWarning` says so.
 `export_diagnostics()`, `export_diagnostics_json()` and
 `rvt_to_ifc_diagnostics()` take the same `saved_meshes` and describe the

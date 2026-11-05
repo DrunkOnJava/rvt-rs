@@ -39,13 +39,33 @@ Revit saves the body it drew, stubs cut or kept; that is the signal, and no fiel
 
 ## 4. The rule
 
-`saved_meshes::attach_scoped_with_control` (every scope that reads saved graphics, Revit 2023 to 2027) now also takes the walls that embed a curtain wall: a wall exported as a plain extrusion, alone in its Tag, with no opening, door or window hosted in it, whose native record names a `WallEmbedWallGStep` whose `m_instId` is an `IfcCurtainWall` of the model (the 72 embedded walls of the office are all curtain walls). It reads their saved graphics in the pass that already reads doors' and windows', and when the mesh decodes whole (no diagnostic, RE-224) and its lowest vertex is at least 0.5 ft above the wall's base and at least 0.5 ft below its top, the wall's body is the mesh (`BodySource` `saved_graphics_mesh`, in the wall's frame as every saved mesh is). Any other wall keeps the body it had, and a file with no curtain wall reads no wall record for this.
+`saved_meshes::attach_scoped_with_control` (every scope that reads saved graphics, Revit 2023 to 2027) now also takes the walls that embed a curtain wall: a wall exported as a plain extrusion or with RE-320's stepped top (not one whose base #1384 cut at a floor), alone in its Tag, with no opening, door or window hosted in it, whose native record names a `WallEmbedWallGStep` whose `m_instId` is an `IfcCurtainWall` of the model (the 72 embedded walls of the office are all curtain walls). It reads their saved graphics in the pass that already reads doors' and windows', and when the mesh decodes whole (no diagnostic, RE-224) and its lowest vertex is at least 0.5 ft above the wall's base and at least 0.5 ft below its top, the wall's body is the mesh (`BodySource` `saved_graphics_mesh`, in the wall's frame as every saved mesh is). Any other wall keeps the body it had, and a file with no curtain wall reads no wall record for this.
 
 The wall's `extrusion` stays the whole prism, which the passes that read a wall's plan use, as for a stepped top (RE-320); the writer and the glTF draw the mesh. The walls carry no base quantity of their own to correct: a wall with an embed step is one whose record holds a cutting step, and gets none (`add_wall_areas_and_volumes`).
 
 ## 5. Results
 
-To be measured; see the pull request.
+Measure [41945943795](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41945943795): this branch at 847c3735 against `main` at 77d71cbb (which holds #1384's footings), both offices, Core Interior and RE1 Architecture, with the seven wall and mesh scorers.
+
+| | as built | at permit |
+|---|---:|---:|
+| walls that embed a curtain wall and that the rule considers (plain or RE-320 stepped, alone in their Tag, nothing hosted in them, not on a base cut at a floor) | 44 | 43 |
+| of those, drawn from their saved mesh | 6 | 8 |
+| kept their body for a mesh that did not decode whole | 0 | 0 |
+| the 14 hosts Revit raises: base now Revit's (`wall_heights_vs_ifc`) | 6 of 6 | 8 of 8 |
+| walls whose base and top are Revit's | 598 to 604 of 607 | 577 to 585 of 589 |
+| top Revit's, base not | 8 to 2 | 12 to 4 |
+| `wall_quantities_vs_ifc`: walls whose `Height` rvt-rs's body span makes Revit's | 572 to 578 of 579 | 557 to 565 of 565 |
+| the same for `NetVolume` (rvt-rs's body volume) | 297 to 303 of 607 | 275 to 283 of 589 |
+| `mesh_bodies_vs_ifc`, `IfcWall` bodies: volume within 0.01%, every vertex of rvt-rs's on Revit's surface and of Revit's on rvt-rs's | 5 of 6 | 7 of 8 |
+
+- Only the 14 hosts' rows moved. Every other row of the seven scorers in the two office files is the same, but for the scorers' own fit: the plan turn they estimate from the walls' middles moves by 5e-5 degrees (40.332546 to 40.332493), which shifts the 4th decimal of the Revit frame's coordinates in rows that did not change. 2103576 as built and 2177158 are unchanged, hosts that keep their stubs in Revit.
+- The 2 and 4 walls still off are the Basement walls 2057668 and 2057670 (and 2058499 and 2058501 at permit), 0.123 and 0.044 ft under Revit's base on their footings, which are not embed hosts and are not touched.
+- The one host whose mesh is not Revit's body is 2177212 (both dates): volume ratio 0.9902 and 0.9901, a vertex of Revit's 0.3018 ft from rvt-rs's surface, and none of rvt-rs's off Revit's by more than 1.9e-6 ft. Its base is Revit's. The mesh is Revit's own saved graphics and Revit's IFC export draws the strip 0.114 ft longer (section 3).
+- **Core Interior and RE1 Architecture: `ifc.sha256` identical to `main`'s**, and neither file has a wall that embeds a curtain wall (no note). The offices' exports differ in the 14 hosts' bodies only: a note line per office, `diagnostics.json` and the hash.
+- The cost is one extra read of the plain and stepped walls' native records in a file that has an `IfcCurtainWall` (none in a file that has none: Core Interior and RE1 took 4.41 and 1.17 s against 4.39 and 1.12 s), and the hosts' saved graphics in the pass that already reads doors' and windows'. The offices' export took 20.1 and 17.1 s against 18.3 and 15.5 s on the same CPU model, while the scorers this change does not touch took 5% to 17% longer on the same runner (`wall_bodies_vs_ifc` 126 s against 110, `saved_meshes_vs_ifc` 209 against 179): no cost beyond the pair's runner noise is shown, and none is claimed.
+
+Held-out models: see the pull request (run 41947083013).
 
 ## 6. Not measured, and not drawn
 
