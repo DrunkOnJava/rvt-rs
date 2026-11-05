@@ -1,4 +1,4 @@
-//! Revit 2015 to 2024 Areas from their partition chain records (#763, #1194).
+//! Revit 2015 to 2027 Areas from their partition chain records (#763, #1194).
 //!
 //! An Area's chain record (RE-35) carries `OST_Areas` (-2003200) at
 //! `+0x12` and no bounding-box marker at `+0x50`, so the element-record
@@ -43,6 +43,25 @@
 //! (within 0.01 ft), and 29 of the 30 in the mesh's vertices
 //! (`reports/element-framing/RE-317-area-boundaries.md`).
 //!
+//! The region of Revit's own plan topology comes first
+//! ([`crate::native_area_regions`], RE-333): the loop Revit computed for the
+//! Area, with each line moved by its area rule's offset and arcs drawn, checked
+//! against the area Revit saves for it and against the Area's point. Where it
+//! is not read (no plan, no circuit, a side not read), the region is the lines'
+//! arrangement with its joins (RE-317, RE-330). Where it is read and fails a
+//! check of its own (the loop is not the saved area, the point is outside it,
+//! an arc is not finite, or it is too large to build) and the lines draw the
+//! Area, it has no body and says why, since Revit's saved area does not vouch
+//! for the lines' region. Neither is asked of a group of lines that cannot be
+//! read as a whole (a non-primary design option, a stray height, copies that
+//! disagree, a missing line). The topology draws the Areas whose lines meet
+//! only once offset, or include an arc or a slanted line. Where both give a
+//! region they must be the same one (the same net area and the same outline,
+//! `regions_agree`); an Area whose two regions differ has no body and says
+//! `area_regions_disagree`, so that a file nothing was measured on cannot
+//! disagree silently. Every other check below applies to it as to the lines'
+//! region.
+//!
 //! # Honesty
 //!
 //! - An Area has a body only where its point lies in exactly one region of
@@ -73,11 +92,13 @@
 //!   measured. An Area on the top storey has none.
 //! - The base offset of the Area is read as zero, which is what the office
 //!   measures.
-//! - An Area whose lines do not close, even with their joins, is not read: its
-//!   point lies in no region. No Revit export of an Area bounded by a wall is
-//!   measured.
-//! - Revit 2024 and 2015 to 2023 (RE-324) are read; elsewhere nothing is read
-//!   (fail closed).
+//! - An Area whose lines do not close, even with their joins, or meet only once
+//!   moved by their area rule's offsets, has its point in no region of the
+//!   lines' boxes; its region is Revit's plan topology's where that is read and
+//!   passes its checks (RE-333), and none otherwise.
+//! - Revit 2015 to 2027 are read (RE-324, RE-333); Revit 2025 to 2027 are
+//!   measured against the same project's 2024 save, not against a Revit
+//!   export. Earlier releases are not read (fail closed).
 //!
 //! # Revit 2015 to 2023 (RE-324)
 //!
@@ -108,7 +129,9 @@
 
 use crate::RevitFile;
 use crate::element_record_plan_profiles::{PLAN_PROFILE_SOURCE_FIELD, PlanProfile};
+use crate::ifc::element_provenance::SourcePart;
 use crate::le_bytes;
+use crate::native_area_regions::AreaRegion;
 use crate::partition_area_boundaries::{AreaFace, Arrangement, BoundaryLine};
 use crate::partition_design_options::DesignOptions;
 use crate::partition_element_records::{
@@ -124,10 +147,13 @@ use crate::partition_room_parameters::{
 use crate::walker::{DecodedElement, ElementProvenance, InstanceField};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Releases where the Area record is measured: Revit 2015 to 2023 (RE-324) and
-/// 2024 (RE-191).
-pub const AREA_SUPPORTED_REVIT_VERSIONS: &[u32] =
-    &[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024];
+/// Releases where the Area record is measured: Revit 2015 to 2023 (RE-324),
+/// 2024 (RE-191), and 2025 to 2027, whose records are 2024's after the
+/// entries some carry before their body (RE-333): Autodesk's `rac_advanced`
+/// gets the Areas of its 2024 save.
+pub const AREA_SUPPORTED_REVIT_VERSIONS: &[u32] = &[
+    2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027,
+];
 
 /// Bytes from the start of a Revit 2015 to 2023 Area record to its
 /// `BuiltInCategory` (RE-324): the record's `u32` ElementId, `u32` size, the
@@ -178,6 +204,11 @@ pub const AREA_POINT_OFFSET: usize = 107;
 /// The source of an Area's plan profile and of its body (RE-317).
 pub const AREA_BOUNDARY_SOURCE: &str = "partition_area_boundary_lines";
 
+/// The source of the plan profile and the body of an Area drawn from the loop
+/// of Revit's plan topology, read from native records and not from the frames
+/// of the lines (RE-333).
+pub const AREA_TOPOLOGY_SOURCE: &str = "native_area_plan_topology";
+
 /// The value-source reader of the area boundary lines an Area's region was
 /// drawn from (#1368).
 pub const AREA_LINES_READER: &str = "area_boundary_lines";
@@ -185,6 +216,11 @@ pub const AREA_LINES_READER: &str = "area_boundary_lines";
 /// The value-source reader of the element data that gave an Area's point
 /// (#1368).
 pub const AREA_POINT_READER: &str = "area_point";
+
+/// The value-source reader of the native records an Area's region was read
+/// from where it is the loop of Revit's plan topology (#1368, RE-333): the
+/// Area's own record, its plan's and its bounding lines'.
+pub const AREA_TOPOLOGY_READER: &str = "area_plan_topology";
 
 /// The field of an Area that holds the elevation of its body's base, feet.
 pub const AREA_BODY_BASE_FIELD: &str = "m_area_body_base";
@@ -195,6 +231,40 @@ pub const AREA_BODY_HEIGHT_FIELD: &str = "m_area_body_height";
 /// The field of an Area, true where its outline runs along a stretch of a line
 /// carried on past the extent its record gives, or along a connector (RE-330).
 pub const AREA_JOINED_FIELD: &str = "m_area_body_joined";
+
+/// The field of an Area, true where its region is the loop of Revit's plan
+/// topology (RE-333) and not the arrangement of its lines.
+pub const AREA_TOPOLOGY_FIELD: &str = "m_area_body_plan_topology";
+
+/// The field of an Area, true where its region is the loop of Revit's plan
+/// topology and its release is one whose Areas nothing outside the file checks
+/// ([`area_release_unchecked`]).
+pub const AREA_TOPOLOGY_UNCHECKED_FIELD: &str = "m_area_body_plan_topology_unchecked";
+
+/// The releases whose Areas, read from the plan topology, are marked
+/// `SpaceOutlineSource` `area_plan_topology_unchecked` instead of
+/// `area_plan_topology` (Griffin, 2026-11-05, "Mark 2025 to 2027 in the file"):
+/// Revit 2025, 2026 and 2027. Nothing outside the file checks them: no Revit
+/// export of one exists, and the only check is that the same project's 2024
+/// save gives the same Areas. 2024 is not among them although Snowdon Towers'
+/// 2024 samples have no Revit export either, because a 2024 Area takes the code
+/// path and shares the release of the office's, whose Areas Revit's IFC4 export
+/// checks, and a release is not split. 2015 to 2023 keep `area_plan_topology`:
+/// they have the IFC2X3 export's check, and the docs say how far it goes.
+pub const AREA_UNCHECKED_RELEASES: std::ops::RangeInclusive<u32> = 2025..=2027;
+
+/// Whether the Areas of Revit `revit_version` that are read from the plan
+/// topology say `area_plan_topology_unchecked`. The one place this is decided.
+pub fn area_release_unchecked(revit_version: u32) -> bool {
+    AREA_UNCHECKED_RELEASES.contains(&revit_version)
+}
+
+/// The field of an Area that holds the arcs of its outline and holes, where it
+/// has any (RE-333): a vector with one entry for the outline and one for each
+/// hole, each a vector with one entry for each edge, from a vertex to the next,
+/// that is empty for a line and holds the x and y of the arc's middle point for
+/// an arc.
+pub const AREA_ARCS_FIELD: &str = "m_area_body_arcs";
 
 /// How far a boundary line's height may lie from its Level's, feet.
 pub const AREA_LEVEL_TOLERANCE_FEET: f64 = 1e-3;
@@ -243,6 +313,9 @@ pub const REFUSED_OFF_REGION: &str = "named_lines_not_on_region";
 /// Another placed Area of the same scheme and Level has the same region,
 /// whether or not that Area is drawn.
 pub const REFUSED_REDUNDANT: &str = "two_areas_one_region";
+/// Revit's plan topology and the arrangement of the lines both give the Area
+/// a region, and they are not the same region (RE-333).
+pub const REFUSED_DISAGREE: &str = "area_regions_disagree";
 
 /// How the chain records of a file are walked (RE-324).
 #[derive(Debug, Clone, Copy)]
@@ -258,6 +331,43 @@ struct ChainSpan {
     start: usize,
     end: usize,
     id: u32,
+    /// The bytes of the record's entry block (Revit 2027, RE-333), which the
+    /// body follows; 0 where it has none.
+    entries: usize,
+}
+
+/// Where a 2024 and later chain record says how many entries come before
+/// its body: a `u16` after the class tag at `+0x0c` (RE-333).
+const CHAIN_ENTRY_COUNT_OFFSET: usize = 0x0e;
+
+/// Where the entries of a chain record start, and where its body starts when
+/// it has none: the record's `BuiltInCategory` ([`CATEGORY_OFFSET`]).
+const CHAIN_ENTRIES_FROM: usize = CATEGORY_OFFSET;
+
+/// One entry before a Revit 2027 record's body: an `i64` (a
+/// BuiltInParameter, negative), an `i64` that is -1, a `u16` and a `u32`.
+const CHAIN_ENTRY_LEN: usize = 22;
+
+/// The bytes of the entries before the body of the chain record at
+/// `start..end`, or `None` where they do not fit or an entry's second word
+/// is not -1. The BIM4LCA office's and Core Interior's records (Revit 2024)
+/// have none. Records with some are in RE1 Architecture (Revit 2025), in
+/// `rac_advanced` saved by Revit 2027 (not in its 2025 and 2026 saves) and in
+/// the recorded Autodesk Snowdon Towers 2024 samples; the body after them is
+/// the one a record without them has (RE-333).
+fn chain_entries(buf: &[u8], start: usize, end: usize) -> Option<usize> {
+    let count = usize::from(le_bytes::u16_at(
+        buf,
+        start.checked_add(CHAIN_ENTRY_COUNT_OFFSET)?,
+    )?);
+    let entries = count.checked_mul(CHAIN_ENTRY_LEN)?;
+    let from = start.checked_add(CHAIN_ENTRIES_FROM)?;
+    if from.checked_add(entries)?.checked_add(8)? > end {
+        return None;
+    }
+    (0..count)
+        .all(|k| le_bytes::u64_at(buf, from + k * CHAIN_ENTRY_LEN + 8) == Some(u64::MAX))
+        .then_some(entries)
 }
 
 impl Layout {
@@ -276,26 +386,47 @@ impl Layout {
         }
     }
 
-    /// The declared records of one inflated partition's chain.
-    fn chain(self, buf: &[u8], declared: &BTreeSet<u32>) -> Vec<ChainSpan> {
+    /// The declared records of one inflated partition's chain. A declared
+    /// record of the wide layout whose entry block does not read is left out
+    /// and its ElementId put in `dropped`: an Area among them is not seen, and
+    /// nor is an area boundary line.
+    fn chain(
+        self,
+        buf: &[u8],
+        declared: &BTreeSet<u32>,
+        dropped: &mut BTreeSet<u32>,
+    ) -> Vec<ChainSpan> {
         match self {
-            Self::Wide(marker) => partition_record_chain(buf, &marker)
-                .into_iter()
-                .filter_map(|span| {
-                    let id = u32::try_from(span.element_id).ok()?;
-                    declared.contains(&id).then_some(ChainSpan {
-                        start: span.start,
-                        end: span.end,
-                        id,
-                    })
-                })
-                .collect(),
+            Self::Wide(marker) => {
+                let mut spans = Vec::new();
+                for span in partition_record_chain(buf, &marker) {
+                    let Ok(id) = u32::try_from(span.element_id) else {
+                        continue;
+                    };
+                    if !declared.contains(&id) {
+                        continue;
+                    }
+                    match chain_entries(buf, span.start, span.end) {
+                        Some(entries) => spans.push(ChainSpan {
+                            start: span.start,
+                            end: span.end,
+                            id,
+                            entries,
+                        }),
+                        None => {
+                            dropped.insert(id);
+                        }
+                    }
+                }
+                spans
+            }
             Self::Narrow(tag) => per32::record_spans(buf, tag, declared)
                 .into_iter()
                 .map(|span| ChainSpan {
                     start: span.start,
                     end: span.end,
                     id: span.element_id,
+                    entries: 0,
                 })
                 .collect(),
         }
@@ -315,7 +446,12 @@ impl Layout {
 struct AreaRecord {
     stream: String,
     offset: usize,
+    /// The record without the entry block that came before its body (Revit
+    /// 2025 to 2027), so that its fields are where a record without one has
+    /// them.
     bytes: Vec<u8>,
+    /// The bytes of that entry block, left out of `bytes`.
+    skipped: usize,
     layout: Layout,
     /// The counted lists of ElementIds a Revit 2015 to 2023 record holds, in
     /// order; empty on 2024.
@@ -338,6 +474,11 @@ struct ChainCensus {
     scheme_ids: BTreeSet<u32>,
     /// The ElementIds of every declared area boundary line.
     line_ids: BTreeSet<u32>,
+    /// The ElementIds of the declared chain records of the wide layout whose
+    /// entry block did not read in some partition, so that whatever they are
+    /// was not seen (RE-333). One that is an area boundary line is not among
+    /// `line_ids`, so no Area is refused for it.
+    dropped: BTreeSet<u32>,
 }
 
 /// The ascending counted lists of at least two declared ElementIds that a
@@ -377,16 +518,18 @@ fn area_records(rf: &mut RevitFile, layout: Layout, declared: &BTreeSet<u32>) ->
     let mut found = LatestCopy::default();
     let mut schemes = BTreeSet::new();
     let mut line_ids = BTreeSet::new();
+    let mut dropped = BTreeSet::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
         let partition = partition_number(&stream);
         let buf = inflated.bytes();
-        for span in layout.chain(buf, declared) {
+        for span in layout.chain(buf, declared, &mut dropped) {
             let id = span.id;
             let category =
-                le_bytes::u64_at(buf, span.start + layout.category_offset()).map(|c| c as i64);
+                le_bytes::u64_at(buf, span.start + span.entries + layout.category_offset())
+                    .map(|c| c as i64);
             if category == Some(OST_AREA_SCHEMES) {
                 schemes.insert(id);
                 continue;
@@ -398,7 +541,26 @@ fn area_records(rf: &mut RevitFile, layout: Layout, declared: &BTreeSet<u32>) ->
             if category != Some(OST_AREAS) {
                 continue;
             }
-            let bytes = buf[span.start..span.end].to_vec();
+            // The record as Revit 2024 to 2026 write it: a 2027 record's
+            // entries are left out, so its fields are where theirs are. Only
+            // the wide layout has any; a narrow record is taken whole, and a
+            // span that does not lie in the partition is not read.
+            let bytes = match layout {
+                Layout::Wide(_) => {
+                    let body = span.start + CHAIN_ENTRIES_FROM;
+                    match (
+                        buf.get(span.start..body),
+                        buf.get(body + span.entries..span.end),
+                    ) {
+                        (Some(head), Some(tail)) => [head, tail].concat(),
+                        _ => continue,
+                    }
+                }
+                Layout::Narrow(_) => match buf.get(span.start..span.end) {
+                    Some(record) => record.to_vec(),
+                    None => continue,
+                },
+            };
             let lists = match layout {
                 Layout::Wide(_) => Vec::new(),
                 Layout::Narrow(_) => counted_lists(&bytes, NARROW_LISTS_FROM, declared),
@@ -410,6 +572,7 @@ fn area_records(rf: &mut RevitFile, layout: Layout, declared: &BTreeSet<u32>) ->
                     stream: stream.clone(),
                     offset: span.start,
                     bytes,
+                    skipped: span.entries,
                     layout,
                     lists,
                 },
@@ -420,6 +583,7 @@ fn area_records(rf: &mut RevitFile, layout: Layout, declared: &BTreeSet<u32>) ->
         areas: found.into_values(),
         scheme_ids: schemes,
         line_ids,
+        dropped,
     }
 }
 
@@ -546,6 +710,11 @@ struct AreaBody {
     base_feet: f64,
     height_feet: f64,
     joined: bool,
+    /// Whether the region is the plan topology's (RE-333).
+    topology: bool,
+    /// The native records the plan topology's region was read from, while the
+    /// handle records value sources (#1368); empty otherwise.
+    records: Vec<SourcePart>,
 }
 
 /// What is known of the file around its Areas.
@@ -903,36 +1072,50 @@ impl GroupArrangement {
     }
 }
 
-/// The arrangement of the lines of one scheme on one Level, or `None` where a
-/// line may be missing, its copies disagree, or none can be read. A line that is
-/// not a straight line along an axis is not read, and an Area whose region it
-/// may change is refused ([`GroupArrangement::blocks`], RE-330).
-fn group_arrangement(
-    lines: &BoundaryLines,
-    key: (u32, u32),
-    base_feet: f64,
-) -> Option<GroupArrangement> {
+/// What the lines of one scheme on one Level give (RE-330, RE-333).
+enum Group {
+    /// The lines cannot be read as a whole: one is in a non-primary design
+    /// option, at a stray height, has copies that disagree, or is missing. No
+    /// region of any kind is drawn from the group, Revit's plan topology's
+    /// included.
+    Unreadable,
+    /// The group is sound but its lines cannot be arranged: none is a straight
+    /// line along an axis, or they overlap or are too many. Revit's plan
+    /// topology may still give an Area a region.
+    Unarranged,
+    /// The arrangement of the lines that can be read.
+    Arranged(GroupArrangement),
+}
+
+/// The arrangement of the lines of one scheme on one Level (RE-330). A line that
+/// is not a straight line along an axis is not read, and an Area whose region it
+/// may change is refused ([`GroupArrangement::blocks`]).
+fn group_arrangement(lines: &BoundaryLines, key: (u32, u32), base_feet: f64) -> Group {
     if lines
         .stray_heights
         .iter()
         .any(|height| (height - base_feet).abs() <= AREA_LEVEL_TOLERANCE_FEET)
     {
-        return None;
+        return Group::Unreadable;
     }
     if lines.option_groups.contains(&key) {
-        return None;
+        return Group::Unreadable;
     }
-    let ids = lines.groups.get(&key)?;
+    let Some(ids) = lines.groups.get(&key) else {
+        return Group::Unreadable;
+    };
     let mut readable = Vec::with_capacity(ids.len());
     let mut joined: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     let mut unread: BTreeSet<u32> = BTreeSet::new();
     let mut blocked = Vec::new();
     for id in ids {
-        let line = lines.by_id.get(id)?;
+        let Some(line) = lines.by_id.get(id) else {
+            return Group::Unreadable;
+        };
         if lines.conflicted.contains(id)
             || (line.height - base_feet).abs() > AREA_LEVEL_TOLERANCE_FEET
         {
-            return None;
+            return Group::Unreadable;
         }
         let boundary = BoundaryLine {
             id: *id,
@@ -948,7 +1131,7 @@ fn group_arrangement(
         }
     }
     if readable.is_empty() {
-        return None;
+        return Group::Unarranged;
     }
     for boundary in &readable {
         let names_unread = joined
@@ -958,11 +1141,13 @@ fn group_arrangement(
             blocked.push(segment_box(boundary.from, boundary.to));
         }
     }
-    let arrangement = Arrangement::new(&readable, &joined)?;
-    Some(GroupArrangement {
-        arrangement,
-        blocked,
-    })
+    match Arrangement::new(&readable, &joined) {
+        Some(arrangement) => Group::Arranged(GroupArrangement {
+            arrangement,
+            blocked,
+        }),
+        None => Group::Unarranged,
+    }
 }
 
 /// The Areas of a file that have a body, and why the others have none.
@@ -984,6 +1169,130 @@ struct Located {
     /// The region, or why there is none: the lines cannot be read, or the point
     /// is in no single region of them.
     face: Result<AreaFace, &'static str>,
+    /// Whether the region is the plan topology's (RE-333).
+    topology: bool,
+    /// The native records the plan topology's region was read from (#1368).
+    records: Vec<SourcePart>,
+}
+
+/// Whether a refusal of Revit's plan topology says it was read and failed a
+/// check of its own, as against not being read at all (RE-333).
+fn topology_failed_a_check(reason: &str) -> bool {
+    use crate::native_area_regions::{REFUSED_ARC, REFUSED_AREA, REFUSED_POINT, REFUSED_TOO_LARGE};
+    matches!(
+        reason,
+        REFUSED_AREA | REFUSED_ARC | REFUSED_POINT | REFUSED_TOO_LARGE
+    )
+}
+
+/// The relative difference in net area within which Revit's plan topology and
+/// the arrangement of the lines give the same region (RE-333).
+const REGION_AREA_TOLERANCE: f64 = 1e-6;
+
+/// How close, feet, the outline of one reader's region must be to the other's
+/// at every vertex of either: a step of a few micrometres where two offset
+/// curves meet is the same outline, and so is a vertex on a straight edge.
+const REGION_OUTLINE_TOLERANCE_FEET: f64 = 1e-4;
+
+/// The signed area of a ring of straight edges (positive counter-clockwise).
+fn ring_area(ring: &[(f64, f64)]) -> f64 {
+    ring.iter()
+        .enumerate()
+        .map(|(index, &(x, y))| {
+            let (next_x, next_y) = ring[(index + 1) % ring.len()];
+            x * next_y - next_x * y
+        })
+        .sum::<f64>()
+        / 2.0
+}
+
+/// The length of a closed ring of straight edges, feet.
+fn ring_perimeter(ring: &[(f64, f64)]) -> f64 {
+    ring.iter()
+        .enumerate()
+        .map(|(index, &(x, y))| {
+            let (next_x, next_y) = ring[(index + 1) % ring.len()];
+            (next_x - x).hypot(next_y - y)
+        })
+        .sum()
+}
+
+/// The distance from the point `p` to the segment from `a` to `b`, feet.
+fn point_segment_distance(p: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let length_squared = dx * dx + dy * dy;
+    let along = if length_squared > 0.0 {
+        (((p.0 - a.0) * dx + (p.1 - a.1) * dy) / length_squared).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    (p.0 - (a.0 + along * dx)).hypot(p.1 - (a.1 + along * dy))
+}
+
+/// Whether every vertex of `points` lies within [`REGION_OUTLINE_TOLERANCE_FEET`]
+/// of the closed outline `ring`. False for an empty outline and for a vertex
+/// that is not finite.
+fn near_outline(points: &[(f64, f64)], ring: &[(f64, f64)]) -> bool {
+    !ring.is_empty()
+        && points.iter().all(|&p| {
+            ring.iter().enumerate().any(|(index, &a)| {
+                point_segment_distance(p, a, ring[(index + 1) % ring.len()])
+                    <= REGION_OUTLINE_TOLERANCE_FEET
+            })
+        })
+}
+
+/// Whether two rings of straight edges are the same outline: every vertex of
+/// each within the tolerance of the other's edges. Neither the number of
+/// vertices nor the vertex a ring starts at matters, so a step of a few
+/// micrometres, a vertex on a straight edge, a ring of thousands of vertices
+/// and a ring turned to start elsewhere are each the same outline.
+fn same_outline(a: &[(f64, f64)], b: &[(f64, f64)]) -> bool {
+    near_outline(a, b) && near_outline(b, a)
+}
+
+/// Whether the region of Revit's plan topology and the region of the lines'
+/// arrangement are the same one: no arc in the topology's (the arrangement
+/// reads straight lines only), the same net area, the same outline and each
+/// hole of one the same outline as a hole of the other (RE-333). An outline
+/// moved, turned or sheared is not the same region, whatever its area.
+fn regions_agree(region: &AreaRegion, face: &AreaFace) -> bool {
+    let curved = region.outer_arcs.iter().any(Option::is_some)
+        || region.hole_arcs.iter().flatten().any(Option::is_some);
+    if curved || region.holes.len() != face.holes.len() {
+        return false;
+    }
+    let Some(topology_area) = region.net_area_feet2() else {
+        return false;
+    };
+    let lines_area = ring_area(&face.outer) + face.holes.iter().map(|h| ring_area(h)).sum::<f64>();
+    let scale = topology_area.abs().max(lines_area.abs()).max(1.0);
+    // Outlines within the tolerance of each other differ in area by at most a
+    // band of that width along them.
+    let band = REGION_OUTLINE_TOLERANCE_FEET
+        * (ring_perimeter(&face.outer) + face.holes.iter().map(|h| ring_perimeter(h)).sum::<f64>());
+    let difference = (topology_area - lines_area).abs();
+    if difference.is_nan() || difference > REGION_AREA_TOLERANCE * scale + band {
+        return false;
+    }
+    if !same_outline(&region.outer, &face.outer) {
+        return false;
+    }
+    let mut taken = vec![false; face.holes.len()];
+    for hole in &region.holes {
+        let mut matched = false;
+        for (index, other) in face.holes.iter().enumerate() {
+            if !taken[index] && same_outline(hole, other) {
+                taken[index] = true;
+                matched = true;
+                break;
+            }
+        }
+        if !matched {
+            return false;
+        }
+    }
+    true
 }
 
 /// The elevation of the Level `level`, feet.
@@ -995,17 +1304,32 @@ fn level_elevation(levels: &[PartitionLevel], level: u32) -> Option<f64> {
     elevation.is_finite().then_some(elevation)
 }
 
-/// The region of one Area, whatever else stops it from being drawn: its point
-/// among the lines of its scheme on its Level. `Err` where it has no point, or
-/// its Level or scheme is not named, or its Level's elevation is not known.
+/// The region of one Area, whatever else stops it from being drawn. Revit's
+/// plan topology's region, `topology`, comes first where it was read and passed
+/// its checks (the loop's area against the area Revit saves for it, the Area's
+/// point in the loop and in no hole, RE-333); otherwise the region of the lines'
+/// arrangement with its joins (RE-317, RE-330): the Area's point among the lines
+/// of its scheme on its Level. A group of lines that cannot be read as a whole
+/// (a non-primary design option, a stray height, copies that disagree, a missing
+/// line) gives no region of either kind. Where both give none, the plan
+/// topology's reason is the Area's, being the more specific. Where both give a
+/// region and they are not the same one ([`regions_agree`]), the Area has none
+/// (`area_regions_disagree`). `Err` where it has
+/// no point and no topology, or its Level or scheme is not named, or its Level's
+/// elevation is not known.
 fn locate(
     record: &AreaRecord,
     point: Option<(f64, f64)>,
+    topology: Option<Result<AreaRegion, &'static str>>,
     lines: &BoundaryLines,
     surroundings: &Surroundings<'_>,
-    arrangements: &mut BTreeMap<GroupKey, Option<GroupArrangement>>,
+    arrangements: &mut BTreeMap<GroupKey, Group>,
 ) -> Result<Located, &'static str> {
-    let point = point.ok_or(REFUSED_NO_POINT)?;
+    // An Area whose point is not read can still have the plan topology's
+    // region, which is checked against the point the topology's Area saves.
+    if point.is_none() && !matches!(topology, Some(Ok(_))) {
+        return Err(REFUSED_NO_POINT);
+    }
     let (Some(level), Some(scheme)) = (
         record.named_one(surroundings.level_ids),
         record.named_one(surroundings.scheme_ids),
@@ -1014,18 +1338,66 @@ fn locate(
     };
     let key = (level, scheme);
     let base_feet = level_elevation(surroundings.levels, level).ok_or(REFUSED_HEIGHT)?;
-    let face = match arrangements
+    let group = arrangements
         .entry(key)
-        .or_insert_with(|| group_arrangement(lines, key, base_feet))
-    {
-        Some(group) => match group.arrangement.face_at(point) {
+        .or_insert_with(|| group_arrangement(lines, key, base_feet));
+    if matches!(group, Group::Unreadable) {
+        return Ok(Located {
+            key,
+            face: Err(REFUSED_GROUP),
+            topology: false,
+            records: Vec::new(),
+        });
+    }
+    let by_lines = match (&*group, point) {
+        (Group::Arranged(group), Some(point)) => match group.arrangement.face_at(point) {
             None => Err(REFUSED_REGION),
             Some(face) if group.blocks(&face) => Err(REFUSED_GROUP),
             Some(face) => Ok(face),
         },
-        None => Err(REFUSED_GROUP),
+        (Group::Arranged(_), None) => Err(REFUSED_NO_POINT),
+        (_, _) => Err(REFUSED_GROUP),
     };
-    Ok(Located { key, face })
+    let (face, from_topology, records) = match topology {
+        // Both readers give a region: they must give the same one.
+        Some(Ok(region))
+            if by_lines
+                .as_ref()
+                .is_ok_and(|face| !regions_agree(&region, face)) =>
+        {
+            (Err(REFUSED_DISAGREE), false, Vec::new())
+        }
+        Some(Ok(region)) => (
+            Ok(AreaFace {
+                outer: region.outer,
+                outer_arcs: region.outer_arcs,
+                holes: region.holes,
+                hole_arcs: region.hole_arcs,
+                line_ids: region.line_ids,
+                joined: false,
+            }),
+            true,
+            region.records,
+        ),
+        // The topology was read and failed a check (its loop is not the circuit's
+        // saved area, the Area's point is outside it, an arc is not finite, or
+        // it is too large to build): the lines' region, which Revit's saved
+        // area does not vouch for, is not drawn in its place. The reason is
+        // counted in `exported.area_body_refusals`.
+        Some(Err(reason)) if by_lines.is_ok() && topology_failed_a_check(reason) => {
+            (Err(reason), false, Vec::new())
+        }
+        // Not read (no plan, no circuit, a side not read): the lines' region,
+        // as before the topology was read.
+        Some(Err(reason)) => (by_lines.map_err(|_| reason), false, Vec::new()),
+        None => (by_lines, false, Vec::new()),
+    };
+    Ok(Located {
+        key,
+        face,
+        topology: from_topology,
+        records,
+    })
 }
 
 /// The body of one Area: its region, where the lines its record names are all
@@ -1060,7 +1432,32 @@ fn draw_area(
         base_feet,
         height_feet,
         joined: face.joined,
+        topology: located.topology,
+        records: located.records.clone(),
     })
+}
+
+/// Note, under an Area drawn from Revit's plan topology, the native records
+/// its region was read from (#1368): its own record (the circuit it names and
+/// its point), the plan's (the circuit's sides and saved area) and the record
+/// of each line that bounds it (its curve and its area rule's offsets), the
+/// current copy of each. Nothing is noted where one of them has no place.
+/// The frames of the lines and the Area's partition point
+/// ([`note_area_sources`]) are not noted: the region was not drawn from them.
+fn note_topology_source(rf: &mut RevitFile, id: u32, records: &[SourcePart]) {
+    use crate::ifc::element_provenance::{CopyRule, ValueSource};
+    if records.is_empty() {
+        return;
+    }
+    rf.note_value_source(
+        id,
+        ValueSource::from_parts(
+            AREA_TOPOLOGY_READER,
+            CopyRule::Native,
+            records.len(),
+            records.to_vec(),
+        ),
+    );
 }
 
 /// Note, under a drawn Area, the records its body was drawn from (#1368): the
@@ -1080,7 +1477,7 @@ fn note_area_sources(
     lines: &BoundaryLines,
     point_at: Option<usize>,
 ) {
-    use crate::ifc::element_provenance::{CopyRule, SourcePart, ValueSource};
+    use crate::ifc::element_provenance::{CopyRule, ValueSource};
     let parts: Option<Vec<SourcePart>> = face
         .line_ids
         .iter()
@@ -1152,13 +1549,23 @@ fn area_bodies(
     }
     let points = area_points(rf, revit_version, placed, surroundings.level_ids);
     let record_sources = rf.recording_value_sources();
-    let mut arrangements: BTreeMap<GroupKey, Option<GroupArrangement>> = BTreeMap::new();
+    let ids: BTreeSet<u64> = placed.keys().map(|&id| u64::from(id)).collect();
+    let mut topology = crate::native_area_regions::area_regions(rf, &ids);
+    let mut arrangements: BTreeMap<GroupKey, Group> = BTreeMap::new();
     let mut located: BTreeMap<u32, Result<Located, &'static str>> = BTreeMap::new();
     for (&id, record) in placed {
         let point = points.get(&id).map(|(point, _)| *point);
+        let region = topology.remove(&u64::from(id));
         located.insert(
             id,
-            locate(record, point, &lines, surroundings, &mut arrangements),
+            locate(
+                record,
+                point,
+                region,
+                &lines,
+                surroundings,
+                &mut arrangements,
+            ),
         );
     }
     // Each Area's region is located; the groups' arrangements are not needed
@@ -1203,7 +1610,9 @@ fn area_bodies(
                 out.refused.insert(id, REFUSED_REDUNDANT);
             }
             Ok(body) => {
-                if record_sources {
+                if record_sources && body.topology {
+                    note_topology_source(rf, id, &body.records);
+                } else if record_sources {
                     note_area_sources(
                         rf,
                         id,
@@ -1223,7 +1632,39 @@ fn area_bodies(
     out
 }
 
-/// Every placed Area of a Revit 2015 to 2024 file, as a `DecodedElement` of
+/// The arcs of a face as [`AREA_ARCS_FIELD`] holds them, or `None` where
+/// every edge is a line.
+fn arcs_field(face: &AreaFace) -> Option<InstanceField> {
+    let edges = |arcs: &[Option<(f64, f64)>]| {
+        InstanceField::Vector(
+            arcs.iter()
+                .map(|arc| {
+                    InstanceField::Vector(match arc {
+                        None => Vec::new(),
+                        Some((x, y)) => vec![
+                            InstanceField::Float { value: *x, size: 8 },
+                            InstanceField::Float { value: *y, size: 8 },
+                        ],
+                    })
+                })
+                .collect(),
+        )
+    };
+    let curved = |arcs: &[Option<(f64, f64)>]| arcs.iter().any(Option::is_some);
+    if !curved(&face.outer_arcs) && !face.hole_arcs.iter().any(|arcs| curved(arcs)) {
+        return None;
+    }
+    let mut loops = vec![edges(&face.outer_arcs)];
+    for (index, hole) in face.holes.iter().enumerate() {
+        match face.hole_arcs.get(index) {
+            Some(arcs) => loops.push(edges(arcs)),
+            None => loops.push(edges(&vec![None; hole.len()])),
+        }
+    }
+    Some(InstanceField::Vector(loops))
+}
+
+/// Every placed Area of a Revit 2015 to 2027 file, as a `DecodedElement` of
 /// class `Area` with its number, name and Level where they are read, and its
 /// boundary, base and height where they are proven (RE-317, RE-324). On 2015
 /// to 2023 only the Areas whose body is proven; the others are counted by
@@ -1248,6 +1689,10 @@ pub fn areas_from_partition_chain_records(
     let options = rf.memoised_design_options();
     let options_read = layout.reads_design_options(revit_version);
     let census = area_records(rf, layout, &declared);
+    // The records dropped are counted only on a file that holds an Area or an
+    // area boundary line: elsewhere nothing of an Area can be lost with them.
+    let holds_areas = !census.areas.is_empty() || !census.line_ids.is_empty();
+    rf.set_dropped_chain_entries(if holds_areas { census.dropped.len() } else { 0 });
     let mut placed: BTreeMap<u32, AreaRecord> = census
         .areas
         .into_iter()
@@ -1356,6 +1801,7 @@ pub fn areas_from_partition_chain_records(
                 ));
             }
             if let Some(body) = bodies.drawn.remove(&id) {
+                let arcs = arcs_field(&body.face);
                 let profile = PlanProfile {
                     outer_xy: body.face.outer,
                     inner_xy: body.face.holes,
@@ -1365,7 +1811,12 @@ pub fn areas_from_partition_chain_records(
                 };
                 for (name, mut value) in profile.fields() {
                     if name == PLAN_PROFILE_SOURCE_FIELD {
-                        value = InstanceField::String(AREA_BOUNDARY_SOURCE.into());
+                        let source = if body.topology {
+                            AREA_TOPOLOGY_SOURCE
+                        } else {
+                            AREA_BOUNDARY_SOURCE
+                        };
+                        value = InstanceField::String(source.into());
                     }
                     fields.push((name, value));
                 }
@@ -1383,15 +1834,27 @@ pub fn areas_from_partition_chain_records(
                         size: 8,
                     },
                 ));
+                if let Some(arcs) = arcs {
+                    fields.push((AREA_ARCS_FIELD.into(), arcs));
+                }
                 if body.joined {
                     fields.push((AREA_JOINED_FIELD.into(), InstanceField::Bool(true)));
+                }
+                if body.topology {
+                    fields.push((AREA_TOPOLOGY_FIELD.into(), InstanceField::Bool(true)));
+                    if area_release_unchecked(revit_version) {
+                        fields.push((
+                            AREA_TOPOLOGY_UNCHECKED_FIELD.into(),
+                            InstanceField::Bool(true),
+                        ));
+                    }
                 }
             }
             DecodedElement {
                 id: Some(id),
                 class: "Area".into(),
                 fields,
-                byte_range: record.offset..record.offset + record.bytes.len(),
+                byte_range: record.offset..record.offset + record.skipped + record.bytes.len(),
                 provenance: ElementProvenance::partition(
                     &record.stream,
                     record.offset,
@@ -1403,4 +1866,178 @@ pub fn areas_from_partition_chain_records(
             }
         })
         .collect()
+}
+
+/// The pure helpers that compare two regions, tested for the ways they could be
+/// wrong first: a region that is not the same called the same, then the same
+/// region called different.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn square(side: f64) -> Vec<(f64, f64)> {
+        vec![(0.0, 0.0), (side, 0.0), (side, side), (0.0, side)]
+    }
+
+    fn region(outer: Vec<(f64, f64)>, holes: Vec<Vec<(f64, f64)>>) -> AreaRegion {
+        let hole_arcs = holes.iter().map(|_| Vec::new()).collect();
+        AreaRegion {
+            outer,
+            outer_arcs: Vec::new(),
+            holes,
+            hole_arcs,
+            line_ids: BTreeSet::new(),
+            records: Vec::new(),
+        }
+    }
+
+    fn face(outer: Vec<(f64, f64)>, holes: Vec<Vec<(f64, f64)>>) -> AreaFace {
+        AreaFace {
+            outer,
+            outer_arcs: Vec::new(),
+            holes,
+            hole_arcs: Vec::new(),
+            line_ids: BTreeSet::new(),
+            joined: false,
+        }
+    }
+
+    fn clockwise(ring: Vec<(f64, f64)>) -> Vec<(f64, f64)> {
+        ring.into_iter().rev().collect()
+    }
+
+    #[test]
+    fn a_region_of_another_area_is_not_the_same() {
+        assert!(!regions_agree(
+            &region(square(10.0), vec![]),
+            &face(square(10.5), vec![])
+        ));
+    }
+
+    #[test]
+    fn a_shifted_region_of_the_same_area_is_not_the_same() {
+        let shifted: Vec<(f64, f64)> = square(10.0).iter().map(|&(x, y)| (x + 0.5, y)).collect();
+        assert!(!regions_agree(
+            &region(square(10.0), vec![]),
+            &face(shifted, vec![])
+        ));
+    }
+
+    #[test]
+    fn a_sheared_region_of_the_same_area_is_not_the_same() {
+        let sheared = vec![(0.0, 0.0), (10.0, 0.0), (13.0, 10.0), (3.0, 10.0)];
+        assert!(!regions_agree(
+            &region(square(10.0), vec![]),
+            &face(sheared, vec![])
+        ));
+    }
+
+    #[test]
+    fn a_region_with_an_arc_is_not_the_lines_region() {
+        let mut curved = region(square(10.0), vec![]);
+        curved.outer_arcs = vec![None, Some((10.5, 5.0)), None, None];
+        assert!(!regions_agree(&curved, &face(square(10.0), vec![])));
+    }
+
+    #[test]
+    fn a_hole_one_reader_lacks_is_not_the_same() {
+        let hole = clockwise(vec![(2.0, 2.0), (4.0, 2.0), (4.0, 4.0), (2.0, 4.0)]);
+        assert!(!regions_agree(
+            &region(square(10.0), vec![hole.clone()]),
+            &face(square(10.0), vec![])
+        ));
+        assert!(!regions_agree(
+            &region(square(10.0), vec![]),
+            &face(square(10.0), vec![hole])
+        ));
+    }
+
+    #[test]
+    fn two_holes_are_not_matched_to_one() {
+        let hole = clockwise(vec![(2.0, 2.0), (4.0, 2.0), (4.0, 4.0), (2.0, 4.0)]);
+        let other = clockwise(vec![(6.0, 6.0), (8.0, 6.0), (8.0, 8.0), (6.0, 8.0)]);
+        assert!(!regions_agree(
+            &region(square(10.0), vec![hole.clone(), hole.clone()]),
+            &face(square(10.0), vec![hole, other])
+        ));
+    }
+
+    #[test]
+    fn a_region_with_the_same_holes_is_the_same() {
+        let first = clockwise(vec![(2.0, 2.0), (4.0, 2.0), (4.0, 4.0), (2.0, 4.0)]);
+        let second = clockwise(vec![(6.0, 6.0), (8.0, 6.0), (8.0, 8.0), (6.0, 8.0)]);
+        let reversed_order = vec![second.clone(), first.clone()];
+        assert!(regions_agree(
+            &region(square(10.0), vec![first, second]),
+            &face(square(10.0), reversed_order)
+        ));
+    }
+
+    #[test]
+    fn an_outline_that_is_not_finite_is_not_the_same() {
+        let mut broken = square(10.0);
+        broken[2] = (f64::NAN, 10.0);
+        assert!(!same_outline(&broken, &square(10.0)));
+        assert!(!same_outline(&square(10.0), &broken));
+        assert!(!same_outline(&[], &square(10.0)));
+    }
+
+    #[test]
+    fn a_region_agrees_with_itself_whichever_vertex_it_starts_at() {
+        let turned = vec![(10.0, 10.0), (0.0, 10.0), (0.0, 0.0), (10.0, 0.0)];
+        assert!(regions_agree(
+            &region(square(10.0), vec![]),
+            &face(turned, vec![])
+        ));
+    }
+
+    #[test]
+    fn a_vertex_on_a_straight_edge_is_the_same_region() {
+        let with_vertex = vec![
+            (0.0, 0.0),
+            (5.0, 0.0),
+            (10.0, 0.0),
+            (10.0, 10.0),
+            (0.0, 10.0),
+        ];
+        assert!(regions_agree(
+            &region(with_vertex, vec![]),
+            &face(square(10.0), vec![])
+        ));
+    }
+
+    #[test]
+    fn a_step_of_a_few_micrometres_is_the_same_region() {
+        // Two offset curves that do not quite meet leave a step 5e-5 ft wide
+        // half way along a side; its two vertices are corners of the topology's
+        // ring and of no corner of the lines'.
+        let jogged = vec![
+            (0.0, 0.0),
+            (10.0, 0.0),
+            (10.0, 5.0),
+            (10.00005, 5.0),
+            (10.00005, 10.0),
+            (0.0, 10.0),
+        ];
+        assert!(regions_agree(
+            &region(jogged, vec![]),
+            &face(square(10.0), vec![])
+        ));
+    }
+
+    #[test]
+    fn a_ring_of_thousands_of_vertices_is_the_same_region() {
+        let sides = 6_000usize;
+        let radius = 100.0;
+        let ring: Vec<(f64, f64)> = (0..sides)
+            .map(|k| {
+                let angle = std::f64::consts::TAU * k as f64 / sides as f64;
+                (radius * angle.cos(), radius * angle.sin())
+            })
+            .collect();
+        assert!(regions_agree(
+            &region(ring.clone(), vec![]),
+            &face(ring, vec![])
+        ));
+    }
 }

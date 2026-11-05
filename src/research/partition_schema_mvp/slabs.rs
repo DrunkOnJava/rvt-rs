@@ -69,8 +69,14 @@ pub fn slabs_from_partition_category_records(
         (id, [b[0], b[1], b[3], b[4]])
     })
     .collect();
-    let profiles =
-        sketch_plan_profiles(rf, revit_version, &sketch_lines, &plates, &BTreeSet::new());
+    let profiles = sketch_plan_profiles(
+        rf,
+        revit_version,
+        &sketch_lines,
+        &plates,
+        &BTreeSet::new(),
+        true,
+    );
 
     let mut out = Vec::new();
     for (category, class) in [
@@ -109,20 +115,43 @@ pub fn slabs_from_partition_category_records(
 /// in its record's box, and where its record does not also hold as a line.
 /// An outline with an arc is kept only where it spans its element's record
 /// box.
+///
+/// `exact` says whether a Sketch's curve list and the lines' exact ends,
+/// curves and circles may be read at all (RE-97, RE-50, RE-96, RE-100); where
+/// it is false the record-box solve alone decides, as on a release those
+/// readers are not measured on ([`roof_reads_exact_sketches`]).
 pub(super) fn sketch_plan_profiles(
     rf: &mut RevitFile,
     revit_version: u32,
     sketch_lines: &[crate::partition_element_records::PartitionElementRecord],
     owners: &BTreeMap<u32, [f64; 4]>,
     skip: &BTreeSet<u32>,
+    exact: bool,
 ) -> BTreeMap<u32, crate::element_record_plan_profiles::PlanProfile> {
     let mut evidence = ProfileEvidence::default();
-    let profiles =
-        solve_sketch_plan_profiles(rf, revit_version, sketch_lines, owners, skip, &mut evidence);
+    let profiles = solve_sketch_plan_profiles(
+        rf,
+        revit_version,
+        sketch_lines,
+        owners,
+        skip,
+        exact,
+        &mut evidence,
+    );
     if rf.recording_value_sources() {
         note_profile_sources(rf, &profiles, &evidence);
     }
     profiles
+}
+
+/// Whether a roof's outline may be read from a Sketch's curve list and its
+/// lines' exact ends, curves and circles on `revit_version`. Not on Revit 2026
+/// and 2027 (RE-341): they are measured there on floors and ceilings against
+/// Autodesk's samples saved by 2024 and 2025, no roof is scored against Revit's
+/// export, and a roof whose slope is not read is drawn as its outline at the
+/// record box's full height, so a sloped roof would become a level block.
+pub(super) fn roof_reads_exact_sketches(revit_version: u32) -> bool {
+    !matches!(revit_version, 2026..=2027)
 }
 
 /// The first frame of a sketch line, by frame order (#1368).
@@ -254,6 +283,7 @@ fn solve_sketch_plan_profiles(
     sketch_lines: &[crate::partition_element_records::PartitionElementRecord],
     owners: &BTreeMap<u32, [f64; 4]>,
     skip: &BTreeSet<u32>,
+    exact: bool,
     evidence: &mut ProfileEvidence,
 ) -> BTreeMap<u32, crate::element_record_plan_profiles::PlanProfile> {
     use crate::element_record_plan_profiles as erpp;
@@ -266,15 +296,19 @@ fn solve_sketch_plan_profiles(
     // sketch's membership; a line's own owner reference names another
     // element where the sketch was edited.
     let line_ids: BTreeSet<u32> = sketch_lines.iter().map(|r| r.element_id).collect();
-    let lists: BTreeMap<u32, Vec<u32>> =
+    let found_lists = if exact {
         erpp::scan_sketch_curve_lists(rf, revit_version, &line_ids)
-            .into_iter()
-            .filter(|(owner, _)| owners.contains_key(owner))
-            .map(|(owner, mut curves)| {
-                curves.retain(|id| !skip.contains(id));
-                (owner, curves)
-            })
-            .collect();
+    } else {
+        BTreeMap::new()
+    };
+    let lists: BTreeMap<u32, Vec<u32>> = found_lists
+        .into_iter()
+        .filter(|(owner, _)| owners.contains_key(owner))
+        .map(|(owner, mut curves)| {
+            curves.retain(|id| !skip.contains(id));
+            (owner, curves)
+        })
+        .collect();
     let listed: BTreeMap<u32, u32> = lists
         .iter()
         .flat_map(|(owner, curves)| curves.iter().map(move |id| (*id, *owner)))
@@ -362,7 +396,7 @@ fn solve_sketch_plan_profiles(
             Some((record.element_id, (owner, record.bbox_feet)))
         })
         .collect();
-    if !diagonal.is_empty() {
+    if exact && !diagonal.is_empty() {
         let ids: BTreeSet<u32> = diagonal.keys().copied().collect();
         let curves = crate::partition_beam_axes::scan_sketch_curves(rf, revit_version, &ids)
             .unwrap_or_default();
@@ -398,7 +432,7 @@ fn solve_sketch_plan_profiles(
                 .or_insert(record.bbox_feet);
         }
     }
-    if unsolved.is_empty() {
+    if !exact || unsolved.is_empty() {
         return profiles;
     }
     let ids: BTreeSet<u32> = unsolved
@@ -634,6 +668,9 @@ pub(super) fn attach_shaft_voids(
         })
     };
     for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        if element.class == "Roof" && !roof_reads_exact_sketches(revit_version) {
+            continue;
+        }
         let Some(profile) = erpp::plan_profile_from_fields(&element.fields) else {
             continue;
         };
