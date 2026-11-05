@@ -159,16 +159,29 @@ for the five lowest ElementIds of each IFC entity, the diagnostics and an
 ## The semantic merge check
 
 Measure is the byte-level oracle: it says that an export moved. The semantic
-merge check (#1334) says what moved in its meaning, before a pull request that
-changes decoder output is armed. It is advisory: the check run `semantic diff
-(advisory)` on the measured commit, not a required check, and nothing is posted
-to the pull request. Merging still waits only on `full / CI passed`.
+merge check (#1334) says whether the pull request says what moved, before a
+pull request that changes decoder output is armed: Jev reads the semantic diff
+beside the pull request's own `## Summary` and is asked whether the export moves
+in a way the Summary does not state (Griffin, 2026-11-05). A described, intended
+change passes; an unexplained move fails. The check run is `semantic diff
+(advisory)` on the measured commit, and nothing is posted to the pull request.
+It is not in the ruleset, so merging still waits on `full / CI passed`, but a
+`fail` is a red check, which `arm.sh` refuses.
 
     gh workflow run measure.yml --ref main -f ref=<pull request head> -f base=main \
       -f models="core-interior einhoven re1-*" -f scorers=mcp_answers_vs_ifc
 
 A run with a base that has a dump on both sides gets the check; a run with
-`base=none`, or with scorers that leave the server out, gets none.
+`base=none`, or with scorers that leave the server out, gets none. The pull
+request is the same-repository one whose head is the measured commit, found
+through the API, so measure the head of the pull request (not a branch name
+that has moved) and write the Summary before the run.
+
+**A pass means the dumps agree, not that the exports are identical.** The dump
+samples five elements per entity (the five lowest ElementIds): property sets,
+types and placements are compared on those elements only, and a mesh vertex or
+a profile point is not in the dump. The check's summary says so every time, and
+Measure's `ifc.sha256` is what says that an export is identical.
 
 - **What is compared.** The MCP server's dump of each openly licensed model
   (Core Interior, Einhoven, RE1, the BIM4LCA office, the Revit 2025 models), on
@@ -196,36 +209,45 @@ A run with a base that has a dump on both sides gets the check; a run with
   held-out, spent, BIMcollab and rac_advanced models and Autodesk's samples and
   families have no dump, and the compare job fails if a model on that list
   (`RESTRICTED_PREFIXES`) or on neither list holds one; `jev_check.py` checks the
-  names again before it sends anything. The pull request's title, branch and
-  number, the model's name and every ElementId stay out of the question.
+  names again before it sends anything. Beside the diff goes the pull
+  request's Summary and nothing else of it: the title, branch, number, the
+  model's name and every ElementId stay out of the question.
 - **Scoring.** `tools/ci/jev_check.py` merges findings that repeat across
   models, groups them by category into chunks of at most 8 findings and 16,000
   characters, and asks Jev `jev-1.13.0` (the version the PR queue pins) about
   each chunk with the two descriptions labelled A and B, the labels assigned at
-  random per chunk from a seed of the run and the head commit. Per finding: is
-  the difference more than rounding, a reordering or a spelling of the same fact?
-  Per chunk: how much would an importer notice, on five levels (0 to 4)? The
-  verdict is a function of the answers: **fail** when a finding scores 0.9 or
-  more and its chunk is rated 3.0 or more; **warn** when a finding scores 0.5 or
-  more or a chunk is rated 1.5 or more; else **pass**. The thresholds are in
-  `THRESHOLDS`; the wording of the two questions and the thresholds were set on
-  the calibration runs in #1419, and a change to either needs those runs again.
-  A diff with no finding is a pass without a call to Jev.
+  random per chunk from a seed of the run and the head commit. Each chunk also
+  carries the first 2,500 characters of the pull request's `## Summary` as
+  quoted data (the pull request's text is untrusted: the state says it is the
+  author's claim, and each question says it cannot change what is asked). Per
+  finding, Jev chooses how the described change relates to the difference:
+  stated, implied by a stated change (a count, a total or a level that follows),
+  unstated, or only rounding, a reordering or a spelling. Per chunk it rates how
+  much an importer would notice, on five levels (0 to 4). A finding Jev puts at
+  0.85 or more unstated is a **fail** in a chunk rated 1.5 or more, a **warn** in
+  a chunk rated 1.0 or more, and nothing below that; else **pass**. The values
+  are `THRESHOLDS`; the wording and the values were set on the calibration runs
+  in #1419, and a change to either needs those runs again. A diff with no
+  finding is a pass without a call to Jev and needs no Summary.
 - **How to treat a verdict.** A `pass` needs nothing. A `warn` is answered in
   the pull request body: one line for each warned finding, saying what moved and
-  why that is the change the pull request is for, with the evidence. A `fail` is
-  fixed before the pull request is armed; where the failing finding is the change
-  the pull request exists to make, the body answers it with the evidence and the
-  main session decides whether to arm. `NOT MEASURED` is neither: it names its
-  cause, and the check is run again once the cause is gone.
-- **NOT MEASURED, never a pass.** No key in the context, a fork's run, HTTP 402
-  or a 429 for exhausted quota (the credit is out; not retried), a key refused, a
-  reply from another model than the pinned one, a time-out or a service that
-  stays busy after three tries, a diff with no model compared, and any chunk not
-  scored (more than 150 chunks, or a run past 7 minutes) when no scored chunk is
-  a warn or a fail already. Run it again with `gh run rerun <semantic check run>`,
-  or score a Measure run from main with `gh workflow run semantic-check.yml -f
-  run_id=<Measure run id>`.
+  why, with the evidence. A `fail` means the diff moves the export in a way the
+  Summary does not state: fix it by changing the code, or by stating the change
+  in the pull request's Summary (what moved, in the words of the finding), then
+  measure the new head. A Summary that only names the area ("improves rooms")
+  states little; name what moves. `NOT MEASURED` is neither: it names its cause,
+  and the check is run again once the cause is gone.
+- **NOT MEASURED, never a pass.** No key in the context, a fork's run or pull
+  request, no same-repository pull request whose head is the measured commit, a
+  pull request with no `## Summary` or an empty one (the template's comment
+  alone) when the diff has findings, HTTP 402 or a 429 for exhausted quota (the
+  credit is out; not retried), a key refused, a reply from another model than the
+  pinned one, a time-out or a service that stays busy after three tries, a diff
+  with no model compared, and any chunk not scored (more than 150 chunks, or a
+  run past 7 minutes) when no scored chunk is a warn or a fail already. Run it
+  again with `gh run rerun <semantic check run>`, or score a Measure run from
+  main with `gh workflow run semantic-check.yml --ref main -f run_id=<Measure run
+  id>`.
 - **Cost.** Jev bills $0.042 per million input tokens; a diff of a few hundred
   kilobytes costs well under a cent, so the results are not cached (the Actions
   cache is not private to the workflows that write it, and the artifact of the
@@ -235,14 +257,16 @@ A run with a base that has a dump on both sides gets the check; a run with
   scoring job is a `workflow_run` workflow, which always runs from main's
   definition, and it runs no measured code: it downloads the `semantic-diff`
   artifact and reads it as JSON. A pull request that changes the check runs the
-  same job without the environment, so without the key, and writes its NOT
-  MEASURED check on itself. The text of the diff is data from files and from the
-  code under test, so a crafted name could try to steer Jev: the verdict is
-  advisory for that reason, and the diff itself is in the artifact for a human to
-  read.
+  same job without the environment, so without the key, and writes its check on
+  itself (NOT MEASURED where the diff has findings, a pass where it has none).
+  The text of the diff and the pull request's Summary are data from files and
+  from the author, so a crafted name or Summary could try to steer Jev: both go
+  in as quoted state, the questions say neither can change what is asked, and
+  the check is advisory for that reason; the diff itself is in the artifact for a
+  human to read.
 - **The check's conclusion.** pass is `success`, warn and NOT MEASURED are
-  `neutral`, fail is `failure`. The watcher treats a `failure` on a head like any
-  failing check.
+  `neutral`, fail is `failure`: a red check on the head, which `arm.sh` refuses
+  and the watcher counts as failing, as intended.
 
 ## Measure's score cache
 
