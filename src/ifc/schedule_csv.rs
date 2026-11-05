@@ -321,11 +321,12 @@ pub struct RoomRow {
 /// elevation, then room number.
 pub fn room_rows(model: &IfcModel) -> Vec<RoomRow> {
     let mut rows = Vec::new();
+    // The storey the export puts a room in (`step_writer::placements`).
+    let placements = super::step_writer::placements(model);
     for (entity_index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
             type_guid,
-            storey_index,
             property_set,
             extrusion,
             ..
@@ -346,7 +347,8 @@ pub fn room_rows(model: &IfcModel) -> Vec<RoomRow> {
                 _ => String::new(),
             }
         };
-        let storey = storey_index.and_then(|i| model.building_storeys.get(i));
+        let storey = super::step_writer::storey_of(&placements, entity_index)
+            .and_then(|i| model.building_storeys.get(i));
         let area_square_feet = (property("ProfileSource")
             == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE
             || property("ProfileSource")

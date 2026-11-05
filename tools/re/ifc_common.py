@@ -18,6 +18,21 @@ FEET = 0.3048
 MESH_ERRORS = set()
 
 
+def siblings(path):
+    """The other Revit exports in path's directory whose names agree with its in
+    the first four words (`ARK_NordicLCA_Office_Concrete_`): the same building
+    saved in another state, as the BIM4LCA office as built and at permit."""
+    directory, name = os.path.split(os.path.abspath(path))
+    head = name.split("_")[:4]
+    if len(head) < 4 or not os.path.isdir(directory):
+        return []
+    return sorted(
+        os.path.join(directory, other)
+        for other in os.listdir(directory)
+        if other != name and other.endswith(".ifc") and other.split("_")[:4] == head
+    )
+
+
 def site_frame(f):
     """Shared metres (IfcOpenShell world) -> Revit internal feet; a file with
     no IfcSite is taken as placed at the origin. The site's placement is in the
