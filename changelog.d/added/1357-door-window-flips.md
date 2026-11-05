@@ -3,8 +3,9 @@
   `m_hand_flipped` and `m_facing_flipped`, the `m_flippedX` and `m_flippedY`
   booleans of the instance's current native `FamilyInstance` record, on Revit
   2024 to 2027, and the typed Door view's `flip_hand` and `flip_facing` read
-  them (they were null on every door; not yet measured on this head). No door or window is stored as a
-  reflection: the first orthonormal block of its element data has determinant
+  them (they were null on every door; 1,588 of 1,588 doors of the 2024 to
+  2027 samples carry them, equal to the booleans, run 42037272808 at
+  18954f33). No door or window is stored as a reflection: the first orthonormal block of its element data has determinant
   1 on all 1,439 doors and windows scored against Revit's export (Measure run
   42014420180 at f65fc702, and Snowdon Towers scored on a Mac) and on all
   1,820 of the Autodesk samples of 2024 to 2027 (run 42024111444 at
