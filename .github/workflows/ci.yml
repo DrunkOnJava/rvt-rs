@@ -1809,6 +1809,8 @@ jobs:
       # does not add up never reads as "stated"; a chunk is never sent over the
       # cap once its text is not ASCII; a commit, a manifest or a pull request
       # text that is not what it should be never reaches a URL, a crash or Jev.
+      - name: Same-project verdict's pure judgement (failure-first)
+        run: python3 tools/ci/test_same_project_verdict.py
       - name: The semantic check's verdict failure modes
         run: python3 tools/ci/test_jev_check.py
 

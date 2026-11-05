@@ -864,8 +864,13 @@ jobs:
   same-project-gates:
     name: Same-project gates
     needs: [plan, measure]
-    if: ${{ !cancelled() && needs.measure.result == 'success' }}
+    # Also after a red shard: a difference the other shards found still has to reach
+    # the verdict, which reads such a run as NOT MEASURED unless a result fails.
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      checks: write # the verdict, on the measured commit
     steps:
       - name: Workflow tools
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -874,6 +879,7 @@ jobs:
           sparse-checkout: |
             tools/ci/check-bodies-across-saves.sh
             tools/ci/check-areas-across-saves.sh
+            tools/ci/same_project_verdict.py
           sparse-checkout-cone-mode: false
       # One directory for each shard: two shards write an areas_across_saves.txt.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
@@ -893,6 +899,33 @@ jobs:
         env:
           SAMPLES: ${{ inputs.samples }}
         run: tools/ci/check-areas-across-saves.sh measure-head
+      # What the two found, as a check run on the commit Measure measured, which
+      # a landing reads across a pull request's commits: Griffin chose these gates
+      # to block landing, and Measure is not a required check. Only a run a
+      # maintainer dispatched writes one. success needs both gates to have compared
+      # every save; a run that compared less reads NOT MEASURED, never a pass.
+      - name: The verdict, on the measured commit
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          MEASURED: ${{ needs.plan.outputs.head_sha }}
+          SAMPLES: ${{ inputs.samples }}
+          SAMPLE_YEARS: ${{ inputs.sample_years }}
+          SCORERS: ${{ inputs.scorers }}
+          IFC_FLAGS: ${{ inputs.ifc_flags }}
+          MEASURE_RESULT: ${{ needs.measure.result }}
+        run: |
+          sha=$(gh api "repos/$REPO/commits/$MEASURED" --jq .sha)
+          # The `=` forms: `--saved-meshes` is a value ifc_flags takes.
+          python3 tools/ci/same_project_verdict.py measure-head --flags="$IFC_FLAGS" --samples="$SAMPLES" \
+            --sample-years="$SAMPLE_YEARS" --scorers="$SCORERS" --measure-result="$MEASURE_RESULT" > verdict.json
+          cat verdict.json
+          jq --arg sha "$sha" --arg from "Scored by workflow commit $GITHUB_WORKFLOW_SHA, run $GITHUB_RUN_ID" \
+            '{name: "same-project gates", head_sha: $sha, status: "completed", conclusion: .conclusion,
+              output: {title: .title, summary: (.summary + "\n- " + $from)}}' verdict.json \
+            | gh api -X POST "repos/$REPO/check-runs" --input - --jq '"wrote check run \(.id): \(.conclusion)"'
 
   compare:
     name: Compare
@@ -1267,8 +1300,15 @@ jobs:
           rows = []
           runners = []
           missing = []
-          for shard in json.loads(e["PLAN"])["include"]:
+          plan = json.loads(e["PLAN"])["include"]
+          for shard in plan:
               directory = f"shards/measure-timing-shard-{shard['shard']}"
+              # download-artifact puts the one artifact a pattern matches
+              # straight into `path`, with no directory of its name, so a plan
+              # of a single shard (a run with `models`, or neither `nordic`
+              # nor `samples`) would leave no table.
+              if len(plan) == 1 and not os.path.isdir(directory):
+                  directory = "shards"
               try:
                   lines = open(f"{directory}/timing.md").read().splitlines()
                   cpu = open(f"{directory}/runner.txt").read().strip()
