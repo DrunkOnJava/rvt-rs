@@ -7,26 +7,36 @@
 //! 100,000 (54,471 by one unit in the last place, 2,596 by two). Sign rule: a
 //! parameter id in an element's typed sets or in the slots of its
 //! `FamilyParams` is negative for a built-in parameter, and a positive id is
-//! the ElementId of a definition element (`ParamElem*`) of the same document;
-//! the `sign` lines count the ids by store and by what a positive id resolves
-//! to, and a positive id with no definition, or a negative one with one,
-//! falsifies it. Stored lengths: among the stored doubles that are whole or
+//! the ElementId of a definition element (`ParamElem*`) of the same document.
+//! Only the positive side can fail: definitions are keyed by positive
+//! ElementIds, so a negative id never has one and `negative defined` is zero
+//! by construction. The `sign` lines count the ids by store and by what a
+//! positive id resolves to, and a `positive undefined` falsifies the rule for
+//! the records read. Stored lengths: among the stored doubles that are whole or
 //! tenth millimetres and not whole 1/256 inches (RE-310's selection), which of
-//! six conversions reproduce the stored bits, by store (the typed `Double`
+//! seven conversions reproduce the stored bits, by store (the typed `Double`
 //! sets, and the `m_value` of every `FamilyParams` slot) and by kind
 //! (built-in, a declared definition, other), on Revit 2015 to 2027 (RE-310 read
-//! the type value blocks of 2024 to 2027 only). Forms: the `Double` sets of a
-//! family's forms hold -1001800 and -1001801 on an `ExtrusionElem`, -1001802
-//! and -1001803 on a `RevolutionElem` (a full turn stored with the end
-//! 0x401921fb54442d11, 2 pi less seven units in the last place), -1001804 and
-//! -1001805 on a `BlendElem` and a `SweptBlendElem`, and none of them on a
-//! `SweepElem`. `PartAtom`: the stream of a family holds no string shaped like
-//! a GUID.
+//! the type value blocks of 2024 to 2027 only); for a value no conversion
+//! reproduces, its distance from `div` and from the nearest of the seven.
+//! A distance is in units of the last place of the magnitude: a value of either
+//! sign whose magnitude is one unit smaller than the conversion's is -1.
+//! Forms: the `Double` sets of a family's forms hold the ids -1001800 and
+//! -1001801 on an `ExtrusionElem`, -1001802 and -1001803 on a
+//! `RevolutionElem`, -1001804 and -1001805 on a `BlendElem` and a
+//! `SweptBlendElem`, and none of them on a `SweepElem`. The probe calls them
+//! the first and the second id and takes no meaning for them from the Revit
+//! API. A revolution's values are tested as multiples of half of the
+//! 14-decimal value 3.14159265358979 (a truncation of pi, 0x400921fb54442d11,
+//! seven units in the last place below pi), and against pi by bits.
+//! `PartAtom`: the stream of each of the 12 family-corpus files holds no
+//! string shaped like a GUID, and a family with shared parameters (RE-327's
+//! 2014 family) holds one for each.
 //!
-//! The six conversions of a whole or tenth millimetre `mm` to feet: `chain`
+//! The seven conversions of a whole or tenth millimetre `mm` to feet: `chain`
 //! `mm / 25.4 / 12`, `div` `mm / 304.8`, `mul` `mm * (1 / 304.8)`, `inch`
 //! `mm * (1 / 25.4) / 12`, `inv12` `mm / 12 / 25.4`, `metre`
-//! `mm / 1000 / 0.3048`.
+//! `mm / 1000 / 0.3048`, `cmchain` `mm / 10 * (1 / 2.54) * (1 / 12)`.
 //!
 //! Output, one record per line:
 //!   file <name> release <layout release> kind project|family
@@ -41,7 +51,7 @@
 //!   cargo run --profile ci -p rvt-probes --example probe_re344_parameter_ids_and_units -- FILE.rvt|FILE.rfa
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::f64::consts::TAU;
+use std::f64::consts::PI;
 
 use anyhow::Result;
 use rvt::RevitFile;
@@ -68,19 +78,23 @@ const FORMS: [&str; 6] = [
     "SweptBlendElem",
     "FreeFormElement",
 ];
-const CONVERSIONS: [&str; 6] = ["chain", "div", "mul", "inch", "inv12", "metre"];
-const EXTRUSION_START: i64 = -1_001_800;
-const EXTRUSION_END: i64 = -1_001_801;
-const REVOLUTION_START: i64 = -1_001_802;
-const REVOLUTION_END: i64 = -1_001_803;
-const BLEND_START: i64 = -1_001_804;
-const BLEND_END: i64 = -1_001_805;
+const CONVERSIONS: [&str; 7] = ["chain", "div", "mul", "inch", "inv12", "metre", "cmchain"];
+const EXTRUSION_FIRST: i64 = -1_001_800;
+const EXTRUSION_SECOND: i64 = -1_001_801;
+const REVOLUTION_FIRST: i64 = -1_001_802;
+const REVOLUTION_SECOND: i64 = -1_001_803;
+const BLEND_FIRST: i64 = -1_001_804;
+const BLEND_SECOND: i64 = -1_001_805;
+/// The 14-decimal value the revolutions' angles are multiples of.
+#[allow(clippy::approx_constant)]
+const TRUNCATED_PI: f64 = 3.14159265358979;
+const SIGN: u64 = 1 << 63;
 
 fn bump(tally: &mut Tally, key: impl Into<String>) {
     *tally.entry(key.into()).or_default() += 1;
 }
 
-fn conversions(mm: f64) -> [f64; 6] {
+fn conversions(mm: f64) -> [f64; 7] {
     [
         mm / 25.4 / 12.0,
         mm / 304.8,
@@ -88,11 +102,27 @@ fn conversions(mm: f64) -> [f64; 6] {
         mm * (1.0 / 25.4) / 12.0,
         mm / 12.0 / 25.4,
         mm / 1000.0 / 0.3048,
+        mm / 10.0 * (1.0 / 2.54) * (1.0 / 12.0),
     ]
 }
 
+/// `a`'s magnitude less `b`'s, in units of the last place: the same for a
+/// negative value as for the positive one of the same magnitude.
 fn ulps(a: f64, b: f64) -> i64 {
-    (a.to_bits() as i64).wrapping_sub(b.to_bits() as i64)
+    ((a.to_bits() & !SIGN) as i64).wrapping_sub((b.to_bits() & !SIGN) as i64)
+}
+
+/// The `k` for which `angle` is `k` half turns of [`TRUNCATED_PI`], by bits.
+fn half_turns(angle: f64) -> Option<u32> {
+    (0..=8u32).find(|k| (f64::from(*k) * TRUNCATED_PI / 2.0).to_bits() == angle.to_bits())
+}
+
+fn bucket(distance: i64) -> String {
+    if distance.abs() <= 3 {
+        distance.to_string()
+    } else {
+        "over 3".to_string()
+    }
 }
 
 fn identifier(value: &Value) -> Option<i64> {
@@ -109,14 +139,21 @@ fn arithmetic() {
     let mut chain: BTreeMap<i64, usize> = BTreeMap::new();
     let mut mul: BTreeMap<i64, usize> = BTreeMap::new();
     let mut inch: BTreeMap<i64, usize> = BTreeMap::new();
+    let mut cmchain: BTreeMap<i64, usize> = BTreeMap::new();
     for n in 1..=100_000u32 {
         let mm = f64::from(n);
         let all = conversions(mm);
         *chain.entry(ulps(all[0], all[1])).or_default() += 1;
         *mul.entry(ulps(all[2], all[1])).or_default() += 1;
         *inch.entry(ulps(all[3], all[1])).or_default() += 1;
+        *cmchain.entry(ulps(all[6], all[1])).or_default() += 1;
     }
-    for (name, counts) in [("chain", &chain), ("mul", &mul), ("inch", &inch)] {
+    for (name, counts) in [
+        ("chain", &chain),
+        ("mul", &mul),
+        ("inch", &inch),
+        ("cmchain", &cmchain),
+    ] {
         let line: Vec<String> = counts.iter().map(|(d, n)| format!("{d}={n}")).collect();
         println!("arith {name}-minus-div {}", line.join(" "));
     }
@@ -244,13 +281,23 @@ fn lengths(
     };
     bump(tally, format!("{prefix} match {set}"));
     let distance = ulps(value, all[1]);
+    if value < 0.0 {
+        bump(tally, format!("{prefix} negative values"));
+    }
     if matched.is_empty() {
-        let bucket = if distance.abs() <= 3 {
-            distance.to_string()
-        } else {
-            "far".to_string()
-        };
-        bump(tally, format!("{prefix} none distance {bucket}"));
+        bump(
+            tally,
+            format!("{prefix} none distance from div {}", bucket(distance)),
+        );
+        let nearest = all
+            .iter()
+            .map(|c| ulps(value, *c).abs())
+            .min()
+            .unwrap_or(i64::MAX);
+        bump(
+            tally,
+            format!("{prefix} none nearest of seven {}", bucket(nearest)),
+        );
     }
     if samples.len() < 12 {
         samples.push(format!(
@@ -317,46 +364,64 @@ fn form(graph: &ObjectGraph, tally: &mut Tally) {
     bump(tally, format!("form {class} records"));
     let pair = |start: i64, end: i64| (doubles.get(&start).copied(), doubles.get(&end).copied());
     match class {
-        "ExtrusionElem" => match pair(EXTRUSION_START, EXTRUSION_END) {
-            (Some(start), Some(_)) => {
-                bump(tally, "extrusion both extents");
-                if start == 0.0 {
-                    bump(tally, "extrusion start is zero");
+        "ExtrusionElem" => match pair(EXTRUSION_FIRST, EXTRUSION_SECOND) {
+            (Some(first), Some(_)) => {
+                bump(tally, "extrusion both ids");
+                if first == 0.0 {
+                    bump(tally, "extrusion first id is zero");
                 }
             }
-            _ => bump(tally, "extrusion without both extents"),
+            _ => bump(tally, "extrusion without both ids"),
         },
-        "RevolutionElem" => match pair(REVOLUTION_START, REVOLUTION_END) {
-            (Some(start), Some(end)) => {
-                bump(tally, "revolution both angles");
-                bump(tally, format!("revolution start {:016x}", start.to_bits()));
-                bump(tally, format!("revolution end {:016x}", end.to_bits()));
-                let span = if (end - start - TAU).abs() < 1e-9 {
-                    "full turn"
+        "RevolutionElem" => match pair(REVOLUTION_FIRST, REVOLUTION_SECOND) {
+            (Some(first), Some(second)) => {
+                bump(tally, "revolution both ids");
+                bump(tally, format!("revolution first {:016x}", first.to_bits()));
+                bump(
+                    tally,
+                    format!("revolution second {:016x}", second.to_bits()),
+                );
+                let order = if first < second {
+                    "first below second"
                 } else {
-                    "partial"
+                    "first not below second"
                 };
-                bump(tally, format!("revolution span {span}"));
-                let end_kind = if end.to_bits() == TAU.to_bits() {
-                    "2pi"
-                } else if end.to_bits() == TAU.to_bits() - 7 {
-                    "2pi minus 7 ulp"
-                } else {
-                    "other"
-                };
-                bump(tally, format!("revolution end is {end_kind}"));
+                bump(tally, format!("revolution {order}"));
+                match (half_turns(first), half_turns(second)) {
+                    (Some(a), Some(b)) => bump(
+                        tally,
+                        format!("revolution pair {a} to {b} half turns of 3.14159265358979"),
+                    ),
+                    _ => bump(tally, "revolution pair not half turns of 3.14159265358979"),
+                }
+                for (label, value) in [("first", first), ("second", second)] {
+                    if value == 0.0 {
+                        continue;
+                    }
+                    let by_bits =
+                        (1..=8u32).any(|k| (f64::from(k) * PI / 2.0).to_bits() == value.to_bits());
+                    let near = (1..=8u32).any(|k| (value - f64::from(k) * PI / 2.0).abs() < 1e-9);
+                    bump(
+                        tally,
+                        format!("revolution {label} equals a multiple of pi/2 by bits {by_bits}"),
+                    );
+                    bump(
+                        tally,
+                        format!("revolution {label} within 1e-9 of a multiple of pi/2 {near}"),
+                    );
+                }
             }
-            _ => bump(tally, "revolution without both angles"),
+            _ => bump(tally, "revolution without both ids"),
         },
-        "BlendElem" | "SweptBlendElem" => match pair(BLEND_START, BLEND_END) {
-            (Some(_), Some(_)) => bump(tally, format!("{class} both blend extents")),
-            _ => bump(tally, format!("{class} without both blend extents")),
+        "BlendElem" | "SweptBlendElem" => match pair(BLEND_FIRST, BLEND_SECOND) {
+            (Some(_), Some(_)) => bump(tally, format!("{class} both ids")),
+            _ => bump(tally, format!("{class} without both ids")),
         },
         "SweepElem" => {
-            let held = (BLEND_END..=EXTRUSION_START)
+            let held = (BLEND_SECOND..=EXTRUSION_FIRST)
                 .filter(|id| doubles.contains_key(id))
                 .count();
-            bump(tally, format!("sweep extent ids held {held}"));
+            bump(tally, format!("sweep ids -1001800 to -1001805 held {held}"));
         }
         _ => {}
     }
