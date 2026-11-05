@@ -206,7 +206,23 @@ the same project's earlier saves, matched by `Tag`: beams, landings and sketch
 outlines to the 2024 save, the 2026 and 2027 stair runs to the 2025 save. A 2025
 save is held to the 2024 save alone: its stair runs are the 2026 and 2027
 reference, so they are not compared, though the number it draws is still
-checked. Measure's script runs it beside each such sample, and the job
+checked. A fifth group (RE-347) holds each door and window placed on Revit's
+axes by the placement rule, whose axes nothing but the 2024 save can check on
+these releases, to the 2024 save's: class, GlobalId, placement axes and body.
+It prints how many it compared and how many are off the default axes, fails
+below `OPENINGS_LEAST` per class and above `OPENINGS_LEFT_OUT_MOST`, the doors
+and windows the 2024 save places by the rule that a later save leaves on the
+default axes (28 on the 2026 and 42 on the 2027 save of `rac_advanced` when it
+was set: the pass that takes a door's host from its native record (RE-245) is
+run on `CUT_LOOP_REVIT_VERSIONS`, 2024 and 2025, so on 2026 and 2027 a nearest
+wall that is not the door's own fails the along-the-wall test; and on 2027, 14
+more, set in 8 host walls with no native straight-line row, #1475), which
+can only shrink: a count that drops
+moves the ceiling down in the change that drops it. It exercises two buildings
+(`rac_advanced` and `rac_basic`, each saved by each release); `rst_basic` holds
+none, and `rme_advanced` and `rme_basic` (107 placed doors per file, 59 with
+unequal flips) join it when their pipes pass, in whichever of #1454 and #1456
+lands second. Measure's script runs it beside each such sample, and the job
 `same-project-gates` turns the run red on a difference, a missing file, an
 unknown project, fewer bodies than the sample holds, or a check that compared
 nothing. That job also holds #1428's Areas gate (rac_advanced's Areas across its

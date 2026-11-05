@@ -15,6 +15,9 @@ paired by Tag. For every `IfcDoor` and `IfcWindow` in both:
   rvt-rs derives from the filler's);
 - its GlobalId, its type's GlobalId and the host wall of its opening.
 
+A body that meshes in neither export, for the same reason, is counted apart
+(`meshed in neither export, not compared`) and is not in `paired`.
+
 A body or an opening that moves in the world is a bug, unless the change
 moves it toward Revit's, which this does not measure: a nonzero count below
 is for the reader to resolve against `door_bodies_vs_ifc` and
@@ -106,6 +109,7 @@ class Tally:
         self.label = label
         self.paired = 0
         self.unmeshed = 0
+        self.failed_alike = 0
         self.volume_moved = 0
         self.vertices_moved = 0
         self.worst_vertex = 0.0
@@ -113,12 +117,17 @@ class Tally:
         self.shown = []
 
     def add(self, key, base, head):
-        self.paired += 1
         if isinstance(base, str) or isinstance(head, str):
-            if base != head:
+            if base == head:
+                # Neither export meshes it, for the same reason: nothing is compared.
+                self.failed_alike += 1
+                self.shown.append((key, f"meshed in neither export: {base}"))
+            else:
+                self.paired += 1
                 self.unmeshed += 1
                 self.shown.append((key, f"meshes differ: {base if isinstance(base, str) else 'meshes'} / {head if isinstance(head, str) else 'meshes'}"))
             return
+        self.paired += 1
         relative = abs(base[0] - head[0]) / max(base[0], 1e-12)
         self.worst_volume = max(self.worst_volume, relative)
         away = max(reach(base[1], head[1]), reach(head[1], base[1]))
@@ -131,7 +140,8 @@ class Tally:
 
     def line(self):
         return (
-            f"placed bodies vs base: {self.label}: paired {self.paired}; meshed differently {self.unmeshed}; "
+            f"placed bodies vs base: {self.label}: paired {self.paired}; meshed in neither export, not compared {self.failed_alike}; "
+            f"meshed in one export only or differently {self.unmeshed}; "
             f"volume moved {self.volume_moved} (largest relative change {self.worst_volume:.3g}); "
             f"vertices moved {self.vertices_moved} (largest {self.worst_vertex / FEET:.6f} ft)"
         )

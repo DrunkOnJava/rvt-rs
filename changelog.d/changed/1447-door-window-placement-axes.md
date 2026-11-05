@@ -12,10 +12,16 @@
   models and on all 145 of the 2024 to 2027 held-out models' (Measure run
   42092391898, counts only), and every door's and window's body and opening
   is where it was in world coordinates, with its GlobalId, type GlobalId and
-  host unchanged (a quarter turn swaps the two sides of its box). A door
-  bound to no plain wall, an element with no stored transform (Revit 2023
-  and older) and an instance turned off the model's axes keep the default
-  axes. On Revit 2026 and 2027 the same elements are held to the 2024 save
+  host unchanged (a quarter turn swaps the two sides of its box). So
+  `rotation_deg` of the elements CSV and the viewer's schedule, the
+  Rotation row of the viewer's info panel and `rotation_degrees` of the MCP
+  server's `get_element` are now set for every such door and window not on
+  +X (0, 90, 180 or -90), and on one whose body is its box `width_ft` and
+  `depth_ft` (the panel's Width and Depth) swap on a quarter turn: width is
+  now along the placement's X, the door's width, where it was the model's X
+  extent. A door bound to no plain wall, an element with no stored
+  transform (Revit 2023 and older) and an instance turned off the model's
+  axes keep the default axes. On Revit 2026 and 2027 the same elements are held to the 2024 save
   of the same project (`tools/re/bodies_across_saves.py`, run 42092410697):
   96 and 82 doors and windows of two Autodesk sample projects, 58 and 45 of
   them off the default axes, are the same. The origin is still the record

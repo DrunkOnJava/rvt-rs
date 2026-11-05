@@ -152,11 +152,13 @@ pub fn opening_placement_x_axis_from_fields(
     Some([x?, y?])
 }
 
-/// How far a stored X axis may lie from the straight wall's direction, as the
-/// dot product of the two unit vectors, before the door or window is not one
-/// RE-343's Rule 1 measures: its X runs along the wall (RE-343 Rule 2), so a
-/// door whose X is across it is left as it is.
-const OPENING_ALONG_WALL_MIN: f64 = 1e-3;
+/// The least the dot product of a stored X axis and the straight wall's
+/// direction (two unit vectors) may be, in absolute value, for the door or
+/// window to be one RE-343's Rule 1 measures: its X runs along the wall
+/// (RE-343 Rule 2). A door whose X is across the wall, or oblique to it, so
+/// that its host is not its own wall, is left as it is. Every one of the 1,061
+/// placed in the open models has 0.999999 or more (the rejects are about 1e-15).
+const OPENING_ALONG_WALL_MIN: f64 = 0.999;
 
 /// A host wall's plan direction and whether the flips of a door or window set
 /// in it differ.
@@ -171,7 +173,8 @@ type WallAndFlip = ([f64; 2], bool);
 ///   and whose native record gives a straight level line
 ///   ([`WALL_NATIVE_DIRECTION_FIELDS`]),
 /// - whose two flips are read,
-/// - whose stored transform is upright and whose X runs along that line, and
+/// - whose stored transform is upright and whose X runs along that line
+///   ([`OPENING_ALONG_WALL_MIN`]), and
 /// - whose X is within [`INSTANCE_TURN_MIN_RADIANS`] of one of the model's
 ///   axes (one turned further keeps its turned box, RE-87).
 ///
@@ -232,7 +235,7 @@ pub(super) fn attach_opening_placement_axes(
         }
         let [x, y, _] = transform.axes[0];
         if !(x.is_finite() && y.is_finite())
-            || (x * wall[0] + y * wall[1]).abs() <= OPENING_ALONG_WALL_MIN
+            || (x * wall[0] + y * wall[1]).abs() < OPENING_ALONG_WALL_MIN
         {
             continue;
         }
