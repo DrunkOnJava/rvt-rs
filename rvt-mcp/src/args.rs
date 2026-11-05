@@ -150,7 +150,8 @@ pub struct IfcOptions {
     /// Also write Revit's own parameter sets (`--revit-property-sets`).
     #[serde(default)]
     pub revit_property_sets: bool,
-    /// Also place properties where Revit's exporter does
+    /// Also place properties where Revit's exporter does, and keep the
+    /// material it associates with an `IfcSpace`, which IFC4 does not allow
     /// (`--revit-set-placement`).
     #[serde(default)]
     pub revit_set_placement: bool,
