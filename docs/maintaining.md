@@ -316,7 +316,8 @@ default axes (28 on the 2026 and 42 on the 2027 save of `rac_advanced` when it
 was set: the pass that takes a door's host from its native record (RE-245) is
 run on `CUT_LOOP_REVIT_VERSIONS`, 2024 and 2025, so on 2026 and 2027 a nearest
 wall that is not the door's own fails the along-the-wall test; and on 2027, 14
-more, set in 8 host walls with no native straight-line row, #1475), which
+more, set in 8 host walls with no native straight-line row, #1475: the 2027
+save's record holds a second `GLine`, the previous location line, RE-360), which
 can only shrink: a count that drops
 moves the ceiling down in the change that drops it. It exercises two buildings
 (`rac_advanced` and `rac_basic`, each saved by each release); `rst_basic` holds
