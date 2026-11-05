@@ -5,9 +5,9 @@
 //! (`EI30`, `EI60`, `-`) on six door type objects and `ThermalTransmittance`
 //! (3.7021) on a seventh, and none of the saved parameters of those types
 //! (RE-207, `probe_re354_door_type_parameters`) holds any of them. This lists
-//! every `EI30`, `EI60` and `EI90` text and every 3.7021 of the partitions
-//! with the bytes around it and the value block it lies in, and the
-//! printable texts of the seven types' own value blocks.
+//! every `EI30`, `EI60` and `EI90` text, every `Manufacturer` text of RE-289
+//! and every 3.7021 of the partitions with the bytes around it and the value
+//! block it lies in, and the printable texts of the types' own value blocks.
 //!
 //! Output:
 //!   text <stream> <offset> <text> block <owner> +<distance> prev <hex 16 bytes> next <hex 24 bytes>
@@ -23,11 +23,23 @@ use rvt::research::partition_type_parameters::VALUE_BLOCK_MARK;
 
 /// The door types whose objects carry a rating or a transmittance in Revit's
 /// export of the office, and one that carries neither.
-const TYPES: [u64; 8] = [
-    2803674, 1110711, 1106810, 1106812, 2324339, 2391770, 3261757, 394296,
+const TYPES: [u64; 14] = [
+    2803674, 1110711, 1106810, 1106812, 2324339, 2391770, 3261757, 394296, 1414255, 2575395,
+    1611986, 3365322, 3376911, 1533300,
 ];
 
-const TEXTS: [&str; 3] = ["EI30", "EI60", "EI90"];
+/// The ratings, and the six `Manufacturer` texts of the family types Revit's
+/// export gives one (RE-289, which looked for them in RE-77's form alone).
+const TEXTS: [&str; 8] = [
+    "EI30",
+    "EI60",
+    "EI90",
+    "IDO",
+    "Ido",
+    "V\u{e4}in\u{f6} Korpinen Oy",
+    "Thorlux Lighting",
+    "Korpinen Oy",
+];
 
 fn utf16(text: &str) -> Vec<u8> {
     let mut out = (text.encode_utf16().count() as u32).to_le_bytes().to_vec();
