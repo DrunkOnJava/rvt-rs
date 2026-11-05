@@ -65,11 +65,15 @@ when a release ships.
   it. The viewer's browser tests are: `ci.yml` calls `viewer-test.yml` as its
   `viewer` job in the full set (#1374), in three groups of spec files on a
   WASM built without LTO, and a change that touches only documentation skips
-  it. Deploy viewer builds and publishes the site, and runs the suite and the
-  saved-mesh measurement again on the release WASM it publishes; `CI passed`
-  does not wait for those, but the deploy job does, and it waits for `CI
-  passed` on the pushed commit. To check a draft's viewer, dispatch
-  `viewer-test.yml` on its branch.
+  it. That WASM and `gen-fixture` are built once per run, by a `build` job of
+  its own, and the three groups download them (#1457); a group fails, rather
+  than skips, when the build did not succeed. Deploy viewer builds the release
+  WASM once, uploads it, publishes the site built on it, and runs the suite and
+  the saved-mesh measurement again on the very file it uploaded (the jobs print
+  its sha256, so a run shows they match, and each checks that the site it
+  builds holds that file); `CI passed` does not wait for those,
+  but the deploy job does, and it waits for `CI passed` on the pushed commit.
+  To check a draft's viewer, dispatch `viewer-test.yml` on its branch.
 - The squash commit's title is the pull request's title plus its number and its
   body is the pull request's description, so the description is permanent
   history: fix it before merging.
@@ -610,8 +614,13 @@ pull request.
 ## Releases
 
 Tags `v*` are protected by the `release-tags` ruleset: only a maintainer can
-create one, and none can be moved or deleted. Pushing a tag runs the publish
-workflow, which builds and verifies the wheels and, through the
+create one, and none can be moved or deleted (the ruleset's bypass list is the
+repository administrator role, which a release never uses). Pushing a tag runs
+the publish workflow, whose first job refuses a tag that is lightweight, not
+verified as signed, on neither `main` nor a `hotfix/*` branch, out of step with
+a version file, or on a commit whose `CI passed` is red or that CI never ran on
+(RELEASE.md, step 10). Then it
+builds and verifies the wheels and, through the
 release-binaries workflow, the CLI archives and the container image, and
 publishes them with build-provenance attestations. Pushing the tag is the
 release decision, so the run asks for no approval: the `crates-io` and `pypi`
