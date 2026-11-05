@@ -419,19 +419,28 @@ fn fixed_layout(registry: &Registry, tag: u16) -> Result<(usize, Vec<Leaf>)> {
     visit(registry, tag, "", &mut size, &mut leaves, 0)?;
     Ok((size, leaves))
 }
-/// Which leaf of the layout each lookup of a row names, once found. The layout
-/// is the same for every row, so the leaf a prefix names is found at the first
-/// row that asks for it, where a lookup that fails fails as it always has, and
-/// is not searched for again at each of the file's thousands of rows (#1335).
-type LeafSlots = [Option<usize>; 7];
+/// Which leaf of the layout each lookup of a row names, once found: one field
+/// for each lookup `parse` makes. The layout is the same for every row, so the
+/// leaf a prefix names is found at the first row that asks for it, where a
+/// lookup that fails fails as it always has, and is not searched for again at
+/// each of the file's thousands of rows (#1335).
+#[derive(Default)]
+struct IndexLeaves {
+    id: Option<usize>,
+    original_id: Option<usize>,
+    creation: Option<usize>,
+    modification: Option<usize>,
+    user_modification: Option<usize>,
+    owner: Option<usize>,
+    partition: Option<usize>,
+}
 fn leaf_value(
     row: &[u8],
     layout: &[Leaf],
-    slots: &mut LeafSlots,
-    slot: usize,
+    slot: &mut Option<usize>,
     prefix: &str,
 ) -> Result<(u64, usize)> {
-    let at = match slots[slot] {
+    let at = match *slot {
         Some(at) => at,
         None => {
             let mut matching = layout
@@ -442,7 +451,7 @@ fn leaf_value(
                 (Some((at, _)), None) => at,
                 _ => anyhow::bail!("ambiguous/missing index field {prefix}"),
             };
-            slots[slot] = Some(at);
+            *slot = Some(at);
             at
         }
     };
@@ -488,25 +497,30 @@ pub fn parse(index: &[u8], registry: &Registry, episodes: &[String]) -> Result<P
         .get(6..end)
         .ok_or_else(|| anyhow::anyhow!("truncated index array"))?;
     let mut result = BTreeMap::new();
-    let mut slots: LeafSlots = [None; 7];
+    let mut leaves = IndexLeaves::default();
     for (i, row) in rows.chunks_exact(stride).enumerate() {
-        let element_id = leaf_value(row, &layout, &mut slots, 0, "m_id.")?.0;
+        let element_id = leaf_value(row, &layout, &mut leaves.id, "m_id.")?.0;
         let original_id_suffix = leaf_value(
             row,
             &layout,
-            &mut slots,
-            1,
+            &mut leaves.original_id,
             "m_history.m_originalElementId.",
         )?
         .0;
-        let creation_episode =
-            u32::try_from(leaf_value(row, &layout, &mut slots, 2, "m_history.m_creationDate.")?.0)?;
+        let creation_episode = u32::try_from(
+            leaf_value(
+                row,
+                &layout,
+                &mut leaves.creation,
+                "m_history.m_creationDate.",
+            )?
+            .0,
+        )?;
         let stored_revision = u32::try_from(
             leaf_value(
                 row,
                 &layout,
-                &mut slots,
-                3,
+                &mut leaves.modification,
                 "m_history.m_lastModificationDate.",
             )?
             .0,
@@ -515,20 +529,20 @@ pub fn parse(index: &[u8], registry: &Registry, episodes: &[String]) -> Result<P
             leaf_value(
                 row,
                 &layout,
-                &mut slots,
-                4,
+                &mut leaves.user_modification,
                 "m_history.m_lastUserModificationDate.",
             )?
             .0,
         )?;
-        let (owner, width) = leaf_value(row, &layout, &mut slots, 5, "m_OwningElementId.")?;
+        let (owner, width) = leaf_value(row, &layout, &mut leaves.owner, "m_OwningElementId.")?;
         let owning_element_id = if width == 4 {
             i64::from(owner as u32 as i32)
         } else {
             owner as i64
         };
-        let partition_id =
-            i64::from(leaf_value(row, &layout, &mut slots, 6, "m_partitionId.")?.0 as u32 as i32);
+        let partition_id = i64::from(
+            leaf_value(row, &layout, &mut leaves.partition, "m_partitionId.")?.0 as u32 as i32,
+        );
         let reverse = episodes
             .len()
             .checked_sub(creation_episode as usize + 1)

@@ -110,7 +110,11 @@ pub struct Options {
     /// which is made from the whole graph. A class the function gives `None`
     /// for, and any record with no function here, keeps every field. For a
     /// reader that takes only those fields from the records of those classes
-    /// (#1335).
+    /// (#1335): the list is a `pub const` beside the one function that reads
+    /// the projected graph (`wall_facts`, `Registry::ingest_binding_context`),
+    /// so that a field read is added to the list where it is read. The
+    /// definitions pass, which [`extract`] makes first, sets its own function
+    /// whatever this is.
     pub graph_fields: Option<GraphFields>,
 }
 /// The default [`Options::max_group_bytes`]: one reassembled continuation
@@ -592,19 +596,6 @@ pub(crate) type DefinitionKey = (
     bool,
 );
 
-/// The fields of a `Family` and a `FamilySymbol` record that
-/// [`crate::native_parameter_definitions::Registry::ingest_binding_context`]
-/// reads, with `m_id`, which the record's identity is checked against: the
-/// definitions pass takes nothing else from them (#1335). The rest of those
-/// records is most of the pass.
-fn binding_context_fields(class: &str) -> Option<&'static [&'static str]> {
-    match class {
-        "Family" => Some(&["m_id", "m_categoryId"]),
-        "FamilySymbol" => Some(&["m_id", "m_familyId"]),
-        _ => None,
-    }
-}
-
 /// The handle's [`DefinitionPass`] for `options`, read if it has none.
 fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<DefinitionPass>> {
     // Every field is named, so a new one has to be put in the key or left out
@@ -649,7 +640,11 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
     definition_options.record_extras = false;
     definition_options.keep_body = false;
     definition_options.value_source = None;
-    definition_options.graph_fields = Some(binding_context_fields);
+    // Whatever the caller's `graph_fields` was: the pass reads a `Family` and
+    // a `FamilySymbol` only through `ingest_binding_context`, and builds the
+    // fields it lists (#1335).
+    definition_options.graph_fields =
+        Some(crate::native_parameter_definitions::binding_context_fields);
     let definition_summary =
         extract_records(
             file,

@@ -6,27 +6,28 @@
 //! full one's in everything but the values of the fields not in `keep`: the
 //! same objects (class, token, start, end of fields), edges, consumed bytes and
 //! usage, and each object's fields exactly the full object's entries whose key
-//! is in `keep`. The definitions pass reads a `Family` record's `m_id` and
-//! `m_categoryId` and a `FamilySymbol` record's `m_id` and `m_familyId` and
-//! nothing else, so its binding context (`symbol_families`,
-//! `family_categories`) and its refusals are the same read from either graph.
+//! is in `keep`. And each reader that is given a projected graph reads the same
+//! from it as from the full one: the definitions pass's
+//! `Registry::ingest_binding_context` (the `Family` and `FamilySymbol` lists),
+//! the wall read's `wall_facts` (`WALL_READ_FIELDS`) and the catalog's
+//! `from_graph` (`CATALOG_FIELDS`). The lists are the readers' own constants,
+//! imported, not copied.
 //!
 //! Every record of the file's native partitions is decoded in full and
-//! projected under each of `KEEPS`, whatever its class: the lists are the ones
-//! the definitions pass, the wall type and top join read and the phase read use,
-//! the identity alone, and the empty list (every field left out).
+//! projected under each of the readers' lists, whatever its class, and under
+//! the identity alone and the empty list (every field left out). The graph the
+//! catalog is read from, the `Global/Latest` document, is read both ways too.
 //!
 //! Output, one line each:
 //!   file <path> release <layout release>
-//!   global-graph <same | same-refusal | what differs | absent>
-//!     (the Global/Latest document the catalog is read from, in full and
-//!     under the fields the catalog reads)
+//!   global-catalog <same | same-refusal | absent | what differs>
 //!   compared records <n> decodes <n> full-ok <n> full-refused <n> mismatches <n>
 //!     budget-stopped <bool>
 //!   keep <list> compared <n> mismatches <n>
 //!   refused <Class> <n>                 (a full decode that failed, by class)
 //!   binding-context family-categories <n> symbol-families <n> same <bool>
 //!     ingest-refusals <n> same-refusals <bool>
+//!   wall-facts compared <n> same <bool>
 //!   mismatch <kind> <Class> (the first few)
 //!
 //! Usage:
@@ -34,11 +35,14 @@
 use anyhow::Result;
 use rvt::RevitFile;
 use rvt::research::native_document::{self, Options};
-use rvt::research::native_es_catalog;
-use rvt::research::native_parameter_definitions::Registry as Definitions;
+use rvt::research::native_es_catalog::{self, CATALOG_FIELDS};
+use rvt::research::native_parameter_definitions::{
+    FAMILY_BINDING_FIELDS, Registry as Definitions, SYMBOL_BINDING_FIELDS,
+};
 use rvt::research::native_parameters::{
     GraphLimits, ObjectGraph, decode_graph_projected, decode_graph_with_catalog_usage,
 };
+use rvt::research::native_walls::{WALL_READ_FIELDS, wall_facts};
 use rvt::research::schema_registry;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -47,17 +51,13 @@ use std::time::{Duration, Instant};
 const BUDGET: Duration = Duration::from_secs(12 * 60);
 const SHOWN: usize = 12;
 
-const KEEPS: [&[&str]; 7] = [
-    &["m_id", "m_categoryId"],
-    &["m_id", "m_familyId"],
-    &["m_id", "m_WallAttributesId", "m_baseOrTop"],
-    &["m_id", "m_WallAttributesId", "m_function", "m_baseOrTop"],
-    &[
-        "m_id",
-        "m_createdPhaseId",
-        "m_demolishedPhaseId",
-        "m_phaseId",
-    ],
+/// The readers' lists, then two that stress the mechanism: the identity alone
+/// and no field at all.
+const KEEPS: [&[&str]; 6] = [
+    FAMILY_BINDING_FIELDS,
+    SYMBOL_BINDING_FIELDS,
+    WALL_READ_FIELDS,
+    CATALOG_FIELDS,
     &["m_id"],
     &[],
 ];
@@ -140,6 +140,48 @@ fn differences(full: &ObjectGraph, projected: &ObjectGraph, keep: &[&str]) -> Ve
     found
 }
 
+/// The catalog `from_graph` reads from the `Global/Latest` document decoded in
+/// full and decoded under `CATALOG_FIELDS`.
+fn global_catalog(rf: &mut RevitFile, registry: &schema_registry::Registry) -> String {
+    let Ok(bytes) = native_document::read_single(rf, "Global/Latest") else {
+        return "absent".into();
+    };
+    let Ok(document) = native_es_catalog::document(&bytes) else {
+        return "absent".into();
+    };
+    let limits = native_es_catalog::document_limits();
+    let full = decode_graph_with_catalog_usage(document, registry, &limits, None);
+    let projected = decode_graph_projected(document, registry, &limits, None, CATALOG_FIELDS);
+    match (&full, &projected) {
+        (Ok((a, usage)), Ok((b, other))) => {
+            if usage.values != other.values || usage.objects != other.objects {
+                return "usage".into();
+            }
+            if let Some(kind) = differences(a, b, CATALOG_FIELDS).first() {
+                return format!("graph-{kind}");
+            }
+            match (
+                native_es_catalog::from_graph(a, &bytes),
+                native_es_catalog::from_graph(b, &bytes),
+            ) {
+                (Ok((c, v)), Ok((d, w))) => {
+                    let same = serde_json::to_value(&c).ok() == serde_json::to_value(&d).ok();
+                    if same && v == w {
+                        "same".into()
+                    } else {
+                        "catalog".into()
+                    }
+                }
+                (Err(x), Err(y)) if x.to_string() == y.to_string() => "same-refusal".into(),
+                _ => "catalog-refusal".into(),
+            }
+        }
+        (Err(a), Err(b)) if a.to_string() == b.to_string() => "same-refusal".into(),
+        (Err(_), Err(_)) => "error".into(),
+        _ => "accepted-differently".into(),
+    }
+}
+
 fn main() -> Result<()> {
     let path = std::env::args()
         .nth(1)
@@ -153,6 +195,7 @@ fn main() -> Result<()> {
     }
     let formats = native_document::read_single(&mut rf, "Formats/Latest")?;
     let registry = schema_registry::parse(&formats)?;
+    println!("global-catalog {}", global_catalog(&mut rf, &registry));
     let catalog = native_document::read_single(&mut rf, "Global/Latest")
         .and_then(|bytes| native_es_catalog::decode(&bytes, &registry))
         .ok()
@@ -162,42 +205,6 @@ fn main() -> Result<()> {
         max_objects: 100_000,
         ..GraphLimits::default()
     };
-    // The document the extensible storage catalog is read from, in full and
-    // under the fields the catalog reads: the same graph either way.
-    let global_keep = [
-        "m_pAppInfoManager",
-        "m_appInfoArr",
-        "m_storedSchemas",
-        "m_schemaUsageMap",
-    ];
-    match native_document::read_single(&mut rf, "Global/Latest") {
-        Ok(bytes) if bytes.len() >= 6 => {
-            let document = &bytes[..bytes.len() - 4];
-            let wide = GraphLimits {
-                max_values: 2_000_000,
-                ..GraphLimits::default()
-            };
-            let full = decode_graph_with_catalog_usage(document, &registry, &wide, None);
-            let projected = decode_graph_projected(document, &registry, &wide, None, &global_keep);
-            let verdict = match (&full, &projected) {
-                (Ok((a, usage)), Ok((b, other))) => {
-                    if usage.values != other.values || usage.objects != other.objects {
-                        "usage"
-                    } else {
-                        differences(a, b, &global_keep)
-                            .first()
-                            .copied()
-                            .unwrap_or("same")
-                    }
-                }
-                (Err(a), Err(b)) if a.to_string() == b.to_string() => "same-refusal",
-                (Err(_), Err(_)) => "error",
-                _ => "accepted-differently",
-            };
-            println!("global-graph {verdict}");
-        }
-        _ => println!("global-graph absent"),
-    }
     // Every record is handed over with its body and no graph: this probe
     // decodes them itself.
     let options = Options {
@@ -219,6 +226,8 @@ fn main() -> Result<()> {
     let mut projected_definitions = Definitions::default();
     let mut ingest_refusals = 0usize;
     let mut same_refusals = true;
+    let mut walls = 0usize;
+    let mut same_walls = true;
     let mut shown = 0usize;
     let result = native_document::extract_graphs(&mut rf, &options, |record| {
         if started.elapsed() > BUDGET {
@@ -266,15 +275,16 @@ fn main() -> Result<()> {
                 }
             }
         }
+        // The readers, on the graph they are given and on the full one.
+        let id = record.identity.element_id;
         if matches!(class.as_str(), "Family" | "FamilySymbol") {
-            let keep: &[&str] = if class == "Family" {
-                KEEPS[0]
+            let keep = if class == "Family" {
+                FAMILY_BINDING_FIELDS
             } else {
-                KEEPS[1]
+                SYMBOL_BINDING_FIELDS
             };
             let projected =
                 decode_graph_projected(body, &registry, &limits, catalog.as_ref(), keep);
-            let id = record.identity.element_id;
             let a = match &full {
                 Ok((graph, _)) => ingest(&mut full_definitions, graph, id),
                 Err(error) => Err(error.to_string()),
@@ -285,6 +295,19 @@ fn main() -> Result<()> {
             };
             ingest_refusals += usize::from(a.is_err());
             same_refusals &= a == b;
+        }
+        if matches!(class.as_str(), "SWall" | "ArcWall") {
+            let projected = decode_graph_projected(
+                body,
+                &registry,
+                &limits,
+                catalog.as_ref(),
+                WALL_READ_FIELDS,
+            );
+            if let (Ok((graph, _)), Ok((other, _))) = (&full, &projected) {
+                walls += 1;
+                same_walls &= wall_facts(graph) == wall_facts(other);
+            }
         }
         Ok(())
     });
@@ -312,5 +335,6 @@ fn main() -> Result<()> {
         full_definitions.family_categories.len(),
         full_definitions.symbol_families.len(),
     );
+    println!("wall-facts compared {walls} same {same_walls}");
     Ok(())
 }
