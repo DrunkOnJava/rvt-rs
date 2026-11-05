@@ -25,7 +25,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
-use rvt::ifc::entities::{Extrusion, IfcEntity, ProfileDef};
+use rvt::ifc::entities::{CurveSegment, Extrusion, IfcEntity, ProfileDef};
 use rvt::research::native_document::{Options, extract_graphs};
 
 type Info = (String, [f64; 3], Option<f64>, String, f64);
@@ -40,6 +40,26 @@ fn profile(body: &Extrusion) -> String {
         Some(ProfileDef::ArbitraryClosed { points }) => {
             let listed: Vec<String> = points.iter().map(|(x, y)| format!("{x},{y}")).collect();
             format!("p_{}", listed.join(";"))
+        }
+        Some(ProfileDef::ArbitraryWithVoids { points, voids }) => {
+            let outer: Vec<String> = points.iter().map(|(x, y)| format!("{x},{y}")).collect();
+            let holes: Vec<String> = voids
+                .iter()
+                .map(|hole| {
+                    let listed: Vec<String> =
+                        hole.iter().map(|(x, y)| format!("{x},{y}")).collect();
+                    listed.join(";")
+                })
+                .collect();
+            format!("w_{}/{}", outer.join(";"), holes.join("/"))
+        }
+        Some(ProfileDef::IndexedPolyCurve { points, segments }) => {
+            let listed: Vec<String> = points.iter().map(|(x, y)| format!("{x},{y}")).collect();
+            let arcs = segments
+                .iter()
+                .filter(|segment| matches!(segment, CurveSegment::Arc(_)))
+                .count();
+            format!("i{arcs}_{}", listed.join(";"))
         }
         Some(_) => "other".to_string(),
     }
