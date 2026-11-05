@@ -156,6 +156,94 @@ for the five lowest ElementIds of each IFC entity, the diagnostics and an
   whose server does not build, leaves the step NOT MEASURED with a warning and
   fails no other scorer. Autodesk's sample projects are not asked.
 
+## The semantic merge check
+
+Measure is the byte-level oracle: it says that an export moved. The semantic
+merge check (#1334) says what moved in its meaning, before a pull request that
+changes decoder output is armed. It is advisory: the check run `semantic diff
+(advisory)` on the measured commit, not a required check, and nothing is posted
+to the pull request. Merging still waits only on `full / CI passed`.
+
+    gh workflow run measure.yml --ref main -f ref=<pull request head> -f base=main \
+      -f models="core-interior einhoven re1-*" -f scorers=mcp_answers_vs_ifc
+
+A run with a base that has a dump on both sides gets the check; a run with
+`base=none`, or with scorers that leave the server out, gets none.
+
+- **What is compared.** The MCP server's dump of each openly licensed model
+  (Core Interior, Einhoven, RE1, the BIM4LCA office, the Revit 2025 models), on
+  both sides of the run: every element's row, the rooms' numbers and areas, the
+  levels, the summary and the diagnostics, and the property and quantity sets,
+  type object, placement and provenance of the sampled elements (the five
+  lowest ElementIds of each entity). `tools/re/semantic_diff.py` is a pure
+  function of the two dumps: elements added, removed and changed with their value
+  before and after; the byte offsets inside `provenance` dropped; order ignored;
+  values compared exactly (0.35 and 0.3500001 are different values; whether an
+  importer would notice is Jev's question); an empty object or list the same as
+  no field; identical changes collapsed by the whole (path, before, after), so a
+  bulk change of 400 walls is one line and a wall that gains another value is a
+  line of its own. Its totals per IFC entity, its coverage block (how many
+  elements' property sets both dumps hold) and its text summary are in the
+  `semantic-diff` artifact, one `.json` and `.txt` per model.
+- **What it cannot see.** A model with no dump on both sides is not compared (a
+  base older than the server). A change to the property sets of an element the
+  dump does not sample, and a change to a mesh vertex or a profile point, is not
+  in the dump: a pass says the dumps agree, not that the exports are identical
+  (Measure's `ifc.sha256` says that). A change that lands only on a release the
+  open models do not cover (the 2015 to 2023 Areas of #1316 have no open model)
+  shows nothing here.
+- **What leaves the runner.** Only the diff of the openly licensed models. The
+  held-out, spent, BIMcollab and rac_advanced models and Autodesk's samples and
+  families have no dump, and the compare job fails if a model on that list
+  (`RESTRICTED_PREFIXES`) or on neither list holds one; `jev_check.py` checks the
+  names again before it sends anything. The pull request's title, branch and
+  number, the model's name and every ElementId stay out of the question.
+- **Scoring.** `tools/ci/jev_check.py` merges findings that repeat across
+  models, groups them by category into chunks of at most 8 findings and 16,000
+  characters, and asks Jev `jev-1.13.0` (the version the PR queue pins) about
+  each chunk with the two descriptions labelled A and B, the labels assigned at
+  random per chunk from a seed of the run and the head commit. Per finding: is
+  the difference more than rounding, a reordering or a spelling of the same fact?
+  Per chunk: how much would an importer notice, on five levels (0 to 4)? The
+  verdict is a function of the answers: **fail** when a finding scores 0.9 or
+  more and its chunk is rated 3.0 or more; **warn** when a finding scores 0.5 or
+  more or a chunk is rated 1.5 or more; else **pass**. The thresholds are in
+  `THRESHOLDS`; the wording of the two questions and the thresholds were set on
+  the calibration runs in #1419, and a change to either needs those runs again.
+  A diff with no finding is a pass without a call to Jev.
+- **How to treat a verdict.** A `pass` needs nothing. A `warn` is answered in
+  the pull request body: one line for each warned finding, saying what moved and
+  why that is the change the pull request is for, with the evidence. A `fail` is
+  fixed before the pull request is armed; where the failing finding is the change
+  the pull request exists to make, the body answers it with the evidence and the
+  main session decides whether to arm. `NOT MEASURED` is neither: it names its
+  cause, and the check is run again once the cause is gone.
+- **NOT MEASURED, never a pass.** No key in the context, a fork's run, HTTP 402
+  or a 429 for exhausted quota (the credit is out; not retried), a key refused, a
+  reply from another model than the pinned one, a time-out or a service that
+  stays busy after three tries, a diff with no model compared, and any chunk not
+  scored (more than 150 chunks, or a run past 7 minutes) when no scored chunk is
+  a warn or a fail already. Run it again with `gh run rerun <semantic check run>`,
+  or score a Measure run from main with `gh workflow run semantic-check.yml -f
+  run_id=<Measure run id>`.
+- **Cost.** Jev bills $0.042 per million input tokens; a diff of a few hundred
+  kilobytes costs well under a cent, so the results are not cached (the Actions
+  cache is not private to the workflows that write it, and the artifact of the
+  run, kept 7 days, holds the result file).
+- **The key and the trust.** `TYPESAFE_API_KEY` is a secret of the Actions
+  environment `jev`, whose deployment branch policy allows only `main`. The
+  scoring job is a `workflow_run` workflow, which always runs from main's
+  definition, and it runs no measured code: it downloads the `semantic-diff`
+  artifact and reads it as JSON. A pull request that changes the check runs the
+  same job without the environment, so without the key, and writes its NOT
+  MEASURED check on itself. The text of the diff is data from files and from the
+  code under test, so a crafted name could try to steer Jev: the verdict is
+  advisory for that reason, and the diff itself is in the artifact for a human to
+  read.
+- **The check's conclusion.** pass is `success`, warn and NOT MEASURED are
+  `neutral`, fail is `failure`. The watcher treats a `failure` on a head like any
+  failing check.
+
 ## Measure's score cache
 
 Measure runs about 40 scorers and four schema checks on every model, and most

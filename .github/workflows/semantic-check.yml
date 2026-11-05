@@ -18,8 +18,9 @@
 # dump on both sides); workflow_dispatch with a run id, to score an older run or
 # score one again; and a pull request that changes this check, which runs it
 # without the environment (so without the key) on the newest Measure run of the
-# pull request's head, to prove the plumbing before it reaches main. Re-run a
-# scored run with `gh run rerun`, e.g. after the Jev credit is topped up.
+# pull request's head and writes its NOT MEASURED check run on the pull request
+# itself, to prove the plumbing before it reaches main. Re-run a scored run with
+# `gh run rerun`, e.g. after the Jev credit is topped up.
 
 name: Semantic check
 
@@ -46,7 +47,7 @@ concurrency:
 
 jobs:
   score:
-    name: Semantic diff (advisory)
+    name: Score the semantic diff
     # A Measure run that failed or was cancelled has nothing to score.
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
@@ -108,6 +109,9 @@ jobs:
           fork=""
           [ "$head_repo" = "$REPO" ] || fork=true
           [[ "$pr_sha" =~ ^[0-9a-f]{40}$ ]] || pr_sha=""
+          # A pull request that changes this check writes its keyless check run on
+          # itself, not on whatever commit the Measure run it found measured.
+          [ "$EVENT" != pull_request ] || pr_sha="$PR_HEAD_SHA"
           {
             echo "found=true"
             echo "run_id=$run_id"

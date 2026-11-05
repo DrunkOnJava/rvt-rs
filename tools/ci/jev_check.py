@@ -16,11 +16,15 @@ How a diff is scored:
   value of B. Which of them is the base and which the head is decided by a random generator seeded
   from the run id and the head commit, once per chunk, and is written to the result file, never to
   the state. No model name, element id, pull request or direction is in it.
-- Each chunk asks one yes/no question per finding ("do A and B state different facts?") and one
-  rating for the chunk ("how much would an importer notice?", five ordered levels).
+- Each chunk asks one yes/no question per finding ("is the difference more than rounding of a
+  measurement, a reordering or a different spelling of the same fact?") and one rating for the
+  chunk ("how much would an importer notice?", five ordered levels). The wording of the yes/no
+  question was chosen on the calibration runs of docs/maintaining.md: asked whether A and B "state
+  different facts", Jev answered 0.5 to 0.93 for a move of 1e-6 in every measurement, which is a
+  difference and no change an importer sees.
 - The verdict is a function of the answers (see THRESHOLDS): fail when a finding is confidently a
-  different fact and its chunk is rated a visible change or more; warn when any finding is likely a
-  different fact or any chunk is rated a detail a careful user finds or more; else pass. An empty
+  real change and its chunk is rated a visible change or more; warn when any finding is likely a
+  real change or any chunk is rated a detail a careful user finds or more; else pass. An empty
   diff passes without a call. A chunk Jev did not answer can only add severity: a diff with such a
   chunk is at best NOT MEASURED.
 
@@ -60,7 +64,7 @@ CHECK_NAME = "semantic diff (advisory)"
 GITHUB_API = "https://api.github.com"
 MAX_REQUEST_CHARS = 16000
 MAX_FINDINGS_PER_CHUNK = 8
-MAX_CHUNKS = 40
+MAX_CHUNKS = 150
 BUDGET_SECONDS = 420.0
 REQUEST_SECONDS = 30.0
 RETRIES = 3
@@ -178,11 +182,11 @@ def questions_for(items):
             "type": "noul",
             "instructions": (
                 f"Look only at the item with id `{item['id']}` in `differences`. "
-                "Do descriptions A and B state different facts about the building there?"
+                "Is the difference between A and B there more than rounding of a measurement, a reordering, or a different spelling of the same fact?"
             ),
             "criteria": {
-                "true": "A and B give a different value, a different set of elements, or one gives a fact the other leaves out",
-                "false": "A and B give the same fact written differently, or there is no real difference",
+                "true": "A real change: a different value beyond rounding, a different set of elements, or a fact that one description has and the other lacks",
+                "false": "Only rounding in the last digits of a measurement, ordering, or a different spelling of the same fact",
             },
         }
     questions["notice"] = {
@@ -406,7 +410,7 @@ def summarize(manifest, diffs, findings, chunks, verdict, reasons, context):
         lines.append(
             f"{len(findings)} findings in {len(chunks)} chunks; {len(scored)} scored by Jev `{MODEL}`"
             + (f", {len(chunks) - len(scored)} not scored" if len(scored) < len(chunks) else "")
-            + ". The first column is Jev's probability that A and B state different facts; the chunk's rating is how much an importer would notice, 0 to 4."
+            + ". The first column is Jev's probability that the difference is more than rounding, a reordering or a spelling of the same fact; the chunk's rating is how much an importer would notice, 0 to 4."
         )
         lines.append("")
         lines.append("| Probability | Chunk rating | Finding |")
