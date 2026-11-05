@@ -6,7 +6,11 @@ name: Deploy viewer
 # Runs on every push to main that touches viewer/, src/ or rvt-wasm/ (so
 # the WASM stays fresh), plus manual runs. It builds and publishes the site,
 # runs the browser tests and measures the viewer with and without saved meshes,
-# on the release build it publishes.
+# on the release WASM it publishes: `build` builds that WASM once and uploads
+# it, `tests` and `measure` download it and test it, and the site is built from
+# the same file. All three print its sha256, so a run shows that they match,
+# and each checks that the site it builds holds that file (#1457); they used
+# to build it three times, and tested builds of their own.
 # The browser tests are viewer-test.yml's: ci.yml runs them as part of
 # `CI passed` (#1374), so a pull request cannot merge before they have passed
 # on its head. To check a draft's viewer, dispatch viewer-test.yml on its
@@ -29,6 +33,12 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/deploy-viewer.yml'
+      # viewer-test.yml is what `tests` and `measure` run, and .github/actions
+      # holds fetch-corpus, which `build` uses: a change to either changes what
+      # this workflow builds or tests, and the run on the release WASM would
+      # otherwise wait for the next change to src/ or viewer/.
+      - '.github/workflows/viewer-test.yml'
+      - '.github/actions/**'
   workflow_dispatch:
 
 # Read-only by default; only the deploy job below can write to Pages (C3).
@@ -76,6 +86,7 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: viewer-wasm
+          cache-directories: target-native
 
       - name: Locked wasm-bindgen version
         # wasm-pack fetches the wasm-bindgen CLI that Cargo.lock pins at build
@@ -99,12 +110,25 @@ jobs:
         with:
           tool: wasm-pack@0.14.0,wasm-bindgen@${{ steps.wasm-bindgen.outputs.version }}
 
-      - name: Build WASM
+      - name: Build WASM, and gen-fixture beside it
+        shell: bash
         # The bindings are their own crate, rvt-wasm (C6). `--out-dir` is
         # relative to that crate, so `../viewer/pkg` writes straight into the
         # viewer; `--out-name rvt` keeps the files `rvt.js` and
         # `rvt_bg.wasm`.
-        run: wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
+        #
+        # gen-fixture generates the synthetic-mvp demo, and the browser tests
+        # stage it too. It is built with the CI profile (the release profile's
+        # full LTO rebuilt the crate from scratch: 39 s) in a target directory
+        # of its own, at the same time as the WASM and inside its build time,
+        # as viewer-test.yml builds it. The stager finds the binary on PATH.
+        run: |
+          set -euo pipefail
+          CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target-native" cargo build --profile ci --bin gen-fixture &
+          fixture=$!
+          wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
+          wait "${fixture}"
+          echo "${GITHUB_WORKSPACE}/target-native/ci" >> "$GITHUB_PATH"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413  # v6.1.0
@@ -125,40 +149,69 @@ jobs:
         working-directory: viewer
         run: node scripts/audit-wasm-imports.mjs
 
+      # The build `tests` and `measure` download: wasm-pack's output, gen-fixture
+      # and the WASM's sha256, in the layout viewer-test.yml's `build` job
+      # writes. It is uploaded here, before anything is staged or built on it,
+      # and the site below is built from this same viewer/pkg.
+      - name: Collect the build, and print the WASM's sha256
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}/viewer-build"
+          mkdir -p "${dir}/bin"
+          cp -R viewer/pkg "${dir}/pkg"
+          cp target-native/ci/gen-fixture "${dir}/bin/gen-fixture"
+          (cd "${dir}" && sha256sum pkg/rvt_bg.wasm > wasm.sha256)
+          sha=$(cut -d' ' -f1 "${dir}/wasm.sha256")
+          echo "WASM sha256 ${sha}"
+          echo "WASM sha256: ${sha}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the WASM and gen-fixture for the tests
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: viewer-build-release
+          path: ${{ runner.temp }}/viewer-build
+          if-no-files-found: error
+          # A rerun of every job uploads under the name of the first attempt.
+          overwrite: true
+          retention-days: 3
+
       - name: Install dependencies
         working-directory: viewer
         run: pnpm install --frozen-lockfile
 
       - name: Stage redistributable demos
         working-directory: viewer
-        run: |
-          # gen-fixture generates the synthetic-mvp demo. Build it with the
-          # CI profile, which the viewer-wasm cache above keeps from the last
-          # run on main; the release profile's full LTO rebuilt the crate
-          # from scratch here (39 s per run). The stager finds the binary on
-          # PATH.
-          cargo build --profile ci --bin gen-fixture
-          PATH="$(pwd)/../target/ci:$PATH" pnpm run stage:demos
+        run: pnpm run stage:demos
 
       - name: Build viewer
         working-directory: viewer
         run: pnpm run build
+
+      # The site is what gets published: it must hold the bytes that were
+      # uploaded for the tests, and this fails the build, and so the deploy,
+      # when it does not. The legs check their own site the same way.
+      - name: The site holds the WASM that was uploaded
+        run: tools/ci/check-wasm-in-site.sh "${RUNNER_TEMP}/viewer-build/wasm.sha256" viewer/dist
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
         with:
           path: viewer/dist
 
-  # The browser tests again, on the release build of the WASM that this
-  # workflow publishes: ci.yml's `viewer` job tests the faster build without
-  # LTO, which is what a pull request waits for. One leg, since nothing waits
-  # for it but the deploy, which waits for `CI passed` as long.
+  # The browser tests again, on the release WASM that `build` uploaded and
+  # this workflow publishes: ci.yml's `viewer` job tests the faster build
+  # without LTO, which is what a pull request waits for. One leg, since
+  # nothing waits for it but the deploy, which waits for `CI passed` as long.
+  # `needs: build` is what makes the artifact exist, and the call builds
+  # nothing: it tests the bytes that are published.
   tests:
+    needs: build
     permissions:
       contents: read
     uses: $/.github/workflows/viewer-test.yml
     with:
       legs: '[{"name":"browser tests","files":"/"}]'
+      wasm_artifact: viewer-build-release
 
   # The viewer draws doors and windows from their saved meshes by default, on
   # the condition (Griffin, 2026-10-30) that its memory and load time are
@@ -166,11 +219,13 @@ jobs:
   # reading and the spec asserts behaviour; `CI passed` does not wait for it
   # (it took 12 minutes of every pull request's), but the deploy does.
   measure:
+    needs: build
     permissions:
       contents: read
     uses: $/.github/workflows/viewer-test.yml
     with:
       legs: '[{"name":"saved-mesh measurement","measure":true}]'
+      wasm_artifact: viewer-build-release
 
   deploy:
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
@@ -189,50 +244,13 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      # C3: wait for CI on this commit. A commit whose every file CI's push
+      # C3: wait for CI on this commit (.github/actions/wait-for-check, which
+      # the release preflight uses too). A commit whose every file CI's push
       # filter ignores runs no CI, and deploys at once.
       - name: Wait for CI on the commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        # Each API call is retried with backoff: a GitHub 5xx (a 502 on
-        # 2026-11-04 failed the v0.14.0 deploy) is not a verdict on the
-        # commit. A call that still fails ends the step, so the deploy
-        # never goes ahead without CI's answer.
-        run: |
-          api() {
-            local try out
-            for try in 1 2 3 4 5 6; do
-              if out=$(gh api "$@"); then printf '%s\n' "$out"; return 0; fi
-              [ "$try" -eq 6 ] && break
-              echo "gh api $1 failed (try ${try}); retrying" >&2
-              sleep $((try * 10))
-            done
-            echo "gh api $1 failed 6 times" >&2
-            return 1
-          }
-          # Every page of the commit's files (the endpoint returns 300 a
-          # page). A commit that lists no file gives one empty line, which
-          # the filter below does not ignore, so it waits for CI: closed.
-          files=$(api --paginate "repos/${GH_REPO}/commits/${SHA}" --jq '.files[].filename') || {
-            echo "::error::could not list the files of ${SHA}"; exit 1; }
-          if ! grep -qvE '(\.md$|^docs/|^LICENSE|^\.gitignore$|^\.github/ISSUE_TEMPLATE/|^CITATION\.cff$)' <<<"$files"; then
-            echo "CI's push filter skips this commit; deploying it"
-            exit 0
-          fi
-          for _ in $(seq 1 80); do
-            conclusion=$(api "repos/${GH_REPO}/commits/${SHA}/check-runs?check_name=CI%20passed" \
-              --jq '[.check_runs[] | select(.status == "completed") | .conclusion] | first // ""') || {
-              echo "::error::could not read CI's check run on ${SHA}"; exit 1; }
-            case "$conclusion" in
-              success) echo "CI passed on ${SHA}"; exit 0 ;;
-              "") sleep 60 ;;
-              *) echo "::error::CI concluded ${conclusion} on ${SHA}; not publishing it"; exit 1 ;;
-            esac
-          done
-          echo "::error::CI did not finish on ${SHA} within 80 minutes"
-          exit 1
+        uses: $/.github/actions/wait-for-check
+        with:
+          sha: ${{ github.sha }}
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5.0.1
