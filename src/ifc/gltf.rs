@@ -465,6 +465,7 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
                 }
                 Body::Solid(shape) if !layers.stacked => {
                     body_geometry::layered_stepped_meshes(shape, local, &widths)
+                        .or_else(|| body_geometry::one_layer_solid_meshes(shape, local, &widths))
                 }
                 _ => None,
             };
