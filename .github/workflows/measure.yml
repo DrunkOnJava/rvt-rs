@@ -521,6 +521,7 @@ jobs:
             measured/target/ci/rvt-rs-mcp
           key: ${{ steps.binaries-key.outputs.key }}
       - name: Build
+        id: build
         working-directory: measured
         run: |
           git log -1 --format='%H %s' > ../measured-commit.txt
@@ -528,11 +529,16 @@ jobs:
             echo "rvt-ifc, rvt-gltf and rvt-info (and rvt-rs-mcp, where the key says so) restored from the binary cache"
           else
             cargo build --profile ci --bin rvt-ifc --bin rvt-gltf --bin rvt-info
+            # The server is optional: a ref without the crate, or one whose
+            # server does not build, leaves the answers NOT MEASURED on this
+            # side and fails no other scorer.
             if [ "$WITH_MCP" = true ]; then
-              if [ -f rvt-mcp/Cargo.toml ]; then
-                cargo build --profile ci -p rvt-rs-mcp --bin rvt-rs-mcp
-              else
+              if [ ! -f rvt-mcp/Cargo.toml ]; then
                 echo "::warning::the measured ref has no rvt-mcp crate: the MCP server's answers are NOT MEASURED on this side"
+              elif cargo build --profile ci -p rvt-rs-mcp --bin rvt-rs-mcp; then
+                echo "mcp_built=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "::warning::rvt-rs-mcp did not build at the measured ref: the MCP server's answers are NOT MEASURED on this side"
               fi
             fi
           fi
@@ -561,9 +567,10 @@ jobs:
           WITH_MCP: ${{ steps.binaries-key.outputs.mcp }}
       # Every shard of a commit misses at once and saves the same key; the one
       # that reserves it first stores it and the others are told it is taken.
-      # A run from a pull request saves nothing, its cache being its own.
+      # A run from a pull request saves nothing, its cache being its own. A key
+      # that says the server is in it is saved only when the server was built.
       - name: Save the binaries
-        if: ${{ success() && github.event_name == 'workflow_dispatch' && steps.binaries-key.outputs.key != '' && steps.binaries.outputs.cache-hit != 'true' }}
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && steps.binaries-key.outputs.key != '' && steps.binaries.outputs.cache-hit != 'true' && (steps.binaries-key.outputs.mcp != 'true' || steps.build.outputs.mcp_built == 'true') }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -854,15 +861,23 @@ jobs:
             # #1327: what the MCP server answered, per model, against the
             # model's own export. A difference is a bug in the server or in the
             # export (tools/re/mcp_answers_vs_ifc.py); it fails no job here.
-            if grep -qs '^mcp answers: consistency ' measure-head/*/mcp_answers_vs_ifc.txt measure-head/*/counts.txt; then
+            mcp_lines=()
+            for f in measure-head/*/mcp_answers_vs_ifc.txt measure-head/*/counts.txt; do
+              [ -f "$f" ] || continue
+              # A counts.txt is a restricted model's, which may hold no MCP line at all.
+              if [ "$(basename "$f")" = counts.txt ] && ! grep -qs '^mcp answers: ' "$f"; then continue; fi
+              verdict=$(grep -E '^mcp answers: consistency (PASS|FAIL|NOT MEASURED)' "$f" | head -n 1 | sed -E 's/^mcp answers: consistency //')
+              if [ -z "$verdict" ]; then
+                # A crash leaves no verdict: told apart from a pass and a fail.
+                status=$(grep -E '^(mcp answers: )?exit [0-9]+$' "$f" | sed -n '$p' | sed -E 's/^(mcp answers: )?exit //')
+                verdict="no verdict, exit ${status:-unknown}: see its mcp_answers_vs_ifc.txt"
+              fi
+              mcp_lines+=("- $(basename "$(dirname "$f")"): $verdict")
+            done
+            if [ "${#mcp_lines[@]}" -gt 0 ]; then
               echo "### MCP server answers against the export"
               echo
-              for f in measure-head/*/mcp_answers_vs_ifc.txt measure-head/*/counts.txt; do
-                [ -f "$f" ] || continue
-                verdict=$(grep -E '^mcp answers: consistency (PASS|FAIL|NOT MEASURED)' "$f" | head -n 1 | sed -E 's/^mcp answers: consistency //')
-                [ -n "$verdict" ] || continue
-                echo "- $(basename "$(dirname "$f")"): $verdict"
-              done
+              printf '%s\n' "${mcp_lines[@]}"
               echo
             fi
             if [ -d measure-base ]; then

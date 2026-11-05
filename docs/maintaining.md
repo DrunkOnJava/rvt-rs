@@ -110,7 +110,7 @@ language model (`tools/re/mcp_client.py`, JSON-RPC over the server's stdio, the
 2026-07-28 lifecycle) opens the model's `.rvt` in the built server and asks a
 fixed query set: the summary, the levels, every element's row, the totals per
 IFC entity, Revit class and level, the rooms with their areas, `get_element`
-for up to five elements of each IFC entity, the diagnostics and an
+for the five lowest ElementIds of each IFC entity, the diagnostics and an
 `export_ifc`. Run it by name on any model:
 
     gh workflow run measure.yml --ref <branch> -f ref=<sha> -f base=none \
@@ -119,27 +119,42 @@ for up to five elements of each IFC entity, the diagnostics and an
 - **Consistency** is a check, not a measurement: every answer must equal the
   IFC export of the same run (the elements and spaces by GlobalId, the
   storeys, the rooms' number, name, storey and plan area, the property and
-  quantity sets of the sampled elements, their types, placement and host, the
-  diagnostics against `diagnostics.json`, the server's export against
-  `ifc.sha256`). A difference ends the output with `exit 1` and is listed
-  under its check; the run summary names each model's verdict and fails no
+  quantity sets of the sampled elements, their types, placement (the
+  translation) and host, whether a body is none or mapped, the diagnostics
+  against `diagnostics.json`, the server's export against `ifc.sha256`). A
+  difference ends the output with `exit 1` and is listed under its check. The
+  run summary names each model's verdict, and a model with no verdict as `no
+  verdict, exit N` (a crash is never read as a pass or a fail); it fails no
   job. With `ifc_flags` the server's default decode is compared with its own
-  export instead, since it takes none of the flags.
+  export instead, since it takes none of the flags, and the checks that need
+  the run's export (the diagnostics and the export hash) are named in the
+  verdict as NOT MEASURED.
+- **What consistency cannot catch.** The server and the IFC writer share the
+  one `IfcModel` the decode builds. The check finds what either does to that
+  model on the way out: a field the server projects wrongly, an element or a
+  set the writer drops, adds or folds, a name or a type object the writer
+  makes at write time, a run that does not repeat. It finds no decode error (a
+  value read wrongly from the file, an element not read): both sides share it.
+  The oracle is what measures those.
 - **The oracle** scores the same answers against Revit's export with the
   pairing and tolerances of `class_sets_vs_ifc`, `storeys_vs_ifc`,
   `space_profiles_vs_ifc`, `psets_vs_ifc` and `qtos_vs_ifc`. Those lines are
   measurements, diffed by `base=main` like every scorer's.
 - **Held-out models** keep the lines starting `mcp answers:` (fixed words,
-  counts and IFC entity names) and nothing else
-  (`tools/ci/scrub-holdout-results.sh`). Nothing is cached: the step runs the
-  server.
-- **The dump** (`mcp-dump.json` in each model's artifact, left out of the
-  diff) is the same answers as one deterministic document: sorted, floats at
-  six decimals, no handle, time or path. `python3 tools/re/mcp_client.py
-  <rvt-rs-mcp> <model.rvt> [--all]` writes it alone, with `get_element` for a
-  sample or for every element, which the semantic merge check (#1334) reads.
+  integers and IFC entity names, which `Report.line` enforces: it raises on
+  any other value) and nothing else (`tools/ci/scrub-holdout-results.sh`).
+  Nothing is cached: the step runs the server.
+- **The dump** (`mcp-dump.json` in the artifact of the openly licensed models
+  only: Core Interior, Einhoven, RE1, the BIM4LCA office and the Revit 2025
+  models; left out of the diff) is the same answers as one deterministic
+  document: sorted, floats at six decimals, no handle, time or path.
+  `python3 tools/re/mcp_client.py <rvt-rs-mcp> <model.rvt> [--all]` writes it
+  alone, with `get_element` for the five lowest ElementIds of each entity or
+  for every element; the semantic merge check (#1334) reads it.
 - The server is built (`cargo build -p rvt-rs-mcp`) only in a run that names
-  no scorers or names this one; Autodesk's sample projects are not asked.
+  no scorers or names this one. It is optional: a ref without the crate, or
+  whose server does not build, leaves the step NOT MEASURED with a warning and
+  fails no other scorer. Autodesk's sample projects are not asked.
 
 ## Measure's score cache
 
@@ -239,7 +254,8 @@ writes the cached output and a `<step> cached` line to the model's
   model and hit everything else.
 
 Measure also keeps the three binaries its Build step makes (`rvt-ifc`,
-`rvt-gltf`, `rvt-info`) under `rvt-bin-v1-<full SHA>-<OS>-<arch>-<toolchain
+`rvt-gltf`, `rvt-info`; and `rvt-rs-mcp` in a run that scores the MCP server,
+under a key ending `-mcp`) under `rvt-bin-v2-<full SHA>-<OS>-<arch>-<toolchain
 hash>-ci`, so the shards of a run, and every run that measures `main`'s commit
 as its base, build them once (the build is about 70 seconds of each job). What
 the cache holds is a function of its key, the code of that commit built by that

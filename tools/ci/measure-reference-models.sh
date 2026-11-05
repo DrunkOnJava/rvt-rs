@@ -393,7 +393,7 @@ model_tasks() { # name rvt ref
 }
 
 model_task() { # name rvt ref task
-  local name="$1" rvt="$2" ref="$3" task="$4" dir s artifact sets flags extra
+  local name="$1" rvt="$2" ref="$3" task="$4" dir s artifact sets flags extra dump
   dir=$(model_dir "$name")
   case "$task" in
     base)
@@ -442,9 +442,19 @@ model_task() { # name rvt ref task
       # it (tools/re/mcp_client.py): a program run, so never from the score cache.
       extra=()
       [ "$ref" != "-" ] && extra=("$MODELS/$ref")
+      # The dump (GlobalIds, names, values) is for the semantic merge check
+      # (#1334), which reads openly licensed models only: it is written for
+      # the models named here, and for no other (not the held-out, spent,
+      # BIMcollab or rac_advanced ones, nor a model added later).
+      dump=()
+      case "$name" in
+        core-interior | einhoven | re1-* | nordic-office-* | r2025-*)
+          dump=(--dump "$dir/mcp-dump.json")
+          ;;
+      esac
       score "$dir/mcp_answers_vs_ifc.txt" "$SCORERS/mcp_answers_vs_ifc.py" \
         --server "$BIN/rvt-rs-mcp" --rvt "$MODELS/$rvt" \
-        --diagnostics "$dir/diagnostics.json" --dump "$dir/mcp-dump.json" \
+        --diagnostics "$dir/diagnostics.json" ${dump[@]+"${dump[@]}"} \
         "$dir/model.ifc" ${extra[@]+"${extra[@]}"}
       ;;
     meshes)

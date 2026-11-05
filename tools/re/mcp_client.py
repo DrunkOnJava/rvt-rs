@@ -14,7 +14,7 @@ The queries, in order:
 - `list_elements` unfiltered, a page of 1000 at a time, so every element's row;
 - `list_elements` once per IFC entity, per Revit class and per level, for the totals alone;
 - `list_rooms`;
-- `get_element` by ElementId for a spread of elements of each IFC entity (every element when
+- `get_element` by ElementId for the five lowest ElementIds of each IFC entity (every element when
   `details` is "all"), and by GlobalId for the first of them;
 - `get_diagnostics`;
 - `export_ifc` with no switch, into a folder of the caller's, for its size and hash.
@@ -36,18 +36,9 @@ META = {
     "io.modelcontextprotocol/protocolVersion": PROTOCOL,
     "io.modelcontextprotocol/clientCapabilities": {},
 }
-TOOLS = [
-    "export_gltf",
-    "export_ifc",
-    "get_diagnostics",
-    "get_element",
-    "get_summary",
-    "list_elements",
-    "list_levels",
-    "list_rooms",
-    "open_model",
-]
 PAGE = 1000
+# Seconds a server that has decoded nothing yet is given to answer discovery and the tool list.
+SHORT = 60.0
 FLOAT_DIGITS = 6
 
 
@@ -99,8 +90,11 @@ class Server:
             "method": method,
             "params": {**(params or {}), "_meta": META},
         }
-        self.process.stdin.write(json.dumps(message).encode() + b"\n")
-        self.process.stdin.flush()
+        try:
+            self.process.stdin.write(json.dumps(message).encode() + b"\n")
+            self.process.stdin.flush()
+        except OSError as error:
+            raise McpError(f"the server closed its input: {type(error).__name__}") from None
         deadline = time.monotonic() + (timeout or self.timeout)
         while True:
             raw = self.line(deadline)
@@ -115,13 +109,13 @@ class Server:
             return reply["result"]
 
     def discover(self):
-        result = self.request("server/discover")
+        result = self.request("server/discover", timeout=SHORT)
         if PROTOCOL not in result.get("supportedVersions", []):
             raise McpError(f"server/discover lists no {PROTOCOL}: {result.get('supportedVersions')}")
         return result
 
     def tools(self):
-        return self.request("tools/list")["tools"]
+        return self.request("tools/list", timeout=SHORT)["tools"]
 
     def call(self, tool, arguments):
         result = self.request("tools/call", {"name": tool, "arguments": arguments})
@@ -166,14 +160,6 @@ class Server:
         self.process.kill()
         self.process.wait()
         self.stderr.close()
-
-
-def spread(items, count):
-    """Up to `count` of `items` (already sorted), the first, the last and an even spread between."""
-    if len(items) <= count:
-        return list(items)
-    step = (len(items) - 1) / (count - 1)
-    return [items[round(i * step)] for i in range(count)]
 
 
 def id_key(row):
@@ -229,7 +215,7 @@ def gather(server, model, export_dir, per_entity=5, details="sample", progress=N
     chosen = []
     for category in sorted(by_category):
         group = sorted(by_category[category], key=id_key)
-        chosen += group if details == "all" else spread(group, per_entity)
+        chosen += group if details == "all" else group[:per_entity]
     answers["details"] = {}
     for row in chosen:
         answers["details"][row["id"]] = server.call("get_element", {"model": handle, "id": row["id"]})

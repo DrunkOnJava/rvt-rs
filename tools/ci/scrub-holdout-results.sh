@@ -143,9 +143,12 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     # What the MCP server answered about the model (#1327): the lines starting
     # `mcp answers:` are made of fixed words, numbers and IFC entity names (the
     # scorer's docstring); the lines under them with an element's id, name or
-    # value start with spaces and are dropped.
+    # value start with spaces and are dropped. The `exit N` line stays, as an
+    # `mcp answers:` line, so a crash (no verdict line) is told from a model
+    # that was not scored.
     if [ -f "${dir}mcp_answers_vs_ifc.txt" ]; then
-      grep -E '^mcp answers: [A-Za-z0-9 _:.,;()=%/+-]+$' "${dir}mcp_answers_vs_ifc.txt" || true
+      grep -E '^(mcp answers: [A-Za-z0-9 _:.,;()=%/+-]+|exit [0-9]+)$' "${dir}mcp_answers_vs_ifc.txt" \
+        | sed -E 's/^exit ([0-9]+)$/mcp answers: exit \1/' || true
     fi
     for f in "$dir"storeys_vs_ifc.txt; do
       [ -f "$f" ] || continue

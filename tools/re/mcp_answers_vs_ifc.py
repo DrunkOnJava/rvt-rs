@@ -4,8 +4,8 @@
 `tools/re/mcp_client.py` starts the built `rvt-rs-mcp`, a scripted client with no language model,
 and asks the fixed query set on the model's .rvt file: the summary, the levels, every element's
 row, the totals per IFC entity, Revit class and level, the rooms with their areas, `get_element`
-for a spread of elements of each IFC entity, the diagnostics, and an `export_ifc`. This scores the
-answers twice.
+for the five lowest ElementIds of each IFC entity, the diagnostics, and an `export_ifc`. This
+scores the answers twice.
 
 Consistency. The server answers from the model the IFC exporter builds, so each answer must equal
 the IFC export of the same run. Any difference is a bug in one of the two and fails the check
@@ -18,15 +18,27 @@ default decode does not take):
 - the summary equals `get_summary`, and its counts equal the rows, the filtered totals, the IFC's
   entities and the export diagnostics;
 - the rows are the IFC's elements and spaces (`IfcElement` and `IfcSpace`) by GlobalId, in both
-  directions, with the same entity, Name (an absent name stands for the exporter's `<class>-<ElementId>` placeholder), LongName of a space, Tag, PredefinedType and storey; the IfcOpeningElements
-  the writer cuts for doors and windows are the only IFC elements a row may lack;
+  directions, with the same entity, Name, LongName of a space, Tag, PredefinedType and storey (an
+  absent name stands for the exporter's `<class>-<ElementId>` placeholder); the IfcOpeningElements
+  the writer cuts for doors and windows are the only IFC elements a row may lack, and a GlobalId
+  that two IFC elements share is a failure;
 - the levels are the IFC's storeys, with their elevations and the elements each holds;
-- every room is an IfcSpace with the same number, name, storey and trust marker, and an area equal
-  to that of its body's plan outline;
+- every room is an IfcSpace whose Name is its number (or `<name>:<ElementId>` without one), with
+  the same LongName, storey and outline source, and an area equal to that of its body's plan
+  outline;
 - `get_element` on the sampled elements: the property and quantity sets, the trust markers, the
-  type object and its sets, the placement, the host and the body, each equal to the IFC's;
+  type object (entity, Name, Tag and sets), the placement (the translation, not the rotation), the
+  host, and whether the body is none or mapped, each equal to the IFC's;
 - `get_diagnostics` equals the `diagnostics.json` rvt-ifc wrote, and the server's export equals
-  rvt-ifc's (the hash Measure writes to `ifc.sha256`), when no flag was given.
+  rvt-ifc's (the hash Measure writes to `ifc.sha256`), when no flag was given; a check that was not
+  measured is named in the verdict.
+
+What it can and cannot catch. The server and the IFC writer share the one `IfcModel` the decode
+builds, so this finds what the server or the writer does to that model on the way out: a field the
+server projects wrongly, an element or a set the writer drops or adds, a name or a type the writer
+makes at write time, a run that does not repeat. It cannot find a decode error (a wrong value read
+from the file, an element not read), which both sides then share; the oracle below is what measures
+those.
 
 Oracle. With Revit's own export (`revit-export.ifc`), the answers are scored against it with the
 existing scorers' pairing and tolerances: the class sets of `class_sets_vs_ifc.py` (elements by
@@ -35,9 +47,12 @@ Tag, spaces by GlobalId), the storeys of `storeys_vs_ifc.py`, the rooms' areas o
 sampled elements, the property values of `psets_vs_ifc.py` (a relative 1e-5) and the quantities of
 `qtos_vs_ifc.py`. These are measurements, not failures.
 
-The lines starting `mcp answers:` are counts only, with IFC entity names, so the Measure workflow
-keeps them for the models it keeps only counts of (tools/ci/scrub-holdout-results.sh). The lines
-that follow with an element's id, name or value are listed under them and are not kept for those.
+The lines starting `mcp answers:` are counts only, so the Measure workflow keeps them for the
+models it keeps only counts of (tools/ci/scrub-holdout-results.sh): `Report.line` takes words
+written in this file with `W()` and, as values, only integers and IFC entity names, and raises on
+anything else. The lines that follow with an element's id, name or value are listed under them and
+are not kept for those. A run that crashes ends with no verdict line, which the run summary reports
+as such.
 
 Usage:
 
@@ -55,6 +70,7 @@ import argparse
 import collections
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -83,21 +99,78 @@ MARKER_SUFFIXES = ("Source", "Resolved", "Refusal")
 WRITER_OPENING = "IfcOpeningElement"
 
 
+# What may leave the runner for a model kept as counts only is the `mcp answers:` lines
+# (tools/ci/scrub-holdout-results.sh), so a line is made of words written in this file and of
+# numbers and IFC entity names, and nothing else: `W` makes the words, `Report.line` takes the
+# numbers and names as values and raises on any other, so a line that interpolates a room's name
+# or an ElementId cannot be printed.
+WORDS = re.compile(r"[A-Za-z0-9 _:.,;()=%/+{}-]+")
+ENTITY = re.compile(r"Ifc[A-Z][A-Za-z0-9]*")
+
+
+class Fixed(str):
+    """Words written in this file, with `{}` where a number or an IFC entity name goes."""
+
+
+def W(text):
+    if not WORDS.fullmatch(text) or "{" in text.replace("{}", "") or "}" in text.replace("{}", ""):
+        raise ValueError(f"not fixed words: {text!r}")
+    return Fixed(text)
+
+
+def is_entity(value):
+    if not isinstance(value, str) or not ENTITY.fullmatch(value):
+        return False
+    for schema in ("IFC4", "IFC2X3"):
+        try:
+            ifcopenshell.ifcopenshell_wrapper.schema_by_name(schema).declaration_by_name(value)
+            return True
+        except Exception:
+            continue
+    return False
+
+
 class Report:
     def __init__(self):
         self.differing = []
+        self.not_measured = []
 
-    def line(self, text):
-        print(f"mcp answers: {text}", flush=True)
+    def line(self, template, *values):
+        if not isinstance(template, Fixed):
+            raise TypeError("a count line is made of fixed words: write them with W()")
+        if template.count("{}") != len(values):
+            raise ValueError(f"{template!r} takes {template.count('{}')} values")
+        for value in values:
+            if isinstance(value, bool) or not (isinstance(value, int) or is_entity(value)):
+                raise TypeError(f"a count line holds numbers and IFC entity names, not {value!r}")
+        print("mcp answers: " + template.format(*values), flush=True)
 
     def check(self, name, compared, differences):
-        self.line(f"consistency {name}: {compared} compared, {len(differences)} differ")
+        if not isinstance(name, Fixed) or "{}" in name:
+            raise TypeError("a check is named with fixed words")
+        print(f"mcp answers: consistency {name}: {compared} compared, {len(differences)} differ", flush=True)
         if differences:
             self.differing.append(name)
         for text in sorted(differences)[:LIST_LIMIT]:
             print(f"  difference {name}: {text}")
         if len(differences) > LIST_LIMIT:
             print(f"  difference {name}: ... {len(differences) - LIST_LIMIT} more")
+
+    def skipped(self, name, why):
+        """A check that was not measured, named in the verdict."""
+        if not isinstance(name, Fixed) or not isinstance(why, Fixed):
+            raise TypeError("a check is named with fixed words")
+        self.not_measured.append(name)
+        print(f"mcp answers: consistency {name}: NOT MEASURED, {why}", flush=True)
+
+    def verdict(self):
+        if self.differing:
+            text = "FAIL: " + ", ".join(self.differing)
+        elif self.not_measured:
+            text = "PASS: every check measured is equal, NOT MEASURED: " + ", ".join(self.not_measured)
+        else:
+            text = "PASS: every check equal"
+        print(f"mcp answers: consistency {text}", flush=True)
 
 
 def number(value):
@@ -311,7 +384,7 @@ def check_protocol(report, answers, status):
         differences.append("tools/list is not sorted by name")
     if status != 0:
         differences.append(f"exit status {status} after stdin closed")
-    report.check("protocol", 5, differences)
+    report.check(W("protocol"), 5, differences)
 
 
 def check_counts(report, answers, written, diagnostics):
@@ -360,12 +433,12 @@ def check_counts(report, answers, written, diagnostics):
         same("summary bounding_box_spaces", digest["bounding_box_spaces"], exported["bounding_box_spaces"])
         same("summary skipped", {s["reason"]: s["count"] for s in digest["skipped"]}, {s["reason"]: s["count"] for s in diagnostics["skipped"]})
         same("summary confidence_level", digest["confidence_level"], diagnostics["confidence"]["level"])
-    report.check("counts", compared, differences)
+    report.check(W("counts"), compared, differences)
     openings = by_category["IFCOPENINGELEMENT"]
-    report.line(f"opening elements listed as rows, which the diagnostics do not count as building elements: {openings}")
+    report.line(W("rows that are opening elements, which the diagnostics do not count as building elements: {}"), openings)
     for name in sorted(by_category):
-        report.line(f"{key_of_category(name)}: {by_category[name]} elements in the answers")
-    report.line(f"elements listed: {len(rows)}")
+        report.line(W("{}: {} rows"), key_of_category(name), by_category[name])
+    report.line(W("rows listed: {}"), len(rows))
     return by_category
 
 
@@ -390,6 +463,8 @@ def check_rows(report, answers, written):
     for gid, found in by_gid.items():
         if len(found) > 1:
             found_in.append(f"GlobalId {gid} on {len(found)} rows")
+    if written.repeated:
+        found_in.append(f"{written.repeated} IFC elements or spaces repeat a GlobalId")
     cut = 0
     for gid, product in written.products.items():
         if gid in by_gid:
@@ -411,9 +486,9 @@ def check_rows(report, answers, written):
             entity.append(f"{label}: entity {category} vs {product.is_a().upper()}")
         if row.get("name") is None:
             # An absent name stands for the exporter's own `<Revit class>-<ElementId>`, which no source named.
-            placeholder = f"{row['provenance'].get('class')}-{row.get('id')}"
-            if (product.Name or "") != placeholder:
-                names.append(f"{label}: no name in the answer and the IFC Name {product.Name!r} is not {placeholder!r}")
+            placeholder = r"[A-Za-z0-9]+-" + re.escape(row.get("id") or "unnamed")
+            if not re.fullmatch(placeholder, product.Name or ""):
+                names.append(f"{label}: no name in the answer and the IFC Name {product.Name!r} is not <class>-<ElementId>")
         elif (product.Name or "") != row["name"]:
             names.append(f"{label}: name {row['name']!r} vs {product.Name!r}")
         long_name = (product.LongName or None) if product.is_a("IfcSpace") else None
@@ -430,15 +505,15 @@ def check_rows(report, answers, written):
             predefined.append(f"{label}: predefined type {row.get('predefined_type')!r} on an entity that declares none")
         if (row.get("level") or None) != written.storey_name(product):
             levels.append(f"{label}: level {row.get('level')!r} vs storey {written.storey_name(product)!r}")
-    report.check("element membership", len(rows), found_in)
-    report.check("element entities", compared, entity)
-    report.check("element names", compared, names)
-    report.check("element long names", compared, long_names)
-    report.check("element ids", compared, ids)
-    report.check("element predefined types", compared, predefined)
-    report.check("element storeys", compared, levels)
-    report.line(f"openings the writer cuts for doors and windows, not rows: {cut}")
-    report.line(f"IFC elements and spaces: {len(written.products)}")
+    report.check(W("element membership"), len(rows), found_in)
+    report.check(W("element entities"), compared, entity)
+    report.check(W("element names"), compared, names)
+    report.check(W("element long names"), compared, long_names)
+    report.check(W("element ids"), compared, ids)
+    report.check(W("element predefined types"), compared, predefined)
+    report.check(W("element storeys"), compared, levels)
+    report.line(W("IFC openings the writer cuts for doors and windows, in no row: {}"), cut)
+    report.line(W("IFC elements and spaces: {}"), len(written.products))
     return by_gid
 
 
@@ -469,7 +544,7 @@ def check_levels(report, answers, written, by_gid):
             differences.append(f"{label}: elevation in feet and metres disagree")
         if level["element_count"] != inside[storey.id()]:
             differences.append(f"{label}: {level['element_count']} elements vs {inside[storey.id()]} in the IFC")
-    report.check("levels", compared, differences)
+    report.check(W("levels"), compared, differences)
 
 
 def check_rooms(report, answers, written):
@@ -494,8 +569,18 @@ def check_rooms(report, answers, written):
         compared += 1
         row_sets = {s["name"]: dict((p[0], p[2]) for p in s["properties"]) for s in object_sets(product, written.metres, written.scales)}
         record = row_sets.get(ROOM_SET, {})
-        if (room.get("number") or "") != (product.Name or "") and (room.get("number") or "") != (record.get("RoomNumber") or ""):
-            differences.append(f"{label}: number {room.get('number')!r} vs Name {product.Name!r}")
+        # The IFC Name is the number, or `<room name>:<ElementId>` without one, or the exporter's own
+        # `<class>-<ElementId>` where neither was read.
+        if room.get("number"):
+            expected = room["number"]
+        elif room.get("name"):
+            expected = f"{room['name']}:{room.get('id')}"
+        else:
+            expected = None
+        if expected is not None and (product.Name or "") != expected:
+            differences.append(f"{label}: Name {product.Name!r} is not the number or `<name>:<ElementId>` {expected!r}")
+        if expected is None and not re.fullmatch(r"[A-Za-z0-9]+-" + re.escape(room.get("id") or "unnamed"), product.Name or ""):
+            differences.append(f"{label}: no number or name in the answer and the IFC Name {product.Name!r} is not <class>-<ElementId>")
         if (room.get("name") or None) != (product.LongName or None):
             differences.append(f"{label}: name {room.get('name')!r} vs LongName {product.LongName!r}")
         if (room.get("level") or None) != written.storey_name(product):
@@ -513,8 +598,10 @@ def check_rooms(report, answers, written):
                 differences.append(f"{label}: area {area} m2 vs the outline's {drawn} m2")
             if not close(room["area_square_feet"] * 0.09290304, area):
                 differences.append(f"{label}: area in square feet and square metres disagree")
-    report.check("rooms", compared, differences)
-    report.line(f"rooms: {len(rooms)}, with an area {with_area}, without one {len(rooms) - with_area}")
+    report.check(W("rooms"), compared, differences)
+    report.line(W("rooms: {}"), len(rooms))
+    report.line(W("rooms with an area: {}"), with_area)
+    report.line(W("rooms without an area: {}"), len(rooms) - with_area)
 
 
 def compare_sets(label, answer_sets, written_sets, differences):
@@ -653,10 +740,10 @@ def check_details(report, answers, written):
                 host = void.RelatingBuildingElement.Tag
         if (detail.get("host_id") or None) != (host or None):
             differences.append(f"{label}: host {detail.get('host_id')!r} vs {host!r}")
-    report.check("details", compared, differences)
-    report.check("type objects", typed, type_presence)
-    report.check("type object sets", typed, type_differences)
-    report.line(f"get_element sets compared: {sets_compared}")
+    report.check(W("details"), compared, differences)
+    report.check(W("type objects"), typed, type_presence)
+    report.check(W("type object sets"), typed, type_differences)
+    report.line(W("get_element property and quantity sets compared: {}"), sets_compared)
     return first
 
 
@@ -684,21 +771,21 @@ def diff_json(label, a, b, out):
 
 def check_diagnostics(report, answers, diagnostics):
     if diagnostics is None:
-        report.line("consistency diagnostics: NOT MEASURED, no diagnostics.json beside the export or flags differ")
+        report.skipped(W("diagnostics"), W("no diagnostics.json beside the export, or the export was made with flags"))
         return
     differences = []
     diff_json("diagnostics", answers["diagnostics"]["diagnostics"], diagnostics, differences)
-    report.check("diagnostics", 1, differences)
+    report.check(W("diagnostics"), 1, differences)
 
 
 def check_export(report, answers, ifc_path, flags):
     if flags:
-        report.line("consistency export hash: NOT MEASURED, the run export was made with flags the server default does not take")
+        report.skipped(W("export hash"), W("the export of this run was made with flags the server default does not take"))
         return
     mine = mcp.sha256_without_export_time(answers["export"]["path"])
     theirs = mcp.sha256_without_export_time(ifc_path)
     differences = [] if mine == theirs else [f"export_ifc {mine} vs rvt-ifc {theirs}"]
-    report.check("export hash", 1, differences)
+    report.check(W("export hash"), 1, differences)
 
 
 # ---- the oracle ---------------------------------------------------------------------------------
@@ -730,8 +817,12 @@ def our_members(rows):
 def oracle_classes(report, answers, revit_file, written):
     revit, revit_untagged, revit_repeated = classes.members(revit_file)
     ours, untagged, repeated = our_members(answers["rows"])
-    report.line(f"classes: Revit export {len(revit)} paired elements and spaces, {revit_untagged} untagged and {revit_repeated} repeated Tags left out")
-    report.line(f"classes: the answers {len(ours)} paired elements and spaces, {untagged} untagged and {repeated} repeated Tags left out")
+    report.line(W("classes: Revit export, elements and spaces paired: {}"), len(revit))
+    report.line(W("classes: Revit export, elements left out for no Tag: {}"), revit_untagged)
+    report.line(W("classes: Revit export, elements left out for a repeated Tag: {}"), revit_repeated)
+    report.line(W("classes: the answers, elements and spaces paired: {}"), len(ours))
+    report.line(W("classes: the answers, rows left out for no Tag: {}"), untagged)
+    report.line(W("classes: the answers, rows left out for a repeated Tag: {}"), repeated)
     table = {}
     for entity in sorted({r[0] for r in revit.values()}):
         keys = [k for k, r in revit.items() if r[0] == entity]
@@ -739,10 +830,10 @@ def oracle_classes(report, answers, revit_file, written):
         other = sum(1 for k in keys if k in ours and ours[k] != entity)
         absent = sum(1 for k in keys if k not in ours)
         table[entity] = (len(keys), same, other, absent)
-        report.line(f"class {entity}: revit {len(keys)}, same {same}, other {other}, absent {absent}")
+        report.line(W("class {}: revit {}, same {}, other {}, absent {}"), entity, len(keys), same, other, absent)
     extra = collections.Counter(entity for key, entity in ours.items() if key not in revit)
     for entity in sorted(extra):
-        report.line(f"class extra {entity}: {extra[entity]}")
+        report.line(W("class extra {}: {}"), entity, extra[entity])
     # The same table from rvt-rs's own export must be the answers' table.
     own, _, _ = classes.members(written.file)
     own_classes = {key: record[0] for key, record in own.items()}
@@ -750,8 +841,17 @@ def oracle_classes(report, answers, revit_file, written):
     for key in sorted(set(own_classes) | set(ours)):
         if own_classes.get(key) != ours.get(key):
             differences.append(f"{key[0]} {key[1]}: {ours.get(key)} in the answers, {own_classes.get(key)} in the export")
-    report.check("class sets", len(own_classes), differences)
+    report.check(W("class sets"), len(own_classes), differences)
     return revit
+
+
+STOREY_LINES = {
+    "same": W("storeys: rows on the same storey as in Revit: {}"),
+    "no storey, Revit has a storey": W("storeys: rows on no storey where Revit has a storey: {}"),
+    "no storey, Revit has another container": W("storeys: rows on no storey where Revit has another container: {}"),
+    "a storey, Revit has another container": W("storeys: rows on a storey where Revit has another container: {}"),
+    "different": W("storeys: rows on a different storey from Revit: {}"),
+}
 
 
 def oracle_storeys(report, answers, revit_file):
@@ -768,16 +868,16 @@ def oracle_storeys(report, answers, revit_file):
         compared += 1
         mine, revit = row.get("level") or "<IfcBuilding>", theirs[key]
         if mine == revit:
-            verdicts["same storey as Revit"] += 1
+            verdicts["same"] += 1
         elif not storeys.on_storey(mine):
-            verdicts["on no storey; Revit has " + ("a storey" if storeys.on_storey(revit) else "another container")] += 1
+            verdicts["no storey, Revit has a storey" if storeys.on_storey(revit) else "no storey, Revit has another container"] += 1
         elif not storeys.on_storey(revit):
-            verdicts["on a storey; Revit contains it in another container"] += 1
+            verdicts["a storey, Revit has another container"] += 1
         else:
-            verdicts["a different storey from Revit"] += 1
-    report.line(f"storeys: {compared} elements the answers and Revit export share")
+            verdicts["different"] += 1
+    report.line(W("storeys: rows the answers and Revit export share: {}"), compared)
     for what, count in sorted(verdicts.items()):
-        report.line(f"storeys: {count} {what}")
+        report.line(STOREY_LINES[what], count)
 
 
 def oracle_rooms(report, answers, revit_path):
@@ -786,20 +886,35 @@ def oracle_rooms(report, answers, revit_path):
     try:
         revit = plan.tops(revit_path, ["IfcSpace"])
     except Exception as error:
-        report.line(f"rooms: NOT MEASURED, Revit spaces could not be meshed ({type(error).__name__})")
+        report.line(W("rooms: NOT MEASURED, Revit spaces could not be meshed"))
         return
     rooms = {room["provenance"]["global_id"]: room for room in answers["rooms"]}
     paired = [(room, revit[gid]) for gid, room in rooms.items() if gid in revit]
     with_area = [(room, top) for room, top in paired if room.get("area_square_feet") is not None and top[0] > 0]
     within = lambda tolerance: sum(1 for room, top in with_area if abs(room["area_square_feet"] - top[0]) / top[0] <= tolerance)
-    report.line(f"rooms: the answers {len(rooms)}, Revit spaces with a body {len(revit)}, paired by GlobalId {len(paired)}")
-    report.line(f"rooms: paired with an area in the answers {len(with_area)}, paired without one {len(paired) - len(with_area)}")
-    report.line(f"rooms: area within 0.1% of Revit {within(1e-3)}, within 1% {within(1e-2)}, off {len(with_area) - within(1e-2)}")
+    report.line(W("rooms: in the answers: {}"), len(rooms))
+    report.line(W("rooms: Revit spaces with a body: {}"), len(revit))
+    report.line(W("rooms: paired by GlobalId: {}"), len(paired))
+    report.line(W("rooms: paired with an area in the answers: {}"), len(with_area))
+    report.line(W("rooms: paired without an area in the answers: {}"), len(paired) - len(with_area))
+    report.line(W("rooms: area within 0.1% of Revit: {}"), within(1e-3))
+    report.line(W("rooms: area within 1% of Revit: {}"), within(1e-2))
+    report.line(W("rooms: area more than 1% from Revit: {}"), len(with_area) - within(1e-2))
 
 
 def revit_sets_by_tag(revit):
     """Tag -> (Revit's property sets of the element) for the elements class_sets pairs."""
     return {key[1]: record[4] for key, record in revit.items() if key[0] == "Tag"}
+
+
+VALUE_LINES = {
+    (what, kind): W(f"values: {what} values {kind}: {{}}")
+    for what in ("property", "quantity")
+    for kind in ("in the answers", "Revit export does not write", "equal to Revit", "different from Revit")
+}
+VALUE_LINES[("property or quantity", "Revit writes that the answers lack")] = W(
+    "values: property or quantity values Revit writes that the answers lack: {}"
+)
 
 
 def oracle_values(report, answers, revit_file, revit):
@@ -828,10 +943,10 @@ def oracle_values(report, answers, revit_file, revit):
             for prop in item["properties"]:
                 key = (item["name"], prop["name"])
                 seen.add(key)
-                counts[f"{what} values in the answers"] += 1
+                counts[(what, "in the answers")] += 1
                 held = theirs.get(key)
                 if held is None:
-                    counts[f"{what} values Revit export does not write"] += 1
+                    counts[(what, "Revit export does not write")] += 1
                     continue
                 kind = prop["ifc_type"] if standard else prop["quantity"]
                 if standard:
@@ -842,15 +957,15 @@ def oracle_values(report, answers, revit_file, revit):
                     )
                 else:
                     same = kind.upper() == held[0] and qtos.same((kind, prop["value"]), (kind, held[1]))
-                counts[f"{what} values equal to Revit" if same else f"{what} values different from Revit"] += 1
+                counts[(what, "equal to Revit" if same else "different from Revit")] += 1
         for (set_name, name), held in theirs.items():
             if (set_name, name) in seen:
                 continue
             if (set_name.startswith("Pset_") and held[2] == "properties") or (set_name.startswith("Qto_") and held[2] == "quantities"):
-                counts["values Revit writes that the answers lack"] += 1
-    report.line(f"values: {elements} sampled elements the answers and Revit export share")
-    for what in sorted(counts):
-        report.line(f"values: {counts[what]} {what}")
+                counts[("property or quantity", "Revit writes that the answers lack")] += 1
+    report.line(W("values: sampled rows the answers and Revit export share: {}"), elements)
+    for (what, kind), count in sorted(counts.items()):
+        report.line(VALUE_LINES[(what, kind)], count)
 
 
 # ---- main ---------------------------------------------------------------------------------------
@@ -869,7 +984,7 @@ def main(argv):
     report = Report()
     flags = os.environ.get("RVT_IFC_FLAGS", "").strip()
     if not os.path.exists(args.ours) or not os.path.exists(args.server):
-        report.line("NOT MEASURED: no export or no server binary")
+        report.line(W("consistency NOT MEASURED: no export of this model or no server binary"))
         return 0
     timeout = float(os.environ.get("MEASURE_STEP_TIMEOUT", "2400")) - 120
     scratch = tempfile.mkdtemp(prefix="mcp-answers-", dir=os.environ.get("RUNNER_TEMP"))
@@ -886,7 +1001,7 @@ def main(argv):
             status = server.close()
         except mcp.McpError as error:
             server.kill()
-            report.line("consistency NOT MEASURED: the server did not answer the query set")
+            report.line(W("consistency NOT MEASURED: the server did not answer the query set"))
             print(f"  error: {str(error)[:300]}")
             return 1
         if args.dump:
@@ -898,12 +1013,9 @@ def main(argv):
             with open(args.diagnostics, encoding="utf-8") as handle:
                 diagnostics = json.load(handle)
         report.line(
-            "consistency basis: "
-            + (
-                "the export of this run"
-                if not flags
-                else f"the server own export, since the export of this run was made with {len(flags.split())} flags"
-            )
+            W("consistency basis: the export of this run")
+            if not flags
+            else W("consistency basis: the server own export, since the export of this run was made with flags")
         )
         written = Written(basis)
         check_protocol(report, answers, status)
@@ -922,14 +1034,11 @@ def main(argv):
                 oracle_rooms(report, answers, args.revit)
                 oracle_values(report, answers, revit_file, revit)
             except Exception as error:
-                report.line(f"oracle: NOT MEASURED, {type(error).__name__} while reading the export of Revit")
+                report.line(W("oracle: NOT MEASURED, the export of Revit could not be read or scored"))
                 print(f"  error: {str(error)[:300]}")
         else:
-            report.line("oracle: NOT MEASURED, Revit gave no export of this model")
-        if report.differing:
-            report.line(f"consistency FAIL: {', '.join(report.differing)}")
-        else:
-            report.line("consistency PASS: every check equal")
+            report.line(W("oracle: NOT MEASURED, Revit gave no export of this model"))
+        report.verdict()
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
     return 1 if report.differing else 0
