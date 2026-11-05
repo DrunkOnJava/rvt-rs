@@ -25,6 +25,10 @@ pub struct ResourceBudget {
     pub max_graph_objects: usize,
 }
 
+/// The fields to keep of a record's graph, by its root class
+/// ([`Options::graph_fields`]).
+pub type GraphFields = fn(&str) -> Option<&'static [&'static str]>;
+
 #[derive(Debug, Clone)]
 pub struct Options {
     pub selected_ids: BTreeSet<u64>,
@@ -107,7 +111,7 @@ pub struct Options {
     /// for, and any record with no function here, keeps every field. For a
     /// reader that takes only those fields from the records of those classes
     /// (#1335).
-    pub graph_fields: Option<fn(&str) -> Option<&'static [&'static str]>>,
+    pub graph_fields: Option<GraphFields>,
 }
 /// The default [`Options::max_group_bytes`]: one reassembled continuation
 /// group's bytes.
