@@ -71,22 +71,32 @@
 //! cut as well keeps its `BodyHeightSource`: one property set cannot hold two
 //! of a name).
 //!
+//! A named element that covers only part of the wall's plan cuts the base over
+//! that part (#1411, RE-349): Revit takes the base up to the element's top where
+//! the two share plan and leaves it at the wall's own base where they do not,
+//! so the wall is the convex pieces of its plan inside the element's outline,
+//! cut at its top, and the rest of the plan from the wall's base
+//! (`BodyBaseSource` `wall_base_cut_at_floor_covering_in_part` or
+//! `wall_base_sloped_at_floor_covering_in_part`). The element's top over the
+//! covered part must lie between the wall's base and top, as for a whole cover.
+//!
 //! A wall of which this is not proven keeps its base. When it names a floor
 //! with shape-edited corners it carries the reason as `BaseCoverRefusal`: the
 //! edits of a floor, roof or ceiling are not read, the wall is not one plain
-//! extrusion, no named element drawn as a body covers its plan or two do, or
-//! the top of the one that does is at or below the wall's base, at or above
-//! its top, or crosses one of them. A named element of which only part covers
-//! the wall is not stepped here.
+//! extrusion, no named element drawn as a body covers its plan or two do, the
+//! covered part of a plan it covers in part is not read, or the top of the one
+//! that does is at or below the wall's base, at or above its top, or crosses
+//! one of them.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use super::{
     ELEMENT_RECORD_PROPERTY_SET, FLOOR_SHAPE_BODY_SOURCE, WALL_BASE_COVER_BODY_BASE_SOURCE,
-    WALL_BASE_REFUSAL_PROPERTY, WALL_BASE_SLOPED_BODY_BASE_SOURCE, WALL_BASE_SOURCE_PROPERTY,
-    WALL_END_AT_BASE_WALL_BODY_END_SOURCE, WALL_END_REFUSAL_PROPERTY, WALL_END_SOURCE_PROPERTY,
-    WALL_END_UPPER_STEP_OMITTED_BODY_END_SOURCE, WALL_TOP_COVER_BODY_HEIGHT_SOURCE,
-    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    WALL_BASE_COVER_IN_PART_BODY_BASE_SOURCE, WALL_BASE_REFUSAL_PROPERTY,
+    WALL_BASE_SLOPED_BODY_BASE_SOURCE, WALL_BASE_SLOPED_IN_PART_BODY_BASE_SOURCE,
+    WALL_BASE_SOURCE_PROPERTY, WALL_END_AT_BASE_WALL_BODY_END_SOURCE, WALL_END_REFUSAL_PROPERTY,
+    WALL_END_SOURCE_PROPERTY, WALL_END_UPPER_STEP_OMITTED_BODY_END_SOURCE,
+    WALL_TOP_COVER_BODY_HEIGHT_SOURCE, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use crate::ifc::body_geometry::{
     Body, Placement, PlanPlane, Point2, Ring, between_surfaces_mesh, extrusion_rings, plan_outline,
@@ -936,12 +946,59 @@ pub(super) struct PendingBase {
     pub named: Vec<u32>,
 }
 
-/// How a wall's base is cut.
+/// How a wall's base is cut. `covered` is `None` where the element covers the
+/// whole of the wall's plan, and otherwise the convex, counter-clockwise pieces
+/// of the plan it covers, in model feet (#1411): the rest of the plan stands
+/// from the wall's own base.
 enum BaseCut {
-    /// At one level across its plan.
-    Level { level: f64, id: u32 },
+    /// At one level.
+    Level {
+        level: f64,
+        id: u32,
+        covered: Option<Vec<Ring>>,
+    },
     /// Along the plane of a shape-edited top.
-    Plane { plane: PlanPlane, id: u32 },
+    Plane {
+        plane: PlanPlane,
+        id: u32,
+        covered: Option<Vec<Ring>>,
+    },
+}
+
+impl BaseCut {
+    /// The pieces of the wall's plan the cut is made over, where not the whole.
+    fn covered(&self) -> Option<&[Ring]> {
+        match self {
+            BaseCut::Level { covered, .. } | BaseCut::Plane { covered, .. } => covered.as_deref(),
+        }
+    }
+}
+
+/// The convex pieces of the wall's plan inside the outline of `cutter`,
+/// counter-clockwise: none where the plan is not made of convex pieces, where
+/// a hole or opening of the element lies over it, or where it falls in more
+/// than [`MAX_RISERS`] pieces (#1411).
+fn covered_pieces(cutter: &Cutter, wall: &Wall) -> Option<Vec<Ring>> {
+    let cut: f64 = cutter.cutouts.iter().map(|t| overlap(wall, t)).sum();
+    if cut > COVER_TOLERANCE_SQUARE_FEET {
+        return None;
+    }
+    let base = convex_pieces(&wall.plan)?;
+    let mut inside: Vec<Ring> = Vec::new();
+    for triangle in &cutter.outline {
+        if overlap(wall, triangle) <= PIECE_ROUNDING_SQUARE_FEET {
+            continue;
+        }
+        let clip = counter_clockwise(triangle.to_vec());
+        for piece in &base {
+            let part = clip_convex(piece, &clip);
+            if part.len() >= 3 && area(&part) > PIECE_ROUNDING_SQUARE_FEET {
+                inside.push(part);
+            }
+        }
+    }
+    let inside: Vec<Ring> = join_pieces(inside.into_iter().map(tidy).collect());
+    (!inside.is_empty() && inside.len() <= MAX_RISERS).then_some(inside)
 }
 
 /// What the passes read of `entities` besides the walls.
@@ -1033,6 +1090,7 @@ fn decide_base(
     let mut crossed = false;
     let mut above = false;
     let mut below = false;
+    let mut partly_unread = false;
     for &id in named {
         // First of all, before the element is looked for among those that cut:
         // a floor, roof or ceiling whose top is not known leaves the wall,
@@ -1056,19 +1114,41 @@ fn decide_base(
             continue;
         };
         built = true;
-        if !covers(cutter, &wall) {
+        // The whole plan, or the part of it the element covers (#1411): Revit
+        // takes the wall's base up to the element's top where the two share
+        // plan, and leaves it where they do not.
+        let part = if covers(cutter, &wall) {
+            None
+        } else if reach(cutter, &wall) > STEP_TOLERANCE_SQUARE_FEET {
+            let Some(pieces) = covered_pieces(cutter, &wall) else {
+                partly_unread = true;
+                continue;
+            };
+            Some(pieces)
+        } else {
             continue;
-        }
+        };
         let (low, high, cut) = match plane {
             Some(plane) => {
-                let (low, high) = wall
-                    .plan
+                let corners: Vec<Point2> = match &part {
+                    Some(pieces) => pieces.iter().flatten().copied().collect(),
+                    None => wall.plan.clone(),
+                };
+                let (low, high) = corners
                     .iter()
                     .map(|&(x, y)| plane[0] * x + plane[1] * y + plane[2])
                     .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), h| {
                         (lo.min(h), hi.max(h))
                     });
-                (low, high, BaseCut::Plane { plane, id })
+                (
+                    low,
+                    high,
+                    BaseCut::Plane {
+                        plane,
+                        id,
+                        covered: part,
+                    },
+                )
             }
             _ => (
                 cutter.top,
@@ -1076,6 +1156,7 @@ fn decide_base(
                 BaseCut::Level {
                     level: cutter.top,
                     id,
+                    covered: part,
                 },
             ),
         };
@@ -1098,6 +1179,7 @@ fn decide_base(
         (None, _) if crossed => BaseDecision::Left("top_crosses_the_wall_base_or_top"),
         (None, _) if above => BaseDecision::Left("top_at_or_above_the_wall_top"),
         (None, _) if below => BaseDecision::Left("top_at_or_below_the_wall_base"),
+        (None, _) if partly_unread => BaseDecision::Left("partly_covered_plan_not_read"),
         (None, _) if built => BaseDecision::Left("no_element_covers_the_wall_plan"),
         (None, _) => BaseDecision::Left("named_element_body_not_read"),
     }
@@ -1205,8 +1287,14 @@ pub(super) fn cut_wall_bases(
 /// The `BodyBaseSource` and the ElementId of the element a base is cut at.
 fn base_cut_source(cut: &BaseCut) -> (&'static str, u32) {
     match cut {
-        BaseCut::Level { id, .. } => (WALL_BASE_COVER_BODY_BASE_SOURCE, *id),
-        BaseCut::Plane { id, .. } => (WALL_BASE_SLOPED_BODY_BASE_SOURCE, *id),
+        BaseCut::Level {
+            id, covered: None, ..
+        } => (WALL_BASE_COVER_BODY_BASE_SOURCE, *id),
+        BaseCut::Level { id, .. } => (WALL_BASE_COVER_IN_PART_BODY_BASE_SOURCE, *id),
+        BaseCut::Plane {
+            id, covered: None, ..
+        } => (WALL_BASE_SLOPED_BODY_BASE_SOURCE, *id),
+        BaseCut::Plane { id, .. } => (WALL_BASE_SLOPED_IN_PART_BODY_BASE_SOURCE, *id),
     }
 }
 
@@ -1214,9 +1302,102 @@ fn base_cut_source(cut: &BaseCut) -> (&'static str, u32) {
 /// above the wall's base, feet.
 type Piece = (Ring, f64);
 
+/// The item for the part `ring` of a piece (in the wall's frame) whose base is
+/// cut at `cut` and whose top is `top` above the wall's base; none where it
+/// rises nowhere above the cut or is crossed by the sloped top.
+fn base_cut_item(
+    cut: &BaseCut,
+    ring: &[Point2],
+    top: f64,
+    placement: &Placement,
+    base: f64,
+) -> Option<SolidShape> {
+    match cut {
+        BaseCut::Level { level, .. } => {
+            let from = level - base;
+            (top - from > 1e-9).then(|| SolidShape::PlacedExtrusion {
+                profile: ProfileDef::ArbitraryClosed {
+                    points: ring.to_vec(),
+                },
+                origin_feet: [0.0, 0.0, from],
+                axis: [0.0, 0.0, 1.0],
+                ref_direction: [1.0, 0.0, 0.0],
+                depth_feet: top - from,
+            })
+        }
+        BaseCut::Plane { plane, .. } => {
+            let bottom = |p: Point2| {
+                let at = placement.apply([p.0, p.1, 0.0]);
+                plane[0] * at[0] + plane[1] * at[1] + plane[2] - base
+            };
+            between_surfaces_mesh(ring, &[], bottom, |_| top).map(|mesh| SolidShape::FacetedBrep {
+                vertices_feet: mesh.vertices,
+                triangles: mesh
+                    .triangles
+                    .into_iter()
+                    .map(|[a, b, c]| BrepTriangle(a, b, c))
+                    .collect(),
+            })
+        }
+    }
+}
+
+/// The items of one piece of a wall whose base is cut at `cut`: the piece
+/// whole where the element covers the whole plan, and otherwise the part of it
+/// inside the pieces the element covers, cut, and the rest, standing from the
+/// wall's own base (#1411). None where any part cannot be made.
+fn base_cut_piece(
+    cut: &BaseCut,
+    piece: &Piece,
+    placement: &Placement,
+    base: f64,
+) -> Option<Vec<SolidShape>> {
+    let (ring, top) = piece;
+    let Some(covered) = cut.covered() else {
+        return Some(vec![base_cut_item(cut, ring, *top, placement, base)?]);
+    };
+    let model: Ring = ring
+        .iter()
+        .map(|&(x, y)| {
+            let at = placement.apply([x, y, 0.0]);
+            (at[0], at[1])
+        })
+        .collect();
+    let local = |part: &Ring| -> Ring { part.iter().map(|&p| to_local(placement, p)).collect() };
+    let mut items = Vec::new();
+    for clip in covered {
+        let part = clip_convex(&model, clip);
+        if part.len() >= 3 && area(&part).abs() > PIECE_ROUNDING_SQUARE_FEET {
+            items.push(base_cut_item(cut, &local(&part), *top, placement, base)?);
+        }
+    }
+    let mut outside: Vec<Ring> = vec![model];
+    for clip in covered {
+        outside = outside
+            .iter()
+            .flat_map(|part| subtract_convex(part, clip))
+            .collect();
+    }
+    for part in &outside {
+        if part.len() >= 3 && area(part).abs() > PIECE_ROUNDING_SQUARE_FEET {
+            items.push(SolidShape::PlacedExtrusion {
+                profile: ProfileDef::ArbitraryClosed {
+                    points: local(part),
+                },
+                origin_feet: [0.0, 0.0, 0.0],
+                axis: [0.0, 0.0, 1.0],
+                ref_direction: [1.0, 0.0, 0.0],
+                depth_feet: *top,
+            });
+        }
+    }
+    (!items.is_empty()).then_some(items)
+}
+
 /// The solid of a wall whose base is cut at `cut`, one item for each of
-/// `pieces`; none if any piece rises nowhere above the cut or is crossed by the
-/// sloped top, so that no block is left out without a trace (#1384, #1396).
+/// `pieces`, or for the parts of each that the element covers and does not;
+/// none if any piece rises nowhere above the cut or is crossed by the sloped
+/// top, so that no block is left out without a trace (#1384, #1396, #1411).
 fn base_cut_solid(
     cut: &BaseCut,
     pieces: &[Piece],
@@ -1224,38 +1405,8 @@ fn base_cut_solid(
     base: f64,
 ) -> Option<SolidShape> {
     let mut items = Vec::with_capacity(pieces.len());
-    for (ring, top) in pieces {
-        let item = match cut {
-            BaseCut::Level { level, .. } => {
-                let from = level - base;
-                (top - from > 1e-9).then(|| SolidShape::PlacedExtrusion {
-                    profile: ProfileDef::ArbitraryClosed {
-                        points: ring.clone(),
-                    },
-                    origin_feet: [0.0, 0.0, from],
-                    axis: [0.0, 0.0, 1.0],
-                    ref_direction: [1.0, 0.0, 0.0],
-                    depth_feet: top - from,
-                })
-            }
-            BaseCut::Plane { plane, .. } => {
-                let bottom = |p: Point2| {
-                    let at = placement.apply([p.0, p.1, 0.0]);
-                    plane[0] * at[0] + plane[1] * at[1] + plane[2] - base
-                };
-                between_surfaces_mesh(ring, &[], bottom, |_| *top).map(|mesh| {
-                    SolidShape::FacetedBrep {
-                        vertices_feet: mesh.vertices,
-                        triangles: mesh
-                            .triangles
-                            .into_iter()
-                            .map(|[a, b, c]| BrepTriangle(a, b, c))
-                            .collect(),
-                    }
-                })
-            }
-        };
-        items.push(item?);
+    for piece in pieces {
+        items.extend(base_cut_piece(cut, piece, placement, base)?);
     }
     if items.len() == 1 {
         items.pop()

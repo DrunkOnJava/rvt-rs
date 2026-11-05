@@ -4629,6 +4629,18 @@ pub const WALL_BASE_COVER_BODY_BASE_SOURCE: &str = "wall_base_cut_at_covering_fl
 /// the wall's own top (#1384, RE-336).
 pub const WALL_BASE_SLOPED_BODY_BASE_SOURCE: &str = "wall_base_sloped_at_covering_floor";
 
+/// `BodyBaseSource` of a wall whose base is cut at the level top of the floor
+/// or footing its base join names over the part of the wall's plan that element
+/// covers, the rest standing from the wall's own base (#1411, RE-349).
+pub const WALL_BASE_COVER_IN_PART_BODY_BASE_SOURCE: &str =
+    "wall_base_cut_at_floor_covering_in_part";
+
+/// `BodyBaseSource` of a wall whose base follows the shape-edited top of the
+/// floor or footing its base join names over the part of the wall's plan that
+/// element covers, the rest standing from the wall's own base (#1411, RE-349).
+pub const WALL_BASE_SLOPED_IN_PART_BODY_BASE_SOURCE: &str =
+    "wall_base_sloped_at_floor_covering_in_part";
+
 /// Property of a floor's [`ELEMENT_RECORD_PROPERTY_SET`] that says why a floor
 /// whose corner vertices are shape-edited is still drawn as its record box
 /// (#1384, RE-336).

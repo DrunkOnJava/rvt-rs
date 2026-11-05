@@ -609,7 +609,7 @@
             "type": "integer",
             "minimum": 0
           },
-          "description": "Of the exported walls whose base join names a floor, roof or ceiling with shape-edited corners and that keep their base, why, by reason (RvtElementRecordGeometry.BaseCoverRefusal, RE-336): slab_shape_not_read, wall_not_one_plain_extrusion, named_element_body_not_read, no_element_covers_the_wall_plan, several_elements_cover_the_wall, top_crosses_the_wall_base_or_top, top_at_or_below_the_wall_base, top_at_or_above_the_wall_top."
+          "description": "Of the exported walls whose base join names a floor, roof or ceiling with shape-edited corners and that keep their base, why, by reason (RvtElementRecordGeometry.BaseCoverRefusal, RE-336, RE-349): slab_shape_not_read, wall_not_one_plain_extrusion, named_element_body_not_read, partly_covered_plan_not_read, no_element_covers_the_wall_plan, several_elements_cover_the_wall, top_crosses_the_wall_base_or_top, top_at_or_below_the_wall_base, top_at_or_above_the_wall_top."
         },
         "wall_end_refusals": {
           "type": "object",
