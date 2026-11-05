@@ -79,7 +79,7 @@
 //! its top, or crosses one of them. A named element of which only part covers
 //! the wall is not stepped here.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use super::{
     ELEMENT_RECORD_PROPERTY_SET, FLOOR_SHAPE_BODY_SOURCE, WALL_BASE_COVER_BODY_BASE_SOURCE,
@@ -1250,6 +1250,15 @@ const ROTATION_TOLERANCE_QUARTERS: f64 = 1e-6;
 /// that hold its base reach it at different faces (#1396).
 const WALL_END_REFUSAL_DIFFERENT_FACES: &str = "walls_beneath_reach_the_end_at_different_faces";
 
+/// Why such a wall keeps its end where the cut of its base, which resolved on
+/// the plan its record gives, would not over the longer plan (#1396).
+const WALL_END_REFUSAL_BASE_CUT_LOST: &str = "base_cut_lost_on_extended_plan";
+
+/// Why such a wall keeps its end where its base join names elements, none of
+/// which cuts the base over the longer plan either, so the longer plan would
+/// only add base that Revit's wall does not have (#1396).
+const WALL_END_REFUSAL_BASE_NOT_CUT: &str = "base_not_cut_over_the_extended_plan";
+
 /// A wall drawn as an upright rectangle along a model axis: its plan bounds
 /// (least x and y, then greatest x and y), its base and top, and which of its
 /// extrusion's two plan sides lies along x (#1396).
@@ -1345,6 +1354,125 @@ fn join_trims(entity: Option<&IfcEntity>) -> Option<[f64; 2]> {
     Some([read("JoinTrimStart")?, read("JoinTrimEnd")?])
 }
 
+/// An end of a wall that is drawn to a wall beneath it: the axis of the
+/// wall's length (0 for x), whether it is the end at the low coordinate, how
+/// far the end moves, feet, and the wall it reaches.
+type End = (usize, bool, f64, Option<u32>);
+
+/// The ends of one wall that are drawn to the walls beneath it.
+struct WallEnds {
+    index: usize,
+    turned: bool,
+    ends: Vec<End>,
+}
+
+/// A wall's extrusion width and depth and its place before its ends moved.
+type Placed = (f64, f64, [f64; 3]);
+
+/// Move `ends` of the wall at `index`, returning how it was.
+fn move_ends(
+    entities: &mut [IfcEntity],
+    index: usize,
+    turned: bool,
+    ends: &[End],
+) -> Option<Placed> {
+    let Some(IfcEntity::BuildingElement {
+        extrusion: Some(body),
+        location_feet: Some(location),
+        ..
+    }) = entities.get_mut(index)
+    else {
+        return None;
+    };
+    let placed = (body.width_feet, body.depth_feet, *location);
+    for &(long, at_low, gap, _) in ends {
+        if (long == 0) != turned {
+            body.width_feet += gap;
+        } else {
+            body.depth_feet += gap;
+        }
+        location[long] += if at_low { -gap / 2.0 } else { gap / 2.0 };
+    }
+    Some(placed)
+}
+
+/// Put the wall at `index` back as `placed` says it was.
+fn restore_ends(entities: &mut [IfcEntity], index: usize, placed: Placed) {
+    if let Some(IfcEntity::BuildingElement {
+        extrusion: Some(body),
+        location_feet: Some(location),
+        ..
+    }) = entities.get_mut(index)
+    {
+        body.width_feet = placed.0;
+        body.depth_feet = placed.1;
+        *location = placed.2;
+    }
+}
+
+/// Whether the base of the wall at `index`, which names `named`, is cut as it
+/// stands (see [`decide_base`]).
+fn base_is_cut(
+    entities: &[IfcEntity],
+    shapes: &HashMap<u32, SlabTop>,
+    index: usize,
+    named: &[u32],
+) -> bool {
+    let context = BaseContext {
+        entities,
+        gathered: gather(entities),
+        shapes,
+    };
+    let mut cutters: HashMap<u32, Option<Cutter>> = HashMap::new();
+    matches!(
+        decide_base(&context, &mut cutters, index, named),
+        BaseDecision::Cut(_)
+    )
+}
+
+/// Write how the wall at `index` was drawn at `ends` to its record's
+/// properties: one `BodyEndSource`, and the least ElementId of the walls its
+/// ends reach.
+fn mark_ends(entities: &mut [IfcEntity], index: usize, ends: &[End]) {
+    let Some(IfcEntity::BuildingElement {
+        property_set: Some(set),
+        ..
+    }) = entities.get_mut(index)
+    else {
+        return;
+    };
+    if set.name != ELEMENT_RECORD_PROPERTY_SET {
+        return;
+    }
+    set.properties.push(Property {
+        name: WALL_END_SOURCE_PROPERTY.into(),
+        value: PropertyValue::Text(WALL_END_AT_BASE_WALL_BODY_END_SOURCE.into()),
+    });
+    if let Some(id) = ends.iter().filter_map(|&(_, _, _, id)| id).min() {
+        set.properties.push(Property {
+            name: "EndCoverElementId".into(),
+            value: PropertyValue::Integer(i64::from(id)),
+        });
+    }
+}
+
+/// Write why the wall at `index` keeps its end to its record's properties.
+fn mark_end_refusal(entities: &mut [IfcEntity], index: usize, reason: &str) {
+    let Some(IfcEntity::BuildingElement {
+        property_set: Some(set),
+        ..
+    }) = entities.get_mut(index)
+    else {
+        return;
+    };
+    if set.name == ELEMENT_RECORD_PROPERTY_SET {
+        set.properties.push(Property {
+            name: WALL_END_REFUSAL_PROPERTY.into(),
+            value: PropertyValue::Text(reason.into()),
+        });
+    }
+}
+
 /// Draw each wall with an edited elevation profile whose end its join trim cut
 /// back from inside the wall beneath it to that wall's face (#1396, RE-337).
 ///
@@ -1363,12 +1491,23 @@ fn join_trims(entity: Option<&IfcEntity>) -> Option<[f64; 2]> {
 /// than their own thickness, where no such wall touches the end already and
 /// they all end at one face. A wall that stops short of such a wall without a
 /// trim is left, as Revit leaves a Snowdon Towers soffit wall whose ends stop
-/// 2 inches short of the walls that hold its base. Where the walls end at
-/// different faces the wall keeps its end and carries `BodyEndRefusal`. The
-/// wall's body is one prism, so it reaches that face at every height: Revit's
+/// 2 inches short of the walls that hold its base.
+///
+/// A wall whose base join names elements keeps its ends unless the cut of its
+/// base ([`decide_base`]) still resolves over the longer plan: a longer plan
+/// that no footing covers leaves the wall uncut, with more of the base than
+/// Revit's wall has, and a cut that resolved on the plan the record gives
+/// would be lost. A wall that names none has no base to lose.
+///
+/// A wall that keeps an end carries `BodyEndRefusal` with the reason. The
+/// wall's body is one prism, so it reaches the face at every height: Revit's
 /// steps above the lower wall's top are not drawn. Every other wall is left
 /// as it was.
-pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
+pub(super) fn extend_wall_ends(
+    entities: &mut [IfcEntity],
+    pending: &[PendingBase],
+    shapes: &HashMap<u32, SlabTop>,
+) {
     let Gathered { profiled, .. } = gather(entities);
     if profiled.is_empty() {
         return;
@@ -1387,9 +1526,9 @@ pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
             })
         )
     };
-    // (wall index, long axis, grows at its low end, gap, the wall reached)
-    let mut extensions: Vec<(usize, usize, bool, f64, Option<u32>)> = Vec::new();
-    let mut refused: Vec<usize> = Vec::new();
+    let mut extensions: Vec<WallEnds> = Vec::new();
+    // One reason for each wall: a property set holds one property of a name.
+    let mut refused: BTreeMap<usize, &'static str> = BTreeMap::new();
     for wall in walls
         .iter()
         .filter(|wall| profiled.contains(&wall.index) && plain(wall.index))
@@ -1426,6 +1565,7 @@ pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
                 (other, a, b)
             })
             .collect();
+        let mut ends: Vec<End> = Vec::new();
         for at_low in [true, false] {
             let end = if at_low { low } else { high };
             let box_end = if at_low {
@@ -1457,61 +1597,52 @@ pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
                 .all(|&(_, other_gap)| (other_gap - gap).abs() <= END_TOLERANCE_FEET)
             {
                 let id = reached.iter().filter_map(|&(other, _)| other.id).min();
-                extensions.push((wall.index, long, at_low, gap, id));
+                ends.push((long, at_low, gap, id));
             } else {
-                refused.push(wall.index);
+                refused
+                    .entry(wall.index)
+                    .or_insert(WALL_END_REFUSAL_DIFFERENT_FACES);
             }
         }
-    }
-    for index in refused {
-        if let Some(IfcEntity::BuildingElement {
-            property_set: Some(set),
-            ..
-        }) = entities.get_mut(index)
-        {
-            if set.name == ELEMENT_RECORD_PROPERTY_SET {
-                set.properties.push(Property {
-                    name: WALL_END_REFUSAL_PROPERTY.into(),
-                    value: PropertyValue::Text(WALL_END_REFUSAL_DIFFERENT_FACES.into()),
-                });
-            }
+        if !ends.is_empty() {
+            extensions.push(WallEnds {
+                index: wall.index,
+                turned: wall.turned,
+                ends,
+            });
         }
     }
-    for (index, long, at_low, gap, reached) in extensions {
-        let turned = walls
+    for WallEnds {
+        index,
+        turned,
+        ends,
+    } in extensions
+    {
+        let named = pending
             .iter()
-            .find(|wall| wall.index == index)
-            .is_some_and(|wall| wall.turned);
-        let Some(IfcEntity::BuildingElement {
-            extrusion: Some(body),
-            location_feet: Some(location),
-            property_set,
-            ..
-        }) = entities.get_mut(index)
-        else {
+            .find(|base| base.index == index)
+            .map(|base| base.named.as_slice());
+        let cut_before = named.map(|named| base_is_cut(entities, shapes, index, named));
+        let Some(placed) = move_ends(entities, index, turned, &ends) else {
             continue;
         };
-        let along_x = long == 0;
-        if along_x != turned {
-            body.width_feet += gap;
-        } else {
-            body.depth_feet += gap;
-        }
-        location[long] += if at_low { -gap / 2.0 } else { gap / 2.0 };
-        if let Some(set) = property_set
-            .as_mut()
-            .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
-        {
-            set.properties.push(Property {
-                name: WALL_END_SOURCE_PROPERTY.into(),
-                value: PropertyValue::Text(WALL_END_AT_BASE_WALL_BODY_END_SOURCE.into()),
-            });
-            if let Some(id) = reached {
-                set.properties.push(Property {
-                    name: "EndCoverElementId".into(),
-                    value: PropertyValue::Integer(i64::from(id)),
-                });
+        if let (Some(named), Some(cut_before)) = (named, cut_before) {
+            if !base_is_cut(entities, shapes, index, named) {
+                restore_ends(entities, index, placed);
+                refused.insert(
+                    index,
+                    if cut_before {
+                        WALL_END_REFUSAL_BASE_CUT_LOST
+                    } else {
+                        WALL_END_REFUSAL_BASE_NOT_CUT
+                    },
+                );
+                continue;
             }
         }
+        mark_ends(entities, index, &ends);
+    }
+    for (index, reason) in refused {
+        mark_end_refusal(entities, index, reason);
     }
 }

@@ -1510,8 +1510,8 @@ pub fn append_typed_production_elements(
     }
 
     // #1396: a wall with an edited elevation profile that stops short of the
-    // wall beneath it is drawn to that wall's face.
-    wall_tops::extend_wall_ends(entities);
+    // wall beneath it is drawn to that wall's face, where its base is still cut.
+    wall_tops::extend_wall_ends(entities, &pending_bases, &slab_shapes);
 
     // RE-267: a wall's top is cut at the underside of the floor that covers it.
     wall_tops::cut_wall_tops(entities, &pending_tops);
@@ -4414,7 +4414,8 @@ pub const WALL_END_AT_BASE_WALL_BODY_END_SOURCE: &str = "wall_end_extended_to_ba
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says why a wall
 /// with an edited elevation profile, whose end stops short of walls beneath it,
 /// keeps the end its record gives: the walls that hold its base lie at
-/// different faces (#1396, RE-337).
+/// different faces, or the cut of its base would not resolve over the longer
+/// plan (#1396, RE-337).
 pub const WALL_END_REFUSAL_PROPERTY: &str = "BodyEndRefusal";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how its base
