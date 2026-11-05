@@ -246,7 +246,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (Revit 2025 to 2027, which nothing\noutside the file checks), `area_boundary`, `area_boundary_joined` or\n`none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (which nothing outside the file checks:\nRevit 2025 to 2027, and an Area drawn from lines whose partition copies\ndisagree), `area_boundary`, `area_boundary_joined` or `none`.",
               "type": [
                 "string",
                 "null"
@@ -1271,7 +1271,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (Revit 2025 to 2027, which nothing\noutside the file checks), `area_boundary`, `area_boundary_joined` or\n`none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (which nothing outside the file checks:\nRevit 2025 to 2027, and an Area drawn from lines whose partition copies\ndisagree), `area_boundary`, `area_boundary_joined` or `none`.",
               "type": [
                 "string",
                 "null"
@@ -2376,7 +2376,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (Revit 2025 to 2027, which nothing\noutside the file checks), `area_boundary`, `area_boundary_joined` or\n`none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (which nothing outside the file checks:\nRevit 2025 to 2027, and an Area drawn from lines whose partition copies\ndisagree), `area_boundary`, `area_boundary_joined` or `none`.",
               "type": [
                 "string",
                 "null"
@@ -2866,7 +2866,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (Revit 2025 to 2027, which nothing\noutside the file checks), `area_boundary`, `area_boundary_joined` or\n`none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (which nothing outside the file checks:\nRevit 2025 to 2027, and an Area drawn from lines whose partition copies\ndisagree), `area_boundary`, `area_boundary_joined` or `none`.",
               "type": [
                 "string",
                 "null"
