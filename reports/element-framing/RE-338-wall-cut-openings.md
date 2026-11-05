@@ -12,25 +12,25 @@
 | `ARK_NordicLCA_Office_Concrete_BuildingPermit_Revit.ifc` | `bc3bd3366a3c413ce74840300a590f59102b740118ef37898e906253b6b7c08d` |
 
 **Scorer:** `tools/re/unfilled_openings_vs_ifc.py` (RE-321)
-**Status:** positive for the fire hose cabinets, for a door in a second wall that runs across the door's wall, and for the curtain walls the rule below takes; the rest are counted and left out. The sibling-covered openings are a call for the maintainer (section 6).
+**Status:** positive for the fire hose cabinets, for a door in a second wall that runs across the door's wall, and for the curtain walls the rule below takes, on the BIM4LCA office pair alone; the rest are counted and left out. Whether the six openings one office file's export omits and the other's holds may be written is a call for the maintainer (section 6): their records are not byte for byte the other file's.
 
 ## 0. Result
 
-The three kinds RE-321 measured and left out are written where their box is proven, and every step that is not written is counted by reason in `exported.wall_cut_openings_left_out`. On the office (Measure 41950674065, c2033d2a against `main`), every opening written has Revit's box within 0.01 ft, GlobalId, name, `PredefinedType` and both `Reference`s, and none is wrong:
+The three kinds RE-321 measured and left out are written where their box is proven, and every step that is not written is counted by reason in `exported.wall_cut_openings_left_out`. On the office (Measure 41952363750, head 04f60dd6 against `main` at 77d71cbb), every opening written has Revit's box within 0.01 ft, GlobalId, name, `PredefinedType` and both `Reference`s, and none is wrong:
 
 | kind | Revit's, as built / at permit | written | counted, not written |
 |---|---:|---:|---|
 | a fire hose cabinet | 39 / 38 | 39 / 38 | none |
 | a door in a second wall | 39 / 43 | 25 / 33 | the wall runs along the door's wall 9 / 9; the door's own opening box not read 1 / 1; a step with `m_bCutSomething` 1 in a wall the door is not hosted in 4 / 0; a shadow-cutout step 1 / 0 |
-| a curtain wall | 70 / 72 | 27 / 16 | the wall's end within half a foot 41 / 50; another wall beside the box 2 / 5; a shadow-cutout step 1 / 1 |
+| a curtain wall | 70 / 72 | 27 / 13 | the wall's end within half a foot 41 / 30; another wall beside the box 2 / 1; the record copies disagree 0 / 27; a shadow-cutout step 1 / 1 |
 
-The columns close. The steps in exported walls that name these cutters are, as built, 40 cabinets (39 written, 1 counted apart), 40 doors (25 written, 15 counted) and 73 curtain walls (27 written, 2 counted apart, 44 counted); at permit 40 cabinets (38 and 2), 44 doors (33 written, 1 counted apart, 10 counted) and 72 curtain walls (16 written, 56 counted). Each count is Revit's openings of the kind plus the steps whose opening its export of that file omits (section 6).
+The columns close. The steps in exported walls that name these cutters are, as built, 40 cabinets (39 written, 1 counted apart), 40 doors (25 written, 15 counted) and 73 curtain walls (27 written, 2 counted apart, 44 counted); at permit 40 cabinets (38 and 2), 44 doors (33 written, 1 counted apart, 10 counted) and 72 curtain walls (13 written, 59 counted). Each count is Revit's openings of the kind plus the steps whose opening its export of that file omits (section 6).
 
-The openings written that Revit's export of the file lacks, and its export of the sibling file holds, are 3 as built (two curtain walls and a cabinet) and 4 at permit (two cabinets, a door and RE-321's rectangular wall opening), counted apart by the scorer. Core Interior (63 of 63), RE1 Architecture and the held-out models are as `main` writes them. The census (RE-235, W7) gains 178 equal property values and 198 equal quantities as built, and the openings' values that rvt-rs does not write fall from 531 to 230 property values and from 437 to 170 quantities (section 6).
+The openings written that Revit's export of the file lacks, and its export of the sibling file holds, are 3 as built (two curtain walls and a cabinet) and 4 at permit (two cabinets, a door and RE-321's rectangular wall opening), counted apart by the scorer. Core Interior (63 of 63), RE1 Architecture and the held-out models are as `main` writes them. The census (RE-235, W7) gains 178 equal property values and 198 equal quantities as built, and the openings' values that rvt-rs does not write fall from 531 to 230 property values and from 437 to 170 quantities (section 6). The thresholds the rules use (half a foot inside a wall's ends, the neighbour test, a quarter foot of reach, a slenderness of 2, 0.05 ft of height, 0.01 ft between record copies) were fitted and checked on the office pair alone: the held-out and reference models exercise none of them.
 
 ## 1. What `main` writes and Revit's export holds
 
-On `main` at 240c7d7c the office as built has 220 unfilled openings in Revit's export and rvt-rs writes 75, 58 of them Revit's; at building permit 216, 69 and 52. Of those Revit's export holds that rvt-rs does not write, by what cuts them (`IfcWall` hosts unless said):
+On `main` at 77d71cbb (the base of the runs below; `main` at 240c7d7c gave the same counts) the office as built has 220 unfilled openings in Revit's export and rvt-rs writes 75, 58 of them Revit's; at building permit 216, 69 and 52. Of those Revit's export holds that rvt-rs does not write, by what cuts them (`IfcWall` hosts unless said):
 
 | kind (cutter in host) | as built | at permit |
 |---|---:|---:|
@@ -64,7 +64,7 @@ A curtain wall embedded in a wall is a `WallEmbedWallGStep`. Revit's export hold
 - Where the curtain wall reaches the wall's end the opening stops short of the end by 0.19 to 0.71 ft, as the end is mitered or another wall is joined there (RE-321).
 - Where another wall's body touches the opening's box, the opening is cut back by the length of the overlap: 0.328 ft on 3030507 in 2991697, whose curtain wall lies 22 ft or more inside its wall at both ends, and 0.03 and 0.059 ft on four of the permit file's.
 
-The rule written takes only a curtain wall whose box lies at least half a foot inside the wall's body at both ends and whose opening box no other wall's box touches (the walls rvt-rs draws, else the wall's record box), and counts the rest by reason. RE-321's variant that wrote every curtain wall had 16 of its 68 boxes wrong (Measure 41738481767); the half-foot rule alone is exact on 28 of 29 as built, the 29th being 3030507.
+The rule written takes only a curtain wall whose box lies at least half a foot inside the wall's body at both ends and whose opening box no other wall's box touches (the walls rvt-rs draws, else every copy of the wall's record box), and counts the rest by reason. An element's record can be framed in several partitions: `frame_boxes` returns every copy, and a curtain wall's box is read only where its copies agree to 0.01 ft. As built they always do; at permit 27 curtain walls' copies disagree and are counted (`curtain_wall_record_copies_disagree`), which costs 3 openings the first copy had exact (16 written before, 13 now, each still within 0.01 ft). A cabinet's step is written only with `m_bCutSomething` 1, the one value measured, a cabinet symbol that cuts several solids whose boxes do not touch is refused, and no cabinet, door or curtain wall box is written that rises 0.05 ft above its wall's top or falls below its base (none of the office's does). RE-321's variant that wrote every curtain wall had 16 of its 68 boxes wrong (Measure 41738481767); the half-foot rule alone is exact on 28 of 29 as built, the 29th being 3030507.
 
 ## 5. What is left
 
@@ -76,28 +76,41 @@ The rule written takes only a curtain wall whose box lies at least half a foot i
 
 ## 6. Measured as it lands
 
-Measure [41950674065](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41950674065) (`-f base=main -f nordic=true -f keep_ifc=true -f models="nordic-office-as-built nordic-office-permit core-interior re1-architecture"`, scorers `unfilled_openings_vs_ifc psets_vs_ifc qtos_vs_ifc`, c2033d2a against `main` at 77d71cbb):
+Measure [41952363750](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41952363750) (`-f base=main -f nordic=true -f keep_ifc=true -f models="nordic-office-as-built nordic-office-permit core-interior re1-architecture"`, scorers `unfilled_openings_vs_ifc psets_vs_ifc qtos_vs_ifc`, head 04f60dd6 against `main` at 77d71cbb; the figures at c2033d2a, Measure 41950674065, are the same as built and 16 curtain walls, 159 and 139 openings, 44,559 equal values and 29,995 equal quantities at permit, before the record copies were compared):
 
 | | office as built | office at permit |
 |---|---:|---:|
 | unfilled openings written / both written and Revit's, `main` | 75 / 58 | 69 / 52 |
-| unfilled openings written / both, this change | 169 / 149 | 159 / 139 |
-| property values equal, `main` / this change | 44,223 / 44,401 | 44,387 / 44,559 |
+| unfilled openings written / both, this change | 169 / 149 | 156 / 136 |
+| property values equal, `main` / this change | 44,223 / 44,401 | 44,387 / 44,553 |
 | property values missing, `main` / this change | 1,361 / 1,384 | 1,364 / 1,396 |
-| quantities equal, `main` / this change | 29,546 / 29,744 | 29,833 / 29,995 |
+| quantities equal, `main` / this change | 29,546 / 29,744 | 29,833 / 29,986 |
 | quantities missing, `main` / this change | 9,931 / 10,000 | 9,917 / 10,013 |
 | values Revit's export does not write, `main` / this change | 10 / 16 | 16 / 20 |
-| Revit's openings' values rvt-rs does not write, not scored, `main` / this change | 531 / 230 | 565 / 265 |
-| Revit's openings' quantities rvt-rs does not write, not scored, `main` / this change | 437 / 170 | 456 / 198 |
+| Revit's openings' values rvt-rs does not write, not scored, `main` / this change | 531 / 230 | 565 / 277 |
+| Revit's openings' quantities rvt-rs does not write, not scored, `main` / this change | 437 / 170 | 456 / 207 |
 | different | 1, unchanged | 1, unchanged |
 
-The new missing values are on the door openings: `Pset_OpeningElementCommon.FireExit` and the quantities of Revit's frame-relative `Width`, `Height` and `Depth` (section 3), which rvt-rs does not write for a door's own opening either. The 6 and 4 more values Revit's export does not write are the two `Reference`s of each opening written under the sibling rule. Core Interior's 63 of 63 and RE1 Architecture's 1 of 3 are identical to `main`'s, and `exported.wall_cut_openings_left_out` is empty on both.
+The new missing values are on the door openings: `Pset_OpeningElementCommon.FireExit` and the quantities of Revit's frame-relative `Width`, `Height` and `Depth` (section 3), which rvt-rs does not write for a door's own opening either. The 6 more values Revit's export does not write as built are the two `Reference`s of each of the 3 openings written under the sibling rule. At permit 3 such openings add 6 and the census shows 4: it keys an unfilled opening by its Tag (`opening:<Tag>:void`), so the door 1728679's second opening, which has the Tag of its opening in the other wall, is scored with that one and its two `Reference`s count equal. Core Interior's 63 of 63 and RE1 Architecture's 1 of 3 are identical to `main`'s, and `exported.wall_cut_openings_left_out` is empty on both.
 
-**The sibling rule.** The scorer counts an opening rvt-rs writes that Revit's export of the file lacks but its export of a sibling file holds on its own line, not as an extra (RE-321 section 4, the maintainer, 2026-11-03, for one rectangular opening at permit). Applied here, it covers every opening the as-built export omits (two curtain walls, a cabinet; the omitted door 3064459 in 1619525 is not written) and the permit export (two cabinets, a door). Nothing read tells them from the openings Revit's export of the same file holds (RE-321 section 4 for the cabinets and curtain walls, section 3 above for the doors). They are written, as the rectangular opening is, and this is a call to confirm: the standing rule that where Revit's exporters disagree the value is left out would drop them, 3 of the 169 openings written as built and 4 of the 159 at permit.
+**The sibling rule, and what the records of the six openings show.** The scorer counts an opening rvt-rs writes that Revit's export of the file lacks but its export of a sibling file holds on its own line, not as an extra (RE-321 section 4, the maintainer, 2026-11-03, for one rectangular opening at permit, whose wall's extent, step and record were byte for byte the other file's). Six openings here are of that kind: as built two curtain walls (1815871 in 1815838, 1892067 in 1892039) and a cabinet (3388647 in 1494012), at permit two cabinets (3387194 in 3363820, 3390319 in 1728013) and a door (1728679 in 1728013). `probes/examples/probe_re338_sibling_records.rs` (Measure [41955022785](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41955022785), head c0c3e0ca, both office files) reads the native records behind each in both files, without the stream offsets of their pointers (which say where an object was saved, and are the only field of any of the six steps that differs):
 
-**The held-out models.** Measure [41948301483](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41948301483) (`-f holdout=true -f models="holdout-* spent-*"`, 51db798e against `main`; the later commits only count more of the steps left out): the exports of all 19 held-out and spent models are byte for byte `main`'s, so they hold no cabinet, no door cutting a second wall and no curtain wall embedded in an exported wall to write, and they say nothing of the rules.
+| opening | the step's fields | the cutter's record | the host wall's record | rvt-rs's box against the sibling export's |
+|---|---|---|---|---|
+| curtain wall 1815871 in 1815838 | identical | identical (47 objects) | differs: 40 and 44 objects, the join steps, `GeomTable`, `GeometryTopology`, `VWallDriver` | 0.000 ft |
+| curtain wall 1892067 in 1892039 | identical | identical (47) | differs: 41 and 45, the same classes and `JoinToRoofGStep` | 0.000 ft |
+| cabinet 3388647 in 1494012 | identical | `InstanceInfo` differs: the transform's origin moved 0.220 ft in Y | differs: 39 and 50, and `SWall` | 0.655 ft |
+| cabinet 3387194 in 3363820 | identical | identical (9) | differs: 39 and 39, in `GeomTable`, `GeometryTopology`, `JoinEndGStep`, `JoinToRoofGStep` and `WallJoinTweakGStep` | 0.000 ft |
+| cabinet 3390319 in 1728013 | identical | identical (9) | differs: 46 and 62, 16 classes | 0.000 ft |
+| door 1728679 in 1728013 | identical | `InstanceInfo` differs: the origin moved 0.048 ft in X | differs: 46 and 62, 16 classes | 0.130 ft |
 
-**Not shown.** The curtain-wall rule is read from the office's two files and nothing else; its neighbour test was chosen on the as-built file's one wrong box and passes the permit file's four others (in an analysis of the office's export, not committed); the first Measure of the writer (41946182305, 17966cbd) wrote doors only where the box overlapped the second wall, 11 and 17, and its figures for doors are superseded.
+So no one of the six has the host wall's record byte for byte the other file's, and two have a cutter that moved between the saves. The step and, on four, the cutter are the other file's; on those four rvt-rs's box is Revit's box in the sibling export to 0.000 ft, and on the two whose cutter moved it is not (the element is elsewhere). That is not unusual for a pair Revit writes in both files: over the 994 (cutter, wall) steps both files hold, the step is identical in 543, the cutter's record in 307 and the host wall's in 110. Nothing in a record separates these six from the pairs Revit's export of the same file writes, so no rule over the records narrows them out: the choice is between writing the classes with the six counted apart (the RE-321 precedent, which had the wall, step and record byte for byte the same) and not writing a class at all. The standing rule (where Revit's exporters disagree, the value is left out) is the second: it takes out the 6 openings and, since nothing separates them, the 91 other cabinets', doors' and curtain walls' openings that are Revit's as built and the 84 at permit (all measured exact). This is the maintainer's call; the code writes them, and the pull request waits on it.
+
+**The held-out models.** Measure [41954664033](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41954664033) (`-f holdout=true -f models="holdout-* spent-*"`, head 17623bfb, whose code is 04f60dd6's, against `main`) and [41948301483](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41948301483) (51db798e): the exports of all 19 held-out and spent models are byte for byte `main`'s, so they hold no cabinet, no door cutting a second wall and no curtain wall embedded in an exported wall to write, and they say nothing of the rules.
+
+**The Autodesk samples and the default path.** Measure [41952392277](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41952392277) (`-f base=main -f samples=true -f sample_years=2024 -f timing=true`, head 04f60dd6, 25 samples of 2024 to 2027 and 6 reference models): every export is byte for byte `main`'s but `rac_basic` 2024 and 2025, which each gain one opening (one more swept solid and two more property sets; no Revit export of them to score it against). Every wall's record is now read, not only the framed walls', for the steps it names: on `rme_advanced` 2024, the largest MEP sample measured, the export takes 9,781 ms against `main`'s 9,667 (1.01, peak memory 574 against 573 MiB), and over the 31 files head over base is 0.99 to 1.03 in time and 0.97 to 1.01 in peak memory (shards pair base and head on one runner).
+
+**Not shown.** The curtain-wall rule is read from the office's two files and nothing else; its neighbour test was chosen on the as-built file's one wrong box and passes the permit file's four others (in an analysis of the office's export, not committed). The first Measure of the writer (41946182305, 17966cbd) wrote doors only where the box overlapped the second wall, 11 and 17, and its figures for doors are superseded. A door whose host is unknown is counted with the doors whose `m_bCutSomething` 1 step is in a wall they are not hosted in. The door's own opening box is the one `opening_cuts_through_hosts` computes once for the exporter and the opening writer.
 
 ## 7. Reproduce
 
@@ -105,6 +118,13 @@ The new missing values are on the door openings: `Pset_OpeningElementCommon.Fire
 gh workflow run measure.yml --ref main -f ref=<sha> -f base=main -f nordic=true -f keep_ifc=true \
   -f models="nordic-office-as-built nordic-office-permit core-interior re1-architecture" \
   -f scorers="unfilled_openings_vs_ifc psets_vs_ifc qtos_vs_ifc"
+gh workflow run measure.yml --ref main -f ref=<sha> -f base=none -f nordic=true \
+  -f models="nordic-office-as-built nordic-office-permit" -f scorers=none \
+  -f probe=probe_re338_sibling_records -f probe_scorer=-
+gh workflow run measure.yml --ref main -f ref=<sha> -f base=main -f holdout=true \
+  -f models="holdout-* spent-*" -f scorers=unfilled_openings_vs_ifc
+gh workflow run measure.yml --ref main -f ref=<sha> -f base=main -f samples=true -f sample_years=2024 \
+  -f timing=true -f scorers=unfilled_openings_vs_ifc
 ```
 
-The counted reasons are in each model's `diagnostics.json`, `exported.wall_cut_openings_left_out`.
+The counted reasons are in each model's `diagnostics.json`, `exported.wall_cut_openings_left_out`. The probe's `step`, `wall` and `cutter` lines digest the records by (cutter, wall); `stepjson`, `wobj`, `cobj` and `case` give the fields and the objects without their stream offsets, which the comparison of section 6 reads.
