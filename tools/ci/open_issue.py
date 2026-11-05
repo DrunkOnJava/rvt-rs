@@ -50,7 +50,7 @@ def job_issue(job, workflow, repo, run_id, server="https://github.com"):
     label = PREFIX + slug(job["name"])
     steps = ", ".join(job.get("steps") or []) or "none recorded"
     timed_out = job.get("conclusion") in TIMED_OUT
-    how = "ended cancelled, which is how a job that exceeded its timeout-minutes ends (the run was not cancelled)" if timed_out else "failed"
+    how = "ended cancelled, which is how a job that exceeded its timeout-minutes ends (nobody cancelled the run)" if timed_out else "failed"
     body = (
         f'The scheduled check "{job["name"]}" of the workflow "{workflow}" {how}.\n\n'
         f"- Run: {server}/{repo}/actions/runs/{run_id}\n"
