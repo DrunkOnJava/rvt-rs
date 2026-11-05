@@ -208,6 +208,10 @@ not remove Compare's report.
   compares what it can and reads `PARTIAL`, never `PASS`. Every such skip prints
   a notice and a line in the run summary, so a green run that did not run the
   check says so.
+- **A run with `ifc_flags` checks neither same-project gate.** The gates are about
+  the default export, and a flag such as `--phase` makes a save refuse. Each gate
+  says in a notice that it compared nothing, so the run a gate judges has no
+  `ifc_flags`. A whitespace-only value is no flag.
 - **What it cannot catch**: an error the earlier save shares with the 2026 or
   2027 read. Nothing in it is a Revit export. It compares bodies, not
   quantities or property sets. No 2026 or 2027 held-out model holds an
