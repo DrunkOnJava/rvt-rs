@@ -161,10 +161,11 @@ for the five lowest ElementIds of each IFC entity, the diagnostics and an
   `python3 tools/re/mcp_client.py <rvt-rs-mcp> <model.rvt> [--all]` writes it
   alone, with `get_element` for the five lowest ElementIds of each entity or
   for every element; the semantic merge check (#1334) reads it.
-- The server is built (`cargo build -p rvt-rs-mcp`) only in a run that names
-  no scorers or names this one. It is optional: a ref without the crate, or
-  whose server does not build, leaves the step NOT MEASURED with a warning and
-  fails no other scorer. Autodesk's sample projects are not asked.
+- The server is built (`cargo build -p rvt-rs-mcp`, in the side's Build job)
+  only in a run that names no scorers or names this one. It is optional: a ref
+  without the crate, or whose server does not build, leaves the step NOT
+  MEASURED with a warning and fails no other scorer. Autodesk's sample projects
+  are not asked.
 
 ## Measure and the kinds of IfcSpace
 
@@ -552,18 +553,21 @@ writes the cached output and a `<step> cached` line to the model's
   the unfiltered run 41748430211 the 18 held-out models took 32.8 of the 119
   task-minutes of model steps (28%); they run only with `-f holdout=true`.
 - **Where it lives.** Each shard of the run, whatever it is called, restores
-  the newest `measure-scores-v2-main-<shard>.*` cache after the measured code
-  has built (a build script never sees a writable cache) (a run given `models`
+  the newest `measure-scores-v2-main-<shard>.*` cache (a run given `models`
   is the shard `all`, with a cache of its own,
-  built by earlier runs of that kind). It is saved only where rust-cache is saved: the
+  built by earlier runs of that kind). No build script of the measured ref runs
+  in a shard (the Build job runs them, on a runner that holds no score cache),
+  but its binaries and a probe's scorers do, with the cache writable. It is
+  saved only where rust-cache is saved: the
   workflow dispatched from `main` and the side measuring `main`'s own code
-  (`inputs.ref` empty, or `base` `main`), because the build scripts of any
-  other ref run on the runner and must not write what a later `main` run
+  (`inputs.ref` empty, or `base` `main`), because code of any
+  other ref runs on the runner and must not write what a later `main` run
   reads. A pull request run, and a run of any other ref, only reads. Keying on
   the scorers makes an entry reachable only by a run whose scorers, files and
-  libraries hash alike, but that is not safe by construction: a build script of
-  the measured ref could rewrite the installed IfcOpenShell, which the key
-  names only by version, and the cache would then hold what that run produced.
+  libraries hash alike, but that is not safe by construction: code of the
+  measured ref that runs in the shard (its binaries, a probe's scorers) could
+  rewrite the installed IfcOpenShell, which the key names only by version, and
+  the cache would then hold what that run produced.
   That is why only `main`'s own code saves it. A run dispatched with `-f
   score_cache=<name>` reads and saves a cache of its own,
   `measure-scores-v2-x-<name>-<shard>.*`, from any ref (GitHub scopes a
@@ -591,11 +595,53 @@ writes the cached output and a `<step> cached` line to the model's
   psets_missing=Pset_WallCommon.Reference` must miss `psets_vs_ifc` on every
   model and hit everything else.
 
-Measure also keeps the three binaries its Build step makes (`rvt-ifc`,
+## Measure builds each side once
+
+The `Build` job of each side (`Build head`, `Build base`) builds what the
+side's shards run: `rvt-ifc`, `rvt-gltf` and `rvt-info`, `rvt-rs-mcp` in a run
+that scores the MCP server, and each `inputs.probe` example that exists at that
+ref. It uploads exactly those files, with the commit they are of, as the
+artifact `measure-bin-head` or `measure-bin-base` (kept 3 days), and every shard
+of the side downloads it into `measured/target/ci`, checks the commit against its
+own checkout of the ref, and sets the executable bit that artifacts drop. A
+shard installs no Rust and restores no rust-cache, and the script it runs
+(`tools/ci/measure-reference-models.sh`) never calls cargo. Before this each
+shard of a commit missed the binary cache at once and built the same binaries
+(over 36 dispatched runs Build was 150 of 720 job-minutes, #1457).
+
+- **A missing optional file is not an error.** The script tests
+  `-x "$BIN/rvt-rs-mcp"` and `-x "$BIN/examples/<probe>"`: a ref with no `rvt-mcp`
+  crate leaves the server's answers NOT MEASURED on that side (a warning in the
+  Build job), and a probe that does not exist at the base ref is skipped there
+  (a notice).
+- **A failed build** fails the run. That side's shards fail at the artifact
+  download and the other side's still run (its results, and the `same-project
+  gates` verdict, are not lost with it); Compare, which needs every shard, is
+  skipped, so the run never reads as a pass. The gates' job still runs and
+  writes the verdict as NOT MEASURED (`neutral`), or a failure if a result that
+  did arrive fails, never a success; with no head result at all it leaves its two
+  checks out. Read the Build job, not Compare.
+- **A shard waits for both Build jobs**, since a matrix job's `needs` covers every
+  leg: in a run with a base, the head shards start when the slower side has built
+  (run 42093529476: 0.6 minute, 82 s against 54 s). With few or short shards that
+  and the artifact hand-off lengthen the wall-clock; the job-minutes fall once a
+  side has more shards than builds.
+- **A ref that is not a full SHA** (`refs/pull/N/head`) is checked out as given by
+  the Build job and by every shard; a shard fails if the ref moved between them,
+  since the binaries and its source would be two commits.
+- **The artifact names** match neither `measure-head-*` nor `measure-base-*`, the
+  patterns Compare and the gates download; `gh run download -n measure-head`
+  still names Compare's merged artifact.
+- **`timing-build`** checks out `inputs.base || 'main'` as given when it
+  starts, where the shards use the commits the plan job resolved. When those
+  differ (`main` moved during the run) `Timing` warns in the log and under its
+  table.
+
+Measure also keeps the binaries its Build job makes (`rvt-ifc`,
 `rvt-gltf`, `rvt-info`; and `rvt-rs-mcp` in a run that scores the MCP server,
 under a key ending `-mcp`) under `rvt-bin-v2-<full SHA>-<OS>-<arch>-<toolchain
-hash>-ci`, so the shards of a run, and every run that measures `main`'s commit
-as its base, build them once (the build is about 70 seconds of each job). What
+hash>-ci`, so every run that measures `main`'s commit as its base builds them
+once (the build is about 70 seconds). What
 the cache holds is a function of its key, the code of that commit built by that
 toolchain, and only a run of that commit restores it, so a run of any ref may
 save it (a pull request's run does not: its caches are its own). A ref that is
