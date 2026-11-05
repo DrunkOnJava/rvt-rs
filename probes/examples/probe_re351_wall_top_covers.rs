@@ -40,9 +40,11 @@
 //!                         solid shape) with a hash of the extrusion, and its
 //!                         `RvtElementRecordGeometry` properties, among them
 //!                         `BodySource`, `BodyHeightSource` and
-//!                         `TopCoverElementId`, and its further property sets
-//!                         (the `Qto_` quantities) as `sets`; "listed" says it
-//!                         is one of the 16
+//!                         `TopCoverElementId`, its further property sets
+//!                         (the `Qto_` quantities) as `sets`, and how many
+//!                         elevation-profile openings it has as
+//!                         `profile_openings` (a wall with one is not cut at its
+//!                         top); "listed" says it is one of the 16
 //!   kind "roof"           every roof and every element a wall names as its top
 //!                         cover, as written
 //!
@@ -408,6 +410,12 @@ fn main() -> Result<()> {
                 .push(json!({ "set": set.name, "properties": properties }));
         }
     }
+    let mut profile_openings: BTreeMap<usize, usize> = BTreeMap::new();
+    for entity in &model.entities {
+        if let IfcEntity::WallProfileOpening { host, .. } = entity {
+            *profile_openings.entry(*host).or_default() += 1;
+        }
+    }
     let mut covers: BTreeSet<u32> = BTreeSet::new();
     for (index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
@@ -440,6 +448,7 @@ fn main() -> Result<()> {
             "solid_shape": compact(value["solid_shape"].clone()),
             "props": props,
             "sets": sets.get(&index),
+            "profile_openings": profile_openings.get(&index).copied().unwrap_or(0),
         });
         if listed {
             line["entity"] = compact(value);
