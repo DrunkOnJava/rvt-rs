@@ -8,7 +8,7 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
-## [0.15.0] — 2026-11-04
+## [0.15.0] — 2026-11-05
 
 0.15.0 makes an export say where its values came from and why it left
 anything out, and draws more of what Revit draws. Two opt-in switches say
@@ -24,7 +24,8 @@ measured, the log keeps at most 5,000 entries a reason, and some values a
 body reads (an Area's Levels, a wall's layers, a beam's I section) have no
 recorded source. Every export of a Revit 2008 to 2023 project counts where
 its element records stopped, so an export that writes nothing says at which
-stage. Rooms take off the round columns their stored solid holds. Areas whose
+stage. Rooms take off the round columns their stored solid holds, and a
+floor's void drawn clockwise takes the tag Revit's export gives it. Areas whose
 boundary lines name each other are drawn to their joins: a rule read off the
 one public export it is scored against (an IFC2X3 export of `rac_advanced`
 of unestablished origin), so it is in-sample, and no Revit IFC4 export of
@@ -86,8 +87,11 @@ Autodesk's sample projects, the held-out models and the families (Measure run
   that element's top (`BodyBaseSource`, `BaseCoverElementId`; the BIM4LCA
   office's Basement); and an Area of a Revit 2015 to 2024 file whose boundary
   lines name each other is drawn to their joins (`SpaceOutlineSource`
-  `area_boundary_joined`). Partition streams are now taken in number order,
-  which moved no Measure model's export.
+  `area_boundary_joined`). A floor's void whose sketch lines run clockwise
+  in the order they were drawn is tagged with the line Revit's export tags
+  it with, so its `Tag` and its GlobalId change (8 voids of the BIM4LCA
+  office as built, 7 at permit). Partition streams are now taken in number
+  order, which moved no Measure model's export.
 - New trust markers in `RvtElementRecordGeometry`: `SlabShapeRefusal` on a
   shape-edited floor kept as its record box and `BaseCoverRefusal` on a wall
   that keeps its base, each naming the reason.
@@ -445,6 +449,29 @@ Autodesk's sample projects, the held-out models and the families (Measure run
   branch.
 
 ### Fixed
+
+- **A floor's void is tagged with the sketch line Revit's export tags it with
+  where the lines run clockwise (#1165, RE-339).** RE-151 tagged each void
+  with the lowest ElementId of the sketch lines on its loop, which is Revit's
+  on 27 of the 36 voids of the BIM4LCA office as built and 27 of the 35 at
+  building permit, and on all 62 floor and shading-device voids of Core
+  Interior. On 8 and 7 of the others Revit's tag is the highest ElementId of
+  the loop's lines: taken in ElementId order, which is the order they were
+  drawn in, they run clockwise round the loop, and Revit starts such a loop at
+  the line drawn last. That is what 8 voids of one exporter show; why is not
+  read. The tag is now the highest where at least three straight lines, each
+  on an edge of its own, step exactly one edge clockwise all the way round the
+  loop in that order (the closing step included), and the lowest everywhere
+  else, a loop with a curve included. On the office the voids with Revit's tag
+  go from 27 to 35 of 36 as built and from 27 to 34 of 35 at permit, with the
+  box, name, type and `Reference` equal on every one, and the voids written
+  under another line's Tag go from 9 and 8 to 1 on each file, a loop of 6
+  lines with a notch drawn later (#1408). The GlobalId of a void is rvt-rs's
+  own, derived from the tag, so the 8 and 7 voids whose tag changes get new
+  GlobalIds. The scorer measured is the unfilled-openings one, with the
+  property and quantity census, on the two office files (Measure run
+  41953415257, head e8ef33d3); Core Interior's and RE1 Architecture's exports
+  and the 19 held-out and spent models' are byte for byte `main`'s.
 
 - **A family's embedded document is read in partition-number order (#1368).**
   The family extrusions, the nested instances and the materials of a family

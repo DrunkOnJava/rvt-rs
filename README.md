@@ -47,7 +47,7 @@ The measured detail behind each row is in [`docs/evidence.md`](docs/evidence.md)
 
 ## Install and quick start
 
-The latest release is [v0.15.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.15.0) (2026-11-04). Install it with any of:
+The latest release is [v0.15.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.15.0) (2026-11-05). Install it with any of:
 
 - the prebuilt Linux, macOS and Windows binaries on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases), or the container image `ghcr.io/drunkonjava/rvt-rs`;
 - `cargo install rvt --locked`;
