@@ -20,7 +20,10 @@ pub struct ModelArgs {
     #[serde(alias = "model_id", alias = "path")]
     pub model: String,
     /// The project phase to read, by its name (exactly) or its ElementId,
-    /// instead of the project's last (`rvt-ifc --phase`). It applies to a file
+    /// instead of the project's last (`rvt-ifc --phase`). A phase named is
+    /// exact: naming the last phase differs from leaving `phase` out where the
+    /// last phase holds no room, since leaving it out then reads the rooms of
+    /// the latest phase that holds any. It applies to a file
     /// path: a `model_id` names the phase its model was opened at. An unknown
     /// phase is an error that lists the file's phases.
     pub phase: Option<String>,
@@ -32,7 +35,10 @@ pub struct ListElementsArgs {
     #[serde(alias = "model_id", alias = "path")]
     pub model: String,
     /// The project phase to read, by its name (exactly) or its ElementId,
-    /// instead of the project's last (`rvt-ifc --phase`). It applies to a file
+    /// instead of the project's last (`rvt-ifc --phase`). A phase named is
+    /// exact: naming the last phase differs from leaving `phase` out where the
+    /// last phase holds no room, since leaving it out then reads the rooms of
+    /// the latest phase that holds any. It applies to a file
     /// path: a `model_id` names the phase its model was opened at. An unknown
     /// phase is an error that lists the file's phases.
     pub phase: Option<String>,
@@ -76,7 +82,10 @@ pub struct GetElementArgs {
     /// GlobalId, as `list_elements` gives them.
     pub id: IdArg,
     /// The project phase to read, by its name (exactly) or its ElementId,
-    /// instead of the project's last (`rvt-ifc --phase`). It applies to a file
+    /// instead of the project's last (`rvt-ifc --phase`). A phase named is
+    /// exact: naming the last phase differs from leaving `phase` out where the
+    /// last phase holds no room, since leaving it out then reads the rooms of
+    /// the latest phase that holds any. It applies to a file
     /// path: a `model_id` names the phase its model was opened at. An unknown
     /// phase is an error that lists the file's phases.
     pub phase: Option<String>,
@@ -92,7 +101,10 @@ pub struct ExplainElementArgs {
     #[serde(alias = "id")]
     pub element: IdArg,
     /// The project phase to read, by its name (exactly) or its ElementId,
-    /// instead of the project's last (`rvt-ifc --phase`). It applies to a file
+    /// instead of the project's last (`rvt-ifc --phase`). A phase named is
+    /// exact: naming the last phase differs from leaving `phase` out where the
+    /// last phase holds no room, since leaving it out then reads the rooms of
+    /// the latest phase that holds any. It applies to a file
     /// path: a `model_id` names the phase its model was opened at. An unknown
     /// phase is an error that lists the file's phases.
     pub phase: Option<String>,
@@ -196,7 +208,10 @@ pub struct ExportIfcArgs {
     #[serde(default)]
     pub options: IfcOptions,
     /// The project phase to read, by its name (exactly) or its ElementId,
-    /// instead of the project's last (`rvt-ifc --phase`). It applies to a file
+    /// instead of the project's last (`rvt-ifc --phase`). A phase named is
+    /// exact: naming the last phase differs from leaving `phase` out where the
+    /// last phase holds no room, since leaving it out then reads the rooms of
+    /// the latest phase that holds any. It applies to a file
     /// path: a `model_id` names the phase its model was opened at. An unknown
     /// phase is an error that lists the file's phases.
     pub phase: Option<String>,
@@ -218,7 +233,10 @@ pub struct ExportGltfArgs {
     #[serde(default)]
     pub allow_partial: bool,
     /// The project phase to read, by its name (exactly) or its ElementId,
-    /// instead of the project's last (`rvt-ifc --phase`). It applies to a file
+    /// instead of the project's last (`rvt-ifc --phase`). A phase named is
+    /// exact: naming the last phase differs from leaving `phase` out where the
+    /// last phase holds no room, since leaving it out then reads the rooms of
+    /// the latest phase that holds any. It applies to a file
     /// path: a `model_id` names the phase its model was opened at. An unknown
     /// phase is an error that lists the file's phases.
     pub phase: Option<String>,

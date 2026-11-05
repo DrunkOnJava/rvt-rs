@@ -20,7 +20,7 @@ failed call has `isError` set and a text message.
 | [`get_summary`](#get_summary) | The summary open_model returns, for a model_id or a path: release and build, element counts by IFC entity and Revit class, levels, room count and the diagnostics summary (what was read, approximated, skipped and left unread). |
 | [`list_elements`](#list_elements) | List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. |
 | [`list_levels`](#list_levels) | List the levels (building storeys) of a model with their elevation in feet and metres and how many building elements the export puts on each. |
-| [`list_rooms`](#list_rooms) | List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. |
+| [`list_rooms`](#list_rooms) | List the spaces the export writes as IfcSpace: ElementId, number, name, space_kind, level, area and provenance. |
 | [`open_model`](#open_model) | Open a Revit file (.rvt, .rfa, .rte or .rft) and decode it once, with the same decode rvt-ifc runs. |
 
 ## explain_element
@@ -35,7 +35,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 |---|---|---|---|
 | `element` | [IdArg](#idarg) | yes | The element's Revit ElementId (`1234`), whether or not the export holds it, or the 22-character IFC GlobalId of an exported one. |
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -65,7 +65,7 @@ Hints: read-only: no, may overwrite: yes, idempotent: yes, open world: no.
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
 | `out_path` | string | yes | Where to write the binary glTF. It must end in `.glb`, must not be the model, and must not exist unless `overwrite` is true. |
 | `overwrite` | boolean | no | Replace `out_path` if it exists. Default: false. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -96,7 +96,7 @@ Hints: read-only: no, may overwrite: yes, idempotent: yes, open world: no.
 | `options` | [IfcOptions](#ifcoptions) | no | The `rvt-ifc` switches; none by default. |
 | `out_path` | string | yes | Where to write the IFC4 file. It must end in `.ifc`, must not be the model, and must not exist unless `overwrite` is true. |
 | `overwrite` | boolean | no | Replace `out_path` if it exists. Default: false. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -124,7 +124,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -147,7 +147,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 |---|---|---|---|
 | `id` | [IdArg](#idarg) | yes | The element's Revit ElementId (`1234`) or its 22-character IFC GlobalId, as `list_elements` gives them. |
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -181,7 +181,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -197,8 +197,9 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | `project_name` | string \| null | no |  |
 | `release_support` | any | no | How the file's release is read, and that row's status. |
 | `revit_release` | integer \| null | no | The Revit release that saved the file. |
-| `room_count` | integer | yes |  |
+| `room_count` | integer | yes | The number of `IfcSpace`s the export writes, of every kind: rooms, Areas and family instances written as spaces. It is not the number of rooms (the name is older than `space_kinds`); `space_kinds.room` is. On the BIM4LCA office it is 308, of which 234 are rooms. |
 | `size_bytes` | integer | yes |  |
+| `space_kinds` | object of integer by name | yes | The `IfcSpace`s by `RvtElementRecordGeometry.SpaceKind` (#1437): `room`, `area`, `mep_space` or `family_instance`. The counts sum to `room_count` less the spaces with no kind, which `get_diagnostics` counts as `exported.spaces_without_kind`. |
 
 ## list_elements
 
@@ -216,7 +217,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | `limit` | integer \| null | no | How many elements to return: 100 by default, at most 1000. |
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
 | `offset` | integer \| null | no | How many matching elements to skip, for the next page. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -240,7 +241,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -251,7 +252,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 ## list_rooms
 
-List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_plan_topology, area_boundary or area_boundary_joined for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
+List the spaces the export writes as IfcSpace: ElementId, number, name, space_kind, level, area and provenance. space_kind says what each is (room, area, mep_space or family_instance): read it, not space_outline_source, to tell an Area from a room, and never filter on the values of space_outline_source, which says only where an outline came from and changes with the rules that read outlines. mep_space is the kind of a Revit Space (MEP), which rvt-rs does not read from a file's partition records, so none is written today: that says what rvt-rs writes, not what the files hold. The area is present only where the outline was read exactly (space_outline_source says so); a space that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
 
 Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
@@ -260,7 +261,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -280,7 +281,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -296,8 +297,9 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | `project_name` | string \| null | no |  |
 | `release_support` | any | no | How the file's release is read, and that row's status. |
 | `revit_release` | integer \| null | no | The Revit release that saved the file. |
-| `room_count` | integer | yes |  |
+| `room_count` | integer | yes | The number of `IfcSpace`s the export writes, of every kind: rooms, Areas and family instances written as spaces. It is not the number of rooms (the name is older than `space_kinds`); `space_kinds.room` is. On the BIM4LCA office it is 308, of which 234 are rooms. |
 | `size_bytes` | integer | yes |  |
+| `space_kinds` | object of integer by name | yes | The `IfcSpace`s by `RvtElementRecordGeometry.SpaceKind` (#1437): `room`, `area`, `mep_space` or `family_instance`. The counts sum to `room_count` less the spaces with no kind, which `get_diagnostics` counts as `exported.spaces_without_kind`. |
 
 ## Types
 
@@ -538,6 +540,7 @@ One room.
 | `name` | string \| null | no |  |
 | `number` | string \| null | no |  |
 | `provenance` | [ElementProvenance](#elementprovenance) | yes |  |
+| `space_kind` | string \| null | no | What the space is (#1437): `room`, `area` (a Revit Area), `mep_space` (a Revit Space, MEP) or `family_instance` (any other element, a family instance or a mass, that its own "Export to IFC As" writes as a space), from the Revit class of the record it was read from. Ask this to tell an Area from a room, and never filter on the values of `space_outline_source`, which says where an outline came from and gains values with a release. `mep_space` is the kind of a Revit Space, which rvt-rs does not read from a file's partition records, so none is written today: that says what rvt-rs writes, not what the files hold. The same value is the IFC export's `RvtElementRecordGeometry.SpaceKind` and the room schedule's `space_kind` column. Absent only for a space whose property set is not `RvtElementRecordGeometry`, which `get_diagnostics` counts as `exported.spaces_without_kind`. |
 
 ### SkippedOut
 

@@ -15,7 +15,8 @@
 # line, naming the gate's four saves, or its two. A shard with fewer than a
 # gate's samples (a narrower sample_years, or the other shard: the 2008 to 2023
 # shard holds the 2021 and 2022 saves, the 2024 to 2099 shard the 2024 to 2027
-# ones) checks nothing of that gate and says so in a notice.
+# ones) checks nothing of that gate and says so in a notice, and so does a run
+# with ifc_flags, since the gate is about the default export.
 #
 # RESULTS_DIR holds the head side's shard artifacts, one directory each (the
 # files of two shards share a name, so they are not merged). This was a step of

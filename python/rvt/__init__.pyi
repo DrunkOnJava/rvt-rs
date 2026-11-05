@@ -219,7 +219,9 @@ class RevitFile:
         ``kind="elements"``: every building element the IFC export writes
         (Revit ElementId, IFC type, level, material, placement, size, host of
         a door or window), on the storey the export puts it on.
-        ``kind="rooms"``: every room (number, name, level). ``metric=True``
+        ``kind="rooms"``: every space the export writes (number, name, level,
+        area, and ``space_kind``: ``room``, ``area``, ``mep_space`` or
+        ``family_instance``). ``metric=True``
         writes lengths in metres; ``excel=True`` prefixes a UTF-8 BOM for
         Excel on Windows. Unknown values are empty cells. ``phase`` is
         ``write_ifc``'s. Raises ``ValueError`` for another ``kind``.
@@ -303,13 +305,20 @@ class RevitFile:
         kind-specific shape as ``read_adocument()["fields"]``.
         ``typed`` is the typed projection when
         ``class_name`` is in ``MVP_TYPED_CLASSES``, else ``None``.
+
+        The elements are those of the export at the phase the handle holds:
+        the project's last until an export names another
+        (``write_ifc(phase=...)``). A project whose last phase holds no room
+        has the rooms of the latest phase that holds any, and a
+        ``RuntimeWarning`` says so.
         """
 
     def element_counts(self) -> TypedElementCounts:
         """Return decoded element counts as ``{"total": int,
         "by_class": dict[str, int]}``. Matches ``rvt-elements
         --counts`` and ``export_diagnostics()["decoded"]
-        ["production_walker_elements"]`` for ``total``.
+        ["production_walker_elements"]`` for ``total``. The phase is
+        ``decoded_elements``'s.
         """
 
     def write_ifc(
@@ -347,8 +356,12 @@ class RevitFile:
         ElementId, as ``rvt-ifc --phase`` takes it, and the export shows that
         phase: an element that does not exist in it, and a room whose own
         phase is not it, are left out. ``None``, the default, is the
-        project's last phase. A phase the file does not have raises
-        ``ValueError`` listing the phases it does.
+        project's last phase, except that a project whose last phase holds
+        no room writes the rooms of the latest phase that holds any, with a
+        ``RuntimeWarning`` naming the phase and the diagnostics'
+        ``room_phase_fallback`` counting them; a phase named, the last
+        included, is exact and writes none of them. A phase the file does not
+        have raises ``ValueError`` listing the phases it does.
         """
 
     def export_diagnostics_json(

@@ -778,6 +778,7 @@ jobs:
           PSETS_MISSING: ${{ inputs.psets_missing }}
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
           MCP_REQUIRE_FOLDED_FIELD: ${{ matrix.side != 'base' && '1' || '' }}
+          MCP_REQUIRE_SPACE_KIND: ${{ matrix.side != 'base' && '1' || '' }}
           # A run of the samples checks the Areas of rac_advanced across its
           # 2024 to 2027 saves on the head side (main writes none on 2025 to
           # 2027) whenever all four samples are in it, and its 2021 save against
@@ -860,8 +861,8 @@ jobs:
   # Compare, which does not need it, still reports (a failed step in a measure
   # shard would skip Compare). The base side is not gated: its files show what
   # each check says of `main`. A check skipped on purpose (no `samples`, no 2026
-  # or 2027 sample, the `scorers` excluding it, a run without the earlier saves)
-  # says so in a notice and in the run summary. Measure is not a required check:
+  # or 2027 sample, the `scorers` excluding it, a run without the earlier saves,
+  # a run with `ifc_flags`) says so in a notice and in the run summary. Measure is not a required check:
   # the failure is read before landing, by the landing rule.
   same-project-gates:
     name: Same-project gates
@@ -901,15 +902,16 @@ jobs:
     needs: [plan, measure]
     runs-on: ubuntu-24.04
     steps:
-      # The semantic diff's script, from the workflow's own ref (this job holds
-      # no secret and runs no measured code). First, since a checkout cleans the
-      # workspace.
+      # The semantic diff's script and the IfcSpace kinds' total (#1437), from the
+      # workflow's own ref (this job holds no secret and runs no measured code).
+      # First, since a checkout cleans the workspace.
       - name: Workflow tools
-        if: needs.plan.outputs.base == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: tools/re/semantic_diff.py
+          sparse-checkout: |
+            tools/re/semantic_diff.py
+            tools/re/space_kinds_vs_ifc.py
           sparse-checkout-cone-mode: false
       # Each side's shards hold disjoint models; merged, they are the
       # measure-head and measure-base directories one runner used to write.
@@ -1088,6 +1090,34 @@ jobs:
         with:
           name: compare-scorer-diff
           path: scorer-diff.txt
+      # #1437: every IfcSpace of every export the head side wrote says what it
+      # is (tools/re/space_kinds_vs_ifc.py). The total fails the job when a
+      # model has no result or failed (judged on its counts, not its verdict
+      # word), when a space has no kind or disagrees with its outline source,
+      # when a model's spaces are not the number its own export counted, and
+      # when a geometry export's spaces have no outline source to check, so a
+      # check that looked at nothing cannot pass. A run of models that hold no
+      # space, such as one filtered to two Revit 2025 roofs, passes when every
+      # export agrees it holds none. Last, so the summary, the semantic diff and
+      # the uploads are written first. A run that names `scorers` without this
+      # one has not asked for the check and is left alone; naming it runs the
+      # step that judges it. The base side is not gated: it is main, whose
+      # exports have no kind to find.
+      - name: Every IfcSpace says what it is
+        if: ${{ !cancelled() && (inputs.scorers == '' || contains(inputs.scorers, 'space_kinds_vs_ifc')) }}
+        shell: bash
+        run: |
+          status=0
+          python3 tools/re/space_kinds_vs_ifc.py --total measure-head > space-kinds-total.txt 2>&1 || status=$?
+          cat space-kinds-total.txt
+          {
+            echo "### IfcSpace kinds across the run (head)"
+            echo
+            echo '```'
+            cat space-kinds-total.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
 
   # B81: the base and head jobs above run on different runners, so their wall
   # times compare machines as much as code. With `timing`, rvt-ifc is built at
