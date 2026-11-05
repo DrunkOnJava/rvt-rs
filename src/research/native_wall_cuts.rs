@@ -219,7 +219,10 @@ pub fn instance_cut_boxes(
     if instances.is_empty() {
         return Ok(BTreeMap::new());
     }
-    let mut placed: BTreeMap<u64, (u64, [[f64; 3]; 3], [f64; 3])> = BTreeMap::new();
+    // The symbol that draws an instance, the rotation of its transform and
+    // the transform's origin.
+    type Placement = (u64, [[f64; 3]; 3], [f64; 3]);
+    let mut placed: BTreeMap<u64, Placement> = BTreeMap::new();
     let options = native_document::Options {
         selected_ids: instances.clone(),
         ..native_document::Options::default()
