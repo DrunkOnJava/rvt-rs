@@ -4,12 +4,19 @@ name: Deploy viewer
 # https://drunkonjava.github.io/rvt-rs/ via GitHub Pages (Pages root;
 # the old `/viewer/` sub-path 404s).
 # Runs on every push to main that touches viewer/, src/ or rvt-wasm/ (so
-# the WASM stays fresh), plus manual runs.
+# the WASM stays fresh), plus manual runs. It builds and publishes the site,
+# runs the browser tests and measures the viewer with and without saved meshes,
+# on the release build it publishes.
+# The browser tests are viewer-test.yml's: ci.yml runs them as part of
+# `CI passed` (#1374), so a pull request cannot merge before they have passed
+# on its head. To check a draft's viewer, dispatch viewer-test.yml on its
+# branch.
 #
-# C3: the viewer is published only from a commit whose CI passed. The deploy
-# job waits for CI's `CI passed` check on the pushed commit; a commit CI's
-# push filter skips (only docs, Markdown and the like, such as a demo-catalog
-# change) deploys without it. Only the deploy job can write to Pages.
+# C3: the viewer is published only from a commit whose CI passed, the browser
+# tests included. The deploy job waits for CI's `CI passed` check on the pushed
+# commit; a commit CI's push filter skips (only docs, Markdown and the like,
+# such as a demo-catalog change, whose pull request ran the tests) deploys
+# without it. Only the deploy job can write to Pages.
 
 on:
   push:
@@ -22,39 +29,21 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/deploy-viewer.yml'
-  pull_request:
-    branches: [main]
-    # A draft is built once it is marked ready (#1237); to check a draft's
-    # viewer first, dispatch this workflow on its branch.
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'src/**'
-      - 'rvt-wasm/**'
-      - 'viewer/**'
-      - 'docs/viewer-demos.json'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - '.github/workflows/deploy-viewer.yml'
   workflow_dispatch:
 
 # Read-only by default; only the deploy job below can write to Pages (C3).
-# The build job runs pnpm dependencies and Playwright, and holds no write
-# scope.
+# The build job runs pnpm dependencies, and holds no write scope.
 permissions:
   contents: read
 
-# One build per ref. A newer push to a pull request supersedes its
-# in-flight build; pushes to main queue instead. The deploy job below
-# serialises on the Pages group. A single `pages` group shared by every
-# PR build and deploy made PR checks cancel each other whenever two
-# runs queued.
+# One build per ref; pushes to main queue. The deploy job below serialises on
+# the Pages group.
 concurrency:
   group: viewer-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 jobs:
   build:
-    if: github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -63,33 +52,14 @@ jobs:
           persist-credentials: false
 
       # Tier-1 + synthetic demos stage from in-repo corpus/tier1/ and
-      # gen-fixture — no Autodesk LFS needed for Playwright MVP coverage.
-      # The MIT magnetar project samples (Einhoven 2023, Core Interior
-      # 2024) are staged from this checkout as real-project gallery demos
-      # (sha256-pinned in docs/viewer-demos.json) and power the
-      # real-project viewer regression (RVT_VIEWER_SAMPLE / projectSampleTest).
+      # gen-fixture. The MIT magnetar project samples (Einhoven 2023, Core
+      # Interior 2024) are staged from this checkout as real-project gallery
+      # demos (sha256-pinned in docs/viewer-demos.json).
       - name: Checkout public project corpus
         uses: $/.github/actions/fetch-corpus
         with:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
-      # W9: the viewer journey (viewer/tests/journey.spec.ts) also runs on the
-      # four RE1 models (Drshelden/IFC-ECS, MIT), pinned by commit and hash
-      # as ci.yml fetches them.
-      - name: Fetch the RE1 models (Drshelden/IFC-ECS, MIT)
-        run: |
-          set -euo pipefail
-          base=https://raw.githubusercontent.com/Drshelden/IFC-ECS/9e8b37175a0fba1397f7011aeee917fe52de7623/data/RE1
-          dir="${GITHUB_WORKSPACE}/_project_corpus/Revit"
-          while read -r name sum; do
-            curl -sSfL --retry 5 --retry-all-errors -o "${dir}/${name}" "${base}/${name}"
-            echo "${sum}  ${dir}/${name}" | sha256sum -c -
-          done <<'LIST'
-          RE1-Architecture.rvt 4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4
-          RE1-Mechanical.rvt d559720177aa0ec435133f804e7c45d60da2deb9d5585bb3d55f4830139c014b
-          RE1-Plumbing.rvt 03689df2aa426031a216e65051b9f19d3265d6fe96884dd47373b17435f9e54c
-          RE1-Electrical.rvt 9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b
-          LIST
 
       - name: Install Rust toolchain
         shell: bash
@@ -151,81 +121,41 @@ jobs:
           cargo build --profile ci --bin gen-fixture
           PATH="$(pwd)/../target/ci:$PATH" pnpm run stage:demos
 
-      - name: Playwright version
-        id: playwright
-        working-directory: viewer
-        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-
-      # The browser download, keyed on the Playwright version (C6); the
-      # install below still adds the OS packages, which are not cached.
-      - name: Cache Playwright browsers
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-
-      - name: Install Playwright Chromium
-        working-directory: viewer
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Typecheck
-        working-directory: viewer
-        run: pnpm run typecheck
-
       - name: Build viewer
         working-directory: viewer
         run: pnpm run build
-
-      - name: Browser regression tests
-        working-directory: viewer
-        env:
-          RVT_VIEWER_SAMPLE: ../_project_corpus/Revit/Revit_IFC5_Einhoven.rvt
-          RVT_VIEWER_REQUIRE_JOURNEYS: "1"
-        run: pnpm run test:browser
-
-      # The viewer draws doors and windows from their saved meshes by default,
-      # on the condition (Griffin, 2026-10-30) that its memory and load time
-      # are measured in Playwright on the reference models. Each is opened
-      # with the option on and off; the spec asserts behaviour, not timings,
-      # and writes the figures to viewer/measurements/ and the job summary.
-      # It runs after the suite, alone, so nothing else competes for the CPU.
-      - name: Measure the viewer with and without saved meshes
-        if: ${{ !cancelled() }}
-        working-directory: viewer
-        env:
-          RVT_VIEWER_MEASURE: "1"
-          RVT_VIEWER_REQUIRE_JOURNEYS: "1"
-        run: pnpm exec playwright test --config playwright.config.ts --reporter=list --output=test-results/measure
-
-      - name: Upload the saved-mesh measurement
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
-        with:
-          name: viewer-saved-meshes-measurement
-          path: viewer/measurements/
-          if-no-files-found: ignore
-          retention-days: 30
-
-      # The HTML report and each failed test's trace, kept for 14 days.
-      - name: Upload Playwright report
-        if: failure()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
-        with:
-          name: playwright-report
-          path: |
-            viewer/playwright-report/
-            viewer/test-results/
-          if-no-files-found: ignore
-          retention-days: 14
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
         with:
           path: viewer/dist
 
+  # The browser tests again, on the release build of the WASM that this
+  # workflow publishes: ci.yml's `viewer` job tests the faster build without
+  # LTO, which is what a pull request waits for. One leg, since nothing waits
+  # for it but the deploy, which waits for `CI passed` as long.
+  tests:
+    permissions:
+      contents: read
+    uses: $/.github/workflows/viewer-test.yml
+    with:
+      legs: '[{"name":"browser tests","files":"/"}]'
+
+  # The viewer draws doors and windows from their saved meshes by default, on
+  # the condition (Griffin, 2026-10-30) that its memory and load time are
+  # measured in Playwright on the reference models. The figures are for
+  # reading and the spec asserts behaviour; `CI passed` does not wait for it
+  # (it took 12 minutes of every pull request's), but the deploy does.
+  measure:
+    permissions:
+      contents: read
+    uses: $/.github/workflows/viewer-test.yml
+    with:
+      legs: '[{"name":"saved-mesh measurement","measure":true}]'
+
   deploy:
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
-    needs: build
+    needs: [build, tests, measure]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
