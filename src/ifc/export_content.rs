@@ -710,6 +710,9 @@ pub fn append_typed_production_elements(
     // for the cut at the top of the floor or footing it stands on, and the
     // top of each floor, roof and ceiling: flat, a plane, or not known.
     let mut pending_bases: Vec<wall_tops::PendingBase> = Vec::new();
+    // #1410: each wall's location curve and the walls its record joins at each
+    // end, in its order, for the ends drawn to the walls they meet.
+    let mut pending_ends: Vec<wall_tops::PendingEnds> = Vec::new();
     let mut slab_shapes: HashMap<u32, wall_tops::SlabTop> = HashMap::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
@@ -1405,6 +1408,17 @@ pub fn append_typed_production_elements(
                 });
             }
         }
+        if policy.include_geometry && decoded.class == "Wall" {
+            if let Some(joins) =
+                crate::partition_schema_mvp::wall_end_joins_from_fields(&decoded.fields)
+            {
+                pending_ends.push(wall_tops::PendingEnds {
+                    index: entity_index,
+                    curve: joins.curve,
+                    lists: joins.lists,
+                });
+            }
+        }
         // The wall pass knows the top of every floor, roof and ceiling: flat
         // where its record was read and holds no edit, the plane of a floor's
         // edited corners, and otherwise not known (a record that was not read,
@@ -1684,7 +1698,8 @@ pub fn append_typed_production_elements(
     // #1396: a wall with an edited elevation profile that stops short of the
     // wall beneath it is drawn to that wall's face, where its base is still cut.
     // After the tops, so that the walls beneath it have their final tops.
-    let end_steps = wall_tops::extend_wall_ends(entities, &pending_bases, &slab_shapes);
+    let end_steps =
+        wall_tops::extend_wall_ends(entities, &pending_bases, &pending_ends, &slab_shapes);
 
     // #1384: a wall's base is cut at the top of the floor or footing it stands
     // on, level or following that element's shape-edited top.
@@ -4591,26 +4606,21 @@ pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_cover
 pub const WALL_END_SOURCE_PROPERTY: &str = "BodyEndSource";
 
 /// `BodyEndSource` of a wall with an edited elevation profile whose end is
-/// drawn to the face of the perpendicular wall beneath it that holds its base,
-/// the block added at the end reaching the wall's full height (#1396, RE-337).
-pub const WALL_END_AT_BASE_WALL_BODY_END_SOURCE: &str = "wall_end_extended_to_base_wall";
-
-/// `BodyEndSource` of such a wall where the block added at an end stops below
-/// the wall's own top: at the top of the wall beneath it, or the base of a wall
-/// it would lie inside. Revit steps the end up further, to the faces of the
-/// walls above, and those steps are not drawn: a labelled approximation
-/// (#1396, RE-337; Griffin, 2026-11-05: ship it, labelled).
-pub const WALL_END_UPPER_STEP_OMITTED_BODY_END_SOURCE: &str =
-    "wall_end_to_base_wall_upper_step_omitted";
+/// drawn, at each height, to the face of the first wall its record lists as
+/// joined at that end that stands there: the end Revit steps up the walls it
+/// meets (#1396, RE-337; #1409, #1410, RE-348).
+pub const WALL_END_AT_JOINED_WALLS_BODY_END_SOURCE: &str = "wall_end_stepped_to_joined_walls";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says why a wall
-/// with an edited elevation profile, whose end stops short of walls beneath it,
-/// keeps the end its record gives: the walls that hold its base lie at
-/// different faces, the cut of its base would not resolve over the longer
-/// plan, a wall beneath it that would reach the end is not one rectangle, or
-/// another wall stands in the stretch the end would be drawn over (#1396,
-/// RE-337). A wall with one end drawn and the other kept carries this
-/// and `BodyEndSource` both.
+/// with an edited elevation profile, whose end stops short of the walls its
+/// record joins there, keeps the end its record gives: a wall it joins is not
+/// read, its top is not, it does not meet the end, its face is inside the end,
+/// the walls it joins do not stand over the whole of the wall's height or
+/// reach further at a greater height than below, the cut of its base would not
+/// resolve over the longer plan, or a wall the record does not join stands in
+/// the stretch the end would be drawn over (#1396, RE-337; #1410, RE-348). A
+/// wall with one end drawn and the other kept carries this and `BodyEndSource`
+/// both.
 pub const WALL_END_REFUSAL_PROPERTY: &str = "BodyEndRefusal";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how its base

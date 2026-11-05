@@ -458,6 +458,17 @@ pub const SLAB_SHAPE_READER: &str = "native_slab_shape";
 /// footings the export may cut its base at.
 pub const WALL_BASE_CUTTERS_FIELD: &str = "m_wall_base_cutters";
 
+/// Field holding, as a flat vector of floats `[x0, y0, x1, y1]`, the plan
+/// places of the start and the end of a wall's location curve
+/// ([`crate::native_walls::EndJoins::curve`], #1410).
+pub const WALL_CURVE_FIELD: &str = "m_wall_curve";
+
+/// Fields holding, each as a vector of ElementIds, the walls joined at the
+/// start and at the end of a wall's location curve, in the order the record
+/// lists them ([`crate::native_walls::EndJoins::real`], #1410). A field is
+/// absent where the record does not give that end's list.
+pub const WALL_END_JOINS_FIELDS: [&str; 2] = ["m_wall_end_joins_start", "m_wall_end_joins_end"];
+
 /// Field holding a railing's height, its type's top rail height, feet
 /// (RE-231).
 pub const RAILING_HEIGHT_FIELD: &str = "m_railing_height";

@@ -77,6 +77,52 @@ pub fn wall_base_cutters_from_fields(fields: &[(String, InstanceField)]) -> Vec<
         .unwrap_or_default()
 }
 
+/// The walls joined at each end of a wall's location curve, as
+/// [`WALL_CURVE_FIELD`] and [`WALL_END_JOINS_FIELDS`] record them (#1410).
+#[derive(Debug, Clone, PartialEq)]
+pub struct WallEndJoins {
+    /// The curve's start and its end, plan model feet.
+    pub curve: [[f64; 2]; 2],
+    /// The ElementIds joined at the start and at the end, in the record's
+    /// order; `None` where the record gives no list for that end.
+    pub lists: [Option<Vec<u32>>; 2],
+}
+
+/// [`WallEndJoins`] of the wall whose fields these are; `None` where it has no
+/// location curve field.
+pub fn wall_end_joins_from_fields(fields: &[(String, InstanceField)]) -> Option<WallEndJoins> {
+    let flat: Vec<f64> = fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Vector(items) if name == WALL_CURVE_FIELD => items
+            .iter()
+            .map(|item| match item {
+                InstanceField::Float { value, .. } => Some(*value),
+                _ => None,
+            })
+            .collect::<Option<Vec<f64>>>(),
+        _ => None,
+    })?;
+    let [x0, y0, x1, y1] = flat.as_slice() else {
+        return None;
+    };
+    let list = |slot: usize| -> Option<Vec<u32>> {
+        let field: &str = WALL_END_JOINS_FIELDS.get(slot).copied()?;
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Vector(items) if name == field => items
+                .iter()
+                .map(|item| match item {
+                    InstanceField::ElementId { id, .. } => Some(*id),
+                    _ => None,
+                })
+                .collect::<Option<Vec<u32>>>(),
+            _ => None,
+        })
+    };
+    Some(WallEndJoins {
+        curve: [[*x0, *y0], [*x1, *y1]],
+        lists: [list(0), list(1)],
+    })
+}
+
 /// The ElementIds [`WALL_TOP_PAIR_ONLY_FIELD`] records: those of a wall's top
 /// cutters that only a cut pair names (RE-320). Empty where it holds none.
 pub fn wall_top_pair_only_from_fields(fields: &[(String, InstanceField)]) -> Vec<u32> {
@@ -648,6 +694,7 @@ pub(super) fn attach_wall_layers(
         pair_only,
         whole,
         bounded,
+        end_joins,
     } = if centreline_bodies {
         let ids: BTreeSet<u64> = wall_ids.iter().map(|&id| u64::from(id)).collect();
         crate::native_walls::native_walls_and_top_joins_into(rf, &ids, reads).unwrap_or_default()
@@ -694,6 +741,35 @@ pub(super) fn attach_wall_layers(
             if let Some(items) = items {
                 wall.fields
                     .push((WALL_BASE_CUTTERS_FIELD.into(), InstanceField::Vector(items)));
+            }
+        }
+        // #1410: the walls joined at each end of its location curve, in the
+        // order its record lists them. An id that does not fit an ElementId
+        // leaves that end out.
+        if let Some(joins) = wall.id.and_then(|id| end_joins.get(&u64::from(id))) {
+            let curve: Vec<InstanceField> = joins
+                .curve
+                .iter()
+                .flatten()
+                .map(|&value| InstanceField::Float { value, size: 8 })
+                .collect();
+            wall.fields
+                .push((WALL_CURVE_FIELD.into(), InstanceField::Vector(curve)));
+            for (name, listed) in WALL_END_JOINS_FIELDS.iter().zip(&joins.real) {
+                let items: Option<Vec<InstanceField>> = listed.as_ref().and_then(|ids| {
+                    ids.iter()
+                        .map(|&id| {
+                            Some(InstanceField::ElementId {
+                                tag: 0,
+                                id: u32::try_from(id).ok()?,
+                            })
+                        })
+                        .collect()
+                });
+                if let Some(items) = items {
+                    wall.fields
+                        .push(((*name).into(), InstanceField::Vector(items)));
+                }
             }
         }
         if let Some(only) = wall.id.and_then(|id| pair_only.get(&u64::from(id))) {
