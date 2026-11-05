@@ -17,22 +17,21 @@
   summary's `elements.folded_into_bodies` counts the folded pieces by IFC
   entity, since the diagnostics' `exported` counts include them. The tool
   output schemas change (`folded_into_bodies`), and so does the contract in
-  `docs/mcp-tools.json`. Measured with the scorer of #1404 (30480145) and
-  `base=none`, on code head 349cce4a (the commits after it are this fragment
-  and the contract): run 41954411755 finds no model failing the counts,
-  element membership, element storeys or levels checks, which failed on the
-  BIM4LCA office as built and at permit (47 coverings, and 599 of 12,974 and
-  of 13,020 rows, 542 of them curtain-wall members and the rest stair
-  flights and landings) and on the 5 Revit 2025 stair models before (runs
-  41949018446 and 41949021964). The models still failing there fail the
-  names and type object checks that #1406 fixes, and the office's rooms
-  check, which that scorer got wrong for family instances written as spaces
-  (9b51c1a8 corrects it). With both fixes merged on a throwaway branch
-  (0fd2d2a6, run 41954444137) 30 of 32 models passed every check and the
-  other two, the office files, failed only that rooms check; run 41957685928
-  (537d88ba, the fixed scorer) re-measures it and is not read yet. IFC
-  identity is not established: run 41954408419 (`base=main` at 07caf059)
-  found 32 of 34 models identical and the two office files different, and
-  this branch is based on 77d71cbb, since when main took two commits that
-  change the export of floors; run 41957584014 compares the head with
-  77d71cbb itself and is not read yet.
+  `docs/mcp-tools.json`. Measured with the scorer of #1404 and `base=none`,
+  on code head 349cce4a (the commits after it are this fragment and the
+  contract): run 41954411755 (scorer 30480145) finds no model failing the
+  counts, element membership, element storeys or levels checks, which failed
+  on the BIM4LCA office as built and at permit (47 coverings, and 599 of
+  12,974 and of 13,020 rows, 542 of them curtain-wall members and the rest
+  stair flights and landings) and on the 5 Revit 2025 stair models before
+  (runs 41949018446 and 41949021964). The models still failing there fail
+  the names and type object checks that #1406 fixes. With #1406 merged (a
+  throwaway branch, 537d88ba, scorer 9b51c1a8), run 41957685928 passes 32 of
+  32 models: the 6 reference models, the 24 Revit 2025 models and the office
+  as built and at permit. The IFC text `rvt-ifc` writes is unchanged by the
+  move: in run 41957584014 (`base=main` at 77d71cbb, the commit this branch
+  is based on, `scorers=none`) the `ifc.sha256` of 34 of 34 models, the
+  reference models, the four office files and the 24 Revit 2025 models, is
+  identical. Run 41954408419 against main at 07caf059 had the two office
+  files differ, which was main's #1403 and #1405 and not this change. The
+  held-out models and Autodesk's samples were not run.
