@@ -78,6 +78,14 @@ const ALONG_FEET: f64 = 1e-4;
 /// cut, square feet.
 const MIN_NOTCH_AREA: f64 = 1e-3;
 
+/// How far inside a side of the section a point is taken to test whether the
+/// section just beside the side is inside a slab, feet.
+const BESIDE_FEET: f64 = 1e-3;
+
+/// How near to parallel two segments are, as the sine of the angle between
+/// them, to be taken as parallel.
+const PARALLEL: f64 = 1e-9;
+
 /// A point in plan, feet.
 type Point = [f64; 2];
 
@@ -262,8 +270,12 @@ enum Cut<'a> {
     /// Nothing cuts it or crosses an end of it.
     Clear,
     /// One slab, which a cut pair names and a clean pair may, lies across its
-    /// top and nothing else cuts it.
-    Across(&'a Partner),
+    /// top and nothing else cuts it; a clean pair may also name other slabs
+    /// across its top, which cut it where their plan meets its section.
+    Across {
+        cutter: &'a Partner,
+        also: Vec<&'a Partner>,
+    },
     /// A pair is of another kind or leaves the column's form unknown.
     Refused,
 }
@@ -293,22 +305,28 @@ fn assess<'a>(
         }
         return Cut::Refused;
     }
+    let mut also: Vec<&Partner> = Vec::new();
     for id in &column.clean {
         let Some(partner) = partners.get(id) else {
             return Cut::Refused;
         };
         match partner.kind.as_str() {
             "IFCSLAB" => {
-                if !lies_clear(partner.span, base, top) && across != Some(*id) {
-                    return Cut::Refused;
+                if lies_clear(partner.span, base, top) || across == Some(*id) {
+                    continue;
                 }
+                if across.is_some() && crosses_top(partner.span, base, top) {
+                    also.push(partner);
+                    continue;
+                }
+                return Cut::Refused;
             }
             "IFCWALL" | "IFCCOVERING" | "IFCCOLUMN" => {}
             _ => return Cut::Refused,
         }
     }
     match across.and_then(|id| partners.get(&id)) {
-        Some(partner) => Cut::Across(partner),
+        Some(cutter) => Cut::Across { cutter, also },
         None => Cut::Clear,
     }
 }
@@ -408,7 +426,8 @@ impl Region {
 }
 
 /// The length of the segment `p..q` inside the counter-clockwise rectangle
-/// `window` (Cyrus-Beck).
+/// `window` (Cyrus-Beck); a segment along a side, within [`ALONG_FEET`] of it,
+/// is on the section's boundary and not inside it.
 fn length_inside(p: Point, q: Point, window: &[Point; 4]) -> f64 {
     let (dx, dy) = (q[0] - p[0], q[1] - p[1]);
     let (mut from, mut to) = (0.0_f64, 1.0_f64);
@@ -417,8 +436,8 @@ fn length_inside(p: Point, q: Point, window: &[Point; 4]) -> f64 {
         let (ex, ey) = (b[0] - a[0], b[1] - a[1]);
         let start = ex * (p[1] - a[1]) - ey * (p[0] - a[0]);
         let rate = ex * dy - ey * dx;
-        if rate.abs() < 1e-15 {
-            if start <= 0.0 {
+        if rate.abs() <= PARALLEL * ex.hypot(ey) * dx.hypot(dy) {
+            if start / ex.hypot(ey) <= ALONG_FEET {
                 return 0.0;
             }
             continue;
@@ -437,17 +456,35 @@ fn length_inside(p: Point, q: Point, window: &[Point; 4]) -> f64 {
 }
 
 /// Where along the side `a..b`, from 0 at `a` to 1 at `b`, the segment `p..q`
-/// crosses it.
+/// crosses it, and not along it.
 fn crossing(a: Point, b: Point, p: Point, q: Point) -> Option<f64> {
     let (ex, ey) = (b[0] - a[0], b[1] - a[1]);
     let (dx, dy) = (q[0] - p[0], q[1] - p[1]);
     let denominator = ex * dy - ey * dx;
-    if denominator.abs() < 1e-15 {
+    if denominator.abs() <= PARALLEL * ex.hypot(ey) * dx.hypot(dy) {
         return None;
     }
     let t = ((p[0] - a[0]) * dy - (p[1] - a[1]) * dx) / denominator;
     let u = ((p[0] - a[0]) * ey - (p[1] - a[1]) * ex) / denominator;
     (t > 0.0 && t < 1.0 && (0.0..=1.0).contains(&u)).then_some(t)
+}
+
+/// Where along the side `a..b` the point `v` lies, from 0 at `a` to 1 at `b`,
+/// if it is on the side, within [`ALONG_FEET`], and not at an end of it.
+fn on_side(a: Point, b: Point, v: Point) -> Option<f64> {
+    let (ex, ey) = (b[0] - a[0], b[1] - a[1]);
+    let t = ((v[0] - a[0]) * ex + (v[1] - a[1]) * ey) / (ex * ex + ey * ey);
+    (distance_to_segment(v, a, b) < ALONG_FEET && t > 0.0 && t < 1.0).then_some(t)
+}
+
+/// The area of the part of a slab's `region` inside the section `window`,
+/// square feet.
+fn overlap_area(window: &[Point; 4], region: &Region) -> f64 {
+    let mut area = doubled_area(&clip(&counter_clockwise(&region.outer), window)) / 2.0;
+    for hole in &region.voids {
+        area -= doubled_area(&clip(&counter_clockwise(hole), window)) / 2.0;
+    }
+    area
 }
 
 /// The part of a slab inside a column's section.
@@ -461,14 +498,9 @@ struct Notch {
 }
 
 /// The part of the slab with plan `region` inside the section `window`, none
-/// where an edge of the slab lies along a side of the section (which side of
-/// it the slab is on is not known), the part is no more than a nick or it is
-/// the whole section.
+/// where the part is no more than a nick or it is the whole section.
 fn notch(window: &[Point; 4], region: &Region) -> Option<Notch> {
-    let mut area = doubled_area(&clip(&counter_clockwise(&region.outer), window)) / 2.0;
-    for hole in &region.voids {
-        area -= doubled_area(&clip(&counter_clockwise(hole), window)) / 2.0;
-    }
+    let area = overlap_area(window, region);
     let section = doubled_area(window) / 2.0;
     if area < MIN_NOTCH_AREA || area > section - MIN_NOTCH_AREA {
         return None;
@@ -476,24 +508,17 @@ fn notch(window: &[Point; 4], region: &Region) -> Option<Notch> {
     let mut inside = 0.0;
     for polygon in region.loops() {
         for at in 0..polygon.len() {
-            let (p, q) = (polygon[at], polygon[(at + 1) % polygon.len()]);
-            if distance(p, q) < 1e-9 {
-                continue;
-            }
-            let along = (0..4).any(|side| {
-                let (a, b) = (window[side], window[(side + 1) % 4]);
-                distance_to_segment(p, a, b) < ALONG_FEET
-                    && distance_to_segment(q, a, b) < ALONG_FEET
-            });
-            if along {
-                return None;
-            }
-            inside += length_inside(p, q, window);
+            inside += length_inside(polygon[at], polygon[(at + 1) % polygon.len()], window);
         }
     }
+    // A side is inside the slab where the section's interior just beside it
+    // is: tested at the middle of each piece between the points where the
+    // slab's outline meets the side.
     let mut along_sides = 0.0;
     for side in 0..4 {
         let (a, b) = (window[side], window[(side + 1) % 4]);
+        let length = distance(a, b);
+        let inward = [-(b[1] - a[1]) / length, (b[0] - a[0]) / length];
         let mut cuts = vec![0.0, 1.0];
         for polygon in region.loops() {
             for at in 0..polygon.len() {
@@ -503,6 +528,7 @@ fn notch(window: &[Point; 4], region: &Region) -> Option<Notch> {
                     polygon[at],
                     polygon[(at + 1) % polygon.len()],
                 ));
+                cuts.extend(on_side(a, b, polygon[at]));
             }
         }
         cuts.sort_by(f64::total_cmp);
@@ -512,8 +538,12 @@ fn notch(window: &[Point; 4], region: &Region) -> Option<Notch> {
                 continue;
             }
             let middle = (from + to) / 2.0;
-            if region.contains([a[0] + middle * (b[0] - a[0]), a[1] + middle * (b[1] - a[1])]) {
-                along_sides += (to - from) * distance(a, b);
+            let beside = [
+                a[0] + middle * (b[0] - a[0]) + inward[0] * BESIDE_FEET,
+                a[1] + middle * (b[1] - a[1]) + inward[1] * BESIDE_FEET,
+            ];
+            if region.contains(beside) {
+                along_sides += (to - from) * length;
             }
         }
     }
@@ -613,9 +643,9 @@ pub(super) fn add_joined_column_quantities(entities: &mut Vec<IfcEntity>, pendin
                     ])
                     .collect()
             }
-            Cut::Across(slab) => {
+            Cut::Across { cutter, also } => {
                 let (Some((slab_base, _)), Some(slab_region), false) =
-                    (slab.span, slab.region.as_ref(), column.clean.is_empty())
+                    (cutter.span, cutter.region.as_ref(), column.clean.is_empty())
                 else {
                     continue;
                 };
@@ -626,6 +656,14 @@ pub(super) fn add_joined_column_quantities(entities: &mut Vec<IfcEntity>, pendin
                 let Ok(window) = <[Point; 4]>::try_from(corners) else {
                     continue;
                 };
+                if !also.iter().all(|other| {
+                    other
+                        .region
+                        .as_ref()
+                        .is_some_and(|region| overlap_area(&window, region) < MIN_NOTCH_AREA)
+                }) {
+                    continue;
+                }
                 let Some(cut) = notch(&window, slab_region) else {
                     continue;
                 };
