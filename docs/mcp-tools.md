@@ -350,6 +350,7 @@ How many building elements the model holds.
 |---|---|---|---|
 | `by_ifc_type` | object of integer by name | yes | By IFC entity, such as `IFCWALL`. |
 | `by_revit_class` | object of integer by name | yes | By the Revit class the record names, such as `Wall`. |
+| `folded_into_bodies` | object of integer by name | yes | By IFC entity: the elements the model holds that the export does not write as elements, each a further piece of an element of separate loops, written as an item of the body of the element that owns it. They are not in `total`, `by_ifc_type` or the lists, and the diagnostics' `exported` counts include them. |
 | `total` | integer | yes |  |
 
 ### ElementProvenance

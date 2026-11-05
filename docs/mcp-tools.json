@@ -1911,6 +1911,15 @@
               "description": "By the Revit class the record names, such as `Wall`.",
               "type": "object"
             },
+            "folded_into_bodies": {
+              "additionalProperties": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "description": "By IFC entity: the elements the model holds that the export does not\nwrite as elements, each a further piece of an element of separate\nloops, written as an item of the body of the element that owns it.\nThey are not in `total`, `by_ifc_type` or the lists, and the\ndiagnostics' `exported` counts include them.",
+              "type": "object"
+            },
             "total": {
               "format": "uint",
               "minimum": 0,
@@ -1920,7 +1929,8 @@
           "required": [
             "total",
             "by_ifc_type",
-            "by_revit_class"
+            "by_revit_class",
+            "folded_into_bodies"
           ],
           "type": "object"
         },
@@ -3243,6 +3253,15 @@
               "description": "By the Revit class the record names, such as `Wall`.",
               "type": "object"
             },
+            "folded_into_bodies": {
+              "additionalProperties": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "description": "By IFC entity: the elements the model holds that the export does not\nwrite as elements, each a further piece of an element of separate\nloops, written as an item of the body of the element that owns it.\nThey are not in `total`, `by_ifc_type` or the lists, and the\ndiagnostics' `exported` counts include them.",
+              "type": "object"
+            },
             "total": {
               "format": "uint",
               "minimum": 0,
@@ -3252,7 +3271,8 @@
           "required": [
             "total",
             "by_ifc_type",
-            "by_revit_class"
+            "by_revit_class",
+            "folded_into_bodies"
           ],
           "type": "object"
         },
