@@ -15,6 +15,18 @@
 # CodeQL analyses here) starts no run, so it has no CodeQL check to wait for
 # and no head analysis; `main` is still analysed on every push, so its
 # baseline stays current.
+#
+# A failed upload of the results is tried once more (#1499). `analyze` used to
+# upload its own SARIF, and the upload failed once with no finding, the log
+# ending at "Uploading results" (run 42128776536, Analyze (rust), on #1468), as
+# Scorecard's and zizmor's did; arm.sh refuses a head with a red check, so the
+# landing waited for a hand rerun. Now `analyze` writes the SARIF and does not
+# upload it, a step of its own uploads it and may fail without failing the job,
+# and the failure leaves the SARIF as an artifact. The retry is the job
+# `analyze-retry`: codeql-action refuses a second upload of one category in a
+# job (upload-lib.ts exports a sentinel into the job's GITHUB_ENV before it
+# sends anything), so a second step in the same job would fail at once whatever
+# the first died of. A real rejection of the file fails the retry, and the run.
 
 name: CodeQL
 
@@ -65,6 +77,121 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: none
+      # `upload: never` leaves the SARIF in `output`, with the category already
+      # in it (analyze passes it to the CLI), and uploads nothing. The overlay
+      # base database on `main` is still saved by this step.
       - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           category: "/language:${{ matrix.language }}"
+          upload: never
+          output: ${{ runner.temp }}/codeql-sarif
+      # The upload analyze did itself, with the same category. It waits for
+      # processing as analyze did, so a file code scanning rejects fails here.
+      - name: Upload the results to code scanning
+        id: sarif
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        with:
+          sarif_file: ${{ runner.temp }}/codeql-sarif
+          category: "/language:${{ matrix.language }}"
+      # Only a failed upload leaves one: `analyze-retry` uploads what it finds.
+      # The artifact also keeps the file for whoever looks into a rejection.
+      - name: Keep the SARIF for the retry
+        if: steps.sarif.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: codeql-sarif-${{ matrix.language }}
+          path: ${{ runner.temp }}/codeql-sarif
+          retention-days: 7
+          if-no-files-found: error
+
+  # Uploads once more the results of each language whose upload failed. A matrix
+  # job's outputs are one set shared by its legs, so the legs cannot say which of
+  # them failed: the artifacts do. Each carries one SARIF, named by the CodeQL
+  # language (javascript-typescript's is javascript.sarif), and the steps below
+  # are one per language. The analysis key is held at the one `analyze` has
+  # (`CODEQL_ACTION_ANALYSIS_KEY`, which the action reads before it asks the API
+  # for it), the category is the leg's, and the matrix input is what the leg's
+  # `toJson(matrix)` is (written out: zizmor reads `toJson(fromJSON(..))` as
+  # obfuscation), so that the retried upload is the same configuration in code
+  # scanning and leaves no second one holding alerts the next run closes.
+  # With nothing to retry the job does a checkout and an empty download.
+  analyze-retry:
+    name: Analyze upload retry
+    needs: analyze
+    if: ${{ !cancelled() && needs.analyze.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read # the checkout
+      actions: read # what `analyze` holds, for codeql-action's calls about the run
+      security-events: write # the upload to code scanning
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # A pattern that matches nothing downloads nothing and is not an error;
+      # `merge-multiple` puts the files of every match in one directory whatever
+      # their number (one match alone is otherwise not put in a directory of its
+      # own).
+      - name: Download the SARIF of each failed upload
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: codeql-sarif-*
+          merge-multiple: true
+          path: retry
+      - name: Say which uploads failed
+        if: hashFiles('retry/*.sarif') != ''
+        shell: bash
+        run: |
+          for file in retry/*.sarif; do
+            echo "::warning::the upload of CodeQL's results for $(basename "$file" .sarif) to code scanning failed; trying once more"
+          done
+      - name: Upload the actions results to code scanning (retry)
+        if: hashFiles('retry/actions.sarif') != ''
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        env:
+          CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/codeql.yml:analyze
+        with:
+          sarif_file: retry/actions.sarif
+          category: /language:actions
+          matrix: |-
+            {
+              "language": "actions"
+            }
+      - name: Upload the javascript-typescript results to code scanning (retry)
+        if: hashFiles('retry/javascript.sarif') != ''
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        env:
+          CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/codeql.yml:analyze
+        with:
+          sarif_file: retry/javascript.sarif
+          category: /language:javascript-typescript
+          matrix: |-
+            {
+              "language": "javascript-typescript"
+            }
+      - name: Upload the python results to code scanning (retry)
+        if: hashFiles('retry/python.sarif') != ''
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        env:
+          CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/codeql.yml:analyze
+        with:
+          sarif_file: retry/python.sarif
+          category: /language:python
+          matrix: |-
+            {
+              "language": "python"
+            }
+      - name: Upload the rust results to code scanning (retry)
+        if: hashFiles('retry/rust.sarif') != ''
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        env:
+          CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/codeql.yml:analyze
+        with:
+          sarif_file: retry/rust.sarif
+          category: /language:rust
+          matrix: |-
+            {
+              "language": "rust"
+            }
