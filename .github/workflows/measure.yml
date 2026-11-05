@@ -259,6 +259,7 @@ jobs:
   plan:
     name: Plan the shards
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       timing: ${{ steps.plan.outputs.timing }}
@@ -868,6 +869,7 @@ jobs:
     # the verdict, which reads such a run as NOT MEASURED unless a result fails.
     if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: read
       checks: write # the verdict, on the measured commit
@@ -931,6 +933,7 @@ jobs:
     name: Compare
     needs: [plan, measure]
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       # The semantic diff's script and the IfcSpace kinds' total (#1437), from the
       # workflow's own ref (this job holds no secret and runs no measured code).

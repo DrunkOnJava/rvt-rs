@@ -30,6 +30,7 @@ jobs:
   zizmor:
     name: zizmor
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: read
       actions: read
