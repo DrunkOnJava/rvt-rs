@@ -34,9 +34,11 @@ The region of an Area is its circuit rebuilt from its lines:
 3. Where one side ends and the next begins, meet their curves where they cross, taking the crossing nearest the lines' shared end. Where the curves do not cross near it, join the two ends with a straight step.
 4. The outer loop is the circuit's. The holes are the outer loops of the components that the circuit encloses.
 
+The reader is bounded against a crafted file: a circuit over 10,000 sides, or that would make over 10,000 edges once its lines are cut where their offset changes, or whose lines have over 20,000 offset parts together, is not built (`area_circuit_side_not_read`), and so is a circuit one of whose lines has no `u32` ElementId (the Area's list of lines would not name a line its outline uses).
+
 The checks: the outer loop's area, exact for arcs, equals the circuit's `m_area` to 1e-6 relative. Each hole's area equals its circuit's. The Area's point lies inside the outer loop and in no hole. An Area that fails a check, or whose plan, circuit, segments or lines are not read, keeps RE-317's refusal, as before (fail closed).
 
-The exporter takes this region first, where it is read and passes the checks above, and otherwise the region of the lines' arrangement with RE-330's joins (RE-317, RE-330). Neither is asked of a group of lines that cannot be read as a whole: a line in a non-primary design option, at a stray height, with copies that disagree, or missing. Where both are found they have the same region (16 of 16 on `rac_advanced`, 30 of 30 on the office); section 8 has what was measured. An Area refused by both says the plan topology's reason (one of the five `area_*` reasons above) rather than the arrangement's.
+The exporter takes this region first, where it is read and passes the checks above, and otherwise the region of the lines' arrangement with RE-330's joins (RE-317, RE-330). Neither is asked of a group of lines that cannot be read as a whole: a line in a non-primary design option, at a stray height, with copies that disagree, or missing. Where both are found they must be the same region: the topology has no arc, the same net area to 1e-6 relative and the same corners within 1e-4 ft (a vertex where two straight edges continue on in a line is not a corner), and each hole of one is a hole of the other. An Area whose two regions differ has no body and says `area_regions_disagree`, so that a file nothing was measured on cannot disagree silently. Measured at `e9124b3a`, before the check existed: the two readers' regions were the same on 16 of 16 Areas of `rac_advanced` where both are found, and on 30 of 30 on the office; with the check, not yet measured, and an Area it refuses would be counted under `area_regions_disagree` in `exported.area_body_refusals`. An Area refused by both says the plan topology's reason (one of the six `area_*` reasons of the diagnostics: `area_not_in_one_plan_topology`, `area_circuit_not_found`, `area_circuit_side_not_read`, `area_circuit_area_differs`, `area_arc_not_finite`, `area_point_outside_circuit`) rather than the arrangement's.
 
 Arcs are written as arcs, in the form Revit's export gives them: an `IfcIndexedPolyCurve` of lines and three-point arcs, a span over a half turn as two arcs (a circle as two half arcs), and an arc whose middle lies within 1.6e-5 ft of its chord, which the writer's micrometre rounding could put on it, as a line. The outline is checked as it is written: its area, arcs as arcs, must be the circuit's saved area to 1e-6 relative, as must the rebuilt edges'; an arc whose centre, radius or sweep is not finite, or that turns more than once, refuses the Area (`area_arc_not_finite`). Only the test of the Area's point uses chords (of at most 2°). Where two straight edges continue in a straight line (a line cut where another meets it), the point between them is left out unless another segment of the plan ends there: RE-317 §3 keeps that point where a third line meets, and so does this (a segment that no circuit runs except as a spur does not count, as RE-317 prunes a line with a free end). Revit's IFC4 export of the office keeps those points; the IFC2X3 export of `rac_advanced` keeps them at some Areas and not at others, so the rule is the office's (section 8).
 
@@ -120,48 +122,13 @@ The two Snowdon Towers files are the recorded Autodesk 2024 samples (`research/a
 
 **The 2020 save against the three.js IFC2X3 export of RE-330 section 1** (`tools/re/space_profiles_vs_ifc.py model.ifc rac_advanced_sample_project.ifc --match globalid`, the export fetched by hand from its pin and never stored): `IfcSpace` in rvt-rs 116, in Revit 116 (91 rooms and 25 Areas); in both 116, **only in rvt-rs 0, only in Revit 0**. For the Areas that is **written 25, Revit's 25, extra 0, missing 0**. All 25 are within 0.1% in area and within 0.01 ft in outline, boundary and in the lowest and highest vertex of the body; the largest outline and boundary distance of any of the 25 is below the 5 decimals the check prints (0.00001 ft), the arc's included. **This is out of sample for the topology:** nothing in the plan-topology reader was read off that export; its offsets and loops come from the file (`m_schemeSegments`, `PlanCircuit`), and its checks are against the area Revit saves in the file and the Area's point. (RE-330's joins were read off the export, so for them it was in-sample.) The export is not one of Revit's IFC4 exports and is counted apart, as RE-330 says, and it is never used to remove a value or to settle a disagreement between exporters.
 
-| Area | rvt-rs ft2 | Revit's ft2 | relative difference |
-|---:|---:|---:|---:|
-| 1 | 1978.334 | 1978.334 | 1.0e-10 |
-| 2 | 1040.444 | 1040.444 | 5.7e-08 |
-| 3 | 6912.840 | 6912.840 | 2.2e-08 |
-| 4 | 1203.391 | 1203.391 | 3.8e-15 |
-| 5 | 78.413 | 78.413 | 1.8e-15 |
-| 6 | 1444.637 | 1444.637 | 9.0e-11 |
-| 7 | 897.423 | 897.423 | 1.1e-08 |
-| 8 | 3658.544 | 3658.544 | 1.4e-08 |
-| 9 | 446.881 | 446.881 | 6.4e-08 |
-| 10 | 6309.710 | 6309.710 | 2.0e-08 |
-| 11 | 77.111 | 77.111 | 2.0e-07 |
-| 12 | 3709.916 | 3709.916 | 1.5e-08 |
-| 13 | 348.138 | 348.138 | 7.1e-08 |
-| 14 | 474.855 | 474.855 | 2.5e-15 |
-| 15 | 183.525 | 183.525 | 6.2e-16 |
-| 16 | 2386.907 | 2386.907 | 5.4e-11 |
-| 17 | 3658.442 | 3658.442 | 1.1e-08 |
-| 18 | 896.604 | 896.604 | 1.4e-08 |
-| 19 | 6450.970 | 6450.970 | 2.4e-08 |
-| 20 | 3658.442 | 3658.442 | 1.1e-08 |
-| 21 | 896.604 | 896.604 | 1.4e-08 |
-| 22 | 6889.133 | 6889.133 | 6.3e-09 |
-| 23 | 184.063 | 184.063 | 9.3e-16 |
-| 24 | 67.576 | 67.576 | 1.9e-07 |
-| 25 | 82.474 | 82.474 | 2.0e-07 |
+The worst relative difference in area is 2.0e-7, on three four-sided Areas of under 83 ft2 (about 1.5e-5 ft2); it was not examined further. The 91 rooms are not part of this change and score as before. **The per-Area figures of this export are not kept in this report** (Griffin's policy for a reference with no licence stated, #1377: counts only, because the export's terms were never checked, as for BIMcollab's example): the 25-row table that an earlier version of this report held, and the per-Area vertex counts and areas below, are gone. The archived commits of #1371 carry that earlier version; it is already public in that history, and the policy is applied from here on.
 
-The worst relative difference in area is 2.0e-7, on Areas 11, 24 and 25, four-sided Areas of under 83 ft2 (about 1.5e-5 ft2); it was not examined further. The 91 rooms are not part of this change and score as before.
+**The arc** (`probe_re333_area_plan_topology`, the 2015 to 2020 state): the topology gives one Area with an arc edge, a loop of 33 vertices and an exact area that is the circuit's to 1e-6. rvt-rs writes the profile as an `IfcIndexedPolyCurve` of `IfcLineIndex` and `IfcArcIndex` segments; the export writes it as an `IfcCompositeCurve` of an `IfcPolyline` and an `IfcTrimmedCurve` over an `IfcCircle`. Both are true curves, so it is judged as #1365 has it, in IfcOpenShell's fine tessellation beside the default one (both files in Revit's internal feet, the top face of the body): at both the Area is within 0.1% in area and below 0.00001 ft in boundary distance of the export's. The symmetric difference of the two faces is the same at both tessellations, so it is not a chord's; what makes it is not examined. At `2689cfe0` (run 41882754673) the arc was cut into 2 degree chords.
 
-**Area 10, the arc** (`probe_re333_area_plan_topology`, the 2015 to 2020 state): the topology gives one arc edge, a loop of 33 vertices and an exact area of 6309.726245 ft2, the circuit's area to 1e-6. rvt-rs writes the profile as an `IfcIndexedPolyCurve` of `IfcLineIndex` and `IfcArcIndex` segments; the export writes it as an `IfcCompositeCurve` of an `IfcPolyline` and an `IfcTrimmedCurve` over an `IfcCircle`. Both are true curves, so it is judged as #1365 has it, in IfcOpenShell's fine tessellation beside the default one (both files in Revit's internal feet, the top face of the body):
+**Vertices against the same export** (the scorer's vertex-to-vertex distance, 0.01 ft; the 2020 save): the merged head's Areas are within it on **17 of 25**; main's 16 on **9 of 16**. Of the 8 the head misses, 5 keep a vertex where a third line meets a straight outline that the export drops, 2 have more vertices in the export than in the head, and 1, the arc, is meshed in a different number of vertices in the two files. At `2689cfe0`, before the vertex rule, it was 21 of 25. So the export keeps a vertex at some points where a third line meets and not at others, and this file does not settle the rule. The rule keeps such a vertex because the office's Revit IFC4 export keeps it (below); the IFC2X3 export is counted apart and is never used to settle a disagreement between exporters.
 
-| Tessellation | rvt-rs top face ft2 | Export's ft2 | Relative difference | Symmetric difference ft2 | Boundary distance ft |
-|---|---:|---:|---:|---:|---:|
-| default | 6309.7097 | 6309.7096 | 2.0e-8 | 0.0012 | below 0.00001 |
-| fine (1e-5 ft, 0.03 rad) | 6309.7263 | 6309.7262 | 2.0e-8 | 0.0012 | below 0.00001 |
-
-The symmetric difference is the same at both tessellations, so it is not a chord's; what makes it is not examined. At `2689cfe0` (run 41882754673) the arc was cut into 2 degree chords and Area 10's outline was 0.0017 ft off the export.
-
-**Vertices against the same export** (the scorer's vertex-to-vertex distance, 0.01 ft; the 2020 save): the merged head's Areas are within it on **17 of 25**; main's 16 on **9 of 16**. The head misses Areas 3, 14, 17, 19 and 20, which keep a vertex where a third line meets a straight outline that the export drops (29 against 26, 5 against 4, 6 against 4, 26 against 20, 5 against 4), Areas 7 and 12, where the export has vertices more than the head (8 against 6, 17 against 16), and Area 10, where the two files' arcs are meshed in different numbers of vertices (72 against 65). At `2689cfe0`, before the vertex rule, it was 21 of 25. So the export keeps a vertex at some points where a third line meets and not at others, and this file does not settle the rule. The rule keeps such a vertex because the office's Revit IFC4 export keeps it (below); the IFC2X3 export is counted apart and is never used to settle a disagreement between exporters.
-
-**The 2022 and 2023 saves are of the later state of the model** (RE-324 section 4: 16 north-edge lines moved 0.0246 ft; measured on `e9124b3a`, and the same at `2689cfe0`). The topology tracks the save's own state: between the 2020 and the 2022 save, Areas 1, 2, 3, 10, 12, 19 and 22 differ by 1.78, 0.99, 0.23, 0.23, 2.77, 0.23 and 2.77 ft2 (0.23 is 9.49 ft of outline times 0.0246 ft, so these outlines run along the moved lines), the 2022 save differs from the 2015 to 2020 export by the same amounts, and the other 18 Areas are equal (below 0.0001 ft2). The 2024 save differs from the 2020 save by the same amounts as the 2022 save. So the 2022 to 2024 saves are not scored against the export.
+**The 2022 and 2023 saves are of the later state of the model** (RE-324 section 4: 16 north-edge lines moved 0.0246 ft; measured on `e9124b3a`, and the same at `2689cfe0`). The topology tracks the save's own state: between the 2020 and the 2022 save, 7 Areas differ, by 0.23 to 2.77 ft2 (0.23 is 9.49 ft of outline times 0.0246 ft, so these outlines run along the moved lines), the 2022 save differs from the 2015 to 2020 export by the same amounts in those 7, and the other 18 Areas are equal (below 0.0001 ft2). The 2024 save differs from the 2020 save by the same amounts as the 2022 save. So the 2022 to 2024 saves are not scored against the export.
 
 **RE-330's 16 joined Areas against their topology loops** (main's IFC against the head's, by GlobalId, the same save, the Areas' top surfaces; run 41894715743): on every save where main draws them, the 2015 to 2020, 2022, 2023 and 2024 saves (9 saves), **16 of 16 are equal**, with a symmetric difference and a boundary distance both below the 5 decimals the check prints (0.00001 ft2, 0.00001 ft). That includes the 10 that RE-330 draws by carrying a line on or by a connector, which the topology draws from the lines' offsets. It confirms RE-330's joins from the file's own data. The marker changes with it: the Areas main says `area_boundary` or `area_boundary_joined` now say `area_plan_topology`, because the topology comes first; the other two values are written where the topology is not read or fails a check.
 
@@ -176,3 +143,14 @@ At `2689cfe0`, before the vertex rule, the office's Area 1 had 4 vertices where 
 **The warning for dropped chain records** now appears only on a file that holds an Area or an area boundary line: Snowdon Towers Architectural (14,881) and Structural (2,932), 2 of the 58 samples and neither office file; Plumbing, Electrical and HVAC, which hold none, no longer have it (run 41894715743; at `2689cfe0` it was on five).
 
 Not scored against the export: the 2015 to 2019 saves (the same 2015 to 2020 state as the 2020 save; the 2015 save scored the same at `2689cfe0`), the 2025 to 2027 saves, and everything in the tables but the 2020 save's Areas.
+
+## 9. What is written without a Revit export, and the gate
+
+**Decision (Griffin, 2026-11-05, "Ship, labelled, with a gate").** The Areas of Revit 2025 to 2027 and the 108 Area spaces of the recorded Autodesk 2024 Snowdon Towers samples (101 Architectural, 7 Structural, counted at `e9124b3a`, 98 of them with a body) are written by default, each saying `SpaceOutlineSource` `area_plan_topology`. They are **not measured against any Revit export**: none exists for these files. The evidence for them is:
+
+- the loop drawn for each Area equals the area Revit saves in the file for that loop (`PlanCircuit m_area`, to 1e-6 relative, arcs integrated), and holds the Area's point;
+- on Revit 2025 to 2027, the same project's 2024 save gives the same Areas (`rac_advanced`: the same 25 GlobalIds, numbers, names, storeys, body areas and heights on the 2025, 2026 and 2027 saves).
+
+**The gate.** They stay written only if the held-out run shows no Area written that Revit's export lacks (`only in rvt-rs` 0) on every Revit 2025 to 2027 model with Areas. The final Measure of the head that lands is where that figure is read; it is not measured on `e9124b3a`. If it is not 0, the rule is not rewritten without Griffin's say.
+
+The docs say the same: `docs/rooms.md`, `docs/status.md`, `docs/evidence.md`, `docs/supported-profile.md`, `docs/support-matrix.json` and the changelog fragments.

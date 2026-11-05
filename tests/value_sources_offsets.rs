@@ -91,7 +91,7 @@ use crate::element_parameters::nordic_dir;
 use rvt::ifc::entities::{IfcEntity, ProfileDef, PropertyValue};
 use rvt::ifc::{ExportOptions, IfcModel, run_export};
 use rvt::research::element_record_plan_profiles::SKETCH_OWNER_OFFSET;
-use rvt::research::native_document::{Options, extract_graphs};
+use rvt::research::native_document::{NATIVE_RELEASES, Options, extract_graphs};
 use rvt::research::native_family_forms::family_records_in;
 use rvt::research::native_form_geometry::FormDocument;
 use rvt::research::partition_area_records::{AREA_POINT_OFFSET, NARROW_POINT_OFFSET};
@@ -236,8 +236,15 @@ const COVERAGE: &[(&str, Coverage)] = &[
     (
         "partition_area_boundary_lines",
         Recorded {
-            readers: &["area_boundary_lines", "area_plan_topology"],
-            rules: &["agreeing", "native"],
+            readers: &["area_boundary_lines"],
+            rules: &["agreeing"],
+        },
+    ),
+    (
+        "native_area_plan_topology",
+        Recorded {
+            readers: &["area_plan_topology"],
+            rules: &["native"],
         },
     ),
     (
@@ -404,11 +411,13 @@ const MIN_READERS: &[(&str, &[&str])] = &[
         ],
     ),
     // `area_boundary_lines` and `area_point` (an Area drawn from the
-    // arrangement of its lines) are not pinned: the office's 30 Areas all have
-    // a region from Revit's plan topology, which is taken first, and no other
-    // model of this test has an Area. They are exercised by an Area whose plan
-    // topology is not read or fails a check, such as a scheme whose Areas are
-    // on two plans; no model of the gate has one.
+    // arrangement of its lines, `partition_area_boundary_lines`) are pinned on
+    // no model: the office's 30 Areas all have a region from Revit's plan
+    // topology, which is taken first, and no other model of this gate is known
+    // to have an Area drawn from its lines. They are exercised only by an Area
+    // whose plan topology is not read or fails a check, such as a scheme whose
+    // Areas are on two plans; a regression in `note_area_sources` would pass
+    // this test until a model of that kind is in the gate.
 ];
 
 /// The ElementId an `Identifier` field holds: `m_id.m_id64` from Revit 2024,
@@ -873,6 +882,7 @@ fn check_topology_areas(rf: &mut RevitFile, areas: &BTreeMap<u32, TopologyParts>
         .collect();
     let options = Options {
         selected_ids: wanted,
+        releases: NATIVE_RELEASES,
         ..Options::default()
     };
     let mut objects: BTreeMap<u64, RecordObjects> = BTreeMap::new();

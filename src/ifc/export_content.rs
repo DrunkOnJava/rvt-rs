@@ -297,7 +297,8 @@ fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
     let from_lines = decoded.fields.iter().any(|(field, value)| {
         field == crate::element_record_plan_profiles::PLAN_PROFILE_SOURCE_FIELD
             && matches!(value, InstanceField::String(source)
-                if source == crate::partition_area_records::AREA_BOUNDARY_SOURCE)
+                if source == crate::partition_area_records::AREA_BOUNDARY_SOURCE
+                    || source == crate::partition_area_records::AREA_TOPOLOGY_SOURCE)
     });
     if !from_lines {
         return None;
@@ -550,16 +551,18 @@ fn area_property_set(decoded: &DecodedElement, drawn: Option<&AreaDrawn>) -> Pro
     // give it a region, and written without a body, so without an outline,
     // where they do not.
     if let Some(drawn) = drawn {
+        // An Area drawn from the loop of Revit's plan topology says so in its
+        // body and profile sources (RE-333): it was read from native records,
+        // not from the lines' frames.
+        let source = if drawn.topology {
+            crate::partition_area_records::AREA_TOPOLOGY_SOURCE
+        } else {
+            crate::partition_area_records::AREA_BOUNDARY_SOURCE
+        };
         for (name, value) in [
-            (
-                "BodySource",
-                PropertyValue::Text(crate::partition_area_records::AREA_BOUNDARY_SOURCE.into()),
-            ),
+            ("BodySource", PropertyValue::Text(source.into())),
             ("ProfileResolved", PropertyValue::Boolean(true)),
-            (
-                "ProfileSource",
-                PropertyValue::Text(crate::partition_area_records::AREA_BOUNDARY_SOURCE.into()),
-            ),
+            ("ProfileSource", PropertyValue::Text(source.into())),
             (
                 "ProfileVertexCount",
                 PropertyValue::Integer(drawn.profile.vertex_count() as i64),

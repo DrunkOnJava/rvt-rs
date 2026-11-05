@@ -67,8 +67,16 @@ pub const PARAMETER_TOLERANCE: f64 = 1e-9;
 pub const SEGMENT_POINT_TOLERANCE_FEET: f64 = 1e-6;
 
 /// The most sides a circuit may have to be read: a loop of a room is never
-/// near this many.
+/// near this many. Also the most edges its sides may make once cut where
+/// their area rule's offset changes: a circuit over it is refused before it
+/// is built, so that a crafted topology cannot ask for sides times parts
+/// edges.
 pub const MAX_CIRCUIT_SIDES: usize = 10_000;
+
+/// The most offset parts the lines of one circuit may have, summed over its
+/// sides (a line run twice counts twice). Cutting a side is quadratic in its
+/// parts, so this bounds the work of one circuit.
+pub const MAX_CIRCUIT_OFFSET_PARTS: usize = 20_000;
 
 /// How close, feet, two segments' ends must be to be the same node of a plan
 /// topology (RE-317's node tolerance).
@@ -828,9 +836,11 @@ fn circuit_edges(
     if circuit.sides.len() > MAX_CIRCUIT_SIDES {
         return None;
     }
-    // A side's edges, and the end of its unmoved line.
-    type Side = (Vec<Edge>, (f64, f64));
+    // How many edges a side made, and the end of its unmoved line.
+    type Side = (usize, (f64, f64));
     let mut pieces: Vec<Side> = Vec::new();
+    let mut edges: Vec<Edge> = Vec::new();
+    let mut parts = 0usize;
     for (line, major, sub) in without_spurs(&circuit.sides) {
         let backwards = sub < 0;
         let index = if backwards { !sub } else { sub };
@@ -847,15 +857,22 @@ fn circuit_edges(
         {
             return None;
         }
-        let mut edges = curve.edges(u0, u1)?;
+        parts = parts.checked_add(curve.offsets.len())?;
+        if parts > MAX_CIRCUIT_OFFSET_PARTS {
+            return None;
+        }
+        let mut side_edges = curve.edges(u0, u1)?;
         let mut unmoved_end = end;
         if backwards {
-            edges = edges.into_iter().rev().map(reversed).collect();
+            side_edges = side_edges.into_iter().rev().map(reversed).collect();
             unmoved_end = start;
         }
-        pieces.push((edges, unmoved_end));
+        if edges.len().checked_add(side_edges.len())? > MAX_CIRCUIT_SIDES {
+            return None;
+        }
+        pieces.push((side_edges.len(), unmoved_end));
+        edges.extend(side_edges);
     }
-    let mut edges: Vec<Edge> = pieces.iter().flat_map(|(e, _)| e.clone()).collect();
     if edges.is_empty() {
         return None;
     }
@@ -869,7 +886,7 @@ fn circuit_edges(
     let mut third: Vec<bool> = vec![false; n];
     let mut at = 0;
     for (side_edges, unmoved_end) in &pieces {
-        at += side_edges.len();
+        at += side_edges;
         let (prev, next) = ((at + n - 1) % n, at % n);
         let (a, b) = (edges[prev], edges[next]);
         let reach = distance(a.end(), *unmoved_end) + distance(b.start(), *unmoved_end);
@@ -1073,11 +1090,8 @@ fn region(
     let mut holes = Vec::new();
     let mut hole_arcs = Vec::new();
     let mut test_holes = Vec::new();
-    let mut line_ids: BTreeSet<u32> = circuit
-        .sides
-        .iter()
-        .filter_map(|side| u32::try_from(side.0).ok())
-        .collect();
+    let mut line_ids: BTreeSet<u32> = BTreeSet::new();
+    add_line_ids(&mut line_ids, circuit)?;
     for hole_id in plan.holes.get(&place.circuit).into_iter().flatten() {
         let hole = plan.circuits.get(hole_id).ok_or(REFUSED_NO_CIRCUIT)?;
         let hole_outline = circuit_edges(plan, hole, curves).ok_or(REFUSED_SIDE)?;
@@ -1096,11 +1110,7 @@ fn region(
         holes.push(hole_written.points);
         hole_arcs.push(hole_written.arcs);
         test_holes.push(edges_polyline(&hole_outline.edges));
-        line_ids.extend(
-            hole.sides
-                .iter()
-                .filter_map(|side| u32::try_from(side.0).ok()),
-        );
+        add_line_ids(&mut line_ids, hole)?;
     }
     if !inside(&test_outer, place.point) || test_holes.iter().any(|h| inside(h, place.point)) {
         return Err(REFUSED_POINT);
@@ -1114,6 +1124,16 @@ fn region(
         line_ids,
         records,
     })
+}
+
+/// The ElementIds of the lines `circuit` runs, added to `ids`. A side whose
+/// line has no `u32` ElementId refuses the Area: the geometry would use it
+/// and the list of lines would not name it.
+fn add_line_ids(ids: &mut BTreeSet<u32>, circuit: &Circuit) -> Result<(), &'static str> {
+    for side in &circuit.sides {
+        ids.insert(u32::try_from(side.0).map_err(|_| REFUSED_SIDE)?);
+    }
+    Ok(())
 }
 
 /// The native records a region was read from, one part each: the Area's

@@ -41,6 +41,11 @@
   source are the maintainer's. No Revit IFC4 export of these Areas exists: the
   IFC2X3 export is the only external check, and it is out of sample for this
   rule because the topology's loops and the figures they are checked against
-  were not read off it. The figures above were measured on the archived head
-  `e9124b3a` of #1371 and are not yet measured on the head that lands; the
-  PR names the run that is.
+  were not read off it, and only its counts are kept (its terms were never
+  checked). Where the plan topology and the lines' arrangement both give a
+  region they must be the same one, else the Area has no body and says
+  `area_regions_disagree`; an Area drawn from the topology has `BodySource`
+  `native_area_plan_topology` and a value source `area_plan_topology` that
+  names the records it was read from. The figures above were measured on the
+  archived head `e9124b3a` of #1371 and are not yet measured on the head that
+  lands; pull request #1428 names the run that is.

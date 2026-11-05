@@ -4095,7 +4095,7 @@ pub(crate) fn build_export_diagnostics_and_decisions(
     let dropped_chain_entries = rf.dropped_chain_entries();
     if dropped_chain_entries > 0 {
         warnings.push(format!(
-            "{dropped_chain_entries} declared chain record(s) of this Revit 2024 or later file have an entry block that does not read (it does not fit the record, or an entry's second word is not -1); an Area among them is not seen (RE-333)."
+            "{dropped_chain_entries} declared chain record(s), counted by ElementId, of this Revit 2024 or later file have an entry block that does not read in some partition (it does not fit the record, or an entry's second word is not -1); an Area among them is not seen, and an area boundary line among them is not among the lines an Area is checked against (RE-333)."
         ));
     }
     // #328: a failed read of the project's phases leaves the filter empty, so
