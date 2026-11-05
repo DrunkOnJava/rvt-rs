@@ -169,9 +169,10 @@ fn boxes_touch(a: &[f64; 6], b: &[f64; 6]) -> bool {
     (0..3).all(|axis| a[axis + 3].min(b[axis + 3]) - a[axis].max(b[axis]) > OVERLAP_FEET)
 }
 
-/// Whether a wall's body is RE-320's stepped one or #1384's, cut at the top
-/// of the floor it stands on: its `extrusion` is still the whole prism, and an
-/// opening voids every piece of the body.
+/// Whether a wall's body is RE-320's stepped one, #1384's, cut at the top
+/// of the floor it stands on, or #1396's, drawn to the wall beneath it: its
+/// `extrusion` is still the whole prism, and an opening voids every piece of
+/// the body.
 fn is_stepped(set: Option<&PropertySet>) -> bool {
     set.is_some_and(|set| {
         set.properties
@@ -182,6 +183,7 @@ fn is_stepped(set: Option<&PropertySet>) -> bool {
                 }
                 (name, PropertyValue::Text(_)) => {
                     name == super::export_content::WALL_BASE_SOURCE_PROPERTY
+                        || name == super::export_content::WALL_END_SOURCE_PROPERTY
                 }
                 _ => false,
             })
