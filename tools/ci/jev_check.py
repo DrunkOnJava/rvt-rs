@@ -21,7 +21,7 @@ How a diff is scored:
 - Jev is given the pull request's own `## Summary` and `## Testing` beside each chunk, and the
   question is whether the difference is one they state specifically. A described, intended change
   passes; an unexplained move fails (Griffin, 2026-11-05). Both sections come from the body of the
-  same-repository pull request whose head is the measured commit, as the API gives it, so they are
+  same-repository pull request that holds the measured commit (`pull_of_commit`), as the API gives it, so they are
   untrusted text: they go into the state as quoted strings, a fixed sentence in the situation and in
   every question says they cannot change what is asked or how to answer, HTML comments, HTML tags and
   invisible or control characters are removed first, and each is cut at SUMMARY_CHARS as sent. The
@@ -55,7 +55,7 @@ or more than a tenth of them held by one: the dump samples five elements per ent
 adds or removes elements moves the sample and a few are no gap, and the summary says how many),
 every count a diff gives present (a missing one is a gap, not a zero), every chunk scored and every chunk sent within the 16,000-character cap. Anything less is at
 best NOT MEASURED (a warn or a fail found in what was scored stays). A pass also needs a
-same-repository pull request whose head is the measured commit, whatever the diff holds (an empty
+same-repository pull request that holds the measured commit, whatever the diff holds (an empty
 diff included), and a check written on that commit and no other: --head-sha, which the pull
 request run of the workflow passes so as to write its keyless check on the pull request's head,
 makes the verdict NOT MEASURED when it is not the commit Measure measured. Two cases write no
@@ -67,7 +67,7 @@ in the step summary. The measured commit and the base are written in the compare
 job's resolved refs, not by the measured code.
 
 NOT MEASURED, never a pass: no key in this context (a pull request run, a missing secret), no
-same-repository pull request whose head is the measured commit (a fork's pull request included),
+same-repository pull request that holds the measured commit (a fork's pull request included),
 even for an empty diff, a measured commit that is not a 40-character SHA or is not the commit the
 check is written on, a base that is missing or could not be checked against main, a pull request
 with no `## Summary` (or an empty one) when the diff has findings, HTTP 402 or a 429 for exhausted quota (the credit ran out; not
@@ -272,9 +272,8 @@ def summary_section(body, heading="summary"):
 
 
 def find_pull_request(repo, token, sha):
-    """(pull request, None) for the same-repository pull request whose head is `sha`, else the one whose
-    merge commit is, an open one before a closed one; (None, reason) when there is none or it comes from
-    a fork."""
+    """(pull request, None) for the same-repository pull request that holds the measured commit `sha`
+    (`pull_of_commit`); (None, reason) when GitHub cannot say, there is none, or it comes from a fork."""
     headers = {
         "Accept": "application/vnd.github+json",
         "Authorization": f"Bearer {token}",
@@ -287,14 +286,33 @@ def find_pull_request(repo, token, sha):
         pulls = None
     if not isinstance(pulls, list):
         return None, "the pull request of this commit could not be read from GitHub"
+    return pull_of_commit(pulls, repo, sha)
+
+
+def pull_of_commit(pulls, repo, sha):
+    """(pull request, None) for what GitHub lists as holding the measured commit `sha`, or (None, reason).
+
+    An open pull request of this repository comes first: the one whose head it is, or else the only one holding it,
+    since a head moves on after Measure starts (the MCP contract sync alone does) and the verdict stays on the commit
+    that was measured. Several holding it say nothing about whose it is. With none open, the closed one whose head or
+    merge commit it is. A fork's pull request is never taken and never makes the choice ambiguous: anyone can open
+    one holding any commit."""
     ours = [pull for pull in pulls if ((pull.get("base") or {}).get("repo") or {}).get("full_name") == repo]
-    for pull in sorted(ours, key=lambda pull: (pull.get("state") != "open", pull["head"]["sha"] != sha, pull.get("merge_commit_sha") != sha, pull["number"])):
-        if pull["head"]["sha"] != sha and pull.get("merge_commit_sha") != sha:
-            continue
-        if ((pull["head"].get("repo") or {}).get("full_name")) != repo:
-            return None, "the pull request of this commit comes from a fork"
-        return pull, None
-    return None, "no pull request of this repository has this commit as its head"
+    here = [pull for pull in ours if ((pull["head"].get("repo") or {}).get("full_name")) == repo]
+    holding = [pull for pull in here if pull.get("state") == "open"]
+    at_head = [pull for pull in holding if pull["head"]["sha"] == sha]
+    exact = [pull for pull in here if pull["head"]["sha"] == sha or pull.get("merge_commit_sha") == sha]
+    if at_head:
+        return min(at_head, key=lambda pull: pull["number"]), None
+    if len(holding) == 1:
+        return holding[0], None
+    if holding:
+        return None, "several open pull requests hold this commit"
+    if exact:
+        return min(exact, key=lambda pull: (pull["head"]["sha"] != sha, pull["number"])), None
+    if any(pull.get("state") == "open" or sha in (pull["head"]["sha"], pull.get("merge_commit_sha")) for pull in ours):
+        return None, "the pull request of this commit comes from a fork"
+    return None, "no open pull request of this repository holds this commit"
 
 
 class NotMeasured(Exception):
@@ -855,6 +873,10 @@ def summarize(manifest, diffs, findings, chunks, verdict, reasons, context):
         f"property sets are compared on the {detail} sampled elements both dumps hold{held_note}, and another element's property set, or a mesh vertex, is not in the dump."
     )
     lines.append("Autodesk's samples, the held-out, spent and BIMcollab models and rac_advanced contribute nothing and are never sent.")
+    if context.get("pull_request"):
+        head = context.get("pull_head")
+        state = "the measured commit" if head == context.get("check_sha") else "not the measured commit: this verdict says nothing about what changed after it"
+        lines.append(f"Scored for pull request #{context['pull_request']}, whose head when this was scored was `{head}`, {state}.")
     lines.append("")
     if context.get("description"):
         number = context.get("pull_request")
@@ -962,19 +984,19 @@ def post_check(repo, token, head_sha, verdict, title, summary, details_url, exte
 
 
 def lookup_pull_request(args, sha):
-    """(body, number, reason): the body of the same-repository pull request whose head is `sha`, else why there is
-    none. With --pr-body-file (a calibration of a merged pull request, or a deliberately wrong description) the
-    body comes from the file, with no number."""
+    """(body, number, head, reason): the body, number and current head of the same-repository pull request that holds
+    `sha`, else why there is none. With --pr-body-file (a calibration of a merged pull request, or a deliberately
+    wrong description) the body comes from the file, with no number or head."""
     if args.pr_body_file:
         with open(args.pr_body_file, encoding="utf-8") as handle:
-            return handle.read(), None, None
+            return handle.read(), None, None, None
     token = os.environ.get("GITHUB_TOKEN", "")
     if not (args.repo and token and sha):
-        return None, None, "the pull request of the measured commit cannot be looked up here"
+        return None, None, None, "the pull request of the measured commit cannot be looked up here"
     pull, why = find_pull_request(args.repo, token, sha)
     if pull is None:
-        return None, None, why
-    return pull.get("body") or "", pull["number"], None
+        return None, None, None, why
+    return pull.get("body") or "", pull["number"], pull["head"]["sha"], None
 
 
 def describe_change(body, number):
@@ -1096,7 +1118,8 @@ def run(args):
         findings = merged_findings(diffs)
         body = pull_why = None
         if check_sha and check_sha == measured:
-            body, number, pull_why = lookup_pull_request(args, check_sha)
+            body, number, pull_head, pull_why = lookup_pull_request(args, check_sha)
+            context.update(pull_request=number, pull_head=pull_head)
         early = early_verdict(measured, check_sha, diffs, pull_why)
         if early:
             verdict, reasons = early
@@ -1104,7 +1127,7 @@ def run(args):
             verdict, reasons = assess([], 0, gaps)
         else:
             description, testing, why = describe_change(body, number)
-            context.update(description=description, testing=testing, pull_request=number)
+            context.update(description=description, testing=testing)
             chunks = [] if why else build_chunks(findings, seed, description or "", testing or "")
             key = os.environ.get("TYPESAFE_API_KEY", "").strip()
             if why:
