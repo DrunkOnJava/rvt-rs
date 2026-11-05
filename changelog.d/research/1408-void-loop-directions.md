@@ -1,13 +1,19 @@
-- **The direction a floor void's first line is stored in says which line Revit
-  tags the void with, on 133 of 133 voids (RE-355, #1408).** Of the sketch lines
-  of a void's loop, the one with the lowest ElementId runs along the loop's
-  counter-clockwise walk or against it; against it Revit tags that line, along it
-  the line after it, which gives Revit's tag on the BIM4LCA office as built (36
-  of 36) and at building permit (35 of 35) and on Core Interior (62 of 62),
-  including the void 3147725 that RE-339 left wrong. A reading from the order the
-  first two lines were drawn in is right on the office and wrong on 20 of Core
-  Interior's 62, so it does not ship. `probe_re355_void_loop_directions` prints
-  both, line by line, from Measure runs 42115473363, 42116875940 and 42118790534.
-  The export is unchanged: `void_tag` does not read a line's stored direction
-  yet, so 3147725 still takes the lowest id, 1 of 36 and 1 of 35 floor voids of
-  the office files, and the held-out models are not read.
+- **A floor's void is tagged by the direction its first line is stored in, as
+  Revit tags it, on 133 of 133 voids (RE-355, #1408).** Of the sketch lines of a
+  void's loop, the one with the lowest ElementId runs along the loop's
+  counter-clockwise walk or against it; against it that line is the tag, along it
+  the line after it. That is Revit's tag on the BIM4LCA office as built (36 of
+  36) and at building permit (35 of 35) and on Core Interior (62 of 62),
+  including the void 3147725 that RE-339 left wrong, and on 12 of 12 voids of
+  Snowdon Towers architectural (11 of 12 before). Where the direction is not read
+  (a curve in the loop, two lines on one edge, no stored ends) the tag is the one
+  RE-339's rule gave. A reading from the order the first two lines were drawn in
+  is wrong on 20 of Core Interior's 62 and is not used.
+  - Measured (Measure run 42122776008, 6d3f6c73 against `main`, 54 exports):
+    3147725 moves on both office files, 1 void on Snowdon architectural (now
+    Revit's) and 3 on Snowdon structural, with no export to check them; the
+    other 50 exports, the 19 held-out and spent models among them, are byte for
+    byte `main`'s.
+  - Why Revit does this is unread, and the rule for a first line stored along
+    the walk rests on 9 loops of the office. `probe_re355_void_loop_directions`
+    prints each loop and the counts by branch (RE-355 section 3).
