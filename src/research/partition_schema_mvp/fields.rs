@@ -240,6 +240,19 @@ pub const DOOR_TYPE_SIZE_FIELDS: [&str; 2] = ["m_door_type_width", "m_door_type_
 /// and `AreaCalculator` read for its base quantities (#1016), feet.
 pub const DRAWN_SIZE_FIELDS: [&str; 2] = ["m_drawn_symbol_width", "m_drawn_symbol_height"];
 
+/// Releases a door's or window's `Area` quantity is written on, its Width
+/// times its Height: measured against Revit's own exports of 2024 and 2025
+/// files and of the held-out 2026 ones (the flowbim house and hemanth1986's
+/// 2026 pair: none different). Revit 2027's export gives the same Width and
+/// Height and an Area that is not their product (hemanth1986's 2027 pair: every
+/// window's and door's differs, RE-346), so a 2027 door or window gets its
+/// Width and Height and no Area.
+pub const DOOR_WINDOW_AREA_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
+
+/// Field marking a door or window whose `Area` is left out
+/// ([`DOOR_WINDOW_AREA_REVIT_VERSIONS`]).
+pub const DRAWN_AREA_LEFT_OUT_FIELD: &str = "m_drawn_area_left_out";
+
 /// Fields carrying the extent along X and along Z of the outline a door's
 /// or window's symbol cuts in its host (RE-215), feet.
 pub const CUT_LOOP_SIZE_FIELDS: [&str; 2] = ["m_cut_loop_width", "m_cut_loop_height"];

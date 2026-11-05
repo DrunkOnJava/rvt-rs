@@ -423,6 +423,14 @@ pub fn drawn_size_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64
     Some([width?, height?])
 }
 
+/// Whether the fields mark the door or window's `Area` as left out
+/// ([`DOOR_WINDOW_AREA_REVIT_VERSIONS`]).
+pub fn drawn_area_left_out(fields: &[(String, InstanceField)]) -> bool {
+    fields.iter().any(|(name, value)| {
+        name == DRAWN_AREA_LEFT_OUT_FIELD && matches!(value, InstanceField::Bool(true))
+    })
+}
+
 /// The size [`DOOR_TYPE_SIZE_FIELDS`] record.
 pub fn door_type_size_from_fields(
     fields: &[(String, InstanceField)],
@@ -689,6 +697,11 @@ pub(super) fn attach_cut_loop_sizes(
             element
                 .fields
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+        if !DOOR_WINDOW_AREA_REVIT_VERSIONS.contains(&revit_version) {
+            element
+                .fields
+                .push((DRAWN_AREA_LEFT_OUT_FIELD.into(), InstanceField::Bool(true)));
         }
     }
     // #227: where no opening is read yet, the opening is the loop, carried
