@@ -1,7 +1,7 @@
 //! Bounded traversal of saved graphics under the default
 //! 3D context. This selects surface carriers, not regenerated Revit geometry.
 //! Unsupported solid-affecting filters and external instances remain explicit.
-use crate::native_parameters::ObjectGraph;
+use crate::native_parameters::{GraphObject, ObjectGraph};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -368,7 +368,7 @@ impl Walker<'_, '_> {
                 }
                 let fields = &info_object.fields;
                 let _transform = read_transform(&fields["m_Trf"])?;
-                if fields["m_GRepId"].as_u64() != Some(0)
+                if !default_representation(fields)
                     || fields["m_cda"]["m_pDoc"]["pointer_token"].as_u64() != Some(1)
                     || !fields["m_cda"]["m_pDoc"]["class_tag"].is_null()
                 {
@@ -401,7 +401,10 @@ impl Walker<'_, '_> {
                 }
             }
             "GInstance" => {
-                if obj.fields["m_bHasScale"].as_bool() != Some(false) {
+                let has_scale = obj.fields["m_bHasScale"].as_bool();
+                if has_scale != Some(false)
+                    && !(has_scale == Some(true) && self.unscaled_legacy_instance(index, obj))
+                {
                     return Err("scaled instance mode is not qualified".into());
                 }
                 if obj.fields["m_resolveSymInView"].as_bool() != Some(false) {
@@ -418,7 +421,7 @@ impl Walker<'_, '_> {
                 let embedded_pointer = &obj.fields["m_oEmbeddedSymbolGRep"];
                 if embedded_pointer["pointer_token"].as_u64() == Some(0) {
                     let info_fields = &self.graph.objects[info].fields;
-                    if info_fields["m_GRepId"].as_u64() != Some(0)
+                    if !default_representation(info_fields)
                         || info_fields["m_cda"]["m_pDoc"]["pointer_token"].as_u64() != Some(1)
                         || !info_fields["m_cda"]["m_pDoc"]["class_tag"].is_null()
                     {
@@ -462,6 +465,20 @@ impl Walker<'_, '_> {
         }
         Ok(())
     }
+    /// Whether a `GInstance` whose `m_bHasScale` is set names an
+    /// `InstanceInfo` of the older schema (no `m_GRepId`) whose 3x3 matrix is
+    /// rigid (RE-342). What the flag means on that schema is not read: a
+    /// matrix that scales keeps the instance refused, and so does the flag
+    /// with the later `InstanceInfo`, whose `m_GRepId` is present.
+    fn unscaled_legacy_instance(&self, index: usize, obj: &GraphObject) -> bool {
+        let Ok(info) = self.target(index, &obj.fields["m_instanceInfo"]) else {
+            return false;
+        };
+        let info = &self.graph.objects[info];
+        info.class_name == "InstanceInfo"
+            && info.fields.get("m_GRepId").is_none()
+            && read_transform(&info.fields["m_Trf"]).is_ok_and(|t| rigid(&t))
+    }
     fn only_curves(&self, index: usize, seen: &mut HashSet<usize>) -> bool {
         if seen.len() >= 128 || !seen.insert(index) {
             return false;
@@ -481,12 +498,31 @@ impl Walker<'_, '_> {
 // The 2023 GElement schema carries its owning element ID in GInfo.tag;
 // 2024+ additionally serializes m_elementId. A present dedicated field must
 // agree; never silently fall back from a malformed or mismatched dedicated ID.
-fn current_graph_owner_matches(root: &crate::native_parameters::GraphObject, id: u64) -> bool {
+fn current_graph_owner_matches(root: &GraphObject, id: u64) -> bool {
     root.class_name == "GElement"
         && match root.fields.get("m_elementId") {
             Some(value) => value.as_u64() == Some(id),
             None => root.fields["m_GInfo"]["m_tag"].as_u64() == Some(id),
         }
+}
+/// Whether an `InstanceInfo` names the default representation: `m_GRepId` is
+/// 0 from Revit 2023, and the older schema has no such field, so the
+/// instance has only the default one (RE-342).
+fn default_representation(info: &Value) -> bool {
+    match info.get("m_GRepId") {
+        Some(id) => id.as_u64() == Some(0),
+        None => info.get("m_Trf").is_some() && info.get("m_cda").is_some(),
+    }
+}
+/// Whether the 3x3 part of `m` has orthonormal rows: a rotation or a mirror,
+/// no scale or shear.
+fn rigid(m: &GraphicsTransform) -> bool {
+    (0..3).all(|a| {
+        (0..3).all(|b| {
+            let dot: f64 = (0..3).map(|k| m[a][k] * m[b][k]).sum();
+            (dot - f64::from(u8::from(a == b))).abs() <= 1e-6
+        })
+    })
 }
 fn graphics_visibility(flags: u64) -> u8 {
     let bits = flags & 0x1e0;
