@@ -831,8 +831,7 @@ read 2.9 to 3.7 s in 275 MiB (the open: 326 MiB, 29.0 s). On the BIM4LCA
 office (62 MiB), not compared with `rvt-elements`, a selection read on its own:
 8 entries in 7.5 s in 943 MiB, the open's worker 910 MiB (126.5 s). A read
 takes about as much wasm memory as the open did (0.74 to 1.04 times), only
-while it runs; the ten-times-size estimate the page gates on understates it
-there (616 MiB). The viewer's open, and so every export, is unchanged. The
+while it runs. The viewer's open, and so every export, is unchanged. The
 release-outside-the-range state
 is measured with the worker's answer replaced, as no such file is in the
 viewer's job.

@@ -2655,10 +2655,25 @@ function revitGlobalId(idx: number): string | undefined {
  * element at the open, which was a pass over the file for each. The file is
  * read again from the `File` this page already holds, so nothing of it stays
  * resident beyond what was held before; a read costs memory only while it runs.
- * The values of the elements already read are kept until the next file.
+ * The answers are kept per element in a small map until the file is opened
+ * again, so selecting an element a second time reads nothing.
  */
 const PARAMETERS_READ_DELAY_MS = 150;
-const savedParametersCache = new Map<number, SavedParametersReading>();
+/**
+ * The most elements whose answers are kept; the least recently selected goes
+ * first. `?parametersRemembered=` lowers it, for the browser test.
+ */
+const PARAMETERS_REMEMBERED = Math.max(
+  1,
+  wholeBytesParam(new URLSearchParams(window.location.search), 'parametersRemembered') ?? 64,
+);
+/** An element's answer, and the characters of its JSON, which is what the map is counted in. */
+interface RememberedParameters {
+  reading: SavedParametersReading;
+  characters: number;
+}
+const savedParametersCache = new Map<number, RememberedParameters>();
+let savedParametersCacheCharacters = 0;
 let parametersWorker: Worker | null = null;
 let parametersTimer: number | undefined;
 /** The wasm linear memory the open left (worker.ts `stats`), which a read in a second instance comes on top of. */
@@ -2676,17 +2691,44 @@ function stopParametersRead(): void {
 function resetSavedParameters(): void {
   stopParametersRead();
   savedParametersCache.clear();
+  savedParametersCacheCharacters = 0;
   loadedWasmMemoryBytes = 0;
+}
+
+/** The answer kept for an element, which counts as its most recent use. */
+function recallParameters(id: number): SavedParametersReading | undefined {
+  const kept = savedParametersCache.get(id);
+  if (!kept) return undefined;
+  savedParametersCache.delete(id);
+  savedParametersCache.set(id, kept);
+  return kept.reading;
+}
+
+/** Keeps an element's answer, and lets the least recently used ones go past the limit. */
+function rememberParameters(id: number, reading: SavedParametersReading): void {
+  const before = savedParametersCache.get(id);
+  if (before) savedParametersCacheCharacters -= before.characters;
+  const characters = JSON.stringify(reading).length;
+  savedParametersCache.delete(id);
+  savedParametersCache.set(id, { reading, characters });
+  savedParametersCacheCharacters += characters;
+  while (savedParametersCache.size > PARAMETERS_REMEMBERED) {
+    const [oldest, gone] = savedParametersCache.entries().next().value as [number, RememberedParameters];
+    savedParametersCache.delete(oldest);
+    savedParametersCacheCharacters -= gone.characters;
+  }
 }
 
 /**
  * Whether a selection reads on its own. A read is another instance of the
- * decoder beside the first, which a file past what the page can judge to fit
- * twice (the open's own estimate, `estimatePeakBytes`, and the memory the open
- * left, against the same ceiling) reads only when asked.
+ * decoder beside the first, and it has taken about what the open's worker held
+ * (0.74 to 1.04 times it, on Einhoven, Core Interior and the BIM4LCA office,
+ * where the ten-times-size estimate was short), so the open's own wasm memory
+ * is what it is judged by: a second instance of that size must still fit the
+ * ceiling the page judges an open by. Above that it reads only when asked.
  */
-function parametersReadAutomatically(file: File): boolean {
-  return loadedWasmMemoryBytes + estimatePeakBytes(file.size) <= memoryCeilingBytes;
+function parametersReadAutomatically(): boolean {
+  return loadedWasmMemoryBytes * 2 <= memoryCeilingBytes;
 }
 
 type ParametersState =
@@ -2813,6 +2855,9 @@ function parametersNotListed(reading: SavedParametersResult): string | null {
 function showSavedParameters(box: HTMLElement, id: number, reading: SavedParametersReading): void {
   box.dataset.readMs = String(Math.round(reading.readMs));
   box.dataset.wasmMemoryBytes = String(reading.wasmMemoryBytes);
+  // What the page keeps, for tests/parameters-row.spec.ts and the office's report.
+  box.dataset.cacheElements = String(savedParametersCache.size);
+  box.dataset.cacheCharacters = String(savedParametersCacheCharacters);
   if (!reading.native) {
     const [first, last] = reading.native_releases;
     parametersMessage(
@@ -2898,7 +2943,7 @@ function readSavedParameters(id: number): void {
     w.terminate();
     parametersWorker = null;
     if (outcome.type === 'result') {
-      savedParametersCache.set(id, {
+      rememberParameters(id, {
         ...outcome.result,
         readMs: outcome.readMs,
         wasmMemoryBytes: outcome.wasmMemoryBytes,
@@ -2907,7 +2952,7 @@ function readSavedParameters(id: number): void {
     // The panel may have moved on while the worker read.
     const box = infoEl.querySelector<HTMLElement>('#info-parameters');
     if (!box || box.dataset.elementId !== String(id)) return;
-    const reading = savedParametersCache.get(id);
+    const reading = recallParameters(id);
     if (outcome.type === 'result' && reading) showSavedParameters(box, id, reading);
     else if (outcome.type === 'error') {
       showParametersError(box, id, outcome.message, outcome.outOfMemory);
@@ -2931,6 +2976,8 @@ function readSavedParameters(id: number): void {
 function savedParametersGroup(panel: ElementInfoPanel): HTMLElement {
   const box = infoGroup('parameters', 'Saved parameters');
   box.id = 'info-parameters';
+  // A read for the element selected before is for one nobody is looking at.
+  stopParametersRead();
   const id = elementIdOf(panel.type_guid);
   if (id === null) {
     parametersMessage(
@@ -2941,7 +2988,7 @@ function savedParametersGroup(panel: ElementInfoPanel): HTMLElement {
     return box;
   }
   box.dataset.elementId = String(id);
-  const cached = savedParametersCache.get(id);
+  const cached = recallParameters(id);
   if (cached) {
     showSavedParameters(box, id, cached);
     return box;
@@ -2951,11 +2998,11 @@ function savedParametersGroup(panel: ElementInfoPanel): HTMLElement {
     parametersMessage(box, 'error', 'The file is no longer open.');
     return box;
   }
-  if (!parametersReadAutomatically(file)) {
+  if (!parametersReadAutomatically()) {
     const body = parametersMessage(
       box,
       'on-request',
-      `Reading them opens the file a second time, in a worker of its own. For ${formatMemory(file.size)} that could take about ${formatMemory(estimatePeakBytes(file.size))}, with ${formatMemory(loadedWasmMemoryBytes)} already held by the first, so it is done when asked.`,
+      `Reading them opens the file a second time, in a worker of its own. That has taken about as much memory as opening it did, ${formatMemory(loadedWasmMemoryBytes)} here, which a second time would bring past the ${formatMemory(memoryCeilingBytes)} the page allows, so it is done when asked.`,
     );
     body.appendChild(
       parametersButton('read-saved-parameters', 'Read saved parameters', () => {
@@ -2968,7 +3015,6 @@ function savedParametersGroup(panel: ElementInfoPanel): HTMLElement {
   parametersMessage(box, 'loading', 'Reading the saved parameters…');
   // A run through the tree selects element after element: only the one the
   // selection stops on is read.
-  stopParametersRead();
   parametersTimer = window.setTimeout(() => readSavedParameters(id), PARAMETERS_READ_DELAY_MS);
   return box;
 }

@@ -197,16 +197,15 @@ it: that worker would be held up for as long as it takes, and the wasm linear
 memory of an instance only grows. A worker is started for one element, reads the
 file again from the `File` the page already holds, and ends with its answer
 (or when another element is selected), so the page holds no more of the file
-than before and a read costs memory only while it runs. A file whose estimated
-memory (`estimatePeakBytes`, ten times its size) and the open's wasm memory
-together pass the page's memory ceiling is read only when asked, with a button.
+than before and a read costs memory only while it runs. A read has taken about
+what the open's worker held, so the page reads on selection only while twice
+the open's wasm memory fits the memory ceiling it judges an open by
+(`memoryCeilingBytes`, 4 GiB) and asks first, with a button, above that. The
+page keeps each element's answer, up to 64 elements and the least recently
+selected going first, until a file is opened again, so an element selected a
+second time reads nothing.
 
-Measured in the viewer tests (run 42103334445, head f56b671a, CI runner, WASM
-without LTO): a read's wasm instance took 17 MiB on Einhoven (the open's worker
-23 MiB), 275 MiB on Core Interior (326 MiB) and 943 MiB on the BIM4LCA office
-as built (910 MiB), 0.74 to 1.04 times the open's, in a median of 532 ms, 2.9 to
-3.7 s and 7.5 s. The ten-times-size estimate (616 MiB for the office's 62 MiB)
-understates a read there; the page's gate is not corrected for it.
+Measured figures: not yet measured on this head.
 
 ## Viewer state
 

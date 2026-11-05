@@ -67,6 +67,8 @@ interface Shown {
   elementId: number | null;
   readMs: number | null;
   wasmMemoryBytes: number | null;
+  cacheElements: number | null;
+  cacheCharacters: number | null;
   rows: Array<{ parameter: Parameter; key: string; text: string; inFold: boolean }>;
   headings: string[];
   text: string;
@@ -162,6 +164,8 @@ async function settled(page: Page): Promise<Shown> {
       elementId: number(group.dataset.elementId),
       readMs: number(group.dataset.readMs),
       wasmMemoryBytes: number(group.dataset.wasmMemoryBytes),
+      cacheElements: number(group.dataset.cacheElements),
+      cacheCharacters: number(group.dataset.cacheCharacters),
       rows: [...group.querySelectorAll<HTMLElement>('[data-parameter]')].map((row) => ({
         parameter: JSON.parse(row.dataset.parameter ?? 'null') as Parameter,
         key: row.querySelector('.k')?.textContent ?? '',
@@ -344,31 +348,175 @@ sampleTest(
   },
 );
 
+/** The tree elements of the sample that rvt-elements lists parameters for, one for each ElementId. */
+async function withParameters(
+  page: Page,
+  expected: Map<number, Parameter[]>,
+  count: number,
+): Promise<Array<{ index: number; id: number }>> {
+  const seen = new Set<number>();
+  const out: Array<{ index: number; id: number }> = [];
+  for (const { index, id } of await treeElements(page)) {
+    if (id === null || (expected.get(id)?.length ?? 0) === 0 || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ index, id });
+    if (out.length === count) break;
+  }
+  expect(out.length, `elements rvt-elements lists parameters for`).toBe(count);
+  return out;
+}
+
+const MiB = 2 ** 20;
+async function openedWasmBytes(page: Page): Promise<number> {
+  const stats = JSON.parse(
+    (await page.locator('#status').getAttribute('data-load-stats')) ?? 'null',
+  ) as { wasmMemoryBytes: number };
+  return stats.wasmMemoryBytes;
+}
+
+// The page reads on selection while a second instance of the size the open's
+// worker held (a read has taken 0.74 to 1.04 times that) still fits the
+// ceiling it judges an open by, and asks first above that. The open's memory
+// is measured here and the ceiling set a little either side of twice it, so
+// the rule is held at its edge, not at the extremes of the default 4 GiB.
 sampleTest(
-  'a file that may not fit twice reads an element only when asked',
+  'a read is made on selection while a second instance of the open fits the ceiling, and asked about when it does not',
   async ({ page }) => {
     test.setTimeout(300_000);
     const expected = oracle();
-    // The estimate is ten times the file, and a ceiling under it makes a second
-    // instance something the page asks about.
-    const ceiling = fs.statSync(sample!).size * 10 - 1;
-    await open(page, sample!, `?memoryCeilingBytes=${ceiling}`);
-    const withParameters = (await treeElements(page)).find(
-      ({ id }) => id !== null && (expected.get(id)?.length ?? 0) > 0,
-    );
-    expect(withParameters, 'an element rvt-elements lists parameters for').toBeDefined();
+    await open(page, sample!);
+    const opened = await openedWasmBytes(page);
+    const [pick] = await withParameters(page, expected, 1);
 
-    await select(page, withParameters!.index);
+    // The default ceiling, 4 GiB: read on selection, no button.
+    await select(page, pick!.index);
+    const onTheDefault = await settled(page);
+    expect(onTheDefault.state).toBe('ready');
+    await expect(page.locator('#read-saved-parameters')).toHaveCount(0);
+
+    // A ceiling a little over twice the open's memory: still read on selection.
+    await open(page, sample!, `?memoryCeilingBytes=${2 * opened + 8 * MiB}`);
+    expect(Math.abs((await openedWasmBytes(page)) - opened), 'the open held what it held').toBeLessThanOrEqual(2 * MiB);
+    await select(page, pick!.index);
+    const over = await settled(page);
+    expect(over.state).toBe('ready');
+    await expect(page.locator('#read-saved-parameters')).toHaveCount(0);
+
+    // A little under twice it: asked first, and then read as the command line has it.
+    await open(page, sample!, `?memoryCeilingBytes=${2 * opened - 8 * MiB}`);
+    expect(Math.abs((await openedWasmBytes(page)) - opened), 'the open held what it held').toBeLessThanOrEqual(2 * MiB);
+    await select(page, pick!.index);
     const asked = await settled(page);
     expect(asked.state).toBe('on-request');
     expect(asked.rows).toHaveLength(0);
-    await expect(page.locator('#info-parameters')).toContainText('a second time');
+    await expect(page.locator('#info-parameters')).toContainText('as much memory as opening it did');
     await page.locator('#read-saved-parameters').click();
     const read = await settled(page);
     expect(read.state).toBe('ready');
     expect(differences(read.elementId!, read, expected.get(read.elementId!) ?? [])).toEqual([]);
   },
 );
+
+// An element selected again is not read again: the page keeps each answer for
+// the open file, a bounded few, and starts afresh when a file is opened.
+sampleTest(
+  'an element selected again is not read again, and a file opened again starts a new map',
+  async ({ page }) => {
+    test.setTimeout(300_000);
+    const expected = oracle();
+    await page.addInitScript(() => {
+      const reads = window as unknown as { __parameterReads: number };
+      reads.__parameterReads = 0;
+      const RealWorker = window.Worker;
+      window.Worker = class extends RealWorker {
+        constructor(url: string | URL, options?: WorkerOptions) {
+          super(url, options);
+          if (String(url).includes('parameters-worker')) reads.__parameterReads += 1;
+        }
+      } as typeof Worker;
+    });
+    const reads = () =>
+      page.evaluate(() => (window as unknown as { __parameterReads: number }).__parameterReads);
+
+    await open(page, sample!);
+    const [a, b] = await withParameters(page, expected, 2);
+    await select(page, a!.index);
+    const firstA = await settled(page);
+    expect(firstA.elementId).toBe(a!.id);
+    expect(await reads()).toBe(1);
+    await select(page, b!.index);
+    await settled(page);
+    expect(await reads()).toBe(2);
+
+    // Both again: from the map, with the answer they had.
+    await select(page, a!.index);
+    const againA = await settled(page);
+    await select(page, b!.index);
+    const againB = await settled(page);
+    expect(await reads(), 'selecting two elements again read the file').toBe(2);
+    expect(againA.readMs, 'the answer kept is the one read').toBe(firstA.readMs);
+    expect(againA.rows.map((row) => row.parameter)).toEqual(firstA.rows.map((row) => row.parameter));
+    expect(differences(a!.id, againA, expected.get(a!.id)!)).toEqual([]);
+    expect(differences(b!.id, againB, expected.get(b!.id)!)).toEqual([]);
+    expect(againB.cacheElements).toBe(2);
+    expect(againB.cacheCharacters!).toBeGreaterThan(0);
+
+    // The same file opened again: nothing is carried over.
+    const before = await page.locator('#status').getAttribute('data-load-stats');
+    await page.locator('#file-input').setInputFiles(sample!);
+    // The open's figures are removed when it starts and written when it ends.
+    await expect
+      .poll(
+        async () => {
+          const now = await page.locator('#status').getAttribute('data-load-stats');
+          return now !== null && now !== before;
+        },
+        { message: 'the file was opened again', timeout: 300_000 },
+      )
+      .toBe(true);
+    await expect(page.locator('#status')).toHaveText(/Loaded/);
+    await select(page, a!.index);
+    const afresh = await settled(page);
+    expect(await reads(), 'a file opened again kept an answer').toBe(3);
+    expect(afresh.cacheElements).toBe(1);
+    expect(differences(a!.id, afresh, expected.get(a!.id)!)).toEqual([]);
+  },
+);
+
+// The map is bounded: with room for two, a third element's answer pushes out
+// the least recently selected, which is then read again, and the other is not.
+sampleTest('the answers kept are bounded, the least recently selected going first', async ({ page }) => {
+  test.setTimeout(300_000);
+  const expected = oracle();
+  await page.addInitScript(() => {
+    const reads = window as unknown as { __parameterReads: number };
+    reads.__parameterReads = 0;
+    const RealWorker = window.Worker;
+    window.Worker = class extends RealWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        if (String(url).includes('parameters-worker')) reads.__parameterReads += 1;
+      }
+    } as typeof Worker;
+  });
+  const reads = () =>
+    page.evaluate(() => (window as unknown as { __parameterReads: number }).__parameterReads);
+  await open(page, sample!, '?parametersRemembered=2');
+  const [a, b, c] = await withParameters(page, expected, 3);
+  for (const element of [a!, b!, c!]) {
+    await select(page, element.index);
+    await settled(page);
+  }
+  expect(await reads()).toBe(3);
+  await select(page, c!.index);
+  const keptC = await settled(page);
+  expect(await reads(), 'the newest answer was kept').toBe(3);
+  expect(keptC.cacheElements, 'room for two').toBe(2);
+  await select(page, a!.index);
+  const evictedA = await settled(page);
+  expect(await reads(), 'the oldest answer was pushed out and read again').toBe(4);
+  expect(differences(a!.id, evictedA, expected.get(a!.id)!)).toEqual([]);
+});
 
 /** Serves the parameters worker's script with a fault in front of it, for its first request only. */
 async function failFirstRead(page: Page, panic: string): Promise<() => number> {

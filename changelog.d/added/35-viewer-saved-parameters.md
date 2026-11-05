@@ -20,22 +20,13 @@
   already holds and ends with its answer, so nothing of the file stays
   resident beyond what the page held before, the open's worker is not held up
   by a read, and a read that fails leaves the rest of the panel where it
-  was. A file whose estimated memory, with what the open left, passes the
-  ceiling the page already judges an open by is read when asked, with a
-  button. Measured in the viewer tests (run 42103334445, head f56b671a, CI
-  runner, WASM without LTO): on Einhoven every one of the 37 tree elements
-  was selected and the panel held, for the 28 with parameters, exactly the
-  369 entries `rvt-elements` prints (332 instance, 37 type, 8 named), and
-  showed the empty state for the 7 with none; a read took a median of 532 ms
-  (most 740 ms) in an instance of 17 MiB, against 23 MiB for the open's
-  worker. On Core Interior four elements of four categories match
-  `rvt-elements` too; a read took 2.9 to 3.7 s in 275 MiB, against 326 MiB
-  and 29.0 s for the open. On the BIM4LCA office (62 MiB) a selection read on
-  its own, with no button: 8 entries in 7.5 s in 943 MiB, against 910 MiB and
-  126.5 s for the open. A read thus takes about what the open's worker did
-  (0.74 to 1.04 times it) while it runs, and the ten-times-size estimate the
-  page gates on understates it on the office (616 MiB estimated). That office
-  is not compared with `rvt-elements`.
+  was. A read has taken about what the open's worker held, so the page reads
+  on selection only while twice the open's wasm memory fits the memory
+  ceiling it already judges an open by (4 GiB), and asks first, with a
+  button, above that. The page keeps each element's answer, up to 64 elements
+  with the least recently selected going first, until a file is opened again,
+  so an element selected a second time is not read again. Not yet measured on
+  this head: all figures.
 - **File Status's Parameters row stops saying the rest are still to be
   decoded (#35).** It said so while `rvt-elements` and Python already listed
   every element's saved parameters (RE-207). It now counts the values written

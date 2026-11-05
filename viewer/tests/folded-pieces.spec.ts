@@ -294,10 +294,11 @@ test('a click on a folded piece selects the element that owns it', async ({ page
   await expect(row('ElementId').locator('.v')).toHaveText(facts.flight!.id, { timeout: 300_000 });
   await expect(info.locator('.info-group-storey')).toContainText(facts.flight!.storey);
 
-  // #35: the saved parameters of the first owner, selected again, on the largest
-  // model the suite opens. Whether the page read them on its own or waited to
-  // be asked, and what the open's worker and the read held, is printed; a read
-  // that fails is not a model that got worse, but it is not a pass either.
+  // #35: the saved parameters of the first owner, selected again (an answer the
+  // page kept, so not read a second time), on the largest model the suite opens.
+  // Whether the page read them on its own or waited to be asked, what the open's
+  // worker and the read held and what the page keeps is printed; a read that
+  // fails is not a model that got worse, but it is not a pass either.
   await (await openTreeRow(first.owner)).click();
   await expect(row('ElementId').locator('.v')).toHaveText(first.id, { timeout: 300_000 });
   const parameters = page.locator('#info-parameters');
@@ -308,6 +309,8 @@ test('a click on a folded piece selects the element that owns it', async ({ page
       state: (el as HTMLElement).dataset.state ?? '',
       readMs: (el as HTMLElement).dataset.readMs ?? null,
       wasmMemoryBytes: (el as HTMLElement).dataset.wasmMemoryBytes ?? null,
+      cacheElements: (el as HTMLElement).dataset.cacheElements ?? null,
+      cacheCharacters: (el as HTMLElement).dataset.cacheCharacters ?? null,
       entries: el.querySelectorAll('[data-parameter]').length,
     }));
   let parameterRead = await read();
@@ -330,7 +333,8 @@ test('a click on a folded piece selects the element that owns it', async ({ page
     `estimated open ${mib(loadStats.estimatedPeakBytes)} MiB): ${askedFirst ? 'the page asked first, then read' : 'read on selection'}: ` +
     `${parameterRead.state}, ${parameterRead.entries} entries, ${parameterRead.readMs ?? 'no'} ms, ` +
     `that read's wasm memory ${mib(parameterRead.wasmMemoryBytes)} MiB; the open's worker ${mib(loadStats.wasmMemoryBytes)} MiB, ` +
-    `${Math.round(loadStats.openMs)} ms in the open call`;
+    `${Math.round(loadStats.openMs)} ms in the open call; the page keeps ${parameterRead.cacheElements ?? 'no'} answers, ` +
+    `${parameterRead.cacheCharacters ?? 'no'} characters of JSON`;
   console.log(parametersLine);
   if (process.env.GITHUB_STEP_SUMMARY) {
     fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${parametersLine}\n\n`);
