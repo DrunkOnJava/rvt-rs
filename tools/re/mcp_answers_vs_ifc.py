@@ -26,7 +26,7 @@ default decode does not take):
 - every room is an IfcSpace whose Name is its number (or `<name>:<ElementId>` without one), with
   the same LongName, storey, outline source and space kind (`space_kind`, #1437: what the space
   is, equal to `RvtElementRecordGeometry.SpaceKind`), and an area equal to that of its body's plan
-  outline;
+  outline (an `IfcIndexedPolyCurve`'s arcs counted as themselves, not as their chords, #1443);
 - `get_element` on the sampled elements: the property and quantity sets, the trust markers, the
   type object (entity, Name, Tag and sets), the placement (the translation, not the rotation), the
   host, and whether the body is none or mapped, each equal to the IFC's;
@@ -81,6 +81,7 @@ Shapely.
 import argparse
 import collections
 import json
+import math
 import os
 import re
 import shutil
@@ -340,11 +341,13 @@ class Written:
                 if not item.is_a("IfcExtrudedAreaSolid"):
                     continue
                 profile = item.SweptArea
-                if profile.is_a("IfcArbitraryProfileDefWithVoids"):
-                    area = ring_area(profile.OuterCurve) - sum(ring_area(v) for v in profile.InnerCurves or ())
-                    return area * self.metres**2
-                if profile.is_a("IfcArbitraryClosedProfileDef"):
-                    return ring_area(profile.OuterCurve) * self.metres**2
+                if not profile.is_a("IfcArbitraryClosedProfileDef"):
+                    continue
+                holes = list(profile.InnerCurves or ()) if profile.is_a("IfcArbitraryProfileDefWithVoids") else []
+                areas = [ring_area(curve) for curve in [profile.OuterCurve] + holes]
+                if any(area is None for area in areas):
+                    return None
+                return (areas[0] - sum(areas[1:])) * self.metres**2
         return None
 
     def outline_has_arcs(self, product):
@@ -380,13 +383,72 @@ class Written:
         return kinds
 
 
+def ring_edges(curve):
+    """The edges of a closed outline as (start, end, middle of the arc or None), or None where the curve is neither an `IfcPolyline` nor an `IfcIndexedPolyCurve`.
+
+    An `IfcIndexedPolyCurve` holds `IfcLineIndex` runs of points and three-point `IfcArcIndex` arcs, or
+    no segments, which stands for one run through every point (the writer's curved outlines, #1428).
+    """
+    if curve is None:
+        return None
+    if curve.is_a("IfcPolyline"):
+        points = [tuple(p.Coordinates)[:2] for p in curve.Points]
+        edges = [(a, b, None) for a, b in zip(points, points[1:])]
+    elif curve.is_a("IfcIndexedPolyCurve"):
+        points = [tuple(p)[:2] for p in curve.Points.CoordList]
+        edges = []
+        for segment in curve.Segments or (None,):
+            if segment is None:
+                run = points
+            else:
+                run = [points[i - 1] for i in segment.wrappedValue]
+            if segment is not None and segment.is_a("IfcArcIndex"):
+                edges.append((run[0], run[2], run[1]))
+            else:
+                edges.extend((a, b, None) for a, b in zip(run, run[1:]))
+    else:
+        return None
+    if edges and math.dist(edges[-1][1], edges[0][0]) > 1e-9:
+        edges.append((edges[-1][1], edges[0][0], None))
+    return edges
+
+
+def arc_sweep(start, middle, end):
+    """The radius and the signed sweep (positive counter-clockwise, radians) of the arc through three points, or None where they are collinear."""
+    d = 2.0 * (start[0] * (middle[1] - end[1]) + middle[0] * (end[1] - start[1]) + end[0] * (start[1] - middle[1]))
+    if abs(d) < 1e-12:
+        return None
+
+    def sq(p):
+        return p[0] * p[0] + p[1] * p[1]
+
+    cx = (sq(start) * (middle[1] - end[1]) + sq(middle) * (end[1] - start[1]) + sq(end) * (start[1] - middle[1])) / d
+    cy = (sq(start) * (end[0] - middle[0]) + sq(middle) * (start[0] - end[0]) + sq(end) * (middle[0] - start[0])) / d
+
+    def angle(p):
+        return math.atan2(p[1] - cy, p[0] - cx)
+
+    counter_clockwise = (angle(end) - angle(start)) % math.tau
+    through_middle = (angle(middle) - angle(start)) % math.tau
+    sweep = counter_clockwise if through_middle < counter_clockwise else counter_clockwise - math.tau
+    return math.hypot(start[0] - cx, start[1] - cy), sweep
+
+
 def ring_area(curve):
-    if curve is None or not curve.is_a("IfcPolyline"):
-        return 0.0
-    points = [tuple(p.Coordinates)[:2] for p in curve.Points]
-    return (
-        abs(sum(p[0] * q[1] - q[0] * p[1] for p, q in zip(points, points[1:] + points[:1]))) / 2.0
-    )
+    """The area a closed outline encloses, in the file's units squared, its arcs counted as themselves and not as their chords; None for a curve it cannot read."""
+    edges = ring_edges(curve)
+    if edges is None:
+        return None
+    area = sum(a[0] * b[1] - b[0] * a[1] for a, b, _ in edges) / 2.0
+    for a, b, middle in edges:
+        if middle is None:
+            continue
+        found = arc_sweep(a, middle, b)
+        if found is None:
+            return None
+        radius, sweep = found
+        area += radius * radius * (sweep - math.sin(sweep)) / 2.0
+    return abs(area)
 
 
 # ---- the answers --------------------------------------------------------------------------------
