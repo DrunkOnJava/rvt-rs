@@ -325,7 +325,8 @@ aspirational state. Update this section when you wire up more of it.
   fmt, clippy, the test matrix (Linux, macOS and Windows, stable, and the
   MSRV), rustdoc, `cargo deny`, `cargo audit`, the docs.rs build preview,
   the Python wheel and its integration tests, IfcOpenShell validation and
-  the witness verdicts, the PII guard and the rest. `full / CI passed` (a
+  the witness verdicts, the viewer's browser tests
+  (`.github/workflows/viewer-test.yml`), the PII guard and the rest. `full / CI passed` (a
   push to `main` names it `CI passed`), the one required check, passes only
   when every one of them did (see
   [`docs/maintaining.md`](docs/maintaining.md#pull-requests)).

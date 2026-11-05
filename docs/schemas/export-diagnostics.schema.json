@@ -593,6 +593,22 @@
           },
           "description": "Of the exported Areas that have no body, why, by reason (RvtElementRecordGeometry.AreaBodyRefusal, RE-317): levels_not_recovered, boundary_line_not_read, no_boundary_lines, point_not_read, level_or_scheme_not_named, named_lines_not_in_scheme_and_level, next_storey_not_proven, boundary_lines_not_readable, point_in_no_single_region, named_lines_not_on_region, two_areas_one_region. Empty when every Area is drawn or the export has no geometry."
         },
+        "slab_shape_refusals": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Of the exported floors, roofs and ceilings whose corner vertices are shape-edited and that keep their record's box, why, by reason (RvtElementRecordGeometry.SlabShapeRefusal, RE-336): interior_edge_vertices_or_creases, corners_not_in_one_plane, first_three_corners_collinear, fewer_than_three_corner_vertices, shape_edit_dormant_or_unmarked, shape_edit_steps_disagree, shape_edit_fields_not_read, corner_vertex_not_finite, record_copies_disagree, record_copy_not_read, roof_or_ceiling_edit_not_drawn, plan_outline_not_read, plan_outline_in_pieces, corners_not_the_outline_vertices, plane_does_not_reproduce_record_box. Empty when no such element is kept as its box."
+        },
+        "wall_base_refusals": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Of the exported walls whose base join names a floor, roof or ceiling with shape-edited corners and that keep their base, why, by reason (RvtElementRecordGeometry.BaseCoverRefusal, RE-336): slab_shape_not_read, wall_not_one_plain_extrusion, named_element_body_not_read, no_element_covers_the_wall_plan, several_elements_cover_the_wall, top_crosses_the_wall_base_or_top, top_at_or_below_the_wall_base, top_at_or_above_the_wall_top."
+        },
         "resolved_outline_spaces": {
           "type": "integer",
           "minimum": 0,
@@ -834,7 +850,7 @@
     },
     "export_decisions": {
       "type": "object",
-      "description": "Each fail-closed decision behind skipped and the exported body and outline counts, one entry per element (#1326): why an element was left out, a body is only its record's box, an opening was not cut, an outline was not read. Present only when asked for (rvt-ifc --export-decisions); without it the diagnostics are the bytes they were. Bounded: at most cap_per_reason entries a reason, the rest counted as dropped. Not written in the IFC file. The skipped items are counted from the same decisions: for every reason of skipped (the stream_not_read_resource_limit item apart, which counts streams) reasons[reason].total is the sum of the items' counts; body_is_record_box, space_outline_is_record_box and area_body_refused total exported.bounding_box_bodies, bounding_box_spaces and area_body_refusals.",
+      "description": "Each fail-closed decision behind skipped and the exported body and outline counts, one entry per element (#1326): why an element was left out, a body is only its record's box, an opening was not cut, an outline was not read. Present only when asked for (rvt-ifc --export-decisions); without it the diagnostics are the bytes they were. Bounded: at most cap_per_reason entries a reason, the rest counted as dropped. Not written in the IFC file. The skipped items are counted from the same decisions: for every reason of skipped (the stream_not_read_resource_limit item apart, which counts streams) reasons[reason].total is the sum of the items' counts; body_is_record_box, space_outline_is_record_box, area_body_refused, slab_shape_refused and wall_base_cut_refused total exported.bounding_box_bodies, bounding_box_spaces, area_body_refusals, slab_shape_refusals and wall_base_refusals.",
       "required": ["cap_per_reason", "dropped", "reasons", "entries"],
       "properties": {
         "cap_per_reason": {
@@ -907,7 +923,7 @@
               },
               "reason": {
                 "type": "string",
-                "description": "The reason of the skipped item the decision is counted in, or body_is_record_box, space_outline_is_record_box or area_body_refused."
+                "description": "The reason of the skipped item the decision is counted in, or body_is_record_box, space_outline_is_record_box, area_body_refused, slab_shape_refused or wall_base_cut_refused."
               },
               "element_id": {
                 "type": "integer",
