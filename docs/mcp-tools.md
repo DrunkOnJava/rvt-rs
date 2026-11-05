@@ -251,7 +251,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 ## list_rooms
 
-List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_boundary or area_boundary_joined for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
+List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_boundary or area_boundary_joined for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Each room's space_kind says what it is (room, area, mep_space or family_instance): read it, not space_outline_source, to tell an Area from a room, and never filter on the values of space_outline_source, which change with the rules that read outlines. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
 
 Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
@@ -538,6 +538,7 @@ One room.
 | `name` | string \| null | no |  |
 | `number` | string \| null | no |  |
 | `provenance` | [ElementProvenance](#elementprovenance) | yes |  |
+| `space_kind` | string \| null | no | What the space is (#1437): `room`, `area` (a Revit Area), `mep_space` (a Revit Space) or `family_instance` (a family instance or mass written as a space through its own "Export to IFC As"), from the Revit class of the record it was read from. Ask this to tell an Area from a room, and never filter on the values of `space_outline_source`, which says where an outline came from and gains values with a release. The same value is the IFC export's `RvtElementRecordGeometry.SpaceKind` and the room schedule's `space_kind` column. Absent only for a space whose class is none of these, which `get_diagnostics` counts as `exported.spaces_without_kind`. |
 
 ### SkippedOut
 
