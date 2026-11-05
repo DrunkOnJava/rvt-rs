@@ -159,6 +159,22 @@ that says to call `open_model` again. The tool descriptions say the same.
 | `export_ifc` | Writes IFC4 to `out_path` and returns a summary and a `resource_link` to the file. `options` takes `rvt-ifc`'s switches: `mode`, `saved_meshes` (`doors_and_windows`, `all`, `off`), `revit_property_sets`, `revit_set_placement`, `no_base_quantities`, `allow_partial`. |
 | `export_gltf` | Writes binary glTF to `out_path` and returns the same kind of summary and link. |
 
+### Elements and levels as the export writes them
+
+The lists, counts and levels are the elements the IFC export writes, in the
+storey it puts them in (`rvt::ifc::step_writer::placements`, which the writer
+writes with). A part of a stair, a railing or a curtain wall has the level of
+its whole, an element in a room the level of the room, and an opening the
+level of its host, as the IFC's containment and aggregation say. A further
+piece of an element of separate loops, which the export writes as an item of
+the owner's body and not as an element, is not a row and not in `total` or
+`by_ifc_type`; the summary counts it by IFC entity in `folded_into_bodies`
+(always present, empty where none is folded), and the diagnostics' `exported`
+counts include it. A part of several wholes takes the storey of the first,
+which is not measured. The diagnostics' `storey_bound_elements` and the rooms
+schedule (`room_rows`) read the same placement, so a part counts as bound to
+its whole's storey in both.
+
 ### Names
 
 A row's `name` is the `Name` the export writes (its `long_name` the `LongName`
@@ -364,4 +380,11 @@ Einhoven the cancellation always lands during the decode), that stdout carries
 nothing but JSON, and that the server exits cleanly when stdin closes (after a
 session, after only `server/discover` or `initialize`, and at once). Another test holds
 `mcp-tools.json` to what the server reports for `tools/list`. CI runs it in the
-test matrix and again in Corpus health, where Einhoven runs in both lifecycles.
+test matrix and again in its "MCP server on Einhoven" job, where Einhoven runs
+in both lifecycles. That job also keeps every tool's `outputSchema` and every
+structured answer the test is given, through rmcp's client or a raw JSON-RPC
+request (`RVT_MCP_ANSWERS_DIR`), and `tools/ci/validate-mcp-answers.py --require-all` checks each
+answer against its tool's schema, failing too when a tool gave no answer:
+a field the schema requires and an answer leaves out fails CI, as it would fail
+a client that validates `structuredContent` (#1415). The answers and schemas are
+the job's `mcp-answers` artifact.
