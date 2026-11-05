@@ -1288,9 +1288,7 @@ project's 38 framing members (23 of them the system's), so neither is added.
 Furniture Systems are `IfcSystemFurnitureElement` in the public IFC4 export of
 the 2018 `rac_basic` (RE-326 section 5, read locally): the 3 placed Furniture
 Systems of that save are all in it (3 of 3), none written that it lacks;
-the category qualifies and is not yet added, since a new category is a pull
-request of its own, and `category_map`'s `IfcFurniture` mapping for it is not
-what that export writes. Revit's exporter has code for rebar and beam systems
+the category meets the rule, and RE-352 below adds it. Revit's exporter has code for rebar and beam systems
 (revit-ifc, CLEANROOM source 5), so the absence of an export is not evidence
 that Revit never writes them. On `rac_advanced` and `rac_basic` the sweep reads
 1,349 panels, 3,276 mullions and 100 doors, and 44 panels, 144 mullions and 16
@@ -1311,8 +1309,14 @@ on one project and 3 elements: Revit's public IFC4 export of Autodesk's 2018
 Systems frames of that save are in it and none is written that it lacks
 (counts of ids; Measure runs 42097940515 and 42108271073), and no other model
 in Measure places one. Type objects, containment in spaces and Revit's
-property sets are not written. The exports this head moves are not yet
-measured (`reports/element-framing/RE-352-furniture-systems.md`).
+property sets are not written. Measure run 42116433579 (`8bf4e3f2`, `-f
+base=main -f samples=true -f sample_years="2015 2027" -f scorers=none -f
+models="-"`) moves 13 of Autodesk's 58 samples' exports, every `rac_basic` save
+of 2015 to 2027, each by 3 `IfcSystemFurnitureElement` and nothing else, and
+the other 45 are byte for byte main's. Not yet measured: the models, the
+held-out files, and the same-project check (that run's is NOT MEASURED, since
+`scorers=none` left it out)
+(`reports/element-framing/RE-352-furniture-systems.md`).
 
 ## Performance
 

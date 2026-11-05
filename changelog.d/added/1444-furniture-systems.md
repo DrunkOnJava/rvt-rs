@@ -11,4 +11,8 @@
   nothing is quoted from it). No other model in Measure places a Furniture
   System, so there is no held-out check. Not written: type objects,
   containment in spaces, Revit's property sets, a body other than the
-  record's box. The exports this head moves are not yet measured.
+  record's box. Measure run 42116433579 (`8bf4e3f2`) moves 13 of Autodesk's 58
+  samples' exports, every `rac_basic` save of 2015 to 2027, each by 3
+  `IfcSystemFurnitureElement` and nothing else; the other 45 are byte for
+  byte main's. The models, the held-out files and the same-project check are
+  not yet measured.
