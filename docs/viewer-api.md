@@ -204,14 +204,25 @@ experimentally, when the element has no saved parameters, when the read failed
 focus moves to the group's message and then to its result, and a live region
 announces the read and its result.
 
-**Selecting an element makes no request.** The worker is bundled into the
-page's own script (Vite's `?worker&inline`) and starts from a blob URL, which
-the page's `Content-Security-Policy` allows with `blob:` in `worker-src`
-(`docs/viewer-privacy-posture.md`); the page's other directives are unchanged.
-It starts from the compiled wasm module the worker that opened the file hands
-over (`WebAssembly.compileStreaming` there, once, the open's one fetch of the
-wasm; `initSync({ module })` here), so there is no chunk or wasm to fetch, and
-a page taken offline after it has loaded still reads (`viewer/tests/parameters-row.spec.ts`).
+**Nothing is requested once the first file is open.** Both workers, the open's
+and this one, are bundled into the page's own script (Vite's `?worker&inline`)
+and start from blob URLs, which the page's `Content-Security-Policy` allows
+with `blob:` in `worker-src` (`docs/viewer-privacy-posture.md`); the page's other
+directives are unchanged. The decoder's glue is a static import of the page. The
+first open's worker fetches the wasm once (the page tells it where it is, as a
+blob worker has no base to resolve against), compiles it
+(`WebAssembly.compileStreaming`) and hands the module to the page, which keeps
+it: the next open, the workers that read, and the main thread's IFC, plan and
+CSV exports start from it (`initSync({ module })` in a worker, the module given
+to `default` on the main thread, whose synchronous instantiation of a large
+module is not allowed), so there is no chunk or wasm to fetch. A page taken
+offline after it has loaded still reads, exports and opens the file again
+(`viewer/tests/parameters-row.spec.ts`, `no-network.spec.ts`). Every lazy load in
+`viewer/src` that could run after the open is therefore gone: the main thread's
+`import('../pkg/rvt.js')` is static, the workers' scripts are inlined, and the
+wasm's `new URL(..., import.meta.url)` is resolved once by the page. What still
+fetches is opening a gallery demo, which is an open, and the catalog and
+thumbnails the page loads to show the gallery.
 
 The read is a pass over the file, so it does not run in the worker that opened
 it: that worker would be held up for as long as it takes, and the wasm linear

@@ -5,7 +5,13 @@
  *
  * Protocol:
  *   main → worker: { type: 'parse', bytes: Uint8Array, mode?: string,
- *                    limits?: OpenLimitsOptions }
+ *                    limits?: OpenLimitsOptions, wasmUrl: string,
+ *                    wasmModule?: WebAssembly.Module }
+ *                  The worker is bundled into the page and starts from a blob
+ *                  URL (`?worker&inline`), so it fetches no script and resolves
+ *                  no URL itself: `wasmUrl` is where the page says the wasm is,
+ *                  fetched only when `wasmModule` (the page's, from an earlier
+ *                  open) is absent.
  *                  `limits` are the reader's resource limits; absent means the
  *                  defaults (the large-model retry sends `largeModel: true`).
  *                  `limits.phase` (a phase's name or ElementId) exports that
@@ -87,7 +93,16 @@ interface TooLarge {
 }
 
 type ParseMsg =
-  | { type: 'parse'; bytes: Uint8Array; mode?: string; limits?: OpenLimitsOptions }
+  | {
+      type: 'parse';
+      bytes: Uint8Array;
+      mode?: string;
+      limits?: OpenLimitsOptions;
+      /** Where the wasm is, as the page resolved it: this worker's own base is a blob URL. */
+      wasmUrl: string;
+      /** The compiled wasm, once the page has one: then nothing is fetched. */
+      wasmModule?: WebAssembly.Module;
+    }
   | { type: 'info'; index: number };
 
 // Retained so `info` requests can re-run element_info_panel (host /
@@ -106,13 +121,14 @@ console.error = (...args: unknown[]): void => {
 };
 
 /**
- * The decoder's wasm, fetched once and compiled once. The page keeps the
- * compiled module and hands it to each worker that reads an element's saved
- * parameters (parameters-worker.ts), so that selecting an element makes no
- * request: those workers start from this module and fetch nothing.
+ * The decoder's wasm, fetched once and compiled once, by the first open. The
+ * page keeps the compiled module and hands it to every later open and to each
+ * worker that reads an element's saved parameters (parameters-worker.ts), and
+ * uses it for its own exports, so that nothing is requested once the first
+ * file is open: those start from this module and fetch nothing.
  */
-async function compileWasm(): Promise<WebAssembly.Module> {
-  const response = await fetch(new URL('../pkg/rvt_bg.wasm', import.meta.url));
+async function compileWasm(url: string): Promise<WebAssembly.Module> {
+  const response = await fetch(url);
   if (!response.ok) throw new Error(`could not load the decoder: ${response.status}`);
   try {
     return await WebAssembly.compileStreaming(response.clone());
@@ -161,10 +177,11 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
   try {
     step('Initializing wasm');
     const startedAt = performance.now();
-    const wasmModule = await compileWasm();
+    const wasmModule = msg.wasmModule ?? (await compileWasm(msg.wasmUrl));
     const wasm = await init({ module_or_path: wasmModule });
     wasmMemory = wasm.memory;
-    send({ type: 'wasm', module: wasmModule });
+    // The first open's module is the page's from here on.
+    if (!msg.wasmModule) send({ type: 'wasm', module: wasmModule });
 
     // VW1-20 — progressive streaming. Emit the cheap metadata
     // first (sub-second even on hundreds-of-MB files) so the UI

@@ -20,11 +20,15 @@
   already holds and ends with its answer, so nothing of the file stays
   resident beyond what the page held before, the open's worker is not held up
   by a read, and a read that fails leaves the rest of the panel where it was.
-  **Selecting an element makes no request**: the worker is bundled into the
-  page and starts from a blob URL (the page's `worker-src` gains `blob:`, and
-  nothing else in its Content-Security-Policy moves, `docs/viewer-privacy-posture.md`)
-  from the compiled wasm the worker that opened the file hands over, so a page
-  taken offline after it has loaded still reads. A read has taken 0.74 to 1.04
+  **Nothing is requested once the first file is open**: both workers are
+  bundled into the page and start from blob URLs (the page's `worker-src` gains
+  `blob:`, and nothing else in its Content-Security-Policy moves,
+  `docs/viewer-privacy-posture.md`), the decoder's glue is a static import and the
+  compiled wasm the first open's worker hands over serves the next open, the
+  reads and the main thread's IFC, plan and CSV exports, so selecting an
+  element, exporting and opening the file again fetch nothing and a page taken
+  offline after it has loaded does all three. The first page load is heavier by
+  the size of that script (not yet measured on this head). A read has taken 0.74 to 1.04
   times the open's wasm memory, rising with the file, and nothing above 910 MiB
   has been measured, so a selection is read on its own only while the wasm
   memory the page holds is at most 1 GiB; above that the panel asks first,

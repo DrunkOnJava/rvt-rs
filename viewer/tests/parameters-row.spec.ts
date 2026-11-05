@@ -510,12 +510,13 @@ sampleTest('the answers kept are bounded, the least recently selected going firs
  * fail the way worker-failures.spec.ts fails the open's: a panic message on console.error before
  * the trap, or (`panic` null) a bare `unreachable` with none, which is how V8 words a failed
  * allocation. `delayMs` holds the file back that long, so that a read is still running when the
- * test acts. The worker is bundled into the page and starts from a blob URL, so the shaping is
- * put in front of that blob's script as the page makes its URL.
+ * test acts. The workers are bundled into the page and start from blob URLs, so the shaping is
+ * put in front of a blob's script as the page makes its URL; the open's worker is the first the
+ * page starts, so `skip` (1 unless given) leaves it as shipped.
  */
 async function shapeReads(
   page: Page,
-  shape: { fail?: { panic: string | null }; delayMs?: number; times: number },
+  shape: { fail?: { panic: string | null }; delayMs?: number; skip?: number; times: number },
 ): Promise<void> {
   await page.addInitScript((shape) => {
     const prelude = `(() => {
@@ -545,12 +546,17 @@ async function shapeReads(
         };
       }
     })();\n`;
+    const skip = shape.skip ?? 1;
+    let seen = 0;
     let used = 0;
     const real = URL.createObjectURL.bind(URL);
     URL.createObjectURL = (object: Blob | MediaSource) => {
-      if (object instanceof Blob && /javascript/.test(object.type) && used < shape.times) {
-        used += 1;
-        return real(new Blob([prelude, object], { type: object.type }));
+      if (object instanceof Blob && /javascript/.test(object.type)) {
+        seen += 1;
+        if (seen > skip && used < shape.times) {
+          used += 1;
+          return real(new Blob([prelude, object], { type: object.type }));
+        }
       }
       return real(object);
     };
@@ -677,33 +683,73 @@ sampleTest('a worker that ends without a word is found, and loading does not sho
   expect((await settled(page)).state).toBe('on-request');
 });
 
-// Selecting an element makes no request, and a page taken offline after it loaded still reads:
-// the worker is in the page's own bundle and starts from the module the open compiled.
-sampleTest('selecting an element makes no request, and an offline page reads', async ({ page }) => {
-  test.setTimeout(300_000);
-  const expected = oracle();
-  await open(page, sample!);
-  const requests: string[] = [];
-  await page.context().route('**/*', async (route) => {
-    requests.push(route.request().url());
-    await route.abort('internetdisconnected');
-  });
-  page.on('request', (request) => requests.push(request.url()));
-  await page.context().setOffline(true);
+// Nothing is requested once the page has loaded and the first file is open, and a page taken
+// offline then still does everything: an element's saved parameters are read, an IFC, a plan and
+// a glTF export are made (the main thread's wasm starts from the module the open compiled, with
+// the glue in the page), and the file is opened again (the saved-mesh toggle reopens it: the
+// worker is in the page's bundle and starts from that module). Every request is recorded, the
+// workers' included.
+sampleTest(
+  'selecting, exporting and opening again make no request, and an offline page does them',
+  async ({ page }) => {
+    test.setTimeout(300_000);
+    const expected = oracle();
+    await open(page, sample!);
+    const requests: string[] = [];
+    await page.context().route('**/*', async (route) => {
+      requests.push(route.request().url());
+      await route.abort('internetdisconnected');
+    });
+    page.on('request', (request) => requests.push(request.url()));
+    await page.context().setOffline(true);
 
-  const picks = await withParameters(page, expected, 3);
-  for (const pick of picks) {
-    await select(page, pick.index);
-    const shown = await settled(page);
-    expect(shown.state, `element ${pick.id}: ${shown.text.slice(0, 200)}`).toBe('ready');
-    expect(differences(pick.id, shown, expected.get(pick.id)!)).toEqual([]);
-  }
-  // A blob: URL is the page's own memory, not the network.
-  expect(
-    requests.filter((url) => /^https?:/.test(url)),
-    'requests made by selecting elements',
-  ).toEqual([]);
-});
+    const picks = await withParameters(page, expected, 3);
+    for (const pick of picks) {
+      await select(page, pick.index);
+      const shown = await settled(page);
+      expect(shown.state, `element ${pick.id}: ${shown.text.slice(0, 200)}`).toBe('ready');
+      expect(differences(pick.id, shown, expected.get(pick.id)!)).toEqual([]);
+    }
+
+    // The exports: the IFC and the plan run wasm on the main thread.
+    for (const [selector, extension] of [
+      ['#export-ifc', /\.ifc$/],
+      ['#export-svg', /\.svg$/],
+      ['#export-glb', /\.glb$/],
+    ] as const) {
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        page.locator(selector).click(),
+      ]);
+      expect(download.suggestedFilename(), selector).toMatch(extension);
+      expect(fs.statSync((await download.path())!).size, `${selector} wrote nothing`).toBeGreaterThan(0);
+    }
+
+    // Opened again: the toggle reopens the open file.
+    const before = await page.locator('#status').getAttribute('data-load-stats');
+    await page.locator('#saved-meshes').click();
+    await expect
+      .poll(
+        async () => {
+          const now = await page.locator('#status').getAttribute('data-load-stats');
+          return now !== null && now !== before;
+        },
+        { message: 'the file was opened again', timeout: 300_000 },
+      )
+      .toBe(true);
+    await expect(page.locator('#status')).toHaveText(/Loaded/);
+    await select(page, picks[0]!.index);
+    const again = await settled(page);
+    expect(again.state).toBe('ready');
+    expect(differences(picks[0]!.id, again, expected.get(picks[0]!.id)!)).toEqual([]);
+
+    // A blob: URL is the page's own memory, not the network.
+    expect(
+      requests.filter((url) => /^https?:/.test(url)),
+      'requests made after the first file was open',
+    ).toEqual([]);
+  },
+);
 
 // A read for an element nobody is looking at is ended, and the element whose read is running
 // keeps it when selected again. The reads are held back four seconds, so that one is still

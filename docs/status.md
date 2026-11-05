@@ -831,11 +831,13 @@ named ones first and the nameless ones behind a fold that groups them by why
 they have no name (#255), each row saying in words where its parameter is
 defined. The `savedParameters` binding reads them for the selected element
 only, in a worker of its own that ends with the answer, so the open is not
-changed and nothing of the file stays resident. Selecting an element makes no
-request: the worker is bundled into the page and starts from a blob URL (the
-page's `worker-src` gained `blob:`, `docs/viewer-privacy-posture.md`), from the
-compiled wasm the open's worker hands over, and a page taken offline after the
-load still reads. The Parameters row of File Status no longer says the rest are
+changed and nothing of the file stays resident. Nothing is requested once the
+first file is open: both workers are bundled into the page and start from blob
+URLs (the page's `worker-src` gained `blob:`, `docs/viewer-privacy-posture.md`),
+the decoder's glue is a static import, and the compiled wasm the first open's
+worker hands over serves the next open, the reads and the main thread's IFC,
+plan and CSV exports, so a page taken offline after the load still reads,
+exports and opens the file again. The Parameters row of File Status no longer says the rest are
 still to be decoded: it counts the values written to the IFC property sets and
 points to the panel. The panel says so when a file is of a release outside
 Revit 2015 to 2027, when one of 2015 to 2022 is read only experimentally

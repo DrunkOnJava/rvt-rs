@@ -16,6 +16,8 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import supportMatrix from '../../docs/support-matrix.json';
+import * as wasmGlue from '../pkg/rvt.js';
+import DecoderWorker from './worker.ts?worker&inline';
 import ParametersWorker from './parameters-worker.ts?worker&inline';
 import {
   elementIdOf,
@@ -841,11 +843,21 @@ function stopWorker(): void {
   if (worker) worker.terminate();
   worker = null;
 }
+/**
+ * Where the decoder's wasm is, resolved against this script (a worker started
+ * from a blob URL has no base to resolve it against). Only the first open
+ * fetches it: the worker compiles it and hands the module to the page
+ * (`decoderWasm`), and every later open, and every worker that reads saved
+ * parameters, starts from that module.
+ */
+const wasmUrl = new URL('../pkg/rvt_bg.wasm', import.meta.url).href;
 function resetWorker(): Worker_ {
   stopWorker();
-  const w = new Worker(new URL('./worker.ts', import.meta.url), {
-    type: 'module',
-  }) as Worker_;
+  // Bundled into this script and started from a blob URL, so that opening the
+  // file again (another phase, the saved-mesh toggle, the large-model retry)
+  // fetches no worker script: nothing is requested once the page has loaded and
+  // the first file is open.
+  const w = new DecoderWorker({ name: 'decoder' }) as Worker_;
   worker = w;
   return w;
 }
@@ -1313,9 +1325,10 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
       | { type: 'wasm'; module: WebAssembly.Module }
       | { type: 'error'; message: string; tooLarge?: TooLarge };
     if (msg.type === 'wasm') {
-      // Kept for the workers that read saved parameters, which start from it
-      // and so fetch nothing when an element is selected.
-      parametersWasm = msg.module;
+      // Kept for good: the same wasm serves every file. The workers that read
+      // saved parameters, the main thread's exports and the next open start from
+      // it, so none of them fetches anything.
+      decoderWasm = msg.module;
       return;
     }
     if (msg.type === 'info') {
@@ -1433,6 +1446,8 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
       bytes,
       mode: qualityMode,
       limits: { ...openLimits, savedMeshes, ...(phase === undefined ? {} : { phase }) },
+      wasmUrl,
+      wasmModule: decoderWasm ?? undefined,
     },
     [bytes.buffer],
   );
@@ -2672,7 +2687,7 @@ function revitGlobalId(idx: number): string | undefined {
  *
  * Selecting an element makes no request: the worker is bundled into this page
  * and starts from a blob URL, and it starts from the compiled wasm module the
- * worker that opened the file handed over (`parametersWasm`), so nothing is
+ * worker that opened the file handed over (`decoderWasm`), so nothing is
  * fetched, and a page taken offline after it loaded still reads.
  */
 const PARAMETERS_READ_DELAY_MS = 150;
@@ -2711,8 +2726,8 @@ let parametersTarget: number | null = null;
 /** Ends the lock request that tells the page its worker has gone. */
 let parametersWatch: AbortController | null = null;
 let parametersReads = 0;
-/** The decoder's compiled wasm, which the worker that opened the file handed over. */
-let parametersWasm: WebAssembly.Module | null = null;
+/** The decoder's compiled wasm, which the worker of the first open handed over: the page's for good. */
+let decoderWasm: WebAssembly.Module | null = null;
 /** Whether a read of this file has run out of memory: it is read only when asked from then on. */
 let parametersRanOutOfMemory = false;
 /** The wasm linear memory the open left (worker.ts `stats`), which a read in a second instance comes on top of. */
@@ -2746,7 +2761,6 @@ function resetSavedParameters(): void {
   savedParametersCache.clear();
   savedParametersCacheCharacters = 0;
   loadedWasmMemoryBytes = 0;
-  parametersWasm = null;
   parametersRanOutOfMemory = false;
 }
 
@@ -3054,7 +3068,7 @@ function readSavedParameters(id: number): void {
   stopParametersRead();
   parametersTarget = id;
   const file = currentFile;
-  const module = parametersWasm;
+  const module = decoderWasm;
   if (!file || !module) {
     finishRead(id, {
       type: 'error',
@@ -4137,21 +4151,24 @@ document.body.addEventListener('drop', (ev) => {
  * this was added. A failed initialisation is not cached, so the next
  * click retries.
  */
-type WasmModule = typeof import('../pkg/rvt.js');
+type WasmModule = typeof wasmGlue;
 let mainThreadWasmReady: Promise<WasmModule> | null = null;
 /** The main thread's instance's memory once an export has made one: it counts toward what a read may be made beside. */
 let mainThreadWasmMemory: WebAssembly.Memory | null = null;
 function mainThreadWasm(): Promise<WasmModule> {
   if (!mainThreadWasmReady) {
-    mainThreadWasmReady = import('../pkg/rvt.js')
-      .then(async (mod) => {
-        mainThreadWasmMemory = (await mod.default()).memory;
-        return mod;
-      })
-      .catch((err: unknown) => {
-        mainThreadWasmReady = null;
-        throw err;
-      });
+    // The glue is part of the page (a static import) and the module is the one
+    // the open compiled, so an export fetches nothing, however late it is
+    // clicked. `default` takes a module and instantiates it asynchronously,
+    // which the main thread allows at any size; `initSync` would not.
+    mainThreadWasmReady = (async () => {
+      if (!decoderWasm) throw new Error('the open did not hand over the decoder');
+      mainThreadWasmMemory = (await wasmGlue.default({ module_or_path: decoderWasm })).memory;
+      return wasmGlue;
+    })().catch((err: unknown) => {
+      mainThreadWasmReady = null;
+      throw err;
+    });
   }
   return mainThreadWasmReady;
 }

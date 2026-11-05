@@ -3,7 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-type NetworkPhase = 'initial-static' | 'opening-sample' | 'post-open' | 'selecting';
+type NetworkPhase =
+  | 'initial-static'
+  | 'opening-sample'
+  | 'post-open'
+  | 'selecting'
+  | 'exporting'
+  | 'reopening';
 
 interface NetworkRecord {
   url: string;
@@ -91,6 +97,35 @@ test('opens a sample without external or post-open network requests', async ({ p
   );
   await page.waitForTimeout(observationMs);
 
+  // The exports run wasm on the main thread, which starts from the module the
+  // open compiled with the glue already in the page: an IFC, a plan and a glTF
+  // export fetch nothing, however late they are clicked.
+  phase = 'exporting';
+  for (const selector of ['#export-ifc', '#export-svg', '#export-glb']) {
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator(selector).click(),
+    ]);
+    expect((await download.path()) !== null, `${selector} made no file`).toBe(true);
+  }
+  await page.waitForTimeout(observationMs);
+
+  // Opening the file again (the saved-mesh toggle does) starts the worker from
+  // the page's bundle and from the module it already holds.
+  phase = 'reopening';
+  const before = await page.locator('#status').getAttribute('data-load-stats');
+  await page.locator('#saved-meshes').click();
+  await expect
+    .poll(
+      async () => {
+        const now = await page.locator('#status').getAttribute('data-load-stats');
+        return now !== null && now !== before;
+      },
+      { message: 'the file was opened again', timeout: 300_000 },
+    )
+    .toBe(true);
+  await page.waitForTimeout(observationMs);
+
   const base = new URL(baseURL ?? 'http://127.0.0.1:4173');
   const disallowed = records.filter((record) => isDisallowed(record, base));
   expect(disallowed, formatFailure(disallowed, records)).toEqual([]);
@@ -127,7 +162,7 @@ function isNetworkUrl(url: string): boolean {
 }
 
 function isDisallowed(record: NetworkRecord, base: URL): boolean {
-  if (record.phase === 'post-open' || record.phase === 'selecting') return true;
+  if (record.phase !== 'initial-static' && record.phase !== 'opening-sample') return true;
 
   const url = new URL(record.url);
   if (url.origin !== base.origin) return true;
