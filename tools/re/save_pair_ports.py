@@ -15,6 +15,7 @@ Usage:
 """
 
 import argparse
+import sys
 
 import ifcopenshell
 import ifcopenshell.util.placement
@@ -53,14 +54,20 @@ def main():
         if key not in reference:
             mine += len(placed)
             continue
-        order = lambda p: tuple(p[0])
-        for (origin, axis), (origin2, axis2) in zip(sorted(placed, key=order), sorted(reference[key], key=order)):
+        order = lambda p: tuple(np.round(p[0], 6))
+        placed, others = sorted(placed, key=order), sorted(reference[key], key=order)
+        for (origin, axis), (origin2, axis2) in zip(placed, others):
             if np.abs(origin - origin2).max() <= ORIGIN_TOLERANCE_M and np.abs(axis - axis2).max() <= AXIS_TOLERANCE:
                 same += 1
             else:
                 differ += 1
-    theirs = sum(len(placed) for key, placed in reference.items() if key not in candidate)
+        # A key with more ports on one side than the other: the extra ones are on that side only.
+        mine += max(len(placed) - len(others), 0)
+        theirs += max(len(others) - len(placed), 0)
+    theirs += sum(len(placed) for key, placed in reference.items() if key not in candidate)
     print(f"same {same}, differ {differ}, only candidate {mine}, only reference {theirs}")
+    if differ or mine or theirs:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

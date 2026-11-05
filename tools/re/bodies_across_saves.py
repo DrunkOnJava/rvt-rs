@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Whether the bodies a Revit 2026 or 2027 save draws are the bodies the same
-project's earlier save draws (RE-341).
+project's earlier save draws (RE-341, RE-346).
 
 No Revit export of a 2026 or 2027 beam, landing, stair run or sketch outline
 is available to score them against, so each is held to the same Autodesk
@@ -25,6 +25,8 @@ lists change:
   named elements       the elements NAMED_TAGS lists, whatever their source,
                        held to the 2024 save; their sources and volumes in
                        every save are printed
+  pipes                `BodySource` is partition_pipe_axis (RE-131, RE-346);
+                       held to the 2025 save, which draws them so
 
 Each is paired by `Tag` (the ElementId, which a project keeps across saves)
 with the earlier save's element, and fails on any difference in: its IFC
@@ -39,6 +41,11 @@ required element not compared equal (REQUIRED), and a check that compared
 nothing, and on a directory whose project is not one of MINIMUMS'. An element
 the earlier save draws and this one leaves as a record box is counted, not
 scored: a body left out is fail closed.
+
+A save is also held to the 2025 save for what `readers_across_saves.py` checks
+(RE-346): its door and window cuts, ports and properties, and a census of every
+body. The pipes' MINIMUMS and that module's are from Measure run 42063046730
+(head 3149973f, 2026 saves).
 
 An earlier save that is not among the arguments (a run that fetched only some
 years) is not compared, and the verdict is `PARTIAL (not compared: ...)`, never
@@ -95,7 +102,8 @@ REFERENCE_YEAR = {BEAMS_AND_LANDINGS: 2024, STAIR_RUNS: 2025, SKETCH_OUTLINES: 2
 READERS_YEAR = 2025
 
 # Bodies the sample is known to draw by BodySource (Measure run 41988011289,
-# head 1d5bbf03, exported diagnostics), and outlines by group.
+# head 1d5bbf03, exported diagnostics; the MEP samples' pipes, run 42063046730,
+# head 3149973f), and outlines by group.
 MINIMUMS = {
     "racadvancedsampleproject": {
         BEAMS_AND_LANDINGS: {
@@ -110,8 +118,8 @@ MINIMUMS = {
         STAIR_RUNS: {"partition_stair_run_sketch": 1},
     },
     "racbasicsampleproject": {STAIR_RUNS: {"partition_stair_run_sketch": 2}},
-    "rmeadvancedsampleproject": {PIPES: {"partition_pipe_axis": 0}},
-    "rmebasicsampleproject": {PIPES: {"partition_pipe_axis": 0}},
+    "rmeadvancedsampleproject": {PIPES: {"partition_pipe_axis": 454}},
+    "rmebasicsampleproject": {PIPES: {"partition_pipe_axis": 457}},
 }
 # At least this many sketch outlines compared (Measure run 42010304828, head
 # e56d31b5: rac_advanced 82, rac_basic 12, rst_basic 5).
@@ -391,6 +399,7 @@ def main():
 
         total += readers_across_saves.check(
             project,
+            int(own_year) if own_year.isdigit() else 0,
             candidate_path,
             model,
             earlier_paths[READERS_YEAR],
