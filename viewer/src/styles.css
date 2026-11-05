@@ -1407,6 +1407,28 @@ header .export-hint[hidden] {
   line-height: var(--sx-lh-xs);
   color: var(--sx-color-text);
 }
+/* Saved parameters (#35): the state they are in, and one band per level. */
+.info-parameters-state {
+  font-size: var(--sx-fs-xs);
+  line-height: var(--sx-lh-xs);
+  color: var(--sx-color-dimmed);
+}
+.info-parameters-state + .side-btn {
+  margin-top: 8px;
+}
+.info-parameters-section + .info-parameters-section {
+  margin-top: 8px;
+}
+.info-parameters-subtitle,
+.info-parameters-summary {
+  padding: 4px 0;
+  font-size: var(--sx-fs-xs);
+  font-weight: var(--sx-fw-medium);
+  color: var(--sx-color-text);
+}
+.info-group-parameters .info-row .k {
+  overflow-wrap: anywhere;
+}
 .info-details > summary {
   list-style: none;
   cursor: pointer;

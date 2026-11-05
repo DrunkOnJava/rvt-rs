@@ -20,6 +20,7 @@
 //! appear.
 
 use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
 
 use wasm_bindgen::prelude::*;
 
@@ -38,6 +39,8 @@ use rvt::ifc::{
     step_writer::write_step,
 };
 use rvt::reader::{OpenLimits, ProjectPhase};
+use rvt::research::native_document::NATIVE_RELEASES;
+use rvt::research::native_element_parameters::{self, ElementParameter};
 
 fn err_str<E: std::fmt::Display>(e: E) -> JsValue {
     JsValue::from_str(&e.to_string())
@@ -474,6 +477,88 @@ pub fn js_element_info_panel(model: JsValue, entity_index: usize) -> Result<JsVa
     let model: IfcModel = serde_wasm_bindgen::from_value(model).map_err(err_str)?;
     let panel: Option<ElementInfoPanel> = element_info_panel(&model, entity_index);
     serde_wasm_bindgen::to_value(&panel).map_err(err_str)
+}
+
+/// What [`saved_parameters`] returns, as JSON: the file's release, whether the
+/// saved parameters of that release are read, and each requested element that
+/// has a native record with its parameters.
+#[derive(serde::Serialize)]
+struct SavedParametersJson {
+    release: u32,
+    native: bool,
+    /// The first and last release whose native records are read.
+    native_releases: [u32; 2],
+    /// By ElementId. An element with no native record is not listed.
+    elements: BTreeMap<String, Vec<ElementParameter>>,
+    unresolved_family_slots: usize,
+    instance_parameters_without_value: usize,
+}
+
+/// A whole, non-negative number a JS number holds exactly, as an ElementId.
+fn element_id(id: f64) -> Result<u64, JsValue> {
+    const MAX_SAFE_INTEGER: f64 = 9_007_199_254_740_991.0;
+    if (0.0..=MAX_SAFE_INTEGER).contains(&id) && id.fract() == 0.0 {
+        Ok(id as u64)
+    } else {
+        Err(JsValue::from_str(&format!(
+            "an ElementId must be a whole number, got {id}"
+        )))
+    }
+}
+
+/// The saved parameters of the elements `ids` (ElementIds), as JSON text:
+/// `{ release, native, native_releases, elements, unresolved_family_slots,
+/// instance_parameters_without_value }`.
+///
+/// It is the read `rvt-elements` and Python's `decoded_elements()` list as an
+/// element's `parameters` (RE-207, `rvt::research::native_element_parameters`),
+/// so each entry of `elements[id]` is the entry those print for that element:
+/// name (null for a built-in), `parameter_id`, `kind`, `storage_type`,
+/// `value` in internal units with `si_value` and `si_unit` where the unit is
+/// known, `level` (`instance` or `type`) and the record it was read from.
+/// `native` is false, and `elements` empty, for a file of a release outside
+/// `native_releases` (first and last, both read); an element whose id has no
+/// native record is left out of `elements`. The two counts are what the read
+/// could not list for these elements.
+///
+/// `bytes` is the whole file and is opened here for this call alone, with
+/// `limits` as `openRvtBytesWithDiagnosticsModeAndOpenLimits` takes them
+/// (`largeModel`, `maxStreamBytes`, `maxInflateBytes`; `null` for the
+/// defaults), and dropped when it returns: nothing of the file stays in this
+/// instance. The page calls it in a worker of its own, for one element at a
+/// time, and ends that worker when it has answered. An id that is not a whole
+/// number, a file that is not a Revit file and a file whose parameters cannot
+/// be read throw.
+#[wasm_bindgen(js_name = savedParameters)]
+pub fn saved_parameters(bytes: Vec<u8>, ids: Vec<f64>, limits: JsValue) -> Result<String, JsValue> {
+    install_panic_hook();
+    let request = limits_from_js(limits)?;
+    let ids = ids
+        .into_iter()
+        .map(element_id)
+        .collect::<Result<BTreeSet<u64>, JsValue>>()?;
+    let mut rf = RevitFile::open_bytes_with_limits(bytes, request.open_limits).map_err(err_str)?;
+    let release = rf.layout_release().map_err(err_str)?;
+    let native = NATIVE_RELEASES.contains(&release);
+    let read = if native {
+        native_element_parameters::read(&mut rf, &ids)
+            .map_err(|error| JsValue::from_str(&format!("{error:#}")))?
+    } else {
+        native_element_parameters::ElementParameters::default()
+    };
+    let json = SavedParametersJson {
+        release,
+        native,
+        native_releases: [*NATIVE_RELEASES.start(), *NATIVE_RELEASES.end()],
+        elements: read
+            .elements
+            .into_iter()
+            .map(|(id, parameters)| (id.to_string(), parameters))
+            .collect(),
+        unresolved_family_slots: read.unresolved_family_slots,
+        instance_parameters_without_value: read.instance_parameters_without_value,
+    };
+    serde_json::to_string(&json).map_err(err_str)
 }
 
 /// Build a flat schedule table of the BuildingElements the IFC export

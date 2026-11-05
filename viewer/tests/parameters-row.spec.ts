@@ -1,4 +1,5 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,5 +26,472 @@ coreInteriorTest(
     await expect(row).toHaveCount(1);
     await expect(row.locator('.status-value')).toHaveText(/^[1-9][\d,]* /);
     await expect(row.locator('.status-value')).not.toContainText('not read yet');
+    // RE-207 reads the rest of each element's parameters, on selection.
+    await expect(row.locator('.status-value')).not.toContainText('still to be decoded');
+    await expect(row.locator('.status-value')).toContainText('select an element to read its saved parameters');
+  },
+);
+
+// #35: the info panel lists an element's saved parameters (RE-207), read when it
+// is selected by a worker of its own (parameters-worker.ts). The sample is the
+// file the suite already opens, Einhoven, and the oracle is the command line:
+// viewer-test.yml builds rvt-elements beside gen-fixture, the test runs it on
+// the same file, and the entries the panel holds for an element must be the
+// entries it prints for that ElementId, whole.
+
+const sample = resolveSamplePath();
+const required = process.env.RVT_VIEWER_REQUIRE_JOURNEYS === '1';
+const sampleTest = required || sample !== null ? test : test.skip;
+
+/** One saved parameter, as rvt-elements prints it. */
+interface Parameter {
+  name: string | null;
+  parameter_id: number;
+  kind: string;
+  storage_type: string;
+  value: unknown;
+  si_value: number | null;
+  si_unit: string | null;
+  level: 'instance' | 'type';
+}
+
+interface CliElement {
+  id: number | null;
+  class_name: string;
+  parameters: Parameter[];
+}
+
+/** What the panel's parameters group holds. */
+interface Shown {
+  state: string;
+  elementId: number | null;
+  readMs: number | null;
+  wasmMemoryBytes: number | null;
+  rows: Array<{ parameter: Parameter; key: string; text: string; inFold: boolean }>;
+  headings: string[];
+  text: string;
+}
+
+function resolveSamplePath(): string | null {
+  const candidates = [
+    process.env.RVT_VIEWER_SAMPLE,
+    path.resolve(__dirname, '../../_project_corpus/Revit/Revit_IFC5_Einhoven.rvt'),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+  for (const candidate of candidates) {
+    const resolved = path.isAbsolute(candidate)
+      ? candidate
+      : path.resolve(process.cwd(), candidate);
+    if (fs.existsSync(resolved)) return resolved;
+  }
+  return null;
+}
+
+/** `rvt-elements FILE`: what the command line prints, by ElementId. */
+function rvtElements(file: string): Map<number, Parameter[]> {
+  let stdout: string;
+  try {
+    stdout = execFileSync('rvt-elements', [file, '--no-typed'], {
+      encoding: 'utf8',
+      maxBuffer: 1024 * 1024 * 1024,
+    });
+  } catch (err) {
+    throw new Error(
+      `rvt-elements could not be run (viewer-test.yml builds it beside gen-fixture and puts it on PATH): ${(err as Error).message}`,
+    );
+  }
+  const byId = new Map<number, Parameter[]>();
+  for (const element of JSON.parse(stdout) as CliElement[]) {
+    if (element.id !== null && !byId.has(element.id)) byId.set(element.id, element.parameters);
+  }
+  return byId;
+}
+
+let einhovenOracle: Map<number, Parameter[]> | undefined;
+function oracle(): Map<number, Parameter[]> {
+  einhovenOracle ??= rvtElements(sample!);
+  return einhovenOracle;
+}
+
+async function open(page: Page, file: string, query = ''): Promise<void> {
+  await page.goto(`/${query}`);
+  await expect(page.locator('#status')).toHaveText(/Ready/);
+  await page.locator('#file-input').setInputFiles(file);
+  await expect(page.locator('#status')).toHaveText(/Loaded/, { timeout: 300_000 });
+}
+
+/** The tree's elements: entity index, the ElementId its name ends in (if it does) and its IFC type. */
+async function treeElements(
+  page: Page,
+): Promise<Array<{ index: number; id: number | null; type: string }>> {
+  const rows = await page
+    .locator('.tree-node.tree-element[data-entity-index]')
+    .evaluateAll((nodes) =>
+      nodes.map((node) => ({
+        index: Number((node as HTMLElement).dataset.entityIndex),
+        title: (node as HTMLElement).title,
+        type: (node as HTMLElement).dataset.ifcType ?? '',
+      })),
+    );
+  return rows.map(({ index, title, type }) => {
+    const name = title.split(' · ')[0] ?? '';
+    const id = /[:-](\d+)(?::\d+)?$/.exec(name)?.[1];
+    return { index, id: id === undefined ? null : Number(id), type };
+  });
+}
+
+/** Selects an entity as a click on its tree row does, whether or not the row is open. */
+async function select(page: Page, index: number): Promise<void> {
+  await page
+    .locator(`.tree-node.tree-element[data-entity-index="${index}"]`)
+    .evaluate((row) => (row as HTMLElement).click());
+}
+
+/** The group once its read has ended, in whatever state. */
+async function settled(page: Page): Promise<Shown> {
+  const box = page.locator('#info-parameters');
+  await expect(box).toHaveAttribute(
+    'data-state',
+    /^(ready|empty|unsupported|error|on-request|no-id)$/,
+    { timeout: 180_000 },
+  );
+  return box.evaluate((el) => {
+    const group = el as HTMLElement;
+    const number = (value: string | undefined) => (value === undefined ? null : Number(value));
+    return {
+      state: group.dataset.state ?? '',
+      elementId: number(group.dataset.elementId),
+      readMs: number(group.dataset.readMs),
+      wasmMemoryBytes: number(group.dataset.wasmMemoryBytes),
+      rows: [...group.querySelectorAll<HTMLElement>('[data-parameter]')].map((row) => ({
+        parameter: JSON.parse(row.dataset.parameter ?? 'null') as Parameter,
+        key: row.querySelector('.k')?.textContent ?? '',
+        text: row.querySelector('.v')?.textContent ?? '',
+        inFold: row.closest('.info-parameters-unnamed') !== null,
+      })),
+      headings: [...group.querySelectorAll('.info-parameters-subtitle')].map(
+        (heading) => heading.textContent ?? '',
+      ),
+      text: group.textContent ?? '',
+    };
+  });
+}
+
+/** What differs between the panel's rows and the command line's entries for an element. */
+function differences(id: number, shown: Shown, expected: Parameter[]): string[] {
+  const out: string[] = [];
+  const order = (list: Parameter[]) =>
+    list.map((p) => JSON.stringify(p)).sort();
+  const fromPanel = shown.rows.map((row) => row.parameter);
+  if (JSON.stringify(order(fromPanel)) !== JSON.stringify(order(expected))) {
+    const panel = new Set(order(fromPanel));
+    const cli = new Set(order(expected));
+    out.push(
+      `${id}: panel ${fromPanel.length} entries, rvt-elements ${expected.length}; only in the panel: ${[...panel].filter((p) => !cli.has(p)).slice(0, 3)}; only in rvt-elements: ${[...cli].filter((p) => !panel.has(p)).slice(0, 3)}`,
+    );
+  }
+  for (const level of ['instance', 'type'] as const) {
+    const count = expected.filter((p) => p.level === level).length;
+    const heading = shown.headings.find((h) => h.startsWith(level === 'instance' ? 'Instance' : 'Type'));
+    if (count === 0 && heading !== undefined) out.push(`${id}: a ${level} heading with no ${level} parameter`);
+    if (count > 0 && heading !== `${level === 'instance' ? 'Instance' : 'Type'} parameters · ${count}`) {
+      out.push(`${id}: ${level} heading is ${JSON.stringify(heading)}, rvt-elements has ${count}`);
+    }
+  }
+  for (const row of shown.rows) {
+    const p = row.parameter;
+    const named = p.name !== null && p.name !== '';
+    const key = named ? p.name : `${p.kind === 'built_in' ? 'Built-in' : 'Parameter'} ${p.parameter_id}`;
+    if (row.key !== key) out.push(`${id}: ${p.parameter_id} is labelled ${JSON.stringify(row.key)}, not ${JSON.stringify(key)}`);
+    if (row.inFold !== !named) out.push(`${id}: ${p.parameter_id} is ${row.inFold ? '' : 'not '}behind the fold`);
+    if (typeof p.value === 'string' && p.value !== '' && row.text !== p.value) {
+      out.push(`${id}: ${key} shows ${JSON.stringify(row.text)}, the value is ${JSON.stringify(p.value)}`);
+    }
+    if (typeof p.value === 'boolean' && row.text !== (p.value ? 'Yes' : 'No')) {
+      out.push(`${id}: ${key} shows ${JSON.stringify(row.text)}, the value is ${p.value}`);
+    }
+    const si = p.si_value?.toLocaleString('en-US', { maximumFractionDigits: 6, useGrouping: false });
+    if (p.si_unit !== null && si !== undefined && !row.text.includes(si)) {
+      out.push(`${id}: ${key} shows ${JSON.stringify(row.text)} without its SI value ${p.si_value} ${p.si_unit}`);
+    }
+    if (row.text === '') out.push(`${id}: ${key} shows nothing`);
+  }
+  return out;
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)] ?? 0;
+}
+
+/** Writes figures where the run's summary and log show them. */
+function report(lines: string[]): void {
+  const text = lines.join('\n');
+  console.log(text);
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${text}\n\n`);
+  }
+}
+
+sampleTest(
+  'selecting an element lists the saved parameters rvt-elements prints for it',
+  async ({ page }) => {
+    test.setTimeout(600_000);
+    const expected = oracle();
+    await open(page, sample!);
+    const loadStats = JSON.parse(
+      (await page.locator('#status').getAttribute('data-load-stats')) ?? 'null',
+    ) as { openMs: number; loadMs: number; wasmMemoryBytes: number };
+
+    const all = await treeElements(page);
+    expect(all.length, 'the sample has elements in its tree').toBeGreaterThan(0);
+    // Every element of a small model; an even sample of a large one.
+    const step = Math.max(1, Math.ceil(all.length / 60));
+    const chosen = all.filter((_, i) => i % step === 0);
+
+    const found: string[] = [];
+    const census = { ready: 0, empty: 0, other: 0, notInCli: 0, entries: 0, instance: 0, type: 0, named: 0 };
+    const readMs: number[] = [];
+    const wasmMemory: number[] = [];
+    let emptyText = '';
+    for (const { index } of chosen) {
+      await select(page, index);
+      const shown = await settled(page);
+      if (shown.elementId === null) {
+        census.other += 1;
+        found.push(`entity ${index}: state ${shown.state} with no ElementId`);
+        continue;
+      }
+      const cli = expected.get(shown.elementId);
+      if (cli === undefined) {
+        // Not an element rvt-elements lists: nothing to hold the panel to.
+        census.notInCli += 1;
+        continue;
+      }
+      if (shown.readMs !== null) readMs.push(shown.readMs);
+      if (shown.wasmMemoryBytes !== null) wasmMemory.push(shown.wasmMemoryBytes);
+      if (cli.length === 0) {
+        census.empty += 1;
+        emptyText = shown.text;
+        if (shown.state !== 'empty' || shown.rows.length > 0) {
+          found.push(`${shown.elementId}: rvt-elements prints none; the panel is ${shown.state} with ${shown.rows.length} rows`);
+        }
+        continue;
+      }
+      census.ready += 1;
+      if (shown.state !== 'ready') {
+        found.push(`${shown.elementId}: rvt-elements prints ${cli.length}; the panel is ${shown.state}: ${shown.text.slice(0, 200)}`);
+        continue;
+      }
+      census.entries += cli.length;
+      census.instance += cli.filter((p) => p.level === 'instance').length;
+      census.type += cli.filter((p) => p.level === 'type').length;
+      census.named += cli.filter((p) => p.name !== null && p.name !== '').length;
+      found.push(...differences(shown.elementId, shown, cli));
+    }
+
+    report([
+      `Saved parameters in the panel, ${path.basename(sample!)}: ${chosen.length} of ${all.length} tree elements selected; ` +
+        `${census.ready} hold parameters (${census.entries} entries: ${census.instance} instance, ${census.type} type, ${census.named} named), ` +
+        `${census.empty} hold none, ${census.notInCli} are not in rvt-elements' list, ${census.other} have no ElementId.`,
+      `Read cost (a worker of its own, per element, the file's bytes and the wasm's start included): median ${Math.round(median(readMs))} ms, ` +
+        `most ${Math.round(Math.max(0, ...readMs))} ms; that instance's wasm memory at the end: median ${Math.round(median(wasmMemory) / 2 ** 20)} MiB, ` +
+        `most ${Math.round(Math.max(0, ...wasmMemory) / 2 ** 20)} MiB. The open's worker, for the same file: ${Math.round(loadStats.wasmMemoryBytes / 2 ** 20)} MiB of wasm memory, ` +
+        `${Math.round(loadStats.openMs)} ms in the open call, ${Math.round(loadStats.loadMs)} ms to Loaded.`,
+    ]);
+    expect(found, 'the panel against rvt-elements').toEqual([]);
+    // Not vacuous: elements with parameters and elements without are compared.
+    expect(census.ready, 'elements holding parameters that were compared').toBeGreaterThan(0);
+    expect(census.empty, 'elements holding none that were compared').toBeGreaterThan(0);
+    expect(emptyText).toMatch(/no saved parameters|no record of this element/);
+  },
+);
+
+sampleTest(
+  'a file that may not fit twice reads an element only when asked',
+  async ({ page }) => {
+    test.setTimeout(300_000);
+    const expected = oracle();
+    // The estimate is ten times the file, and a ceiling under it makes a second
+    // instance something the page asks about.
+    const ceiling = fs.statSync(sample!).size * 10 - 1;
+    await open(page, sample!, `?memoryCeilingBytes=${ceiling}`);
+    const withParameters = (await treeElements(page)).find(
+      ({ id }) => id !== null && (expected.get(id)?.length ?? 0) > 0,
+    );
+    expect(withParameters, 'an element rvt-elements lists parameters for').toBeDefined();
+
+    await select(page, withParameters!.index);
+    const asked = await settled(page);
+    expect(asked.state).toBe('on-request');
+    expect(asked.rows).toHaveLength(0);
+    await expect(page.locator('#info-parameters')).toContainText('a second time');
+    await page.locator('#read-saved-parameters').click();
+    const read = await settled(page);
+    expect(read.state).toBe('ready');
+    expect(differences(read.elementId!, read, expected.get(read.elementId!) ?? [])).toEqual([]);
+  },
+);
+
+/** Serves the parameters worker's script with a fault in front of it, for its first request only. */
+async function failFirstRead(page: Page, panic: string): Promise<() => number> {
+  const prelude = `(() => {
+    const panic = ${JSON.stringify(panic)};
+    const failing = () => {
+      console.error(panic);
+      throw new WebAssembly.RuntimeError('unreachable');
+    };
+    const wrapInstance = (instance) => {
+      const exports = { ...instance.exports, savedParameters: failing };
+      return new Proxy(instance, {
+        get(target, key) {
+          if (key === 'exports') return exports;
+          const value = Reflect.get(target, key, target);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+    };
+    const wrap = (result) =>
+      result instanceof WebAssembly.Instance
+        ? wrapInstance(result)
+        : { ...result, instance: wrapInstance(result.instance) };
+    for (const name of ['instantiateStreaming', 'instantiate']) {
+      const real = WebAssembly[name];
+      WebAssembly[name] = async (...args) => wrap(await real.apply(WebAssembly, args));
+    }
+  })();`;
+  let requests = 0;
+  let served = 0;
+  await page.context().route(/\/assets\/parameters-worker-[^/?]+\.js(\?.*)?$/, async (route) => {
+    requests += 1;
+    if (requests > 1) {
+      await route.continue();
+      return;
+    }
+    const response = await route.fetch();
+    served += 1;
+    await route.fulfill({ response, body: `${prelude}\n${await response.text()}` });
+  });
+  return () => served;
+}
+
+sampleTest(
+  'a read that fails says so, and Try again reads the element',
+  async ({ page }) => {
+    test.setTimeout(300_000);
+    const expected = oracle();
+    const served = await failFirstRead(
+      page,
+      'rvt-rs wasm panic: panicked at rvt-wasm/src/lib.rs:1:1:\nindex out of bounds: the len is 3 but the index is 7',
+    );
+    await open(page, sample!);
+    const withParameters = (await treeElements(page)).find(
+      ({ id }) => id !== null && (expected.get(id)?.length ?? 0) > 0,
+    );
+    expect(withParameters, 'an element rvt-elements lists parameters for').toBeDefined();
+
+    await select(page, withParameters!.index);
+    const failed = await settled(page);
+    await expect.poll(served, 'the patched worker script was served').toBeGreaterThan(0);
+    expect(failed.state).toBe('error');
+    // The panic's own words, and not a claim about memory.
+    expect(failed.text).toContain('index out of bounds: the len is 3');
+    expect(failed.text).not.toMatch(/ran out of memory/i);
+    expect(failed.rows).toHaveLength(0);
+    // The rest of the panel is where it was.
+    await expect(page.locator('#info .info-group-identity')).toContainText('ElementId');
+
+    await page.locator('#retry-saved-parameters').click();
+    const retried = await settled(page);
+    expect(retried.state).toBe('ready');
+    expect(differences(retried.elementId!, retried, expected.get(retried.elementId!) ?? [])).toEqual([]);
+  },
+);
+
+sampleTest(
+  'a file of a release whose parameters are not read says so (the answer replaced)',
+  async ({ page }) => {
+    // No file of a release outside the range the reader covers is in the
+    // viewer's job, so the worker's answer to the page is replaced with the
+    // binding's own shape for one: `native` false, the release, no elements.
+    // The range in the message is the real binding's.
+    test.setTimeout(300_000);
+    await page.addInitScript(() => {
+      const RealWorker = window.Worker;
+      window.Worker = class extends RealWorker {
+        constructor(url: string | URL, options?: WorkerOptions) {
+          super(url, options);
+          if (!String(url).includes('parameters-worker')) return;
+          const add = this.addEventListener.bind(this) as (...args: unknown[]) => void;
+          (this as unknown as { addEventListener: unknown }).addEventListener = (
+            type: string,
+            listener: (ev: Event) => void,
+            options?: unknown,
+          ) => {
+            if (type !== 'message') return add(type, listener, options);
+            return add(
+              type,
+              (ev: Event) => {
+                const data = (ev as MessageEvent).data as { type: string; result: object };
+                if (data.type !== 'result') return listener(ev);
+                const result = { ...data.result, release: 2013, native: false, elements: {} };
+                return listener(new MessageEvent('message', { data: { ...data, result } }));
+              },
+              options,
+            );
+          };
+        }
+      } as typeof Worker;
+    });
+    await open(page, sample!);
+    const first = (await treeElements(page)).find(({ id }) => id !== null);
+    expect(first, 'an element with an ElementId').toBeDefined();
+    await select(page, first!.index);
+    const shown = await settled(page);
+    expect(shown.state).toBe('unsupported');
+    expect(shown.rows).toHaveLength(0);
+    expect(shown.text).toMatch(/This is a Revit 2013 file/);
+    expect(shown.text).toMatch(/from Revit 2015 to 2027 files/);
+  },
+);
+
+// The same hold on the largest reference model, a few elements of different
+// categories, and what a read costs there.
+coreInteriorTest(
+  'Core Interior: the saved parameters of elements of several categories are what rvt-elements prints',
+  async ({ page }) => {
+    test.setTimeout(900_000);
+    const expected = rvtElements(coreInteriorPath);
+    await page.goto('/');
+    await expect(page.locator('#status')).toHaveText(/Ready/);
+    await page.locator('[data-demo-id="core-interior-2024"]').click();
+    await expect(page.locator('#status')).toHaveText(/Loaded/, { timeout: 300_000 });
+    const loadStats = JSON.parse(
+      (await page.locator('#status').getAttribute('data-load-stats')) ?? 'null',
+    ) as { openMs: number; loadMs: number; wasmMemoryBytes: number };
+
+    const chosen = new Map<string, { index: number; id: number }>();
+    for (const { index, id, type } of await treeElements(page)) {
+      if (id === null || (expected.get(id)?.length ?? 0) === 0 || chosen.has(type)) continue;
+      chosen.set(type, { index, id });
+      if (chosen.size === 4) break;
+    }
+    expect(chosen.size, 'categories with an element rvt-elements lists parameters for').toBeGreaterThan(1);
+
+    const found: string[] = [];
+    const lines: string[] = [];
+    for (const [type, { index }] of chosen) {
+      await select(page, index);
+      const shown = await settled(page);
+      expect(shown.state, `${type}`).toBe('ready');
+      found.push(...differences(shown.elementId!, shown, expected.get(shown.elementId!) ?? []));
+      lines.push(
+        `${type} ${shown.elementId}: ${shown.rows.length} entries in ${shown.readMs} ms, that read's wasm memory ${Math.round((shown.wasmMemoryBytes ?? 0) / 2 ** 20)} MiB`,
+      );
+    }
+    report([
+      `Saved parameters on 2024_Core_Interior.rvt (${Math.round(fs.statSync(coreInteriorPath).size / 2 ** 20)} MiB): ${lines.join('; ')}. ` +
+        `The open's worker: ${Math.round(loadStats.wasmMemoryBytes / 2 ** 20)} MiB of wasm memory, ${Math.round(loadStats.openMs)} ms in the open call, ${Math.round(loadStats.loadMs)} ms to Loaded.`,
+    ]);
+    expect(found, 'the panel against rvt-elements').toEqual([]);
   },
 );

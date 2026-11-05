@@ -88,7 +88,11 @@ Allowed browser requests are limited to initial same-origin static
 assets needed to boot the viewer:
 
 - the HTML document;
-- Vite-generated JavaScript chunks, including the worker script;
+- Vite-generated JavaScript chunks, including the worker scripts (the one
+  that opens the file and the one that reads an element's saved parameters,
+  which starts when an element is selected and loads its own script and the
+  wasm binary, from the same origin, and reads the file from the tab's own
+  `File`);
 - the generated `rvt_bg.wasm` WebAssembly binary;
 - optional same-origin source maps or favicon requests from the
   browser tooling/runtime;

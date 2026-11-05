@@ -234,9 +234,14 @@ jobs:
         # build's lock on target/, and at the same time: it finishes well
         # inside the WASM build, which took 150 to 225 s while the two
         # builds in turn took 200 to 290 s. The stager finds the binary on PATH.
+        #
+        # rvt-elements is built in the same invocation (a link of the library
+        # gen-fixture already compiled): tests/parameters-row.spec.ts runs it
+        # on the sample and holds the panel's saved parameters to what it prints
+        # (#35).
         run: |
           set -euo pipefail
-          CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target-native" cargo build --profile ci --bin gen-fixture &
+          CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target-native" cargo build --profile ci --bin gen-fixture --bin rvt-elements &
           fixture=$!
           if [ "${RELEASE_WASM}" != true ]; then
             export CARGO_PROFILE_RELEASE_LTO=off CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16

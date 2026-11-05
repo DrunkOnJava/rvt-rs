@@ -16,6 +16,15 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import supportMatrix from '../../docs/support-matrix.json';
+import {
+  elementIdOf,
+  parameterIsNumeric,
+  parameterLabel,
+  parameterValueText,
+  type SavedParameter,
+  type SavedParametersReading,
+  type SavedParametersResult,
+} from './saved-parameters';
 
 // ---------- DOM ----------
 const $ = (id: string): HTMLElement => {
@@ -1226,6 +1235,7 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
   // A new file invalidates the panel and the schedule; leaving the
   // previous file's numbers up would read as if they still applied.
   pendingInfoIndex = null;
+  resetSavedParameters();
   infoEl.removeAttribute('aria-busy');
   infoEl.textContent =
     'Select an element in the 3-D view or scene tree (Enter / Space on a tree row). Double-click it or press F to zoom to it.';
@@ -1362,6 +1372,7 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
       return;
     }
     model = msg.model;
+    loadedWasmMemoryBytes = msg.stats.wasmMemoryBytes;
     sceneGraph = msg.scene;
     listedEntities = listedIndices(msg.scene, new Set<number>());
     distinctTypes = msg.types;
@@ -2555,7 +2566,7 @@ function propertyGroup(group: PanelPropertyGroup): HTMLElement | null {
 const GAP_LABELS: Record<string, string> = {
   storey: 'level binding',
   material: 'material',
-  properties: 'Revit parameters',
+  properties: 'IFC property sets',
   placement: 'placement',
   extents: 'geometry extents',
 };
@@ -2633,6 +2644,333 @@ function revitGlobalId(idx: number): string | undefined {
   const elements = model?.global_ids?.elements;
   if (elements instanceof Map) return elements.get(idx);
   return elements?.[String(idx)];
+}
+
+// ---------- Saved parameters (#35, RE-207) ----------
+/**
+ * An element's saved parameters are read when it is selected, by a worker of
+ * its own that ends with the answer (parameters-worker.ts, the `savedParameters`
+ * binding): not by the worker that opened the file, whose reads would hold up
+ * the panel behind them and whose wasm memory only grows, and not for every
+ * element at the open, which was a pass over the file for each. The file is
+ * read again from the `File` this page already holds, so nothing of it stays
+ * resident beyond what was held before; a read costs memory only while it runs.
+ * The values of the elements already read are kept until the next file.
+ */
+const PARAMETERS_READ_DELAY_MS = 150;
+const savedParametersCache = new Map<number, SavedParametersReading>();
+let parametersWorker: Worker | null = null;
+let parametersTimer: number | undefined;
+/** The wasm linear memory the open left (worker.ts `stats`), which a read in a second instance comes on top of. */
+let loadedWasmMemoryBytes = 0;
+
+/** Ends a read in progress, or one waiting to start. */
+function stopParametersRead(): void {
+  window.clearTimeout(parametersTimer);
+  parametersTimer = undefined;
+  parametersWorker?.terminate();
+  parametersWorker = null;
+}
+
+/** What a new file starts from. */
+function resetSavedParameters(): void {
+  stopParametersRead();
+  savedParametersCache.clear();
+  loadedWasmMemoryBytes = 0;
+}
+
+/**
+ * Whether a selection reads on its own. A read is another instance of the
+ * decoder beside the first, which a file past what the page can judge to fit
+ * twice (the open's own estimate, `estimatePeakBytes`, and the memory the open
+ * left, against the same ceiling) reads only when asked.
+ */
+function parametersReadAutomatically(file: File): boolean {
+  return loadedWasmMemoryBytes + estimatePeakBytes(file.size) <= memoryCeilingBytes;
+}
+
+type ParametersState =
+  | 'loading'
+  | 'ready'
+  | 'empty'
+  | 'unsupported'
+  | 'error'
+  | 'on-request'
+  | 'no-id';
+
+/** Clears what the group showed and says what it shows now. */
+function parametersBody(box: HTMLElement, state: ParametersState): HTMLElement {
+  box.dataset.state = state;
+  if (state === 'loading') box.setAttribute('aria-busy', 'true');
+  else box.removeAttribute('aria-busy');
+  box.querySelector('.info-parameters-body')?.remove();
+  const body = document.createElement('div');
+  body.className = 'info-parameters-body';
+  box.appendChild(body);
+  return body;
+}
+
+function parametersMessage(box: HTMLElement, state: ParametersState, text: string): HTMLElement {
+  const body = parametersBody(box, state);
+  const line = document.createElement('div');
+  line.className = 'info-parameters-state';
+  line.textContent = text;
+  body.appendChild(line);
+  return body;
+}
+
+function parametersButton(id: string, label: string, onActivate: () => void): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'side-btn';
+  btn.id = id;
+  btn.textContent = label;
+  btn.addEventListener('click', onActivate);
+  return btn;
+}
+
+const PARAMETER_KIND_LABEL: Record<string, string> = {
+  built_in: 'Built-in parameter',
+  family: 'Family parameter',
+  shared: 'Shared parameter',
+  global: 'Global parameter',
+  project: 'Project parameter',
+  undefined: 'No definition in the file',
+};
+
+/** One parameter: its name, or its id where it has none, and its value as saved. */
+function parameterRow(p: SavedParameter): HTMLElement {
+  const { label, why } = parameterLabel(p);
+  const row = infoRow(label, parameterValueText(p), parameterIsNumeric(p));
+  // The entry as the reader gave it, for tests/parameters-row.spec.ts, which
+  // holds it to what rvt-elements prints for the same element.
+  row.dataset.parameter = JSON.stringify(p);
+  row.dataset.parameterId = String(p.parameter_id);
+  row.dataset.level = p.level;
+  row.dataset.kind = p.kind;
+  row.title = [
+    why ?? PARAMETER_KIND_LABEL[p.kind] ?? p.kind,
+    p.level === 'type' ? `read from type record ${p.source_element_id} (${p.source_class})` : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' · ');
+  return row;
+}
+
+/** The parameters of one level, the named first and the nameless behind a fold. */
+function parameterSection(
+  level: 'instance' | 'type',
+  entries: SavedParameter[],
+): HTMLElement | null {
+  const mine = entries.filter((p) => p.level === level);
+  if (mine.length === 0) return null;
+  const section = document.createElement('div');
+  section.className = 'info-parameters-section';
+  section.dataset.level = level;
+  const title = document.createElement('div');
+  title.className = 'info-parameters-subtitle';
+  title.textContent = `${level === 'instance' ? 'Instance' : 'Type'} parameters · ${mine.length}`;
+  section.appendChild(title);
+  const named = mine.filter((p) => parameterLabel(p).why === null);
+  const unnamed = mine.filter((p) => parameterLabel(p).why !== null);
+  for (const p of named) section.appendChild(parameterRow(p));
+  if (unnamed.length > 0) {
+    const details = document.createElement('details');
+    details.className = 'info-details info-parameters-unnamed';
+    // Nothing but nameless ones: the fold would hide the whole list.
+    details.open = named.length === 0;
+    const summary = document.createElement('summary');
+    summary.className = 'info-parameters-summary';
+    summary.textContent = `${unnamed.length} without a name`;
+    details.appendChild(summary);
+    const why = document.createElement('div');
+    why.className = 'info-parameters-state';
+    why.textContent = parameterLabel(unnamed[0]!).why;
+    details.appendChild(why);
+    for (const p of unnamed) details.appendChild(parameterRow(p));
+    section.appendChild(details);
+  }
+  return section;
+}
+
+/** What the read could not list for the element, in words. */
+function parametersNotListed(reading: SavedParametersResult): string | null {
+  const notes: string[] = [];
+  const slots = reading.unresolved_family_slots;
+  if (slots > 0) {
+    notes.push(`${slots} family parameter slot${slots === 1 ? '' : 's'} no definition in the file resolves`);
+  }
+  const defaults = reading.instance_parameters_without_value;
+  if (defaults > 0) {
+    notes.push(
+      `${defaults} instance parameter${defaults === 1 ? '' : 's'} this element holds no value for (its type holds the family's default, which is not the element's)`,
+    );
+  }
+  return notes.length > 0 ? `Not listed: ${notes.join('; ')}.` : null;
+}
+
+/** An element's saved parameters in the group, or why there are none. */
+function showSavedParameters(box: HTMLElement, id: number, reading: SavedParametersReading): void {
+  box.dataset.readMs = String(Math.round(reading.readMs));
+  box.dataset.wasmMemoryBytes = String(reading.wasmMemoryBytes);
+  if (!reading.native) {
+    const [first, last] = reading.native_releases;
+    parametersMessage(
+      box,
+      'unsupported',
+      `This is a Revit ${reading.release} file. rvt-rs reads saved parameters from Revit ${first} to ${last} files, so none are listed.`,
+    );
+    return;
+  }
+  const entries = reading.elements[String(id)];
+  if (entries === undefined) {
+    parametersMessage(
+      box,
+      'empty',
+      'The file holds no record of this element that rvt-rs reads, so it has no saved parameters to list.',
+    );
+    return;
+  }
+  if (entries.length === 0) {
+    parametersMessage(box, 'empty', "This element's record holds no saved parameters.");
+    return;
+  }
+  const body = parametersBody(box, 'ready');
+  for (const level of ['instance', 'type'] as const) {
+    const section = parameterSection(level, entries);
+    if (section) body.appendChild(section);
+  }
+  const note = parametersNotListed(reading);
+  if (note) {
+    const line = document.createElement('div');
+    line.className = 'info-parameters-state';
+    line.textContent = note;
+    body.appendChild(line);
+  }
+}
+
+/** A read that did not finish, in words, with a way to try it again. */
+function showParametersError(
+  box: HTMLElement,
+  id: number,
+  message: string,
+  outOfMemory: boolean,
+): void {
+  const body = parametersMessage(
+    box,
+    'error',
+    outOfMemory
+      ? `The tab ran out of memory reading the file a second time: ${message}`
+      : `The saved parameters could not be read: ${message}`,
+  );
+  body.appendChild(
+    parametersButton('retry-saved-parameters', 'Try again', () => {
+      parametersMessage(box, 'loading', 'Reading the saved parameters…');
+      readSavedParameters(id);
+    }),
+  );
+}
+
+type ParametersMessage =
+  | { type: 'result'; result: SavedParametersResult; readMs: number; wasmMemoryBytes: number }
+  | { type: 'error'; message: string; outOfMemory: boolean };
+
+/**
+ * Reads the saved parameters of the element `id` of the open file in a new
+ * worker, which ends with its answer. Another read, or a new file, ends this one.
+ */
+function readSavedParameters(id: number): void {
+  stopParametersRead();
+  const file = currentFile;
+  if (!file) return;
+  const limits: OpenLimitsOptions = {};
+  if (currentOpenLimits?.largeModel !== undefined) limits.largeModel = currentOpenLimits.largeModel;
+  if (currentOpenLimits?.maxStreamBytes !== undefined) {
+    limits.maxStreamBytes = currentOpenLimits.maxStreamBytes;
+  }
+  if (currentOpenLimits?.maxInflateBytes !== undefined) {
+    limits.maxInflateBytes = currentOpenLimits.maxInflateBytes;
+  }
+  const w = new Worker(new URL('./parameters-worker.ts', import.meta.url), { type: 'module' });
+  parametersWorker = w;
+  const settle = (outcome: ParametersMessage): void => {
+    if (parametersWorker !== w) return;
+    w.terminate();
+    parametersWorker = null;
+    if (outcome.type === 'result') {
+      savedParametersCache.set(id, {
+        ...outcome.result,
+        readMs: outcome.readMs,
+        wasmMemoryBytes: outcome.wasmMemoryBytes,
+      });
+    }
+    // The panel may have moved on while the worker read.
+    const box = infoEl.querySelector<HTMLElement>('#info-parameters');
+    if (!box || box.dataset.elementId !== String(id)) return;
+    const reading = savedParametersCache.get(id);
+    if (outcome.type === 'result' && reading) showSavedParameters(box, id, reading);
+    else if (outcome.type === 'error') {
+      showParametersError(box, id, outcome.message, outcome.outOfMemory);
+    }
+  };
+  w.addEventListener('message', (ev: MessageEvent<ParametersMessage>) => settle(ev.data));
+  w.addEventListener('error', (ev: ErrorEvent) =>
+    settle({
+      type: 'error',
+      message: ev.message ? ev.message : 'the worker that reads them stopped',
+      outOfMemory: false,
+    }),
+  );
+  w.addEventListener('messageerror', () =>
+    settle({ type: 'error', message: 'the answer could not be received', outOfMemory: false }),
+  );
+  w.postMessage({ type: 'read', file, ids: [id], limits });
+}
+
+/** The group of a selected element: its saved parameters, or the state they are in. */
+function savedParametersGroup(panel: ElementInfoPanel): HTMLElement {
+  const box = infoGroup('parameters', 'Saved parameters');
+  box.id = 'info-parameters';
+  const id = elementIdOf(panel.type_guid);
+  if (id === null) {
+    parametersMessage(
+      box,
+      'no-id',
+      'This element has no ElementId in the export, so its saved parameters cannot be looked up.',
+    );
+    return box;
+  }
+  box.dataset.elementId = String(id);
+  const cached = savedParametersCache.get(id);
+  if (cached) {
+    showSavedParameters(box, id, cached);
+    return box;
+  }
+  const file = currentFile;
+  if (!file) {
+    parametersMessage(box, 'error', 'The file is no longer open.');
+    return box;
+  }
+  if (!parametersReadAutomatically(file)) {
+    const body = parametersMessage(
+      box,
+      'on-request',
+      `Reading them opens the file a second time, in a worker of its own. For ${formatMemory(file.size)} that could take about ${formatMemory(estimatePeakBytes(file.size))}, with ${formatMemory(loadedWasmMemoryBytes)} already held by the first, so it is done when asked.`,
+    );
+    body.appendChild(
+      parametersButton('read-saved-parameters', 'Read saved parameters', () => {
+        parametersMessage(box, 'loading', 'Reading the saved parameters…');
+        readSavedParameters(id);
+      }),
+    );
+    return box;
+  }
+  parametersMessage(box, 'loading', 'Reading the saved parameters…');
+  // A run through the tree selects element after element: only the one the
+  // selection stops on is read.
+  stopParametersRead();
+  parametersTimer = window.setTimeout(() => readSavedParameters(id), PARAMETERS_READ_DELAY_MS);
+  return box;
 }
 
 /** Render the whole panel from the Rust payload. */
@@ -2748,6 +3086,7 @@ function showElementInfo(idx: number): void {
  */
 function showContainerInfo(node: TreeItem): void {
   pendingInfoIndex = null;
+  stopParametersRead();
   infoEl.innerHTML = '';
   infoEl.removeAttribute('aria-busy');
   const identity = infoGroup('identity');
@@ -3084,8 +3423,8 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
         'Parameters',
         parameterValueCount > 0 ? 'ok' : 'warn',
         parameterValueCount > 0
-          ? `${parameterValueCount.toLocaleString('en-US')} ${parameterValueCount === 1 ? 'value' : 'values'} in Revit's common property sets · the rest of each element's parameters are still to be decoded`
-          : "Revit's parameter table is not read yet · each element lists the properties rvt-rs decodes",
+          ? `${parameterValueCount.toLocaleString('en-US')} ${parameterValueCount === 1 ? 'value' : 'values'} written in the IFC property sets · select an element to read its saved parameters`
+          : 'No parameter values written in the IFC property sets · select an element to read its saved parameters',
       ),
     );
     statusPanelEl.appendChild(

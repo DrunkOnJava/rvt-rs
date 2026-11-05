@@ -146,6 +146,61 @@ use rvt::ifc::scene_graph::{
   panel and its per-type scene highlight. Rebuild it with
   `Schedule::from_rows` after resorting or filtering rows.
 
+## Saved parameters
+
+The info panel lists an element's saved parameters (#35, RE-207) under
+"Saved parameters", beside the property sets the IFC export writes. They are
+not part of `element_info_panel`, which stays what the export holds: they are
+read when an element is selected, by `savedParameters`, in a worker of its
+own (`viewer/src/parameters-worker.ts`).
+
+`savedParameters(bytes, ids, limits)` returns JSON text (not a JS object, so
+no `Map` or large number is made of it):
+
+```json
+{
+  "release": 2023,
+  "native": true,
+  "native_releases": [2015, 2027],
+  "elements": { "123456": [ { "name": "Mark", "parameter_id": 4711, "kind": "family", "...": "..." } ] },
+  "unresolved_family_slots": 0,
+  "instance_parameters_without_value": 0
+}
+```
+
+- `elements[id]` holds the entries `rvt-elements` prints as that element's
+  `parameters` (`docs/schemas/decoded-elements.schema.json`; the same Rust
+  value, `rvt::research::native_element_parameters::ElementParameter`):
+  `name` (the definition's caption, or `null` for a built-in parameter, which
+  keeps its negative `parameter_id` and no name, #255), `kind`
+  (`built_in`, `family`, `shared`, `global`, `project`, `undefined`),
+  `storage_type`, `value` in Revit's internal units, `si_value` and
+  `si_unit` for a length, area, volume or angle, `target_name` and
+  `target_family` for an ElementId that names a material or a family type,
+  `level` (`instance`, or `type` for the values an instance takes from its
+  type), and the record the value came from. An element with no native record
+  is not in `elements`; one whose record holds none has an empty list.
+- `native` is false, and `elements` empty, for a file whose release is outside
+  `native_releases` (Revit 2015 to 2027, both read).
+- `unresolved_family_slots` and `instance_parameters_without_value` count what
+  the read could not list for these elements, so the panel can say so.
+
+The panel shows the instance parameters and then the type parameters, named
+ones first, with the nameless built-ins behind a fold that says why they have
+no name. A value reads as saved, with its unit where the entry has one:
+`3 ft · 0.9144 m`, `Yes`, `Wall type · ElementId 123`. It says so when the file
+is of a release that is not read, when the element has no saved parameters,
+when the read failed (with "Try again"), and while it runs.
+
+The read is a pass over the file, so it does not run in the worker that opened
+it: that worker would be held up for as long as it takes, and the wasm linear
+memory of an instance only grows. A worker is started for one element, reads the
+file again from the `File` the page already holds, and ends with its answer
+(or when another element is selected), so the page holds no more of the file
+than before and a read costs memory only while it runs. A file whose estimated
+memory (`estimatePeakBytes`, ten times its size) and the open's wasm memory
+together pass the page's memory ceiling is read only when asked, with a button.
+
 ## Viewer state
 
 ```rust
@@ -535,6 +590,7 @@ describing the error.
 | `buildSceneGraph` | `model` | scene tree | The model's scene graph |
 | `distinctIfcTypes` | `scene` | `string[]` | The IFC types in a scene, for the layer toggles |
 | `elementInfoPanel` | `model`, `entity_index: number` | info panel | What the info panel shows for one element, on the storey the IFC export puts it in |
+| `savedParameters` | `bytes`, `ids: number[]` (ElementIds), `limits: { largeModel?, maxStreamBytes?, maxInflateBytes? }` or `null` | JSON `string` | The saved parameters of the elements `ids`, the read `rvt-elements` and Python's `decoded_elements()` list as an element's `parameters` (RE-207), as `{ release, native, native_releases, elements, unresolved_family_slots, instance_parameters_without_value }`; see [Saved parameters](#saved-parameters). Opens `bytes` for the call alone, under the limits the file was opened with, and keeps nothing of them |
 | `buildSchedule` | `model` | schedule table | A flat table of the building elements the IFC export writes, each on the storey it puts it in |
 | `modelToGlb` | `model` | `Uint8Array` | The model as a glTF 2.0 binary |
 | `modelToIfcStep` | `model` | `string` | The model as an IFC4 STEP document |

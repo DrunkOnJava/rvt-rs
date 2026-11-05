@@ -124,7 +124,7 @@ own IFC export of the same file wherever one exists; the measured tables are in 
 levels a file can reach (opened, elements identified, geometry, properties)
 are in the [supported profile](supported-profile.md). On Revit 2023 to 2027
 files, and experimentally on 2015 to 2022 ones (RE-281), `rvt-elements` and Python also list each element's saved parameters,
-named where the file defines them (RE-207), and `rvt-ifc --revit-property-sets`
+named where the file defines them (RE-207), the browser viewer's info panel lists them for a selected element, and `rvt-ifc --revit-property-sets`
 writes the named ones in Revit's own property sets (RE-210). With
 `--revit-set-placement` it also writes properties where Revit's own exporter
 does and IFC4's definitions do not, such as a room's
@@ -809,6 +809,23 @@ rating, 4,297 of the 4,314 Revit writes (the 17 left are stair landings,
 which name no type this way)
 (`reports/element-framing/RE-256-system-family-type-parameters.md`).
 
+**The viewer's saved parameters (#35, 2026-11-05)**: selecting an element
+lists the same saved parameters in the info panel, instance and type apart,
+named ones first and the nameless built-ins behind a fold that says why they
+have no name (#255). The `savedParameters` binding reads them for the
+selected element only, in a worker of its own that ends with the answer, so
+the open is not changed and nothing of the file stays resident. The Parameters
+row of File Status no longer says the rest are still to be decoded: it counts
+the values written to the IFC property sets and points to the panel. The panel
+says so when a file is of a release outside Revit 2015 to 2027, when an
+element has no saved parameters and when a read failed. A file too large to
+hold twice in the tab is read when asked. `viewer/tests/parameters-row.spec.ts`
+holds the panel's entries for an element to the entries `rvt-elements` prints
+for the same ElementId, whole, on Einhoven and on Core Interior; the
+measured figures are in the pull request. The release-outside-the-range state
+is measured with the worker's answer replaced, as no such file is in the
+viewer's job.
+
 **RE-210 (2026-10-22)** adds `rvt-ifc --revit-property-sets` (#35). It
 writes each element's named saved parameters (RE-207) as Revit's exporter
 does with "Export Revit property sets", following revit-ifc's
@@ -996,7 +1013,8 @@ checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,
 whose bytes do not match the catalog hash, and both cards are gated by
 Playwright. Viewer File Status lists
 recovered storey names, material name samples, and a Parameters row that
-counts the Revit parameter values written into the export's property sets. The scene tree groups each
+counts the Revit parameter values written into the export's property sets
+(the info panel lists a selected element's saved parameters, below). The scene tree groups each
 storey's elements by category, type name first, with curtain-wall and
 stair parts under their whole. Elements reach their storey from the
 Level their record names (RE-59, RE-60): all 970 of Core Interior's

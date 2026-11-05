@@ -1,0 +1,31 @@
+- **The viewer's info panel lists an element's saved parameters (#35, RE-207).**
+  Selecting an element shows, under "Saved parameters", the same entries
+  `rvt-elements` and Python's `decoded_elements()` list for it: instance
+  parameters, then the type parameters it takes from its type, each with its
+  name, its value as saved and its unit where the entry has one (`3 ft · 0.9144 m`,
+  `Yes`, a material's or family type's name beside its ElementId). A built-in
+  parameter has no name in the file, so it is listed by its id behind a fold
+  that says why (#255), and what the read could not list (family slots no
+  definition resolves, an instance parameter whose value is its family's
+  default) is counted in a line. The panel says so when the file is of a
+  release outside Revit 2015 to 2027, when the element has no saved
+  parameters, when the element has no ElementId in the export and when a read
+  failed, with "Try again"; it shows that it is reading while it does.
+  `viewer/tests/parameters-row.spec.ts` holds the entries the panel shows
+  for an element to the ones `rvt-elements` prints for the same ElementId,
+  whole, on Einhoven and Core Interior. It is a new binding, `savedParameters`
+  (`docs/viewer-api.md`), and it does not read at the open: the export, and so
+  every IFC, GLB and diagnostics output, is unchanged. An element is read when
+  it is selected, in a worker of its own that reads the `File` the page
+  already holds and ends with its answer, so nothing of the file stays
+  resident beyond what the page held before, the open's worker is not held up
+  by a read, and a read that fails leaves the rest of the panel where it
+  was. A file whose estimated memory, with what the open left, passes the
+  ceiling the page already judges an open by is read when asked, with a
+  button. Not yet measured on this head: the read's time and memory.
+- **File Status's Parameters row stops saying the rest are still to be
+  decoded (#35).** It said so while `rvt-elements` and Python already listed
+  every element's saved parameters (RE-207). It now counts the values written
+  to the IFC property sets and points to the info panel. The panel's "Not
+  recovered" note for an element with no property set now names "IFC property
+  sets", not "Revit parameters", which it lists itself.
