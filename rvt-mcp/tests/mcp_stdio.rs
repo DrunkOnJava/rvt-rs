@@ -108,12 +108,11 @@ fn object(value: Value) -> serde_json::Map<String, Value> {
 }
 
 /// Where the test keeps each tool's `outputSchema` (from the `tools/list` of
-/// each session [`drive`] runs) and every structured answer the rmcp client
-/// is given through [`call`], for `tools/ci/validate-mcp-answers.py` to check
+/// each session [`drive`] runs) and every structured answer the test is given,
+/// through the rmcp client's [`call`] or a raw request, for `tools/ci/validate-mcp-answers.py` to check
 /// each answer against its tool's schema (#1415): `RVT_MCP_ANSWERS_DIR`, an
 /// absolute path (the test runs in `rvt-mcp/`). The raw JSON-RPC tests'
-/// answers are not kept: the same tools answer through the client too. Unset,
-/// nothing is kept.
+/// answers are kept too ([`Raw::recv`]). Unset, nothing is kept.
 fn answers_dir() -> Option<PathBuf> {
     std::env::var_os("RVT_MCP_ANSWERS_DIR").map(PathBuf::from)
 }
@@ -1055,6 +1054,9 @@ struct Raw {
     child: Child,
     stdin: Option<ChildStdin>,
     lines: Receiver<Result<Value, String>>,
+    /// The tool each `tools/call` request names, by request id, so that
+    /// [`Raw::recv`] can keep its structured answer for the schema check.
+    calls: std::cell::RefCell<std::collections::BTreeMap<String, String>>,
 }
 
 impl Raw {
@@ -1085,20 +1087,41 @@ impl Raw {
             child,
             stdin,
             lines,
+            calls: std::cell::RefCell::default(),
         }
     }
 
     fn send(&mut self, message: &Value) {
+        if let (Some("tools/call"), Some(tool)) = (
+            message["method"].as_str(),
+            message["params"]["name"].as_str(),
+        ) {
+            self.calls
+                .borrow_mut()
+                .insert(message["id"].to_string(), tool.to_string());
+        }
         let stdin = self.stdin.as_mut().expect("stdin is open");
         writeln!(stdin, "{message}").expect("write a request");
         stdin.flush().expect("flush");
     }
 
     fn recv(&self) -> Value {
-        self.lines
+        let message = self
+            .lines
             .recv_timeout(Duration::from_secs(120))
             .expect("the server answered in time")
-            .unwrap_or_else(|problem| panic!("{problem}"))
+            .unwrap_or_else(|problem| panic!("{problem}"));
+        // A successful tools/call answer is kept for the schema check, as
+        // [`call`] keeps the rmcp client's (#1415).
+        let tool = self.calls.borrow().get(&message["id"].to_string()).cloned();
+        if let (Some(tool), Some(structured), false) = (
+            tool,
+            message["result"].get("structuredContent"),
+            message["result"]["isError"] == json!(true),
+        ) {
+            keep("answers", &tool, structured);
+        }
+        message
     }
 
     /// Closes stdin and waits for the server to exit.
