@@ -265,6 +265,7 @@ const COVERAGE: &[(&str, Coverage)] = &[
             rules: &["frame"],
         },
     ),
+    ("native_slab_shape_edit", NotYet),
 ];
 
 /// The readers that at least one model of the Revit 2025 set

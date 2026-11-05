@@ -8,18 +8,24 @@ const previewUrl = `http://127.0.0.1:${previewPort}`;
 
 // The saved-mesh measurement opens every reference model twice and reads the
 // CPU and memory it takes, so it runs on its own, in one worker, and not with
-// the rest of the suite: RVT_VIEWER_MEASURE=1 runs it and only it.
+// the rest of the suite: RVT_VIEWER_MEASURE=1 runs it and only it. Its
+// assertions about the toggle (one test) are in the suite.
 const measure = process.env.RVT_VIEWER_MEASURE === '1';
 const measureSpec = /saved-meshes-measure\.spec\.ts$/;
 
+// CI splits the suite across jobs with `--shard`, which splits by file unless
+// tests may run in parallel, and the files differ in length by a factor of
+// fifty. Every test opens its own page and shares nothing with the others.
+const fullyParallel = process.env.RVT_VIEWER_FULLY_PARALLEL === '1';
+
 export default defineConfig({
   testDir: './tests',
-  ...(measure ? { testMatch: measureSpec, workers: 1 } : { testIgnore: measureSpec }),
+  ...(measure ? { testMatch: measureSpec, workers: 1 } : {}),
   timeout: 120_000,
   expect: {
     timeout: 60_000,
   },
-  fullyParallel: false,
+  fullyParallel,
   reporter: process.env.CI
     ? [
         ['list'],

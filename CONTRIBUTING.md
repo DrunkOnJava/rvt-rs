@@ -109,7 +109,8 @@ Python wheel builds, with the full platform matrix reserved for pushes to
 2026-09-19). A draft pull request runs less still: fmt, clippy, cargo doc, the PII
 guard, the env lint, Corpus health and the Ubuntu builds with their
 real-file checks, as `fast / ...`. Marking it ready runs the full set, whose
-`full / CI passed` is the check a merge needs (#1237, #1319).
+`full / CI passed` is the check a merge needs (#1237, #1319) and which includes
+the viewer's browser tests, except on a change to documentation alone (#1374).
 
 **Unit tests are banned, with one exception.** Do not add them. Changes are
 verified end to end: against real Revit files and Revit's own exports,
