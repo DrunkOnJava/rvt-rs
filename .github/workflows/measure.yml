@@ -864,7 +864,9 @@ jobs:
   same-project-gates:
     name: Same-project gates
     needs: [plan, measure]
-    if: ${{ !cancelled() && needs.measure.result == 'success' }}
+    # Also after a red shard: a difference the other shards found still has to reach
+    # the verdict, which reads such a run as NOT MEASURED unless a result fails.
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -913,13 +915,16 @@ jobs:
           SAMPLE_YEARS: ${{ inputs.sample_years }}
           SCORERS: ${{ inputs.scorers }}
           IFC_FLAGS: ${{ inputs.ifc_flags }}
+          MEASURE_RESULT: ${{ needs.measure.result }}
         run: |
           sha=$(gh api "repos/$REPO/commits/$MEASURED" --jq .sha)
-          python3 tools/ci/same_project_verdict.py measure-head --flags "$IFC_FLAGS" --samples "$SAMPLES" \
-            --sample-years "$SAMPLE_YEARS" --scorers "$SCORERS" > verdict.json
+          # The `=` forms: `--saved-meshes` is a value ifc_flags takes.
+          python3 tools/ci/same_project_verdict.py measure-head --flags="$IFC_FLAGS" --samples="$SAMPLES" \
+            --sample-years="$SAMPLE_YEARS" --scorers="$SCORERS" --measure-result="$MEASURE_RESULT" > verdict.json
           cat verdict.json
-          jq --arg sha "$sha" '{name: "same-project gates", head_sha: $sha, status: "completed", conclusion: .conclusion,
-            output: {title: .title, summary: .summary}}' verdict.json \
+          jq --arg sha "$sha" --arg from "Scored by workflow commit $GITHUB_WORKFLOW_SHA, run $GITHUB_RUN_ID" \
+            '{name: "same-project gates", head_sha: $sha, status: "completed", conclusion: .conclusion,
+              output: {title: .title, summary: (.summary + "\n- " + $from)}}' verdict.json \
             | gh api -X POST "repos/$REPO/check-runs" --input - --jq '"wrote check run \(.id): \(.conclusion)"'
 
   compare:

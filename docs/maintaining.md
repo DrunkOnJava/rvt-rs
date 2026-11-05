@@ -211,10 +211,13 @@ not remove Compare's report.
 - **A landing reads the verdict.** The gates' job writes a check run,
   `same-project gates`, on the commit Measure measured: success only where both
   compared every save, failure on a difference or a missing result, and neutral
-  (NOT MEASURED) where they compared less. Measure is not a required check, so the
+  (NOT MEASURED) where they compared less or a measure shard did not finish, unless
+  a result that did arrive fails. Measure is not a required check, so the
   maintainer's landing script reads this across a pull request's commits and
-  refuses one that changes `src/` with no passing verdict at or after its last
-  change to `src/`, or with a newest verdict that fails.
+  refuses one that changes `src/` or the gates' own files unless a commit holding
+  every such change has a passing verdict, and refuses outright when that commit's
+  newest verdict fails. A clean merge of `main` is not such a change; a merge that
+  resolves a conflict there is.
 - **A run with `ifc_flags` checks neither same-project gate.** The gates are about
   the default export, and a flag such as `--phase` makes a save refuse. Each gate
   says in a notice that it compared nothing, so the run a gate judges has no

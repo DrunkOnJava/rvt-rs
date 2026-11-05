@@ -60,7 +60,10 @@ struct Cli {
     /// Schedule this phase, by its name (exactly) or its ElementId, instead of
     /// the project's last, as `rvt-ifc --phase` does: an element that does
     /// not exist in it, and a room whose own phase is not it, are left out.
-    /// An unknown phase is an error that lists the file's phases.
+    /// Without it, a project whose last phase holds no room schedules the
+    /// rooms of the latest phase that holds any, and says so; naming the
+    /// last phase schedules none. An unknown phase is an error that lists
+    /// the file's phases.
     #[arg(long, value_name = "NAME|ID")]
     phase: Option<String>,
 }
@@ -110,6 +113,16 @@ fn run(cli: Cli) -> Result<(), String> {
     let model = RvtDocExporter
         .export(&mut rf)
         .map_err(|e| format!("export {}: {e}", cli.input.display()))?;
+    // #1359: where no phase is named and the last holds no room, the rooms
+    // are those of the latest phase that holds any.
+    if let Some(fallback) = rf.room_phase_fallback() {
+        let phase = fallback
+            .name
+            .unwrap_or_else(|| format!("ElementId {}", fallback.id));
+        eprintln!(
+            "rvt-schedule: the project's last phase holds no room, so the rooms of {phase:?}, the latest phase that holds any, are scheduled; --phase NAME|ID chooses the phase exactly (naming the last writes no room)"
+        );
+    }
     let options = CsvOptions {
         unit: if cli.metric {
             LengthUnit::Metres
