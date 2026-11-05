@@ -456,7 +456,6 @@ fn raise_embed_host(
         return;
     }
     report.embed_raised += 1;
-    report.triangles += triangles.len();
     *solid_shape = Some(SolidShape::TriangulatedFaceSet {
         vertices_feet: vertices,
         triangles,
