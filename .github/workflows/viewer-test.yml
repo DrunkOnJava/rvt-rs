@@ -143,32 +143,41 @@ jobs:
 
       # folded-pieces.spec.ts opens the BIM4LCA office as built, the one model with
       # a piece folded into another element's body (CC BY-SA 4.0). A file restored
-      # is checked against its pin like a fetched one. The host being unreachable
-      # says nothing about the viewer, so that test is then not measured, and says
-      # so; a file that no longer matches its pin fails.
-      - name: Cache the BIM4LCA office as built
-        if: ${{ contains(matrix.files, 'folded-pieces') }}
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      # is checked against its pin like a fetched one, and only main saves a file
+      # that was verified. The host being unreachable says nothing about the
+      # viewer, so that test is then not measured, and says so: `timeout`, since
+      # this host has held a job for 27 minutes (#1237). A file that no longer
+      # matches its pin fails. Deploy viewer's leg runs every file ("/").
+      - name: Restore the BIM4LCA office as built
+        id: office-cache
+        if: ${{ contains(matrix.files, 'folded-pieces') || matrix.files == '/' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: _bim4lca-viewer
           key: bim4lca-viewer-${{ hashFiles('research/bim4lca-measure.tsv', 'tools/ci/fetch-bim4lca.py') }}
       - name: Fetch the BIM4LCA office as built
         id: office
-        if: ${{ contains(matrix.files, 'folded-pieces') }}
+        if: ${{ contains(matrix.files, 'folded-pieces') || matrix.files == '/' }}
         shell: bash
         run: |
           name=ARK_NordicLCA_Office_Concrete_As-Built.rvt
           awk -F'\t' -v tail="/${name}" '$1 != "entry" || substr($2, length($2) - length(tail) + 1) == tail' \
             research/bim4lca-measure.tsv > "${RUNNER_TEMP}/office-pin.tsv"
           set +e
-          python3 tools/ci/fetch-bim4lca.py "${RUNNER_TEMP}/office-pin.tsv" _bim4lca-viewer
+          timeout 240 python3 tools/ci/fetch-bim4lca.py "${RUNNER_TEMP}/office-pin.tsv" _bim4lca-viewer
           status=$?
           set -e
           case "$status" in
             0) echo "path=${GITHUB_WORKSPACE}/_bim4lca-viewer/${name}" >> "$GITHUB_OUTPUT" ;;
-            2) echo "::warning::folded-pieces.spec.ts NOT MEASURED: the host of the BIM4LCA office was unreachable" ;;
+            2|124) echo "::warning::folded-pieces.spec.ts NOT MEASURED: the host of the BIM4LCA office was unreachable" ;;
             *) echo "::error::the BIM4LCA office no longer matches research/bim4lca-measure.tsv"; exit 1 ;;
           esac
+      - name: Save the BIM4LCA office as built
+        if: ${{ steps.office.outputs.path != '' && steps.office-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: _bim4lca-viewer
+          key: bim4lca-viewer-${{ hashFiles('research/bim4lca-measure.tsv', 'tools/ci/fetch-bim4lca.py') }}
 
       - name: Install Rust toolchain
         shell: bash

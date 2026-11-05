@@ -1567,6 +1567,8 @@ function renderScene(glb: Uint8Array): void {
     url,
     (gltf) => {
       currentModel = gltf.scene;
+      // A category hidden before the meshes arrived stays hidden.
+      applyCategoryVisibility();
       scene.add(currentModel);
       frameCamera(currentModel);
       URL.revokeObjectURL(url);

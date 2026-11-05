@@ -9,9 +9,15 @@ import { expect, test, type Page } from '@playwright/test';
 // No other model the browser tests hold has a folded piece, so this opens the
 // BIM4LCA office as built (CC BY-SA 4.0; research/bim4lca-measure.tsv), given by
 // RVT_VIEWER_OFFICE. Without it the test is skipped; the workflow says so when
-// the host could not be reached. The clicks are real, and the capture below
-// only records: it reads which mesh each click hit, so that the test knows it
-// clicked a folded piece rather than assuming so.
+// the host could not be reached. The clicks are real. The capture below reads
+// which mesh each click hit, so that the test knows it clicked a folded piece
+// rather than assuming so. While it looks for one it holds back the panel
+// requests those clicks post, each of which decodes the whole model in the
+// worker (11.9 minutes in CI otherwise); the click the test asserts is not held.
+//
+// The JavaScript that maps a pick to its owner and the worker's panel, which
+// resyncs the selection, each cover for the other, so breaking one alone does
+// not fail this test; it holds the two together.
 
 interface Hit {
   object: { visible: boolean; parent: unknown; userData: { entityIndex?: number } };
@@ -20,14 +26,18 @@ interface Hit {
 interface Capture {
   model: {
     body_pieces?: Map<number, number[]> | Record<string, number[]>;
+    global_ids?: { elements?: Map<number, string> | Record<string, string> };
+    building_storeys: Array<{ name: string }>;
     entities: Array<{ kind?: string; ifc_type?: string; name?: string; type_guid?: string }>;
   } | null;
   scene: SceneNode | null;
   hits: Hit[] | null;
+  holdInfo: boolean;
 }
 interface SceneNode {
   entity_index: number | null;
   ifc_type: string;
+  storey_index?: number | null;
   children: SceneNode[];
 }
 declare global {
@@ -40,7 +50,7 @@ const office = process.env.RVT_VIEWER_OFFICE;
 
 async function capture(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    const seen: Capture = { model: null, scene: null, hits: null };
+    const seen: Capture = { model: null, scene: null, hits: null, holdInfo: false };
     window.__capture = seen;
     const Native = window.Worker;
     window.Worker = class extends Native {
@@ -53,6 +63,10 @@ async function capture(page: Page): Promise<void> {
             seen.scene = message.scene;
           }
         });
+      }
+      override postMessage(message: unknown, ...rest: never[]): void {
+        if (seen.holdInfo && (message as { type?: string } | null)?.type === 'info') return;
+        (super.postMessage as (m: unknown, ...r: unknown[]) => void)(message, ...rest);
       }
     };
     // three.js sorts a raycast's hits by distance.
@@ -105,13 +119,30 @@ test('a click on a folded piece selects the element that owns it', async ({ page
       .sort((a, b) => b.folded.length - a.folded.length);
     const elements = model!.entities.filter((entity) => entity.kind === 'BuildingElement').length;
     const folded = owners.reduce((sum, entry) => sum + entry.folded.length, 0);
-    return { owners, listedByType, folded, written: elements - folded };
+    // A part of a stair, on the storey the export writes it on: its own record
+    // names none, so it read as no storey before #1423.
+    let flight: { index: number; id: string; storey: string } | null = null;
+    const findFlight = (node: SceneNode, storey: number | null) => {
+      const here = node.ifc_type === 'IFCBUILDINGSTOREY' ? (node.storey_index ?? null) : storey;
+      if (!flight && node.ifc_type === 'IFCSTAIRFLIGHT' && node.entity_index !== null && here !== null) {
+        flight = {
+          index: node.entity_index,
+          id: model!.entities[node.entity_index]!.type_guid ?? '',
+          storey: model!.building_storeys[here]!.name,
+        };
+      }
+      node.children.forEach((child) => findFlight(child, here));
+    };
+    findFlight(scene!, null);
+    return { owners, listedByType, folded, written: elements - folded, flight };
   });
   expect(facts.owners.length, 'this model has no folded piece').toBeGreaterThan(0);
   const ifcType = facts.owners[0]!.ifcType;
 
   // The schedule lists the elements the export writes, not the meshes drawn.
-  await expect(page.locator('#schedule-total')).toContainText(`${facts.written} scheduled elements`);
+  await expect(page.locator('#schedule-total')).toHaveText(
+    new RegExp(`^${facts.written} scheduled elements`),
+  );
 
   // The category's count is the elements the tree lists, not the meshes drawn.
   const toggles = page.locator('#categories label.category-toggle');
@@ -120,6 +151,12 @@ test('a click on a folded piece selects the element that owns it', async ({ page
   const toggleText = toggleTexts.find((text) => text.toLowerCase().includes(typeName));
   expect(toggleText, `no toggle for ${ifcType} in ${toggleTexts.join(' | ')}`).toBeTruthy();
   expect(Number(/(\d+)\s*$/.exec(toggleText!.trim())![1])).toBe(facts.listedByType[ifcType]);
+
+  // Wait for the meshes: `Loaded` comes before the glTF has been parsed, and a
+  // schedule row becomes a button only once there are meshes to light up.
+  await expect(page.locator('#schedule-groups button').first()).toBeVisible({ timeout: 120_000 });
+  const canvas = page.locator('#viewport canvas');
+  const box = (await canvas.boundingBox())!;
 
   // Only that category is drawn: every other one is hidden, and still in front.
   await page.evaluate((name) => {
@@ -135,88 +172,127 @@ test('a click on a folded piece selects the element that owns it', async ({ page
     info
       .locator('.info-group-identity .info-row')
       .filter({ has: page.locator('.k', { hasText: new RegExp(`^${name}$`) }) });
-  async function expectOwnerPanel(id: string): Promise<void> {
+  async function expectOwnerPanel(owner: number, id: string): Promise<void> {
     await expect(row('ElementId').locator('.v')).toHaveText(id, { timeout: 300_000 });
-    await expect(row('GlobalId')).toBeVisible();
+    const globalId = await page.evaluate((index) => {
+      const ids = window.__capture.model!.global_ids?.elements;
+      return ids instanceof Map ? ids.get(index) : ids?.[String(index)];
+    }, owner);
+    expect(globalId, 'the owner has no GlobalId in the model').toBeTruthy();
+    await expect(row('GlobalId').locator('.v')).toHaveText(globalId!);
     await expect(info.locator('.info-group-extents')).toHaveCount(0);
     await expect(info).not.toContainText('no longer in the scene');
     await expect(info).not.toContainText(/Not recovered:[^\n]*extents/);
   }
   const first = facts.owners[0]!;
-  await page.evaluate((index) => {
-    const target = document.querySelector(`.tree-node[data-entity-index="${index}"]`)!;
-    const openers: HTMLElement[] = [];
-    for (
-      let group = target.parentElement?.closest('.tree-children');
-      group;
-      group = group.parentElement?.closest('.tree-children')
-    ) {
-      openers.unshift(group.previousElementSibling as HTMLElement);
-    }
-    for (const opener of openers) {
-      if (opener.getAttribute('aria-expanded') === 'false') opener.click();
-    }
-  }, first.owner);
-  const treeRow = page.locator(`.tree-node[data-entity-index="${first.owner}"]`);
+  async function openTreeRow(index: number) {
+    await page.evaluate((target) => {
+      const row = document.querySelector(`.tree-node[data-entity-index="${target}"]`)!;
+      const openers: HTMLElement[] = [];
+      for (
+        let group = row.parentElement?.closest('.tree-children');
+        group;
+        group = group.parentElement?.closest('.tree-children')
+      ) {
+        openers.unshift(group.previousElementSibling as HTMLElement);
+      }
+      for (const opener of openers) {
+        // A category opens as it is clicked, any other row only from its caret.
+        if (opener.getAttribute('aria-expanded') === 'false') {
+          opener.querySelector<HTMLElement>('.tree-caret')!.click();
+        }
+      }
+    }, index);
+    return page.locator(`.tree-node[data-entity-index="${index}"]`);
+  }
+  const treeRow = await openTreeRow(first.owner);
   await treeRow.click();
-  await expectOwnerPanel(first.id);
+  await expectOwnerPanel(first.owner, first.id);
   // A double-click frames the owner and its pieces.
   await treeRow.dblclick();
   await page.waitForTimeout(1_500);
   await testInfo.attach('framed', { body: await page.screenshot(), contentType: 'image/png' });
 
-  // Click across the view until a click lands on a folded piece.
+  // Click across the view, from the middle out, until a click lands on a folded
+  // piece with a hidden element in front of it.
   const ownerOf = new Map<number, (typeof facts.owners)[number]>();
   for (const entry of facts.owners) for (const piece of entry.folded) ownerOf.set(piece, entry);
-  const canvas = page.locator('#viewport canvas');
-  const box = (await canvas.boundingBox())!;
-  const grid = { columns: 40, rows: 26 };
-  let found: { piece: number; owner: (typeof facts.owners)[number] } | null = null;
-  let clicks = 0;
-  let hiddenInFront = 0;
-  for (let r = 0; r < grid.rows && !found; r++) {
-    for (let c = 0; c < grid.columns && !found; c++) {
-      await page.evaluate(() => {
-        window.__capture.hits = null;
-      });
-      await page.mouse.click(
-        box.x + (box.width * (c + 0.5)) / grid.columns,
-        box.y + (box.height * (r + 0.5)) / grid.rows,
-      );
-      clicks++;
-      const hit = await page.evaluate(() => {
-        const isDrawn = (object: Hit['object']) => {
-          for (let at: Hit['object'] | null = object; at; at = at.parent as Hit['object'] | null) {
-            if (!at.visible) return false;
-          }
-          return true;
-        };
-        const hits = window.__capture.hits ?? [];
-        const drawn = hits.find((h) => isDrawn(h.object));
-        return {
-          any: hits.length > 0,
-          hiddenFirst: hits.length > 0 && !isDrawn(hits[0]!.object),
-          entity: drawn?.object.userData.entityIndex ?? null,
-        };
-      });
-      if (hit.hiddenFirst) hiddenInFront++;
-      const owner = hit.entity === null ? undefined : ownerOf.get(hit.entity);
-      if (owner) found = { piece: hit.entity!, owner };
+  const columns = 60;
+  const rows = 40;
+  const points: Array<{ x: number; y: number }> = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < columns; c++) {
+      points.push({ x: box.x + (box.width * (c + 0.5)) / columns, y: box.y + (box.height * (r + 0.5)) / rows });
     }
   }
-  expect(found, `no click of ${clicks} landed on a folded piece`).not.toBeNull();
+  const middle = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  points.sort((a, b) => Math.hypot(a.x - middle.x, a.y - middle.y) - Math.hypot(b.x - middle.x, b.y - middle.y));
+  async function clickAndRead(point: { x: number; y: number }) {
+    await page.evaluate(() => {
+      window.__capture.hits = null;
+    });
+    await page.mouse.click(point.x, point.y);
+    return page.evaluate(() => {
+      const isDrawn = (object: Hit['object']) => {
+        for (let at: Hit['object'] | null = object; at; at = at.parent as Hit['object'] | null) {
+          if (!at.visible) return false;
+        }
+        return true;
+      };
+      const hits = window.__capture.hits ?? [];
+      return {
+        any: hits.length > 0,
+        hiddenFirst: hits.length > 0 && !isDrawn(hits[0]!.object),
+        entity: hits.find((h) => isDrawn(h.object))?.object.userData.entityIndex ?? null,
+      };
+    });
+  }
+  await page.evaluate(() => {
+    window.__capture.holdInfo = true;
+  });
+  let found: { point: { x: number; y: number }; piece: number; owner: (typeof facts.owners)[number] } | null = null;
+  let clicks = 0;
+  let anyHit = false;
+  let hiddenInFront = 0;
+  for (const point of points) {
+    const hit = await clickAndRead(point);
+    clicks++;
+    anyHit ||= hit.any;
+    // A capture that sees nothing would otherwise spend the whole grid.
+    if (clicks === 200) expect(anyHit, 'no click hit anything: is the capture still reading the raycast?').toBe(true);
+    if (hit.hiddenFirst) hiddenInFront++;
+    const owner = hit.entity === null ? undefined : ownerOf.get(hit.entity);
+    if (owner && hit.hiddenFirst) {
+      found = { point, piece: hit.entity!, owner };
+      break;
+    }
+  }
+  expect(found, `no click of ${clicks} landed on a folded piece behind a hidden element`).not.toBeNull();
+  await page.evaluate(() => {
+    window.__capture.holdInfo = false;
+  });
 
-  // The click on the piece selected its owner.
-  await expectOwnerPanel(found!.owner.id);
+  // From an unrelated selection, that click selects the piece's owner: not the
+  // hidden element in front of it, and not the piece.
+  const other = facts.owners.find((entry) => entry.owner !== found!.owner.owner)!;
+  await (await openTreeRow(other.owner)).click();
+  await expectOwnerPanel(other.owner, other.id);
+  const again = await clickAndRead(found!.point);
+  expect(again.hiddenFirst, 'the view moved: the hidden element is no longer in front').toBe(true);
+  expect(again.entity).toBe(found!.piece);
+  await expectOwnerPanel(found!.owner.owner, found!.owner.id);
   await expect(row('Name').locator('.v')).toHaveText(found!.owner.name);
   await expect(
     page.locator(`.tree-node.selected[data-entity-index="${found!.owner.owner}"]`),
   ).toHaveCount(1);
   await testInfo.attach('selected', { body: await page.screenshot(), contentType: 'image/png' });
 
-  // Some of those clicks had a hidden element in front of what they selected,
-  // or this test says nothing about the hidden categories.
-  expect(hiddenInFront, 'no click had a hidden element in front of it').toBeGreaterThan(0);
+  // A part of a stair is on its whole's storey, where its own record has none.
+  expect(facts.flight, 'this model has no stair flight on a storey').not.toBeNull();
+  await (await openTreeRow(facts.flight!.index)).click();
+  await expect(row('ElementId').locator('.v')).toHaveText(facts.flight!.id, { timeout: 300_000 });
+  await expect(info.locator('.info-group-storey')).toContainText(facts.flight!.storey);
+
   console.log(
     `office: ${facts.owners.length} owners, ${facts.folded} folded pieces, ${facts.written} written; ` +
       `${ifcType} ${facts.listedByType[ifcType]} listed; click ${clicks} hit piece ${found!.piece} of ` +
