@@ -770,6 +770,10 @@ jobs:
           PSETS_MISSING: ${{ inputs.psets_missing }}
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
           MCP_REQUIRE_FOLDED_FIELD: ${{ matrix.side != 'base' && '1' || '' }}
+          # A run of the samples checks the Areas of rac_advanced across its
+          # 2024 to 2027 saves on the head side (main writes none on 2025 to
+          # 2027) whenever all four samples are in it, and says so when not.
+          AREAS_ACROSS_SAVES: ${{ matrix.side != 'base' && matrix.samples && '1' || '' }}
           RVT_SCORER_FINE_MESH: ${{ inputs.fine_mesh && '1' || '' }}
           FAMILY_DIR: ${{ matrix.families && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           SAMPLE_DIR: ${{ matrix.samples && format('{0}/_samples', github.workspace) || '' }}
@@ -831,6 +835,33 @@ jobs:
           if-no-files-found: error
           # Compare re-uploads them merged as measure-head and measure-base.
           retention-days: 7
+      # The gate of the Areas of Revit 2025 to 2027 (#1261, #1194; Griffin,
+      # 2026-11-05, "Same-project gate"): rac_advanced's Areas on its 2025,
+      # 2026 and 2027 saves equal its 2024 save's. With the four samples in the
+      # run, a failed check, a missing result and a result that read other than
+      # 25 Areas, 25 of them with a body, on any save each turn the job red,
+      # after the results are uploaded; a pass needs the scorer's own `passed`
+      # line. A run with fewer than the four samples (a narrower sample_years)
+      # checks nothing and says so in a notice. Measure is not a required
+      # check: the failure is read before landing, by the landing rule.
+      - name: The Areas agree across rac_advanced's saves
+        if: ${{ !cancelled() && matrix.side != 'base' && matrix.samples }}
+        shell: bash
+        run: |
+          file=results/areas_across_saves.txt
+          if [ ! -s "$file" ]; then
+            echo "::error::the Areas of rac_advanced were not compared across its saves: no result, so nothing was checked"
+            exit 1
+          fi
+          cat "$file"
+          if grep -q '^areas across saves: skipped:' "$file"; then
+            echo "::notice::$(sed -n '1p' "$file")"
+            exit 0
+          fi
+          if [ "$(sed -n '$p' "$file")" != "exit 0" ] || ! grep -q '^areas across saves: passed: 25 Areas, 25 with a body, on each of 4 saves' "$file"; then
+            echo "::error::the Areas of rac_advanced differ across its 2024 to 2027 saves, or other than 25 Areas with a body were read on a save, or a save is missing (areas_across_saves.txt)"
+            exit 1
+          fi
 
   compare:
     name: Compare
@@ -904,6 +935,15 @@ jobs:
               echo "### MCP server answers against the export"
               echo
               printf '%s\n' "${mcp_lines[@]}"
+              echo
+            fi
+            # The gate of the Areas of Revit 2025 to 2027: counts by field.
+            if [ -s measure-head/areas_across_saves.txt ]; then
+              echo "### Areas of rac_advanced across its 2024 to 2027 saves"
+              echo
+              echo '```'
+              cat measure-head/areas_across_saves.txt
+              echo '```'
               echo
             fi
             if [ -d measure-base ]; then
