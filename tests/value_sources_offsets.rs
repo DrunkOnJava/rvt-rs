@@ -37,8 +37,11 @@
 //!   entry is the keyed element's `u64`, an index of at most 255, the `u32` 1
 //!   and a point, the two parts' points making a cylinder (`pipe_body`) with
 //!   the pipe's record box (the frame decoded here); a run type is an id
-//!   object with the type's id; and a Sketch's curve list is an element-data
-//!   header followed, at a fixed place, by the sketched element's id. Frames of
+//!   object with the type's id; a native run type or landing type is a record
+//!   of the type's id, a length and a body of that length that opens with the
+//!   tag of a `StairsRunType` or a `StairsLandingType`; and a Sketch's curve
+//!   list is an element-data header followed, at a fixed place, by the
+//!   sketched element's id. Frames of
 //!   a 32-bit release that carry no id at their first bytes are counted as not
 //!   read;
 //! - for an Area drawn from the loop of Revit's plan topology
@@ -84,8 +87,13 @@
 //! which CI prints and uploads.
 //!
 //! Runs on every `.rvt` under `RVT_PROJECT_CORPUS_DIR` (Core Interior and the
-//! RE1 models in CI) and on the BIM4LCA as-built office under
-//! `RVT_NORDIC_LCA_DIR`; each is skipped when its variable is unset.
+//! RE1 models in CI) and on the BIM4LCA office as built and at building permit
+//! under `RVT_NORDIC_LCA_DIR`; each is skipped when its variable is unset. The
+//! permit file is the one model of the gate with the `current` copy rule in its
+//! table (`CURRENT_PINS`): a source chosen by it names the copy of the current
+//! partition among copies that disagree, and is read at its bytes like an
+//! `agreeing` one; that the partition is the current one is
+//! `native_document::current_partitions`, which this test does not measure.
 
 use crate::element_parameters::nordic_dir;
 use rvt::ifc::entities::{IfcEntity, ProfileDef, PropertyValue};
@@ -145,8 +153,9 @@ use Coverage::Recorded;
 
 /// The record's box, or the box trimmed or cut by joins: read from the
 /// selected frame. `selected_frame_box` is the same where the profile is read
-/// from another record (sketch lines, the type's section), which no reader
-/// notes yet.
+/// from another record that none of `PROFILE_FRAME_READERS` notes: no element
+/// on any of the 92 models of Measure run 42111951132 has it, so every model of
+/// this gate reads `selected_frame` and `box_only` is 0.
 const FRAME: Coverage = Recorded {
     readers: &["selected_frame", "selected_frame_box"],
     rules: &["selected"],
@@ -201,14 +210,14 @@ const COVERAGE: &[(&str, Coverage)] = &[
     (
         "native_spiral_run_treads",
         Recorded {
-            readers: &["native_run"],
+            readers: &["native_run", "native_run_type"],
             rules: &["native"],
         },
     ),
     (
         "native_landing_tread",
         Recorded {
-            readers: &["native_landing"],
+            readers: &["native_landing", "native_landing_type", "native_run_type"],
             rules: &["native"],
         },
     ),
@@ -400,7 +409,9 @@ const MIN_READERS: &[(&str, &[&str])] = &[
             "saved_graphics",
             "instance_transform",
             "native_run",
+            "native_run_type",
             "native_landing",
+            "native_landing_type",
             "stair_run_lines",
             "landing_lines",
             "room_solid_faces",
@@ -408,6 +419,19 @@ const MIN_READERS: &[(&str, &[&str])] = &[
             "pipe_connectors",
             "area_plan_topology",
             "native_slab_shape",
+        ],
+    ),
+    // Measure run 42111951132: 116 floors' sketch lines and Sketch curve lists
+    // here, of which 3 and 1 hold the `current` rule (`CURRENT_PINS`).
+    (
+        "nordic-office-permit",
+        &[
+            "selected_frame",
+            "bounded_line",
+            "saved_graphics",
+            "instance_transform",
+            "sketch_lines",
+            "sketch_list",
         ],
     ),
     // `area_boundary_lines` and `area_point` (an Area drawn from the
@@ -419,6 +443,11 @@ const MIN_READERS: &[(&str, &[&str])] = &[
     // Areas are on two plans; a regression in `note_area_sources` would pass
     // this test until a model of that kind is in the gate.
 ];
+
+/// The readers whose table must hold a source chosen by the `current` copy
+/// rule (the copies disagreed and the current partition's was taken), by model:
+/// a model that does not, or a reader that no longer takes the rule, fails.
+const CURRENT_PINS: &[(&str, &[&str])] = &[("nordic-office-permit", &["sketch_lines"])];
 
 /// The ElementId an `Identifier` field holds: `m_id.m_id64` from Revit 2024,
 /// `m_id.m_id` before.
@@ -574,6 +603,23 @@ fn office_model() -> Vec<(String, PathBuf)> {
         return Vec::new();
     }
     vec![("nordic-office-as-built".to_string(), path)]
+}
+
+/// The BIM4LCA office at building permit (`RVT_NORDIC_LCA_DIR`, #1368): the one
+/// model of the 92 that Measure's run 42111951132 read (Core Interior, the RE1
+/// models, Einhoven, the four BIM4LCA office files, puzzbobb's 23 Revit 2025
+/// models and Autodesk's 59 samples) whose table has the `current` copy rule:
+/// the sketch lines of 3 of its floors, and the Sketch's curve list of one.
+fn office_permit_model() -> Vec<(String, PathBuf)> {
+    let Some(dir) = nordic_dir() else {
+        return Vec::new();
+    };
+    let path = dir.join("ARK_NordicLCA_Office_Concrete_BuildingPermit.rvt");
+    if !path.is_file() {
+        eprintln!("skipping the building permit office: the model is absent");
+        return Vec::new();
+    }
+    vec![("nordic-office-permit".to_string(), path)]
 }
 
 /// Each element's ElementId and `BodySource`, with whether its profile is read
@@ -1276,6 +1322,14 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                     source.reader, source.differs_from_frame
                 ));
             }
+            // The current copy is chosen among copies that disagree: a copy of
+            // one partition has none to be chosen from.
+            if source.rule.as_str() == "current" && source.parts.is_empty() && source.copies < 2 {
+                problems.push(format!(
+                    "{id}: {} took the current copy of {} copies",
+                    source.reader, source.copies
+                ));
+            }
             checked += 1;
             let holds = if !source.parts.is_empty() {
                 let mut all = true;
@@ -1512,6 +1566,40 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                                 u32_at(bytes, part.offset).map(u64::from)
                             };
                             if first == Some(wanted) {
+                                Part::Confirmed
+                            } else {
+                                Part::Failed
+                            }
+                        }
+                        // The native record of a run type or a landing type:
+                        // the record's id, a length (after four bytes more on
+                        // the channels that carry them), a body that opens with
+                        // the class's tag and the same length again; the class
+                        // is the one the reader names.
+                        "native_run_type" | "native_landing_type" => {
+                            let first = if width == 8 {
+                                u64_at(bytes, part.offset)
+                            } else {
+                                u32_at(bytes, part.offset).map(u64::from)
+                            };
+                            let body = [width + 4, width + 8].into_iter().find_map(|header| {
+                                let length =
+                                    usize::try_from(u32_at(bytes, part.offset + header - 4)?)
+                                        .ok()?;
+                                let start = part.offset + header;
+                                let echo = u32_at(bytes, start.checked_add(length)?)?;
+                                (usize::try_from(echo).ok()? == length).then_some(start)
+                            });
+                            let kind = body
+                                .and_then(|start| u16_at(bytes, start))
+                                .and_then(|tag| classes.as_ref()?.by_tag(tag))
+                                .map(|class| class.name.as_str());
+                            let wanted_kind = if source.reader == "native_run_type" {
+                                "StairsRunType"
+                            } else {
+                                "StairsLandingType"
+                            };
+                            if first == Some(wanted) && kind == Some(wanted_kind) {
                                 Part::Confirmed
                             } else {
                                 Part::Failed
@@ -1864,6 +1952,23 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
             }
         }
     }
+    for (model, readers) in CURRENT_PINS {
+        if *model != base {
+            continue;
+        }
+        for reader in *readers {
+            if by_rule
+                .get(&format!("{reader}:current"))
+                .copied()
+                .unwrap_or(0)
+                == 0
+            {
+                problems.push(format!(
+                    "{name}: no element has a source from {reader} chosen by the current copy rule"
+                ));
+            }
+        }
+    }
 
     // The report.
     let mut line = format!(
@@ -1992,6 +2097,15 @@ fn nordic_office_value_sources_name_the_copy_the_reader_took() {
         "RVT_NORDIC_LCA_DIR",
         office_model(),
         &["nordic-office-as-built"],
+    );
+}
+
+#[test]
+fn nordic_office_permit_value_sources_exercise_the_current_copy_rule() {
+    check_all(
+        "RVT_NORDIC_LCA_DIR",
+        office_permit_model(),
+        &["nordic-office-permit"],
     );
 }
 

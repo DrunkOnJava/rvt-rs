@@ -240,8 +240,8 @@ pub struct ValueSource {
     /// `sketch_circle`, `sketch_spline`, `instance_transform`, a native
     /// reader's name, `selected_frame` for a body read from the frame, or
     /// `selected_frame_box` for a body whose box and placement are read from
-    /// the frame and whose profile is read from another record, which no
-    /// reader notes yet (its `ProfileSource` names the reader).
+    /// the frame and whose profile is read from another record that no
+    /// profile reader notes (its `ProfileSource` names the reader).
     pub reader: String,
     /// How the copy was chosen.
     pub rule: CopyRule,
@@ -902,7 +902,10 @@ pub const SELECTED_FRAME_READER: &str = "selected_frame";
 /// The reader name of the value source of a body whose box and placement are
 /// read from the element's own frame and whose profile is read from another
 /// record (sketch lines, or the type's section): the frame is named for the
-/// box only, and the profile has no source yet.
+/// box only, and no profile reader (`sketch_lines`, `type_section`,
+/// `room_solid_faces` and the others listed in `docs/export-diagnostics.md`)
+/// noted the profile. No element has it on any of the 92 models of Measure run
+/// 42111951132.
 pub const SELECTED_FRAME_BOX_READER: &str = "selected_frame_box";
 
 /// The reader name of the value source of a Sketch's curve list (#1368).
@@ -951,7 +954,7 @@ fn body_readers(body: &str) -> &'static [&'static str] {
             &[SELECTED_FRAME_READER, "instance_transform", "family_forms"]
         }
         super::saved_meshes::SAVED_MESH_BODY_SOURCE => &["saved_graphics"],
-        ec::SPIRAL_RUN_BODY_SOURCE => &["native_run"],
+        ec::SPIRAL_RUN_BODY_SOURCE => &["native_run", "native_run_type"],
         ec::STAIR_RUN_BODY_SOURCE => &[
             "stair_run_lines",
             "stair_run_ends",
@@ -985,7 +988,9 @@ fn body_readers(body: &str) -> &'static [&'static str] {
             "roof_line_data",
             "roof_type_layers",
         ],
-        ec::LANDING_TREAD_BODY_SOURCE => &["native_landing"],
+        ec::LANDING_TREAD_BODY_SOURCE => {
+            &["native_landing", "native_landing_type", "native_run_type"]
+        }
         ec::LANDING_SLAB_BODY_SOURCE => &["landing_lines", "native_landing", "native_landing_type"],
         crate::partition_area_records::AREA_BOUNDARY_SOURCE => &[
             crate::partition_area_records::AREA_LINES_READER,

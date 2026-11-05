@@ -686,6 +686,49 @@ impl RevitFile {
         }
     }
 
+    /// Note for `owner`, under `as_reader`, one source made of the records
+    /// that the value sources of `from` under `reader` name, where several
+    /// records give the value (the run types of a stair's runs, #1368). It
+    /// lists one part for each of `from`; if any of them has no note, nothing
+    /// is noted, since a list that left a record out would not be the records
+    /// the value was read from. Does nothing unless
+    /// [`Self::record_value_sources`] is on.
+    pub(crate) fn attribute_value_sources(
+        &mut self,
+        from: impl IntoIterator<Item = u32>,
+        reader: &str,
+        owner: u32,
+        as_reader: &str,
+    ) {
+        let Some(noted) = self.value_sources.as_ref() else {
+            return;
+        };
+        let parts: Option<Vec<crate::ifc::element_provenance::SourcePart>> = from
+            .into_iter()
+            .map(|id| {
+                let source = noted.get(&id)?.iter().find(|held| held.reader == reader)?;
+                Some(crate::ifc::element_provenance::SourcePart {
+                    element_id: id,
+                    stream: source.stream.clone()?,
+                    offset: source.offset?,
+                })
+            })
+            .collect();
+        let Some(parts) = parts.filter(|parts| !parts.is_empty()) else {
+            return;
+        };
+        let copies = parts.len();
+        self.note_value_source(
+            owner,
+            crate::ifc::element_provenance::ValueSource::from_parts(
+                as_reader,
+                crate::ifc::element_provenance::CopyRule::Native,
+                copies,
+                parts,
+            ),
+        );
+    }
+
     /// Take back the note of `reader` for `element_id`, where the value was
     /// not used after all (a record selected, then found not to give the
     /// value). Does nothing unless [`Self::record_value_sources`] is on.

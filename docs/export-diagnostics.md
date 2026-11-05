@@ -114,7 +114,7 @@ drawn from that reader.
 | `BodySource` | Reader | Rule | What `offset` is |
 |---|---|---|---|
 | `partition_element_record_bbox`, `partition_element_record_join_trimmed`, `partition_element_record_join_cut`, `partition_element_record_column_cut` | `selected_frame` | `selected` | The frame itself (a trim or cut also reads the joined elements' frames, which are not named). |
-| The same bodies where the profile is read from a record no reader notes yet: a `profile_source` that is not the `body_source` | `selected_frame_box` | `selected` | The frame, for the box and the placement only. The profile's copy has no source yet. |
+| The same bodies where the profile is read from a record that none of the profile readers below notes: a `profile_source` that is not the `body_source`, and no source from `sketch_lines`, `type_section`, `room_solid_faces`, `type_hollow_section`, `type_i_section`, `pipe_connectors` or `family_forms` | `selected_frame_box` | `selected` | The frame, for the box and the placement only. It is what an element gets when its profile has no source, so that the frame is not claimed to be the profile's. A profile read from sketch lines, a type symbol or a room's solid has its readers in the rows below, and the value-source test fails one of those that has none. No element has `selected_frame_box` on any of 92 models: Measure run 42111951132 (main at d2439b09, `--element-provenance`) on Core Interior, Einhoven, the four RE1 models, the four BIM4LCA office files, puzzbobb's 24 Revit 2025 models and Autodesk's 58 samples (the held-out models, BIMcollab's example and the three.js `rac_advanced` export's models keep no diagnostics, so they are not measured). |
 | The same bodies where the profile is solved from sketch lines (`profile_source` `partition_element_record_sketch_lines`: floors, slabs and ceilings, and roofs whose body is the record's box; a roof drawn from its slope or extrusion has the `roof_*` rows below) | `sketch_lines` | `agreeing` or `current` | `parts`: the frame of each sketch line the solve was given, the first of its frames by frame order (`agreeing`), or the current partition's where its frames disagree (`current`, RE-216). The element's `selected_frame` names the frame for the box. |
 | The same | `sketch_list` | `agreeing` or `current` | The element-data header of the Sketch's curve list that names the lines (RE-97), the lowest-numbered partition's or the current one. Where the element has one. |
 | The same, where the outline is read from the lines' own ends rather than their boxes | `sketch_line_data` | `agreeing` or `current` | `parts`: the element-data header of each line's copy (as `bounded_line`). |
@@ -135,7 +135,10 @@ drawn from that reader.
 | `partition_family_instance_turned_box`, `partition_family_instance_oriented_box` | `instance_transform` | `agreeing` or `current` | The element-data header of the copy: the lowest-numbered partition's where the copies agree, the current partition's where they differ (RE-216). |
 | `saved_graphics_mesh` | `saved_graphics` | `native` | The header of the element's current graphics record. |
 | `native_spiral_run_treads` | `native_run` | `native` | The header of the run's current native record. |
-| `native_landing_tread` | `native_landing` | `native` | The header of the landing's current native record, which gives its outline and top. Its thickness is its stair's run types' tread thickness, which has no source yet. |
+| `native_spiral_run_treads` | `native_run_type` | `native` | `parts`: the header of the run type's current native record, which gives the tread thickness, the nosing and the type's name. |
+| `native_landing_tread` | `native_landing` | `native` | The header of the landing's current native record, which gives its outline and top. |
+| `native_landing_tread` | `native_landing_type` | `native` | `parts`: the header of the landing type's current native record, whose flags (not monolithic, a tread, the run's own tread) say the landing is drawn as its runs' tread. |
+| `native_landing_tread` | `native_run_type` | `native` | `parts`: the header of the current native record of each distinct run type of the runs of the landing's stair, which give the tread thickness; every run gives the same thickness within a tolerance, or the landing is left out. |
 | `partition_stair_run_sketch` | `stair_run_lines`, `stair_run_ends` | `agreeing` | The element-data header of the first copy of the run's data that gave the sketch lines, or the ends; `partitions` lists the copies that did. |
 | `partition_stair_run_sketch` | `stair_run_type` | `agreeing` | `parts`: the run type's id object (where its id is stored), read once for the type and noted for each run of it; `copies` is the partitions that held the id object, `partitions` those that gave a run type. |
 | `partition_stair_run_sketch` | `native_run` | `native` | A Revit 2025, 2026 or 2027 run: the header of the run's current native record, which gives its sketch, riser height and ends (RE-217, RE-341). |
@@ -149,22 +152,38 @@ drawn from that reader.
 | `native_area_plan_topology` | `area_plan_topology` | `native` | An Area drawn from the loop of Revit's own plan topology (`SpaceOutlineSource` `area_plan_topology`, or `area_plan_topology_unchecked` on Revit 2025 to 2027 and on an Area drawn from lines whose partition copies disagree, RE-333, #1434; the reader and its parts are the same). `parts`: the current native record of the Area itself (its `RoomElem`: the circuit it names and its point), of the `LevelRoomPlan` that holds the circuit (the circuit's sides, its holes and its saved area) and of each area boundary line that bounds the region, its holes' too (its `CurveElem`: the curve and the area rule's offsets), each at the place its group puts it in its partition (the record's ElementId, then its length and body). The region is rebuilt from these records alone, so the partition frames of the lines are not listed. An Area one of whose records has no place (its group's bytes are not the partition's own consecutive bytes) has no `area_plan_topology` source. The reader's name is the `SpaceOutlineSource` value `area_plan_topology` on purpose; the Area's `BodySource` and `ProfileSource` are `native_area_plan_topology`, so that one value says which readers sourced it. |
 | `native_slab_shape_edit` | `native_slab_shape` | `native` | The header of the floor's current native record, whose `SlabShapeEditGStep` gives the plane of its top (#1384, RE-336). The element's `selected_frame` names the frame whose box gives its base and placement, and `sketch_lines` and `sketch_list` its outline, as for a floor (`selected_frame_box` where no reader noted the outline's lines). |
 
-Every `BodySource` above has a reader that notes its copy. No reader notes one
-yet for the other values a body reads (a wall's layers, a beam's I section, the
-parameters of a rectangular column's section, an Area's Levels); an element
-whose box is the body but whose profile is read from a record no reader notes
-yet has `selected_frame_box` and nothing for the profile. That is not a claim
-that it read the frame. `value_source_counts`
-counts, by reader, the elements with a source, those whose value is held in
-another partition than their frame, and those whose copy was chosen as the
-current partition's (`current`), so a run on any model shows whether it
-exercises that rule. On Core Interior and the BIM4LCA office as built no source
-has the rule `current` (Measure run 41890994176: no `current` count). That does
-not say every copy set agreed: a set that disagreed and could not be resolved is
-dropped by its reader and leaves no source and no count.
+Every `BodySource` above has a reader that notes its copy. Four values a body
+or its quantities read have no reader, each for its own reason: a wall's layers
+(its type's, and its joined neighbours', which a layer-joined wall's staircase is
+drawn from: 266 walls on the BIM4LCA office as built, CI run 42107535655, each
+with its location line as its only source); a beam's I section (`type_i_section`
+is noted for every beam and column whose type is an I section, but a beam is
+drawn from it only where its body along its line holds the section, and the
+table does not say which beams are, so listing it would claim a value some beams
+did not use); the two sides of a rectangular column's section (they feed the
+column's length quantity, not its body); and an Area's Levels (its base and
+height, from Level records whose frames no reader notes). An element whose box
+is the body but whose profile has no source has `selected_frame_box` and nothing
+for the profile. That is not a claim that it read the frame.
+`value_source_counts` counts, by reader, the elements with a source, those whose
+value is held in another partition than their frame, and those whose copy was
+chosen as the current partition's (`current`), so a run on any model shows
+whether it exercises that rule. Measure run 42111951132 (main at d2439b09,
+`--element-provenance`, 92 models: Core Interior, Einhoven, the four RE1 models,
+the four BIM4LCA office files, puzzbobb's 24 Revit 2025 models and Autodesk's 58
+samples) has the rule `current` on one model: the BIM4LCA office at building
+permit, in the sketch lines of 3 of its floors (`sketch_lines`) and the Sketch
+curve list of one (`sketch_list`). No source of `instance_transform`,
+`sketch_line_data` or `roof_line_data`, the other readers that can take it, has
+it on any of the 92, and the office as built has none (Measure run
+41890994176). The value-source test reads the permit office, so a reader that
+stops taking the rule there fails it. That does not say every copy set agreed:
+a set that disagreed and could not be resolved is dropped by its reader and
+leaves no source and no count.
 
 `tests/value_sources_offsets.rs` reads the bytes at each recorded offset on Core
-Interior, the RE1 models, Einhoven and the BIM4LCA as-built office, and, where
+Interior, the RE1 models, Einhoven and the BIM4LCA office as built and at building
+permit, and, where
 `RVT_R2025_DIR` names puzzbobb's Revit 2025 models (CI's Corpus health fetches
 them), on those: the only models of the gate whose roofs are drawn from their
 slopes or from an extrusion. For the element-data readers it finds the element-data header, then the element's own
