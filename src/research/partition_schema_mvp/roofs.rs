@@ -55,7 +55,31 @@ pub(super) fn attach_roof_profiles(
         crate::partition_roof_slopes::scan_arrow_heights(rf, revit_version, &line_ids)
             .map(|found| found.into_keys().collect())
             .unwrap_or_default();
-    let profiles = sketch_plan_profiles(rf, revit_version, &sketch_lines, &roofs, &arrows);
+    // RE-341: on Revit 2026 and 2027 a roof is held to the record-box solve
+    // alone; a ceiling takes the readers of the lines' exact ends and of a
+    // Sketch's curve list.
+    let roof_ids: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| element.class == "Roof")
+        .filter_map(|element| element.id)
+        .collect();
+    let held_back = !roof_reads_exact_sketches(revit_version);
+    let (box_only, others): (BTreeMap<u32, [f64; 4]>, BTreeMap<u32, [f64; 4]>) = roofs
+        .into_iter()
+        .partition(|(id, _)| held_back && roof_ids.contains(id));
+    let mut profiles = BTreeMap::new();
+    for (owners, exact) in [(&others, true), (&box_only, false)] {
+        if !owners.is_empty() {
+            profiles.extend(sketch_plan_profiles(
+                rf,
+                revit_version,
+                &sketch_lines,
+                owners,
+                &arrows,
+                exact,
+            ));
+        }
+    }
     for roof in products
         .iter_mut()
         .filter(|element| SKETCHED_PRODUCT_CLASSES.contains(&element.class.as_str()))
