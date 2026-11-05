@@ -61,7 +61,7 @@ Measure [41945943795](https://github.com/DrunkOnJava/rvt-rs/actions/runs/4194594
 
 - Only the 14 hosts' rows moved. Every other row of the seven scorers in the two office files is the same, but for the scorers' own fit: the plan turn they estimate from the walls' middles moves by 5e-5 degrees (40.332546 to 40.332493), which shifts the 4th decimal of the Revit frame's coordinates in rows that did not change. 2103576 as built and 2177158 are unchanged, hosts that keep their stubs in Revit.
 - The 2 and 4 walls still off are the Basement walls 2057668 and 2057670 (and 2058499 and 2058501 at permit), 0.123 and 0.044 ft under Revit's base on their footings, which are not embed hosts and are not touched.
-- The one host whose mesh is not Revit's body is 2177212 (both dates): volume ratio 0.9902 and 0.9901, a vertex of Revit's 0.3018 ft from rvt-rs's surface, and none of rvt-rs's off Revit's by more than 1.9e-6 ft. Its base is Revit's. The mesh is Revit's own saved graphics and Revit's IFC export draws the strip 0.114 ft longer (section 3).
+- The one host whose mesh is not Revit's body is 2177212 (both dates): volume ratio 0.9902 and 0.9901, a vertex of Revit's 0.3018 ft from rvt-rs's surface, and none of rvt-rs's off Revit's by more than 1.9e-6 ft. Its base is Revit's. The mesh is Revit's own saved graphics and Revit's IFC export draws the strip 0.114 ft longer (section 3). It agrees with Revit's own quantities of the wall, which the same export writes: `NetVolume` 14.590085 ft³ against the mesh's 14.590083 and `GrossSideArea` 37.686932 ft² against 37.686926 as built, and 14.547453 and 37.576811 against 14.547453 and 37.576811 at permit (`wall_quantities_vs_ifc`, run 41945943795). So the 1.0% is Revit's IFC tessellation of the wall against Revit's own quantities of it, not the mesh being short, and the wall stays in the rule.
 - **Core Interior and RE1 Architecture: `ifc.sha256` identical to `main`'s**, and neither file has a wall that embeds a curtain wall (no note). The offices' exports differ in the 14 hosts' bodies only: a note line per office, `diagnostics.json` and the hash.
 - The cost is one extra read of the plain and stepped walls' native records in a file that has an `IfcCurtainWall` (none in a file that has none: Core Interior and RE1 took 4.41 and 1.17 s against 4.39 and 1.12 s), and the hosts' saved graphics in the pass that already reads doors' and windows'. The offices' export took 20.1 and 17.1 s against 18.3 and 15.5 s on the same CPU model, while the scorers this change does not touch took 5% to 17% longer on the same runner (`wall_bodies_vs_ifc` 126 s against 110, `saved_meshes_vs_ifc` 209 against 179): no cost beyond the pair's runner noise is shown, and none is claimed.
 
@@ -69,7 +69,11 @@ Einhoven, puzzbobb's Revit 2025 models and Autodesk's samples (Measure [41948046
 
 Held-out models (`-f holdout=true`, Measure [41947083013](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41947083013): f016fc32 against `main` at 77d71cbb, `mesh_bodies_vs_ifc` and `saved_meshes_vs_ifc`): 19 models, 18 held out and the spent Vitoria 2018 file, 46 files on each side, all identical but the export time in one log. `ifc.sha256` is the same on all 19, so no held-out export changes, and the one log kept (the spent file's) has no walls-that-embed line, so no host was drawn from a mesh there. Whether any of the 18 holds a wall that embeds a curtain wall is not known from what is kept (their logs are not), and the rule reads Revit 2023 to 2027 records only.
 
-## 6. Not measured, and not drawn
+## 6. What the 0.5 ft rule stands on
+
+The threshold was fitted and checked on the same two files: the BIM4LCA office as built and at building permit, 113 host states, of which 14 are raised and make 10 distinct walls (2098938, 2105250, 2177212, 2293116, 2294996, 3450274, 1378125, 1416796, 2103576 and 2495664). Every raise there is 8.2021 or 9.514 ft and every other wall is within 0.001 ft of its base, so any threshold between 0.001 and 8.2 ft draws the same walls; 0.5 ft is a round figure in that gap, not a measured edge. The held-out models and Autodesk's samples gave no host to score (their exports are `main`'s byte for byte, or the rule drew nothing on them), so nothing outside these two files has checked it.
+
+## 7. Not measured, and not drawn
 
 - A wall that embeds a curtain wall and has an opening hosted in it, or an embedded wall that is not a curtain wall (none of the office's 72), keeps its body.
 - Walls Revit raises for another reason (the 14 Basement walls on sloped footings, RE-335 section 1) are not touched; the saved mesh may well draw them, but the rule's scope is the embed step.
@@ -78,7 +82,7 @@ Held-out models (`-f holdout=true`, Measure [41947083013](https://github.com/Dru
 - Revit 2023 and earlier: the walls' native records give no embed step, so no wall is drawn from its mesh. The rule applies on Revit 2024 to 2027, and a raised host has been seen on the two Revit 2024 office files alone.
 - The pull request's Measure runs are filtered (`-f scorers=` the seven wall and mesh scorers on the offices, Core Interior and RE1 Architecture; the held-out models with the two mesh scorers; exports only for the rest): no unfiltered Measure with every scorer on every model has been run on this change. The rule fires on any Revit 2023 to 2027 file that has an `IfcCurtainWall` and a wall that embeds one, so a model outside the ones above (Revit 2025's puzzbobb models are in the last run, but only hashed) is measured against Revit's export only if a scorer was run on it.
 
-## 7. Reproduce
+## 8. Reproduce
 
 ```bash
 gh workflow run measure.yml --ref <this branch> -f ref=f8e195196b4aa231c7c3c749a51087f9eeb9ddde -f base=none -f nordic=true \

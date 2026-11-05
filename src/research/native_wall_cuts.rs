@@ -43,7 +43,9 @@ pub struct WallCutStep {
 /// name a cutting element, in the order the record lists them. A wall whose
 /// record is not read is left out. Errs where the native record path does
 /// not read the file's release; Revit 2023 and earlier save the ElementId
-/// in another shape, so they give no steps.
+/// in another shape, so they give no steps. A wall's steps are read once
+/// for the file's handle: a second call for walls already asked for reads
+/// only the others.
 pub fn wall_cut_steps(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
@@ -51,6 +53,30 @@ pub fn wall_cut_steps(
     if walls.is_empty() {
         return Ok(BTreeMap::new());
     }
+    let missing: BTreeSet<u64> = walls
+        .difference(&rf.wall_cut_steps_asked)
+        .copied()
+        .collect();
+    if !missing.is_empty() {
+        let read = read_wall_cut_steps(rf, &missing)?;
+        rf.wall_cut_steps_asked.extend(missing);
+        rf.wall_cut_steps_memo.extend(read);
+    }
+    Ok(walls
+        .iter()
+        .filter_map(|id| {
+            rf.wall_cut_steps_memo
+                .get(id)
+                .map(|steps| (*id, steps.clone()))
+        })
+        .collect())
+}
+
+/// The steps of the native records of `walls`, read now.
+fn read_wall_cut_steps(
+    rf: &mut RevitFile,
+    walls: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, Vec<WallCutStep>>> {
     let mut out: BTreeMap<u64, Vec<WallCutStep>> = BTreeMap::new();
     let options = native_document::Options {
         selected_ids: walls.clone(),
