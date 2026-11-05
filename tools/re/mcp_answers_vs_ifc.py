@@ -571,7 +571,12 @@ def check_rooms(report, answers, written):
     for room in rooms:
         by_gid.setdefault(room["provenance"].get("global_id"), []).append(room)
     spaces = {gid: p for gid, p in written.products.items() if p.is_a("IfcSpace")}
-    answered = {row["provenance"].get("global_id") for row in answers["rows"] if row["provenance"].get("category") == "IFCSPACE"}
+    space_rows = {
+        row["provenance"].get("global_id"): row
+        for row in answers["rows"]
+        if row["provenance"].get("category") == "IFCSPACE"
+    }
+    answered = set(space_rows)
     if set(by_gid) != answered:
         differences.append(f"list_rooms names {len(by_gid)} spaces, list_elements {len(answered)}")
     with_area = 0
@@ -585,16 +590,18 @@ def check_rooms(report, answers, written):
         compared += 1
         row_sets = {s["name"]: dict((p[0], p[2]) for p in s["properties"]) for s in object_sets(product, written.metres, written.scales)}
         record = row_sets.get(ROOM_SET, {})
-        # The IFC Name is the number, or `<room name>:<ElementId>` without one, or the exporter's own
-        # `<class>-<ElementId>` where neither was read.
+        # The IFC Name is the number, or `<room name>:<ElementId>` without one, or, where neither was
+        # read, the name the model kept (a family instance written as a space keeps its
+        # `Family:Type:ElementId`, which the row gives), or the exporter's own `<class>-<ElementId>`
+        # placeholder, which the row leaves out.
         if room.get("number"):
             expected = room["number"]
         elif room.get("name"):
             expected = f"{room['name']}:{room.get('id')}"
         else:
-            expected = None
+            expected = (space_rows.get(gid) or {}).get("name")
         if expected is not None and (product.Name or "") != expected:
-            differences.append(f"{label}: Name {product.Name!r} is not the number or `<name>:<ElementId>` {expected!r}")
+            differences.append(f"{label}: Name {product.Name!r} is not the expected {expected!r}")
         if expected is None and not re.fullmatch(r"[A-Za-z0-9]+-" + re.escape(room.get("id") or "unnamed"), product.Name or ""):
             differences.append(f"{label}: no number or name in the answer and the IFC Name {product.Name!r} is not <class>-<ElementId>")
         if (room.get("name") or None) != (product.LongName or None):
