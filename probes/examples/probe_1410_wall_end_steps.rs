@@ -7,7 +7,8 @@
 //! join order, which was not read. Hypothesis: `JoinEndGStep.m_realJoined` (or
 //! `m_geomJoined`) lists the walls in the order Revit follows them, so that at
 //! each height the end is the face of the first wall named that stands there.
-//! `tools/re/wall_end_steps_vs_ifc.py` tests it against Revit's own export.
+//! `tools/re/wall_heights_vs_ifc.py`, `wall_top_cover_vs_ifc.py` and
+//! `wall_quantities_vs_ifc.py` test it against Revit's own export.
 //!
 //! Output, one record per line:
 //!   end <id> <m_end> real <id:end ...> geom <id:end ...> omitted <id:end> weak <n> exposed <id:tag ...>

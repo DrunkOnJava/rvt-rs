@@ -257,6 +257,14 @@ pub(super) type PlaneEdge = (u32, (f64, f64), (f64, f64));
 /// lines are read on does not take openings that are not measured there.
 const WALL_PROFILE_OPENING_REVIT_VERSIONS: &[u32] = &[2024];
 
+/// Releases the order of a wall's end joins is measured on: the BIM4LCA office
+/// (Revit 2024), whose Basement walls 2057668, 2057670, 2058499 and 2058501 are
+/// the four walls it rests on (RE-348). Its own list, a decision of its own
+/// (#1410): the profile openings the rule asks for are read on
+/// [`WALL_PROFILE_OPENING_REVIT_VERSIONS`], and a release added to that list
+/// takes the rule only when it is added here.
+const WALL_END_JOIN_REVIT_VERSIONS: &[u32] = &[2024];
+
 /// Give each wall whose elevation profile was edited the openings that cuts
 /// (RE-151's 63rd opening).
 ///
@@ -746,7 +754,11 @@ pub(super) fn attach_wall_layers(
         // #1410: the walls joined at each end of its location curve, in the
         // order its record lists them. An id that does not fit an ElementId
         // leaves that end out.
-        if let Some(joins) = wall.id.and_then(|id| end_joins.get(&u64::from(id))) {
+        let joins = wall
+            .id
+            .filter(|_| WALL_END_JOIN_REVIT_VERSIONS.contains(&revit_version))
+            .and_then(|id| end_joins.get(&u64::from(id)));
+        if let Some(joins) = joins {
             let curve: Vec<InstanceField> = joins
                 .curve
                 .iter()

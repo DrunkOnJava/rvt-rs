@@ -19,8 +19,10 @@
   RE-337's end then omitted and the far end's sloped top (#1473), the same as
   wall 2057670's to 3e-5 ft3. No other wall of the office as built changes (607
   bodies compared), and the office at building permit is byte for byte what
-  `main` writes. An element that covers the whole plan still decides first, and
-  one that covers part counts only where none covers the whole. Every other
+  `main` writes. A wall whose base join names an element that covers the whole plan is decided by
+  those alone, as before, and one that covers part counts only where none
+  covers the whole; a cut that resolves and whose solid cannot be made keeps the
+  prism and says so (`BaseCoverRefusal` `base_cut_solid_not_made`). Every other
   model is not yet measured on this head. The level top of a partial cover, a
   partially covered wall with no end extension, a footing with an opening under
   a wall and a wall whose ring is clockwise or concave are exercised by no

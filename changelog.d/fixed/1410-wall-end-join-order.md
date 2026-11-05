@@ -20,8 +20,14 @@
   `joined_wall_top_not_read`, `joined_wall_does_not_meet_the_end`,
   `joined_walls_do_not_reach_the_wall_height`,
   `joined_wall_face_inside_the_wall`, `joined_wall_faces_overhang_the_lower_end`,
+  `end_join_curve_not_at_the_box_end`, `end_join_list_not_read`,
   `base_cut_lost_on_extended_plan`, `base_not_cut_over_the_extended_plan`,
-  `wall_stands_in_the_added_end`). On the office (Measure 42101944733 at
+  `base_solid_not_made_over_the_extended_plan`, `wall_stands_in_the_added_end`).
+  The diagnostics count the walls that take the rule and the ends that depend
+  on the order (`exported.wall_end_sources`, `wall_base_sources`,
+  `wall_ends_order_dependent`); only those ends test the order, and on the office
+  they are the 4 as-built ends, 3 orderings chosen after about four alternatives
+  had been tried. The rule is on its own release list (Revit 2024). On the office (Measure 42101944733 at
   `006f5f98`) the four walls have Revit's end at every height and no point of
   their plan above Revit's top; 2058499 and 2058501 at building permit go from
   0.044 ft above Revit's lowest point to Revit's, and the wall beneath them

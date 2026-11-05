@@ -804,6 +804,25 @@ pub struct ExportedModelDiagnostics {
     /// `base_not_cut_over_the_extended_plan` or `wall_stands_in_the_added_end`.
     #[serde(default)]
     pub wall_end_refusals: std::collections::BTreeMap<String, usize>,
+    /// Of the exported walls, how many have an end drawn to the walls their
+    /// record joins there, by the `BodyEndSource` property of each (#1410,
+    /// RE-348): `wall_end_stepped_to_joined_walls`. Empty when no wall does.
+    #[serde(default)]
+    pub wall_end_sources: std::collections::BTreeMap<String, usize>,
+    /// Of the exported walls, how many have their base cut at an element their
+    /// base join names, by the `BodyBaseSource` property of each (#1384,
+    /// RE-336; #1411, RE-349): `wall_base_sloped_at_covering_floor`,
+    /// `wall_base_cut_at_covering_floor`, and the two `_in_part` values of a
+    /// base cut over the part of the plan the element covers.
+    #[serde(default)]
+    pub wall_base_sources: std::collections::BTreeMap<String, usize>,
+    /// The ends drawn by the rule of `wall_end_sources` that depend on the
+    /// order of the walls the record lists: at some height two of them stand
+    /// with faces that differ, so that another order would draw another end
+    /// (`EndOrderDependent` of each wall, #1410, RE-348). The rest of the ends
+    /// would be the same in any order.
+    #[serde(default)]
+    pub wall_ends_order_dependent: usize,
     /// Of the exported `IfcSpace`s, the rooms whose outline was read from the
     /// faces their stored solid lists, up to the solid's own end, where the
     /// walk of RE-101 did not close them (`SpaceOutlineSource` is
@@ -4714,6 +4733,9 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut slab_shape_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_base_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_end_refusals = std::collections::BTreeMap::<String, usize>::new();
+    let mut wall_end_sources = std::collections::BTreeMap::<String, usize>::new();
+    let mut wall_base_sources = std::collections::BTreeMap::<String, usize>::new();
+    let mut wall_ends_order_dependent = 0usize;
     let mut resolved_outline_spaces = 0usize;
     let mut approximate_outline_spaces = 0usize;
     let mut space_kinds = std::collections::BTreeMap::<String, usize>::new();
@@ -4771,6 +4793,20 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                         export_content::WALL_END_REFUSAL_PROPERTY,
                         entities::PropertyValue::Text(text),
                     ) => *wall_end_refusals.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_END_SOURCE_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *wall_end_sources.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_BASE_SOURCE_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *wall_base_sources.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_END_ORDER_DEPENDENT_PROPERTY,
+                        entities::PropertyValue::Integer(count),
+                    ) => {
+                        wall_ends_order_dependent += usize::try_from(*count).unwrap_or(0);
+                    }
                     ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
                     (
                         export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
@@ -4872,6 +4908,9 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         slab_shape_refusals,
         wall_base_refusals,
         wall_end_refusals,
+        wall_end_sources,
+        wall_base_sources,
+        wall_ends_order_dependent,
         resolved_outline_spaces,
         approximate_outline_spaces,
         space_kinds,

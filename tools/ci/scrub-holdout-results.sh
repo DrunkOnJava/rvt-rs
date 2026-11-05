@@ -66,6 +66,9 @@
 # section 8, #1365: the same), the counts of the IFC4 schema's findings on
 # the export (`schema validate:` and `schema rules:` lines, #1430: a number, and
 # for a rule finding the entity and rule that name it, never its message), and
+# the `wall rules:` count lines of tools/re/wall_rule_counts.py (RE-348, RE-349:
+# how many walls take the wall base and end rules and why the others do not, as
+# numbers beside fixed words and reason names, never an ElementId), and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
@@ -95,6 +98,10 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^native framing: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^saved graphics pre2023: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+    done
+    for f in "$dir"wall_rules.txt; do
+      [ -f "$f" ] || continue
+      grep -E '^wall rules: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
     done
     for f in "$dir"qtos_vs_ifc*.txt; do
       [ -f "$f" ] || continue
