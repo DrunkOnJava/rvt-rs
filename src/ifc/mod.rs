@@ -794,6 +794,19 @@ pub struct ExportedModelDiagnostics {
     /// Revit's export does not take the column off.
     #[serde(default)]
     pub approximate_outline_spaces: usize,
+    /// The exported `IfcSpace`s by what they are: each one's
+    /// `RvtElementRecordGeometry.SpaceKind` (#1437), `room`, `area`,
+    /// `mep_space` or `family_instance`, taken from the Revit class of the
+    /// record it was read from. Their sum with [`Self::spaces_without_kind`]
+    /// is `by_ifc_type.IFCSPACE`.
+    #[serde(default)]
+    pub space_kinds: std::collections::BTreeMap<String, usize>,
+    /// The exported `IfcSpace`s that carry no `SpaceKind` (#1437): a space whose
+    /// class is none of a room, an Area, a Revit Space or a family instance
+    /// written as a space, which the export leaves without the property rather
+    /// than guess. Zero on every model measured.
+    #[serde(default)]
+    pub spaces_without_kind: usize,
     /// The steps of the walls' native records that name a rectangular wall
     /// opening, a fire hose cabinet, a door in a second wall or a curtain
     /// wall and write no opening for it, by why (RE-321, RE-338):
@@ -4638,6 +4651,8 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut wall_end_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut resolved_outline_spaces = 0usize;
     let mut approximate_outline_spaces = 0usize;
+    let mut space_kinds = std::collections::BTreeMap::<String, usize>::new();
+    let mut spaces_without_kind = 0usize;
     let mut body_pieces_folded = std::collections::BTreeMap::<String, usize>::new();
     // Where the writer puts each element: an element is bound to a storey when
     // the export contains it in one, through its space, its whole or its host
@@ -4671,6 +4686,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             let properties = property_set.iter().flat_map(|set| &set.properties);
             let mut source = None;
             let mut space_outline = None;
+            let mut space_kind = None;
             let mut profile_resolved = false;
             for property in properties {
                 match (property.name.as_str(), &property.value) {
@@ -4695,10 +4711,19 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                         export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
                         entities::PropertyValue::Text(text),
                     ) => space_outline = Some(text),
+                    (export_content::SPACE_KIND_PROPERTY, entities::PropertyValue::Text(text)) => {
+                        space_kind = Some(text)
+                    }
                     ("ProfileResolved", entities::PropertyValue::Boolean(true)) => {
                         profile_resolved = true
                     }
                     _ => {}
+                }
+            }
+            if ifc_type == "IFCSPACE" {
+                match space_kind {
+                    Some(kind) => *space_kinds.entry(kind.clone()).or_insert(0) += 1,
+                    None => spaces_without_kind += 1,
                 }
             }
             if let Some(source) = source {
@@ -4784,6 +4809,8 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         wall_end_refusals,
         resolved_outline_spaces,
         approximate_outline_spaces,
+        space_kinds,
+        spaces_without_kind,
         wall_cut_openings_left_out: model.wall_cut_openings_left_out.clone(),
         body_pieces_folded,
     }

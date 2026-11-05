@@ -7,7 +7,8 @@
 //!   the host wall of a door or window, and where the body came from.
 //! - [`rooms_csv`]: every `IfcSpace` with its recovered room number, name
 //!   and, where the room's outline was read from its stored solid (RE-101),
-//!   its plan area.
+//!   its plan area, and what it is (`space_kind`: a room, an Area, a Revit
+//!   Space or a family instance written as a space, #1437).
 //!
 //! Only decoded values are written; an unknown is an empty cell, never a
 //! guess. A room that keeps its record's bounding box has no area: the area
@@ -22,7 +23,7 @@
 use super::IfcModel;
 use super::entities::{Extrusion, IfcEntity, ProfileDef, PropertyValue};
 use super::export_content::{
-    ROOM_NAME_PROPERTY, ROOM_NUMBER_PROPERTY, SPACE_OUTLINE_SOURCE_PROPERTY,
+    ROOM_NAME_PROPERTY, ROOM_NUMBER_PROPERTY, SPACE_KIND_PROPERTY, SPACE_OUTLINE_SOURCE_PROPERTY,
 };
 use super::step_writer::{Placement, placements, storey_of};
 
@@ -104,6 +105,7 @@ pub fn room_columns(unit: LengthUnit) -> Vec<String> {
         format!("level_elevation_{u}"),
         format!("area_{u}2"),
         "body_source".into(),
+        "space_kind".into(),
     ]
 }
 
@@ -316,6 +318,7 @@ pub fn rooms_csv(model: &IfcModel, options: &CsvOptions) -> String {
                 ),
                 number(row.area_square_feet.map(|area| unit.convert_area(area))),
                 text(&row.body_source),
+                text(&row.space_kind),
             ];
             let elevation = row.level_elevation_feet.unwrap_or(f64::INFINITY);
             (elevation, natural_key(&row.number), cells)
@@ -348,6 +351,9 @@ pub struct RoomRow {
     pub body_source: String,
     /// The room's `SpaceOutlineSource` property, empty where it has none.
     pub outline_source: String,
+    /// The room's `SpaceKind` property (#1437): `room`, `area`, `mep_space` or
+    /// `family_instance`, empty where it has none.
+    pub space_kind: String,
 }
 
 /// The rooms [`rooms_csv`] writes, one per `IfcSpace`, in its order: by storey
@@ -399,6 +405,7 @@ pub fn room_rows(model: &IfcModel) -> Vec<RoomRow> {
             area_square_feet,
             body_source: property("BodySource"),
             outline_source: property(SPACE_OUTLINE_SOURCE_PROPERTY),
+            space_kind: property(SPACE_KIND_PROPERTY),
         });
     }
     rows.sort_by(|a, b| {

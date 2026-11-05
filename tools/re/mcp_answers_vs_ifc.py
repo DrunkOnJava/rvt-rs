@@ -24,7 +24,8 @@ default decode does not take):
   that two IFC elements share is a failure;
 - the levels are the IFC's storeys, with their elevations and the elements each holds;
 - every room is an IfcSpace whose Name is its number (or `<name>:<ElementId>` without one), with
-  the same LongName, storey and outline source, and an area equal to that of its body's plan
+  the same LongName, storey, outline source and space kind (`space_kind`, #1437: what the space
+  is, equal to `RvtElementRecordGeometry.SpaceKind`), and an area equal to that of its body's plan
   outline;
 - `get_element` on the sampled elements: the property and quantity sets, the trust markers, the
   type object (entity, Name, Tag and sets), the placement (the translation, not the rotation), the
@@ -100,6 +101,7 @@ ABSOLUTE = 1e-6
 RELATIVE = 1e-5
 AREA_ABSOLUTE = 1e-5
 ROOM_SET = "RvtElementRecordGeometry"
+SPACE_KINDS = ("room", "area", "mep_space", "family_instance")
 MARKER_SUFFIXES = ("Source", "Resolved", "Refusal")
 # Entities no reader of the IFC lists as an element.
 WRITER_OPENING = "IfcOpeningElement"
@@ -628,6 +630,9 @@ def check_rooms(report, answers, written):
         source = room["provenance"].get("space_outline_source")
         if source != record.get("SpaceOutlineSource"):
             differences.append(f"{label}: outline source {source!r} vs {record.get('SpaceOutlineSource')!r}")
+        kind = room.get("space_kind")
+        if kind != record.get("SpaceKind"):
+            differences.append(f"{label}: space kind {kind!r} vs {record.get('SpaceKind')!r}")
         area = room.get("area_square_metres")
         if area is not None:
             with_area += 1
@@ -642,6 +647,10 @@ def check_rooms(report, answers, written):
     report.line(W("rooms: {}"), len(rooms))
     report.line(W("rooms with an area: {}"), with_area)
     report.line(W("rooms without an area: {}"), len(rooms) - with_area)
+    by_kind = collections.Counter(room.get("space_kind") for room in rooms)
+    for kind in SPACE_KINDS:
+        report.line(W(f"rooms of space kind {kind}: {{}}"), by_kind[kind])
+    report.line(W("rooms with no space kind: {}"), by_kind[None])
 
 
 def compare_sets(label, answer_sets, written_sets, differences):

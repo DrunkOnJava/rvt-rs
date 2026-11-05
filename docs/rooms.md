@@ -1,6 +1,26 @@
 # Rooms and spaces in an rvt-rs IFC export
 
-This page is for the importer of an rvt-rs export: what an `IfcSpace` holds for each release, the one property that says whether to trust its area, what is measured against Revit's own export and where, and what is not. Every `IfcSpace` rvt-rs writes in a geometry export (the default) carries that property: rooms, Revit Spaces, family instances written as spaces and Areas alike. An export with no geometry (`typed_no_geometry`) has no outlines and no property. The evidence is in [RE-313](../reports/element-framing/RE-313-space-outlines-measured.md) and, for the rooms whose stored solid the first reader did not close, [RE-316](../reports/element-framing/RE-316-room-solids-resolved.md); the earlier findings are RE-29, RE-101, RE-102, RE-117, RE-153, RE-196, RE-255 and RE-296, and RE-191 and [RE-317](../reports/element-framing/RE-317-area-boundaries.md) for Areas.
+This page is for the importer of an rvt-rs export: what an `IfcSpace` is and which property says so, what it holds for each release, the one property that says whether to trust its area, what is measured against Revit's own export and where, and what is not. Every `IfcSpace` rvt-rs writes in a geometry export (the default) carries that property: rooms, Revit Spaces, family instances written as spaces and Areas alike. An export with no geometry (`typed_no_geometry`) has no outlines and no `SpaceOutlineSource`, and every `IfcSpace` of it still carries `SpaceKind`. The evidence is in [RE-313](../reports/element-framing/RE-313-space-outlines-measured.md) and, for the rooms whose stored solid the first reader did not close, [RE-316](../reports/element-framing/RE-316-room-solids-resolved.md); the earlier findings are RE-29, RE-101, RE-102, RE-117, RE-153, RE-196, RE-255 and RE-296, and RE-191 and [RE-317](../reports/element-framing/RE-317-area-boundaries.md) for Areas.
+
+## Which property answers which question
+
+| Question | Read | Do not |
+|---|---|---|
+| What is this space: a room, an Area, a Revit Space (MEP) or a family instance written as a space? | `RvtElementRecordGeometry.SpaceKind` (`room`, `area`, `mep_space` or `family_instance`), on every `IfcSpace` | filter on the values of `SpaceOutlineSource`, or infer the kind from a name, a number, a predefined type or a body |
+| Is the plan area of its body the space's, and where did its outline come from? | `RvtElementRecordGeometry.SpaceOutlineSource` (the table below) | use it to tell an Area from a room |
+
+`SpaceKind` is taken from the Revit class of the record the space was read from, not from its outline, so it does not move when an outline is read by another rule. `SpaceOutlineSource` says only where an outline came from, and its values change with the rules that read outlines: an Area is `area_boundary` or `area_boundary_joined` today, and a release that reads Areas by another rule gives them another value, as the plan topology of #1428 does (`area_plan_topology`), so a filter on the old values would catch none of them. The same value is `space_kind` in the MCP server's `list_rooms` and a `space_kind` column, the last, in the room schedule (`rvt-schedule --schedule rooms`).
+
+| `SpaceKind` | The space is | Its `SpaceOutlineSource` is |
+|---|---|---|
+| `room` | a Revit room (class `Room`) | `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `record_box` or `saved_mesh` |
+| `area` | a Revit Area (class `Area`), with a body or without one | `area_boundary`, `area_boundary_joined`, `area_plan_topology` (#1428) or `none`; `area` holds exactly where `SpaceOutlineSource` is one of these |
+| `mep_space` | a Revit Space (class `Space`, MEP), in a model that has one | `record_box` or `family_body` |
+| `family_instance` | a family instance, or a mass, whose "Export to IFC As" names `IfcSpace` (#763): the 42 "Turning Free Space" discs and two "VOLUME" families on the BIM4LCA office | `record_box` or `family_body` |
+
+Every `IfcSpace` rvt-rs writes carries `SpaceKind`, in a geometry export (the default) and in `typed_no_geometry`, whatever the release: the document exporter adds it after every other step, so `rvt-ifc`, Python's `write_ifc`, the MCP server's `export_ifc` and the browser viewer all write it. It goes in the space's `RvtElementRecordGeometry`, which is made for a space that has none. The one path that does not carry it is the library function `ifc::build_ifc_model`, which writes whatever property sets its caller hands it and which no rvt-rs exporter uses. `RvtElementRecordGeometry` is rvt-rs's own set, not an IFC4 one: `SpaceKind` is in none of `Pset_` counting, `decoded.parameter_value_count` and the property-set census (`psets_vs_ifc`), which read the `Pset_` sets only.
+
+A space whose class is none of the four is written without `SpaceKind`, never with a guess, and the diagnostics count it: `exported.spaces_without_kind` (and `rvt-ifc` says so in its summary), with `exported.space_kinds` giving the others by kind. The expectation is zero, and `tools/re/space_kinds_vs_ifc.py` makes it a check: it fails on any `IfcSpace` with no kind, with another value, or with a kind that disagrees with its outline source (an `area` outside the Area values above, or a space of another kind inside them), and Measure sums its result over the run and fails when it saw no `IfcSpace` at all. The BIM4LCA office's spaces, by the outline-source counts of the tables below, should read 232 rooms, 30 Areas and 44 family instances as built, and 234, 30 and 44 at permit (not yet measured on this head).
 
 ## Which `IfcSpace`s rvt-rs writes
 
@@ -15,7 +35,7 @@ A room carries its ElementId (`RvtElementRecordGeometry.ElementId`), its number 
 
 ## Which property says whether to trust the area
 
-Read `RvtElementRecordGeometry.SpaceOutlineSource` on the `IfcSpace`:
+Read `RvtElementRecordGeometry.SpaceOutlineSource` on the `IfcSpace`. It says where the outline came from and so whether to trust the area. It does not say what the space is (`SpaceKind` does, above), and its values are not a set to filter on:
 
 | Value | The body is | Its plan area is |
 |---|---|---|
@@ -35,7 +55,8 @@ The export also counts the spaces drawn as their record's box (rooms and family 
 
 - `exported.bounding_box_spaces` in the diagnostics JSON (`rvt-ifc --diagnostics`), out of `exported.by_ifc_type.IFCSPACE`;
 - `exported.resolved_outline_spaces` (`stored_solid_faces`) and `exported.approximate_outline_spaces` (`stored_solid_approximate`), the rooms whose outline was not read by the exact walk;
-- a line in `rvt-ifc`'s summary for each: "N of M spaces are their record's box", "N rooms take an outline resolved from the faces up to their stored solid's end", "N rooms take an approximate outline".
+- a line in `rvt-ifc`'s summary for each: "N of M spaces are their record's box", "N rooms take an outline resolved from the faces up to their stored solid's end", "N rooms take an approximate outline";
+- `exported.space_kinds` (the spaces by `SpaceKind`) and `exported.spaces_without_kind` (those with none, expected zero, and said in the summary when not).
 
 ## Which releases read a room's outline
 
@@ -116,6 +137,9 @@ What the misses are:
 ```bash
 rvt-ifc model.rvt -o model.ifc --diagnostics model.diagnostics.json
 python3 tools/re/space_profiles_vs_ifc.py model.ifc revit-export.ifc --list 10
+python3 tools/re/space_kinds_vs_ifc.py model.ifc
 ```
 
 The second command needs Revit's own IFC export of the same model, IfcOpenShell, NumPy and Shapely (`tools/ci/requirements-ifc.txt`). It prints the counts above, one line each (`area`, `boundary`, `outline`, and the same split by what the space is and its `SpaceOutlineSource`), and for every space off in area or outline, the area on both sides, the distances and `SpaceOutlineSource`.
+
+The last needs only IfcOpenShell and no Revit export: it counts the `IfcSpace`s of the file by `SpaceKind` and exits 1 if any has none, has another value or disagrees with its `SpaceOutlineSource` (an export with no geometry has no outline sources, so the agreement is not checked there and those spaces are counted on a line of their own).

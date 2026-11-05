@@ -235,7 +235,9 @@ one width, depth and height cannot state. The room schedule gives a room's
 plan area where its outline was read from the solid Revit stores for it
 (RE-101), and an Area's where its boundary lines gave it a region (RE-317); a
 room that keeps its bounding box has an empty area, since the area of a box
-is not the area of a room.
+is not the area of a room. The room schedule lists every `IfcSpace` the export
+writes, Areas, Revit Spaces and family instances written as spaces among the
+rooms, and its last column, `space_kind`, says which each is.
 
 The columns, in order. Lengths are in feet; with `--metric` they are in
 metres and `_ft` in a column's name becomes `_m`. A later release may add
@@ -273,6 +275,7 @@ calling it a breaking change.
 | `level_elevation_ft` | That level's elevation |
 | `area_ft2` | Plan area, where the room's outline was read |
 | `body_source` | Where the room's solid came from |
+| `space_kind` | What the space is: `room`, `area` (a Revit Area), `mep_space` (a Revit Space) or `family_instance` (a family instance written as a space); the same as `RvtElementRecordGeometry.SpaceKind` in the IFC. Filter on this, not on how the area was read |
 
 What the schedules contain is what rvt-rs decodes and the IFC export writes,
 so check `rvt-inspect model.rvt` first: Revit 2024 project files with element

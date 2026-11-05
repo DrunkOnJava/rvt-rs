@@ -718,6 +718,7 @@ pub fn rooms(entry: &Entry, computed: &Computed) -> RoomsOut {
                 id: non_empty(&row.revit_element_id),
                 number: non_empty(&row.number),
                 name: non_empty(&row.name),
+                space_kind: non_empty(&row.space_kind),
                 level: non_empty(&row.level),
                 level_elevation_feet: row.level_elevation_feet,
                 area_square_feet: row.area_square_feet,

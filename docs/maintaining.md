@@ -156,6 +156,25 @@ for the five lowest ElementIds of each IFC entity, the diagnostics and an
   whose server does not build, leaves the step NOT MEASURED with a warning and
   fails no other scorer. Autodesk's sample projects are not asked.
 
+## Measure and the kinds of IfcSpace
+
+Every model and every Autodesk sample whose export is not empty is checked by
+`tools/re/space_kinds_vs_ifc.py` (#1437), which reads the export alone: each
+`IfcSpace` carries `RvtElementRecordGeometry.SpaceKind`, `area` holds exactly
+where `SpaceOutlineSource` is an Area value (`area_boundary`,
+`area_boundary_joined`, `area_plan_topology` or `none`), and no other kind holds
+one. It writes `space_kinds_vs_ifc.txt` (fixed words and integers, so the
+held-out models keep it as counts; `tools/ci/scrub-holdout-results.sh`) and
+exits 1 on any space without a kind, with another value, or in disagreement. The
+compare job sums the head side's results (`space_kinds_vs_ifc.py --total`),
+prints how many `IfcSpace`s of each kind the run saw, and fails the job when a
+model has no result or failed, or when the run saw no `IfcSpace` at all, so a
+check that looked at nothing cannot pass; a run that names `scorers` has not
+asked for it and is not gated. The `IfcOpenShell validates exports` job of CI
+runs it on Core Interior and RE1 Architecture, and shows it failing on copies of
+Core Interior's export with the property renamed, every room called an area, and
+every room's outline source made an Area's.
+
 ## The semantic merge check
 
 Measure is the byte-level oracle: it says that an export moved. The semantic

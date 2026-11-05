@@ -359,6 +359,7 @@ impl RvtServer {
             .expect("the input schema is an object"),
         description = concat!(
             "List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_boundary or area_boundary_joined for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. ",
+            "Each room's space_kind says what it is (room, area, mep_space or family_instance): read it, not space_outline_source, to tell an Area from a room, and never filter on the values of space_outline_source, which change with the rules that read outlines. ",
             short_not_read!()
         ),
         annotations(

@@ -1205,6 +1205,12 @@ pub fn append_typed_production_elements(
         // covering whose body holds every piece, where it splits a floor.
         let pieces_in_body =
             PIECES_IN_BODY_CLASSES.contains(&decoded.class.as_str()) && solid_shape.is_none();
+        // #1437: every space says what it is, in every mode, from its class.
+        if ifc_type == "IFCSPACE" {
+            if let Some(kind) = space_kind(&decoded.class, family_space) {
+                add_space_kind(&mut property_set, kind);
+            }
+        }
         entities.push(entities::IfcEntity::BuildingElement {
             ifc_type,
             name,
@@ -4478,11 +4484,67 @@ pub const FLOOR_SHAPE_BODY_SOURCE: &str = "native_slab_shape_edit";
 /// no carrier refines it (#409).
 pub const RECORD_BBOX_BODY_SOURCE: &str = "partition_element_record_bbox";
 
+/// Property of every `IfcSpace`'s [`ELEMENT_RECORD_PROPERTY_SET`] saying what
+/// the space is (#1437): [`SPACE_KIND_ROOM`], [`SPACE_KIND_AREA`],
+/// [`SPACE_KIND_MEP_SPACE`] or [`SPACE_KIND_FAMILY_INSTANCE`]. It comes from the
+/// Revit class of the record the space was read from, not from where its
+/// outline came from, so it holds whatever the outline source is and whatever
+/// a later release adds to it. A space whose class is none of these has no
+/// such property and is counted by `exported.spaces_without_kind`.
+pub const SPACE_KIND_PROPERTY: &str = "SpaceKind";
+
+/// [`SPACE_KIND_PROPERTY`] of a Revit room.
+pub const SPACE_KIND_ROOM: &str = "room";
+
+/// [`SPACE_KIND_PROPERTY`] of a Revit Area.
+pub const SPACE_KIND_AREA: &str = "area";
+
+/// [`SPACE_KIND_PROPERTY`] of a Revit Space (MEP).
+pub const SPACE_KIND_MEP_SPACE: &str = "mep_space";
+
+/// [`SPACE_KIND_PROPERTY`] of a family instance (or a mass) written as an
+/// `IfcSpace` through its own "Export to IFC As" value (#763).
+pub const SPACE_KIND_FAMILY_INSTANCE: &str = "family_instance";
+
+/// What an element written as an `IfcSpace` is (#1437), from the Revit class of
+/// its record: a room, an Area, a Revit Space, or any other class that its own
+/// "Export to IFC As" value writes as a space (`by_export_value`). `None` for a
+/// class that is none of these, which the export then leaves without the
+/// property rather than guess.
+fn space_kind(class: &str, by_export_value: bool) -> Option<&'static str> {
+    match class {
+        "Room" => Some(SPACE_KIND_ROOM),
+        "Area" => Some(SPACE_KIND_AREA),
+        "Space" => Some(SPACE_KIND_MEP_SPACE),
+        _ if by_export_value => Some(SPACE_KIND_FAMILY_INSTANCE),
+        _ => None,
+    }
+}
+
+/// Put [`SPACE_KIND_PROPERTY`] in the space's [`ELEMENT_RECORD_PROPERTY_SET`],
+/// making the set where the space has none. A space whose property set is
+/// another set keeps it as it is, and so has no kind.
+fn add_space_kind(property_set: &mut Option<PropertySet>, kind: &str) {
+    let set = property_set.get_or_insert_with(|| PropertySet {
+        name: ELEMENT_RECORD_PROPERTY_SET.into(),
+        properties: Vec::new(),
+    });
+    if set.name == ELEMENT_RECORD_PROPERTY_SET {
+        set.properties.push(Property {
+            name: SPACE_KIND_PROPERTY.into(),
+            value: PropertyValue::Text(kind.into()),
+        });
+    }
+}
+
 /// Property of an `IfcSpace`'s [`ELEMENT_RECORD_PROPERTY_SET`] saying where its
 /// outline, and so the plan area of its body, came from (RE-313). A room's
 /// `BodySource` stays [`RECORD_BBOX_BODY_SOURCE`] even when its outline was
 /// read from the room's stored solid, because the placement and the height
-/// are the record box's; this property is the one to read.
+/// are the record box's; this property is the one to read for the outline. It
+/// says where the outline came from, not what the space is: an importer asks
+/// [`SPACE_KIND_PROPERTY`] that, and never filters on these values, which a
+/// release adds to (#1437).
 pub const SPACE_OUTLINE_SOURCE_PROPERTY: &str = "SpaceOutlineSource";
 
 /// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room whose outline was read from the

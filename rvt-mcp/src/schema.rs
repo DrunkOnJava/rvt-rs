@@ -491,6 +491,18 @@ pub struct RoomOut {
     pub number: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// What the space is (#1437): `room`, `area` (a Revit Area), `mep_space` (a
+    /// Revit Space) or `family_instance` (a family instance or mass written as
+    /// a space through its own "Export to IFC As"), from the Revit class of
+    /// the record it was read from. Ask this to tell an Area from a room, and
+    /// never filter on the values of `space_outline_source`, which says where
+    /// an outline came from and gains values with a release. The same value is
+    /// the IFC export's `RvtElementRecordGeometry.SpaceKind` and the room
+    /// schedule's `space_kind` column. Absent only for a space whose class is
+    /// none of these, which `get_diagnostics` counts as
+    /// `exported.spaces_without_kind`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub space_kind: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub level: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
