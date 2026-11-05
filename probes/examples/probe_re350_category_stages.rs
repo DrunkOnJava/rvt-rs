@@ -47,17 +47,28 @@
 //! partitions open with (an element the file holds) that no decoded frame
 //! carries.
 //!
+//! With `--records` it also reads the native record of every id in that last
+//! list and of every frame of the categories in `WATCHED`, in one pass of
+//! `native_document::extract_graphs` that decodes no graph, and prints
+//! `native <group> class=<class> moribund=<0|1> dummy=<0|1> unplaced_owner=<0|1>
+//! view=<0|1> option=<0|1> demolished=<0|1> created=<phase id> <count> <ids>`,
+//! the group `unframed` or `frame<category>`, the flags those of the Element
+//! base (`1` where an id is set), then `native records without a record <n>
+//! absent from the index <n>`.
+//!
 //! ```bash
 //! cargo run --profile ci -p rvt-probes --example probe_re350_category_stages -- model.rvt [--records]
 //! ```
 
 use rvt::RevitFile;
+use rvt::research::native_document::{NATIVE_RELEASES, Options, Record, extract_graphs};
 use rvt::research::partition_element_records::{self as per, PartitionElementRecord};
 use rvt::research::partition_element_records_2023 as per32;
 use std::collections::{BTreeMap, BTreeSet};
 
 type Ids = BTreeMap<i64, BTreeSet<u32>>;
 type IdsByReason = BTreeMap<(i64, &'static str), BTreeSet<u32>>;
+type NativeGroups = BTreeMap<(String, String), BTreeSet<u32>>;
 
 /// Autodesk's `BuiltInCategory.OST_StructuralFramingSystem` (Revit's "Structural
 /// Beam Systems"): a record of it lists the beams of the system.
@@ -349,7 +360,74 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .copied()
         .collect();
     println!("chained without a frame {} {}", bare.len(), runs(&bare));
+    if records_wanted {
+        print_native_classes(&mut rf, &bare, &any);
+    }
     Ok(())
+}
+
+/// The class and the Element base flags of a record read without its graph.
+fn base_key(record: &Record) -> String {
+    let class = record.class_name.as_deref().unwrap_or("-");
+    let Some(base) = record.base.as_ref() else {
+        return format!("class={class} base=none");
+    };
+    let set = |id: i64| u8::from(id > 0);
+    format!(
+        "class={class} moribund={} dummy={} unplaced_owner={} view={} option={} demolished={} created={}",
+        u8::from(base.moribund),
+        u8::from(base.dummy),
+        set(base.unplaced_owner_id),
+        set(base.owner_view_id),
+        set(base.design_option_id),
+        set(base.demolished_phase_id),
+        base.created_phase_id
+    )
+}
+
+/// Prints the native class of the ids with a record and no frame and of the
+/// frames of `WATCHED`, grouped with the flags of their Element base.
+fn print_native_classes(rf: &mut RevitFile, unframed: &[u32], any: &Ids) {
+    let mut group_of: BTreeMap<u64, String> = BTreeMap::new();
+    for category in WATCHED {
+        for id in any.get(&category).into_iter().flatten() {
+            group_of
+                .entry(u64::from(*id))
+                .or_insert_with(|| format!("frame{category}"));
+        }
+    }
+    for id in unframed {
+        group_of.insert(u64::from(*id), "unframed".to_string());
+    }
+    let options = Options {
+        selected_ids: group_of.keys().copied().collect(),
+        releases: NATIVE_RELEASES,
+        graph_classes: Some(BTreeSet::new()),
+        ..Options::default()
+    };
+    let mut groups = NativeGroups::new();
+    let summary = extract_graphs(rf, &options, |record: Record| {
+        let id = record.identity.element_id;
+        if let (Some(group), Ok(id)) = (group_of.get(&id), u32::try_from(id)) {
+            groups
+                .entry((group.clone(), base_key(&record)))
+                .or_default()
+                .insert(id);
+        }
+        Ok(())
+    });
+    match summary {
+        Ok(summary) => println!(
+            "native records without a record {} absent from the index {}",
+            summary.selected_ids_without_records.len(),
+            summary.requested_ids_absent_from_index.len()
+        ),
+        Err(error) => println!("native refused: {error}"),
+    }
+    for ((group, key), ids) in &groups {
+        let ids: Vec<u32> = ids.iter().copied().collect();
+        println!("native {group} {key} {} {}", ids.len(), runs(&ids));
+    }
 }
 
 /// The ElementIds of the records the file's partitions open with: the chain of
