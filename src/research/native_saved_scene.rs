@@ -356,14 +356,25 @@ fn add_references(
 /// in no set order, and the decoded graphs of the shared symbols are freed
 /// before the next ones are read.
 ///
-/// The owners (a door's or window's own graph is a few objects) are decoded
-/// first and kept. Their symbols, which are shared and which hold the
-/// geometry (on the BIM4LCA office 105 symbols hold 99 % of the graph
-/// objects of 538 owners), are decoded a batch at a time, with the owners
-/// that name them meshed against the batch. A batch holds the symbols of
-/// owners next to each other by symbol, as many as hold about 20,000 graph
-/// objects (`BATCH_OBJECT_BUDGET`) by the size of the batch before. Each
-/// element is the one [`extract_at_detail_with_control`] makes; only the
+/// The owners are decoded first and kept until they are meshed. Their symbols,
+/// which are shared and which hold the geometry (on the BIM4LCA office 105
+/// symbols hold 99 % of the graph objects of 538 doors and windows), are
+/// decoded a batch at a time, with the owners that name them meshed against
+/// the batch. A batch holds the symbols of owners next to each other by
+/// symbol, as many as hold about 20,000 graph objects (`BATCH_OBJECT_BUDGET`)
+/// by the size of the batch before: only a batch of symbols sizes the next.
+/// The owners that name no symbol of their own (a wall's graph is its own
+/// geometry, about 1.6 MiB on the office's walls that embed a curtain wall,
+/// #1429) are meshed first, in a batch of their own. That batch reads no
+/// symbol of its own, but one that an owner it names names, so an owner that
+/// names only other owners is in it too, and reads those symbols with it.
+///
+/// An owner's graph is freed with its batch, unless another owner names that
+/// owner: its graph is then kept for the mesh of the one that names it. The
+/// one-shot read has every owner in hand, so a shared symbol that names an
+/// owner already freed has that owner read again with it, as one of its
+/// shared records, and the mesh finds it as it finds it in the one-shot read.
+/// Each element is the one [`extract_at_detail_with_control`] makes; only the
 /// summaries of the passes are not returned. The progress reported to
 /// `control` is its too: [`Stage::SavedGraphics`] at 0 and then at 1 of 1
 /// once the owners are read, then [`Stage::SavedMeshes`] at 0 and once for each
@@ -398,6 +409,14 @@ pub fn extract_in_batches_with_control(
     let owner_references: BTreeMap<u64, Vec<u64>> = owners
         .iter()
         .map(|(&id, record)| (id, instance_symbols(record)))
+        .collect();
+    // The owners another owner names: their graphs stay for the mesh of the one
+    // that names them. Every other owner's graph is freed once it is meshed.
+    let named_owners: BTreeSet<u64> = owner_references
+        .values()
+        .flatten()
+        .copied()
+        .filter(|symbol| owner_references.contains_key(symbol))
         .collect();
     // Each owner with the symbols it names that are not owners themselves,
     // ordered so that owners naming the same symbols are next to each other.
@@ -437,7 +456,10 @@ pub fn extract_in_batches_with_control(
         let mut ids = Vec::new();
         let mut symbols = BTreeSet::<u64>::new();
         while let Some((_, id, own)) = named.get(next) {
-            if !ids.is_empty() && symbols.union(own).count() > limit {
+            // The owners that name no symbol sort first and make a batch that
+            // reads none, so that their graphs are gone before any symbol is.
+            let ends_symbol_free = symbols.is_empty() && !own.is_empty();
+            if !ids.is_empty() && (ends_symbol_free || symbols.union(own).count() > limit) {
                 break;
             }
             ids.push(*id);
@@ -479,6 +501,14 @@ pub fn extract_in_batches_with_control(
                 );
                 Ok(())
             })?;
+            // A symbol that names an owner whose graph was freed with an
+            // earlier batch (no owner names it, so it was not kept): the mesh
+            // looks it up among the shared records, so it is read again.
+            wanted.extend(found.iter().copied().filter(|id| {
+                owner_references.contains_key(id)
+                    && !owners.contains_key(id)
+                    && !attempted.contains(id)
+            }));
             add_references(
                 found,
                 &owner_references,
@@ -503,12 +533,25 @@ pub fn extract_in_batches_with_control(
         for element in elements {
             visit(element)?;
         }
-        limit = (BATCH_OBJECT_BUDGET.saturating_mul(shared.len().max(1)) / objects.max(1))
-            .clamp(MIN_BATCH_SYMBOLS, MAX_BATCH_SYMBOLS);
+        // Only a batch of symbols sizes the next one.
+        if !symbols.is_empty() {
+            limit = (BATCH_OBJECT_BUDGET.saturating_mul(shared.len().max(1)) / objects.max(1))
+                .clamp(MIN_BATCH_SYMBOLS, MAX_BATCH_SYMBOLS);
+        }
+        // The batch's owners are meshed: their graphs go with its symbols,
+        // those another owner names excepted.
+        let meshed: Vec<Record> = ids
+            .iter()
+            .filter(|id| !named_owners.contains(*id))
+            .filter_map(|id| owners.remove(id))
+            .collect();
         // Freeing the decoded graphs takes seconds on large models: do it
         // aside where there are threads.
         if workers() > 1 {
-            freeing = Some(std::thread::spawn(move || drop(shared)));
+            freeing = Some(std::thread::spawn(move || {
+                drop(shared);
+                drop(meshed);
+            }));
         }
     }
     Ok(())
