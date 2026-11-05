@@ -17,7 +17,7 @@ mahach666 states the sources of every finding: bytes of Revit files (including t
 Other handling:
 
 - The folder carries no licence: no licence file, and no licence statement in its README. Facts (counts, layouts, ids) are restated here with credit; no table, prose or script is copied or committed. RvtIO's own repository is MIT.
-- None of their scripts was run. Two need RvtIO's command line to dump the schema and the inflated partitions, and this probe proves the same facts on Measure's runners by rvt-rs's own readers.
+- None of their scripts was run. Their parameter probe needs RvtIO's command line to dump the schema and the inflated partitions, and the others read the files themselves; this probe proves the same facts on Measure's runners with rvt-rs's own readers. Their finding files, count tables and outputs were read, and only the opening of one probe.
 - Their copies of Autodesk's samples were not used (Measure fetches the pinned files from Autodesk's host) and their NDA models were never available.
 - RvtIO's README says its built-in name tables are re-verified against copies of Revit's resource DLLs. No BuiltInParameter name is taken from RvtIO here: parameters are named by id in this report and in the probe, and the names rvt-rs already uses come from its own exports (RE-77, RE-93).
 
