@@ -10,21 +10,49 @@ fragments a release moves into this file.
 
 ## [0.15.0] — 2026-11-04
 
-0.15.0 makes an export auditable down to the byte and draws more of what
-Revit draws. Two opt-in switches say where each decoded element's record was
-read from, and which copy a body, profile or outline took its value from where
-its reader notes one (`rvt-ifc --element-provenance`), and why each element,
-body, opening or outline was left out (`rvt-ifc --export-decisions`); the MCP
-server asks for both and gains `explain_element`. Every export of a Revit 2008
-to 2023 project counts where its element records stopped, so an export that
-writes nothing says at which stage. Rooms take off the round columns their
-stored solid holds, Areas whose boundary lines name each other are drawn to
-their joins, a floor whose shape-edited corners lie in one plane is drawn
-along that sloped top and a wall it wholly covers starts from it, and the
-opt-in `rvt-ifc --family-extrusions` draws a family instance from its family's
-own extrusions, arcs as true arcs, where they reproduce the mesh Revit saved.
-The viewer's browser tests are now part of every pull request's required
-check.
+0.15.0 makes an export say where its values came from and why it left
+anything out, and draws more of what Revit draws. Two opt-in switches say
+where each decoded element's record was read from and which copy its body,
+profile or outline took its value from (`rvt-ifc --element-provenance`), and
+why each element, body, opening or outline was left out
+(`rvt-ifc --export-decisions`); the MCP server asks for both and gains
+`explain_element`. The offsets are read again and confirmed on the Revit 2023
+to 2025 models CI holds; those of Revit 2008 to 2022, the second-prologue
+frames of 2023 and the schema-walk carrier are not measured, and some values
+a body reads (an Area's Levels, a wall's layers, a beam's I section) have no
+recorded source. Every export of a Revit 2008 to 2023 project counts where
+its element records stopped, so an export that writes nothing says at which
+stage. Rooms take off the round columns their stored solid holds. Areas whose
+boundary lines name each other are drawn to their joins: a rule read off the
+one public export it is scored against (an IFC2X3 export of `rac_advanced`
+of unestablished origin), so it is in-sample, and no Revit IFC4 export of
+these Areas exists. A floor whose shape-edited corners lie in one plane is
+drawn along that sloped top, and a wall it wholly covers starts from it; the
+refusals this adds on Snowdon Towers and `rac_advanced` have no
+redistributable Revit IFC4 export to score them. The opt-in
+`rvt-ifc --family-extrusions` draws a family instance from its family's own
+extrusions, arcs as true arcs, where they reproduce the mesh Revit saved
+(Revit 2024 to 2027 files, measured on 2024 and 2025). The viewer's browser
+tests are now part of every pull request's required check.
+
+Measured against 0.14.0 on every reference model, Autodesk's sample
+projects, the held-out models and the families (Measure run 41944962415,
+`main` at 77d71cbb, with timing):
+
+- On the BIM4LCA office the walls with Revit's base and top go from 586 to
+  598 of 607 as built and from 565 to 577 of 589 at permit; no wall's top
+  moves.
+- On `rac_advanced`'s saves of 2015 to 2020 and 2022 to 2024, 13 more Areas
+  are written with a body (2021's save and 2025 to 2027 are unchanged).
+- Each of Autodesk's 33 sample projects of 2015 to 2023 now reports its
+  element record stages, every count adding up: 192,811 of 197,463 markers
+  give a record, 87,366 elements are handed to the export and the models
+  hold 87,315 of them.
+- Nothing moves from equal to different, and the values Revit's export does
+  not write are unchanged; the other models' scorer outputs are line for
+  line 0.14.0's.
+- Export time is 0.98 to 1.03 times 0.14.0's on all 68 timed files, and
+  peak memory 0.92 to 1.04 times (Core Interior 309 to 323 MiB).
 
 ### Upgrading from 0.14
 
