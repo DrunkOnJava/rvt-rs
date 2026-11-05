@@ -1,0 +1,19 @@
+# actionlint's configuration (run by the env config lint job in ci.yml, with
+# shellcheck on every `run:` script).
+#
+# The workflows call this repository's own composite action and reusable
+# workflows as `$/.github/actions/<name>` and `$/.github/workflows/<name>.yml`,
+# a form GitHub resolves to the ref the calling workflow runs at (it works in
+# CI) and that actionlint 1.7.12 does not know: it reports each use as a
+# malformed `owner/repo@ref` reference. These two patterns ignore exactly
+# those two messages, matched whole and only for a `$/.github/` target, so any
+# other malformed `uses:` (a missing ref on a third-party action, a bad path)
+# is still reported. What actionlint would have checked of such a reference,
+# tools/ci/check-workflows.py checks instead: the file exists, and `with:` names
+# only inputs it declares and gives those it requires. Delete both patterns once
+# actionlint knows the form.
+paths:
+  .github/workflows/**/*.yml:
+    ignore:
+      - '^specifying action "\$/\.github/actions/[A-Za-z0-9._-]+" in invalid format because ref is missing\. available formats are "\{owner\}/\{repo\}@\{ref\}" or "\{owner\}/\{repo\}/\{path\}@\{ref\}"$'
+      - '^reusable workflow call "\$/\.github/workflows/[A-Za-z0-9._-]+\.yml" at "uses" is not following the format "owner/repo/path/to/workflow\.yml@ref" nor "\./path/to/workflow\.yml"\. see https://docs\.github\.com/en/actions/learn-github-actions/reusing-workflows for more details$'
