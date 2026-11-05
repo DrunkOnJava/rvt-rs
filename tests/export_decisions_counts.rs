@@ -128,8 +128,6 @@ const CASES: [Case; 5] = [
             "element_record_without_volume",
             "space_outline_is_record_box",
             "unsupported_geometry_unresolved_host",
-            "wall_base_cut_refused",
-            "wall_end_extension_refused",
         ],
         frames: true,
     },

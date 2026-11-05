@@ -20,6 +20,106 @@ The script downloads each redistributable file from its original source and
 checks it against the registry; nothing is vendored in this repository. It
 lists the local-only files with their source and hash, and never fetches them.
 
+## Model index
+
+The README and the [supported profile](supported-profile.md) name a model for
+every number they give. This table is where those names come from: each model,
+the names the pages use for it, and whether anyone else can fetch it.
+`tools/ci/measured_numbers.py` reads it in CI (the PII guard job), so a number
+on either page that names no model listed here, or a model whose row does not
+say who can fetch it, fails the check
+([how a new number keeps to the rule](maintaining.md#numbers-on-the-readme-and-the-supported-profile)).
+
+Who can fetch it is one of four words:
+
+- **redistributable**: licensed for redistribution. `tools/fetch-reference-models.sh`
+  fetches it, and every Measure run and CI score it.
+- **fetched by Measure**: a public download, pinned by hash, that a Measure run
+  fetches for the run with the flag the row names and does not keep. The
+  workflow uses no secret and runs on GitHub-hosted runners, so a fork with
+  Actions enabled should be able to dispatch it (no fork has been tried).
+- **local only**: no documented command fetches it with Revit's export of it, so
+  nobody else can re-run a number resting on it. A page says "local only" next
+  to such a number.
+- **not shared**: files their owner has not shared with anyone; the numbers are
+  the owner's report. A page says "not shared" next to such a number.
+
+| Model | Names the pages use | Who can fetch it | How |
+|---|---|---|---|
+| magnetar Core Interior, Revit 2024 | Core Interior | redistributable | `tools/fetch-reference-models.sh`; with Revit's IFC4 export; scored in every Measure run and in CI |
+| magnetar Einhoven, Revit 2023 | Einhoven | redistributable | `tools/fetch-reference-models.sh`; no Revit export of it |
+| IFC-ECS RE1 Architecture, Mechanical, Plumbing and Electrical, Revit 2025 | RE1 | redistributable | `tools/fetch-reference-models.sh`; with Revit 26.2's IFC2X3 exports; scored in every Measure run and in CI |
+| the synthetic fixtures of `corpus/tier1/` | corpus/tier1 | redistributable | committed to this repository (Apache-2.0); no Revit export |
+| VTT's BIM4LCA example buildings (a housing and an office, timber and concrete), Revit 2024 | BIM4LCA | fetched by Measure | `-f nordic=true`, [`research/bim4lca-measure.tsv`](../research/bim4lca-measure.tsv); CC BY-SA 4.0; Measure scores the concrete office as built and at building permit and the two terrain offices, each with Revit's IFC export |
+| puzzbobb's 24 Revit 2025 models | puzzbobb, R2025 | fetched by Measure | `-f r2025=true`, [`research/r2025-models.tsv`](../research/r2025-models.tsv); Apache-2.0; with Revit's IFC4 export of each |
+| Autodesk's sample projects of Revit 2015 to 2027 (`rac_basic`, `rst_basic`, `rac_advanced`, `rme_basic`, `rme_advanced`, `rst_advanced`) | rac_basic, rst_basic, rac_advanced, rme_basic, rme_advanced, rst_advanced, rac_basic_sample_project, rac_advanced_sample_project, sample projects | fetched by Measure | `-f samples=true`, [`research/autodesk-sample-projects.tsv`](../research/autodesk-sample-projects.tsv); no Revit export of them in a run, except the IFC2X3 export of `rac_advanced` 2015 to 2020 that `-f racadv=true` fetches from the three.js repository |
+| Autodesk's family corpus (phi-ag/rvt, 12 releases of `rac_basic_sample_family`) | family corpus | fetched by Measure | `-f families=true`; CC BY-NC-SA 3.0; no Revit export of it |
+| BIMcollab's example structural model, Revit 2015 | BIMcollab | fetched by Measure | `-f bimcollab=true`, [`research/bimcollab-models.tsv`](../research/bimcollab-models.tsv); no licence stated, so only its summary counts are uploaded; with Revit 2015's IFC2X3 export |
+| BIM-Speed Vitoria, Frigento, Gdynia and Warmond, Revit 2018 to 2021 | Vitoria, Frigento, Gdynia, Warmond | fetched by Measure | `-f holdout=true`, [`research/holdout-archive-models.tsv`](../research/holdout-archive-models.tsv); CC BY 4.0; Frigento, Gdynia, Warmond and `ALD26 Project` are held out and keep only their counts, while `ALD26 Before` is spent and measured in full, which is where the pages' Vitoria figures come from (#1261) |
+| BIM Whale `AdvancedProject`, Revit 2021 | BIM Whale | fetched by Measure | `-f holdout=true`; counts only, held out |
+| Autodesk's Snowdon Towers sample files alone (Architectural, Structural, Plumbing, HVAC, Electrical), Revit 2024 | Snowdon Towers samples, Snowdon Towers 2024 samples | fetched by Measure | `-f samples=true`, [`research/autodesk-sample-projects.tsv`](../research/autodesk-sample-projects.tsv); a number that rests on the files alone (their records, what rvt-rs reads from them) can be re-run |
+| Revit's exports of Snowdon Towers (the IFC4 export of the Architectural, the VIM of the Structural, Plumbing, HVAC and Electrical), Revit 2024 | Snowdon | local only | the exports are not available to a Measure run (the IFC4 is from bldrs-ai/test-models with no licence), so nothing scored against them can be re-run: a page that gives a Snowdon number says "local only" |
+| the Revit 2018 export of `rac_basic_sample_project` that a user posted on the IFC for Revit wiki (SourceForge `ifcexporter`, 2018-01-04) | posted on the IFC for Revit wiki | local only | a forum attachment with no licence stated, used locally and never committed ([RE-326](../reports/element-framing/RE-326-room-phases.md), section 5) |
+| MIT 4.567 tutorial house, 2024 and 2025 saves | MIT house | local only | copyright reserved; MIT's 4.567 course page (`cat2.mit.edu/4.567/samples`) serves the two saves, but no script or Measure flag fetches them and there is no Revit export of them |
+| 255ribeiro `Projeto1`, `teste_export_2025`, `Exemplo_data` and `modelo_bim`, Revit 2023 and 2025 | Projeto1, teste_export_2025, Exemplo_data, modelo_bim | local only | no licence declared; the files are in the 255ribeiro/intro_ifc repository on GitHub, but no script or Measure flag fetches them |
+| flowbim's `AA-SingleDwellingHouse`, Revit 2026, with its IFC | AA-SingleDwellingHouse | local only | a public download from flowbim.ee with no licence stated, and no Measure flag fetches it |
+| Revit 2008 to 2014 project files | local closed-source files | local only | closed-source files, outside the 1.0 range; no download |
+| the field reports' client models of Revit 2022 to 2027 (#421, #1075) | client models, client model | not shared | their reporter's files; the counts are what the reporter sent back |
+
+## Re-run the numbers
+
+The command that re-runs the numbers on the models anyone can fetch is a
+Measure dispatch, the workflow the figures on the README and the supported
+profile were made with. It uses no secret and runs on GitHub-hosted runners, so
+it should work from a fork with Actions enabled (no fork has been tried):
+
+```bash
+gh workflow run measure.yml --ref main -f ref=<commit to measure> -f base=none \
+  -f nordic=true -f r2025=true -f samples=true
+```
+
+`ref` is the commit to measure and the scorers come from the workflow's own
+ref. The run fetches each model the index above marks `redistributable` or
+`fetched by Measure` (Core Interior, Einhoven and RE1 on every run; the BIM4LCA
+files with `nordic`; puzzbobb's 24 with `r2025`; Autodesk's sample projects, the
+Snowdon Towers files among them, with `samples`), exports each with that commit's `rvt-ifc`, and scores the export
+against Revit's own with the scorers under `tools/re/` where Revit's export is
+among the fetched files. The scores are in the run's summary and artifacts.
+
+What it covers: the figures that name Core Interior, Einhoven, RE1, BIM4LCA,
+puzzbobb and Autodesk's sample projects and are scored by those scorers with the
+default export flags, at the commit you name. Add `-f families=true` for the family corpus (read, scored
+against nothing), and `-f holdout=true`, `-f bimcollab=true` and `-f racadv=true`
+for the other `fetched by Measure` models, which keep only their counts.
+
+What it does not cover:
+
+- A number on a model the index marks `local only` or `not shared` (Snowdon
+  Towers' scores against Revit's exports, the MIT house, the 255ribeiro
+  projects, flowbim's 2026 house, the pre-2015 files, the client models): the
+  file, its export or both are not available to a run.
+- A figure made with `-f ifc_flags=`: the saved-mesh and family-extrusion
+  figures use `--saved-meshes` and `--family-extrusions` (runs 41850769925 and
+  41884639625), and the default dispatch exports without them, drawing only
+  doors and windows from saved meshes.
+- A figure made by a probe (`-f probe=`, with its `-f probe_scorer=`) or by a
+  comparison with another commit (`-f base=main`, the byte-identity counts): the
+  report that gives it has the dispatch with those inputs in its Reproduce
+  section.
+- The counts the tests under `tests/` pin on the same models. Fetch the models
+  with `tools/fetch-reference-models.sh` and run `tools/check-local.sh --corpus`
+  for those; it also runs the whole gate first.
+- Whether a figure is current. A run gives the numbers of the commit it
+  measures. A figure on a page is the number of the run it names, at that run's
+  head, until the pull request that moves it edits the page, which
+  [`docs/maintaining.md`](maintaining.md#numbers-on-the-readme-and-the-supported-profile)
+  requires of it.
+
+Nobody has yet re-run the pages' numbers from this command and compared the
+result with them: it is the command their runs were dispatched with, not a
+verified reproduction of every figure (W10 in the
+[1.0 criteria](release-1.0-criteria.md)).
+
 ## The files
 
 | Model | Revit | Licence | Reference export | What it measures |
@@ -103,12 +203,14 @@ each with `-f nordic=true`
 
 ## Revit 2025 models made for one feature each, fetched for a run
 
-A contributor, puzzbobb, made 23 small Revit 2025 projects. Each isolates
+A contributor, puzzbobb, made 23 small Revit 2025 projects, and on #885 a 24th
+(`20_T_U_Roof`, with T and U hip roofs). Each isolates
 one feature: roofs of one and two slopes, hips and an L-shaped hip, slope
 arrows, rafter cuts and a fascia, a roof by extrusion, rooms with a door
 and windows, stairs with and without risers, monolithic and spiral, and
-wall joins. All but one come with Revit's own IFC4 Reference View export.
-He released the `.rvt` and `.ifc` files under Apache-2.0 on #356. Measure
+wall joins. All but one of the first 23 come with Revit's own IFC4 Reference
+View export, and that one has the export of its property-set variant. He
+released the `.rvt` and `.ifc` files under Apache-2.0 on #356 and #885. Measure
 fetches the archive by its pinned hash
 ([`research/r2025-models.tsv`](../research/r2025-models.tsv),
 `tools/ci/fetch-r2025-models.sh`) and, with `-f r2025=true`, scores each
