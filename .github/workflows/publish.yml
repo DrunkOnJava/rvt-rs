@@ -26,7 +26,9 @@ name: Publish (crates.io + PyPI + release binaries)
 #     both lock files, a CHANGELOG.md section, and pyproject.toml leaving the
 #     wheel's version to rvt-py/Cargo.toml (tools/ci/release_preflight.py);
 #   - `CI passed` succeeded on that commit. A running CI is waited for, up to
-#     80 minutes; a failed, cancelled or missing one stops the release. A
+#     80 minutes; a failed, cancelled or missing one stops the release, and
+#     so does a commit whose every file CI's push filter skips (docs and the
+#     like: CI never ran on it, and it could sit on a red commit). A
 #     tag cannot be moved or deleted, so a red tag is fixed in a new commit
 #     and a new version, or, for a flaky job, by re-running CI's failed jobs
 #     and then this run's failed jobs (RELEASE.md).
@@ -135,11 +137,15 @@ jobs:
         run: |
           python3 tools/ci/release_preflight.py check \
             --event "$EVENT" --ref-type "$REF_TYPE" --ref-name "$REF_NAME" --sha "$SHA"
+      # A release is never tagged on a commit CI skipped: a docs-only commit
+      # after a red one would otherwise read as having nothing to wait for and
+      # ship the red commit's tree.
       - name: Wait for CI on the tagged commit
         if: ${{ github.event_name == 'push' }}
         uses: $/.github/actions/wait-for-check
         with:
           sha: ${{ github.sha }}
+          docs-only-skips: "false"
 
   # Build release wheels on every target OS. Mirrors the python-wheel
   # matrix in ci.yml so any regression that would fail a push-CI run

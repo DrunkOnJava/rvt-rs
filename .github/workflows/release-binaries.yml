@@ -180,6 +180,9 @@ jobs:
       # shipping an Intel CLI nobody has run.
       - name: Install Rosetta
         if: matrix.rosetta
+        # A hung softwareupdate would hold the runner for the job's six-hour
+        # default.
+        timeout-minutes: 10
         shell: bash
         run: |
           set -euo pipefail

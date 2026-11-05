@@ -33,25 +33,30 @@ check_runs() {
   api "repos/${GH_REPO}/commits/${SHA}/check-runs" -X GET -f check_name="${CHECK_NAME}" --jq "$1"
 }
 
-if [ "$docs_only_skips" = true ]; then
-  # Every page of the commit's files (the endpoint returns 300 a page). A
-  # commit that lists no file gives one empty line, which the filter below
-  # does not ignore, so it waits for CI: closed. The filter is ci.yml's
-  # `on.push.paths-ignore`; keep the two in step.
-  files=$(api --paginate "repos/${GH_REPO}/commits/${SHA}" --jq '.files[].filename') || {
-    echo "::error::could not list the files of ${SHA}"; exit 1; }
-  if ! grep -qvE '(\.md$|^docs/|^LICENSE|^\.gitignore$|^\.github/ISSUE_TEMPLATE/|^CITATION\.cff$)' <<<"$files"; then
-    # A push of several commits runs CI once, on its last commit, when any
-    # of them changes more than the ignored paths: a docs-only commit that
-    # ends such a push has the check, and it still has to pass.
-    seen=$(check_runs '.total_count') || { echo "::error::could not read ${CHECK_NAME} on ${SHA}"; exit 1; }
-    if [ "$seen" = 0 ]; then
+# Every page of the commit's files (the endpoint returns 300 a page). A commit
+# that lists no file gives one empty line, which the filter below does not
+# ignore, so it waits for CI: closed. The filter is ci.yml's
+# `on.push.paths-ignore`; keep the two in step.
+files=$(api --paginate "repos/${GH_REPO}/commits/${SHA}" --jq '.files[].filename') || {
+  echo "::error::could not list the files of ${SHA}"; exit 1; }
+if ! grep -qvE '(\.md$|^docs/|^LICENSE|^\.gitignore$|^\.github/ISSUE_TEMPLATE/|^CITATION\.cff$)' <<<"$files"; then
+  # A push of several commits runs CI once, on its last commit, when any of
+  # them changes more than the ignored paths: a docs-only commit that ends
+  # such a push has the check, and it still has to pass.
+  seen=$(check_runs '.total_count') || { echo "::error::could not read ${CHECK_NAME} on ${SHA}"; exit 1; }
+  if [ "$seen" = 0 ]; then
+    if [ "$docs_only_skips" = true ]; then
       echo "CI's push filter skips this commit and it has no ${CHECK_NAME}; nothing to wait for"
       result skipped-no-ci
       exit 0
     fi
-    echo "${SHA} changes only files CI's push filter ignores, but ${CHECK_NAME} ran on it (earlier commits of its push); waiting for it"
+    # A release must not ride on an earlier commit's CI: this commit's tree
+    # is that commit's plus docs, and CI says nothing about it. Failing here
+    # also spares the wait for a check that will never come.
+    echo "::error::every file of ${SHA} is one CI's push filter skips, so CI did not run on it and ${CHECK_NAME} will never come; go ahead only from a commit CI ran on"
+    exit 1
   fi
+  echo "${SHA} changes only files CI's push filter ignores, but ${CHECK_NAME} ran on it (earlier commits of its push); waiting for it"
 fi
 
 for _ in $(seq 1 "$attempts"); do

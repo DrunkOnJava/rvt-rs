@@ -58,7 +58,11 @@ Every `vX.Y.Z` release:
   `rvt-rs-vX.Y.Z.intoto.jsonl` (the bundle
   `gh attestation verify <archive> -R DrunkOnJava/rvt-rs` also reads from
   GitHub). Verifying `SHA256SUMS` that way and then running
-  `sha256sum -c --ignore-missing SHA256SUMS` checks every archive.
+  `sha256sum -c --ignore-missing SHA256SUMS` checks every archive. The
+  release page carries the wheels and the sdist too (`docs/install.md` says
+  so), but `SHA256SUMS` and the attestations cover the CLI archives only
+  (#1466); the wheels on PyPI carry PEP 740 attestations from trusted
+  publishing.
 - Publishes the `rvt` crate to [crates.io](https://crates.io/crates/rvt),
   then, once the repository variable `PUBLISH_RVT_RS_MCP` is `true` (step 8),
   the MCP server's crate `rvt-rs-mcp` ([docs/mcp.md](docs/mcp.md)), which
@@ -188,6 +192,11 @@ project treats a silent skipped step the same as an untested change.
     key). The `release-tags` ruleset lets only a maintainer create
     a `v*` tag, and nobody can move or delete one (a repository
     administrator can bypass the ruleset, which a release never needs).
+    Keep the landing queue disarmed from the release pull request's squash
+    until the tag is pushed: a landing in between queues another CI run on
+    `main` behind the squash commit's, and the preflight waits on the squash
+    commit's `CI passed` for up to 80 minutes, so a slow or superseded run
+    costs the whole wait.
 10. **Push the tag.** `git push origin vX.Y.Z` runs `publish.yml`. Its
     `preflight` job runs first, and every other job waits for it. It
     refuses, within seconds, a tag that is not named `vX.Y.Z` (or with a
@@ -195,8 +204,9 @@ project treats a silent skipped step the same as an untested change.
     commit than the one pushed, whose commit is on neither `main` nor a
     `hotfix/*` branch, or whose commit disagrees with the tag on any
     version file above; and it waits for `CI passed` on the tagged commit,
-    up to 80 minutes, and refuses a failed, cancelled or missing one (a
-    commit whose every file CI's push filter skips needs no CI of its own).
+    up to 80 minutes, and refuses a failed, cancelled or missing one, and a
+    commit whose every file CI's push filter skips (CI never ran on it, so
+    it could sit on a red commit; tag a commit CI ran on).
     Then the workflow builds the wheels and the sdist and checks them: each
     wheel installed and opening a model, `cargo install` of the source with
     the CLI sample smoke, the docs.rs build preview (CI's pinned nightly and
@@ -316,15 +326,24 @@ where CI and Measure run, only when it is ready to release.
    again on the new head: CI runs on any push that changes more than the paths
    `ci.yml` ignores (Markdown, `docs/`, `CITATION.cff` and a few others),
    a push of only those runs none, and a change to code needs Measure
-   again.
+   again. The tag goes on a commit CI ran on: the preflight refuses a head
+   whose every file CI skips, because no `CI passed` exists for it and a red
+   commit may sit under it. After a docs-only fix, push a change CI does not
+   skip too (or tag the last commit CI ran on, if the fix can wait for the
+   next version).
 6. **Tag the reviewed head and push the tag.** Steps 8 to 11 above,
    with that head in place of `origin/main`, once its code and witness
    files are the ones CI and Measure passed:
    `git tag -s vX.Y.(Z+1) -m "rvt-rs X.Y.(Z+1)" <its SHA>`. The preflight
    accepts the tag only while `hotfix/vX.Y.(Z+1)` holds that commit, and
    waits for CI's `CI passed` on it (the branch's push run), so keep the
-   branch until the release has finished, re-runs included. Then close
-   the review-only pull request unmerged and delete
+   branch until the release has finished, re-runs included. A tag push runs
+   the workflow files as they are at the tagged commit, so a hotfix cut from
+   v0.15.0 or older has no preflight (and the old publish workflow, without
+   its re-run and concurrency fixes) unless the branch carries `publish.yml`,
+   `release-binaries.yml`, `.github/actions/wait-for-check` and
+   `tools/ci/release_preflight.py` from `main`; copy them in the step 3
+   commit. Then close the review-only pull request unmerged and delete
    `review/vX.Y.Z-base`.
 7. **Bring `main` up to it** through a pull request, as merging the
    branch back would: the fix if `main` lacks it, the new `CHANGELOG.md`

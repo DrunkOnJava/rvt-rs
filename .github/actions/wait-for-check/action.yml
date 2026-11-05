@@ -5,9 +5,11 @@ description: >-
   commit whose CI is red, cancelled or missing.
 # C3: the viewer deploy and the release preflight both wait through this. A
 # commit that CI's push filter skips (only docs, Markdown and the like) has no
-# check to wait for and passes at once, unless the check ran on it anyway
-# because an earlier commit of the same push changed more. Each API call is
-# retried (wait.sh), so a GitHub 5xx is not read as a verdict.
+# check to wait for: the viewer deploy lets it pass at once (its pull request
+# ran the tests), the release preflight refuses it (docs-only-skips: "false"),
+# and both wait for the check when it ran on the commit anyway because an
+# earlier commit of the same push changed more. Each API call is retried
+# (wait.sh), so a GitHub 5xx is not read as a verdict.
 inputs:
   sha:
     description: The commit to wait on
@@ -21,7 +23,10 @@ inputs:
     required: false
     default: "80"
   docs-only-skips:
-    description: Let a commit CI's push filter skips, with no such check on it, pass without waiting
+    description: >-
+      Let a commit CI's push filter skips, with no such check on it, pass
+      without waiting. With "false" such a commit fails at once instead, since
+      CI never ran on it (a release tags a commit CI ran on).
     required: false
     default: "true"
   token:
