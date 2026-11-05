@@ -133,10 +133,10 @@ is held to the same Autodesk project's 2025 save, on the MEP samples too
 not to a Revit export: no held-out model holds a pipe, a duct or a port, and
 that cannot catch an error the 2025 save shares. On the 2026 saves of Measure
 run 42063046730 (head 3149973f) 0 of 6,605 and of 6,650 bodies differ on the MEP
-samples (490 and 493 before); the 2027 saves, scored on the IFC files of run
-42107917715 (head f1460b32), give the 2026 saves' numbers but for two doors of
-`rac_basic` that write no Width and Height (#1489), and the Measure run of the
-shipped head is not yet made. Sloped
+samples (490 and 493 before); the 2027 saves, held to the gate by Measure run
+42119142486 (head 95fe042f, passed on 15 samples), give the 2026 saves' numbers but
+for two doors of `rac_basic` that write no Width and Height (#1489), and the
+unfiltered Measure run of the shipped head, with the held-out scorers, is not yet made. Sloped
 roofs, spiral runs, a wall's profile openings, `IsExternal` on walls, curtain
 walls, members and plates (2025 writes it, 2026 and 2027 do not), IFC export
 overrides and the opening index stay unread there.

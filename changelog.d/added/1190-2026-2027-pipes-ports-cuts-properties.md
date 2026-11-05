@@ -19,7 +19,7 @@
   run 42063046730 (head 3149973f) the bodies that differ from the 2025 save fall
   from 490 and 493 to 0 on `rme_advanced` and `rme_basic`, and every port of the
   four Autodesk samples that hold one, 14,095 in all, is the 2025 save's; the
-  2027 saves, scored on the IFC files of run 42107917715 (head f1460b32), give
+  2027 saves, held to the gate by Measure run 42119142486 (head 95fe042f), give
   the same numbers but for two doors of `rac_basic` that write no Width and
-  Height (#1489), and the run that scores the shipped head is not yet made. Every 2015 to 2025 file exports as
+  Height (#1489), and the unfiltered run that scores the shipped head is not yet made. Every 2015 to 2025 file exports as
   before on puzzbobb's local run.
