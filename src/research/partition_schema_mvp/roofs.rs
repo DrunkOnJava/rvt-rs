@@ -64,9 +64,17 @@ pub(super) fn attach_roof_profiles(
         .filter_map(|element| element.id)
         .collect();
     let held_back = !roof_reads_exact_sketches(revit_version);
-    let (box_only, others): (BTreeMap<u32, [f64; 4]>, BTreeMap<u32, [f64; 4]>) = roofs
-        .into_iter()
-        .partition(|(id, _)| held_back && roof_ids.contains(id));
+    let is_held = |id: &u32| held_back && roof_ids.contains(id);
+    let box_only: BTreeMap<u32, [f64; 4]> = roofs
+        .iter()
+        .filter(|(id, _)| is_held(id))
+        .map(|(id, plan_box)| (*id, *plan_box))
+        .collect();
+    let others: BTreeMap<u32, [f64; 4]> = roofs
+        .iter()
+        .filter(|(id, _)| !is_held(id))
+        .map(|(id, plan_box)| (*id, *plan_box))
+        .collect();
     let mut profiles = BTreeMap::new();
     for (owners, exact) in [(&others, true), (&box_only, false)] {
         if !owners.is_empty() {
