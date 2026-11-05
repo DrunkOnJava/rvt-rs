@@ -1,0 +1,35 @@
+name: tmp apt mirror proof
+on:
+  push:
+    branches: [fix/i686-apt-mirror]
+permissions: {}
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        fail_first: [1, 2]
+    steps:
+      - name: The step, with the first attempts forced to fail
+        run: |
+          cat /etc/apt/apt-mirrors.txt
+          apt=(sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+          mirrors=(http://archive.ubuntu.com/ubuntu/ https://mirrors.edge.kernel.org/ubuntu/)
+          for attempt in 1 2 3; do
+            if (( attempt > ${{ matrix.fail_first }} )) \
+              && timeout 120 "${apt[@]}" update \
+              && timeout 180 "${apt[@]}" install -y --no-install-recommends gcc-multilib; then
+              cat /etc/apt/apt-mirrors.txt
+              grep -c "${mirrors[attempt - 2]%/}" <(apt-cache policy gcc-multilib)
+              echo 'int main(void){return 0;}' > t.c && gcc -m32 t.c -o t && ./t && echo "m32 links on attempt $attempt"
+              exit 0
+            fi
+            echo "::warning::apt attempt $attempt did not finish; retrying"
+            if (( attempt < 3 )); then
+              echo "${mirrors[attempt - 1]}" | sudo tee /etc/apt/apt-mirrors.txt
+            fi
+            sleep 15
+          done
+          exit 1
