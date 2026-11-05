@@ -18,6 +18,9 @@
 //!
 //! Output, one line each:
 //!   file <path> release <layout release>
+//!   global-graph <same | same-refusal | what differs | absent>
+//!     (the Global/Latest document the catalog is read from, in full and
+//!     under the fields the catalog reads)
 //!   compared records <n> decodes <n> full-ok <n> full-refused <n> mismatches <n>
 //!     budget-stopped <bool>
 //!   keep <list> compared <n> mismatches <n>
@@ -159,6 +162,42 @@ fn main() -> Result<()> {
         max_objects: 100_000,
         ..GraphLimits::default()
     };
+    // The document the extensible storage catalog is read from, in full and
+    // under the fields the catalog reads: the same graph either way.
+    let global_keep = [
+        "m_pAppInfoManager",
+        "m_appInfoArr",
+        "m_storedSchemas",
+        "m_schemaUsageMap",
+    ];
+    match native_document::read_single(&mut rf, "Global/Latest") {
+        Ok(bytes) if bytes.len() >= 6 => {
+            let document = &bytes[..bytes.len() - 4];
+            let wide = GraphLimits {
+                max_values: 2_000_000,
+                ..GraphLimits::default()
+            };
+            let full = decode_graph_with_catalog_usage(document, &registry, &wide, None);
+            let projected = decode_graph_projected(document, &registry, &wide, None, &global_keep);
+            let verdict = match (&full, &projected) {
+                (Ok((a, usage)), Ok((b, other))) => {
+                    if usage.values != other.values || usage.objects != other.objects {
+                        "usage"
+                    } else {
+                        differences(a, b, &global_keep)
+                            .first()
+                            .copied()
+                            .unwrap_or("same")
+                    }
+                }
+                (Err(a), Err(b)) if a.to_string() == b.to_string() => "same-refusal",
+                (Err(_), Err(_)) => "error",
+                _ => "accepted-differently",
+            };
+            println!("global-graph {verdict}");
+        }
+        _ => println!("global-graph absent"),
+    }
     // Every record is handed over with its body and no graph: this probe
     // decodes them itself.
     let options = Options {
