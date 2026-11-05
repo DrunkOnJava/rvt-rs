@@ -24,10 +24,13 @@
     the latest phase that holds any: an Area or an unplaced record does not, and
     a placed room whose phase is unset, unread or not one of the project's is
     written as before and does not either.
-  - Measured (Measure run 42011174043 at `992196c6`, 111 exports): the 2016
-    to 2027 saves of `rac_basic_sample_project` each write 14 `IfcSpace` (0
-    before), and the other 99 exports, held-out ones included, are byte for
-    byte as before. The default is byte for byte the `--phase "Working
+  - Measured (Measure run 42035308270 at `ea0c7449`, 111 exports): the 2016
+    to 2027 saves of `rac_basic_sample_project` each write 14 `IfcSpace` of kind
+    `room` (0 before), and the other 99 exports, held-out ones included, are byte
+    for byte as before. The default is byte for byte the `--phase "Working
     Drawings"` export and pairs 14 of the Revit 2018 export's 17 spaces by
     GlobalId; `--phase` with the last phase writes what 0.14.0 wrote on all ten
-    saves of 2018 to 2027 (RE-326 §9.4).
+    saves of 2018 to 2027 (RE-326 §9.4). One project exercises the fallback, and
+    the Python warnings are checked by `tests/python/test_room_phase_fallback.py`
+    in the full CI, which has not run on this head; the viewer's label has no
+    browser test.
