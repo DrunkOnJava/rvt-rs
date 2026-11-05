@@ -467,8 +467,7 @@ pub const ON_LOOP_EPS_FEET: f64 = 1e-4;
 /// point of it on the edge it makes: a straight line's box centre, its
 /// midpoint, or the midpoint of the first chord a curve is drawn with. A line
 /// is on a loop where that point lies on one of the loop's edges. A void with
-/// no line on it, or whose lines do not run once round it in ElementId order,
-/// is left untagged.
+/// no line on it is left untagged.
 pub fn tag_voids(profile: &mut PlanProfile, lines: &[(u32, (f64, f64))]) {
     let voids = std::iter::once(&profile.inner_xy)
         .chain(profile.pieces.iter().map(|piece| &piece.inner_xy))
@@ -489,13 +488,16 @@ pub fn tag_voids(profile: &mut PlanProfile, lines: &[(u32, (f64, f64))]) {
     profile.void_openings = tagged;
 }
 
-/// The ElementId Revit's export tags a void with: the line its loop starts
-/// at, once the loop is counter-clockwise (RE-339). Sketch lines are indexed
-/// in the order they were drawn, which on every sketch measured is the order
-/// of their ElementIds, and a loop drawn clockwise is turned round, so its
-/// first line is the last drawn. The lines on `ring`, taken in ElementId
-/// order, must each lie on the next edge round the loop (or the previous one
-/// all the way) for the direction to be read; otherwise `None`.
+/// The ElementId Revit's export tags a void with (RE-151, RE-339): the lowest
+/// of the lines on it, unless they run clockwise round it in ElementId order,
+/// when it is the highest. Sketch lines are indexed in the order they were
+/// drawn, which on every sketch measured is the order of their ElementIds,
+/// and a loop drawn clockwise is turned round, so its first line is the last
+/// drawn. The direction is read only where the lines, taken in ElementId
+/// order, each lie on the next edge round the loop (or each on the previous
+/// one, all the way, and two on one edge count for nothing); where they do
+/// not, nothing says it is clockwise, and the tag is the lowest, as it is on
+/// all 62 voids of Core Interior.
 fn void_tag(ring: &[(f64, f64)], lines: &[(u32, (f64, f64))]) -> Option<u32> {
     let mut on: Vec<(u32, usize)> = lines
         .iter()
@@ -503,16 +505,16 @@ fn void_tag(ring: &[(f64, f64)], lines: &[(u32, (f64, f64))]) -> Option<u32> {
         .collect();
     on.sort_unstable();
     let (first, last) = (on.first()?.0, on.last()?.0);
-    if first == last {
-        return Some(first);
-    }
     let edges = ring.len();
     let mut forward = true;
     let mut backward = true;
     for pair in on.windows(2) {
         let step = (pair[1].1 + edges - pair[0].1) % edges;
-        if step == 0 || 2 * step == edges {
-            return None;
+        if step == 0 {
+            continue;
+        }
+        if 2 * step == edges {
+            return Some(first);
         }
         if 2 * step < edges {
             backward = false;
@@ -520,8 +522,8 @@ fn void_tag(ring: &[(f64, f64)], lines: &[(u32, (f64, f64))]) -> Option<u32> {
             forward = false;
         }
     }
-    if !(forward || backward) {
-        return None;
+    if forward == backward {
+        return Some(first);
     }
     let ring_counter_clockwise = signed_area(ring) > 0.0;
     Some(if ring_counter_clockwise == forward {
