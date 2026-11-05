@@ -174,11 +174,24 @@ the four levels a file can reach are in the
   wall tops and wall corner order (#1067, #1194); conduits, conduit fittings
   and gutters (#1261); every timed export faster than 0.13.0's and a lower
   memory peak (#1075, #1237).
+- **0.15.0, 2026-11-05.** Where each decoded element and the values its body
+  took were read from, down to the byte, and why each element, body, opening
+  or outline was left out, on request (`rvt-ifc --element-provenance`,
+  `--export-decisions`; confirmed on Revit 2023 to 2025 and 2024 to 2025),
+  which the MCP server asks for, with `explain_element` (#1325, #1326,
+  #1368); the MCP server names elements and type objects as the IFC export
+  does (#1327); Revit 2008 to 2023 exports count where their element records
+  stopped (#1389); floors with shape-edited corners in one plane drawn along
+  their sloped tops, and the walls on them starting from that top (#1384);
+  more Areas drawn to their boundary lines' joins, in-sample against the one
+  IFC2X3 export (#1261); rooms take off the round columns their solids hold
+  (#1354); floor voids tagged as Revit tags them (#1165); and the opt-in
+  `rvt-ifc --family-extrusions`, measured on 2024 and 2025 (#156).
 
-### 0.15.0: IFC geometry and element data
+### 0.16.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.14.0, moved from the
-0.14.0 milestone when 0.14.0 shipped. Each
+The geometry and element-data work that continues after 0.15.0, moved from the
+0.15.0 milestone when 0.15.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
@@ -190,7 +203,7 @@ with no oracle (#884, #885), the openings on releases other than 2024 and 2025
 close (#90), beams (#94), MEP equipment and routes (#96) and ports and pipes outside
 Revit 2024 and 2025 (#869), the sketch-to-solid pipeline (#156), and the Snowdon slab
 that is not in Revit's export (#309); and the export time on Revit 2015 to 2023
-(#1237). Element data: instance and type parameters with units and precedence
+(#1335). Element data: instance and type parameters with units and precedence
 (#35, #155) and the element-record fields that carry them (#223), written to
 IFC property sets and shown in the viewer; door and window sizes where the
 symbol cuts no outline, measured on one building's families only

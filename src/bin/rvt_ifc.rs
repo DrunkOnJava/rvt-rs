@@ -86,11 +86,14 @@ struct Args {
     /// Draw every element whose body would be its record's bounding box
     /// (furniture, fixtures, equipment and the rest) from the mesh Revit
     /// saved for display (#255). Doors and windows are drawn so by default
-    /// on Revit 2023 to 2027. Slower on large files.
+    /// on Revit 2023 to 2027, and so are the walls that embed a curtain wall
+    /// where Revit raised their base, on Revit 2024 to 2027 (RE-340). Slower
+    /// on large files.
     #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
     saved_meshes: bool,
-    /// Keep doors and windows as their record's bounding box instead of the
-    /// mesh Revit saved for them.
+    /// Keep doors and windows as their record's bounding box, and the walls
+    /// that embed a curtain wall as their record's body, instead of the mesh
+    /// Revit saved for them.
     #[arg(long, conflicts_with = "placeholder")]
     no_saved_meshes: bool,
     /// Draw a family instance from its family's own extrusions (the sketch
@@ -359,7 +362,9 @@ fn run(args: Args) -> anyhow::Result<()> {
 /// The switches that change the model: the document exporter by default,
 /// `--placeholder` or `--diagnostic-proxies` for the others; the saved-graphics
 /// bodies are every boxed one with `--saved-meshes`, none with
-/// `--no-saved-meshes`, and otherwise doors and windows on Revit 2023 to 2027.
+/// `--no-saved-meshes`, and otherwise doors and windows on Revit 2023 to 2027
+/// and the walls that embed a curtain wall where Revit raised their base on
+/// Revit 2024 to 2027 (RE-340).
 fn export_options(args: &Args) -> ExportOptions {
     let kind = if args.placeholder {
         ExportKind::Placeholder

@@ -636,12 +636,32 @@ jobs:
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
           RVT_REQUIRE_CLI_PARITY: "1"
+          RVT_MCP_ANSWERS_DIR: ${{ github.workspace }}/target/tmp/mcp-answers
         # The test compares the server's exports with rvt-ifc's and
         # rvt-gltf's, which it finds beside the server in target/ci: built
         # here, not left to a step that may not have run.
         run: |
           cargo build --profile ci --bin rvt-ifc --bin rvt-gltf
           cargo test --profile ci -p rvt-rs-mcp --no-fail-fast
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      # #1415: every structured answer the test was given, on the synthetic
+      # fixture and Einhoven, against the outputSchema its tool declared. A
+      # field the schema requires and an answer leaves out fails here, as it
+      # would for a client that validates structuredContent (#1414).
+      - name: Check every MCP answer against its tool's output schema
+        run: |
+          python -m pip install --require-hashes -r tools/ci/requirements-test.txt
+          python tools/ci/validate-mcp-answers.py --require-all target/tmp/mcp-answers
+      - name: Upload the MCP answers and schemas
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mcp-answers
+          path: target/tmp/mcp-answers/
+          if-no-files-found: ignore
+          retention-days: 14
 
   writer-patch-corpus:
     # M9-01: stream-level writer coverage for real family + project
