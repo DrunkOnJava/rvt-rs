@@ -1,9 +1,12 @@
 name: Report failed scheduled checks
 
 # Called by the last job of a scheduled workflow (scheduled-checks.yml,
-# corpus-nightly.yml, perf-budget.yml), which runs `if: failure()` and holds
-# `actions: read` and `issues: write` for it. For each job of the calling run
-# that failed it opens one issue under the label `scheduled:<the job's name>`,
+# corpus-nightly.yml, perf-budget.yml), which runs `if: !cancelled()` when a job
+# it needs ended `failure` or `cancelled` (a job that exceeds its timeout-minutes
+# ends cancelled, and `failure()` is false for it; `!cancelled()` is false only
+# when the whole run was cancelled) and holds `actions: read` and `issues: write`
+# for it. For each job of the calling run that failed or was cancelled it opens
+# one issue under the label `scheduled:<the job's name>`,
 # or leaves alone the one already open under that label: no comment, no edit.
 # A comment on an issue is the maintainer's to write, and a check that keeps
 # failing leaves one open issue rather than one a night. The logic is

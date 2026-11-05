@@ -699,7 +699,11 @@ line names what to fix (its rulesets check needs an admin token). The list:
    `main`'s newest two generations of each family, live branches' and open pull
    requests' caches are kept. The cache is evicted least recently used first at
    its limit, so a key read only once a night does not last: Fuzz's corpus is an
-   artifact for that reason (`fuzz.yml`).
+   artifact for that reason (`fuzz.yml`). A night that cannot read the corpus
+   (three tries) warns, starts from the seeds and saves nothing, so the corpus it
+   could not read stays the newest. With no open pull request the cleaner deletes
+   nothing and exits 0 with a notice, because that list cannot be told from an
+   empty reply.
 4. Workflow runs on `main` are green. A red check is a defect to fix, or an
    issue to file with its cause, and a check that fails only because a service
    is down reports "not measured" rather than failing. A "not measured"

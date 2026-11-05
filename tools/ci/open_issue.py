@@ -11,9 +11,13 @@ it is closed opens a new one. A dry run reads what is open and prints what would
 `failed-jobs` opens one issue for each job of the current run (GITHUB_RUN_ID) that failed or
 was cancelled, labelled `scheduled:` and the job's name in lower case. A job that exceeds its
 `timeout-minutes` ends as cancelled, not as failed, so a cancelled job in a run nobody
-cancelled is a timeout. The calling workflow runs this only `if: !cancelled()`, which is false
-when the run itself was cancelled (by a person or a newer run), so such a run reports nothing.
-The reporting job itself is still running when it looks, so it is never in the list.
+cancelled is, in practice, a timeout (a lost or shut-down runner ends a job the same way). The
+calling workflow runs this only `if: !cancelled()`, which is false when the run itself was
+cancelled (by a person or a newer run), so such a run reports nothing. A matrix leg that a
+sibling's failure cancels would read as a timeout too, which is why the matrix of the workflows
+that call this (the audit legs of scheduled-checks.yml) sets `fail-fast: false`; the other two
+callers have no matrix. The reporting job itself is still running when it looks, so it is never
+in the list.
 
 Needs the GitHub CLI with GH_TOKEN (or a login), GH_REPO or GITHUB_REPOSITORY, and `issues: write`
 (`actions: read` for failed-jobs).
@@ -50,7 +54,9 @@ def job_issue(job, workflow, repo, run_id, server="https://github.com"):
     label = PREFIX + slug(job["name"])
     steps = ", ".join(job.get("steps") or []) or "none recorded"
     timed_out = job.get("conclusion") in TIMED_OUT
-    how = "ended cancelled, which is how a job that exceeded its timeout-minutes ends (nobody cancelled the run)" if timed_out else "failed"
+    how = ("ended cancelled although nobody cancelled the run: a job that exceeds its timeout-minutes ends this way, "
+           "and so does one whose runner was lost or shut down; the step above is the one that was running"
+           if timed_out else "failed")
     body = (
         f'The scheduled check "{job["name"]}" of the workflow "{workflow}" {how}.\n\n'
         f"- Run: {server}/{repo}/actions/runs/{run_id}\n"
