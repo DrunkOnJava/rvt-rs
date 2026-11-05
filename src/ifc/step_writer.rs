@@ -763,6 +763,32 @@ struct Sink<'a> {
 /// How much text [`StepWriter`] holds before handing it to its sink.
 const SPILL_BYTES: usize = 1 << 20;
 
+/// The `IfcShapeRepresentation.RepresentationType` IFC4's
+/// `IfcShapeRepresentationTypes` accepts for items of every kind in `kinds`
+/// (the tokens `emit_solid_shape` returns), or `None` where there are none or
+/// no one type holds them all (#1430):
+/// - `AdvancedSweptSolid` takes every `IfcSweptAreaSolid`, extruded and
+///   revolved ones too;
+/// - `SolidModel` takes those and `IfcFacetedBrep`;
+/// - `SurfaceOrSolidModel` takes those and `IfcTriangulatedFaceSet`;
+/// - `CSG` takes `IfcBooleanResult` alone, and no other type takes one.
+fn shared_representation_type(
+    kinds: &std::collections::BTreeSet<&'static str>,
+) -> Option<&'static str> {
+    let within = |allowed: &[&str]| kinds.iter().all(|kind| allowed.contains(kind));
+    if kinds.len() <= 1 {
+        kinds.iter().next().copied()
+    } else if within(&["SweptSolid", "AdvancedSweptSolid"]) {
+        Some("AdvancedSweptSolid")
+    } else if within(&["SweptSolid", "AdvancedSweptSolid", "Brep"]) {
+        Some("SolidModel")
+    } else if within(&["SweptSolid", "AdvancedSweptSolid", "Brep", "Tessellation"]) {
+        Some("SurfaceOrSolidModel")
+    } else {
+        None
+    }
+}
+
 impl StepWriter<'_> {
     /// The `Position` and depth, metres, of an opening's extruded solid: the
     /// shared `solid_position` and the body's `depth_m`, or, for a cut with
@@ -1323,8 +1349,11 @@ impl StepWriter<'_> {
     /// return `(solid_entity_id, representation_type_token)`. The
     /// second value is the `IfcShapeRepresentation.RepresentationType`
     /// token that the caller should use: `"SweptSolid"` for
-    /// extruded / revolved, `"CSG"` for boolean results, `"Brep"`
-    /// for faceted breps.
+    /// extruded / revolved, `"AdvancedSweptSolid"` for a profile swept
+    /// along a directrix, `"CSG"` for boolean results, `"Brep"` for
+    /// faceted breps and `"Tessellation"` for triangulated face sets.
+    /// IFC4's `IfcShapeRepresentationTypes` accepts only those item
+    /// classes under each token (#1430).
     ///
     /// The caller is responsible for wrapping the returned entity
     /// ID in an `IfcShapeRepresentation` + `IfcProductDefinitionShape`
@@ -1360,17 +1389,35 @@ impl StepWriter<'_> {
                     ids.push(id);
                     kinds.insert(kind);
                 }
-                let kind = match kinds.into_iter().collect::<Vec<_>>().as_slice() {
-                    [one] => *one,
-                    _ => "CSG",
-                };
-                (ids, kind)
+                match shared_representation_type(&kinds) {
+                    Some(kind) => (ids, kind),
+                    // `CSG` takes boolean results alone, and no other type
+                    // takes one: the items are written as their union.
+                    None => match ids.split_first() {
+                        Some((first, rest)) => (vec![self.emit_union(*first, rest)], "CSG"),
+                        None => (Vec::new(), "CSG"),
+                    },
+                }
             }
             _ => {
                 let (id, kind) = self.emit_solid_shape(shape, solid_position, z_axis);
                 (vec![id], kind)
             }
         }
+    }
+
+    /// The union of solids `first` and `rest`, as nested `IfcBooleanResult`s.
+    fn emit_union(&mut self, first: usize, rest: &[usize]) -> usize {
+        let mut solid_id = first;
+        for other in rest {
+            let union = self.id();
+            self.emit_entity(
+                union,
+                format!("IFCBOOLEANRESULT(.UNION.,#{solid_id},#{other})"),
+            );
+            solid_id = union;
+        }
+        solid_id
     }
 
     fn emit_solid_shape(
@@ -1468,10 +1515,11 @@ impl StepWriter<'_> {
             }
             SolidShape::Compound(items) => {
                 // Nested in another solid, the items are one: their union.
-                let mut ids = items
+                let parts: Vec<(usize, &'static str)> = items
                     .iter()
-                    .map(|item| self.emit_solid_shape(item, solid_position, z_axis).0);
-                let Some(mut solid_id) = ids.next() else {
+                    .map(|item| self.emit_solid_shape(item, solid_position, z_axis))
+                    .collect();
+                let Some(((first, kind), rest)) = parts.split_first() else {
                     return self.emit_solid_shape(
                         &SolidShape::TriangulatedFaceSet {
                             vertices_feet: Vec::new(),
@@ -1481,19 +1529,11 @@ impl StepWriter<'_> {
                         z_axis,
                     );
                 };
-                let rest: Vec<usize> = ids.collect();
                 if rest.is_empty() {
-                    return (solid_id, "SweptSolid");
+                    return (*first, *kind);
                 }
-                for other in rest {
-                    let union = self.id();
-                    self.emit_entity(
-                        union,
-                        format!("IFCBOOLEANRESULT(.UNION.,#{solid_id},#{other})"),
-                    );
-                    solid_id = union;
-                }
-                (solid_id, "CSG")
+                let rest: Vec<usize> = rest.iter().map(|(id, _)| *id).collect();
+                (self.emit_union(*first, &rest), "CSG")
             }
             SolidShape::BooleanResult {
                 op,
@@ -1672,7 +1712,10 @@ impl StepWriter<'_> {
                         "IFCFIXEDREFERENCESWEPTAREASOLID(#{profile_id},#{solid_position},#{directrix},$,$,#{fixed_ref_id})"
                     ),
                 );
-                (solid_id, "SweptSolid")
+                // IFC4 reserves `SweptSolid` for extruded and revolved
+                // solids; a fixed-reference sweep is `AdvancedSweptSolid`
+                // (IfcShapeRepresentationTypes, #1430).
+                (solid_id, "AdvancedSweptSolid")
             }
             SolidShape::PlacedExtrusion {
                 profile,
@@ -3039,6 +3082,17 @@ impl StepWriter<'_> {
                 // material. Try each in order; `profile_or_layer_applied`
                 // carries the "already emitted" flag through so the
                 // single-material path below doesn't double-associate.
+                //
+                // An IfcSpace is none of the entities IFC4's
+                // IfcRelAssociatesMaterial.AllowedElements takes (elements,
+                // element types, door and window styles, structural members
+                // and ports), so a space is associated with no material
+                // (#1430), though Revit's own export associates one.
+                let material_index = material_index.as_ref().filter(|_| !is_space);
+                let material_profile_set_index =
+                    material_profile_set_index.as_ref().filter(|_| !is_space);
+                let material_layer_set_index =
+                    material_layer_set_index.as_ref().filter(|_| !is_space);
                 let profile_set_applied = if let Some(ps_idx) = material_profile_set_index {
                     if let Some(&ps_id) = profile_set_ids.get(*ps_idx) {
                         let usage_id = self.id();
@@ -3122,7 +3176,9 @@ impl StepWriter<'_> {
                         if *m_idx < material_ids.len() {
                             element_material_pairs.push((el_id, *m_idx));
                         }
-                    } else if let Some(&set) = constituent_set_of.get(&entity_idx) {
+                    } else if let Some(&set) =
+                        constituent_set_of.get(&entity_idx).filter(|_| !is_space)
+                    {
                         element_constituent_pairs.push((el_id, set));
                     }
                 }
@@ -4234,11 +4290,22 @@ impl StepWriter<'_> {
                     )
                 })
                 .collect();
+            // IFC4's CorrectPredefinedType on every element type: a
+            // USERDEFINED type states which user-defined type it is in
+            // ElementType. Revit's export writes `$` there (and breaks the
+            // rule on the same objects), so rvt-rs names the type by its own
+            // Name and leaves PredefinedType, which the type GlobalIds hash,
+            // as Revit has it (#1430).
+            let element_type = if predefined == "USERDEFINED" {
+                quoted_or_dollar(&escape(name))
+            } else {
+                "$".into()
+            };
             let type_el_id = self.id();
             self.emit_entity(
                 type_el_id,
                 format!(
-                    "{entity_name}('{type_gid}',#{owner_hist},{},$,$,({}),$,'{tag}',$,{tail})",
+                    "{entity_name}('{type_gid}',#{owner_hist},{},$,$,({}),$,'{tag}',{element_type},{tail})",
                     quoted_or_dollar(&escape(name)),
                     set_ids.join(","),
                 ),

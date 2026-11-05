@@ -64,6 +64,20 @@ write:
    witnesses also run against Revit's full Core Interior export. The claimed
    fields are deliberately few; what rvt-rs cannot claim yet is excluded by
    name, with its tracking issue.
+8. **Every export the job writes holds the schema's EXPRESS rules.**
+   [`tools/ci/ifc_validate_summary.py --gate`](../tools/ci/ifc_validate_summary.py)
+   runs IfcOpenShell's check of the IFC4 schema's WHERE rules and global
+   rules, which `ifcopenshell.validate` leaves out, on the tier-1 exports,
+   the synthetic pair, the Einhoven and Core Interior exports (with and
+   without saved meshes) and the four RE1 projects, and fails on any
+   finding (#1430). Measure reports the same check in the `rules:` section of
+   each model's `schema.txt` on the models CI does not hold (the BIM4LCA
+   office, the Revit 2025 models, Autodesk's samples), and as counts for the
+   held-out ones. Revit's own exports break some of these rules (the check
+   finds 1,194 in the BIM4LCA office's As-Built export, among them `USERDEFINED`
+   types with no `ElementType` and a material on an `IfcSpace`; IfcOpenShell
+   0.9.0.post1, 2026-11-05), so a value rvt-rs writes as Revit does is not
+   evidence that it holds them.
 
 ## What is measured against Revit's own exports
 
