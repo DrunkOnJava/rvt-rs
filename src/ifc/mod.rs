@@ -810,8 +810,11 @@ pub struct ExportedModelDiagnostics {
     /// entities [`step_writer::placements`] marks
     /// [`step_writer::Placement::Folded`], and are in none of
     /// [`Self::building_elements`], [`Self::by_ifc_type`] and the other
-    /// counts of the elements the IFC writes: a count before #1424 equals the
-    /// written count plus these. Empty where the export folds none.
+    /// counts of the elements the IFC writes. Before #1424 `building_elements`
+    /// and `by_ifc_type` counted them, so their figure from before is the
+    /// written count plus these (per entity, for `by_ifc_type`); the other
+    /// counts took a piece's properties, which clone its owner's, and are not
+    /// recoverable from this. Empty where the export folds none.
     #[serde(default)]
     pub body_pieces_folded: std::collections::BTreeMap<String, usize>,
 }
@@ -4844,7 +4847,8 @@ fn element_tag(type_guid: &Option<String>) -> Option<u32> {
 }
 
 /// The geometry gaps of `model` as `skipped` items, and the decision behind
-/// each element counted in them (#1326).
+/// each element counted in them (#1326). A piece the writer folds into another
+/// element's body is none of the elements counted (#1424).
 fn geometry_gap_skipped_items(
     model: &IfcModel,
 ) -> (
@@ -4877,7 +4881,8 @@ fn geometry_gap_skipped_items(
         DecisionStage::OpeningNotCut,
     );
 
-    for entity in &model.entities {
+    let placements = step_writer::placements(model);
+    for (index, entity) in model.entities.iter().enumerate() {
         let entities::IfcEntity::BuildingElement {
             ifc_type,
             name,
@@ -4894,6 +4899,12 @@ fn geometry_gap_skipped_items(
         else {
             continue;
         };
+        // #1424: a piece folded into another element's body is no element of
+        // the IFC and clones its owner's properties and storey: a gap it
+        // shares with its owner is one gap.
+        if matches!(placements[index], Some(step_writer::Placement::Folded)) {
+            continue;
+        }
         let id = element_tag(type_guid);
 
         let has_body_shape =
@@ -5358,7 +5369,9 @@ pub(crate) fn host_references(model: &IfcModel) -> std::collections::HashMap<usi
 /// The property values `write_step` writes in `Pset_` sets, counted as it
 /// emits them: every building element's own set and further sets, then each
 /// storey's sets and the building's when the model has a storey, and an
-/// opening of its host's own geometry's `Reference` (RE-237).
+/// opening of its host's own geometry's `Reference` (RE-237). A piece the
+/// writer folds into another element's body writes none (#1424): it is no
+/// element of the IFC, though it holds the sets of its owner.
 fn pset_property_value_count(model: &IfcModel) -> usize {
     let values = |set: &entities::PropertySet| {
         if set.name.starts_with("Pset_") {
@@ -5367,22 +5380,27 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             0
         }
     };
-    let is_building_element = |index: usize| {
+    let placements = step_writer::placements(model);
+    let is_written_element = |index: usize| {
         matches!(
             model.entities.get(index),
             Some(entities::IfcEntity::BuildingElement { .. })
+        ) && !matches!(
+            placements.get(index),
+            Some(Some(step_writer::Placement::Folded))
         )
     };
     let elements: usize = model
         .entities
         .iter()
-        .map(|entity| match entity {
+        .enumerate()
+        .map(|(index, entity)| match entity {
             entities::IfcEntity::BuildingElement {
                 property_set: Some(set),
                 ..
-            } => values(set),
+            } if is_written_element(index) => values(set),
             entities::IfcEntity::ElementPropertySet { element, set }
-                if is_building_element(*element) =>
+                if is_written_element(*element) =>
             {
                 values(set)
             }

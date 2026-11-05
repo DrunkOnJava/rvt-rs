@@ -185,8 +185,8 @@ of a space). The exporter names an element nothing named
 as its `Name`, and the server leaves it out (`name` is absent), but the same
 placeholder on any other element is still served as its `name` (a wall nothing
 named is `Wall-<ElementId>`). On the models Measure runs, 23 of Einhoven's 37
-rows, 3 of RE1 Electrical's 49 and 52 of the BIM4LCA office's 13,021 as built
-carry one. The path where a row has no `name` is not measured: no row of the
+rows, 3 of RE1 Electrical's 49 and 52 of the BIM4LCA office's 12,974 as built
+(52 of 13,020 at permit; Measure run 41986491801) carry one. The path where a row has no `name` is not measured: no row of the
 32 models' dumps lacks one. `explain_element`'s `name` follows the same rule
 (it was the model's name, placeholder included, before).
 

@@ -549,7 +549,11 @@ pub struct ExportOut {
     /// `ifc` or `glb`.
     pub format: String,
     pub output: OutputOut,
-    /// Building elements the export wrote.
+    /// Building elements the IFC export writes (the diagnostics'
+    /// `exported.building_elements`), for `export_gltf` too: the glb also
+    /// draws each piece of an element of separate loops that the IFC folds
+    /// into the body of another element (`elements.folded_into_bodies`), which
+    /// is not counted here or in `entity_counts`, and `notes` says how many.
     pub building_elements: usize,
     pub building_elements_with_geometry: usize,
     /// By IFC entity.

@@ -478,7 +478,7 @@ impl RvtServer {
         input_schema = rmcp::handler::server::common::schema_for_input::<ExportGltfArgs>()
             .expect("the input schema is an object"),
         description = concat!(
-            "Write the model as a binary glTF 2.0 file to out_path, which must end in .glb, must not be the model, and must not exist unless overwrite is true. The file is the one rvt-gltf writes. If a resource limit kept part of the file unread, nothing is written unless allow_partial is true. Returns a summary (entity counts, unread streams, size and sha256) and a resource_link to the file; the glb is never returned inline. Sends progress notifications when the request carries a progress token, and cancelling it stops the export with nothing written. Writes only the file it is asked for. ",
+            "Write the model as a binary glTF 2.0 file to out_path, which must end in .glb, must not be the model, and must not exist unless overwrite is true. The file is the one rvt-gltf writes. If a resource limit kept part of the file unread, nothing is written unless allow_partial is true. Returns a summary (entity counts, unread streams, size and sha256) and a resource_link to the file; the glb is never returned inline. The entity counts are those of the IFC export: the glb also draws the pieces of elements of separate loops that the IFC folds into another element's body, and notes says how many. Sends progress notifications when the request carries a progress token, and cancelling it stops the export with nothing written. Writes only the file it is asked for. ",
             short_not_read!()
         ),
         output_schema = rmcp::handler::server::tool::schema_for_output::<ExportOut>(),
