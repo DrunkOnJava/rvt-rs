@@ -1509,6 +1509,10 @@ pub fn append_typed_production_elements(
         }
     }
 
+    // #1396: a wall with an edited elevation profile that stops short of the
+    // wall beneath it is drawn to that wall's face.
+    wall_tops::extend_wall_ends(entities);
+
     // RE-267: a wall's top is cut at the underside of the floor that covers it.
     wall_tops::cut_wall_tops(entities, &pending_tops);
 
@@ -4396,6 +4400,16 @@ pub const WALL_TOP_COVER_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_at_covering_fl
 /// the rest: drawn as one prism of its plan to the underside and the pieces
 /// of the plan outside the element from there to the top (#1067, RE-320).
 pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_covering_floor";
+
+/// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how an end
+/// of it was drawn where it is not the end its record's joins give (#1396,
+/// RE-337). The wall's `EndCoverElementId` is the wall it reaches.
+pub const WALL_END_SOURCE_PROPERTY: &str = "BodyEndSource";
+
+/// `BodyEndSource` of a wall with an edited elevation profile whose end is
+/// drawn to the face of the perpendicular wall beneath it that holds its base
+/// (#1396, RE-337).
+pub const WALL_END_AT_BASE_WALL_BODY_END_SOURCE: &str = "wall_end_extended_to_base_wall";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how its base
 /// was cut (#1384, RE-336). It is not `BodyHeightSource`, which says how the

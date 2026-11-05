@@ -84,6 +84,7 @@ use std::collections::{HashMap, HashSet};
 use super::{
     ELEMENT_RECORD_PROPERTY_SET, FLOOR_SHAPE_BODY_SOURCE, WALL_BASE_COVER_BODY_BASE_SOURCE,
     WALL_BASE_REFUSAL_PROPERTY, WALL_BASE_SLOPED_BODY_BASE_SOURCE, WALL_BASE_SOURCE_PROPERTY,
+    WALL_END_AT_BASE_WALL_BODY_END_SOURCE, WALL_END_SOURCE_PROPERTY,
     WALL_TOP_COVER_BODY_HEIGHT_SOURCE, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use crate::ifc::body_geometry::{
@@ -1230,6 +1231,209 @@ pub(super) fn cut_wall_bases(
                 name: "BaseCoverElementId".into(),
                 value: PropertyValue::Integer(i64::from(id)),
             });
+        }
+    }
+}
+
+/// How far a wall's elevation range may lie outside another's and still hold
+/// its base, and how far a wall's width may lie outside another's length and
+/// still be spanned by it, feet (#1396).
+const END_TOLERANCE_FEET: f64 = 1e-3;
+
+/// A wall drawn as an upright rectangle along a model axis: its plan bounds
+/// (least x and y, then greatest x and y), its base and top, and which of its
+/// extrusion's two plan sides lies along x (#1396).
+struct AxisWall {
+    index: usize,
+    id: Option<u32>,
+    base: f64,
+    top: f64,
+    bounds: [f64; 4],
+    turned: bool,
+}
+
+/// The wall `entity` is, where it is one rectangle whose sides lie along the
+/// model's axes. A wall drawn as a solid keeps its extrusion, which is its
+/// plan's prism.
+fn axis_wall(index: usize, entity: &IfcEntity) -> Option<AxisWall> {
+    let IfcEntity::BuildingElement {
+        ifc_type,
+        type_guid,
+        extrusion: Some(body),
+        representation_map_index: None,
+        location_feet: Some(location),
+        rotation_radians,
+        ..
+    } = entity
+    else {
+        return None;
+    };
+    if !matches!(ifc_type.as_str(), "IFCWALL" | "IFCWALLSTANDARDCASE")
+        || body.profile_override.is_some()
+        || !location.iter().all(|v| v.is_finite())
+    {
+        return None;
+    }
+    let quarters = rotation_radians.unwrap_or(0.0) / std::f64::consts::FRAC_PI_2;
+    if !quarters.is_finite() || (quarters - quarters.round()).abs() > 1e-9 {
+        return None;
+    }
+    let turned = (quarters.round() as i64).rem_euclid(2) == 1;
+    let (across_x, across_y) = if turned {
+        (body.depth_feet, body.width_feet)
+    } else {
+        (body.width_feet, body.depth_feet)
+    };
+    if !(across_x.is_finite()
+        && across_y.is_finite()
+        && across_x > 0.0
+        && across_y > 0.0
+        && body.height_feet.is_finite()
+        && body.height_feet > 0.0)
+    {
+        return None;
+    }
+    Some(AxisWall {
+        index,
+        id: type_guid.as_deref().and_then(|guid| guid.parse().ok()),
+        base: location[2],
+        top: location[2] + body.height_feet,
+        bounds: [
+            location[0] - across_x / 2.0,
+            location[1] - across_y / 2.0,
+            location[0] + across_x / 2.0,
+            location[1] + across_y / 2.0,
+        ],
+        turned,
+    })
+}
+
+/// Draw each wall with an edited elevation profile that stops short of the
+/// wall beneath it to that wall's face (#1396, RE-337).
+///
+/// A wall's record gives its joins from the walls whose centreline lies on
+/// its line's end, however little of the wall's height they overlap: the
+/// walls of the BIM4LCA office's Basement that stand on the sloped footings
+/// of RE-336 are cut back to the face of a Level_01 wall that overlaps them
+/// by 0.66 ft of 9.5, and Revit's body at the base runs on to the face of the
+/// Basement wall beneath, which that line ends inside (0.31 ft further as
+/// built, 0.09 ft at building permit). For a wall with an edited elevation
+/// profile (a [`IfcEntity::WallProfileOpening`] voids it) that is a rectangle
+/// along a model axis, this draws an end to the face of the one other
+/// rectangle along the perpendicular axis that holds the wall's base, spans
+/// its width, and stands beyond the end by no more than its own thickness,
+/// where no such wall touches the end already. The wall's body is one prism,
+/// so it reaches that face at every height: Revit's steps above the lower
+/// wall's top are not drawn. Every other wall is left as it was.
+pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
+    let Gathered { profiled, .. } = gather(entities);
+    if profiled.is_empty() {
+        return;
+    }
+    let walls: Vec<AxisWall> = entities
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entity)| axis_wall(index, entity))
+        .collect();
+    let plain = |index: usize| {
+        matches!(
+            entities.get(index),
+            Some(IfcEntity::BuildingElement {
+                solid_shape: None,
+                ..
+            })
+        )
+    };
+    // (wall index, long axis, grows at its low end, gap, the wall reached)
+    let mut extensions: Vec<(usize, usize, bool, f64, Option<u32>)> = Vec::new();
+    for wall in walls
+        .iter()
+        .filter(|wall| profiled.contains(&wall.index) && plain(wall.index))
+    {
+        let [x0, y0, x1, y1] = wall.bounds;
+        let long = usize::from(y1 - y0 > x1 - x0);
+        let across = 1 - long;
+        let range = |bounds: &[f64; 4], axis: usize| (bounds[axis], bounds[axis + 2]);
+        let (low, high) = range(&wall.bounds, long);
+        let (side_low, side_high) = range(&wall.bounds, across);
+        // The walls beneath, perpendicular to this one, that hold its base and
+        // span its width: their range along this wall's line.
+        let beneath: Vec<(&AxisWall, f64, f64)> = walls
+            .iter()
+            .filter(|other| other.index != wall.index)
+            .filter(|other| {
+                let (a, b) = range(&other.bounds, across);
+                let (c, d) = range(&other.bounds, long);
+                b - a > d - c
+            })
+            .filter(|other| {
+                other.base - END_TOLERANCE_FEET <= wall.base
+                    && wall.base <= other.top + END_TOLERANCE_FEET
+            })
+            .filter(|other| {
+                let (a, b) = range(&other.bounds, across);
+                a - END_TOLERANCE_FEET <= side_low && side_high <= b + END_TOLERANCE_FEET
+            })
+            .map(|other| {
+                let (a, b) = range(&other.bounds, long);
+                (other, a, b)
+            })
+            .collect();
+        for at_low in [true, false] {
+            let end = if at_low { low } else { high };
+            if beneath
+                .iter()
+                .any(|&(_, a, b)| a - END_TOLERANCE_FEET <= end && end <= b + END_TOLERANCE_FEET)
+            {
+                continue;
+            }
+            let reached: Vec<(&AxisWall, f64)> = beneath
+                .iter()
+                .filter_map(|&(other, a, b)| {
+                    let gap = if at_low { end - b } else { a - end };
+                    (gap > END_TOLERANCE_FEET && gap <= b - a).then_some((other, gap))
+                })
+                .collect();
+            if let [(other, gap)] = reached.as_slice() {
+                extensions.push((wall.index, long, at_low, *gap, other.id));
+            }
+        }
+    }
+    for (index, long, at_low, gap, reached) in extensions {
+        let turned = walls
+            .iter()
+            .find(|wall| wall.index == index)
+            .is_some_and(|wall| wall.turned);
+        let Some(IfcEntity::BuildingElement {
+            extrusion: Some(body),
+            location_feet: Some(location),
+            property_set,
+            ..
+        }) = entities.get_mut(index)
+        else {
+            continue;
+        };
+        let along_x = long == 0;
+        if along_x != turned {
+            body.width_feet += gap;
+        } else {
+            body.depth_feet += gap;
+        }
+        location[long] += if at_low { -gap / 2.0 } else { gap / 2.0 };
+        if let Some(set) = property_set
+            .as_mut()
+            .filter(|set| set.name == ELEMENT_RECORD_PROPERTY_SET)
+        {
+            set.properties.push(Property {
+                name: WALL_END_SOURCE_PROPERTY.into(),
+                value: PropertyValue::Text(WALL_END_AT_BASE_WALL_BODY_END_SOURCE.into()),
+            });
+            if let Some(id) = reached {
+                set.properties.push(Property {
+                    name: "EndCoverElementId".into(),
+                    value: PropertyValue::Integer(i64::from(id)),
+                });
+            }
         }
     }
 }
