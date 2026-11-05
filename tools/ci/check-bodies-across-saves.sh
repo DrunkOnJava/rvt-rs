@@ -24,7 +24,8 @@
 #                samples fetched; empty is all of them.
 # A sample whose 2024 or 2025 save is not in the run is marked SKIPPED by the
 # measuring script, and one with only some PARTIAL; both print a notice and
-# neither is a pass.
+# neither is a pass. A run with ifc_flags is SKIPPED too, since the check is
+# about the default export.
 set -euo pipefail
 
 results="${1:?usage: check-bodies-across-saves.sh RESULTS_DIR}"
