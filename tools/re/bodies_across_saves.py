@@ -137,26 +137,28 @@ OUTLINE_LEAST = {
     "rstbasicsampleproject": {2025: 5, 2026: 5, 2027: 5},
 }
 # Doors and windows placed by the rule (RE-347) in each candidate save, held to
-# the 2024 save, by project and candidate year (Measure run 42092410697, head
-# b452f967). OPENINGS_LEAST: at least this many of each class compared;
+# the 2024 save, by project and candidate year (Measure run 42106711251, head
+# c1a2a739). OPENINGS_LEAST: at least this many of each class compared;
 # OPENINGS_LEFT_OUT_MOST: at most this many that the 2024 save places by the rule
 # and the candidate leaves on the default axes, which can only shrink: a count
-# that drops moves the ceiling down in that change. rst_basic holds none. 2025
-# is compared and counted but has no floor or ceiling yet: no run has measured it
-# with this code (the unfiltered run of the change that added this group does).
+# that drops moves the ceiling down in that change, and a floor up. rst_basic
+# holds none. rme_advanced and rme_basic hold 107 placed doors per file and join
+# when their pipes pass the gate (#1454).
 OPENINGS_LEAST = {
     "racadvancedsampleproject": {
+        2025: {"IfcDoor": 83, "IfcWindow": 24},
         2026: {"IfcDoor": 61, "IfcWindow": 18},
         2027: {"IfcDoor": 47, "IfcWindow": 18},
     },
     "racbasicsampleproject": {
+        2025: {"IfcDoor": 10, "IfcWindow": 7},
         2026: {"IfcDoor": 10, "IfcWindow": 7},
         2027: {"IfcDoor": 10, "IfcWindow": 7},
     },
 }
 OPENINGS_LEFT_OUT_MOST = {
-    "racadvancedsampleproject": {2026: 28, 2027: 42},
-    "racbasicsampleproject": {2026: 0, 2027: 0},
+    "racadvancedsampleproject": {2025: 0, 2026: 28, 2027: 42},
+    "racbasicsampleproject": {2025: 0, 2026: 0, 2027: 0},
 }
 # rac_advanced's ceiling 147534, which the 2024 save draws as its record box
 # and the 2026 save drew as an outline before a Sketch's curve list was read

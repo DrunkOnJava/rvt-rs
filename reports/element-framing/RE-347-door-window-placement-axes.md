@@ -114,50 +114,80 @@ In the held-out models the one window not written already had a rotation of its 
 
 "Moved" is a vertex farther than 1e-6 m (0.000003 ft) from the other export's nearest, or a volume more than 1e-9 relative: none is, and the largest vertex difference prints as 0.000000 ft (the largest relative volume change is 2.5e-15). Identity differences are a different class, GlobalId, type GlobalId, opening GlobalId or host wall: none. The number of doors and windows whose axes moved is the number that differed from Revit's before the rule (92 + 6, 3, 156 + 156, 155 + 152), as it should be.
 
-**Nothing else moved.** In the run's scorer diff (base against head) the only differences are the new `door flips:` lines; the outputs of `door_bodies_vs_ifc`, `door_window_sizes_vs_ifc`, `openings_vs_ifc`, `opening_boxes_vs_ifc`, `opening_hosts_vs_ifc`, `unfilled_openings_vs_ifc`, `window_openings_vs_box`, `global_ids_vs_ifc` and `type_objects_vs_ifc` are the same on every open model and on the held-out models' kept counts. `ifc.sha256` moves on the four open models, as it must. Not run: the other scorers, the witness, the MCP answers and the semantic diff (an unfiltered run's), and the timing of the one added pass over the stored transforms.
+**Nothing else moved.** In the run's scorer diff (base against head) the only differences are the new `door flips:` lines; the outputs of `door_bodies_vs_ifc`, `door_window_sizes_vs_ifc`, `openings_vs_ifc`, `opening_boxes_vs_ifc`, `opening_hosts_vs_ifc`, `unfilled_openings_vs_ifc`, `window_openings_vs_box`, `global_ids_vs_ifc` and `type_objects_vs_ifc` are the same on every open model and on the held-out models' kept counts. `ifc.sha256` moves on the four open models, as it must. V1 did not run the other scorers, the witness, the MCP answers or the semantic diff, nor time the added pass over the stored transforms; V2 below does.
 
-## 7. The same-project check on Revit 2026 and 2027
+### The final head (run V2 and the box-body run)
 
-The rule writes new axes on Revit 2026 and 2027, where almost no Revit export exists (RE-343 section 6: one 2026 house and layouts whose doors and windows are `00` or `11`). So each 2026 and 2027 door and window the rule places is held to the 2024 save of the same Autodesk sample project, per element, by `tools/re/bodies_across_saves.py` (a `doors and windows` group): class, GlobalId, storey, `BodySource`, placement within 0.001 ft and its axes within 1e-6, volume and vertices, and the element must be placed by the rule in the 2024 save too. It is the right home, not `readers_across_saves.py` (#1454): it already compares placements and world vertices by Tag, which is what a placement is, and its failure turns Measure red.
+Run V2: Measure [42106711251](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42106711251), head `c1a2a7399d4ee71bb9a10e3cdc4e6927884ca45c` (V1's rule with the along-wall bound at 0.999 and `main` at `e9f4c592` merged), base `main` at `e9f4c592`, unfiltered (`-f base=main -f nordic=true -f r2025=true -f holdout=true -f samples=true -f sample_years="2024 2027" -f keep_ifc=true`, probe `probe_re343_door_flips`, scorer `door_placements_vs_ifc`; every default scorer on every model). Every job succeeded, `same-project gates` included (9 samples).
 
-Run G: Measure [42092410697](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42092410697), head `b452f967`, `-f base=none -f samples=true -f sample_years="2024 2027" -f scorers=bodies_across_saves -f models=re1-architecture`. Every save passed.
+- **The default scorer `tools/re/door_axes_vs_ifc.py` (no probe), per model, base against head.** Doors, then windows, as same / half turn / quarter turn from Revit's, and how many were placed by the rule (`PlacementAxesSource`) and differ from Revit's:
+
+  | model | base: doors | base: windows | head: doors | head: windows | placed by the rule, differ |
+  |---|---|---|---|---|---:|
+  | Core Interior | 40 / 39 / 53 of 132 | 0 / 0 / 6 of 6 | 132 same of 132 | 6 same of 6 | 138, 0 |
+  | RE1 Architecture | 1 / 1 / 3 of 5 | none | 4 same, 1 half turn of 5 | none | 4, 0 |
+  | office as built | 55 / 110 / 104 of 269 | 113 / 103 / 53 of 269 | 211 same, 34 half, 24 quarter of 269 | 269 same of 269 | 462, 0 |
+  | office at permit | 55 / 110 / 104 of 269 | 113 / 99 / 53 of 265 | 210 same, 36 half, 23 quarter of 269 | 265 same of 265 | 457, 0 |
+  | R2025 models (24 files; the doors and windows are in models 12 to 17) | 0 / 0 / 6 of 6 | 6 / 0 / 12 of 18 | 6 same of 6 | 18 same of 18 | 24, 0 |
+  | held-out, counts only (18 models) | 48 same, 100 half, 112 quarter, 166 other of 426 | 90 same, 108 half, 119 quarter, 313 other of 630 | 67 same, 94 half, 99 quarter, 166 other | 173 same, 80 half, 64 quarter, 313 other | 145, 0 |
+
+  The 58 and 59 doors that are not `same` on the two office files are doors bound to none (76 and 77 of them, 18 of which are `same`), unchanged. The 2018 to 2023 held-out models and the spent 2018 pair (68 doors and 70 windows, none placed by the rule) have no stored transform and keep their default axes, which differ from Revit's as before. The other five open models hold no door or window both exports have (the two terrain office files and the three RE1 services models). The scorer exits 0 on all 52 models that have a Revit export. It is in `main`'s default list from this change, so every unfiltered Measure repeats the claim and the base-against-head diff catches a regression.
+- **Nothing else moved.** The run's scorer diff (base against head) holds only: this scorer's output on the ten open models, the held-out models' `door axes:` lines, the `doors and windows` lines of the gate on the six 2025 to 2027 samples that hold any, and the two witness observations. Every other scorer output (the whole default suite: doors, openings, sizes, GlobalIds, types, property sets, quantities, saved and box bodies, the MCP answers) is identical base against head on every model.
+- **The semantic diff saw dumps** (the MCP server's answers as the deterministic dump) on all 35 models with one, the open and R2025 models among them, and on Core Interior, RE1, the office files and R2025 model 12 the findings are exactly `RvtElementRecordGeometry.PlacementAxesSource` and `trust_markers.PlacementAxesSource` absent to `stored_axes_reversed_by_flips` and `rotation_degrees` absent to 90, 180 (or -90) on the doors and windows the dump holds; no other element changes.
+- **Core Interior's step counts and witness.** In both witness observations `IFCDIRECTION` moves 1037 to 1135 (98: a direction of its own for each of the 92 doors and 6 windows not on +X) and `IFCPROPERTYSINGLEVALUE` 27824 to 27962 (138: `PlacementAxesSource` on 132 doors and 6 windows); nothing else. Both `rvt-rs.json` observations are refreshed from this run (`witness-<artifact>.json`, byte for byte), and `witness-verdict.py` replayed with CI's arguments is PASS for both artifacts (the committed verdict files unchanged, the three witnesses replay `match`). The fixtures' notes carry a dated line.
+- **Time.** The export's wall time in `rvt-ifc.log`, base against head, one run each on different runners (runners differ by up to 1.7 times, so a cost under about 2 percent cannot be resolved): open models (10 files) head over base 0.944 to 1.061, mean 1.007, totals 60,141 and 60,282 ms; R2025 models (24) mean 1.014; samples 2024 (10 files) mean 0.978, 2025 0.975, 2026 0.991, 2027 0.990; the three largest files: the office as built 25,692 and 26,034 ms, Snowdon Towers Architectural 25,789 and 25,555 ms, the office at permit 23,035 and 22,932 ms. The added read of the stored transforms is not resolvable from this. Memory was not measured.
+- **Box-bodied doors do not move.** Every door and window of the open models goes through a saved mesh by default, so V1 exercised the swapped box only through its openings. The box-body run, Measure [42106731054](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42106731054) (head `c1a2a739`, base `main` at `e9f4c592`, `-f ifc_flags=--no-saved-meshes -f keep_ifc=true -f nordic=true -f models="core-interior nordic-office-*" -f scorers=none`; it judges no gate), exports the same models with the record boxes as bodies: every door and window is an `IfcExtrudedAreaSolid` rectangle (138 of 138, 538 of 538). `placed_bodies_vs_base.py` on its kept IFCs:
+
+  | | doors' axes moved / unchanged | windows' axes moved / unchanged | bodies | openings | identity differences |
+  |---|---|---|---|---|---|
+  | Core Interior | 92 / 40 | 6 / 0 | 138 paired, 0 moved, largest relative volume change 4.6e-16 | 138 paired, 0 moved | none |
+  | office as built | 156 / 113 | 156 / 113 | 538 paired, 0 moved (4.3e-16) | 463 paired, 0 moved | none |
+  | office at permit | 155 / 114 | 152 / 113 | 534 paired, 0 moved (4.0e-16) | 457 paired, 0 moved | none |
+
+  The largest vertex difference prints 0.000000 ft, and no pair meshed in neither export. Of the elements whose axes moved, the rectangle's two sides are kept on the half turns and swapped on the quarter turns, by count: Core Interior 39 kept and 59 swapped (the 39 half turns and the 53 doors and 6 windows on a quarter turn), the office as built 179 kept and 133 swapped (76 + 103 half turns, 80 + 53 quarter turns).
+
+## 7. The same-project check on Revit 2025, 2026 and 2027
+
+The rule writes new axes on Revit 2025, 2026 and 2027, where almost no Revit export exists (RE-343 section 6: one 2026 house and layouts whose doors and windows are `00` or `11`; one 2025 model, RE1 Architecture, and the R2025 models). So each 2025, 2026 and 2027 door and window the rule places is held to the 2024 save of the same Autodesk sample project, per element, by `tools/re/bodies_across_saves.py` (a `doors and windows` group): class, GlobalId, storey, `BodySource`, placement within 0.001 ft and its axes within 1e-6, volume and vertices, and the element must be placed by the rule in the 2024 save too. It is the right home, not `readers_across_saves.py` (#1454): it already compares placements and world vertices by Tag, which is what a placement is, and its failure turns Measure red.
+
+Run V2 above holds it: `same-project gates` succeeded on the 9 samples (3 projects, 3 saves each), and every save reads `bodies across saves: PASS`. Run G (Measure [42092410697](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42092410697), head `b452f967`, 2026 and 2027 only) gave the same 2026 and 2027 counts.
 
 | project and save | doors and windows compared with the 2024 save | not on the default axes | in the 2024 save placed by the rule and left on the default axes here, not scored |
 |---|---|---:|---:|
-| `rac_advanced` 2026 | 79 (61 doors, 18 windows) | 44 | 28 (22, 6) |
+| `rac_advanced` 2025 | 107 (83 doors, 24 windows) | 66 | 0 |
+| `rac_advanced` 2026 | 79 (61, 18) | 44 | 28 (22, 6) |
 | `rac_advanced` 2027 | 65 (47, 18) | 31 | 42 (36, 6) |
-| `rac_basic` 2026 | 17 (10, 7) | 14 | 0 |
-| `rac_basic` 2027 | 17 (10, 7) | 14 | 0 |
-| `rst_basic` 2026 and 2027 | 0 | 0 | 0 |
+| `rac_basic` 2025, 2026 and 2027 | 17 each (10, 7) | 14 each | 0 |
+| `rst_basic` 2025, 2026 and 2027 | 0 | 0 | 0 |
 
-**What this exercises, plainly.** Two buildings, each saved twice: 96 and 82 doors and windows compared, 58 and 45 of them on axes other than the default, the same elements saved by two releases. `rst_basic` holds no door or window the rule places, so it exercises nothing. The 2024 save's own axes are measured against Revit's export only on the models of section 6, so this check holds 2026 and 2027 to a save, not to Revit. The 28 and 42 elements of `rac_advanced` that the 2024 save places by the rule and these saves leave on the default axes are counted, not scored, and now gated from above. Their cause is determined: the pass that takes a door's host from its native record (RE-245) runs on `CUT_LOOP_REVIT_VERSIONS` (`fields.rs`), 2024 and 2025 only, so on 2026 and 2027 a nearest wall that is not the door's own fails the along-the-wall test (#1454 widens that list to 2026 and 2027, which should place those 28); and on 2027 the other 14 are set in 8 host walls with no native straight-line row (#1475). The 2025 saves are candidates of this check on `main` now (RE-345) and are counted; no floor or ceiling is set for them yet. The floors are per class, project and year (`OPENINGS_LEAST`: `rac_advanced` 61 doors and 18 windows in 2026 and 47 and 18 in 2027; `rac_basic` 10 and 7 in both) and the ceilings `OPENINGS_LEFT_OUT_MOST` (28 and 42; 0 and 0), so a count that drops moves its floor up and one that shrinks moves its ceiling down in that change. `rme_advanced` and `rme_basic` hold 107 placed doors per file (59 with unequal flips) and their 2026 and 2027 saves are held to nothing; they join this group, with floors, in whichever of #1454 and #1456 lands second, because their pipes do not pass the gate before #1454. This changes a gate file, so the verdict is rewritten on the final head by a final run.
+**What this exercises, plainly.** Two buildings, each saved by three releases: 124, 96 and 82 doors and windows compared (2025, 2026, 2027), 80, 58 and 45 of them on axes other than the default, the same elements saved by three releases. `rst_basic` holds no door or window the rule places, so it exercises nothing. The 2024 save's own axes are measured against Revit's export only on the models of section 6, so this check holds 2025 to 2027 to a save, not to Revit. The 28 and 42 elements of `rac_advanced` that the 2024 save places by the rule and these saves leave on the default axes are counted, not scored, and gated from above. Their cause is determined: the pass that takes a door's host from its native record (RE-245) runs on `CUT_LOOP_REVIT_VERSIONS` (`fields.rs`), 2024 and 2025 only, so on 2026 and 2027 a nearest wall that is not the door's own fails the along-the-wall test (#1454 widens that list to 2026 and 2027, which should place those 28); and on 2027 the other 14 are set in 8 host walls with no native straight-line row (#1475). The floors are per class, project and year (`OPENINGS_LEAST`: `rac_advanced` 83 doors and 24 windows in 2025, 61 and 18 in 2026, 47 and 18 in 2027; `rac_basic` 10 and 7 in each) and the ceilings `OPENINGS_LEFT_OUT_MOST` (`rac_advanced` 0, 28 and 42; `rac_basic` 0, 0 and 0), so a count that drops moves its floor up and one that shrinks moves its ceiling down in that change. `rme_advanced` and `rme_basic` hold 107 placed doors per file (59 with unequal flips) and their 2026 and 2027 saves are held to nothing; they join this group, with floors, in whichever of #1454 and #1456 lands second, because their pipes do not pass the gate before #1454. The 2025 floors and ceilings are set from run V2's counts after that run, which changes a gate file (`bodies_across_saves.py`), so a samples-only run on the final head writes the verdict.
 
 ## 8. Not claimed, not measured
 
 - The origin (#1465), what Revit's origin is, and anything keyed to it.
-- Snowdon Towers (local only; 44 mixed-state doors and 2 windows): not scored. R2025 models 12 to 17: not run (one `11` door and `00` or `11` windows each).
-- The 160 doors bound to none; a turned instance with unequal flips; a curved wall.
+- Snowdon Towers (local only; 44 mixed-state doors and 2 windows) against Revit's export: not scored. Its 2024 sample is in the runs, and the 27 turned plain-walled instances of section 5 are read from its probe.
+- The 160 doors bound to none; a curved wall; a turned instance with unequal flips (none in the samples).
 - Revit 2026 and 2027 against a Revit export beyond RE-343's held-out counts: the 2026 house (13 doors and 16 windows in its states) and the small layouts are `same` on all of them (section 6), which exercises the rule on one 2026 house in a mixed state and no 2027 model in one.
-- What any consumer does with the axes; time and memory of the added pass (`attach_opening_placement_axes` reads the stored transforms of the doors and windows set in plain walls once more).
-- The step counts of Core Interior's export (`IFCDIRECTION`, `IFCPROPERTYSINGLEVALUE`) and its witness observation, which move with the rule (a rotation per turned door, one property per placed element): read from the unfiltered run.
+- What any consumer does with the axes; the memory of the added read of the stored transforms (its time is below what a run resolves, section 6).
 
 ## 9. Reproduce
 
 The models are those of RE-343 section 7 (Core Interior, RE1 Architecture, the BIM4LCA office files, the held-out list).
 
 ```bash
-gh workflow run measure.yml --ref <branch holding the scorers> -f ref=<sha> -f base=main -f keep_ifc=true \
-  -f nordic=true -f holdout=true -f probe=probe_re343_door_flips -f probe_scorer=door_placements_vs_ifc \
-  -f models="core-interior re1-architecture nordic-office-as-built nordic-office-permit holdout-*" \
-  -f scorers="door_bodies_vs_ifc door_window_sizes_vs_ifc openings_vs_ifc opening_boxes_vs_ifc opening_hosts_vs_ifc unfilled_openings_vs_ifc window_openings_vs_box global_ids_vs_ifc type_objects_vs_ifc"   # V1
+gh workflow run measure.yml --ref <branch holding the scorers> -f ref=<sha> -f base=main -f nordic=true -f r2025=true \
+  -f holdout=true -f samples=true -f sample_years="2024 2027" -f keep_ifc=true \
+  -f probe=probe_re343_door_flips -f probe_scorer=door_placements_vs_ifc    # V2, with every default scorer
+gh workflow run measure.yml --ref <branch holding the scorers> -f ref=<sha> -f base=main -f ifc_flags=--no-saved-meshes \
+  -f keep_ifc=true -f nordic=true -f models="core-interior nordic-office-*" -f scorers=none   # the box-body run
 gh workflow run measure.yml --ref <branch holding the scorers> -f ref=<sha> -f base=none \
-  -f samples=true -f sample_years="2024 2027" -f scorers=bodies_across_saves -f models="re1-architecture"   # G
+  -f samples=true -f sample_years="2024 2027" -f scorers=bodies_across_saves -f models="re1-architecture"   # G, the gate alone
 ```
 
-`<sha>` is `b452f96708aa3564b5376c550b3bd32e198513f5` (V1, G) and `eb6de281f64761045ef01fdae6026c0a0b522b0b` (V0, with `-f base=none -f scorers=none` and no other scorer). With the kept IFCs of V1 downloaded, base and head of each model:
+`<sha>` is `c1a2a7399d4ee71bb9a10e3cdc4e6927884ca45c` (V2 and the box-body run), `b452f96708aa3564b5376c550b3bd32e198513f5` (V1 and G; V1 is the first command with `-f nordic=true -f holdout=true -f keep_ifc=true`, the probe above, `-f models="core-interior re1-architecture nordic-office-as-built nordic-office-permit holdout-*"` and the nine scorers of section 6) and `eb6de281f64761045ef01fdae6026c0a0b522b0b` (V0, with `-f base=none -f scorers=none`). With the kept IFCs of a run downloaded, base and head of each model:
 
 ```bash
 python3 tools/re/placed_bodies_vs_base.py base/<model>/model.ifc head/<model>/model.ifc
 ```
 
-The scorer reads rvt-rs's IFC as `model.ifc` beside the probe output, which only `keep_ifc=true` leaves in place: `python3 tools/re/door_placements_vs_ifc.py probe.txt revit.ifc --ours rvt-rs.ifc`.
+The probe's scorer reads rvt-rs's IFC as `model.ifc` beside the probe output, which only `keep_ifc=true` leaves in place: `python3 tools/re/door_placements_vs_ifc.py probe.txt revit.ifc --ours rvt-rs.ifc`. The default scorer needs only the two exports: `python3 tools/re/door_axes_vs_ifc.py rvt-rs.ifc revit.ifc`.

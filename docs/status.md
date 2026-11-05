@@ -369,24 +369,26 @@ the world (a quarter turn swaps its two sides) and the element says so in
 default axes on every door and window, which were Revit's on 115 of the 521
 doors and 226 of the 540 windows it binds to a plain wall in the open models
 (Measure run 42066757105). Now the rule is written for all 521 and 540, and
-Revit's axes are the same on all of them (Measure run 42092391898, head
-`b452f967`; the BIM4LCA office files are one building). In the held-out
-models of 2024 to 2027 it is written for 41 of 41 doors and 104 of 105
-windows (the one other already had a rotation of its own, which is Revit's)
-and none differs. Every door's and window's body, and the opening it
-fills, is where it was in world coordinates, and its GlobalId, type GlobalId
-and host wall are unchanged, on Core Interior, RE1 Architecture and the two
-office files (`tools/re/placed_bodies_vs_base.py`). A door bound to none, an
-element with no stored transform (Revit 2023 and older) and a turned
-instance keep the default axes, which say nothing of the direction they face;
-the origin is still the record box's centre, more than 0.5 ft from Revit's on
-almost all (#1465). On Revit 2026 and 2027 the same elements are held to the
-2024 save by the same-project check
-(`tools/re/bodies_across_saves.py`, Measure run 42092410697): it compares 79
-and 65 doors and windows of `rac_advanced` and 17 and 17 of `rac_basic` (of
-them 44, 31, 14 and 14 not on the default axes), so two buildings, each saved
-twice, exercise it; 28 and 42 the 2024 save places by the rule are left on
-the default axes in the 2026 and 2027 saves of `rac_advanced`, not scored
+Revit's axes are the same on all of them, and on the 24 doors and windows of
+the R2025 models (Measure run 42106711251, head `c1a2a739`; the BIM4LCA office
+files are one building). In the held-out models of 2024 to 2027 it is written
+for 41 of 41 doors and 104 of 105 windows (the one other already had a
+rotation of its own, which is Revit's) and none differs. Every door's and
+window's body, and the opening it fills, is where it was in world
+coordinates, as a saved mesh and as a record box, and its GlobalId, type
+GlobalId and host wall are unchanged, on Core Interior, RE1 Architecture and
+the two office files (`tools/re/placed_bodies_vs_base.py`, runs 42092391898
+and 42106731054). A door bound to none, an element with no stored transform
+(Revit 2023 and older) and a turned instance keep the default axes, which say
+nothing of the direction they face; the origin is still the record box's
+centre, more than 0.5 ft from Revit's on almost all (#1465). On Revit 2025,
+2026 and 2027 the same elements are held to the 2024 save by the same-project
+check (`tools/re/bodies_across_saves.py`, run 42106711251): it compares 107,
+79 and 65 doors and windows of `rac_advanced` and 17 each of `rac_basic` (of
+them 66, 44, 31 and 14, 14, 14 not on the default axes), so two buildings,
+each saved by three releases, exercise it; 28 and 42 the 2024 save places by
+the rule are left on the default axes in the 2026 and 2027 saves of
+`rac_advanced`, not scored
 (`reports/element-framing/RE-347-door-window-placement-axes.md`).
 **Storeys on Revit 2024 are the Revit `Level` elements themselves, names
 and elevations together** (#218, RE-24). A `Level` record carries the
