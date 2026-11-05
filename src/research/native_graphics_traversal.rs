@@ -397,7 +397,7 @@ impl Walker<'_, '_> {
                 }
                 let fields = &info_object.fields;
                 let _transform = read_transform(&fields["m_Trf"])?;
-                if !default_representation(fields)
+                if !default_representation(fields, self.pre2023)
                     || fields["m_cda"]["m_pDoc"]["pointer_token"].as_u64() != Some(1)
                     || !fields["m_cda"]["m_pDoc"]["class_tag"].is_null()
                 {
@@ -452,7 +452,7 @@ impl Walker<'_, '_> {
                 let embedded_pointer = &obj.fields["m_oEmbeddedSymbolGRep"];
                 if embedded_pointer["pointer_token"].as_u64() == Some(0) {
                     let info_fields = &self.graph.objects[info].fields;
-                    if !default_representation(info_fields)
+                    if !default_representation(info_fields, self.pre2023)
                         || info_fields["m_cda"]["m_pDoc"]["pointer_token"].as_u64() != Some(1)
                         || !info_fields["m_cda"]["m_pDoc"]["class_tag"].is_null()
                     {
@@ -517,7 +517,7 @@ impl Walker<'_, '_> {
         let info = &self.graph.objects[info];
         info.class_name == "InstanceInfo"
             && info.fields.get("m_GRepId").is_none()
-            && default_representation(&info.fields)
+            && default_representation(&info.fields, self.pre2023)
             && read_transform(&info.fields["m_Trf"]).is_ok_and(|t| rotation(&t))
     }
     fn only_curves(&self, index: usize, seen: &mut HashSet<usize>) -> bool {
@@ -549,21 +549,26 @@ fn current_graph_owner_matches(root: &crate::native_parameters::GraphObject, id:
 /// Whether an `InstanceInfo` names the default representation: `m_GRepId` is
 /// 0 on every file of Revit 2023 to 2027 measured. The classes of Revit 2015
 /// to 2022 declare no such field (`InstInfoBase` has `m_Trf` and `m_symbolId`,
-/// `InstanceInfo` `m_cda`, in all 30 sample projects), and an object that
-/// holds exactly those three is read as the default one (RE-342 compares
-/// those meshes with the same projects' 2023 copies); one that holds anything
-/// else is refused. The decoder drops a field flagged transient unread, so a
-/// missing key cannot say whether the class declares one: the release gate
-/// keeps those files out of every export.
-fn default_representation(info: &Value) -> bool {
+/// `InstanceInfo` `m_cda`, in all 30 sample projects), and on the pre-2023
+/// route (`pre2023`, the graphics of a file of Revit 2015 to 2022, which no
+/// export reads) an object that holds exactly those three is read as the
+/// default one (RE-342 compares those meshes with the same projects' 2023
+/// copies); one that holds anything else is refused. On every other route an
+/// `InstanceInfo` with no `m_GRepId` is refused, as it was before RE-342: the
+/// decoder drops a field flagged transient unread, so a missing key cannot say
+/// whether the class declares one, and nothing measured should rest on it.
+fn default_representation(info: &Value, pre2023: bool) -> bool {
     match info.get("m_GRepId") {
         Some(id) => id.as_u64() == Some(0),
-        None => info.as_object().is_some_and(|fields| {
-            fields.len() == 3
-                && fields.contains_key("m_Trf")
-                && fields.contains_key("m_symbolId")
-                && fields.contains_key("m_cda")
-        }),
+        None => {
+            pre2023
+                && info.as_object().is_some_and(|fields| {
+                    fields.len() == 3
+                        && fields.contains_key("m_Trf")
+                        && fields.contains_key("m_symbolId")
+                        && fields.contains_key("m_cda")
+                })
+        }
     }
 }
 /// Whether the 3x3 part of `m` is a rotation: orthonormal rows and a
@@ -851,16 +856,28 @@ mod tests {
             }
             info
         };
-        assert!(default_representation(&with(&[])));
-        assert!(!default_representation(&with(&["m_other"])));
-        assert!(!default_representation(&json!({"m_Trf": {}, "m_cda": {}})));
-        assert!(!default_representation(&json!(null)));
+        assert!(default_representation(&with(&[]), true));
+        assert!(!default_representation(&with(&["m_other"]), true));
+        assert!(!default_representation(
+            &json!({"m_Trf": {}, "m_cda": {}}),
+            true
+        ));
+        assert!(!default_representation(&json!(null), true));
+    }
+
+    #[test]
+    fn a_missing_representation_id_is_refused_off_the_pre_2023_route() {
+        let exact = json!({"m_Trf": {}, "m_symbolId": {}, "m_cda": {}});
+        assert!(default_representation(&exact, true));
+        assert!(!default_representation(&exact, false));
     }
 
     #[test]
     fn a_representation_id_other_than_zero_is_not_the_default() {
-        assert!(default_representation(&json!({"m_GRepId": 0})));
-        assert!(!default_representation(&json!({"m_GRepId": 1})));
-        assert!(!default_representation(&json!({"m_GRepId": null})));
+        for pre2023 in [false, true] {
+            assert!(default_representation(&json!({"m_GRepId": 0}), pre2023));
+            assert!(!default_representation(&json!({"m_GRepId": 1}), pre2023));
+            assert!(!default_representation(&json!({"m_GRepId": null}), pre2023));
+        }
     }
 }

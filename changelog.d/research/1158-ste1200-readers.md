@@ -16,7 +16,9 @@
   refused, never redrawn from the winding. A set `m_bHasScale` is read only on
   an `InstanceInfo` of `m_Trf`, `m_symbolId` and `m_cda` with a rotation
   matrix, so a mirror, a scale, or the flag on Revit 2023 to 2027 stays
-  refused. What the flag means on the older schema is not read: if it marks a
+  refused. This also narrows #1436: an `InstanceInfo` with no `m_GRepId`,
+  which it let every route read as the default representation, is now read on
+  the pre-2023 route alone and refused on every other, as before. What the flag means on the older schema is not read: if it marks a
   scale the matrix does not carry, a mesh drawn through it is wrong and nothing
   in the file says so. In one held-out model 57 owners pass the scale check and
   end with no primitive, and what they hold is not known. Saved graphics stay a
