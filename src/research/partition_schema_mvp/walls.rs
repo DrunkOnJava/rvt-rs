@@ -206,6 +206,11 @@ pub type SketchSegment = (u32, [f64; 3], [f64; 3]);
 // Tracker: B55.
 pub(super) type PlaneEdge = (u32, (f64, f64), (f64, f64));
 
+/// Releases a wall's profile openings are measured on: Core Interior's wall
+/// 55840 (Revit 2024). Its own list, so that a release the sketch and beam
+/// lines are read on does not take openings that are not measured there.
+const WALL_PROFILE_OPENING_REVIT_VERSIONS: &[u32] = &[2024];
+
 /// Give each wall whose elevation profile was edited the openings that cuts
 /// (RE-151's 63rd opening).
 ///
@@ -227,7 +232,7 @@ pub(super) fn attach_wall_profile_openings(
 ) {
     use crate::partition_element_records as per;
     let wall_ids: BTreeSet<u32> = walls.iter().filter_map(|wall| wall.id).collect();
-    if wall_ids.is_empty() || !crate::partition_beam_axes::supports_revit_version(revit_version) {
+    if wall_ids.is_empty() || !WALL_PROFILE_OPENING_REVIT_VERSIONS.contains(&revit_version) {
         return;
     }
     let declared = match crate::elem_table::parse_records(rf) {
