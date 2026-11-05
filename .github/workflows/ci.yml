@@ -1660,6 +1660,19 @@ jobs:
       # docs/support-matrix.json, so it cannot claim more than the matrix.
       - name: The README support table matches the support matrix
         run: python3 tools/ci/readme-matrix.py --check
+      # The semantic merge check's diff (#1334) is a pure function of two JSON
+      # documents; its three failure modes (a change hidden as cosmetic, a
+      # reorder reported as a change, a bulk collapse that hides a different
+      # value) are tested with no file, network or clock.
+      - name: The semantic diff's failure modes
+        run: python3 tools/re/test_semantic_diff.py
+      # The check's verdict logic (#1334) is pure too: a model with no dump, a
+      # diff that failed or a dropped group never reads as a pass; an answer that
+      # does not add up never reads as "stated"; a chunk is never sent over the
+      # cap once its text is not ASCII; a commit, a manifest or a pull request
+      # text that is not what it should be never reaches a URL, a crash or Jev.
+      - name: The semantic check's verdict failure modes
+        run: python3 tools/ci/test_jev_check.py
 
   # Guards the development environments' config: shellcheck the Cursor
   # install script and the devcontainer's scripts, install the
