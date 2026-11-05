@@ -305,13 +305,20 @@ class RevitFile:
         kind-specific shape as ``read_adocument()["fields"]``.
         ``typed`` is the typed projection when
         ``class_name`` is in ``MVP_TYPED_CLASSES``, else ``None``.
+
+        The elements are those of the export at the phase the handle holds:
+        the project's last until an export names another
+        (``write_ifc(phase=...)``). A project whose last phase holds no room
+        has the rooms of the latest phase that holds any, and a
+        ``RuntimeWarning`` says so.
         """
 
     def element_counts(self) -> TypedElementCounts:
         """Return decoded element counts as ``{"total": int,
         "by_class": dict[str, int]}``. Matches ``rvt-elements
         --counts`` and ``export_diagnostics()["decoded"]
-        ["production_walker_elements"]`` for ``total``.
+        ["production_walker_elements"]`` for ``total``. The phase is
+        ``decoded_elements``'s.
         """
 
     def write_ifc(
@@ -349,8 +356,12 @@ class RevitFile:
         ElementId, as ``rvt-ifc --phase`` takes it, and the export shows that
         phase: an element that does not exist in it, and a room whose own
         phase is not it, are left out. ``None``, the default, is the
-        project's last phase. A phase the file does not have raises
-        ``ValueError`` listing the phases it does.
+        project's last phase, except that a project whose last phase holds
+        no room writes the rooms of the latest phase that holds any, with a
+        ``RuntimeWarning`` naming the phase and the diagnostics'
+        ``room_phase_fallback`` counting them; a phase named, the last
+        included, is exact and writes none of them. A phase the file does not
+        have raises ``ValueError`` listing the phases it does.
         """
 
     def export_diagnostics_json(

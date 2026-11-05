@@ -35,7 +35,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 |---|---|---|---|
 | `element` | [IdArg](#idarg) | yes | The element's Revit ElementId (`1234`), whether or not the export holds it, or the 22-character IFC GlobalId of an exported one. |
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -65,7 +65,7 @@ Hints: read-only: no, may overwrite: yes, idempotent: yes, open world: no.
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
 | `out_path` | string | yes | Where to write the binary glTF. It must end in `.glb`, must not be the model, and must not exist unless `overwrite` is true. |
 | `overwrite` | boolean | no | Replace `out_path` if it exists. Default: false. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -96,7 +96,7 @@ Hints: read-only: no, may overwrite: yes, idempotent: yes, open world: no.
 | `options` | [IfcOptions](#ifcoptions) | no | The `rvt-ifc` switches; none by default. |
 | `out_path` | string | yes | Where to write the IFC4 file. It must end in `.ifc`, must not be the model, and must not exist unless `overwrite` is true. |
 | `overwrite` | boolean | no | Replace `out_path` if it exists. Default: false. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -124,7 +124,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -147,7 +147,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 |---|---|---|---|
 | `id` | [IdArg](#idarg) | yes | The element's Revit ElementId (`1234`) or its 22-character IFC GlobalId, as `list_elements` gives them. |
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -181,7 +181,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -217,7 +217,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | `limit` | integer \| null | no | How many elements to return: 100 by default, at most 1000. |
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
 | `offset` | integer \| null | no | How many matching elements to skip, for the next page. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -241,7 +241,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -261,7 +261,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
@@ -281,7 +281,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of a `.rvt`, `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 

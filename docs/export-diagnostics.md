@@ -558,18 +558,48 @@ could not be read"), and the export then writes every element.
 
 `room_not_in_export_phase` counts placed rooms whose own phase
 (`RoomElem.m_phaseId`, Revit's `ROOM_PHASE`) is a phase of the project other
-than the export phase, which Revit's exporter leaves out and rvt-rs does too
-(RE-326). There is one item for each phase the rooms sit in: `count` and
-`classes.Room` are the rooms, and `phase` is that phase's name (`ElementId <n>`
-where the file names none; `--anonymize` replaces it). A room whose phase is
-unset or unread is written and not counted, and so is an Area or an MEP space,
-which Revit's exporter does not check against a phase. Autodesk's
+than the one rooms are judged against, as Revit's exporter leaves out a room
+whose phase is not the export phase (RE-326). That phase is the export phase,
+the project's last unless `rvt-ifc --phase` names another, except where no
+phase is named and the last holds no room: then it is the latest phase that
+holds any (`room_phase_fallback`, below), and that Revit's exporter leaves out
+the rooms of the other phases at that phase is not known, because no Revit
+export made at the last phase of such a project exists. There is one item for each phase the rooms sit
+in: `count` and `classes.Room` are the rooms, and `phase` is that phase's name
+(`ElementId <n>` where the file names none; `--anonymize` replaces it). A room
+whose phase is unset or unread is written and not counted, and so is an Area or
+an MEP space, which Revit's exporter does not check against a phase. Autodesk's
 `rac_basic_sample_project` has 14 rooms in Working Drawings, the second of
-three phases, so the default export counts 14 for that phase and
-`--phase "Working Drawings"` counts none (Measure runs 41784415396 and
-41784419457). Revit 2016 to 2023 apply it as they apply the
+three phases, and none in its last, Learning Content: its default export is
+`room_phase_fallback` (`Working Drawings`, 14) with none counted, and
+`--phase "Learning Content"` counts the 14 and holds no `room_phase_fallback`
+(Measure runs 42035308270 and 42035311977 at `ea0c7449`, each save of 2018 to
+2027; RE-326 §9.4). Revit 2016 to 2023 apply it as they apply the
 element filter; Revit 2015 and earlier write every room, as every element
 (#1332).
+
+`room_phase_fallback` (#1359) is present only where no phase was named and the
+project's last phase holds no room, so the export writes the rooms of the
+latest phase that holds any. `phase` is that phase's name (`ElementId <n>` where
+the file names none; `--anonymize` replaces it) and `rooms` the placed rooms of
+it, each counted once: the rooms the phase rule would otherwise have left out,
+each then written or left out for its own reasons, such as having no body. Only placed rooms
+count, both for the last phase holding a room and for the latest phase that
+holds any: an Area and an unplaced record (RE-326 §2) hold no room, so an
+unplaced record in the last phase does not stop the fallback and one in a later
+phase than the placed rooms does not move it. A placed room whose phase is
+unset, unread or not one of the project's is written as before and does not
+count either. Where a release's records cannot be scanned for placement there
+is no fallback. Every other element still follows the last phase (RE-184), the
+rooms of the other phases are left out and counted in `room_not_in_export_phase`
+as before, and a phase named (`rvt-ifc --phase`, Python's `phase=`, the MCP
+server's `phase`) is exact: naming the last phase writes none of these rooms.
+`rvt-ifc` prints a line saying so, the Python bindings raise a
+`RuntimeWarning`, and the field is absent from every other export. It is a
+choice by Griffin (2026-11-05), not a measurement of Revit's default: no Revit
+export made at the last phase of such a project exists, and rooms all in one
+phase cannot overlap. A project with no room in its last phase gets earlier
+rooms that Revit's default might leave out.
 
 On Revit 2024 to 2027, a door or window is written as its opening alone,
 with no door or window, only where its type's native record was read with
@@ -622,6 +652,7 @@ Important nested fields:
 | `decoded.unknown_unit_identifiers` | array | Revit unit identifiers observed but not mapped to IFC units. |
 | `decoded.wall_curve_lengths_feet` | object | The length of each exported wall's native curve in feet, by ElementId (RE-252): one of the two lengths Revit's export may write as the wall's `Qto_WallBaseQuantities.Length`. `tools/re/qtos_vs_ifc.py` reads it to count apart a wall whose two lengths differ. It is not written in the IFC file, and is absent when no wall has one. |
 | `decoded.walls_type_confirmed` | array | The ElementIds of the exported walls whose native `SWall` record names the type the export gives them (RE-253). Where Revit's export gives such a wall another type, `tools/re/qtos_vs_ifc.py` counts its differing `Width` apart. Not written in the IFC file; absent when there is none. |
+| `room_phase_fallback` | object | Present only where no phase was named and the project's last phase holds no room, so the export writes the rooms of the latest phase that holds any (#1359, see `room_not_in_export_phase` above). `phase` (string) is that phase's name, or `ElementId <n>`; `--anonymize` replaces it. `rooms` (integer) counts its placed rooms, each once. Absent in every other export. |
 | `export_decisions` | object | Present only with `rvt-ifc --export-decisions` (see Export decisions above). Each fail-closed decision behind `skipped` and the `exported` body and outline counts, one entry per element, with a stage, a reason code and where the evidence was read; bounded at 5,000 entries a reason with the rest counted in `dropped`. The `skipped` counts are made from the same decisions. Not written in the IFC file. |
 | `decoded.element_provenance` | object | Present only with `rvt-ifc --element-provenance` (see [Provenance table size](#provenance-table-size)). Where each decoded element was read from, by ElementId (#1325): `elements` maps an ElementId to its `carrier` (`partition_element_record_first_prologue`, `partition_element_record_second_prologue`, `global_latest_schema_walk`, `partition_arc_wall`, `partition_area_record`, `partition_derived` or `other`), its `stream` (`Partitions/46`, `Global/Latest`), its `offset` in that stream inflated, the `record_offset` where its ElementId is stored (a partition record header; for a second-prologue frame the enclosing record's, whose id is `enclosing_record_id`, RE-35), its `class_tag` and the `class_name` that resolves to in the file's own schema, its `builtin_category`, and its `native` record (`copies`, which `copy` is named, `stream`, `offset`). An offset indexes the stream as `RevitFile::inflated_partition` returns it, which `rvt-dump` writes as `Partitions_NN.decomp` (#291); for the schema walk it indexes `Global/Latest` inflated as the walk inflates it. `by_carrier` counts every element with an ElementId by carrier, with how many have their offset given (`located`) and how many do not (`unlocated`), whatever the cap of 250,000 listed entries (`omitted_entries` counts the highest ElementIds left out); `unkeyed_elements` counts decoded elements with no ElementId, which have no entry; `native` counts the native records of every element with an ElementId the same way; `layout_release`, `partition_count` and `record_id_bytes` (8 from Revit 2024, 4 before) describe the file. When an element has several partition element record frames, `offset` is the one the exporter selected: on Revit 2024 and later (`select_instance_records`) the frame with the greatest vertical extent and, on a tie, the higher-numbered partition and then the later offset; on Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) the newest, with no extent test. A native record in several partitions names the current copy (RE-145, RE-216). A body reader may take another copy (the sketch-line readers take the current one), so `offset` and `native.stream` can name different partitions: the copy a reader took is in `value_sources`. The schema-walk carrier is unmeasured: no model of the offsets test has such an element. Not written in the IFC file; absent for a placeholder export and unless asked for. Each element also lists its `value_sources` (#1360), the copy each reader took a value of its body from, and the table its `value_source_counts`. |
 | `exported.building_elements` | integer | The building elements the IFC file holds as elements: not an `IFCOPENINGELEMENT` building element (RE-84), which `by_ifc_type` lists and this does not count, and not a piece the writer folds into another element's body (`body_pieces_folded`). Before #1424 it counted the folded pieces too. |
