@@ -15,8 +15,9 @@ anything out, and draws more of what Revit draws. Two opt-in switches say
 where each decoded element's record was read from and which copy its body,
 profile or outline took its value from (`rvt-ifc --element-provenance`), and
 why each element, body, opening or outline was left out
-(`rvt-ifc --export-decisions`); the MCP server asks for both and gains
-`explain_element`. The provenance table's offsets are read again and
+(`rvt-ifc --export-decisions`); the MCP server asks for both, gains
+`explain_element`, and now names elements and their type objects as the IFC
+export does. The provenance table's offsets are read again and
 confirmed on the Revit 2023 to 2025 models CI holds and the decisions log's
 on 2024 and 2025; those of Revit 2008 to 2022, the second-prologue frames of
 2023, the decisions log's before 2024 and the schema-walk carrier are not
@@ -54,7 +55,7 @@ mesh.
 
 Measured against 0.14.0 on every reference model, the Revit 2025 models,
 Autodesk's sample projects, the held-out models and the families (Measure run
-41963115180, this release's head at 5b1a3710):
+41965523134, this release's head at 1e56972e):
 
 - On the BIM4LCA office the walls with Revit's base and top go from 586 to
   598 of 607 as built and from 565 to 577 of 589 at permit; no wall's top
