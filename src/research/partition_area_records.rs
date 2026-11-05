@@ -229,6 +229,10 @@ pub const AREA_POINT_READER: &str = "area_point";
 /// Area's own record, its plan's and its bounding lines'.
 pub const AREA_TOPOLOGY_READER: &str = "area_plan_topology";
 
+/// The reader name of the value source of an Area's base and height (#1368):
+/// the blocks of the Levels the rule compares (RE-317).
+pub const AREA_LEVELS_READER: &str = "area_levels";
+
 /// The field of an Area that holds the elevation of its body's base, feet.
 pub const AREA_BODY_BASE_FIELD: &str = "m_area_body_base";
 
@@ -1520,6 +1524,22 @@ fn draw_area(
     })
 }
 
+/// Note, under a drawn Area, the blocks of the Levels its base and height were
+/// taken from (#1368, RE-317): its base is its Level's elevation and its height
+/// the distance to the next building story, drawn only where no other Level
+/// lies at either elevation or between them, so every Level's block was read
+/// and none is left out of the list.
+fn note_area_levels(rf: &mut RevitFile, id: u32, levels: &[PartitionLevel]) {
+    use crate::ifc::element_provenance::CopyRule;
+    rf.attribute_value_sources(
+        levels.iter().map(|level| level.element_id),
+        crate::partition_level_records::LEVEL_BLOCK_READER,
+        id,
+        AREA_LEVELS_READER,
+        CopyRule::Agreeing,
+    );
+}
+
 /// Note, under an Area drawn from Revit's plan topology, the native records
 /// its region was read from (#1368): its own record (the circuit it names and
 /// its point), the plan's (the circuit's sides and saved area) and the record
@@ -1693,6 +1713,9 @@ fn area_bodies(
                 out.refused.insert(id, REFUSED_REDUNDANT);
             }
             Ok(body) => {
+                if record_sources {
+                    note_area_levels(rf, id, surroundings.levels);
+                }
                 if record_sources && body.topology {
                     note_topology_source(rf, id, &body.records);
                 } else if record_sources {

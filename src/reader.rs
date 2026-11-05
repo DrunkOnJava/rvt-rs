@@ -691,14 +691,15 @@ impl RevitFile {
     /// records give the value (the run types of a stair's runs, #1368). It
     /// lists one part for each of `from`; if any of them has no note, nothing
     /// is noted, since a list that left a record out would not be the records
-    /// the value was read from. Does nothing unless
-    /// [`Self::record_value_sources`] is on.
+    /// the value was read from. `rule` is how each record's copy was chosen.
+    /// Does nothing unless [`Self::record_value_sources`] is on.
     pub(crate) fn attribute_value_sources(
         &mut self,
         from: impl IntoIterator<Item = u32>,
         reader: &str,
         owner: u32,
         as_reader: &str,
+        rule: crate::ifc::element_provenance::CopyRule,
     ) {
         let Some(noted) = self.value_sources.as_ref() else {
             return;
@@ -720,12 +721,7 @@ impl RevitFile {
         let copies = parts.len();
         self.note_value_source(
             owner,
-            crate::ifc::element_provenance::ValueSource::from_parts(
-                as_reader,
-                crate::ifc::element_provenance::CopyRule::Native,
-                copies,
-                parts,
-            ),
+            crate::ifc::element_provenance::ValueSource::from_parts(as_reader, rule, copies, parts),
         );
     }
 

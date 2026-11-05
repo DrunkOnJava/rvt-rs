@@ -475,6 +475,9 @@ pub struct NameElevationBlock {
     /// Revit's Building Story setting, read after the name (RE-118,
     /// [`BUILDING_STORY_ANCHOR`]).
     pub building_story: Option<bool>,
+    /// Where the block's owner id starts in the stream it was found in,
+    /// inflated (#1368).
+    pub offset: usize,
 }
 
 /// The bytes that open the Level data holding its Building Story setting
@@ -626,6 +629,7 @@ fn decode_name_block(
         element_id,
         name,
         elevation_feet,
+        offset: owner_at,
         // RE-118's Building Story setting is measured from 2023 on. Before
         // 2013 ([`framed_plane_marker`]) it is not: the two Levels of each
         // local 2012 project read "not a building story" there, as no
@@ -1159,14 +1163,29 @@ pub fn scan_partition_levels(
         numbered.extend(blocks.into_iter().map(|block| (number, block)));
     }
     let mut newest: BTreeMap<u32, u32> = BTreeMap::new();
+    let mut held_in: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
+    let recording = rf.recording_value_sources();
     for (number, block) in &numbered {
         let held = newest.entry(block.element_id).or_insert(*number);
         *held = (*held).max(*number);
+        if recording {
+            held_in.entry(block.element_id).or_default().insert(*number);
+        }
     }
+    // Where each Level's current block is (#1368): its newest partition's,
+    // the first of the blocks there.
+    let mut places: BTreeMap<u32, (u32, usize)> = BTreeMap::new();
     let blocks: Vec<NameElevationBlock> = numbered
         .into_iter()
         .filter(|(number, block)| newest.get(&block.element_id) == Some(number))
-        .map(|(_, block)| block)
+        .map(|(number, block)| {
+            if recording {
+                places
+                    .entry(block.element_id)
+                    .or_insert((number, block.offset));
+            }
+            block
+        })
         .collect();
     // A Level inside another element is not a storey: it neither joins
     // the storey set nor counts against it.
@@ -1187,8 +1206,31 @@ pub fn scan_partition_levels(
     {
         return Ok(Vec::new());
     }
+    if recording {
+        use crate::ifc::element_provenance::{CopyRule, ValueSource};
+        for level in &levels {
+            let Some(&(number, at)) = places.get(&level.element_id) else {
+                continue;
+            };
+            let copies = held_in.get(&level.element_id).map_or(1, BTreeSet::len);
+            rf.note_value_source(
+                level.element_id,
+                ValueSource::in_partition(
+                    LEVEL_BLOCK_READER,
+                    CopyRule::Agreeing,
+                    copies,
+                    number,
+                    Some(at),
+                ),
+            );
+        }
+    }
     Ok(levels)
 }
+
+/// The reader name of the value source of a Level's name, elevation and
+/// Building Story setting: its newest block (#1368).
+pub const LEVEL_BLOCK_READER: &str = "level_block";
 
 /// Every declared object laid out `01 00 00 00 · u64 id · u64 Level id`
 /// whose second id is one of `level_ids`, as its Level, by id (RE-60).

@@ -943,10 +943,9 @@ fn body_readers(body: &str) -> &'static [&'static str] {
         | crate::element_record_beam_cuts::BEAM_BODY_COLUMN_CUT => &[SELECTED_FRAME_READER],
         ec::WALL_CENTRELINE_BODY_SOURCE
         | ec::WALL_TAPERED_BODY_SOURCE
-        | ec::WALL_LAYER_JOIN_BODY_SOURCE
-        | ec::BEAM_AXIS_BODY_SOURCE
-        | ec::BEAM_BOX_BODY_SOURCE => &["bounded_line"],
-        ec::WALL_ARC_BODY_SOURCE => &["bounded_arc"],
+        | ec::WALL_LAYER_JOIN_BODY_SOURCE => &["bounded_line", "wall_type_layers"],
+        ec::BEAM_AXIS_BODY_SOURCE | ec::BEAM_BOX_BODY_SOURCE => &["bounded_line"],
+        ec::WALL_ARC_BODY_SOURCE => &["bounded_arc", "wall_type_layers"],
         ec::INSTANCE_TURNED_BODY_SOURCE | ec::INSTANCE_ORIENTED_BODY_SOURCE => {
             &["instance_transform"]
         }
@@ -995,10 +994,12 @@ fn body_readers(body: &str) -> &'static [&'static str] {
         crate::partition_area_records::AREA_BOUNDARY_SOURCE => &[
             crate::partition_area_records::AREA_LINES_READER,
             crate::partition_area_records::AREA_POINT_READER,
+            crate::partition_area_records::AREA_LEVELS_READER,
         ],
-        crate::partition_area_records::AREA_TOPOLOGY_SOURCE => {
-            &[crate::partition_area_records::AREA_TOPOLOGY_READER]
-        }
+        crate::partition_area_records::AREA_TOPOLOGY_SOURCE => &[
+            crate::partition_area_records::AREA_TOPOLOGY_READER,
+            crate::partition_area_records::AREA_LEVELS_READER,
+        ],
         ec::FLOOR_SHAPE_BODY_SOURCE => &[
             SELECTED_FRAME_READER,
             crate::partition_schema_mvp::SLAB_SHAPE_READER,
@@ -1051,9 +1052,11 @@ pub(crate) fn attach_value_sources(
         let mut body = None;
         let mut profile_source = None;
         let mut profile_resolved = false;
+        let mut i_section = false;
         for property in property_set.iter().flat_map(|set| &set.properties) {
             match (property.name.as_str(), &property.value) {
                 ("BodySource", PropertyValue::Text(text)) => body = Some(text.as_str()),
+                ("SectionShape", PropertyValue::Text(text)) if text == "I" => i_section = true,
                 ("ProfileSource", PropertyValue::Text(text)) => {
                     profile_source = Some(text.as_str())
                 }
@@ -1077,7 +1080,10 @@ pub(crate) fn attach_value_sources(
         };
         for source in noted.and_then(|noted| noted.get(&id)).into_iter().flatten() {
             let reader = source.reader.as_str();
-            if !(body_list.contains(&reader) || profile_list.contains(&reader))
+            // A beam or column whose body is its type's I section (`SectionShape`
+            // is written only then) is drawn from the type's parameters.
+            let drawn_i_section = i_section && reader == "type_i_section";
+            if !(body_list.contains(&reader) || profile_list.contains(&reader) || drawn_i_section)
                 || entry
                     .value_sources
                     .iter()

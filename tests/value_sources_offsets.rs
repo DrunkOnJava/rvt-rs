@@ -118,6 +118,7 @@ use rvt::research::partition_element_records::{
 use rvt::research::partition_instance_transforms::{
     INSTANCE_TRANSFORM_WINDOW, InstanceTransform, instance_transform, scan_instance_transforms,
 };
+use rvt::research::partition_level_records::recover_partition_levels;
 use rvt::research::partition_names::{ElementDataLayout, element_data_layout};
 use rvt::research::partition_pipe_axes::pipe_body;
 use rvt::research::partition_roof_slopes::{
@@ -366,7 +367,12 @@ const MIN_READERS: &[(&str, &[&str])] = &[
     ),
     (
         "RE1-Architecture",
-        &["selected_frame", "bounded_line", "saved_graphics"],
+        &[
+            "selected_frame",
+            "bounded_line",
+            "saved_graphics",
+            "wall_type_layers",
+        ],
     ),
     // puzzbobb's Revit 2025 roofs: a shed by its edge, a shed by its slope
     // arrow and a roof by extrusion, each drawn from the sources pinned here
@@ -406,6 +412,7 @@ const MIN_READERS: &[(&str, &[&str])] = &[
         &[
             "selected_frame",
             "bounded_line",
+            "wall_type_layers",
             "saved_graphics",
             "instance_transform",
             "native_run",
@@ -418,6 +425,7 @@ const MIN_READERS: &[(&str, &[&str])] = &[
             "type_hollow_section",
             "pipe_connectors",
             "area_plan_topology",
+            "area_levels",
             "native_slab_shape",
         ],
     ),
@@ -428,10 +436,12 @@ const MIN_READERS: &[(&str, &[&str])] = &[
         &[
             "selected_frame",
             "bounded_line",
+            "wall_type_layers",
             "saved_graphics",
             "instance_transform",
             "sketch_lines",
             "sketch_list",
+            "area_levels",
         ],
     ),
     // `area_boundary_lines` and `area_point` (an Area drawn from the
@@ -1186,15 +1196,33 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
     // layers reader needs to read a type's layers again.
     let mut rafter_roofs: BTreeSet<u32> = BTreeSet::new();
     let layer_materials: BTreeSet<u32> = if table.elements.values().any(|entry| {
-        entry
-            .value_sources
-            .iter()
-            .any(|source| source.reader == "roof_type_layers")
+        entry.value_sources.iter().any(|source| {
+            matches!(
+                source.reader.as_str(),
+                "roof_type_layers" | "wall_type_layers"
+            )
+        })
     }) {
         scan_type_records(&mut rf, version, OST_MATERIALS, &declared)
             .unwrap_or_default()
             .iter()
             .map(|record| record.element_id)
+            .collect()
+    } else {
+        BTreeSet::new()
+    };
+    // The Levels the Areas' base and height compare (RE-317): an Area's
+    // `area_levels` source lists the block of each, all of them.
+    let level_ids: BTreeSet<u32> = if table.elements.values().any(|entry| {
+        entry
+            .value_sources
+            .iter()
+            .any(|source| source.reader == "area_levels")
+    }) {
+        recover_partition_levels(&mut rf, version)
+            .unwrap_or_default()
+            .iter()
+            .map(|level| level.element_id)
             .collect()
     } else {
         BTreeSet::new()
@@ -1371,15 +1399,15 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                         // The line's element-data header, then the line's own
                         // id: the part's offset is a header, not a frame.
                         // A roof's slope block or sketch line is read again:
-                        // it decodes to a slope, an arrow or a curve. A roof
-                        // type's layers are an element-data header and the
-                        // type's id.
+                        // it decodes to a slope, an arrow or a curve. A roof's
+                        // or wall's type's layers are an element-data header and
+                        // the type's id.
                         "sketch_line_data" | "roof_slope_edges" | "roof_line_data"
-                        | "roof_type_layers" => match layout.as_ref() {
+                        | "roof_type_layers" | "wall_type_layers" => match layout.as_ref() {
                             Some(layout) => {
                                 let window = match source.reader.as_str() {
                                     "roof_slope_edges" => EDGE_SLOPE_WINDOW,
-                                    "roof_type_layers" => LAYER_WINDOW,
+                                    "roof_type_layers" | "wall_type_layers" => LAYER_WINDOW,
                                     _ => BEAM_DATA_WINDOW,
                                 };
                                 let read = element_data_at(
@@ -1405,7 +1433,7 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                                     }
                                     // The type's layers are read again by the layers
                                     // reader, with the reader's window and anchors.
-                                    ("roof_type_layers", Some(data)) => {
+                                    ("roof_type_layers" | "wall_type_layers", Some(data)) => {
                                         match (layer_frame_tag(version), layer_layout(version)) {
                                             (Some(tag), Some(layers)) => find_layers(
                                                 data,
@@ -1683,6 +1711,11 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                     "type_hollow_section" => {
                         sound &= parameters.len() == HOLLOW_SECTION_PARAMETER_NAMES.len();
                         hollow_checks.push((id, parameters.clone()));
+                    }
+                    "area_levels" => {
+                        let listed: BTreeSet<u32> =
+                            source.parts.iter().map(|part| part.element_id).collect();
+                        sound &= source.parts_left_out == 0 && listed == level_ids;
                     }
                     "pipe_connectors" => {
                         sound &= match (points.as_slice(), frame_box) {

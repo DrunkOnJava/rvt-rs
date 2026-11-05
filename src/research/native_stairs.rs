@@ -1486,7 +1486,13 @@ pub fn native_tread_landings(
             .filter(|(_, run_stair)| *run_stair == stair)
             .filter_map(|(run, _)| runs.get(run).and_then(|t| u32::try_from(*t).ok()))
             .collect();
-        rf.attribute_value_sources(run_types, "native_landing", landing, "native_run_type");
+        rf.attribute_value_sources(
+            run_types,
+            "native_landing",
+            landing,
+            "native_run_type",
+            crate::ifc::element_provenance::CopyRule::Native,
+        );
     }
     Ok(drawn)
 }

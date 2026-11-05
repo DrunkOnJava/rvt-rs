@@ -868,6 +868,8 @@ pub(super) fn attach_wall_layers(
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
         }
         wall.fields.push((WALL_LAYERS_FIELD.into(), bands));
+        // The thickness and the layers it is drawn in are the type's (#1368).
+        rf.attribute_value_source(type_id, "type_layers", id, "wall_type_layers");
     }
     // RE-88: a wall its data does not place (no orientation, line or arc)
     // still carries its type's layers, for its materials. With no exterior
@@ -888,6 +890,9 @@ pub(super) fn attach_wall_layers(
             continue;
         }
         wall.fields.push((WALL_LAYERS_FIELD.into(), bands));
+        if let (Some(id), Some(type_id)) = (wall.id, type_of(wall)) {
+            rf.attribute_value_source(type_id, "type_layers", id, "wall_type_layers");
+        }
     }
     if centreline_bodies {
         attach_wall_butt_joins(rf, revit_version, walls, &layers, &native);
