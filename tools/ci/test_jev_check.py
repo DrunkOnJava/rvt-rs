@@ -311,5 +311,76 @@ class Text(unittest.TestCase):
         self.assertTrue(jc.normalize_manifest({"requested_all": True})["requested_all"])
 
 
+
+class PullOfCommit(unittest.TestCase):
+    REPO = "o/r"
+    SHA = "b" * 40
+
+    def pull(self, number, head, state="open", head_repo="o/r", merge=None):
+        return {
+            "number": number,
+            "state": state,
+            "merge_commit_sha": merge,
+            "base": {"repo": {"full_name": self.REPO}},
+            "head": {"sha": head, "repo": {"full_name": head_repo}},
+        }
+
+    def test_a_head_that_moved_past_the_measured_commit_keeps_its_pull_request(self):
+        pull, why = jc.pull_of_commit([self.pull(7, "c" * 40)], self.REPO, self.SHA)
+        self.assertEqual((pull["number"], why), (7, None))
+
+    def test_two_open_pull_requests_holding_it_name_neither(self):
+        pulls = [self.pull(7, "c" * 40), self.pull(8, "d" * 40)]
+        pull, why = jc.pull_of_commit(pulls, self.REPO, self.SHA)
+        self.assertIsNone(pull)
+        self.assertIn("several", why)
+
+    def test_the_pull_request_whose_head_it_is_wins_over_another_holding_it(self):
+        pulls = [self.pull(7, "c" * 40), self.pull(8, self.SHA)]
+        self.assertEqual(jc.pull_of_commit(pulls, self.REPO, self.SHA)[0]["number"], 8)
+
+    def test_a_closed_pull_request_that_only_holds_it_is_not_taken(self):
+        pull, why = jc.pull_of_commit([self.pull(7, "c" * 40, state="closed")], self.REPO, self.SHA)
+        self.assertIsNone(pull)
+        self.assertIn("no open pull request", why)
+
+    def test_a_merged_pull_request_is_found_by_its_merge_commit(self):
+        pulls = [self.pull(7, "c" * 40, state="closed", merge=self.SHA)]
+        self.assertEqual(jc.pull_of_commit(pulls, self.REPO, self.SHA)[0]["number"], 7)
+
+    def test_a_forks_pull_request_is_never_taken_even_when_it_holds_the_commit(self):
+        pull, why = jc.pull_of_commit([self.pull(7, "c" * 40, head_repo="f/r")], self.REPO, self.SHA)
+        self.assertIsNone(pull)
+        self.assertIn("fork", why)
+
+    def test_a_fork_holding_it_does_not_make_the_choice_ambiguous(self):
+        pulls = [self.pull(7, "c" * 40), self.pull(8, "d" * 40, head_repo="f/r")]
+        self.assertEqual(jc.pull_of_commit(pulls, self.REPO, self.SHA), (pulls[0], None))
+
+    def test_an_open_holder_wins_over_a_merged_pull_request_with_that_head(self):
+        pulls = [self.pull(7, self.SHA, state="closed", merge="e" * 40), self.pull(8, "c" * 40)]
+        self.assertEqual(jc.pull_of_commit(pulls, self.REPO, self.SHA)[0]["number"], 8)
+
+    def test_an_open_head_wins_over_a_closed_one_whatever_the_order(self):
+        for pulls in ([self.pull(7, self.SHA, state="closed"), self.pull(8, self.SHA)],
+                      [self.pull(8, self.SHA), self.pull(7, self.SHA, state="closed")]):
+            self.assertEqual(jc.pull_of_commit(pulls, self.REPO, self.SHA)[0]["number"], 8)
+
+    def test_a_merged_head_is_taken_before_another_merge_commit_match(self):
+        pulls = [self.pull(7, "c" * 40, state="closed", merge=self.SHA), self.pull(8, self.SHA, state="closed")]
+        self.assertEqual(jc.pull_of_commit(pulls, self.REPO, self.SHA)[0]["number"], 8)
+
+    def test_a_merged_forks_pull_request_says_it_is_a_forks(self):
+        pulls = [self.pull(7, "c" * 40, state="closed", head_repo="f/r", merge=self.SHA)]
+        pull, why = jc.pull_of_commit(pulls, self.REPO, self.SHA)
+        self.assertIsNone(pull)
+        self.assertIn("fork", why)
+
+    def test_another_repositorys_pull_request_is_ignored(self):
+        other = self.pull(7, self.SHA)
+        other["base"]["repo"]["full_name"] = "x/y"
+        self.assertIsNone(jc.pull_of_commit([other], self.REPO, self.SHA)[0])
+
+
 if __name__ == "__main__":
     unittest.main()
