@@ -1295,7 +1295,7 @@
           "type": "object"
         },
         "EntityRefOut": {
-          "description": "Another entity the export writes for the same ElementId (a slab's further\npieces, a curtain wall's parts).",
+          "description": "Another entity the export writes as an element for the same ElementId (a\nslab's further pieces written as elements of their own, a curtain wall's\nparts); a piece folded into another element's body is none.",
           "properties": {
             "global_id": {
               "type": [
@@ -1708,7 +1708,7 @@
           ]
         },
         "other_entities": {
-          "description": "Other entities with the same ElementId.",
+          "description": "Other entities the export writes as elements with the same ElementId:\nnot a piece folded into the body of the element, which is no entity of\nits own.",
           "items": {
             "$ref": "#/$defs/EntityRefOut"
           },
@@ -1762,7 +1762,7 @@
   },
   {
     "name": "get_summary",
-    "description": "The summary open_model returns, for a model_id or a path: release and build, element counts by IFC entity and Revit class, levels, room count and the diagnostics summary (what was read, approximated, skipped and left unread). What is not read: rvt-rs decodes a subset of a Revit file, and this server answers from the model the IFC export writes. An element's body is often only its record's bounding box (provenance.body_source says which); family files give no family geometry; an element's property sets hold the parameters the export writes, and Revit's own parameter sets need export_ifc with options.revit_property_sets; the Revit Mark parameter is not decoded; files saved by Revit 2015 to 2022, 2026 and 2027 are experimental, and 2008 to 2014 more so (release_support in the summary); get_diagnostics lists what the export skipped or approximated and why. docs/status.md in the rvt-rs repository (https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md) states what is read per release and category.",
+    "description": "The summary open_model returns, for a model_id or a path: release and build, element counts by IFC entity and Revit class, levels, room count and the diagnostics summary (what was read, approximated, skipped and left unread). Element counts and lists are the elements the export writes: the further pieces of an element of separate loops, which it folds into the owner's body, are not rows and not counted (elements.folded_into_bodies counts them by IFC entity, since the diagnostics' exported counts include them). What is not read: rvt-rs decodes a subset of a Revit file, and this server answers from the model the IFC export writes. An element's body is often only its record's bounding box (provenance.body_source says which); family files give no family geometry; an element's property sets hold the parameters the export writes, and Revit's own parameter sets need export_ifc with options.revit_property_sets; the Revit Mark parameter is not decoded; files saved by Revit 2015 to 2022, 2026 and 2027 are experimental, and 2008 to 2014 more so (release_support in the summary); get_diagnostics lists what the export skipped or approximated and why. docs/status.md in the rvt-rs repository (https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md) states what is read per release and category.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1920,6 +1920,15 @@
               "description": "By the Revit class the record names, such as `Wall`.",
               "type": "object"
             },
+            "folded_into_bodies": {
+              "additionalProperties": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "description": "By IFC entity: the elements the model holds that the export does not\nwrite as elements, each a further piece of an element of separate\nloops, written as an item of the body of the element that owns it.\nThey are not in `total`, `by_ifc_type` or the lists, and the\ndiagnostics' `exported` counts include them. Always present, empty\nwhere the export folds none.",
+              "type": "object"
+            },
             "total": {
               "format": "uint",
               "minimum": 0,
@@ -1929,7 +1938,8 @@
           "required": [
             "total",
             "by_ifc_type",
-            "by_revit_class"
+            "by_revit_class",
+            "folded_into_bodies"
           ],
           "type": "object"
         },
@@ -2174,7 +2184,7 @@
   },
   {
     "name": "list_elements",
-    "description": "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name and long_name (the IFC Name and LongName: an IfcSpace's are its room number (or <room name>:<ElementId> for a room with a name and no number) and its room name; name is absent only for a room with neither whose name is exactly the exporter's <Revit class>-<ElementId> placeholder, and the placeholder names of other elements are still served as name), level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. The rows leave out value_sources, the copy each reader took a value of the body from: get_element lists them. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "description": "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. The rows are the elements the export writes, not the pieces it folds into another element's body (the summary counts those in elements.folded_into_bodies). Each row has the Revit ElementId, name and long_name (the IFC Name and LongName: an IfcSpace's are its room number (or <room name>:<ElementId> for a room with a name and no number) and its room name; name is absent only for a room with neither whose name is exactly the exporter's <Revit class>-<ElementId> placeholder, and the placeholder names of other elements are still served as name), level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. The rows leave out value_sources, the copy each reader took a value of the body from: get_element lists them. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -3092,7 +3102,7 @@
   },
   {
     "name": "open_model",
-    "description": "Open a Revit file (.rvt, .rfa, .rte or .rft) and decode it once, with the same decode rvt-ifc runs. Every other tool answers from that decoded model and the IFC export is written from it, so an answer and the export cannot disagree. Returns model_id, the Revit release and build, element counts by IFC entity and Revit class, levels, and what was left out (diagnostics, unread streams). Handle lifetime: model_id is opaque and stays valid while this server process runs and the model is among the most recently used ones the server keeps (2 by default); after an eviction or a restart a tool returns an error and you call open_model again. Every tool also takes the file path in place of the model_id. Phase: pass phase (a phase name or ElementId) with the path to read a project phase other than the last, as rvt-ifc --phase does; the model_id then names that phase, and get_diagnostics lists the rooms it leaves out. Reads the file only: no Revit install, no network call, nothing is written. What is not read: rvt-rs decodes a subset of a Revit file, and this server answers from the model the IFC export writes. An element's body is often only its record's bounding box (provenance.body_source says which); family files give no family geometry; an element's property sets hold the parameters the export writes, and Revit's own parameter sets need export_ifc with options.revit_property_sets; the Revit Mark parameter is not decoded; files saved by Revit 2015 to 2022, 2026 and 2027 are experimental, and 2008 to 2014 more so (release_support in the summary); get_diagnostics lists what the export skipped or approximated and why. docs/status.md in the rvt-rs repository (https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md) states what is read per release and category.",
+    "description": "Open a Revit file (.rvt, .rfa, .rte or .rft) and decode it once, with the same decode rvt-ifc runs. Every other tool answers from that decoded model and the IFC export is written from it, so an answer and the export cannot disagree. Returns model_id, the Revit release and build, element counts by IFC entity and Revit class, levels, and what was left out (diagnostics, unread streams). Element counts and lists are the elements the export writes: the further pieces of an element of separate loops, which it folds into the owner's body, are not rows and not counted (elements.folded_into_bodies counts them by IFC entity, since the diagnostics' exported counts include them). Handle lifetime: model_id is opaque and stays valid while this server process runs and the model is among the most recently used ones the server keeps (2 by default); after an eviction or a restart a tool returns an error and you call open_model again. Every tool also takes the file path in place of the model_id. Phase: pass phase (a phase name or ElementId) with the path to read a project phase other than the last, as rvt-ifc --phase does; the model_id then names that phase, and get_diagnostics lists the rooms it leaves out. Reads the file only: no Revit install, no network call, nothing is written. What is not read: rvt-rs decodes a subset of a Revit file, and this server answers from the model the IFC export writes. An element's body is often only its record's bounding box (provenance.body_source says which); family files give no family geometry; an element's property sets hold the parameters the export writes, and Revit's own parameter sets need export_ifc with options.revit_property_sets; the Revit Mark parameter is not decoded; files saved by Revit 2015 to 2022, 2026 and 2027 are experimental, and 2008 to 2014 more so (release_support in the summary); get_diagnostics lists what the export skipped or approximated and why. docs/status.md in the rvt-rs repository (https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md) states what is read per release and category.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -3250,6 +3260,15 @@
               "description": "By the Revit class the record names, such as `Wall`.",
               "type": "object"
             },
+            "folded_into_bodies": {
+              "additionalProperties": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "description": "By IFC entity: the elements the model holds that the export does not\nwrite as elements, each a further piece of an element of separate\nloops, written as an item of the body of the element that owns it.\nThey are not in `total`, `by_ifc_type` or the lists, and the\ndiagnostics' `exported` counts include them. Always present, empty\nwhere the export folds none.",
+              "type": "object"
+            },
             "total": {
               "format": "uint",
               "minimum": 0,
@@ -3259,7 +3278,8 @@
           "required": [
             "total",
             "by_ifc_type",
-            "by_revit_class"
+            "by_revit_class",
+            "folded_into_bodies"
           ],
           "type": "object"
         },
