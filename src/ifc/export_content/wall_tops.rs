@@ -79,12 +79,14 @@
 //! its top, or crosses one of them. A named element of which only part covers
 //! the wall is not stepped here.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use super::{
     ELEMENT_RECORD_PROPERTY_SET, FLOOR_SHAPE_BODY_SOURCE, WALL_BASE_COVER_BODY_BASE_SOURCE,
     WALL_BASE_REFUSAL_PROPERTY, WALL_BASE_SLOPED_BODY_BASE_SOURCE, WALL_BASE_SOURCE_PROPERTY,
-    WALL_TOP_COVER_BODY_HEIGHT_SOURCE, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    WALL_END_AT_BASE_WALL_BODY_END_SOURCE, WALL_END_REFUSAL_PROPERTY, WALL_END_SOURCE_PROPERTY,
+    WALL_END_UPPER_STEP_OMITTED_BODY_END_SOURCE, WALL_TOP_COVER_BODY_HEIGHT_SOURCE,
+    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use crate::ifc::body_geometry::{
     Body, Placement, PlanPlane, Point2, Ring, between_surfaces_mesh, extrusion_rings, plan_outline,
@@ -1001,7 +1003,7 @@ struct BaseContext<'a> {
     shapes: &'a HashMap<u32, SlabTop>,
 }
 
-/// How the base of `wall` (the entity at `index`) is cut at the one element of
+/// How the base of `wall` is cut at the one element of
 /// `named` that covers it (#1384): at that element's level, or along the plane
 /// its shape-edited corners lie in, when that top lies between the wall's base
 /// and top over the whole of the wall's plan. Left as it was, with the reason,
@@ -1015,7 +1017,7 @@ struct BaseContext<'a> {
 fn decide_base(
     context: &BaseContext<'_>,
     cutters: &mut HashMap<u32, Option<Cutter>>,
-    index: usize,
+    wall: Option<Wall>,
     named: &[u32],
 ) -> BaseDecision {
     let BaseContext {
@@ -1023,7 +1025,7 @@ fn decide_base(
         gathered,
         shapes,
     } = context;
-    let Some(wall) = entities.get(index).and_then(build_wall) else {
+    let Some(wall) = wall else {
         return BaseDecision::Left("wall_not_one_plain_extrusion");
     };
     let mut eligible: Vec<BaseCut> = Vec::new();
@@ -1118,7 +1120,12 @@ fn decide_bases(
     let mut cutters: HashMap<u32, Option<Cutter>> = HashMap::new();
     let mut decisions = Vec::new();
     for PendingBase { index, named } in pending {
-        let decision = decide_base(&context, &mut cutters, *index, named);
+        let decision = decide_base(
+            &context,
+            &mut cutters,
+            entities.get(*index).and_then(build_wall),
+            named,
+        );
         let edited = named
             .iter()
             .any(|id| matches!(shapes.get(id), Some(SlabTop::Plane(_) | SlabTop::NotRead)));
@@ -1139,6 +1146,7 @@ pub(super) fn cut_wall_bases(
     entities: &mut [IfcEntity],
     pending: &[PendingBase],
     shapes: &HashMap<u32, SlabTop>,
+    steps: &HashMap<usize, SteppedPlan>,
 ) {
     if pending.is_empty() {
         return;
@@ -1171,52 +1179,12 @@ pub(super) fn cut_wall_bases(
                 continue;
             }
         };
-        let Some((outer, holes)) = extrusion_rings(body) else {
+        let Some(shape) =
+            wall_base_solid(body, *location, *rotation_radians, &cut, steps.get(&index))
+        else {
             continue;
         };
-        if !holes.is_empty() {
-            continue;
-        }
-        let base = location[2];
-        let top = body.height_feet;
-        let placement = Placement::new(Some(*location), *rotation_radians);
-        let (shape, source, id) = match cut {
-            BaseCut::Level { level, id } => {
-                let from = level - base;
-                (
-                    SolidShape::PlacedExtrusion {
-                        profile: ProfileDef::ArbitraryClosed { points: outer },
-                        origin_feet: [0.0, 0.0, from],
-                        axis: [0.0, 0.0, 1.0],
-                        ref_direction: [1.0, 0.0, 0.0],
-                        depth_feet: top - from,
-                    },
-                    WALL_BASE_COVER_BODY_BASE_SOURCE,
-                    id,
-                )
-            }
-            BaseCut::Plane { plane, id } => {
-                let bottom = |p: Point2| {
-                    let at = placement.apply([p.0, p.1, 0.0]);
-                    plane[0] * at[0] + plane[1] * at[1] + plane[2] - base
-                };
-                let Some(mesh) = between_surfaces_mesh(&outer, &[], bottom, |_| top) else {
-                    continue;
-                };
-                (
-                    SolidShape::FacetedBrep {
-                        vertices_feet: mesh.vertices,
-                        triangles: mesh
-                            .triangles
-                            .into_iter()
-                            .map(|[a, b, c]| BrepTriangle(a, b, c))
-                            .collect(),
-                    },
-                    WALL_BASE_SLOPED_BODY_BASE_SOURCE,
-                    id,
-                )
-            }
-        };
+        let (source, id) = base_cut_source(&cut);
         *solid_shape = Some(shape);
         if let Some(set) = property_set
             .as_mut()
@@ -1232,4 +1200,930 @@ pub(super) fn cut_wall_bases(
             });
         }
     }
+}
+
+/// The `BodyBaseSource` and the ElementId of the element a base is cut at.
+fn base_cut_source(cut: &BaseCut) -> (&'static str, u32) {
+    match cut {
+        BaseCut::Level { id, .. } => (WALL_BASE_COVER_BODY_BASE_SOURCE, *id),
+        BaseCut::Plane { id, .. } => (WALL_BASE_SLOPED_BODY_BASE_SOURCE, *id),
+    }
+}
+
+/// A piece of a wall's plan in the wall's frame and the height of its top
+/// above the wall's base, feet.
+type Piece = (Ring, f64);
+
+/// The solid of a wall whose base is cut at `cut`, one item for each of
+/// `pieces`; none if any piece rises nowhere above the cut or is crossed by the
+/// sloped top, so that no block is left out without a trace (#1384, #1396).
+fn base_cut_solid(
+    cut: &BaseCut,
+    pieces: &[Piece],
+    placement: &Placement,
+    base: f64,
+) -> Option<SolidShape> {
+    let mut items = Vec::with_capacity(pieces.len());
+    for (ring, top) in pieces {
+        let item = match cut {
+            BaseCut::Level { level, .. } => {
+                let from = level - base;
+                (top - from > 1e-9).then(|| SolidShape::PlacedExtrusion {
+                    profile: ProfileDef::ArbitraryClosed {
+                        points: ring.clone(),
+                    },
+                    origin_feet: [0.0, 0.0, from],
+                    axis: [0.0, 0.0, 1.0],
+                    ref_direction: [1.0, 0.0, 0.0],
+                    depth_feet: top - from,
+                })
+            }
+            BaseCut::Plane { plane, .. } => {
+                let bottom = |p: Point2| {
+                    let at = placement.apply([p.0, p.1, 0.0]);
+                    plane[0] * at[0] + plane[1] * at[1] + plane[2] - base
+                };
+                between_surfaces_mesh(ring, &[], bottom, |_| *top).map(|mesh| {
+                    SolidShape::FacetedBrep {
+                        vertices_feet: mesh.vertices,
+                        triangles: mesh
+                            .triangles
+                            .into_iter()
+                            .map(|[a, b, c]| BrepTriangle(a, b, c))
+                            .collect(),
+                    }
+                })
+            }
+        };
+        items.push(item?);
+    }
+    if items.len() == 1 {
+        items.pop()
+    } else {
+        Some(SolidShape::Compound(items))
+    }
+}
+
+/// The solid of the wall drawn as `body` at `location`, whose base is cut at
+/// `cut`: its plan to its top, or, for a wall whose ends were drawn to the
+/// walls beneath it, that plan and the blocks of `plan` (#1396).
+fn wall_base_solid(
+    body: &Extrusion,
+    location: [f64; 3],
+    rotation: Option<f64>,
+    cut: &BaseCut,
+    plan: Option<&SteppedPlan>,
+) -> Option<SolidShape> {
+    let (outer, holes) = extrusion_rings(body)?;
+    if !holes.is_empty() {
+        return None;
+    }
+    let base = location[2];
+    let placement = Placement::new(Some(location), rotation);
+    let pieces = match plan {
+        Some(plan) => plan.pieces(&placement, base, base + body.height_feet),
+        None => vec![(outer, body.height_feet)],
+    };
+    base_cut_solid(cut, &pieces, &placement, base)
+}
+
+/// Draw the wall of each of `steps` that no base cut has made a solid of as
+/// its whole plan to the lowest top of its pieces and what stands above that
+/// (#1396): the first item is the whole plan, as in RE-320's stepped body, so
+/// the glTF can lay the type's layers across it.
+pub(super) fn finish_wall_ends(entities: &mut [IfcEntity], steps: &HashMap<usize, SteppedPlan>) {
+    for (&index, plan) in steps {
+        let Some(IfcEntity::BuildingElement {
+            extrusion: Some(body),
+            location_feet: Some(location),
+            rotation_radians,
+            solid_shape,
+            ..
+        }) = entities.get_mut(index)
+        else {
+            continue;
+        };
+        if solid_shape.is_some() {
+            continue;
+        }
+        let placement = Placement::new(Some(*location), *rotation_radians);
+        let base = location[2];
+        let pieces = plan.pieces(&placement, base, base + body.height_feet);
+        let low = pieces
+            .iter()
+            .map(|(_, top)| *top)
+            .fold(f64::INFINITY, f64::min);
+        // `decide_ends` let the wall through only with every piece above its
+        // base, so this is a guard and not a path.
+        if !(low.is_finite() && low > 1e-9) {
+            continue;
+        }
+        let mut items = vec![SolidShape::ExtrudedArea(Extrusion {
+            height_feet: low,
+            ..body.clone()
+        })];
+        items.extend(
+            pieces
+                .into_iter()
+                .filter(|(_, top)| *top > low + 1e-9)
+                .map(|(ring, top)| SolidShape::PlacedExtrusion {
+                    profile: ProfileDef::ArbitraryClosed { points: ring },
+                    origin_feet: [0.0, 0.0, low],
+                    axis: [0.0, 0.0, 1.0],
+                    ref_direction: [1.0, 0.0, 0.0],
+                    depth_feet: top - low,
+                }),
+        );
+        *solid_shape = Some(SolidShape::Compound(items));
+    }
+}
+
+/// How far a wall's elevation range may lie outside another's and still hold
+/// its base, and how far a wall's width may lie outside another's length and
+/// still be spanned by it, feet (#1396).
+const END_TOLERANCE_FEET: f64 = 1e-3;
+
+/// How far a wall's rotation may lie from a quarter turn and still count as
+/// along a model axis, in quarter turns: its record box turns by the angle its
+/// record stores in single precision, which is off by about 1.5e-7 radian,
+/// 3e-5 foot over a wall 200 feet long (#1396).
+const ROTATION_TOLERANCE_QUARTERS: f64 = 1e-6;
+
+/// Why a wall with an edited elevation profile keeps its end where the walls
+/// that hold its base reach it at different faces (#1396).
+const WALL_END_REFUSAL_DIFFERENT_FACES: &str = "walls_beneath_reach_the_end_at_different_faces";
+
+/// Why such a wall keeps its end where the cut of its base, which resolved on
+/// the plan its record gives, would not over the longer plan (#1396).
+const WALL_END_REFUSAL_BASE_CUT_LOST: &str = "base_cut_lost_on_extended_plan";
+
+/// Why such a wall keeps its end where its base join names elements, none of
+/// which cuts the base over the longer plan either, so the longer plan would
+/// only add base that Revit's wall does not have (#1396).
+const WALL_END_REFUSAL_BASE_NOT_CUT: &str = "base_not_cut_over_the_extended_plan";
+
+/// Why such a wall keeps its end where a wall beneath it that would reach the
+/// end has a plan of its own that is not one rectangle (a stepped or layered
+/// profile), whose face is not read (#1396).
+const WALL_END_REFUSAL_NOT_ONE_RECTANGLE: &str = "wall_beneath_not_one_rectangle";
+
+/// Why such a wall keeps its end where another wall stands in the stretch the
+/// end would be drawn over, from the stem's own base up: the added end would lie
+/// inside that wall (#1396).
+const WALL_END_REFUSAL_IN_THE_WAY: &str = "wall_stands_in_the_added_end";
+
+/// A wall drawn as an upright rectangle along a model axis: its plan bounds
+/// (least x and y, then greatest x and y), its base and top, and which of its
+/// extrusion's two plan sides lies along x (#1396). `top` is the height the
+/// wall has over its whole plan: the lowest of a wall whose top a floor cut in
+/// steps (RE-320), `stepped`.
+struct AxisWall {
+    index: usize,
+    id: Option<u32>,
+    base: f64,
+    top: f64,
+    bounds: [f64; 4],
+    turned: bool,
+    stepped: bool,
+}
+
+/// How many quarter turns `rotation` is, where it is one to within
+/// [`ROTATION_TOLERANCE_QUARTERS`].
+fn quarter_turns(rotation: Option<f64>) -> Option<i64> {
+    let quarters = rotation.unwrap_or(0.0) / std::f64::consts::FRAC_PI_2;
+    (quarters.is_finite() && (quarters - quarters.round()).abs() <= ROTATION_TOLERANCE_QUARTERS)
+        .then_some(quarters.round() as i64)
+}
+
+/// The wall `entity` is, where it is one plain rectangle whose sides lie along
+/// the model's axes. A wall drawn as a solid is not: it is no longer its
+/// plan's prism.
+fn axis_wall(index: usize, entity: &IfcEntity) -> Option<AxisWall> {
+    let IfcEntity::BuildingElement {
+        ifc_type,
+        type_guid,
+        extrusion: Some(body),
+        solid_shape: None,
+        representation_map_index: None,
+        location_feet: Some(location),
+        rotation_radians,
+        ..
+    } = entity
+    else {
+        return None;
+    };
+    if !matches!(ifc_type.as_str(), "IFCWALL" | "IFCWALLSTANDARDCASE")
+        || body.profile_override.is_some()
+        || !location.iter().all(|v| v.is_finite())
+    {
+        return None;
+    }
+    let turned = quarter_turns(*rotation_radians)?.rem_euclid(2) == 1;
+    let (across_x, across_y) = if turned {
+        (body.depth_feet, body.width_feet)
+    } else {
+        (body.width_feet, body.depth_feet)
+    };
+    if !(across_x.is_finite()
+        && across_y.is_finite()
+        && across_x > 0.0
+        && across_y > 0.0
+        && body.height_feet.is_finite()
+        && body.height_feet > 0.0)
+    {
+        return None;
+    }
+    Some(AxisWall {
+        index,
+        id: type_guid.as_deref().and_then(|guid| guid.parse().ok()),
+        base: location[2],
+        top: location[2] + body.height_feet,
+        bounds: [
+            location[0] - across_x / 2.0,
+            location[1] - across_y / 2.0,
+            location[0] + across_x / 2.0,
+            location[1] + across_y / 2.0,
+        ],
+        turned,
+        stepped: false,
+    })
+}
+
+/// The wall `entity` is, where its top was cut in steps by the floors that
+/// cover it in part (RE-320), as the whole of its plan to the lowest underside:
+/// the pieces that stand higher over part of the plan are not read, so the
+/// wall is taken as low as it is anywhere (#1396).
+fn stepped_whole(entity: &IfcEntity) -> Option<IfcEntity> {
+    let IfcEntity::BuildingElement {
+        solid_shape: Some(SolidShape::Compound(items)),
+        property_set: Some(set),
+        ..
+    } = entity
+    else {
+        return None;
+    };
+    let stepped = set.properties.iter().any(|property| {
+        property.name == "BodyHeightSource"
+            && matches!(&property.value, PropertyValue::Text(source)
+                if source == WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE)
+    });
+    let Some(SolidShape::ExtrudedArea(first)) = items.first() else {
+        return None;
+    };
+    if !stepped {
+        return None;
+    }
+    let mut whole = entity.clone();
+    if let IfcEntity::BuildingElement {
+        solid_shape,
+        extrusion: Some(body),
+        ..
+    } = &mut whole
+    {
+        *solid_shape = None;
+        body.height_feet = first.height_feet;
+    }
+    Some(whole)
+}
+
+/// The rectangle of a wall whose top was cut in steps (see [`stepped_whole`]).
+fn stepped_top_wall(index: usize, entity: &IfcEntity) -> Option<AxisWall> {
+    let mut wall = axis_wall(index, &stepped_whole(entity)?)?;
+    wall.stepped = true;
+    Some(wall)
+}
+
+/// The wall `entity` is, where it is plain (or cut in steps at the top, as the
+/// whole of its plan to the lowest underside), turned by a quarter turn and has
+/// a profile of its own (a stepped or layered one): the bounds of its plan, in
+/// place of the rectangle [`axis_wall`] reads (#1396).
+fn profiled_wall(index: usize, entity: &IfcEntity) -> Option<AxisWall> {
+    let whole = stepped_whole(entity);
+    let entity = whole.as_ref().unwrap_or(entity);
+    let IfcEntity::BuildingElement {
+        type_guid,
+        extrusion: Some(body),
+        rotation_radians,
+        ..
+    } = entity
+    else {
+        return None;
+    };
+    body.profile_override.as_ref()?;
+    quarter_turns(*rotation_radians)?;
+    let wall = build_wall(entity)?;
+    Some(AxisWall {
+        index,
+        id: type_guid.as_deref().and_then(|guid| guid.parse().ok()),
+        base: wall.base,
+        top: wall.top,
+        bounds: wall.bounds,
+        turned: false,
+        stepped: false,
+    })
+}
+
+/// The trims at the low and high end of a wall drawn from its record box,
+/// feet: how far its join trim cut each end in from the box (RE-26). None for
+/// any other body. They stay the record's once a wall's end is drawn to the
+/// wall beneath it: the body's end is then `BodyEndSource`'s, not the box's
+/// less the trim.
+fn join_trims(entity: Option<&IfcEntity>) -> Option<[f64; 2]> {
+    let Some(IfcEntity::BuildingElement {
+        property_set: Some(set),
+        ..
+    }) = entity
+    else {
+        return None;
+    };
+    if set.name != ELEMENT_RECORD_PROPERTY_SET {
+        return None;
+    }
+    let read = |name: &str| {
+        set.properties
+            .iter()
+            .find_map(|property| match (&property.value, property.name == name) {
+                (PropertyValue::LengthFeet(trim), true) if trim.is_finite() && *trim >= 0.0 => {
+                    Some(*trim)
+                }
+                _ => None,
+            })
+    };
+    Some([read("JoinTrimStart")?, read("JoinTrimEnd")?])
+}
+
+/// An end of a wall that is drawn to a wall beneath it.
+struct End {
+    /// The axis of the wall's length: 0 for x.
+    long: usize,
+    /// Whether it is the end at the low coordinate.
+    at_low: bool,
+    /// How far the end moves, feet.
+    gap: f64,
+    /// The least ElementId of the walls it reaches.
+    reached: Option<u32>,
+    /// The height the block added at the end stops at: the lowest top of the
+    /// walls it reaches, the base of the lowest wall that stands in it, or the
+    /// wall's own top.
+    top: f64,
+}
+
+/// The ends of one wall that are drawn to the walls beneath it.
+struct WallEnds {
+    index: usize,
+    turned: bool,
+    ends: Vec<End>,
+    /// The wall's plan and the blocks of its ends, where a block stops below
+    /// the wall's top.
+    plan: Option<SteppedPlan>,
+}
+
+/// A wall whose ends are drawn to the walls beneath it where a block stops
+/// below the wall's top: its body is its own plan to its top and a block at
+/// each end, which stops at the lowest of the top of the walls it reaches, the
+/// base of any wall it would lie inside and the wall's top. Revit steps the end
+/// up further, and those steps are not drawn: a labelled approximation
+/// (`BodyEndSource` `wall_end_to_base_wall_upper_step_omitted`; #1396). Model
+/// feet.
+#[derive(Debug)]
+pub(super) struct SteppedPlan {
+    /// The wall's plan before its ends moved.
+    original: Ring,
+    /// The plan of each block, and the height its top is at.
+    blocks: Vec<(Ring, f64)>,
+}
+
+impl SteppedPlan {
+    /// The pieces in the frame of `placement`, each with the height of its top
+    /// above `base`; the wall's own plan to `top` (a height above sea level)
+    /// first.
+    fn pieces(&self, placement: &Placement, base: f64, top: f64) -> Vec<Piece> {
+        let local =
+            |ring: &Ring| -> Ring { ring.iter().map(|&p| to_local(placement, p)).collect() };
+        let mut pieces = vec![(local(&self.original), top - base)];
+        pieces.extend(
+            self.blocks
+                .iter()
+                .map(|(ring, block_top)| (local(ring), block_top - base)),
+        );
+        pieces
+    }
+}
+
+/// The rectangle that spans `along` on the axis `long` and `across` on the
+/// other, counter-clockwise.
+fn rect(long: usize, along: (f64, f64), across: (f64, f64)) -> Ring {
+    let (x, y) = if long == 0 {
+        (along, across)
+    } else {
+        (across, along)
+    };
+    vec![(x.0, y.0), (x.1, y.0), (x.1, y.1), (x.0, y.1)]
+}
+
+fn range(bounds: &[f64; 4], axis: usize) -> (f64, f64) {
+    (bounds[axis], bounds[axis + 2])
+}
+
+/// The bounds of the rectangle that spans `along` on the axis `long` and
+/// `across` on the other.
+fn rect_bounds(long: usize, along: (f64, f64), across: (f64, f64)) -> [f64; 4] {
+    if long == 0 {
+        [along.0, across.0, along.1, across.1]
+    } else {
+        [across.0, along.0, across.1, along.1]
+    }
+}
+
+/// Whether two sets of bounds share more than a line.
+fn overlaps(a: &[f64; 4], b: &[f64; 4]) -> bool {
+    a[2].min(b[2]) - a[0].max(b[0]) > END_TOLERANCE_FEET
+        && a[3].min(b[3]) - a[1].max(b[1]) > END_TOLERANCE_FEET
+}
+
+/// The walls of `list` beneath `wall`, whose line runs along `long`: those
+/// perpendicular to it that hold its base, which they stand on strictly (a
+/// wall standing exactly on the top of another is not beneath it), and span
+/// its width, with their range along its line.
+fn beneath<'a>(
+    list: &'a [AxisWall],
+    wall: &AxisWall,
+    long: usize,
+) -> Vec<(&'a AxisWall, f64, f64)> {
+    let across = 1 - long;
+    let (side_low, side_high) = range(&wall.bounds, across);
+    list.iter()
+        .filter(|other| other.index != wall.index)
+        .filter(|other| {
+            let (a, b) = range(&other.bounds, across);
+            let (c, d) = range(&other.bounds, long);
+            b - a > d - c
+        })
+        .filter(|other| {
+            other.base - END_TOLERANCE_FEET <= wall.base
+                && wall.base < other.top - END_TOLERANCE_FEET
+        })
+        .filter(|other| {
+            let (a, b) = range(&other.bounds, across);
+            a - END_TOLERANCE_FEET <= side_low && side_high <= b + END_TOLERANCE_FEET
+        })
+        .map(|other| {
+            let (a, b) = range(&other.bounds, long);
+            (other, a, b)
+        })
+        .collect()
+}
+
+/// Whether the span `a` to `b` holds `at`.
+fn holds(a: f64, b: f64, at: f64) -> bool {
+    a - END_TOLERANCE_FEET <= at && at <= b + END_TOLERANCE_FEET
+}
+
+/// The walls of `near` (see [`beneath`]) that hold the end of a record box at
+/// `box_end` and stand beyond the body's end at `end` by no more than their
+/// own thickness, with how far.
+fn end_reach<'a>(
+    near: &[(&'a AxisWall, f64, f64)],
+    at_low: bool,
+    end: f64,
+    box_end: f64,
+) -> Vec<(&'a AxisWall, f64)> {
+    near.iter()
+        .filter_map(|&(other, a, b)| {
+            let gap = if at_low { end - b } else { a - end };
+            (holds(a, b, box_end) && gap > END_TOLERANCE_FEET && gap <= b - a)
+                .then_some((other, gap))
+        })
+        .collect()
+}
+
+/// What moving the ends of a wall did to its place: the shift of its origin in
+/// model feet and its rotation.
+struct Moved {
+    delta: [f64; 2],
+    rotation: f64,
+}
+
+/// Move `ends` of the wall `entity`: its extrusion grows and its origin follows
+/// the middle.
+fn move_ends(entity: &mut IfcEntity, turned: bool, ends: &[End]) -> Option<Moved> {
+    let IfcEntity::BuildingElement {
+        extrusion: Some(body),
+        location_feet: Some(location),
+        rotation_radians,
+        ..
+    } = entity
+    else {
+        return None;
+    };
+    let before = *location;
+    for end in ends {
+        if (end.long == 0) != turned {
+            body.width_feet += end.gap;
+        } else {
+            body.depth_feet += end.gap;
+        }
+        location[end.long] += if end.at_low {
+            -end.gap / 2.0
+        } else {
+            end.gap / 2.0
+        };
+    }
+    Some(Moved {
+        delta: [location[0] - before[0], location[1] - before[1]],
+        rotation: rotation_radians.filter(|r| r.is_finite()).unwrap_or(0.0),
+    })
+}
+
+/// Put the openings of the edited elevation profile of the wall at `host` back
+/// where they were in model space after its origin moved: each is placed in the
+/// wall's frame, its outline along the opening's axis and its plane offset to
+/// the axis's left (see [`IfcEntity::WallProfileOpening`]).
+fn shift_profile_openings(entities: &mut [IfcEntity], host: usize, moved: &Moved) {
+    let (sin, cos) = moved.rotation.sin_cos();
+    let local = (
+        cos * moved.delta[0] + sin * moved.delta[1],
+        cos * moved.delta[1] - sin * moved.delta[0],
+    );
+    for entity in entities.iter_mut() {
+        let IfcEntity::WallProfileOpening {
+            host: opening_host,
+            outline_feet,
+            axis_turn_radians,
+            plane_offset_feet,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if *opening_host != host {
+            continue;
+        }
+        let (axis_sin, axis_cos) = axis_turn_radians.sin_cos();
+        let along = axis_cos * local.0 + axis_sin * local.1;
+        let left = axis_cos * local.1 - axis_sin * local.0;
+        for point in outline_feet.iter_mut() {
+            point.0 -= along;
+        }
+        *plane_offset_feet -= left;
+    }
+}
+
+/// Write how the wall at `index` was drawn at `ends` to its record's
+/// properties: one `BodyEndSource`, `source`, and the least ElementId of the
+/// walls its ends reach.
+fn mark_ends(entities: &mut [IfcEntity], index: usize, ends: &[End], source: &str) {
+    let Some(IfcEntity::BuildingElement {
+        property_set: Some(set),
+        ..
+    }) = entities.get_mut(index)
+    else {
+        return;
+    };
+    if set.name != ELEMENT_RECORD_PROPERTY_SET {
+        return;
+    }
+    set.properties.push(Property {
+        name: WALL_END_SOURCE_PROPERTY.into(),
+        value: PropertyValue::Text(source.into()),
+    });
+    if let Some(id) = ends.iter().filter_map(|end| end.reached).min() {
+        set.properties.push(Property {
+            name: "EndCoverElementId".into(),
+            value: PropertyValue::Integer(i64::from(id)),
+        });
+    }
+}
+
+/// Write why the wall at `index` keeps its end to its record's properties.
+fn mark_end_refusal(entities: &mut [IfcEntity], index: usize, reason: &str) {
+    let Some(IfcEntity::BuildingElement {
+        property_set: Some(set),
+        ..
+    }) = entities.get_mut(index)
+    else {
+        return;
+    };
+    if set.name == ELEMENT_RECORD_PROPERTY_SET {
+        set.properties.push(Property {
+            name: WALL_END_REFUSAL_PROPERTY.into(),
+            value: PropertyValue::Text(reason.into()),
+        });
+    }
+}
+
+/// The ends to draw and the reasons for the ends to keep (see
+/// [`extend_wall_ends`]), read from `entities` and changing none. A wall with a
+/// base join that names elements is tried: its ends are moved on a copy, and
+/// the base cut is decided again over the longer plan and its solid made.
+fn decide_ends(
+    entities: &[IfcEntity],
+    pending: &[PendingBase],
+    shapes: &HashMap<u32, SlabTop>,
+    refused: &mut BTreeMap<usize, &'static str>,
+) -> Vec<WallEnds> {
+    let profiled: HashSet<usize> = entities
+        .iter()
+        .filter_map(|entity| match entity {
+            IfcEntity::WallProfileOpening { host, .. } => Some(*host),
+            _ => None,
+        })
+        .collect();
+    let walls: Vec<AxisWall> = entities
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entity)| {
+            axis_wall(index, entity).or_else(|| stepped_top_wall(index, entity))
+        })
+        .collect();
+    let candidates: Vec<(&AxisWall, [f64; 2])> = walls
+        .iter()
+        .filter(|wall| !wall.stepped && profiled.contains(&wall.index))
+        .filter_map(|wall| join_trims(entities.get(wall.index)).map(|trims| (wall, trims)))
+        .collect();
+    if candidates.is_empty() {
+        return Vec::new();
+    }
+    let profiled_walls: Vec<AxisWall> = entities
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entity)| profiled_wall(index, entity))
+        .collect();
+    let context = BaseContext {
+        entities,
+        gathered: gather(entities),
+        shapes,
+    };
+    let mut cutters: HashMap<u32, Option<Cutter>> = HashMap::new();
+    let mut accepted = Vec::new();
+    for (wall, trims) in candidates {
+        let [x0, y0, x1, y1] = wall.bounds;
+        let long = usize::from(y1 - y0 > x1 - x0);
+        let (low, high) = range(&wall.bounds, long);
+        let (side_low, side_high) = range(&wall.bounds, 1 - long);
+        let near = beneath(&walls, wall, long);
+        let unread = beneath(&profiled_walls, wall, long);
+        let mut ends: Vec<End> = Vec::new();
+        for at_low in [true, false] {
+            let end = if at_low { low } else { high };
+            let box_end = if at_low {
+                low - trims[0]
+            } else {
+                high + trims[1]
+            };
+            let touches =
+                |list: &[(&AxisWall, f64, f64)]| list.iter().any(|&(_, a, b)| holds(a, b, end));
+            if touches(&near) || touches(&unread) {
+                continue;
+            }
+            if !end_reach(&unread, at_low, end, box_end).is_empty() {
+                refused
+                    .entry(wall.index)
+                    .or_insert(WALL_END_REFUSAL_NOT_ONE_RECTANGLE);
+                continue;
+            }
+            let reached = end_reach(&near, at_low, end, box_end);
+            let Some(&(_, gap)) = reached.first() else {
+                continue;
+            };
+            if !reached
+                .iter()
+                .all(|&(_, other_gap)| (other_gap - gap).abs() <= END_TOLERANCE_FEET)
+            {
+                refused
+                    .entry(wall.index)
+                    .or_insert(WALL_END_REFUSAL_DIFFERENT_FACES);
+                continue;
+            }
+            // The block lies against the face of the walls it reaches, over the
+            // stretch the end grows by, and stops below the base of any other
+            // wall that stands in that stretch: Revit trims the end against
+            // the walls it meets, and the block must not lie inside one.
+            let along = if at_low {
+                (low - gap, low)
+            } else {
+                (high, high + gap)
+            };
+            let block = rect_bounds(long, along, (side_low, side_high));
+            let in_the_way = walls
+                .iter()
+                .chain(profiled_walls.iter())
+                .filter(|other| {
+                    other.index != wall.index
+                        && other.top > wall.base + END_TOLERANCE_FEET
+                        && overlaps(&other.bounds, &block)
+                })
+                .map(|other| other.base)
+                .fold(f64::INFINITY, f64::min);
+            if in_the_way <= wall.base + END_TOLERANCE_FEET {
+                refused
+                    .entry(wall.index)
+                    .or_insert(WALL_END_REFUSAL_IN_THE_WAY);
+                continue;
+            }
+            ends.push(End {
+                long,
+                at_low,
+                gap,
+                reached: reached.iter().filter_map(|&(other, _)| other.id).min(),
+                top: reached
+                    .iter()
+                    .map(|&(other, _)| other.top)
+                    .fold(wall.top.min(in_the_way), f64::min),
+            });
+        }
+        if ends.is_empty() {
+            continue;
+        }
+        let plan = ends
+            .iter()
+            .any(|end| end.top < wall.top - END_TOLERANCE_FEET)
+            .then(|| SteppedPlan {
+                original: rect(long, (low, high), (side_low, side_high)),
+                blocks: ends
+                    .iter()
+                    .map(|end| {
+                        let along = if end.at_low {
+                            (low - end.gap, low)
+                        } else {
+                            (high, high + end.gap)
+                        };
+                        (rect(long, along, (side_low, side_high)), end.top)
+                    })
+                    .collect(),
+            });
+        let Some(mut trial) = entities.get(wall.index).cloned() else {
+            continue;
+        };
+        if move_ends(&mut trial, wall.turned, &ends).is_none() {
+            continue;
+        }
+        // Every piece of the stepped body must have a height above the base:
+        // `finish_wall_ends` and the base pass make nothing of one that has not.
+        if let (
+            Some(plan),
+            IfcEntity::BuildingElement {
+                extrusion: Some(body),
+                location_feet: Some(location),
+                rotation_radians,
+                ..
+            },
+        ) = (&plan, &trial)
+        {
+            let placement = Placement::new(Some(*location), *rotation_radians);
+            let pieces = plan.pieces(&placement, location[2], location[2] + body.height_feet);
+            if !pieces.iter().all(|(_, top)| *top > END_TOLERANCE_FEET) {
+                refused
+                    .entry(wall.index)
+                    .or_insert(WALL_END_REFUSAL_IN_THE_WAY);
+                continue;
+            }
+        }
+        let named = pending
+            .iter()
+            .find(|base| base.index == wall.index)
+            .map(|base| base.named.as_slice());
+        if let Some(named) = named {
+            let cut_before = matches!(
+                decide_base(
+                    &context,
+                    &mut cutters,
+                    entities.get(wall.index).and_then(build_wall),
+                    named
+                ),
+                BaseDecision::Cut(_)
+            );
+            let cut_after = match decide_base(&context, &mut cutters, build_wall(&trial), named) {
+                BaseDecision::Cut(cut) => match &trial {
+                    IfcEntity::BuildingElement {
+                        extrusion: Some(body),
+                        location_feet: Some(location),
+                        rotation_radians,
+                        ..
+                    } => wall_base_solid(body, *location, *rotation_radians, &cut, plan.as_ref())
+                        .is_some(),
+                    _ => false,
+                },
+                BaseDecision::Left(_) => false,
+            };
+            if !cut_after {
+                refused.insert(
+                    wall.index,
+                    if cut_before {
+                        WALL_END_REFUSAL_BASE_CUT_LOST
+                    } else {
+                        WALL_END_REFUSAL_BASE_NOT_CUT
+                    },
+                );
+                continue;
+            }
+        }
+        accepted.push(WallEnds {
+            index: wall.index,
+            turned: wall.turned,
+            ends,
+            plan,
+        });
+    }
+    accepted
+}
+
+/// Draw each wall with an edited elevation profile whose end its join trim cut
+/// back from inside the wall beneath it to that wall's face (#1396, RE-337).
+///
+/// A wall's record gives its joins from the walls whose centreline lies on
+/// its line's end, however little of the wall's height they overlap: the
+/// walls of the BIM4LCA office's Basement that stand on the sloped footings
+/// of RE-336 are cut back to the face of a Level_01 wall that overlaps them
+/// by 0.66 ft of 9.5, and Revit's body at the base runs on to the face of the
+/// Basement wall beneath, which that line ends inside (0.31 ft further as
+/// built, 0.09 ft at building permit). For a wall with an edited elevation
+/// profile (a [`IfcEntity::WallProfileOpening`] voids it) that is a plain
+/// rectangle along a model axis, drawn from its record box, this draws an end
+/// to the face of the other plain rectangles along the perpendicular axis that
+/// hold the wall's base (it stands on them, not on their top), span its width
+/// and hold the box's own end (the end before the join trim, a T joint), and
+/// that stand beyond the body's end by no more than their own thickness, where
+/// no such wall touches the end already and they all end at one face. A wall
+/// that stops short of such a wall without a trim is left, as Revit leaves a
+/// Snowdon Towers soffit wall whose ends stop 2 inches short of the walls that
+/// hold its base.
+///
+/// Revit steps the end up the height, to the face of each wall it meets, and
+/// which of the walls that meet it at a height it follows is its join order,
+/// which is not read. The block this adds at an end is drawn up to the lowest
+/// of: the top of the walls beneath it that it reaches (the lowest top over
+/// the whole plan of one whose top a floor cut in steps, taken after the tops
+/// are cut), the base of any other wall the pass reads whose plan it overlaps
+/// (the block must not lie inside a wall; one that is turned off a quarter
+/// turn, or drawn as another kind of solid, is not read and does not stop it),
+/// and the wall's own top. The steps above are not
+/// drawn: a labelled approximation (`BodyEndSource`
+/// `wall_end_to_base_wall_upper_step_omitted`, shipped so by Griffin on
+/// 2026-11-05) where a block stops below the wall's top. That is a bound by the
+/// geometry the pass reads, not Revit's rule: whether any wall's top is higher
+/// than Revit's at an added end is measured, by the plan rows of
+/// `wall_top_cover_vs_ifc`. The wall's `extrusion` is its
+/// full plan to its top, which the passes that read its plan use; its
+/// `solid_shape` is the stepped body, made by [`cut_wall_bases`] or
+/// [`finish_wall_ends`]. The openings of its edited profile, placed in its
+/// frame, are moved back with the origin.
+///
+/// A wall whose base join names elements keeps its ends unless the cut of its
+/// base ([`decide_base`]) still resolves over the longer plan: a longer plan
+/// that no footing covers leaves the wall uncut, with more of the base than
+/// Revit's wall has, and a cut that resolved on the plan the record gives
+/// would be lost. A wall that names none has no base to lose.
+///
+/// A wall that keeps an end carries `BodyEndRefusal` with the reason, whether
+/// or not the other end is drawn: a wall with one end drawn and the other kept
+/// carries `BodyEndSource` and `BodyEndRefusal` both. A property set holds one
+/// property of a name, so a wall carries one reason. Every other wall is left
+/// as it was. The result is the stepped bodies [`cut_wall_bases`] and
+/// [`finish_wall_ends`] make, by wall.
+pub(super) fn extend_wall_ends(
+    entities: &mut [IfcEntity],
+    pending: &[PendingBase],
+    shapes: &HashMap<u32, SlabTop>,
+) -> HashMap<usize, SteppedPlan> {
+    let mut stepped = HashMap::new();
+    if !entities
+        .iter()
+        .any(|entity| matches!(entity, IfcEntity::WallProfileOpening { .. }))
+    {
+        return stepped;
+    }
+    // One reason for each wall: a property set holds one property of a name.
+    let mut refused: BTreeMap<usize, &'static str> = BTreeMap::new();
+    let accepted = decide_ends(entities, pending, shapes, &mut refused);
+    for WallEnds {
+        index,
+        turned,
+        ends,
+        plan,
+    } in accepted
+    {
+        let Some(moved) = entities
+            .get_mut(index)
+            .and_then(|entity| move_ends(entity, turned, &ends))
+        else {
+            continue;
+        };
+        shift_profile_openings(entities, index, &moved);
+        // A block that stops below the wall's top leaves Revit's steps above it
+        // out: its own label.
+        let source = if plan.is_some() {
+            WALL_END_UPPER_STEP_OMITTED_BODY_END_SOURCE
+        } else {
+            WALL_END_AT_BASE_WALL_BODY_END_SOURCE
+        };
+        if let Some(plan) = plan {
+            stepped.insert(index, plan);
+        }
+        mark_ends(entities, index, &ends, source);
+    }
+    for (index, reason) in refused {
+        mark_end_refusal(entities, index, reason);
+    }
+    stepped
 }
