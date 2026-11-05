@@ -201,6 +201,13 @@ than before and a read costs memory only while it runs. A file whose estimated
 memory (`estimatePeakBytes`, ten times its size) and the open's wasm memory
 together pass the page's memory ceiling is read only when asked, with a button.
 
+Measured in the viewer tests (run 42103334445, head f56b671a, CI runner, WASM
+without LTO): a read's wasm instance took 17 MiB on Einhoven (the open's worker
+23 MiB), 275 MiB on Core Interior (326 MiB) and 943 MiB on the BIM4LCA office
+as built (910 MiB), 0.74 to 1.04 times the open's, in a median of 532 ms, 2.9 to
+3.7 s and 7.5 s. The ten-times-size estimate (616 MiB for the office's 62 MiB)
+understates a read there; the page's gate is not corrected for it.
+
 ## Viewer state
 
 ```rust
