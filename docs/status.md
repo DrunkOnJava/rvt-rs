@@ -88,14 +88,17 @@ On 2026 and 2027 (RE-341) beams are drawn along their axes as on 2024 (on 2025
 they are not), stair runs as their steps and treads from their native records
 as on 2025, with the stair property sets and quantities read from them, and
 landings as on 2024 (not drawn on 2025); and the sketch lines' exact ends,
-curves and Sketch curve lists are read, so sketch-driven floors, ceilings,
-slabs and footprint roofs take their outline from their lines and shaft
-openings are cut from floors, roofs and ceilings, as on 2024 and 2025. That is
-measured against the same Autodesk samples saved by Revit 2024 and 2025 and, for
-one stair flight, against Revit's own 2026 and 2027 exports; no beam, landing,
-sketch outline or roof is scored against Revit's export. Sloped roofs, spiral
-runs, stair names, railing heights and lengths, a wall's profile openings, IFC
-export overrides and the opening index stay unread there.
+curves and Sketch curve lists are read, so sketch-driven floors, ceilings and
+slabs take their outline from their lines and shaft openings are cut from
+floors and ceilings, as on 2024 and 2025. A roof there keeps the record-box
+solve alone, as before (RE-341 section 5). No beam, landing, stair run, sketch
+outline or shaft void there is scored against a Revit export: each is held to
+the same Autodesk project's earlier save (`tools/re/bodies_across_saves.py`,
+which Measure runs and fails on), and that cannot catch an error the earlier
+save shares. One stair flight is scored against Revit's own 2026 and 2027
+exports. Sloped roofs, spiral runs, stair names,
+railing heights and lengths, a wall's profile openings, IFC export overrides
+and the opening index stay unread there.
 Conduits, conduit fittings and gutters export on every release the exporter
 reads and are measured against Revit's own export on `ALD26 Before` only (all
 178 it holds are Revit's elements, RE-319); Autodesk's MEP samples and Snowdon
