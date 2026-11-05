@@ -5,8 +5,8 @@
 **Credit:** mahach666, author of RvtIO (a .NET reader of Revit files, MIT), who published findings on both issues in Discussion #1241 on 2026-11-05: the record shapes of the parameter stores, the sign rule of parameter ids, the unit factors, the two millimetre conversions and the form parameters of extrusions and revolutions, with the count tables for Autodesk's samples that section 4 answers. This report restates facts with that credit and copies none of their tables or prose.
 **Artefacts:** Autodesk's sample projects of Revit 2015 to 2027 as `research/autodesk-sample-projects.tsv` pins them, the `phi-ag/rvt` family corpus, the BIM4LCA office, Core Interior, the RE1 models and puzzbobb's R2025 models, as Measure fetches them; none is committed.
 **Probe:** `probes/examples/probe_re344_parameter_ids_and_units.rs`
-**Runs:** Measure 42028541274 (`main` at 5988d839, the samples of 2021 to 2027, section 4), 42031090233 (the same head, the class sets of `racadv-2020` against Revit's public IFC2X3 export, section 4.2), 42030865532 (the probe at 27875749, on `main` at 5988d839: `-f base=none -f samples=true -f sample_years="2015 2027" -f families=true -f nordic=true -f r2025=true -f scorers=none`, 105 models, section 5). The probe was changed after that run (a seventh conversion, a distance in magnitude, a joint tally of the revolutions' angles); sections 5.3 and 5.4 come from its re-run on the head that carries the change, and 5.1, 5.2 and 5.5 from this one.
-**Status:** open. Section 4 and sections 5.1, 5.2 and 5.5 name their runs. Sections 5.3 and 5.4 are rewritten from the re-run and claim no figure until then. Nothing here changes an export: no value is added.
+**Runs:** Measure 42028541274 (`main` at 5988d839, the samples of 2021 to 2027, section 4), 42031090233 (the same head, the class sets of `racadv-2020` against Revit's public IFC2X3 export, section 4.2), 42030865532 (the probe at 27875749: `-f base=none -f samples=true -f sample_years="2015 2027" -f families=true -f nordic=true -f r2025=true -f scorers=none`, 105 models) and 42039153578 (the same selection, the changed probe at head 37f377d3, sections 5.1 to 5.5). The probe's code is the one at 37f377d3; the two runs' counts of 5.1, 5.2 and 5.5 are identical.
+**Status:** measured. Sections 4 and 5 name their runs. Nothing here changes an export: no value is added.
 
 ## 1. What the findings rest on, and what may be used
 
@@ -14,7 +14,7 @@ mahach666 states the sources of every finding: bytes of Revit files (including t
 
 `CLEANROOM.md` lists public byte observations, `RevitAPI.dll`'s exported symbols, previously published reverse-engineering work, buildingSMART's specifications and `revit-ifc` as accepted sources. The output of the Revit API run on a file is on neither list, accepted or forbidden. This report therefore splits every finding by what it rests on, and takes only the facts that can be stated and proved from bytes of files Measure fetches, against Revit's own IFC export or Revit's saved geometry where one exists. A value that only an API capture confirms is recorded as reported and not measured. The maintainer decided on 2026-11-05 that a third party's API capture is published reverse-engineering work (accepted source 3): it is cited and used to know where to look, and a value lands only when bytes of files CI can fetch, with Revit's own export or saved geometry, confirm it. `CLEANROOM.md` says so in one sentence.
 
-Nothing that rests on NDA material is used (`CLEANROOM.md`, forbidden source 4). mahach666 says in the discussion that the other models they test on locally are real projects under NDA, and their sketch finding says its volume and area comparisons rest on their own models and on API captures that are not in the folder; the folder does not say which of those are NDA material. Whatever rests on models or captures that are not in the folder (rows 39, 42, 46 and 47 of section 2) is cited as reported, not measured, and no value, number or rule is taken from it.
+Nothing that rests on NDA material is used (`CLEANROOM.md`, forbidden source 4). mahach666 says in the discussion that the other models they test on locally are real projects under NDA, and their sketch finding says its volume and area comparisons rest on their own models and on API captures that are not in the folder; the folder does not say which of those are NDA material. Whatever rests on models or captures that are not in the folder (the unit-factor, 1713-of-1872, host-area and volume rows of section 2) is cited as reported, not measured, and no value, number or rule is taken from it.
 
 Other handling:
 
@@ -116,9 +116,9 @@ The 34 curtain walls, 140 standard-case walls, 41 flow terminals and 104 furnish
 
 ## 5. Measured
 
-Measure run 42030865532 ran the probe at 27875749 on 105 models: Autodesk's 58 sample projects of Revit 2015 to 2027, the 12 family-corpus files of 2016 to 2027 and the 2014 maker family of RE-327, the four BIM4LCA office files, Core Interior, Einhoven, the four RE1 models and the 24 R2025 models. The native reader read 1,284,631 element records of the 92 projects (4,818 had no saved metadata) and the 12 corpus families (10 had one record that did not decode, 2 had seven). The 2014 family is outside the native releases and was refused, as in RE-327. Counts of forms are form-and-file pairs: the same families recur in every release's files, and the samples are re-saves of one model per project.
+Measure run 42039153578 ran the probe at head 37f377d3 on 105 models: Autodesk's 58 sample projects of Revit 2015 to 2027, the 12 family-corpus files of 2016 to 2027 and the 2014 maker family of RE-327, the four BIM4LCA office files, Core Interior, Einhoven, the four RE1 models and the 24 R2025 models. The native reader read 1,284,631 element records of the 92 projects (4,818 had no saved metadata) and the 12 corpus families (10 had one record that did not decode, 2 had seven). The 2014 family is outside the native releases and was refused, as in RE-327. Run 42030865532 ran the first form of the probe (six conversions, a signed distance, a different revolution tally) on the same selection; its counts for 5.1, 5.2 and 5.5 are identical to this run's, and its six-conversion table for 5.3 is withdrawn: the seventh conversion changes it.
 
-That probe was changed afterwards (a seventh conversion, a distance in magnitude, a joint tally of the revolutions' angles). Sections 5.3 and 5.4 are rewritten from its re-run; 5.1, 5.2 and 5.5 stand on this run.
+Counts of forms are form-and-file pairs. The samples are re-saves of one model per project and the same families recur in every release's files, so the pairs overcount: section 5.4 also gives the count with files of identical per-class form counts taken once.
 
 ### 5.1 The sign rule
 
@@ -137,11 +137,55 @@ The 2027 schema puts the id first in the Double item. The reader follows the sch
 
 ### 5.3 The stored millimetre lengths
 
-To be written from the re-run of the changed probe.
+RE-310's selection (whole or tenth millimetres, not whole 1/256 inches), the seven conversions of section 3, projects only. Of the values on which the seven conversions give different bits, the share each conversion reproduces and the share none of the seven does:
+
+| store, kind, releases | values where the seven differ | none of the seven | `mul` | `div` | `chain` | `metre` | `cmchain` | only `metre` | only `cmchain` |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| typed Double sets, built-in, 2015 to 2023 | 35,915 | 17% | 45% | 45% | 33% | 58% | 38% | 2,788 | 7,413 |
+| typed Double sets, built-in, 2024 to 2027 | 42,935 | 21% | 46% | 45% | 34% | 59% | 28% | 4,489 | 6,195 |
+| slots, built-in, 2015 to 2023 | 13,729 | 12% | 80% | 68% | 64% | 59% | 15% | 0 | 487 |
+| slots, built-in, 2024 to 2027 | 21,121 | 26% | 69% | 57% | 60% | 46% | 10% | 10 | 407 |
+| slots, declared, 2015 to 2023 | 61,371 | 4% | 91% | 75% | 78% | 61% | 10% | 202 | 1,692 |
+| slots, declared, 2024 to 2027 | 163,035 | 4% | 93% | 76% | 85% | 49% | 7% | 680 | 1,897 |
+
+- **The slots agree with RE-310.** `mul` (`mm * (1 / 304.8)`) reproduces the most on the slots in every half, so on 2015 to 2023 as on 2024 to 2027. On the office as built it reproduces 90% of the differing slot values that some conversion reproduces (RE-310: 84% of its type value blocks'). The counts cannot be compared: RE-310 reads the type value blocks once per owner, parameter and value, and this run counts every record's slots (the office: 839 built-in and 4,514 declared values where the seven differ, RE-310: 460 and 2,024). That the slots are RE-310's entries is the inference of section 2, not tested here.
+- **The typed sets lead with another conversion.** `metre` (`mm / 1000 / 0.3048`) reproduces the most in the typed Double sets, 58% and 59% of the values where the seven differ, `mul` and `div` 45% and 46%. RE-310 did not read these sets.
+- **The seven are not exhaustive.** The first run, with six, left 37% of the typed values unmatched. The seventh, `cmchain` (`mm / 10 * (1 / 2.54) * (1 / 12)`), reproduces 7,413 and 6,195 typed values that no other conversion does, and 487 and 407 built-in and 1,692 and 1,897 declared slot values. Whether other chains reproduce more is not known.
+- **Many stored values are none of them.** 17% and 21% of the typed values, 12% and 26% of the built-in slots' and 4% of the declared slots' match none of the seven. Their distance, in units of the last place of the magnitude (a value one unit smaller in magnitude than `div` is -1, for either sign), from `div` and from the nearest of the seven:
+
+| store, kind, releases | none of the seven | -1 | -2 | -3 | +1 to +3 | over 3 | nearest of the seven: 1 | 2 | 3 | over 3 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| typed, built-in, 2015 to 2023 | 5,926 | 1,246 | 57 | 608 | 157 | 3,858 | 1,440 | 628 | 5 | 3,853 |
+| typed, built-in, 2024 to 2027 | 9,217 | 876 | 134 | 1,359 | 546 | 6,302 | 1,514 | 1,409 | 93 | 6,201 |
+| slots, built-in, 2015 to 2023 | 1,650 | 243 | 178 | 0 | 153 | 1,076 | 532 | 24 | 30 | 1,064 |
+| slots, built-in, 2024 to 2027 | 5,473 | 113 | 328 | 2 | 158 | 4,872 | 521 | 66 | 68 | 4,818 |
+| slots, declared, 2015 to 2023 | 2,204 | 264 | 649 | 0 | 56 | 1,235 | 931 | 18 | 26 | 1,229 |
+| slots, declared, 2024 to 2027 | 7,258 | 419 | 1,118 | 12 | 120 | 5,589 | 1,605 | 24 | 90 | 5,539 |
+
+  Of the 31,728 values none of the seven reproduces, 67% of the typed (15,143) and 77% of the slots' (16,585) are more than 3 units from `div`, and 66% and 76% more than 3 from every one of the seven: most are computed values or come from a conversion not tried, and not one unit off one that was. Exactly one unit below `div` are 14% of the typed and 6% of the slots'. A search that takes a miss as absence fails on all of them.
+- **The family files** add 520 built-in typed values (344 in 2016 to 2023, 176 in 2024 to 2027): `cmchain` reproduces 436 (84%), 200 of them alone, and the 72 that none of the seven reproduces are all one unit below `div`.
+- **Re-saves.** The 2015 to 2023 shares are close to the 2024 to 2027 ones. The samples are re-saves of one model per project, so that shows the stored bits survive re-saving, not that Revit's conversion is the same across releases.
+
+The probe selects numerically and does not know that a value was typed in millimetres: a value computed from others would be among them.
 
 ### 5.4 The parameters of a family's forms
 
-To be written from the re-run of the changed probe.
+| form | form-and-file pairs | at most, files of identical form counts taken once | holds | does not hold |
+|---|---:|---:|---|---|
+| `ExtrusionElem` | 10,354 | 2,732 | -1001800 and -1001801 on every one (the first is zero on 3,318 pairs) | |
+| `RevolutionElem` | 550 | 207 | -1001802 and -1001803 on every one | |
+| `BlendElem` | 1,229 | 278 | -1001804 and -1001805 on every one | |
+| `SweptBlendElem` | 322 | 87 | no Double set | both ids on every one |
+| `SweepElem` | 5,006 | 1,383 | | any of -1001800 to -1001805 on every one |
+| `FreeFormElement` | 208 | 208 | | any of them on every one |
+
+86 files hold forms and have 23 distinct per-class counts; the once-counted figures take one file of each. They are upper bounds on distinct forms: files with equal counts are not shown to hold the same forms.
+
+The revolutions' values, the first id and then the second:
+
+- **Every value is a multiple of one 14-decimal number.** The 550 pairs are, in half turns of 3.14159265358979 (`0x400921fb54442d11`, a truncation of π that is seven units in the last place below π, `0x400921fb54442d18`): 517 from 0 to 4 (at most 186 counted once), 28 from 0 to 2 (16), 2 from 1 to 3 (2) and 3 from 2 to 4 (3). So 21 of the at most 207 once-counted pairs are not 0 to 4. The first is below the second on all 550.
+- **The seven units in the last place come from that number.** The second id is `401921fb54442d11` on 520 pairs (twice the truncation), `400921fb54442d11` on 28 (the truncation itself, not π, though the probe's first form labelled it "other") and `4012d97c7f3321cd` on 2; the first is `3ff921fb54442d11` on 2 and `400921fb54442d11` on 3, and 0 on 545. Not one of the 555 nonzero values equals a multiple of π/2 by bits; all 555 are within 1e-9 of one. A reader that compares an angle with 2π or π by bits or by exact equality fails on every one of them.
+- **Meaning.** The values are those of angles in radians, with the first below the second on every pair. That they are the start and end angle is what RvtIO reports from the Revit API, and nothing here compares them with a mesh: it is reported, not measured. RE-327 does not rebuild revolutions.
 
 ### 5.5 `PartAtom`
 
@@ -151,7 +195,7 @@ To be written from the re-run of the changed probe.
 
 ### 5.6 What it changes
 
-Nothing in an export.
+Nothing in an export. A reader or probe that searches for a length by its bits has to try `mul`, `div`, `chain`, `metre` and `cmchain` at least, cannot take a miss as absence, and finds many stored values none of them reproduces. One that tests a revolution's angle compares with a tolerance, not with π or 2π by bits.
 
 ## 6. Not claimed
 
@@ -172,4 +216,4 @@ gh workflow run measure.yml --ref main -f ref=27875749ca622bfd0f81d1ef2ba6e72d00
   -f probe=probe_re344_parameter_ids_and_units -f scorers=none
 ```
 
-Each model's `probe.txt` in the `measure-head` artifact ends in `tally` lines.
+The third command, with `-f ref=37f377d35b0e369b43f9ea182d836c9efd35ccc4`, is run 42039153578. Each model's `probe.txt` in the `measure-head` artifact ends in `tally` lines.
