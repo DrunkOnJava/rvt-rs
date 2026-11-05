@@ -15,9 +15,9 @@ Exits 1 with an `::error` line for each of:
   DELIBERATE_MSRV.
 * The documentation-only path list. ci.yml's `paths-ignore` (the commits that run no CI), the
   regex in ci.yml's `viewer-paths` job (the pull requests that skip the viewer tests) and the
-  regex in Deploy viewer's wait step (the commits it deploys without waiting for CI) must
-  name the same paths, but for the files in EXPECTED_BUILT_FROM.
-
+  regex in Deploy viewer's wait step (the commits it deploys without waiting for CI, read from
+  its `run` or from the script of the local action it uses) must name the same paths, but for
+  the files in EXPECTED_BUILT_FROM.
 * Local references. Every `uses: $/.github/...` or `./.github/...` of an action or a reusable
   workflow names a file that exists, and its `with:` names only inputs that file declares and
   gives those it requires. actionlint does not know the `$/` form (.github/actionlint.yaml
