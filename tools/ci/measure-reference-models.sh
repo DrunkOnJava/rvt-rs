@@ -66,6 +66,13 @@
 # OUT_DIR/family-<file>/ with the same info.json and info.exit (a family
 # carries its Atom entry in a PartAtom stream) and, when PROBE is built, the
 # same probe.txt. A family has no Revit export, so nothing else is measured on it.
+# When AREAS_ACROSS_SAVES is set and SAMPLE_DIR holds Autodesk's rac_advanced
+# samples of 2024 to 2027, OUT_DIR/areas_across_saves.txt is the gate of #1261
+# and #1194 (Griffin, 2026-11-05, "Same-project gate"): the 25 Areas of its 2025,
+# 2026 and 2027 saves must equal its 2024 save's in GlobalId, number, name,
+# storey, body area and height (tools/re/areas_across_saves.py), ending with
+# its exit status, which the workflow turns into a failed job. It runs once
+# every export is done and before any sample's IFC is deleted.
 # SAMPLE_DIR does the same for Autodesk's sample projects (.rvt), adding the
 # export's diagnostics.json, rvt-ifc.log and ifc.sha256 (hashed as a model's
 # is) under OUT_DIR/sample-<file>/, and element_stage_counts.txt, the check
@@ -552,6 +559,21 @@ measure_sample() { # sample
   finished "$dir" "$(basename "$sample")" "$item_started"
 }
 
+# The Areas of Autodesk's rac_advanced across its 2024 to 2027 saves (the
+# gate of the Areas of Revit 2025 to 2027, RE-333 section 9). A save with no
+# IFC is a failure, not a skipped check: the scorer is given all four paths
+# and says which is missing.
+areas_across_saves() {
+  local year args=()
+  for year in 2024 2025 2026 2027; do
+    args+=("$year=$(sample_dir "$SAMPLE_DIR/$year-racadvancedsampleproject.rvt")/model.ifc")
+  done
+  {
+    timeout "$STEP_TIMEOUT" python "$SCORERS/areas_across_saves.py" "${args[@]}"
+    echo "exit $?"
+  } > "$OUT/areas_across_saves.txt" 2>&1
+}
+
 # Every probe runs after the items, alone, one at a time: a probe is cut off
 # after 20 minutes, and items running beside it would slow it by up to about
 # 2x, so a probe would stop sooner than it always has.
@@ -651,6 +673,10 @@ while IFS='|' read -r _ run first second _; do
   esac
 done <<< "$items"
 wait
+# Before any sample's IFC is deleted at the end of its measure_sample.
+if [ -n "${AREAS_ACROSS_SAVES:-}" ] && [ -d "${SAMPLE_DIR:-}" ]; then
+  areas_across_saves
+fi
 tasks=""
 while IFS='|' read -r rank run first second third; do
   case "$run" in
