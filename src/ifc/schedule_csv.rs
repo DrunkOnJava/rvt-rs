@@ -24,7 +24,7 @@ use super::entities::{Extrusion, IfcEntity, ProfileDef, PropertyValue};
 use super::export_content::{
     ROOM_NAME_PROPERTY, ROOM_NUMBER_PROPERTY, SPACE_OUTLINE_SOURCE_PROPERTY,
 };
-use super::step_writer::{Placement, placements, storey_of};
+use super::step_writer::{Placement, associates_material, placements, storey_of};
 
 const FEET_TO_METRES: f64 = 0.3048;
 
@@ -187,9 +187,14 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
         let storey =
             storey_of(&placements, entity_index).and_then(|i| model.building_storeys.get(i));
         // Same precedence as the STEP writer: profile set > layer set >
-        // single material > constituent set.
+        // single material > constituent set, and the same elements: an
+        // `IfcSpace` has no material (`step_writer::associates_material`,
+        // #1430), which `rvt-ifc --revit-set-placement` gives it in the IFC
+        // and no schedule's flag does.
+        let holds_material = associates_material(ifc_type);
         // A profile set names its section; its one material is the material.
         let material = material_profile_set_index
+            .filter(|_| holds_material)
             .and_then(|i| model.material_profile_sets.get(i))
             .map(|set| match set.profiles.as_slice() {
                 [profile] => model
@@ -200,11 +205,13 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
             })
             .or_else(|| {
                 material_layer_set_index
+                    .filter(|_| holds_material)
                     .and_then(|i| model.material_layer_sets.get(i))
                     .map(|m| m.name.clone())
             })
             .or_else(|| {
                 material_index
+                    .filter(|_| holds_material)
                     .and_then(|i| model.materials.get(i))
                     .map(|m| m.name.clone())
             })
@@ -212,7 +219,9 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
             // materials where its body is not a layer set (RE-88), each
             // once, in the order the STEP writer lists them.
             .or_else(|| {
-                let set = constituent_set_of.get(&entity_index)?;
+                let set = constituent_set_of
+                    .get(&entity_index)
+                    .filter(|_| holds_material)?;
                 let mut names: Vec<&str> = Vec::new();
                 for name in set
                     .material_indices

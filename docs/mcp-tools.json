@@ -751,7 +751,7 @@
             },
             "revit_set_placement": {
               "default": false,
-              "description": "Also place properties where Revit's exporter does\n(`--revit-set-placement`).",
+              "description": "Also place properties where Revit's exporter does, and keep the\nmaterial it associates with an `IfcSpace`, which IFC4 does not allow\n(`--revit-set-placement`).",
               "type": "boolean"
             },
             "saved_meshes": {

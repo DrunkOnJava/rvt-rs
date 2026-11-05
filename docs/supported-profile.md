@@ -159,7 +159,10 @@ names, grouping and values measured on Autodesk's Snowdon Towers HVAC, Site and 
 a text parameter named `<set>.<property>` for a property the set's IFC4 definition lacks
 (`Pset_SpaceCommon.FloorCovering`), and the `Reference` of a set whose entity's name begins with the
 element's (`Pset_SpaceHeaterTypeCommon` on a space); without it every property is in the set IFC4 gives
-(RE-235). A value Revit's export writes that is known to be wrong is left out either way: a stair's or
+(RE-235). The same flag keeps the material Revit's export associates with an `IfcSpace` (the family
+instances written as spaces): IFC4's `IfcRelAssociatesMaterial.AllowedElements` takes no `IfcSpace`, so with the flag
+the output breaks that rule, as Revit's own export does, and without it a space has no material (#1430;
+Griffin, 2026-11-05: valid IFC4 by default, Revit's behind the flag). A value Revit's export writes that is known to be wrong is left out either way: a stair's or
 flight's `WalkingLineOffset`, half the run's width in feet read as millimetres, a curtain mullion's `Qto_MemberBaseQuantities.CrossSectionArea`, which grows with its length and is never its section's area, and a curtain mullion's or panel's `IsExternal` in the office's exports and its mullion type's, which the exporter that made them sets from its own cache of element types, not from the model (RE-235 §5, RE-269; rvt-rs writes the member's by its curtain wall's value, RE-288). Not read: most instance and type parameters (#35, #155). Elements in a
 design-option set's non-primary options are left out, as Revit leaves them out,
 and so are elements that do not exist in the project's last phase (RE-184; the order is read on Revit 2015 to 2027, RE-281),
