@@ -54,11 +54,15 @@ mesh.
 
 Measured against 0.14.0 on every reference model, the Revit 2025 models,
 Autodesk's sample projects, the held-out models and the families (Measure run
-41954445310, this release's head at ce0b2d8a):
+41963115180, this release's head at 5b1a3710):
 
 - On the BIM4LCA office the walls with Revit's base and top go from 586 to
   598 of 607 as built and from 565 to 577 of 589 at permit; no wall's top
   moves.
+- On the same office the floor voids written with Revit's tag go from 27 to
+  35 as built and from 27 to 34 at permit, and the values rvt-rs writes that
+  Revit's export does not fall from 10 to 2 as built and from 16 to 9 at
+  permit.
 - On `rac_advanced`'s saves of 2015 to 2020 and 2022 to 2024, 13 more Areas
   are written with a body (2021's save and 2025 to 2027 are unchanged).
 - Each of Autodesk's 33 sample projects of 2015 to 2023 now reports its
