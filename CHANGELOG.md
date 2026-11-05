@@ -16,10 +16,12 @@ where each decoded element's record was read from and which copy its body,
 profile or outline took its value from (`rvt-ifc --element-provenance`), and
 why each element, body, opening or outline was left out
 (`rvt-ifc --export-decisions`); the MCP server asks for both and gains
-`explain_element`. The offsets are read again and confirmed on the Revit 2023
-to 2025 models CI holds; those of Revit 2008 to 2022, the second-prologue
-frames of 2023 and the schema-walk carrier are not measured, and some values
-a body reads (an Area's Levels, a wall's layers, a beam's I section) have no
+`explain_element`. The provenance table's offsets are read again and
+confirmed on the Revit 2023 to 2025 models CI holds and the decisions log's
+on 2024 and 2025; those of Revit 2008 to 2022, the second-prologue frames of
+2023, the decisions log's before 2024 and the schema-walk carrier are not
+measured, the log keeps at most 5,000 entries a reason, and some values a
+body reads (an Area's Levels, a wall's layers, a beam's I section) have no
 recorded source. Every export of a Revit 2008 to 2023 project counts where
 its element records stopped, so an export that writes nothing says at which
 stage. Rooms take off the round columns their stored solid holds. Areas whose
@@ -33,7 +35,21 @@ redistributable Revit IFC4 export to score them. The opt-in
 `rvt-ifc --family-extrusions` draws a family instance from its family's own
 extrusions, arcs as true arcs, where they reproduce the mesh Revit saved
 (Revit 2024 to 2027 files, measured on 2024 and 2025). The viewer's browser
-tests are now part of every pull request's required check.
+tests are now part of every pull request's required check. The element
+record stages follow hemanth1986's reports on #421 and the Area joins
+inevitable-co-ai's on #1261, and puzzbobb's Revit 2025 models now check the
+roof value sources in CI. Thanks to all three.
+
+Not measured by the runs below, and said in each entry: whether a value
+source names the right copy (copies that agree are equal; `current` is
+`current_partitions`); the stage counts on Revit 2008 to 2014 and on the four
+files of #421 that export nothing; the 2021 to 2024 saves of `rac_advanced`
+against any export, and the 9 of its 25 Areas left out; Revit's own area of
+the `rac_advanced` rooms, a concave or short column, and the rooms of the
+2021 to 2027 saves and of Snowdon Towers; the BIM4LCA office's Basement walls
+still off Revit's lowest point (2 as built, 4 at permit); and a family whose
+extrusions include a void, an ellipse or an unclosed sketch, which keeps its
+mesh.
 
 Measured against 0.14.0 on every reference model, Autodesk's sample
 projects, the held-out models and the families (Measure run 41944962415,
@@ -59,8 +75,9 @@ projects, the held-out models and the families (Measure run 41944962415,
 - Every export's IFC header names rvt-rs 0.15.0, so an export that is
   otherwise unchanged still differs from 0.14.0's there.
 - A default export can change where these apply: a room whose stored solid
-  holds round columns loses their area (Autodesk's `rac_advanced` and
-  `rac_basic` samples); a floor whose shape-edited corners lie in one plane is
+  holds round columns loses their area, and one with columns against its
+  walls that kept its record box takes an outline (Autodesk's `rac_advanced`
+  and `rac_basic` samples, and 2 of Snowdon Towers' boxed rooms); a floor whose shape-edited corners lie in one plane is
   drawn along its sloped top (`BodySource` `native_slab_shape_edit`), and a
   wall whose base join names one element covering its whole plan starts from
   that element's top (`BodyBaseSource`, `BaseCoverElementId`; the BIM4LCA
@@ -77,7 +94,11 @@ projects, the held-out models and the families (Measure run 41944962415,
   `--element-provenance` or `--export-decisions` they also hold
   `decoded.element_provenance` or `export_decisions`; without them the
   diagnostics carry neither.
-- `--family-extrusions` implies `--saved-meshes`.
+- `--family-extrusions` implies `--saved-meshes` and cannot be combined with
+  `--no-saved-meshes`.
+- The MCP server builds the provenance table and the decisions log each time
+  it opens a model, so `open_model` takes longer than in 0.14.0 on a large
+  model; neither is in `get_diagnostics`.
 
 ### Added
 
@@ -189,8 +210,9 @@ projects, the held-out models and the families (Measure run 41944962415,
   entry lists a source only where the element's final `BodySource` is drawn
   from that reader. A body that is the record's box but whose profile is read
   from sketch lines or the type's section (floors, columns) names the frame as
-  `selected_frame_box`, for the box and the placement only; the profile has no
-  source yet. The MCP `get_element` and `explain_element` list
+  `selected_frame_box`, for the box and the placement only, where no reader
+  notes the profile's records (the entries below give floors, columns and
+  rooms theirs). The MCP `get_element` and `explain_element` list
   the sources in the element's provenance; `list_elements` does not. This
   replaces the #1325 caveat that the offset may not be the copy a body came
   from. `tests/value_sources_offsets.rs` reads the bytes at each recorded
@@ -257,9 +279,9 @@ projects, the held-out models and the families (Measure run 41944962415,
   `value_source_counts` also counts,
   by reader, the elements whose copy was chosen as the current partition's,
   so a run on any model shows whether the rule is exercised. The readers
-  still without a source, and the elements that keep `selected_frame_box`
-  (every room, whose outline is read from its solid's faces), are listed in
-  `docs/export-diagnostics.md`. Nothing is noted unless the table is asked
+  still without a source, and the elements that keep `selected_frame_box`,
+  are listed in `docs/export-diagnostics.md` (a room's outline has
+  `room_solid_faces`, below). Nothing is noted unless the table is asked
   for, so the default export and its diagnostics are unchanged.
 
 - **Value sources for roofs drawn from their slopes or from an extrusion
@@ -327,8 +349,10 @@ projects, the held-out models and the families (Measure run 41944962415,
   sample projects of 2015 to 2023 (Measure run 41932213967), every count added
   up, per stream and in total, and the IFC was byte-identical to main's; 192,811
   of their 197,463 markers gave a record, 87,366 elements were handed to the
-  export and the models hold 87,315 of them. The causes for the 51 not written
-  are counted after that run and not yet measured on this head.
+  export and the models hold 87,315 of them. The 51 not written are all
+  `Mass` elements, which the exporter writes nothing for (none held by an
+  earlier reader, none below the confidence floor; the release's Measure run
+  41944962415).
   `tests/element_record_stages.rs` re-reads the markers on Einhoven and checks a
   file with no record and a family; Measure checks the sums on each sample
   project with `tools/re/element_stage_counts.py`.
@@ -380,7 +404,7 @@ projects, the held-out models and the families (Measure run 41944962415,
   used to make every Area of its scheme on its Level unreadable; it is now
   left out with its box and refuses only the Areas whose region the box
   touches. On Autodesk's `rac_advanced`, 16 of the 25 Areas are drawn on
-  every save but 2021's (3 before), 10 of them `area_boundary_joined`; the
+  every save from 2015 to 2024 but 2021's (3 before), 10 of them `area_boundary_joined`; the
   four once taken to be bounded partly by walls are bounded by lines alone.
   What this rests on: the only external check is an IFC2X3 export from the
   three.js repository, by a build of Revit 2021's exporter whose string ends
@@ -455,7 +479,10 @@ projects, the held-out models and the families (Measure run 41944962415,
   2 (4) are 0.123 ft (0.044 ft) off, from 0.656 ft, because their plans end
   short of Revit's. No wall's top moved, and no other model's export moves
   but for the refusal markers on Autodesk's Snowdon Towers (18) and `rac_advanced`
-  (1 a save), which have no redistributable Revit IFC4 export to score them against. Details:
+  (1 a save), which have no redistributable Revit IFC4 export to score them against.
+  Such a floor keeps the `Qto_SlabBaseQuantities` `GrossArea` and `NetVolume`
+  of its plan profile, Revit's on all 8, and a one-layer wall cut at a
+  shape-edited or level floor keeps its layer's colour in the GLB (#1405). Details:
   `reports/element-framing/RE-336-sloped-footings.md`.
 
 - **Partition streams are taken in the order Revit numbers them, not by
