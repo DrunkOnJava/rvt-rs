@@ -244,6 +244,14 @@ on:
 permissions:
   contents: read
 
+# A push to a pull request replaces that pull request's run in progress, which is
+# measuring a head that is gone (2026-11-05: run 42038588757 ran 8 minutes after a
+# push 16 seconds later). A dispatched run is in a group of its own, so one never
+# cancels another: each was asked for its own commit and inputs.
+concurrency:
+  group: measure-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   CARGO_TERM_COLOR: always
 
