@@ -12,5 +12,8 @@
   elements are the ones they were. `rvt-ifc`'s peak on the office is 914 MiB
   as built and 971 MiB at permit (the parent of #1401: 916 and 979 MiB), and
   Snowdon Towers architectural's 1,062 MiB, against 1,108 MiB on `main`
-  before this change. `probes/examples/probe_1429_export_peak.rs` profiles
-  the heap at the export's peak by call site.
+  before this change. The IFC does not move: the 111 files an unfiltered
+  Measure exports (34 models, 19 held-out and spent models, 58 Autodesk
+  samples) are byte-identical to `main`'s.
+  `probes/examples/probe_1429_export_peak.rs` profiles the heap at the
+  export's peak by call site.
