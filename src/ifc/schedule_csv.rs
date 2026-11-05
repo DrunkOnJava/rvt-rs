@@ -2,9 +2,9 @@
 //!
 //! Two schedules, one row per element, in storey order:
 //!
-//! - [`elements_csv`]: every building element — Revit ElementId, IFC type,
-//!   level, material, placement, body size where decoded, the host wall of a
-//!   door or window, and where the body came from.
+//! - [`elements_csv`]: every building element the IFC export writes — Revit
+//!   ElementId, IFC type, level, material, placement, body size where decoded,
+//!   the host wall of a door or window, and where the body came from.
 //! - [`rooms_csv`]: every `IfcSpace` with its recovered room number, name
 //!   and, where the room's outline was read from its stored solid (RE-101),
 //!   its plan area.
@@ -24,6 +24,7 @@ use super::entities::{Extrusion, IfcEntity, ProfileDef, PropertyValue};
 use super::export_content::{
     ROOM_NAME_PROPERTY, ROOM_NUMBER_PROPERTY, SPACE_OUTLINE_SOURCE_PROPERTY,
 };
+use super::step_writer::{Placement, placements, storey_of};
 
 const FEET_TO_METRES: f64 = 0.3048;
 
@@ -106,7 +107,18 @@ pub fn room_columns(unit: LengthUnit) -> Vec<String> {
     ]
 }
 
-/// One row per building element (rooms included, as `IFCSPACE`).
+/// One row per building element the IFC export writes (rooms included, as
+/// `IFCSPACE`), on the storey the export puts it in.
+///
+/// Both follow [`step_writer::placements`](super::step_writer::placements),
+/// the writer's own decision, as the MCP server does. An element the export
+/// folds into the body of another element (a further piece of an element of
+/// separate loops, [`Placement::Folded`]) is not written as an element and has
+/// no row. The `level` and `level_elevation` cells are the storey of
+/// [`storey_of`]: the one the element is contained in, that of the space that
+/// contains it, that of the whole it is a part of (a stair's run or landing, a
+/// railing's or a curtain wall's member), or that of the host an opening cuts;
+/// empty where the export contains it in the building only.
 ///
 /// # Examples
 ///
@@ -123,6 +135,9 @@ pub fn room_columns(unit: LengthUnit) -> Vec<String> {
 pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
     let unit = options.unit;
     let mut rows: Vec<(f64, String, Vec<String>)> = Vec::new();
+    // Where the export puts each element: whether it is written at all, and
+    // its storey (`step_writer::placements`).
+    let placements = placements(model);
     // The first constituent set naming each entity, found once rather than
     // by a search of every set for every entity.
     let mut constituent_set_of: std::collections::HashMap<
@@ -140,7 +155,7 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
             name,
             type_guid,
             predefined_type,
-            storey_index,
+            storey_index: _,
             material_index,
             property_set,
             location_feet,
@@ -155,7 +170,11 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
         else {
             continue;
         };
-        let storey = storey_index.and_then(|i| model.building_storeys.get(i));
+        if matches!(placements.get(entity_index), Some(Some(Placement::Folded))) {
+            continue;
+        }
+        let storey =
+            storey_of(&placements, entity_index).and_then(|i| model.building_storeys.get(i));
         // Same precedence as the STEP writer: profile set > layer set >
         // single material > constituent set.
         // A profile set names its section; its one material is the material.
@@ -322,7 +341,7 @@ pub struct RoomRow {
 pub fn room_rows(model: &IfcModel) -> Vec<RoomRow> {
     let mut rows = Vec::new();
     // The storey the export puts a room in (`step_writer::placements`).
-    let placements = super::step_writer::placements(model);
+    let placements = placements(model);
     for (entity_index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
@@ -347,8 +366,8 @@ pub fn room_rows(model: &IfcModel) -> Vec<RoomRow> {
                 _ => String::new(),
             }
         };
-        let storey = super::step_writer::storey_of(&placements, entity_index)
-            .and_then(|i| model.building_storeys.get(i));
+        let storey =
+            storey_of(&placements, entity_index).and_then(|i| model.building_storeys.get(i));
         let area_square_feet = (property("ProfileSource")
             == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE
             || property("ProfileSource")

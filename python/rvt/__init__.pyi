@@ -216,8 +216,9 @@ class RevitFile:
     ) -> str:
         """Spreadsheet schedule of the decoded model as CSV text.
 
-        ``kind="elements"``: every building element (Revit ElementId, IFC
-        type, level, material, placement, size, host of a door or window).
+        ``kind="elements"``: every building element the IFC export writes
+        (Revit ElementId, IFC type, level, material, placement, size, host of
+        a door or window), on the level the export puts it in.
         ``kind="rooms"``: every room (number, name, level). ``metric=True``
         writes lengths in metres; ``excel=True`` prefixes a UTF-8 BOM for
         Excel on Windows. Unknown values are empty cells. ``phase`` is

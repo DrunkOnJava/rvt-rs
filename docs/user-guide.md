@@ -214,11 +214,18 @@ rvt-schedule model.rvt -o -                     # print the CSV instead of writi
 rvt-schedule model.rvt --phase "Existing"       # another phase than the project's last (a name or an ElementId)
 ```
 
-The element schedule has one row per decoded building element: Revit
-ElementId, IFC type, level and its elevation, material, placement, body
+The element schedule has one row per building element the IFC export writes:
+Revit ElementId, IFC type, level and its elevation, material, placement, body
 size, the host wall of each door and window, and where the body came from
 (`body_source`, `profile_resolved`). A value rvt-rs did not decode is an
-empty cell, never a guess. The room schedule gives a room's plan area
+empty cell, never a guess. The rows and the level column are the export's own
+decision, the same the IFC file and the MCP server give: a further piece of
+an element of separate loops, which the export writes as an item of its
+owner's body, has no row; a part of a stair, a railing or a curtain wall is on
+the level of its whole, an element in a room on the level of the room, and an
+opening on the level of the door, window or wall it is cut from. An element
+the export contains in the building only, with no storey, has empty level
+cells. The room schedule gives a room's plan area
 where its outline was read from the solid Revit stores for it (RE-101), and
 an Area's where its boundary lines gave it a region (RE-317); a room that
 keeps its bounding box has an empty area, since the area of a box is not the
@@ -236,7 +243,7 @@ calling it a breaking change.
 | `ifc_type` | The IFC entity it is exported as, as the STEP file spells it, such as `IFCWALL` |
 | `predefined_type` | The IFC predefined type, where one is set |
 | `name` | The element's name |
-| `level` | The name of its level |
+| `level` | The name of the storey the IFC export contains the element in: its own, or that of its room, its whole (the stair, railing or curtain wall a part belongs to) or its host (for an opening); empty where the export contains it in the building only |
 | `level_elevation_ft` | That level's elevation |
 | `material` | Its material's name; for a layered wall, floor, roof or ceiling, the name of its layer set (its `Family:Type`); for a family instance of several materials, their names separated by `; ` |
 | `x_ft` | Placement, x |

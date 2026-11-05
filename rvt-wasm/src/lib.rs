@@ -417,7 +417,8 @@ pub fn file_metadata(bytes: &[u8]) -> Result<JsValue, JsValue> {
 
 /// Spreadsheet schedule of an exported model as CSV
 /// ([`rvt::ifc::schedule_csv`]): `kind` is `"elements"` (every building
-/// element) or `"rooms"`; `metric` switches lengths to metres; `excel`
+/// element the IFC export writes, on the level it puts it in) or `"rooms"`;
+/// `metric` switches lengths to metres; `excel`
 /// prefixes a UTF-8 byte-order mark so Excel on Windows reads non-ASCII
 /// names correctly.
 #[wasm_bindgen(js_name = scheduleCsv)]
