@@ -12,7 +12,10 @@ use rvt::{
     ifc::{
         ExportDiagnostics, ExportKind, ExportOptions, ExportQualityMode, SavedMeshChoice,
         run_export_with_limits,
-        step_writer::{StepOptions, write_step_to, write_step_with_options},
+        step_writer::{
+            StepOptions, write_step_to, write_step_to_with_space_materials,
+            write_step_with_options, write_step_with_space_materials,
+        },
     },
     walker::WalkerLimits,
 };
@@ -119,7 +122,10 @@ struct Args {
     /// text parameter named `<set>.<property>` for a property the set's IFC4
     /// definition lacks (`Pset_SpaceCommon.FloorCovering`) (RE-235). By
     /// default every property is in the set buildingSMART's IFC4 definitions
-    /// put it in.
+    /// put it in. It also keeps the material Revit's export associates with
+    /// an `IfcSpace`, which IFC4's `IfcRelAssociatesMaterial.AllowedElements`
+    /// does not allow: with it the output breaks that rule, as Revit's own
+    /// export does (#1430).
     #[arg(long, conflicts_with = "placeholder")]
     revit_set_placement: bool,
     /// Leave out the base quantities (the `Qto_` sets: lengths, areas and
@@ -311,7 +317,11 @@ fn run(args: Args) -> anyhow::Result<()> {
     let mut observed_step = None;
     drop(rf);
     let written = if args.observation.is_some() {
-        let step = write_step_with_options(&model, &options);
+        let step = if args.revit_set_placement {
+            write_step_with_space_materials(&model, &options)
+        } else {
+            write_step_with_options(&model, &options)
+        };
         std::fs::write(&out_path, step.as_bytes())?;
         let written = step.len() as u64;
         observed_step = Some(step);
@@ -323,7 +333,13 @@ fn run(args: Args) -> anyhow::Result<()> {
         partial.push(".partial");
         let partial = PathBuf::from(partial);
         let streamed = std::fs::File::create(&partial)
-            .and_then(|file| write_step_to(&model, &options, file))
+            .and_then(|file| {
+                if args.revit_set_placement {
+                    write_step_to_with_space_materials(&model, &options, file)
+                } else {
+                    write_step_to(&model, &options, file)
+                }
+            })
             .and_then(|written| std::fs::rename(&partial, &out_path).map(|()| written));
         match streamed {
             Ok(written) => written,

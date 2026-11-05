@@ -77,7 +77,26 @@ pub struct ExportOptions {
     /// Also write Revit's own parameter sets (`--revit-property-sets`).
     pub revit_property_sets: bool,
     /// Also place properties where Revit's exporter does
-    /// (`--revit-set-placement`).
+    /// (`--revit-set-placement`). This option places properties only, in the
+    /// model it builds.
+    ///
+    /// The other half of `rvt-ifc --revit-set-placement` is not a setting of
+    /// the model but of the writer: keeping the material Revit's export
+    /// associates with an `IfcSpace`, which IFC4's
+    /// `IfcRelAssociatesMaterial.AllowedElements` does not allow (#1430). It
+    /// is the entry points
+    /// [`write_step_with_space_materials`](super::step_writer::write_step_with_space_materials)
+    /// and
+    /// [`write_step_to_with_space_materials`](super::step_writer::write_step_to_with_space_materials),
+    /// which `rvt-ifc` and the MCP server pick by this option. A caller of
+    /// the library, Python or the wasm bindings that writes the IFC with
+    /// `write_step` or `write_step_to` gets the default: no material on a
+    /// space. The two are not one setting because a setting both read would
+    /// be a field of [`StepOptions`](super::step_writer::StepOptions), a
+    /// struct the crate's callers construct by literal (so a new field is a
+    /// semver break), or of the model, which would also take the material
+    /// from the glTF and the viewer, where a colour on a space's mesh is a
+    /// drawing choice and not an association.
     pub revit_set_placement: bool,
     /// Leave out the base quantities (`--no-base-quantities`).
     pub no_base_quantities: bool,
