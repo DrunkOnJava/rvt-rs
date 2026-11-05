@@ -1101,12 +1101,22 @@ pub fn append_typed_production_elements(
         add_beam_span(&mut reference_sets, &ifc_type);
         add_beam_slope(&mut reference_sets, &ifc_type, &decoded);
         add_beam_roll(&mut reference_sets, &ifc_type, &decoded);
+        // #1384: a floor drawn along the plane of its shape-edited corners
+        // keeps the extrusion of its plan profile beside its solid.
+        let shaped_floor = ifc_type == "IFCSLAB"
+            && property_set.as_ref().is_some_and(|set| {
+                set.properties.iter().any(|property| {
+                    property.name == "BodySource"
+                        && matches!(&property.value, PropertyValue::Text(source)
+                        if source == FLOOR_SHAPE_BODY_SOURCE)
+                })
+            });
         add_slab_gross_area(
             &mut reference_sets,
             &ifc_type,
             &decoded,
             extrusion.as_ref(),
-            solid_shape.is_none() && piece_bodies.is_empty(),
+            (solid_shape.is_none() || shaped_floor) && piece_bodies.is_empty(),
         );
         add_ceiling_quantities(
             &mut reference_sets,
@@ -2988,9 +2998,11 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 
 /// Add a floor's `Qto_SlabBaseQuantities.GrossArea` to `sets` (#1016,
 /// RE-249): the area of the profile its body extrudes, its outline less its
-/// holes, as Revit's export writes it. Only on a floor drawn as one extrusion
-/// (`single`): a sketch of separate loops is several elements sharing its
-/// `Tag`, and a stair landing's slab gets none from Revit's export. Where the
+/// holes, as Revit's export writes it. Only on a floor drawn as one extrusion,
+/// or along the plane of its shape-edited corners over the plan profile its
+/// extrusion still holds (#1384) (`single`): a sketch of separate loops is
+/// several elements sharing its `Tag`, and a stair landing's slab gets none
+/// from Revit's export. Where the
 /// floor's type's layers add up to the extrusion's depth (RE-238), also, as
 /// revit-ifc's `DepthCalculator` and `GrossVolumeCalculator` take them from
 /// the extrusion Revit's export builds last (CLEANROOM.md source 5), its
