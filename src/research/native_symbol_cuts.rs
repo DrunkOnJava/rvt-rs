@@ -16,7 +16,7 @@
 //! Architecture's 4 doors, and the door and 3 windows of each of the R2025
 //! models 12 to 17 (`reports/element-framing/RE-215-symbol-cut-loops.md`).
 
-use crate::native_json::{element_id, finite_triple};
+use crate::native_json::{agree, element_id, finite_triple};
 use crate::vector_math::distance;
 use crate::{RevitFile, native_document, native_saved_mesh::pointer};
 use std::collections::{BTreeMap, BTreeSet};
@@ -127,7 +127,7 @@ pub fn instance_cut_loops_and_uncut(
     rf: &mut RevitFile,
     instances: &BTreeSet<u64>,
 ) -> anyhow::Result<(BTreeMap<u64, CutLoop>, BTreeSet<u64>)> {
-    let (loops, uncut, _, _, _) = instance_cuts_and_symbols(rf, instances)?;
+    let (loops, uncut, _, _, _, _) = instance_cuts_and_symbols(rf, instances)?;
     Ok((loops, uncut))
 }
 
@@ -166,8 +166,9 @@ fn cut_solid_size(vertices: &[[f64; 3]]) -> Option<CutSolidSize> {
 }
 
 /// An instance's cut loop, the instances whose symbol cuts none, the
-/// symbol that draws each instance, the element hosting it, and the extents
-/// of the solid an instance's symbol cuts where it cuts no loop, as
+/// symbol that draws each instance, the element hosting it, the extents
+/// of the solid an instance's symbol cuts where it cuts no loop, and the
+/// `m_flippedX` and `m_flippedY` its records agree on, as
 /// [`instance_cuts_and_symbols`] reads them.
 pub type InstanceCuts = (
     BTreeMap<u64, CutLoop>,
@@ -175,6 +176,7 @@ pub type InstanceCuts = (
     BTreeMap<u64, u64>,
     BTreeMap<u64, u64>,
     BTreeMap<u64, CutSolidSize>,
+    BTreeMap<u64, [bool; 2]>,
 );
 
 /// [`instance_cut_loops_and_uncut`], and the symbol that draws each of
@@ -182,7 +184,8 @@ pub type InstanceCuts = (
 /// the type where the instance's own parameters change nothing, else the
 /// symbol its parameters make; the element hosting it, the `m_hostId`
 /// its current record names (RE-245); and, where the symbol cuts no loop,
-/// the extents of the solid it cuts (RE-225).
+/// the extents of the solid it cuts (RE-225); and the hand flip and facing
+/// flip its current records agree on (`m_flippedX` and `m_flippedY`, RE-343).
 pub fn instance_cuts_and_symbols(
     rf: &mut RevitFile,
     instances: &BTreeSet<u64>,
@@ -194,8 +197,10 @@ pub fn instance_cuts_and_symbols(
             BTreeMap::new(),
             BTreeMap::new(),
             BTreeMap::new(),
+            BTreeMap::new(),
         ));
     }
+    let mut flipped: BTreeMap<u64, Option<[bool; 2]>> = BTreeMap::new();
     let mut solids: BTreeMap<u64, CutSolidSize> = BTreeMap::new();
     let mut drawn_by: BTreeMap<u64, u64> = BTreeMap::new();
     let mut hosts: BTreeMap<u64, u64> = BTreeMap::new();
@@ -243,9 +248,24 @@ pub fn instance_cuts_and_symbols(
             {
                 hosts.insert(id, host);
             }
+            if let Some(root) = graph
+                .objects
+                .first()
+                .filter(|_| record.class_name.as_deref() == Some("FamilyInstance"))
+            {
+                let flag = |name: &str| root.fields.get(name).and_then(serde_json::Value::as_bool);
+                let flips = flag("m_flippedX")
+                    .zip(flag("m_flippedY"))
+                    .map(|(x, y)| [x, y]);
+                agree(&mut flipped, id, flips);
+            }
         }
         Ok(())
     })?;
+    let flips = flipped
+        .into_iter()
+        .filter_map(|(id, flips)| Some((id, flips?)))
+        .collect();
     let uncut = drawn_by
         .iter()
         .filter(|(_, symbol)| uncut_symbols.contains(symbol))
@@ -259,7 +279,7 @@ pub fn instance_cuts_and_symbols(
         .iter()
         .filter_map(|(instance, symbol)| Some((*instance, *solids.get(symbol)?)))
         .collect();
-    Ok((loops, uncut, drawn_by, hosts, solids))
+    Ok((loops, uncut, drawn_by, hosts, solids, flips))
 }
 
 /// The category of the lines in a symbol's saved graphics that belong to no

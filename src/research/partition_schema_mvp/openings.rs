@@ -38,10 +38,20 @@ pub(super) fn attach_opening_facings(
 
 /// Give each door and window the hand flip and facing flip of its native
 /// `FamilyInstance` record ([`OPENING_FLIP_FIELDS`], RE-343): `m_flippedX`
-/// and `m_flippedY`, a boolean each, on Revit 2015 to 2027. An element with
+/// and `m_flippedY`, a boolean each, on the releases whose doors and windows
+/// are decoded as Door and Window records (measured on 2024 to 2027). An element with
 /// no such record, whose record lacks either boolean, or whose records
-/// disagree, gets neither field.
-pub(super) fn attach_opening_flips(rf: &mut RevitFile, groups: [&mut Vec<DecodedElement>; 2]) {
+/// disagree, gets neither field. On the releases `attach_cut_loop_sizes`
+/// reads (`CUT_LOOP_REVIT_VERSIONS`) that pass gives them in the one it makes
+/// for the doors' and windows' symbols, and this makes none of its own.
+pub(super) fn attach_opening_flips(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 2],
+) {
+    if CUT_LOOP_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
     let ids: BTreeSet<u64> = groups
         .iter()
         .flat_map(|elements| elements.iter())
@@ -535,25 +545,47 @@ pub(super) fn attach_cut_loop_sizes(
     if !CUT_LOOP_REVIT_VERSIONS.contains(&revit_version) {
         return;
     }
-    let mut elements: Vec<&mut DecodedElement> = groups
+    let has_geometry = |element: &DecodedElement| {
+        !element
+            .fields
+            .iter()
+            .any(|(name, _)| name == TYPE_WITHOUT_GEOMETRY_FIELD)
+    };
+    let mut every: Vec<&mut DecodedElement> = groups
         .into_iter()
         .flat_map(|group| group.iter_mut())
-        .filter(|element| {
-            !element
-                .fields
-                .iter()
-                .any(|(name, _)| name == TYPE_WITHOUT_GEOMETRY_FIELD)
-        })
         .collect();
-    let ids: BTreeSet<u64> = elements
+    // The pass reads every door and window, those that are an opening alone
+    // too, for their flips (RE-343); the rest is read for those with a body.
+    let every_id: BTreeSet<u64> = every
         .iter()
         .filter_map(|element| element.id.map(u64::from))
         .collect();
-    let Ok((loops, uncut, drawn_by, hosts, solids)) =
-        crate::native_symbol_cuts::instance_cuts_and_symbols(rf, &ids)
+    let ids: BTreeSet<u64> = every
+        .iter()
+        .filter(|element| has_geometry(element))
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    let Ok((loops, uncut, drawn_by, hosts, solids, flips)) =
+        crate::native_symbol_cuts::instance_cuts_and_symbols(rf, &every_id)
     else {
         return;
     };
+    // RE-343: the hand flip and facing flip of each door and window.
+    for element in every.iter_mut() {
+        let Some(flips) = element.id.and_then(|id| flips.get(&u64::from(id))) else {
+            continue;
+        };
+        for (name, value) in OPENING_FLIP_FIELDS.iter().zip(*flips) {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Bool(value)));
+        }
+    }
+    let mut elements: Vec<&mut DecodedElement> = every
+        .into_iter()
+        .filter(|element| has_geometry(element))
+        .collect();
     // RE-245: a door or window set in a wall is set in the one its current
     // native record names, which the reference list's nearest wall
     // (`attach_host_candidates`) is not where the list names several.
@@ -628,8 +660,9 @@ pub(super) fn attach_cut_loop_sizes(
         })
     };
     let symbols: BTreeSet<u32> = drawn_by
-        .values()
-        .filter_map(|symbol| u32::try_from(*symbol).ok())
+        .iter()
+        .filter(|(instance, _)| ids.contains(*instance))
+        .filter_map(|(_, symbol)| u32::try_from(*symbol).ok())
         .chain(elements.iter().filter_map(|element| type_of(element)))
         .collect();
     let sizes = crate::partition_type_parameters::type_door_sizes(rf, revit_version, &symbols);
