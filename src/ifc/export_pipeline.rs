@@ -104,7 +104,9 @@ pub struct ExportOptions {
     /// instead of the project's last (`--phase`,
     /// [`RevitFile::set_export_phase`]). An unknown phase is
     /// [`Error::InvalidInput`](crate::Error::InvalidInput) listing the file's
-    /// phases.
+    /// phases. A phase named is exact, the last included; with none named, a
+    /// project whose last phase holds no room writes the rooms of the latest
+    /// phase that holds any ([`ExportDiagnostics::room_phase_fallback`], #1359).
     pub phase: Option<String>,
     /// Also list where each decoded element was read from in the diagnostics
     /// (`decoded.element_provenance`, `rvt-ifc --element-provenance`, #1325).
@@ -352,9 +354,38 @@ pub enum ExportNote {
         /// The reason.
         error: String,
     },
+    /// The project's last phase holds no room and no phase was named, so the
+    /// rooms of the latest phase that holds any are written (#1359). Every
+    /// other element is of the last phase.
+    #[non_exhaustive]
+    RoomPhaseFallback {
+        /// The phase the rooms are written from: its name, or `ElementId <n>`.
+        phase: String,
+        /// The placed rooms of that phase.
+        rooms: usize,
+    },
 }
 
 impl ExportNote {
+    /// The note with the project's own text replaced, as
+    /// [`ExportDiagnostics::anonymize`] replaces it in the diagnostics: the
+    /// phase a room fallback is written from. Every other note carries none.
+    #[must_use]
+    pub fn anonymized(&self) -> Self {
+        match self {
+            Self::RoomPhaseFallback { rooms, .. } => Self::RoomPhaseFallback {
+                phase: crate::redact::ANONYMIZED.to_string(),
+                rooms: *rooms,
+            },
+            other => other.clone(),
+        }
+    }
+
+    /// Whether this is the room fallback of #1359.
+    pub fn is_room_phase_fallback(&self) -> bool {
+        matches!(self, Self::RoomPhaseFallback { .. })
+    }
+
     /// Why the step did not run, for the `...Skipped` notes; `None` for a
     /// step that ran.
     pub fn skipped(&self) -> Option<&str> {
@@ -453,6 +484,10 @@ impl fmt::Display for ExportNote {
                 f,
                 "walls that embed a curtain wall not read, bodies unchanged: {error}"
             ),
+            Self::RoomPhaseFallback { phase, rooms } => write!(
+                f,
+                "the project's last phase holds no room, so the {rooms} room(s) of {phase:?}, the latest phase that holds any, are written; every other element is of the last phase. Naming the export phase (rvt-ifc --phase, Python's phase=, the MCP phase argument) is exact: naming the last writes no room"
+            ),
         }
     }
 }
@@ -542,7 +577,10 @@ pub fn run_export_with_limits(
 /// out ([`RevitFile::set_export_phase`]), so each export is the one a handle
 /// opened for that phase gives, and giving the phase the handle already has
 /// keeps what it read. `options.phase` of `None` leaves the handle's phase as
-/// it is; [`RevitFile::clear_export_phase`] goes back to the project's last.
+/// it is; [`RevitFile::clear_export_phase`] goes back to the default, the
+/// project's last with the rooms' fallback where the last holds no room
+/// ([`RevitFile::room_phase_fallback`], #1359), which a phase named, the last
+/// included, does not have.
 ///
 /// # Errors
 ///
@@ -581,6 +619,14 @@ pub fn run_export_with_limits_and_control(
     let mut diagnostics = result.diagnostics;
     let decisions = result.decisions;
     let mut notes = Vec::new();
+    // #1359: the rooms of an earlier phase, written because the last phase
+    // holds none.
+    if let Some(fallback) = &diagnostics.room_phase_fallback {
+        notes.push(ExportNote::RoomPhaseFallback {
+            phase: fallback.phase.clone(),
+            rooms: fallback.rooms,
+        });
+    }
 
     // #1325: built from the walk the exporter just made, which the handle
     // memoised, before the steps below touch the handle again. The log of
