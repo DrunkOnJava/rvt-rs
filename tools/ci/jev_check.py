@@ -49,17 +49,26 @@ How a diff is scored:
 
 Coverage. A pass needs every open model to be compared (semantic_diff.OPEN_MODEL_NAMES, from this
 checkout and not from the artifact), no model skipped (a dump missing on a side, a dump that did not
-read, a diff that failed), no group of changes dropped from a diff for its size, every chunk scored
-and every chunk sent within the 16,000-character cap. Anything less is at best NOT MEASURED (a
-warn or a fail found in what was scored stays). A run that was not asked for every open model
-(`requested_all` false in the manifest: a `models` filter, or no office or Revit 2025 models) writes no
-check run at all, since a narrower run's pass would stand beside, or replace, a fuller run's fail on
-the same commit; it says why in the step summary.
+read, a diff that failed), no group of changes dropped from a diff for its size, no element whose
+property sets only one dump holds, every count a diff gives present (a missing one is a gap, not a
+zero), every chunk scored and every chunk sent within the 16,000-character cap. Anything less is at
+best NOT MEASURED (a warn or a fail found in what was scored stays). A pass also needs a
+same-repository pull request whose head is the measured commit, whatever the diff holds (an empty
+diff included), and a check written on that commit and no other: --head-sha, which the pull
+request run of the workflow passes so as to write its keyless check on the pull request's head,
+makes the verdict NOT MEASURED when it is not the commit Measure measured. Two cases write no
+check run at all, since another run's pass would stand beside, or replace, a fuller run's fail on
+the same commit: a run that was not asked for every open model (`requested_all` false in the
+manifest: a `models` filter, or no office or Revit 2025 models), and a run whose base is not main or
+an ancestor of main (a run against the pull request's own head scores an empty diff); each says why
+in the step summary. The measured commit and the base are written in the compare job from the plan
+job's resolved refs, not by the measured code.
 
 NOT MEASURED, never a pass: no key in this context (a pull request run, a missing secret), no
-same-repository pull request whose head is the measured commit (a fork's pull request included), a
-measured commit that is not a 40-character SHA, a pull request with no `## Summary` (or an empty
-one) when the diff has findings, HTTP 402 or a 429 for exhausted quota (the credit ran out; not
+same-repository pull request whose head is the measured commit (a fork's pull request included),
+even for an empty diff, a measured commit that is not a 40-character SHA or is not the commit the
+check is written on, a base that is missing or could not be checked against main, a pull request
+with no `## Summary` (or an empty one) when the diff has findings, HTTP 402 or a 429 for exhausted quota (the credit ran out; not
 retried), a key refused, a reply from another model than the pinned one or an answer that does not
 add up, a time-out or a service that stays overloaded after bounded retries, any error in the
 scoring (named by its type), and a diff with no model compared.
@@ -182,17 +191,31 @@ def http_get(url, headers, timeout):
         return error.code, error.read()
 
 
+# Characters that show nothing and are not format characters by category: variation selectors (VS16 among
+# them), the combining grapheme joiner, the Hangul and Khmer fillers, the Braille blank and the Mongolian
+# vowel separator. They are removed with the control and format characters (zero-width, soft hyphen, direction
+# marks, tags), so that what Jev reads is what a person sees.
+INVISIBLE = frozenset(
+    [0x034F, 0x115F, 0x1160, 0x17B4, 0x17B5, 0x180B, 0x180C, 0x180D, 0x180E, 0x2800, 0x3164, 0xFFA0]
+    + list(range(0xFE00, 0xFE10))
+    + list(range(0xE0100, 0xE01F0))
+)
+
+
+def hidden(ch):
+    return ord(ch) in INVISIBLE or unicodedata.category(ch) in ("Cc", "Cf", "Cs", "Co", "Cn")
+
+
 def clean(text, limit=300):
-    """`text` for one printed line: control and format characters (newlines, escapes, zero-width and
+    """`text` for one printed line: control, format and invisible characters (newlines, escapes, zero-width and
     direction marks) removed, cut at `limit`. Everything printed from the artifact goes through here."""
-    text = "".join(" " if ch in "\r\n\t" else ch for ch in str(text) if ch in "\r\n\t" or unicodedata.category(ch) not in ("Cc", "Cf", "Cs", "Co", "Cn"))
+    text = "".join(" " if ch in "\r\n\t" else ch for ch in str(text) if ch in "\r\n\t" or not hidden(ch))
     return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
 def clean_block(text):
-    """`text` with the control characters and format characters (zero-width, soft hyphen, direction marks) removed
-    and its newlines and tabs kept."""
-    return "".join(ch for ch in text if ch in "\n\t" or unicodedata.category(ch) not in ("Cc", "Cf", "Cs", "Co", "Cn"))
+    """`text` with the control, format and invisible characters removed and its newlines and tabs kept."""
+    return "".join(ch for ch in text if ch in "\n\t" or not hidden(ch))
 
 
 def as_sent(text):
@@ -214,7 +237,17 @@ def cut_as_sent(text, limit):
     return text[:low].rstrip() + " [cut]"
 
 
-HTML_TAG = re.compile(r"</?[A-Za-z][A-Za-z0-9-]*(?:\s[^<>]*)?/?>")
+# HTML elements only: a Summary of this repository writes `<set>.<property>`, `Option<T>` and
+# `<Revit class>-<ElementId>`, which are text and must stay.
+HTML_ELEMENTS = (
+    "a abbr address area article aside audio b base bdi bdo blockquote body br button canvas caption center cite code col "
+    "colgroup data datalist dd del details dfn dialog div dl dt em embed fieldset figcaption figure font footer form "
+    "h1 h2 h3 h4 h5 h6 head header hr html i iframe img input ins kbd label legend li link main map mark menu meta meter "
+    "nav noscript object ol optgroup option output p param picture pre progress q rp rt ruby s samp script section select "
+    "small source span strike strong style sub summary sup svg table tbody td template textarea tfoot th thead time title "
+    "tr track tt u ul var video wbr"
+).split()
+HTML_TAG = re.compile(r"</?(?:" + "|".join(HTML_ELEMENTS) + r")(?:\s[^<>]*)?/?>", re.I)
 
 
 def summary_section(body, heading="summary"):
@@ -337,17 +370,33 @@ def load_diffs(directory):
 def coverage_gaps(manifest, diffs):
     """(uncovered, others): why the diffs do not cover every open model completely, as lines. `uncovered` names the
     open models no diff covers (from OPEN_MODEL_NAMES, with the reason the manifest gives for a skipped one),
-    `others` a model skipped that is not on that list and a diff that dropped groups of changes for its size.
+    `others` a model skipped that is not on that list, a diff that dropped groups of changes for its size and a diff
+    whose two dumps do not both hold the property sets of the same elements (the dump samples five elements per
+    entity; one that lost them on a side compares nothing there). A count a diff does not give is a gap, never a zero.
     Both are empty only when every open model is compared in full."""
     reasons = {item["model"]: item["reason"] for item in manifest["skipped"]}
     uncovered = [f"{name}: {reasons.get(name, 'no result folder on either side')}" for name in sd.OPEN_MODEL_NAMES if name not in diffs]
     others = [f"{name}: {reason}" for name, reason in reasons.items() if name not in sd.OPEN_MODEL_NAMES]
+
+    def count(value):
+        return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
     for name in sorted(diffs):
-        dropped = diffs[name].get("dropped_groups", 0)
-        if not isinstance(dropped, int) or isinstance(dropped, bool) or dropped < 0:
+        diff = diffs[name]
+        if not isinstance(diff, dict):
+            others.append(f"{name}: its diff is not readable")
+            continue
+        dropped = diff.get("dropped_groups")
+        if not count(dropped):
             others.append(f"{name}: its diff does not say how many groups of changes it left out")
         elif dropped:
             others.append(f"{name}: {dropped} smaller groups of changes are left out of its diff for their number")
+        coverage = diff.get("coverage")
+        one_side = coverage.get("details_one_side") if isinstance(coverage, dict) else None
+        if not count(one_side):
+            others.append(f"{name}: its diff does not say how many elements' property sets only one dump holds")
+        elif one_side:
+            others.append(f"{name}: {one_side} elements' property sets are held by one dump only, so they are not compared")
     return uncovered, others
 
 
@@ -741,7 +790,13 @@ def summarize(manifest, diffs, findings, chunks, verdict, reasons, context):
             lines.append(f"- {clean(reason, 400)}")
         lines.append("")
     base, head = manifest.get("base_sha"), manifest.get("head_sha")
-    lines.append(f"Compared {len(compared)} openly licensed models ({elements} elements at the head) from Measure run {context.get('run_id', 'unknown')}: base `{(base or 'unknown')[:10]}`, head `{(head or 'unknown')[:10]}`.")
+    on_main = " (main or an ancestor of main)" if context.get("base_on_main") else " (not checked against main)"
+    lines.append(
+        f"Compared {len(compared)} openly licensed models ({elements} elements at the head) from Measure run {context.get('run_id', 'unknown')}: "
+        f"base `{base or 'unknown'}`{on_main}, measured head `{head or 'unknown'}`."
+    )
+    if context.get("check_sha") != head:
+        lines.append(f"**This check is written on `{context.get('check_sha') or 'no commit'}`, which is not the commit Measure measured, so it cannot be more than NOT MEASURED.**")
     shown = ", ".join(compared[:12]) + (f", and {len(compared) - 12} more" if len(compared) > 12 else "")
     lines.append(f"Models: {shown}.")
     gaps = context.get("gaps") or []
@@ -865,37 +920,76 @@ def post_check(repo, token, head_sha, verdict, title, summary, details_url, exte
 # ---- main -------------------------------------------------------------------------------------
 
 
-def resolve_description(args, head_sha):
-    """(description, testing, pull request number, reason): the pull request's `## Summary` and `## Testing`, or
-    why there is no Summary. The Testing section may be empty."""
+def lookup_pull_request(args, sha):
+    """(body, number, reason): the body of the same-repository pull request whose head is `sha`, else why there is
+    none. With --pr-body-file (a calibration of a merged pull request, or a deliberately wrong description) the
+    body comes from the file, with no number."""
     if args.pr_body_file:
         with open(args.pr_body_file, encoding="utf-8") as handle:
-            body, number = handle.read(), None
-    else:
-        token = os.environ.get("GITHUB_TOKEN", "")
-        if not (args.repo and token and head_sha):
-            return None, None, None, "the pull request of the measured commit cannot be looked up here"
-        pull, why = find_pull_request(args.repo, token, head_sha)
-        if pull is None:
-            return None, None, None, why
-        body, number = pull.get("body"), pull["number"]
+            return handle.read(), None, None
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if not (args.repo and token and sha):
+        return None, None, "the pull request of the measured commit cannot be looked up here"
+    pull, why = find_pull_request(args.repo, token, sha)
+    if pull is None:
+        return None, None, why
+    return pull.get("body") or "", pull["number"], None
+
+
+def describe_change(body, number):
+    """(description, testing, reason): the Summary and Testing of a pull request body, or why there is no Summary."""
     description = summary_section(body)
     if description is None:
         where = f"pull request #{number}" if number else "the pull request"
-        return None, None, number, f"{where} has no `## Summary` section to describe the change"
-    return description, summary_section(body, "testing"), number, None
+        return None, None, f"{where} has no `## Summary` section to describe the change"
+    return description, summary_section(body, "testing"), None
+
+
+def base_is_on_main(repo, token, base):
+    """True if `base` is main or an ancestor of it, False if it is not (a commit of a branch, of a fork, or unknown to
+    the repository), None if that could not be told."""
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        status, raw = http_get(f"{GITHUB_API}/repos/{repo}/compare/{base}...main", headers, 30.0)
+        if status == 404:
+            return False
+        if status != 200:
+            return None
+        return json.loads(raw).get("status") in ("ahead", "identical")
+    except (OSError, ValueError, http.client.HTTPException):
+        return None
+
+
+def early_verdict(measured, check_sha, diffs, pull_reason):
+    """(verdict, reasons) when the check cannot be a verdict on this run at all, else None. In order: the commit it
+    would be written on is not a SHA; that commit is not the one Measure measured (a check on another commit says
+    nothing about it, whatever the diff holds); there is no same-repository pull request whose head is the
+    measured commit, which an empty diff does not excuse; no model was compared."""
+    if not check_sha:
+        return "NOT MEASURED", ["the measured commit is missing or is not a 40-character SHA (--head-sha or the artifact's manifest): no request is made"]
+    if check_sha != measured:
+        return "NOT MEASURED", [
+            f"this check is for {check_sha[:10]}, but Measure measured {measured[:10] if measured else 'no valid commit'}: it is not a verdict on the commit it is written on"
+        ]
+    if pull_reason:
+        return "NOT MEASURED", [pull_reason]
+    if not diffs:
+        return "NOT MEASURED", ["no openly licensed model has a dump on both sides of this run"]
+    return None
+
+
+def no_check_text(why, lines):
+    """The summary of a run that writes no check run."""
+    return clean_block("\n".join([f"**No check run is written for this Measure run.** {why}", ""] + lines + [""]))
 
 
 def not_covered_text(uncovered):
-    """The summary of a run that writes no check run, and why."""
-    lines = [
-        "**No check run is written for this Measure run.** It was not asked for every open model "
-        "(it has a `models` filter, or the BIM4LCA office or the Revit 2025 models were off), and the check is written only "
-        "for a run that measured all of them: a narrower run's pass would stand beside, or replace, a fuller run's fail on the same commit.",
-        "",
-        f"{len(uncovered)} of {len(sd.OPEN_MODEL_NAMES)} open models have no diff in this run:",
-        "",
-    ]
+    """The summary of a run that writes no check run because it did not measure every open model."""
+    lines = [f"{len(uncovered)} of {len(sd.OPEN_MODEL_NAMES)} open models have no diff in this run:", ""]
     lines += [f"- {clean(item, 300)}" for item in uncovered[:12]]
     if len(uncovered) > 12:
         lines.append(f"- and {len(uncovered) - 12} more")
@@ -904,7 +998,12 @@ def not_covered_text(uncovered):
         "Run Measure for the pull request's head with `-f base=main -f nordic=true -f r2025=true` and no `models` filter "
         "(`-f scorers=mcp_answers_vs_ifc` keeps every model and leaves the other scorers out).",
     ]
-    return clean_block("\n".join(lines) + "\n")
+    return no_check_text(
+        "It was not asked for every open model (it has a `models` filter, or the BIM4LCA office or the Revit 2025 models were off), "
+        "and the check is written only for a run that measured all of them: a narrower run's pass would stand beside, or replace, "
+        "a fuller run's fail on the same commit.",
+        lines,
+    )
 
 
 def run(args):
@@ -916,8 +1015,8 @@ def run(args):
         raise
     except Exception as error:
         raise SystemExit(f"the semantic-diff artifact could not be read ({type(error).__name__}): no check run is written")
-    head_sha = sha_or_none(args.head_sha) if args.head_sha else manifest["head_sha"]
-    manifest["head_sha"] = head_sha
+    measured = manifest["head_sha"]
+    check_sha = sha_or_none(args.head_sha) if args.head_sha else measured
     uncovered, others = coverage_gaps(manifest, diffs)
     if uncovered and not manifest["requested_all"]:
         print(f"::notice::no check run is written: this Measure run did not cover {len(uncovered)} of {len(sd.OPEN_MODEL_NAMES)} open models and was not asked for all of them")
@@ -925,21 +1024,45 @@ def run(args):
             with open(args.summary, "w", encoding="utf-8") as handle:
                 handle.write(not_covered_text(uncovered))
         return 0
+    base = manifest["base_sha"]
+    base_on_main = None
+    if not args.pr_body_file:
+        token = os.environ.get("GITHUB_TOKEN", "")
+        if base and args.repo and token:
+            base_on_main = base_is_on_main(args.repo, token, base)
+        if base_on_main is False:
+            print(f"::notice::no check run is written: the base {base} is not on main")
+            if args.summary:
+                with open(args.summary, "w", encoding="utf-8") as handle:
+                    handle.write(
+                        no_check_text(
+                            f"Its base is `{base}`, which is not main or an ancestor of main (a run against a pull request's own head, or a branch, "
+                            "would score an empty diff and let a later run supersede an earlier fail on the same commit).",
+                            ["Dispatch Measure with `-f base=main`, or a commit of main."],
+                        )
+                    )
+            return 0
+        if not base:
+            others.append("the base commit is missing or is not a 40-character SHA")
+        elif base_on_main is None:
+            others.append(f"the base {base[:10]} could not be checked against main")
     gaps = uncovered + others
-    seed = f"{args.run_id or 'local'}:{head_sha}"
+    seed = f"{args.run_id or 'local'}:{check_sha}"
     findings, chunks = [], []
     description = testing = number = None
-    context = {"run_id": args.run_id, "gaps": gaps}
+    context = {"run_id": args.run_id, "gaps": gaps, "check_sha": check_sha, "base_on_main": base_on_main}
     try:
         findings = merged_findings(diffs)
-        if not head_sha:
-            verdict, reasons = "NOT MEASURED", ["the measured commit is missing or is not a 40-character SHA (--head-sha or the artifact's manifest): no request is made"]
-        elif not diffs:
-            verdict, reasons = "NOT MEASURED", ["no openly licensed model has a dump on both sides of this run"]
+        body = pull_why = None
+        if check_sha and check_sha == measured:
+            body, number, pull_why = lookup_pull_request(args, check_sha)
+        early = early_verdict(measured, check_sha, diffs, pull_why)
+        if early:
+            verdict, reasons = early
         elif not findings:
             verdict, reasons = assess([], 0, gaps)
         else:
-            description, testing, number, why = resolve_description(args, head_sha)
+            description, testing, why = describe_change(body, number)
             context.update(description=description, testing=testing, pull_request=number)
             chunks = [] if why else build_chunks(findings, seed, description or "", testing or "")
             key = os.environ.get("TYPESAFE_API_KEY", "").strip()
@@ -968,8 +1091,10 @@ def run(args):
         "verdict": verdict,
         "reasons": [clean(reason, 400) for reason in reasons],
         "title": title,
-        "head_sha": head_sha,
-        "base_sha": manifest["base_sha"],
+        "check_sha": check_sha,
+        "measured_sha": measured,
+        "base_sha": base,
+        "base_on_main": base_on_main,
         "run_id": args.run_id,
         "seed": seed,
         "model": MODEL,
@@ -992,13 +1117,13 @@ def run(args):
     if args.dry_run:
         for chunk in chunks:
             print(f"  {chunk['id']} {clean(chunk['part'], 100)}: {len(chunk['findings'])} findings, {chunk['elements']} elements, {chunk['chars']} characters, head is {chunk['head_label']}")
-    if args.post and not head_sha:
+    if args.post and not check_sha:
         print("no check run written: there is no valid commit to write it on")
     elif args.post:
         if not args.repo or not os.environ.get("GITHUB_TOKEN"):
             raise SystemExit("--post needs --repo and GITHUB_TOKEN")
-        check, url = post_check(args.repo, os.environ["GITHUB_TOKEN"], head_sha, verdict, title, summary, args.run_url, f"measure-{args.run_id}")
-        print(f"check run {check} written on {head_sha[:10]}: {clean(url, 200)}")
+        check, url = post_check(args.repo, os.environ["GITHUB_TOKEN"], check_sha, verdict, title, summary, args.run_url, f"measure-{args.run_id}")
+        print(f"check run {check} written on {check_sha[:10]}: {clean(url, 200)}")
     return 0
 
 

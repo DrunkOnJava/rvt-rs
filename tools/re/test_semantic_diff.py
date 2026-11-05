@@ -138,6 +138,14 @@ class Coverage(unittest.TestCase):
     def test_every_open_model_diffed_leaves_nothing_uncovered(self):
         self.assertEqual(sd.uncovered_models(list(sd.OPEN_MODEL_NAMES), []), [])
 
+    def test_the_commit_a_manifest_names_is_the_one_given_or_none_never_the_measured_codes(self):
+        theirs = "c" * 40
+        mine = "a" * 40
+        self.assertEqual(sd.trusted_sha(mine, theirs), mine)
+        self.assertEqual(sd.trusted_sha(None, theirs), theirs)
+        for bad in ("", "main", "A" * 40, "a" * 39, "../x", mine + "\n"):
+            self.assertIsNone(sd.trusted_sha(bad, theirs), bad)
+
     def test_every_name_on_the_list_is_open_and_none_is_restricted(self):
         for name in sd.OPEN_MODEL_NAMES:
             self.assertEqual(sd.model_scope(name), "open", name)

@@ -34,8 +34,12 @@ def manifest(models=None, skipped=(), requested_all=True):
     }
 
 
+def diff_of(dropped=0, one_side=0):
+    return {"dropped_groups": dropped, "coverage": {"details_one_side": one_side, "details_compared": 5}}
+
+
 def diffs_for(names, dropped=0):
-    return {name: {"dropped_groups": dropped} for name in names}
+    return {name: diff_of(dropped) for name in names}
 
 
 def chunk(top=0.1, notice=0.2, findings=1, scored=True):
@@ -74,14 +78,32 @@ class Coverage(unittest.TestCase):
         self.assertTrue(all("no result folder" in line for line in uncovered))
 
     def test_a_dropped_group_or_a_skipped_unlisted_model_is_a_gap(self):
-        uncovered, others = jc.coverage_gaps(manifest(skipped=[("r2025-21_New", "the diff failed (TypeError)")]), {**diffs_for(NAMES), "einhoven": {"dropped_groups": 3}})
+        uncovered, others = jc.coverage_gaps(manifest(skipped=[("r2025-21_New", "the diff failed (TypeError)")]), {**diffs_for(NAMES), "einhoven": diff_of(dropped=3)})
         self.assertEqual(uncovered, [])
         self.assertEqual(len(others), 2)
         self.assertTrue(any("einhoven" in line and "3 smaller groups" in line for line in others))
         self.assertTrue(any("r2025-21_New" in line for line in others))
 
     def test_a_diff_that_does_not_say_what_it_dropped_is_a_gap(self):
-        _, others = jc.coverage_gaps(manifest(), {**diffs_for(NAMES), "einhoven": {"dropped_groups": "0"}})
+        _, others = jc.coverage_gaps(manifest(), {**diffs_for(NAMES), "einhoven": diff_of(dropped="0")})
+        self.assertEqual(len(others), 1)
+
+    def test_a_missing_dropped_groups_key_is_a_gap_not_a_zero(self):
+        diff = diff_of()
+        del diff["dropped_groups"]
+        _, others = jc.coverage_gaps(manifest(), {**diffs_for(NAMES), "einhoven": diff})
+        self.assertEqual(len(others), 1)
+        self.assertIn("einhoven", others[0])
+
+    def test_property_sets_that_only_one_dump_holds_are_a_gap(self):
+        _, others = jc.coverage_gaps(manifest(), {**diffs_for(NAMES), "core-interior": diff_of(one_side=35)})
+        self.assertEqual(len(others), 1)
+        self.assertIn("35 elements", others[0])
+
+    def test_a_diff_without_its_coverage_block_is_a_gap(self):
+        diff = diff_of()
+        del diff["coverage"]
+        _, others = jc.coverage_gaps(manifest(), {**diffs_for(NAMES), "einhoven": diff})
         self.assertEqual(len(others), 1)
 
     def test_every_open_model_in_full_has_no_gap(self):
@@ -109,6 +131,52 @@ class Verdict(unittest.TestCase):
 
     def test_a_complete_diff_with_nothing_over_the_gates_passes(self):
         self.assertEqual(jc.assess([chunk(top=0.9, notice=0.5), chunk()], 0, []), ("pass", []))
+
+
+class Gates(unittest.TestCase):
+    """The three numbers of the verdict, on both sides of each: 0.85 unstated, 1.0 and 1.5 of 4 for the chunk."""
+
+    def verdict(self, top, notice):
+        return jc.judge([chunk(top=top, notice=notice)], 0)[0]
+
+    def test_a_fail_needs_a_finding_at_the_gate_in_a_chunk_rated_one_and_a_half(self):
+        self.assertEqual(self.verdict(0.85, 1.5), "fail")
+        self.assertEqual(self.verdict(0.85, 3.9), "fail")
+        self.assertEqual(self.verdict(0.85, 1.49), "warn")
+        self.assertNotEqual(self.verdict(0.849, 3.9), "fail")
+
+    def test_a_warn_needs_the_same_finding_in_a_chunk_rated_one(self):
+        self.assertEqual(self.verdict(0.85, 1.0), "warn")
+        self.assertEqual(self.verdict(0.99, 1.2), "warn")
+        self.assertEqual(self.verdict(0.85, 0.99), "pass")
+        self.assertEqual(self.verdict(0.849, 1.4), "pass")
+
+
+class Early(unittest.TestCase):
+    """What the check says before it scores anything: the commit it is written on, the pull request, the models."""
+
+    B, D = "b" * 40, "d" * 40
+
+    def test_a_check_on_a_commit_measure_did_not_measure_is_not_measured_even_for_an_empty_diff(self):
+        verdict, reasons = jc.early_verdict(self.B, self.D, diffs_for(NAMES), None)
+        self.assertEqual(verdict, "NOT MEASURED")
+        self.assertIn(self.D[:10], reasons[0])
+        self.assertIn(self.B[:10], reasons[0])
+
+    def test_a_check_with_no_measured_commit_is_not_measured(self):
+        self.assertEqual(jc.early_verdict(None, self.D, diffs_for(NAMES), None)[0], "NOT MEASURED")
+        self.assertEqual(jc.early_verdict(self.B, None, diffs_for(NAMES), None)[0], "NOT MEASURED")
+
+    def test_an_empty_diff_with_no_pull_request_is_not_measured(self):
+        verdict, reasons = jc.early_verdict(self.B, self.B, diffs_for(NAMES), "no pull request of this repository has this commit as its head")
+        self.assertEqual(verdict, "NOT MEASURED")
+        self.assertIn("no pull request", reasons[0])
+
+    def test_no_model_compared_is_not_measured(self):
+        self.assertEqual(jc.early_verdict(self.B, self.B, {}, None)[0], "NOT MEASURED")
+
+    def test_the_measured_commit_with_a_pull_request_and_models_goes_on_to_be_scored(self):
+        self.assertIsNone(jc.early_verdict(self.B, self.B, diffs_for(NAMES), None))
 
 
 class Reply(unittest.TestCase):
@@ -181,6 +249,19 @@ class Text(unittest.TestCase):
         self.assertNotIn("​", summary)
         self.assertNotIn("‮", summary)
         self.assertIn("gain a height", summary)
+
+    def test_text_in_angle_brackets_that_is_not_html_stays(self):
+        body = "## Summary\n\nA parameter named `<set>.<property>` on `Option<T>` and `<Revit class>-<ElementId>` stay; <br/> and <details> go."
+        summary = jc.summary_section(body)
+        for kept in ("<set>.<property>", "Option<T>", "<Revit class>-<ElementId>"):
+            self.assertIn(kept, summary)
+        self.assertNotIn("<br", summary)
+        self.assertNotIn("<details", summary)
+
+    def test_characters_that_show_nothing_are_removed_whatever_their_category(self):
+        hidden = "\ufe0f\u2800\u3164\u034f\U000e0100\u115f\u180e\u200b"
+        summary = jc.summary_section(f"## Summary\n\nwalls{hidden} gain a height")
+        self.assertEqual(summary, "walls gain a height")
 
     def test_a_template_comment_alone_is_no_summary(self):
         self.assertIsNone(jc.summary_section("## Summary\n\n<!-- 1-3 sentences -->\n\n## Motivation\n\nx"))

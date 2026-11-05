@@ -973,11 +973,15 @@ jobs:
         shell: bash
         env:
           REQUESTED_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.models == '' && inputs.nordic && inputs.r2025 && 'true' || 'false' }}
+          # The commits the plan job resolved from the inputs, not the commit.txt of a result folder: that
+          # file is written by a shard job that runs the measured code, which could name any commit.
+          HEAD_SHA: ${{ needs.plan.outputs.head_sha }}
+          BASE_SHA: ${{ needs.plan.outputs.base_sha }}
         run: |
           status=0
-          args=()
+          args=(--head-sha "$HEAD_SHA" --base-sha "$BASE_SHA")
           [ "$REQUESTED_ALL" = true ] && args+=(--requested-all)
-          python3 tools/re/semantic_diff.py measure measure-base measure-head semantic-diff ${args[@]+"${args[@]}"} > semantic-diff.log 2>&1 || status=$?
+          python3 tools/re/semantic_diff.py measure measure-base measure-head semantic-diff "${args[@]}" > semantic-diff.log 2>&1 || status=$?
           cat semantic-diff.log
           {
             echo "### Semantic diff of the MCP dumps"

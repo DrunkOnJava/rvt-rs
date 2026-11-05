@@ -186,15 +186,22 @@ a fetcher gains a model). A run with a filter, or `base=none`, gets its diffs in
 the `semantic-diff` artifact and no check run, and says so in the step summary
 of both its compare job and the Semantic check run: a narrower run's pass would
 stand beside a fuller run's fail on the same commit, since the check has one
-name. A run that was asked for everything and compared less (a model whose dump
-is missing on one side because the server crashed on it, a diff that failed, a
-group of changes dropped for size, a model not fetched) writes a check that is
-**NOT MEASURED at best**, naming each model and its own reason; a warn or a
-fail found in what was compared stays. The check lands on the commit Measure
-measured (the commit its artifact names), which is found again through the API
-as the head of a same-repository pull request: if the pull request's head has
-moved since, or the commit is another pull request's, the check is NOT MEASURED
-and says so. Measure the head of the pull request, not a branch name that has
+name. A run whose base is not main or an ancestor of main writes no check
+either (`-f base=<the pull request's own head>` scores an empty diff, and its
+pass would supersede an earlier fail on the same commit); the check's step summary
+names the base. A run that was asked for everything and compared less (a model
+whose dump is missing on one side because the server crashed on it, a diff that
+failed, a group of changes dropped for size, property sets that only one of the
+two dumps holds, a count a diff does not give, a model not fetched) writes a
+check that is **NOT MEASURED at best**, naming each model and its own reason; a
+warn or a fail found in what was compared stays. The check lands on the commit
+Measure measured, which the compare job takes from the plan job's resolved refs
+(a shard job runs the measured code, so its `commit.txt` is not trusted), and
+which is found again through the API as the head of a same-repository pull
+request. If the pull request's head has moved since, or the commit is another
+pull request's or a fork's, or no pull request has it as its head, the check is
+NOT MEASURED and says so, **an empty diff included**: a pass needs that pull
+request first. Measure the head of the pull request, not a branch name that has
 moved, and write the Summary before the run.
 
 **Where to find the verdict.** The verdict is on the measured commit, which is
@@ -207,8 +214,10 @@ summary names as its head):
 
 A later commit does not clear a fail: only a new score of the same pull request
 does, which is a complete Measure run of its new head, and that run writes its own
-verdict on the commit it measured. A filtered Measure run writes no verdict at
-all, so a pull request that changes output needs its final unfiltered run (no
+verdict on the commit it measured. A NOT MEASURED check, on that commit or a later
+one, does not clear a fail either: only a new pass or a new warn does, so read the
+newest verdict that is one of those three. A filtered Measure run writes no verdict
+at all, so a pull request that changes output needs its final unfiltered run (no
 `models` filter), made on the head it is armed at, and the verdict that run writes
 is the one to read.
 
@@ -271,8 +280,11 @@ Measure's `ifc.sha256` is what says that an export is identical.
   each chunk with the two descriptions labelled A and B, the labels assigned at
   random per chunk from a seed of the run and the head commit. Each chunk also
   carries the first 2,500 characters (as sent) of the pull request's
-  `## Summary` and of its `## Testing` as quoted data, with HTML comments and
-  tags and invisible or control characters removed first (the pull request's
+  `## Summary` and of its `## Testing` as quoted data, with HTML comments, HTML
+  element tags (`<br>`, `<details>`, `<span>`; angle-bracket text that is not an
+  element, such as `<set>.<property>` or `Option<T>`, stays) and control,
+  format and invisible characters (zero-width, variation selectors, fillers, the
+  Braille blank) removed first (the pull request's
   text is untrusted: the state says it is the author's claim, and each question
   says it cannot change what is asked); the check's summary shows all of the
   text Jev read, so a person sees what it saw. Per finding, Jev chooses how they
@@ -312,7 +324,12 @@ Measure's `ifc.sha256` is what says that an export is identical.
   its type, never a message), a measured commit that is not a 40-character SHA, a
   diff with no model compared, any open model that is not compared in full (see
   above), a group of changes dropped from a diff for its size (over 20,000 groups
-  in one model), and any chunk not scored (more than 150 chunks, a run past 7
+  in one model), property sets that only one of a model's two dumps holds (the
+  dump samples five elements per entity; one that lost them compares nothing
+  there), a measured commit that is not the commit the check is written on (the
+  keyless run of a pull request that changes the check writes on the pull
+  request's head, whatever commit Measure measured), a base that is missing or could
+  not be checked against main, and any chunk not scored (more than 150 chunks, a run past 7
   minutes, or a chunk that does not fit in 16,000 characters as sent, a
   character outside ASCII counting six) when no scored chunk is a warn or a fail
   already. A fork's run and a run that was not dispatched are not NOT MEASURED:

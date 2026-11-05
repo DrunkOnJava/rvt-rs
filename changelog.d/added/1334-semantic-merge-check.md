@@ -13,9 +13,9 @@
   environment `jev` that holds the key) scores only a Measure run dispatched
   in this repository, gives Jev `jev-1.13.0` the diff in chunks of at most
   16,000 characters beside the pull request's own `## Summary` and `##
-  Testing` (found through the API from the measured commit, HTML and invisible
-  characters removed, quoted as untrusted data, all of it shown in the check's
-  summary) and asks, blind (the outputs are labelled A and B at random per
+  Testing` (found through the API from the measured commit, HTML element tags
+  and invisible characters removed, quoted as untrusted data, all of it shown in
+  the check's summary) and asks, blind (the outputs are labelled A and B at random per
   chunk, with no model name, pull request number or direction), whether each
   difference is stated specifically, follows from a specific change, is
   covered only by a general description, is unstated, or is only rounding. A
@@ -24,11 +24,16 @@
   (advisory)` on the commit Measure measured: pass (success), warn (neutral),
   fail (failure: a move the Summary and Testing do not state specifically) or
   NOT MEASURED (no key, a pull request from a fork, no pull request for the
-  commit, no Summary where the diff has findings, HTTP 402, a time-out, an
-  answer that does not add up), with each finding and its probability. Only
+  commit even for an empty diff, a check written on a commit Measure did not
+  measure, no Summary where the diff has findings, HTTP 402, a time-out, an
+  answer that does not add up), with each finding and its probability. The
+  measured commit and the base are written by the compare job from the plan
+  job's refs, not by the measured code, and a run whose base is not on main
+  writes no check. Only
   a run of every open model writes a check, and a pass needs all 34 compared
-  in full: a model whose dump is missing, a diff that failed, a dropped group
-  or an unscored chunk makes it NOT MEASURED at best, and a run with a
+  in full: a model whose dump is missing, a diff that failed, a dropped group,
+  property sets only one dump holds or an unscored chunk makes it NOT MEASURED
+  at best, and a run with a
   `models` filter writes none, so a narrower run's pass cannot stand beside a
   fuller run's fail. It is not a required check and posts no pull request
   comment. A pass means the dumps agree, not that the exports are identical:

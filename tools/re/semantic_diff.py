@@ -35,13 +35,16 @@ Usage:
     python3 tools/re/semantic_diff.py pair <base-dump.json> <head-dump.json> [--model NAME]
         [--json OUT] [--text OUT]
     python3 tools/re/semantic_diff.py measure <measure-base> <measure-head> <out-dir> [--requested-all]
+        [--head-sha SHA] [--base-sha SHA]
 
 `measure` is what Measure's compare job runs on its two merged result folders: for each openly
 licensed model that has a dump on both sides it writes `<out-dir>/<model>.json` and `.txt`, and a
 `manifest.json` naming the models, the models skipped and why, the open models no diff covers
 (`uncovered`, against OPEN_MODEL_NAMES), whether the run was asked for every open model
 (`--requested-all`: no model filter, the office and the Revit 2025 models on) and the measured
-commits. A model on the restricted list (the held-out, spent, BIMcollab and rac_advanced models,
+commits. The compare job passes the commits the plan job resolved (`--head-sha`, `--base-sha`): the
+`commit.txt` of a result folder is written by a shard job that runs the measured code, which could
+name any commit, so it is read only when none is passed. A model on the restricted list (the held-out, spent, BIMcollab and rac_advanced models,
 Autodesk's samples and families) must hold no dump; a dump there, or in a model on neither list,
 fails the run with exit status 1 and no output.
 
@@ -661,7 +664,16 @@ def uncovered_models(diffed, skipped, expected=OPEN_MODEL_NAMES):
     return [(name, reasons.get(name, "no result folder on either side")) for name in expected if name not in set(diffed)]
 
 
-def measure(base_dir, head_dir, out_dir, requested_all=False):
+def trusted_sha(value, fallback):
+    """The commit a manifest names. `value` is what the compare job resolved from the plan job's refs (None when none
+    was given: then the `commit.txt` of the folder, which the measured code wrote); a value given that is not a
+    40-character SHA is no commit, never the fallback."""
+    if value is None:
+        return fallback
+    return value if isinstance(value, str) and re.fullmatch(r"[0-9a-f]{40}", value) else None
+
+
+def measure(base_dir, head_dir, out_dir, requested_all=False, head_sha=None, base_sha=None):
     """Diff every openly licensed model that has a dump on both sides. Returns (manifest, violations);
     a violation is a dump in a model that is restricted or on neither list."""
     names = sorted(set(model_folders(base_dir)) | set(model_folders(head_dir)))
@@ -703,8 +715,8 @@ def measure(base_dir, head_dir, out_dir, requested_all=False):
         write(os.path.join(out_dir, f"{name}.txt"), render_text(diff, name))
     manifest = {
         "version": VERSION,
-        "base_sha": commit_of(base_dir),
-        "head_sha": commit_of(head_dir),
+        "base_sha": trusted_sha(base_sha, commit_of(base_dir)),
+        "head_sha": trusted_sha(head_sha, commit_of(head_dir)),
         "models": models,
         "skipped": skipped,
         "uncovered": [{"model": name, "reason": reason} for name, reason in uncovered_models([m["model"] for m in models], skipped)],
@@ -728,6 +740,8 @@ def main(argv):
     run.add_argument("head_dir")
     run.add_argument("out_dir")
     run.add_argument("--requested-all", action="store_true")
+    run.add_argument("--head-sha")
+    run.add_argument("--base-sha")
     args = parser.parse_args(argv)
     if args.command == "pair":
         diff = diff_dumps(load_dump(args.base), load_dump(args.head))
@@ -739,7 +753,7 @@ def main(argv):
         else:
             sys.stdout.write(text)
         return 0
-    manifest, violations = measure(args.base_dir, args.head_dir, args.out_dir, args.requested_all)
+    manifest, violations = measure(args.base_dir, args.head_dir, args.out_dir, args.requested_all, args.head_sha, args.base_sha)
     if violations:
         for line in violations:
             print(f"::error::semantic diff: {line}")

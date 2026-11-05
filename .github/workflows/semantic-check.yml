@@ -33,9 +33,12 @@
 # dump on both sides); workflow_dispatch with a run id, to score an older run or
 # score one again; and a pull request that changes this check, which runs it
 # without the environment (so without the key) on the newest dispatched Measure
-# run of the pull request's head and writes its keyless check run on the pull
-# request itself, to prove the plumbing before it reaches main. Re-run a scored
-# run with `gh run rerun`, e.g. after the Jev credit is topped up.
+# run dispatched from the pull request's head and writes its keyless check run on
+# the pull request's head, to prove the plumbing before it reaches main. That run
+# measured some other commit (the one it was dispatched for), so the check is
+# NOT MEASURED and says so in its title: a check is never more than that on a
+# commit Measure did not measure. Re-run a scored run with `gh run rerun`, e.g.
+# after the Jev credit is topped up.
 
 name: Semantic check
 
@@ -106,8 +109,9 @@ jobs:
                 echo "::notice::a pull request from a fork: nothing is scored and no check run is written"
               elif [[ "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
                 # The keyless run of a pull request that changes this check: the newest
-                # dispatched Measure run of the pull request's head, and the check lands on
-                # that head. The other events write on the commit the artifact names.
+                # Measure run dispatched from the pull request's head, and the check lands on
+                # that head, as NOT MEASURED (jev_check.py: it is not the measured commit).
+                # The other events write on the commit the artifact names.
                 run_id=$(gh api "repos/$REPO/actions/workflows/measure.yml/runs?head_sha=$PR_HEAD_SHA&status=success&event=workflow_dispatch&per_page=1" --jq '.workflow_runs[0].id // empty')
                 check_sha="$PR_HEAD_SHA"
               fi
