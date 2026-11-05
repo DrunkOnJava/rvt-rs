@@ -2058,9 +2058,12 @@ fn decide_ends(
 /// (the block must not lie inside a wall; one that is turned off a quarter
 /// turn, or drawn as another kind of solid, is not read and does not stop it),
 /// and the wall's own top. The steps above are not
-/// drawn. That is a bound by the geometry the pass reads, not Revit's rule:
-/// whether any wall's top is higher than Revit's at an added end is measured,
-/// by the plan rows of `wall_top_cover_vs_ifc`. The wall's `extrusion` is its
+/// drawn: a labelled approximation (`BodyEndSource`
+/// `wall_end_to_base_wall_upper_step_omitted`, shipped so by Griffin on
+/// 2026-11-05) where a block stops below the wall's top. That is a bound by the
+/// geometry the pass reads, not Revit's rule: whether any wall's top is higher
+/// than Revit's at an added end is measured, by the plan rows of
+/// `wall_top_cover_vs_ifc`. The wall's `extrusion` is its
 /// full plan to its top, which the passes that read its plan use; its
 /// `solid_shape` is the stepped body, made by [`cut_wall_bases`] or
 /// [`finish_wall_ends`]. The openings of its edited profile, placed in its
