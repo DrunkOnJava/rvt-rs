@@ -372,6 +372,23 @@ pub fn exclusion(
         .then_some(PhaseExclusion::Demolished)
 }
 
+/// The fields of a `RoomElem` record that [`compute_phase_filter`] takes: the
+/// phases it was created and demolished in, its own phase, and `m_id`, which
+/// the record's identity is checked against. The rest of a room's graph is
+/// read and checked but not built (#1335). The two records of the project's
+/// phases are read in full.
+fn room_phase_fields(class: &str) -> Option<&'static [&'static str]> {
+    match class {
+        "RoomElem" => Some(&[
+            "m_id",
+            "m_createdPhaseId",
+            "m_demolishedPhaseId",
+            "m_phaseId",
+        ]),
+        _ => None,
+    }
+}
+
 /// The project's phase order and names, every element not in its last phase
 /// and every room's own phase, in one pass over the native records (graphs
 /// only for `AllProjectPhases`, `ProjectPhase` and `RoomElem`). Empty where
@@ -392,6 +409,7 @@ pub fn compute_phase_filter(rf: &mut RevitFile) -> anyhow::Result<PhaseFilter> {
             "RoomElem".to_string(),
         ])),
         releases: native_document::NATIVE_RELEASES,
+        graph_fields: Some(room_phase_fields),
         ..native_document::Options::default()
     };
     let mut order: Option<Vec<i64>> = None;
