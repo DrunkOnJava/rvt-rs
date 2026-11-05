@@ -27,33 +27,40 @@
   keeps its shape, with `entity_index` added to the panel.
   `docs/viewer-api.md` says what the storey is. Measured with
   `probes/examples/probe_1422_viewer_panel_levels.rs` in Measure run
-  41983448919 (code head 32f8a3e5, `base=none`, `scorers=none`, nordic and
-  r2025 on), where all 8 models pass the probe's checks (the schedule's rows
-  and the tree's nodes are exactly the written elements, each on the storey
-  `storey_of` gives it, in level-elevation order, and every sampled panel has
-  that storey, a folded piece the panel of its owner): on the BIM4LCA office
-  as built the schedule goes from 13,021 rows to 12,974 and at building
-  permit from 13,067 to 13,020, the 47 rows left out in each being
-  `IfcCovering` pieces, and 599 rows of each change storey (542
+  41986216576 (code head a8785bb9, `base=none`, `scorers=none`, nordic and
+  r2025 on), where all 8 models pass the probe's 10 checks (the schedule's
+  rows and the tree's nodes are exactly the written elements, each on the
+  storey `storey_of` gives it, in level-elevation order; every sampled
+  panel has that storey, names the written element in `entity_index` and,
+  for an element with folded pieces, states no size and does not list
+  `extents` as missing; a folded piece has the panel of its owner): on the
+  BIM4LCA office as built the schedule goes from 13,021 rows to 12,974 and
+  at building permit from 13,067 to 13,020, the 47 rows left out in each
+  being `IfcCovering` pieces, and 599 rows of each change storey (542
   `IfcMember`, 35 `IfcStairFlight` and 22 `IfcSlab`, all parts of a whole):
   542 from one storey to another and 57 from none to a storey, and the tree
   and the panels move the same 599; the tree's `Unassigned` storey goes from
-  60 elements to 3 as built and from 59 to 2 at permit. On the Revit 2025
-  stair models r2025-13, r2025-14 and r2025-15 the 27 rows stay 27 and 3 take a
-  storey, and on r2025-16 and r2025-17 the 25 rows stay 25 and 1 takes one,
-  each from none to a storey; Einhoven's 37 elements move none and lose
-  none, a null result that does not exercise the fold path. The IFC text
-  `rvt-ifc` writes is the same on 8 of 8 of those models, in run 41983474888
-  (head 32f8a3e5 against main 40b86b80, `scorers=none`). The size rows left out
-  of the panels, the click selection, the category counts, the part under the
-  first whole and the hosts that host each other came after code head
-  32f8a3e5 and are not yet measured on a run. Not measured: the held-out
-  models and Autodesk's samples, 2024 Core Interior and RE1, the viewer's
-  saved-mesh model beyond what the probe builds (`ExportOptions::default()`),
-  and a real click in a browser: no browser test exercises the fold path,
-  since Einhoven has no folded piece, and the probe's checks derive from
-  `placements`, so they prove the viewer's views follow the writer's decision
-  and not that the decision is right (the MCP scorer reading the written IFC
-  does, run 41977947391). The diagnostics' count of folded pieces is #1424,
-  until which the Schedule panel's total can read 47 below the diagnostics'
-  on the office.
+  60 elements to 3 as built and from 59 to 2 at permit. The panels of all 19
+  elements with folded pieces as built and all 20 at permit have their size
+  rows left out. On the Revit 2025 stair models r2025-13, r2025-14 and
+  r2025-15 the 27 rows stay 27 and 3 take a storey, and on r2025-16 and
+  r2025-17 the 25 rows stay 25 and 1 takes one, each from none to a storey;
+  Einhoven's 37 elements move none and lose none, and neither it nor the
+  Revit 2025 models has an element with folded pieces, a null result that
+  does not exercise the fold path or the size rows. The IFC text `rvt-ifc`
+  writes is the same on 8 of 8 of those models, in run 41986242000 (head
+  a8785bb9 against main b510ff3c, `scorers=none`). These figures cover the
+  Rust side: the three functions' output and the panel's `entity_index` and
+  extents. The probe did not count elements that host each other, so that
+  path is not known to be exercised. Not measured: the viewer's TypeScript
+  (the click selecting the written element, the highlight and zoom over its
+  pieces, the category counts, the part under the first whole) in a real
+  browser, since no browser test exercises the fold path; the held-out
+  models and Autodesk's samples; 2024 Core Interior and RE1; and the
+  viewer's saved-mesh model beyond what the probe builds
+  (`ExportOptions::default()`). The probe's checks derive from `placements`,
+  so they prove the viewer's views follow the writer's decision and not that
+  the decision is right (the MCP scorer reading the written IFC does, run
+  41977947391). The diagnostics' count of folded pieces is #1424, until which
+  the Schedule panel's total can read 47 below the diagnostics' on the
+  office.
