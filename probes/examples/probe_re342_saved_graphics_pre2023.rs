@@ -36,8 +36,8 @@
 //!   orthogonal, general), and the `GInstance` objects by `m_bHasScale`, the
 //!   `m_GRepId` and the matrix class of the `InstanceInfo` they name;
 //! - `scene`, on files of Revit 2023 and earlier: the elements of class
-//!   `FamilyInstance`, `ImportInstance` and `DirectShape` (every element of a
-//!   family), meshed as `saved_meshes::attach` meshes a body
+//!   `FamilyInstance`, `ImportInstance` and `DirectShape`, meshed as
+//!   `saved_meshes::attach` meshes a body
 //!   (`native_saved_scene::extract_in_batches_with_control`, detail level 3,
 //!   `Options::releases` widened to `NATIVE_RELEASES`): their status, the
 //!   histogram of what stops the partial ones, and their triangles.
@@ -497,13 +497,9 @@ fn diagnostic_kind(diagnostic: &str) -> String {
     norm_msg(kind)
 }
 
-fn scene(rf: &mut RevitFile, family: bool, tally: &mut Tally) -> BTreeMap<u64, Mesh> {
+fn scene(rf: &mut RevitFile, tally: &mut Tally) -> BTreeMap<u64, Mesh> {
     let options = Options {
-        selected_classes: if family {
-            BTreeSet::new()
-        } else {
-            SCENE_CLASSES.iter().map(|c| (*c).to_string()).collect()
-        },
+        selected_classes: SCENE_CLASSES.iter().map(|c| (*c).to_string()).collect(),
         releases: NATIVE_RELEASES,
         max_graph_values: 1_000_000,
         max_graph_objects: 1_000_000,
@@ -645,7 +641,7 @@ fn open(path: &str) -> Result<RevitFile> {
     )?)
 }
 
-fn header(rf: &mut RevitFile, path: &str) -> Result<(u32, bool)> {
+fn header(rf: &mut RevitFile, path: &str) -> Result<u32> {
     let saved = rf.basic_file_info()?.version;
     let layout = rf.layout_release()?;
     let family = path.to_ascii_lowercase().ends_with(".rfa");
@@ -653,12 +649,12 @@ fn header(rf: &mut RevitFile, path: &str) -> Result<(u32, bool)> {
         "release saved {saved} layout {layout} kind {}",
         if family { "family" } else { "project" }
     ));
-    Ok((layout, family))
+    Ok(layout)
 }
 
 fn single(path: &str, census_only: bool) -> Result<()> {
     let mut rf = open(path)?;
-    let (release, family) = header(&mut rf, path)?;
+    let release = header(&mut rf, path)?;
     let mut tally = Tally::default();
     match native_document::read_single(&mut rf, "Formats/Latest")
         .and_then(|bytes| schema_registry::parse(&bytes))
@@ -678,7 +674,7 @@ fn single(path: &str, census_only: bool) -> Result<()> {
     if census_only {
         scene_tally.add("scene not run: --records", 1);
     } else if release <= 2023 {
-        scene(&mut rf, family, &mut scene_tally);
+        scene(&mut rf, &mut scene_tally);
     } else {
         scene_tally.add(
             "scene not run: the release is read by the default export",
@@ -692,13 +688,13 @@ fn single(path: &str, census_only: bool) -> Result<()> {
 fn pair(older_path: &str, newer_path: &str) -> Result<()> {
     let mut older_file = open(older_path)?;
     let mut newer_file = open(newer_path)?;
-    let (_, older_family) = header(&mut older_file, older_path)?;
-    let (_, newer_family) = header(&mut newer_file, newer_path)?;
+    header(&mut older_file, older_path)?;
+    header(&mut newer_file, newer_path)?;
     let mut older_tally = Tally::default();
-    let older = scene(&mut older_file, older_family, &mut older_tally);
+    let older = scene(&mut older_file, &mut older_tally);
     older_tally.print_with("older");
     let mut newer_tally = Tally::default();
-    let newer = scene(&mut newer_file, newer_family, &mut newer_tally);
+    let newer = scene(&mut newer_file, &mut newer_tally);
     newer_tally.print_with("newer");
     let mut tally = Tally::default();
     compare(&older, &newer, &mut tally);
