@@ -113,6 +113,26 @@ pub const OPENING_FACING_FIELDS: [&str; 2] = ["m_opening_facing_x", "m_opening_f
 /// doors disagree), and nothing is claimed.
 pub const OPENING_FLIP_FIELDS: [&str; 2] = ["m_hand_flipped", "m_facing_flipped"];
 
+/// Fields holding the plan direction of a straight wall's level line, from
+/// the wall's native `SWall` record (RE-222): the unit vector from its start
+/// to its end, on a wall whose record gives exactly one such line and a flip.
+/// A door or window is bound to a plain wall for
+/// [`OPENING_PLACEMENT_X_AXIS_FIELDS`] only where its host has these.
+pub const WALL_NATIVE_DIRECTION_FIELDS: [&str; 2] =
+    ["m_wall_native_direction_x", "m_wall_native_direction_y"];
+
+/// Fields holding the plan direction of the X axis of a door's or window's
+/// `IfcLocalPlacement` in Revit's own export (RE-347): the X axis of its
+/// stored transform, reversed where `m_hand_flipped` differs from
+/// `m_facing_flipped` (RE-343 Rule 1). Present only where the element is set
+/// in a plain wall rvt-rs binds, whose native record gives a straight level
+/// line the stored X runs along, and the transform is upright and its X axis
+/// within [`INSTANCE_TURN_MIN_RADIANS`] of the model's axes.
+pub const OPENING_PLACEMENT_X_AXIS_FIELDS: [&str; 2] = [
+    "m_opening_placement_x_axis_x",
+    "m_opening_placement_x_axis_y",
+];
+
 /// Field carrying a family instance's original symbol (RE-167): the
 /// FamilySymbol `ExporterIFCUtils.GetOriginalSymbol` returns, whose GlobalId
 /// Revit's export gives the instance's type object while its `Tag` stays the
@@ -457,6 +477,17 @@ pub const SLAB_SHAPE_READER: &str = "native_slab_shape";
 /// ([`crate::native_walls::WallRecords::base_cutters`], #1384): the floors and
 /// footings the export may cut its base at.
 pub const WALL_BASE_CUTTERS_FIELD: &str = "m_wall_base_cutters";
+
+/// Field holding, as a flat vector of floats `[x0, y0, x1, y1]`, the plan
+/// places of the start and the end of a wall's location curve
+/// ([`crate::native_walls::EndJoins::curve`], #1410).
+pub const WALL_CURVE_FIELD: &str = "m_wall_curve";
+
+/// Fields holding, each as a vector of ElementIds, the walls joined at the
+/// start and at the end of a wall's location curve, in the order the record
+/// lists them ([`crate::native_walls::EndJoins::real`], #1410). A field is
+/// absent where the record does not give that end's list.
+pub const WALL_END_JOINS_FIELDS: [&str; 2] = ["m_wall_end_joins_start", "m_wall_end_joins_end"];
 
 /// Field holding a railing's height, its type's top rail height, feet
 /// (RE-231).

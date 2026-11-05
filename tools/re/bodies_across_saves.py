@@ -33,6 +33,16 @@ lists change:
   named elements       the elements NAMED_TAGS lists, whatever their source,
                        held to the 2024 save; their sources and volumes in
                        every save are printed
+  doors and windows    an IfcDoor or IfcWindow that carries
+                       RvtElementRecordGeometry.PlacementAxesSource, placed as
+                       Revit's export places a door or window set in a plain
+                       wall (RE-347); held to the 2024 save, where its axes,
+                       GlobalId and body must be the same. The number compared,
+                       and of those not on the default axes, is printed; the
+                       least compared per class (OPENINGS_LEAST) and the most
+                       the 2024 save places by the rule that this save leaves on
+                       the default axes (OPENINGS_LEFT_OUT_MOST) are set per
+                       project and year, and the second can only shrink
 
 Each is paired by `Tag` (the ElementId, which a project keeps across saves)
 with the earlier save's element, and fails on any difference in: its IFC
@@ -42,7 +52,9 @@ placement (0.001 ft), body volume (1e-6 relative) and vertices (each within
 0.001 ft of one of the other's, both ways). It also fails on an element the
 earlier save has no counterpart for, one the earlier save draws otherwise, one
 of the earlier save's that this save lacks altogether, a missing file, fewer
-elements than the sample is known to hold (MINIMUMS, OUTLINE_LEAST), a
+elements than the sample is known to hold (MINIMUMS, OUTLINE_LEAST,
+OPENINGS_LEAST), more doors and windows left on the default axes than
+OPENINGS_LEFT_OUT_MOST, a
 required element not compared equal (REQUIRED), and a check that compared
 nothing, and on a directory whose project is not one of MINIMUMS'. An element
 the earlier save draws and this one leaves as a record box is counted, not
@@ -86,6 +98,8 @@ BEAMS_AND_LANDINGS = "beams and landings"
 STAIR_RUNS = "stair runs"
 SKETCH_OUTLINES = "sketch outlines"
 NAMED_ELEMENTS = "named elements"
+DOORS_AND_WINDOWS = "doors and windows"
+OPENING_CLASSES = {"IfcDoor", "IfcWindow"}
 
 SOURCE_GROUP = {
     "partition_beam_axis": BEAMS_AND_LANDINGS,
@@ -95,7 +109,7 @@ SOURCE_GROUP = {
     "partition_stair_run_sketch": STAIR_RUNS,
 }
 OUTLINE_CLASSES = {"IfcSlab", "IfcCovering", "IfcRoof"}
-REFERENCE_YEAR = {BEAMS_AND_LANDINGS: 2024, STAIR_RUNS: 2025, SKETCH_OUTLINES: 2024, NAMED_ELEMENTS: 2024}
+REFERENCE_YEAR = {BEAMS_AND_LANDINGS: 2024, STAIR_RUNS: 2025, SKETCH_OUTLINES: 2024, NAMED_ELEMENTS: 2024, DOORS_AND_WINDOWS: 2024}
 
 # Bodies the sample is known to draw by BodySource (Measure run 41988011289,
 # head 1d5bbf03, exported diagnostics), and outlines by group.
@@ -121,6 +135,30 @@ OUTLINE_LEAST = {
     "racadvancedsampleproject": {2025: 86, 2026: 82, 2027: 82},
     "racbasicsampleproject": {2025: 13, 2026: 12, 2027: 12},
     "rstbasicsampleproject": {2025: 5, 2026: 5, 2027: 5},
+}
+# Doors and windows placed by the rule (RE-347) in each candidate save, held to
+# the 2024 save, by project and candidate year (Measure run 42106711251, head
+# c1a2a739). OPENINGS_LEAST: at least this many of each class compared;
+# OPENINGS_LEFT_OUT_MOST: at most this many that the 2024 save places by the rule
+# and the candidate leaves on the default axes, which can only shrink: a count
+# that drops moves the ceiling down in that change, and a floor up. rst_basic
+# holds none. rme_advanced and rme_basic hold 107 placed doors per file and join
+# when their pipes pass the gate (#1454).
+OPENINGS_LEAST = {
+    "racadvancedsampleproject": {
+        2025: {"IfcDoor": 83, "IfcWindow": 24},
+        2026: {"IfcDoor": 61, "IfcWindow": 18},
+        2027: {"IfcDoor": 47, "IfcWindow": 18},
+    },
+    "racbasicsampleproject": {
+        2025: {"IfcDoor": 10, "IfcWindow": 7},
+        2026: {"IfcDoor": 10, "IfcWindow": 7},
+        2027: {"IfcDoor": 10, "IfcWindow": 7},
+    },
+}
+OPENINGS_LEFT_OUT_MOST = {
+    "racadvancedsampleproject": {2025: 0, 2026: 28, 2027: 42},
+    "racbasicsampleproject": {2025: 0, 2026: 0, 2027: 0},
 }
 # rac_advanced's ceiling 147534, which the 2024 save draws as its record box
 # and the 2026 save drew as an outline before a Sketch's curve list was read
@@ -175,6 +213,17 @@ def properties(element):
     return source, resolved
 
 
+def placement_source(element):
+    """The `PlacementAxesSource` of a door or window (RE-347), or None."""
+    for rel in element.IsDefinedBy:
+        if not rel.is_a("IfcRelDefinesByProperties"):
+            continue
+        for prop in getattr(rel.RelatingPropertyDefinition, "HasProperties", None) or []:
+            if prop.Name == "PlacementAxesSource" and prop.NominalValue is not None:
+                return prop.NominalValue.wrappedValue
+    return None
+
+
 def group_of(element, source, resolved, named=False):
     if named:
         return NAMED_ELEMENTS
@@ -182,6 +231,8 @@ def group_of(element, source, resolved, named=False):
         return SOURCE_GROUP[source]
     if element.is_a() in OUTLINE_CLASSES and resolved:
         return SKETCH_OUTLINES
+    if element.is_a() in OPENING_CLASSES and placement_source(element):
+        return DOORS_AND_WINDOWS
     return None
 
 
@@ -350,7 +401,7 @@ def main():
         print(f"named {tag}, {own_year} save: {describe(settings, candidate.get(tag))}")
         for year, (_, reference) in sorted(earlier.items()):
             print(f"named {tag}, {year} save: {describe(settings, reference.get(tag))}")
-    for group in (BEAMS_AND_LANDINGS, STAIR_RUNS, SKETCH_OUTLINES, NAMED_ELEMENTS):
+    for group in (BEAMS_AND_LANDINGS, STAIR_RUNS, SKETCH_OUTLINES, NAMED_ELEMENTS, DOORS_AND_WINDOWS):
         year = REFERENCE_YEAR[group]
         chosen = {
             tag: [item for item in items if item[2] == group]
@@ -364,6 +415,11 @@ def main():
         if own_number is not None and year >= own_number:
             print(f"{group}: not applicable, the {year} save is the reference of the later saves and this is the {own_year} save ({len(chosen)} drawn here)")
             continue
+        if group == DOORS_AND_WINDOWS:
+            by_class = collections.Counter(item[0].is_a() for items in chosen.values() for item in items)
+            for cls, least in OPENINGS_LEAST.get(project, {}).get(own_number, {}).items():
+                if by_class.get(cls, 0) < least:
+                    fail(f"{group}: {by_class.get(cls, 0)} {cls} placed by the rule, fewer than the {least} it holds in the {own_year} save")
         if year not in earlier_paths:
             not_compared.append(f"{group} ({len(chosen)} here; the {year} save is not in this run)")
             print(f"{group}: not compared, the {year} save is not in this run ({len(chosen)} drawn here)")
@@ -374,6 +430,7 @@ def main():
         earlier_model, reference = earlier[year]
         scale_earlier = ifcopenshell.util.unit.calculate_unit_scale(earlier_model)
         compared = collections.Counter()
+        off_axes = 0
         compared_tags = set()
         for tag in sorted(chosen, key=lambda t: (0, int(t)) if t.isdigit() else (1, t)):
             counterparts = reference.get(tag)
@@ -392,6 +449,9 @@ def main():
                     detail = f"{mine} here, {theirs} in the {year} save" if theirs != "" else mine
                     fail(f"{group}: {tag} {left[0].is_a()} differs in {field}: {detail}")
                 compared[left[0].is_a()] += 1
+                if group == DOORS_AND_WINDOWS:
+                    frame = placement(left[0], scale_candidate)
+                    off_axes += frame is None or not np.allclose(frame[:3, :3], np.eye(3), atol=ANGLE_TOLERANCE)
             if ok:
                 compared_tags.add(tag)
         total += sum(compared.values())
@@ -404,6 +464,13 @@ def main():
                     fail(f"{group}: {tag} ({item[0].is_a()}) is in the {year} save and not in this one")
                 else:
                     left_out[item[0].is_a()] += 1
+        if group == DOORS_AND_WINDOWS:
+            most = OPENINGS_LEFT_OUT_MOST.get(project, {}).get(own_number)
+            if most is not None and sum(left_out.values()) > most:
+                fail(
+                    f"{group}: {sum(left_out.values())} placed by the rule in the {year} save and left on the default axes "
+                    f"in the {own_year} save, more than the {most} they are left"
+                )
         for tag in sorted(required.get(group, ())):
             if tag not in compared_tags:
                 fail(f"{group}: {tag} was not compared equal, and is required")
@@ -420,6 +487,7 @@ def main():
             f"{group}: compared {sum(compared.values())} against the {year} save ({', '.join(f'{c} {n}' for c, n in sorted(compared.items())) or 'none'}); "
             f"left as boxes here, drawn in the {year} save, not scored: {sum(left_out.values())}"
             + (f" ({', '.join(f'{c} {n}' for c, n in sorted(left_out.items()))})" if left_out else "")
+            + (f"; of those compared, placed on axes other than the default: {off_axes}" if group == DOORS_AND_WINDOWS else "")
         )
         other = OTHER_YEAR.get(group)
         if other in earlier and other != own_number and chosen:
