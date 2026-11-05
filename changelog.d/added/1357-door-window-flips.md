@@ -24,6 +24,11 @@
   changed. The fields are carried, equal to the booleans, by 1,820 of the
   1,820 doors and windows of the Autodesk samples of 2024 to 2027 and by none
   of 2015 to 2023, whose doors and windows are not decoded as Door and
-  Window records (run 42021284465 at 7d346f1f). Not yet measured on this
-  head: the fields, and the time and memory of reading them in the pass that
-  reads the doors' and windows' symbols (runs named in the pull request).
+  Window records (run 42024111444 at e2f8accc). On 2024 and 2025 the flips
+  are read in the pass that already reads the doors' and windows' symbols
+  and add none; on 2026 and 2027 they add one. Against `main` the IFC is
+  byte for byte the same on all 111 models of the unfiltered run (42024095189)
+  and, over 64 files, no peak memory moves by more than 1 MiB and export time
+  by more than 1.2% on the files of 2023 to 2025 or 1.6% on those of 2026 and
+  2027 (run 42024099050), where the same measurement varies by 7% on files
+  the change does not touch.
