@@ -617,7 +617,7 @@
             "type": "integer",
             "minimum": 0
           },
-          "description": "Of the exported walls with an edited elevation profile that stop short of the wall beneath them and keep the end their record gives, why, by reason (RvtElementRecordGeometry.BodyEndRefusal, RE-337): walls_beneath_reach_the_end_at_different_faces, base_cut_lost_on_extended_plan, base_not_cut_over_the_extended_plan, wall_beneath_not_one_rectangle, wall_stands_in_the_added_end. Empty when no such wall keeps its end."
+          "description": "Of the exported walls with an edited elevation profile that stop short of the walls their record joins at an end and keep the end their record gives, why, by reason (RvtElementRecordGeometry.BodyEndRefusal, RE-337, RE-348): joined_wall_not_read, joined_wall_top_not_read, joined_wall_does_not_meet_the_end, joined_walls_do_not_reach_the_wall_height, joined_wall_face_inside_the_wall, joined_wall_faces_overhang_the_lower_end, base_cut_lost_on_extended_plan, base_not_cut_over_the_extended_plan, wall_stands_in_the_added_end. Empty when no such wall keeps its end."
         },
         "resolved_outline_spaces": {
           "type": "integer",
