@@ -857,7 +857,9 @@ impl PyRevitFile {
     /// (`rvt::ifc::schedule_csv`): `kind="elements"` (every building
     /// element the IFC export writes, on the storey it puts it on: type,
     /// level, material, placement, size, host) or
-    /// `kind="rooms"` (number, name, level). `metric=True` writes lengths in
+    /// `kind="rooms"` (every space the export writes: number, name, level,
+    /// area, and `space_kind`, which says whether it is a room, an Area, a
+    /// Revit Space or a family instance). `metric=True` writes lengths in
     /// metres; `excel=True` prefixes a UTF-8 byte-order mark for Excel on
     /// Windows. Only decoded values are written; unknowns are empty cells.
     /// `phase` (a phase's name or its ElementId, default the project's last)
