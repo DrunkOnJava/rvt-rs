@@ -711,6 +711,9 @@ pub fn append_typed_production_elements(
     // for the cut at the top of the floor or footing it stands on, and the
     // top of each floor, roof and ceiling: flat, a plane, or not known.
     let mut pending_bases: Vec<wall_tops::PendingBase> = Vec::new();
+    // #1410: each wall's location curve and the walls its record joins at each
+    // end, in its order, for the ends drawn to the walls they meet.
+    let mut pending_ends: Vec<wall_tops::PendingEnds> = Vec::new();
     let mut slab_shapes: HashMap<u32, wall_tops::SlabTop> = HashMap::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
@@ -1406,6 +1409,17 @@ pub fn append_typed_production_elements(
                 });
             }
         }
+        if policy.include_geometry && decoded.class == "Wall" {
+            if let Some(joins) =
+                crate::partition_schema_mvp::wall_end_joins_from_fields(&decoded.fields)
+            {
+                pending_ends.push(wall_tops::PendingEnds {
+                    index: entity_index,
+                    curve: joins.curve,
+                    lists: joins.lists,
+                });
+            }
+        }
         // The wall pass knows the top of every floor, roof and ceiling: flat
         // where its record was read and holds no edit, the plane of a floor's
         // edited corners, and otherwise not known (a record that was not read,
@@ -1685,7 +1699,13 @@ pub fn append_typed_production_elements(
     // #1396: a wall with an edited elevation profile that stops short of the
     // wall beneath it is drawn to that wall's face, where its base is still cut.
     // After the tops, so that the walls beneath it have their final tops.
-    let end_steps = wall_tops::extend_wall_ends(entities, &pending_bases, &slab_shapes);
+    let end_steps = wall_tops::extend_wall_ends(
+        entities,
+        &pending_bases,
+        &pending_ends,
+        &slab_shapes,
+        &mut out.record_handoffs,
+    );
 
     // #1384: a wall's base is cut at the top of the floor or footing it stands
     // on, level or following that element's shape-edited top.
@@ -4594,27 +4614,35 @@ pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_cover
 pub const WALL_END_SOURCE_PROPERTY: &str = "BodyEndSource";
 
 /// `BodyEndSource` of a wall with an edited elevation profile whose end is
-/// drawn to the face of the perpendicular wall beneath it that holds its base,
-/// the block added at the end reaching the wall's full height (#1396, RE-337).
-pub const WALL_END_AT_BASE_WALL_BODY_END_SOURCE: &str = "wall_end_extended_to_base_wall";
-
-/// `BodyEndSource` of such a wall where the block added at an end stops below
-/// the wall's own top: at the top of the wall beneath it, or the base of a wall
-/// it would lie inside. Revit steps the end up further, to the faces of the
-/// walls above, and those steps are not drawn: a labelled approximation
-/// (#1396, RE-337; Griffin, 2026-11-05: ship it, labelled).
-pub const WALL_END_UPPER_STEP_OMITTED_BODY_END_SOURCE: &str =
-    "wall_end_to_base_wall_upper_step_omitted";
+/// drawn, at each height, to the face of the first wall its record lists as
+/// joined at that end that stands there: the end Revit steps up the walls it
+/// meets (#1396, RE-337; #1409, #1410, RE-348).
+pub const WALL_END_AT_JOINED_WALLS_BODY_END_SOURCE: &str = "wall_end_stepped_to_joined_walls";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says why a wall
-/// with an edited elevation profile, whose end stops short of walls beneath it,
-/// keeps the end its record gives: the walls that hold its base lie at
-/// different faces, the cut of its base would not resolve over the longer
-/// plan, a wall beneath it that would reach the end is not one rectangle, or
-/// another wall stands in the stretch the end would be drawn over (#1396,
-/// RE-337). A wall with one end drawn and the other kept carries this
-/// and `BodyEndSource` both.
+/// with an edited elevation profile, whose end stops short of the walls its
+/// record joins there, keeps the end its record gives: a wall it joins is not
+/// read, its top is not, it does not meet the end, its face is inside the end,
+/// the walls it joins do not stand over the whole of the wall's height or
+/// reach further at a greater height than below, the cut of its base would not
+/// resolve over the longer plan, or a wall the record does not join stands in
+/// the stretch the end would be drawn over (#1396, RE-337; #1410, RE-348). A
+/// wall with one end drawn and the other kept carries this and `BodyEndSource`
+/// both.
 pub const WALL_END_REFUSAL_PROPERTY: &str = "BodyEndRefusal";
+
+/// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that counts the ends it
+/// draws whose face depends on the order of the walls its record joins there:
+/// at some height two of those walls stand with faces that differ, so that
+/// another order would draw another end (#1410, RE-348).
+pub const WALL_END_ORDER_DEPENDENT_PROPERTY: &str = "EndOrderDependent";
+
+/// Hand-off property of a wall (see [`TypedProductionAppend::record_handoffs`],
+/// not written in the file) that gives why an end of it that its record joins
+/// walls at was not read, where the faces read do not show the end short of or
+/// past those walls, so that the wall carries no `BodyEndRefusal`: counted in
+/// `exported.wall_end_reads_unmarked` (#1410, RE-348).
+pub const WALL_END_NOT_MARKED_PROPERTY: &str = "EndNotMarked";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how its base
 /// was cut (#1384, RE-336). It is not `BodyHeightSource`, which says how the
@@ -4631,6 +4659,18 @@ pub const WALL_BASE_COVER_BODY_BASE_SOURCE: &str = "wall_base_cut_at_covering_fl
 /// floor or footing its base join names, drawn as a solid between that top and
 /// the wall's own top (#1384, RE-336).
 pub const WALL_BASE_SLOPED_BODY_BASE_SOURCE: &str = "wall_base_sloped_at_covering_floor";
+
+/// `BodyBaseSource` of a wall whose base is cut at the level top of the floor
+/// or footing its base join names over the part of the wall's plan that element
+/// covers, the rest standing from the wall's own base (#1411, RE-349).
+pub const WALL_BASE_COVER_IN_PART_BODY_BASE_SOURCE: &str =
+    "wall_base_cut_at_floor_covering_in_part";
+
+/// `BodyBaseSource` of a wall whose base follows the shape-edited top of the
+/// floor or footing its base join names over the part of the wall's plan that
+/// element covers, the rest standing from the wall's own base (#1411, RE-349).
+pub const WALL_BASE_SLOPED_IN_PART_BODY_BASE_SOURCE: &str =
+    "wall_base_sloped_at_floor_covering_in_part";
 
 /// Property of a floor's [`ELEMENT_RECORD_PROPERTY_SET`] that says why a floor
 /// whose corner vertices are shape-edited is still drawn as its record box
@@ -4950,6 +4990,37 @@ fn turned_box(x_axis: [f64; 2], width: f64, depth: f64) -> Option<(f64, f64, f64
     let across = (depth * c - width * s) / det;
     (along > 1e-6 && across > 1e-6).then(|| (x_axis[1].atan2(x_axis[0]), along, across))
 }
+
+/// The turn about the vertical, radians, of a plan X axis that lies along one
+/// of the model's four axes: 0, a quarter turn, a half turn or minus a quarter
+/// turn (RE-347). `None` for an axis off them by more than a thousandth.
+fn axis_aligned_turn(axis: [f64; 2]) -> Option<f64> {
+    let length = axis[0].hypot(axis[1]);
+    if !(length.is_finite() && length > 0.5) {
+        return None;
+    }
+    let (x, y) = (axis[0] / length, axis[1] / length);
+    if x.abs() >= y.abs() {
+        (y.abs() < 1e-3).then_some(if x > 0.0 { 0.0 } else { std::f64::consts::PI })
+    } else {
+        (x.abs() < 1e-3).then_some(if y > 0.0 {
+            std::f64::consts::FRAC_PI_2
+        } else {
+            -std::f64::consts::FRAC_PI_2
+        })
+    }
+}
+
+/// Property of a door's or window's [`ELEMENT_RECORD_PROPERTY_SET`] that says
+/// where the axes of its placement come from, written only for one that is
+/// placed as Revit's export places it (RE-347). The others have the default
+/// axes, which say nothing of the direction they face.
+pub const PLACEMENT_AXES_SOURCE_PROPERTY: &str = "PlacementAxesSource";
+
+/// [`PLACEMENT_AXES_SOURCE_PROPERTY`] of a door or window set in a plain wall
+/// whose X axis is its stored one, reversed where its hand flip and facing
+/// flip differ (RE-343 Rule 1, RE-347).
+pub const OPENING_PLACEMENT_AXES_SOURCE: &str = "stored_axes_reversed_by_flips";
 
 /// `BodySource` of a beam whose body runs along its location line (RE-49).
 pub const BEAM_AXIS_BODY_SOURCE: &str = "partition_beam_axis";
@@ -6798,6 +6869,17 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         crate::partition_schema_mvp::instance_x_axis_from_fields(&decoded.fields)
             .and_then(|axis| turned_box(axis, width, depth))
     };
+    // RE-347: a door or window set in a plain wall is placed as Revit's export
+    // places it, its X axis along the stored one and reversed where its two
+    // flips differ (RE-343 Rule 1). Its box keeps its extents in the world:
+    // a quarter turn swaps the profile's two sides. One turned off the
+    // model's axes keeps its turned box.
+    let placed_turn = if matches!(class, "Door" | "Window") && turned.is_none() {
+        crate::partition_schema_mvp::opening_placement_x_axis_from_fields(&decoded.fields)
+            .and_then(axis_aligned_turn)
+    } else {
+        None
+    };
     // RE-56: a shed roof whose slope reproduces its record box rises along
     // it. RE-199: a gable or hip roof, its planes' lowest envelope, and
     // either cut level at its base when that is what its box records.
@@ -7638,6 +7720,30 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                         (None, record_body, solid)
                     }
                 },
+            };
+            // RE-347: the placement Revit gives a door or window set in a
+            // plain wall, the box with it.
+            let (rotation, body) = match placed_turn {
+                Some(angle)
+                    if rotation.is_none() && solid.is_none() && body.profile_override.is_none() =>
+                {
+                    let quarter = (angle.abs() - std::f64::consts::FRAC_PI_2).abs() < 1e-9;
+                    let body = if quarter {
+                        Extrusion {
+                            width_feet: body.depth_feet,
+                            depth_feet: body.width_feet,
+                            ..body
+                        }
+                    } else {
+                        body
+                    };
+                    properties.push(Property {
+                        name: PLACEMENT_AXES_SOURCE_PROPERTY.into(),
+                        value: PropertyValue::Text(OPENING_PLACEMENT_AXES_SOURCE.into()),
+                    });
+                    ((angle != 0.0).then_some(angle), body)
+                }
+                _ => (rotation, body),
             };
             ([x, y, z], rotation, body, solid)
         }

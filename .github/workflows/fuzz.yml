@@ -68,6 +68,7 @@ jobs:
   # A manual run for one target starts one job, not eleven.
   targets:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     outputs:
       targets: ${{ steps.pick.outputs.targets }}
     steps:
@@ -90,6 +91,11 @@ jobs:
     name: Fuzz ${{ matrix.target }}
     needs: targets
     runs-on: ubuntu-24.04
+    # A job takes 10 to 13 minutes on the default 300 s budget (14 nights), so
+    # 40 minutes. A manual run that sets another duration is a focused
+    # investigation and keeps the default limit, since the budget is added to
+    # the build and the minimisation and an expression cannot add.
+    timeout-minutes: ${{ (inputs.duration_seconds || '300') == '300' && 40 || 360 }}
     # `actions: read` lists and downloads the previous night's corpus artifact.
     permissions:
       actions: read
@@ -251,6 +257,7 @@ jobs:
     needs: fuzz
     if: failure() && github.event_name == 'schedule'
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       issues: write
     steps:

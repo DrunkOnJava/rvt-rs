@@ -231,6 +231,13 @@ pub struct IfcModel {
     /// Counted in `exported.wall_cut_openings_left_out`.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub wall_cut_openings_left_out: std::collections::BTreeMap<String, usize>,
+    /// The ends of walls with an edited elevation profile whose record joins
+    /// walls there and that were not read, by why, where the faces read do not
+    /// show the end short of or past those walls, so that the wall carries no
+    /// `BodyEndRefusal` (#1410, RE-348). Counted in
+    /// `exported.wall_end_reads_unmarked`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub wall_end_reads_unmarked: std::collections::BTreeMap<String, usize>,
 }
 
 /// A layered element's layers across its thickness (RE-53).
@@ -797,13 +804,32 @@ pub struct ExportedModelDiagnostics {
     #[serde(default)]
     pub wall_base_refusals: std::collections::BTreeMap<String, usize>,
     /// Of the exported walls with an edited elevation profile that stop short
-    /// of the wall beneath them and keep the end their record gives, why, by
-    /// reason: the `BodyEndRefusal` property of each (#1396, RE-337), such as
-    /// `walls_beneath_reach_the_end_at_different_faces`,
-    /// `base_cut_lost_on_extended_plan`, `base_not_cut_over_the_extended_plan`,
-    /// `wall_beneath_not_one_rectangle` or `wall_stands_in_the_added_end`.
+    /// of the walls their record joins at an end and keep the end their record
+    /// gives, why, by reason: the `BodyEndRefusal` property of each (#1396,
+    /// RE-337; #1410, RE-348), such as `joined_wall_not_read`,
+    /// `joined_wall_face_inside_the_wall`, `base_cut_lost_on_extended_plan`,
+    /// `base_not_cut_over_the_extended_plan` or `wall_stands_in_the_added_end`.
     #[serde(default)]
     pub wall_end_refusals: std::collections::BTreeMap<String, usize>,
+    /// Of the exported walls, how many have an end drawn to the walls their
+    /// record joins there, by the `BodyEndSource` property of each (#1410,
+    /// RE-348): `wall_end_stepped_to_joined_walls`. Empty when no wall does.
+    #[serde(default)]
+    pub wall_end_sources: std::collections::BTreeMap<String, usize>,
+    /// Of the exported walls, how many have their base cut at an element their
+    /// base join names, by the `BodyBaseSource` property of each (#1384,
+    /// RE-336; #1411, RE-349): `wall_base_sloped_at_covering_floor`,
+    /// `wall_base_cut_at_covering_floor`, and the two `_in_part` values of a
+    /// base cut over the part of the plan the element covers.
+    #[serde(default)]
+    pub wall_base_sources: std::collections::BTreeMap<String, usize>,
+    /// The ends drawn by the rule of `wall_end_sources` that depend on the
+    /// order of the walls the record lists: at some height two of them stand
+    /// with faces that differ, so that another order would draw another end
+    /// (`EndOrderDependent` of each wall, #1410, RE-348). The rest of the ends
+    /// would be the same in any order.
+    #[serde(default)]
+    pub wall_ends_order_dependent: usize,
     /// Of the exported `IfcSpace`s, the rooms whose outline was read from the
     /// faces their stored solid lists, up to the solid's own end, where the
     /// walk of RE-101 did not close them (`SpaceOutlineSource` is
@@ -846,6 +872,15 @@ pub struct ExportedModelDiagnostics {
     /// export has no geometry.
     #[serde(default)]
     pub wall_cut_openings_left_out: std::collections::BTreeMap<String, usize>,
+    /// The ends of walls with an edited elevation profile whose record joins
+    /// walls there and that the end rule did not read, by why, where the faces
+    /// of the joined walls read do not show the end short of or past them: the
+    /// wall carries no marker (a `BodyEndRefusal` is only for a wall the faces
+    /// show short or past), so the reasons are counted here alone (#1410,
+    /// RE-348): `end_join_curve_not_at_the_box_end`, `end_join_list_not_read`
+    /// and the refusals of `wall_end_refusals` that are not marked.
+    #[serde(default)]
+    pub wall_end_reads_unmarked: std::collections::BTreeMap<String, usize>,
     /// The further pieces of an element of separate loops that the STEP
     /// writer folds into the body of the element that owns them instead of
     /// writing each as an element (#823, #1424), by IFC entity. They are the
@@ -1091,6 +1126,7 @@ impl Exporter for PlaceholderExporter {
             storey_properties: Default::default(),
             filler_sizes: Default::default(),
             wall_cut_openings_left_out: Default::default(),
+            wall_end_reads_unmarked: Default::default(),
         })
     }
 }
@@ -1592,6 +1628,14 @@ fn export_rvt_doc_reporting(
     let opening_cuts = early_opening_cuts
         .unwrap_or_else(|| opening_cuts_through_hosts(&entities, &record_handoffs));
     let filler_sizes = filler_sizes_from_handoffs(&record_handoffs);
+    let mut wall_end_reads_unmarked = std::collections::BTreeMap::<String, usize>::new();
+    for property in record_handoffs.values().flatten() {
+        if let (export_content::WALL_END_NOT_MARKED_PROPERTY, entities::PropertyValue::Text(why)) =
+            (property.name.as_str(), &property.value)
+        {
+            *wall_end_reads_unmarked.entry(why.clone()).or_insert(0) += 1;
+        }
+    }
 
     Ok(IfcModel {
         project_name,
@@ -1617,6 +1661,7 @@ fn export_rvt_doc_reporting(
         storey_properties,
         filler_sizes,
         wall_cut_openings_left_out,
+        wall_end_reads_unmarked,
     })
 }
 
@@ -4714,6 +4759,9 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut slab_shape_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_base_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_end_refusals = std::collections::BTreeMap::<String, usize>::new();
+    let mut wall_end_sources = std::collections::BTreeMap::<String, usize>::new();
+    let mut wall_base_sources = std::collections::BTreeMap::<String, usize>::new();
+    let mut wall_ends_order_dependent = 0usize;
     let mut resolved_outline_spaces = 0usize;
     let mut approximate_outline_spaces = 0usize;
     let mut space_kinds = std::collections::BTreeMap::<String, usize>::new();
@@ -4771,6 +4819,20 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                         export_content::WALL_END_REFUSAL_PROPERTY,
                         entities::PropertyValue::Text(text),
                     ) => *wall_end_refusals.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_END_SOURCE_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *wall_end_sources.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_BASE_SOURCE_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *wall_base_sources.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_END_ORDER_DEPENDENT_PROPERTY,
+                        entities::PropertyValue::Integer(count),
+                    ) => {
+                        wall_ends_order_dependent += usize::try_from(*count).unwrap_or(0);
+                    }
                     ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
                     (
                         export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
@@ -4872,11 +4934,15 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         slab_shape_refusals,
         wall_base_refusals,
         wall_end_refusals,
+        wall_end_sources,
+        wall_base_sources,
+        wall_ends_order_dependent,
         resolved_outline_spaces,
         approximate_outline_spaces,
         space_kinds,
         spaces_without_kind,
         wall_cut_openings_left_out: model.wall_cut_openings_left_out.clone(),
+        wall_end_reads_unmarked: model.wall_end_reads_unmarked.clone(),
         body_pieces_folded,
     }
 }
