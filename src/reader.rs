@@ -183,6 +183,12 @@ pub struct RevitFile {
     /// The Areas of a Revit 2015 to 2023 file the reader left unwritten, by
     /// why (RE-324), set when the Areas are read.
     unwritten_areas: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
+    /// What became of each frame at the markers of a Revit 2008 to 2023 file
+    /// (#1389), set when its element records are recovered.
+    element_record_stages: Option<crate::partition_element_records_2023::RecordStages>,
+    /// Whether the recovery lists the frames that stop, for the log of
+    /// decisions ([`Self::record_frame_decisions`], #1389).
+    frame_decisions: bool,
     /// Memoised production walk: the elements
     /// [`crate::walker::iter_elements_with_control`] yields for a minimum
     /// score and walker limits. An export walks once to write and again for
@@ -462,6 +468,8 @@ impl RevitFile {
             phase_filter: None,
             chosen_export_phase: None,
             unwritten_areas: BTreeMap::new(),
+            element_record_stages: None,
+            frame_decisions: false,
             walk: None,
             arc_wall_scan: None,
             partition_progress: None,
@@ -503,6 +511,48 @@ impl RevitFile {
         self.unread_type_doors_windows.extend(ids);
     }
 
+    /// What became of each frame at the markers of this Revit 2008 to 2023
+    /// file in the recovery of its element records (#1389); `None` where that
+    /// recovery has not run, or the file takes another layout.
+    pub(crate) fn element_record_stages(
+        &self,
+    ) -> Option<&crate::partition_element_records_2023::RecordStages> {
+        self.element_record_stages.as_ref()
+    }
+
+    pub(crate) fn note_element_record_stages(
+        &mut self,
+        stages: crate::partition_element_records_2023::RecordStages,
+    ) {
+        self.element_record_stages = Some(stages);
+    }
+
+    /// Note that the walk dropped the element the record recovery handed under
+    /// `id`, because an element with that ElementId was already in it (#1389).
+    pub(crate) fn note_id_already_held(&mut self, id: u32) {
+        if let Some(stages) = self.element_record_stages.as_mut() {
+            stages.note_held(id);
+        }
+    }
+
+    /// Start or stop listing, as the recovery of a Revit 2008 to 2023 file's
+    /// element records goes, each frame that stops (#1389), which the log of
+    /// decisions holds. The counts need no list and are kept either way.
+    /// Starting drops the memoised production walk, since a walk made without
+    /// the list has none to give.
+    pub(crate) fn record_frame_decisions(&mut self, on: bool) {
+        if on && !self.frame_decisions {
+            self.walk = None;
+        }
+        self.frame_decisions = on;
+    }
+
+    /// Whether the recovery lists the frames that stop
+    /// ([`Self::record_frame_decisions`]).
+    pub(crate) fn recording_frame_decisions(&self) -> bool {
+        self.frame_decisions
+    }
+
     /// The family instances written as spaces that this handle's export left
     /// out because their family draws no model form (RE-312), by class, each
     /// with the frame it was read from (#1326).
@@ -526,6 +576,7 @@ impl RevitFile {
     /// only when it finds some, so each walk starts from none: the notes
     /// follow the memoised walk that produced them.
     pub(crate) fn reset_export_notes(&mut self) {
+        self.element_record_stages = None;
         self.unwritten_areas.clear();
         self.bodiless_family_spaces.clear();
         self.bodiless_family_space_error = None;

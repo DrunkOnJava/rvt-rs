@@ -58,7 +58,9 @@
 # same probe.txt. A family has no Revit export, so nothing else is measured on it.
 # SAMPLE_DIR does the same for Autodesk's sample projects (.rvt), adding the
 # export's diagnostics.json, rvt-ifc.log and ifc.sha256 (hashed as a model's
-# is) under OUT_DIR/sample-<file>/. When
+# is) under OUT_DIR/sample-<file>/, and element_stage_counts.txt, the check
+# (tools/re/element_stage_counts.py, #1389) that a Revit 2008 to 2023 export's
+# element-record stage counts add up, ending with its exit status. When
 # PROBE_PAIR_RELEASE names a release, the probe also runs on each sample of
 # another release and the same project saved by that one, the sample first,
 # into probe-pair.txt, ending with its exit status: the cross-release
@@ -488,6 +490,12 @@ measure_sample() { # sample
   item_started=$(date +%s%N)
   dir=$(sample_dir "$sample"); mkdir -p "$dir"
   timed "$dir" rvt-info info "$sample" "$dir"
+  # #1389: the stage counts of a Revit 2008 to 2023 export add up, and an export
+  # that wrote no record says where its records stopped. Reads the diagnostics
+  # alone, so it runs for every sample, whatever its release.
+  if [ -s "$dir/diagnostics.json" ]; then
+    score "$dir/element_stage_counts.txt" "$SCORERS/element_stage_counts.py" "$dir/diagnostics.json"
+  fi
   # C9: the IFC4 schema's view of the export, so a writer path only the
   # samples reach (I-shape profiles and profile set usages on the
   # structural samples) is checked somewhere. Attribute counts on every

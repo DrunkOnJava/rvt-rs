@@ -2033,6 +2033,7 @@
           "description": "Something the export left out or approximated, with how many.",
           "properties": {
             "count": {
+              "description": "How many the reason counts. Mostly elements; for\n`element_record_frame_stopped` it is frames of record markers in every\ncategory (several frames can belong to one element), not lost elements.",
               "format": "uint",
               "minimum": 0,
               "type": "integer"
@@ -3364,6 +3365,7 @@
           "description": "Something the export left out or approximated, with how many.",
           "properties": {
             "count": {
+              "description": "How many the reason counts. Mostly elements; for\n`element_record_frame_stopped` it is frames of record markers in every\ncategory (several frames can belong to one element), not lost elements.",
               "format": "uint",
               "minimum": 0,
               "type": "integer"

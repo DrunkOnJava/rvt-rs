@@ -226,6 +226,9 @@ pub struct UnreadOut {
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct SkippedOut {
     pub reason: String,
+    /// How many the reason counts. Mostly elements; for
+    /// `element_record_frame_stopped` it is frames of record markers in every
+    /// category (several frames can belong to one element), not lost elements.
     pub count: usize,
 }
 

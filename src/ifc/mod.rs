@@ -85,6 +85,7 @@ pub mod category_map;
 pub mod clipping;
 pub mod compare;
 pub mod element_provenance;
+pub mod element_record_stages;
 pub mod entities;
 pub mod export_content;
 pub mod export_decisions;
@@ -670,6 +671,16 @@ pub struct DecodedExportDiagnostics {
     /// [`element_provenance`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub element_provenance: Option<element_provenance::ElementProvenanceTable>,
+    /// Where the element records of a Revit 2008 to 2023 file stopped, stage
+    /// by stage, per partition stream and in total (#1389): the markers found,
+    /// those with a declared ElementId, those that gave a record, the placed
+    /// instances, those with volume, the frames kept, the elements handed to the
+    /// export and written, and, when none is written, the stage they stopped at.
+    /// Present only for a file that takes that record layout; absent for Revit
+    /// 2024 and later, whose rejected frames are in `skipped`. Not written in
+    /// the IFC file; see [`element_record_stages`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub element_record_stages: Option<element_record_stages::ElementRecordStages>,
 }
 
 fn default_min_element_confidence_serde() -> f32 {
@@ -3839,6 +3850,17 @@ pub(crate) fn build_export_diagnostics_and_decisions(
 
     let mut skipped = Vec::new();
     let mut decisions: Vec<ExportDecision> = Vec::new();
+    // The ElementIds below the minimum confidence, which the stage report of a
+    // Revit 2008 to 2023 file sets against the elements it handed to the export.
+    let below_min_ids: std::collections::BTreeSet<u32> = if rf.element_record_stages().is_some() {
+        walker_stats
+            .below_min_confidence
+            .iter()
+            .filter_map(|element| element.element_id)
+            .collect()
+    } else {
+        std::collections::BTreeSet::new()
+    };
     let below_min = left_out_decisions(
         "below_min_element_confidence",
         None,
@@ -3899,6 +3921,32 @@ pub(crate) fn build_export_diagnostics_and_decisions(
         unattributed_frames,
         ClassesBy::Class,
     );
+    // #1389: on a Revit 2008 to 2023 file the layout above is not read, and
+    // the counts of what became of each frame at its markers are the ones the
+    // recovery of its records made as it decided.
+    // A placeholder export writes none of what was decoded, so it has no
+    // report. Every other export of a file of this layout has one, even when
+    // each count is zero: that is what says where the records stopped. A family
+    // reads its elements from `Global/Latest`, and `rvt-ifc` prints no line for
+    // one (the file name tells; the streams do not, as a synthetic project
+    // carries a `PartAtom` stream too).
+    let element_record_stages = match rf.element_record_stages() {
+        Some(stages) if mode != ExportDiagnosticsMode::Placeholder => Some(
+            element_record_stages::ElementRecordStages::build(stages, model, &below_min_ids),
+        ),
+        _ => None,
+    };
+    if let Some(report) = &element_record_stages {
+        skipped.extend(report.skipped_item());
+        // The frames themselves are listed only for the log of decisions.
+        if rf.recording_frame_decisions() {
+            if let Some(stages) = rf.element_record_stages() {
+                decisions.extend(element_record_stages::frame_stopped_decisions(
+                    &stages.stopped,
+                ));
+            }
+        }
+    }
     // #309: placed instances with no 3D body are left out by design, as
     // Revit's own export leaves them out. They are not missing, so they
     // do not count toward `unexported_element_records`.
@@ -4330,6 +4378,7 @@ pub(crate) fn build_export_diagnostics_and_decisions(
             wall_curve_lengths_feet: walker_stats.wall_curve_lengths_feet,
             walls_type_confirmed: walker_stats.walls_type_confirmed,
             element_provenance: None,
+            element_record_stages,
         },
         source_coverage: {
             let coverage = SourceCoverageDiagnostics::measure(
