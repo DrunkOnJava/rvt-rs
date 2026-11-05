@@ -310,6 +310,19 @@ pub enum ExportNote {
         /// The reason.
         error: String,
     },
+    /// Walls that embed a curtain wall, drawn from their saved graphics where
+    /// Revit raised their base (#1385, RE-338).
+    #[non_exhaustive]
+    EmbedHostBodies {
+        /// Walls that embed a curtain wall, drawn as plain extrusions with
+        /// nothing hosted in them.
+        hosts: usize,
+        /// Of those, walls now drawn from their saved mesh.
+        raised: usize,
+        /// Of those, walls keeping their body because part of their saved
+        /// graphics did not decode (RE-224).
+        partial: usize,
+    },
 }
 
 impl ExportNote {
@@ -398,6 +411,14 @@ impl fmt::Display for ExportNote {
             Self::FamilyExtrusionsSkipped { error } => {
                 write!(f, "family extrusions not read, bodies unchanged: {error}")
             }
+            Self::EmbedHostBodies {
+                hosts,
+                raised,
+                partial,
+            } => write!(
+                f,
+                "{raised} of {hosts} walls that embed a curtain wall drawn from their saved graphics, Revit having raised their base; {partial} kept their body, their saved graphics not decoding whole"
+            ),
         }
     }
 }
@@ -561,6 +582,13 @@ pub fn run_export_with_limits_and_control(
                         replaced: report.replaced,
                         partial: report.partial,
                         triangles: report.triangles,
+                    });
+                }
+                if report.embed_hosts > 0 {
+                    notes.push(ExportNote::EmbedHostBodies {
+                        hosts: report.embed_hosts,
+                        raised: report.embed_raised,
+                        partial: report.embed_partial,
                     });
                 }
             }
