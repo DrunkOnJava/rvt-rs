@@ -15,5 +15,7 @@
   224 of 352 and of 354, quantities 21 to 23 of 322 and 17 to 19 of 367;
   Measure run 41988011289, head 1d5bbf03). Of 111 exports in run
   42004827803 (head f9035152), 102 are unchanged and 9 change, all 2026 or
-  2027; the head that keeps roofs to the record-box solve and adds the check
-  is not yet measured.
+  2027. In run 42010304828 (head e56d31b5) the check passes on `rst_basic`
+  (354 beams, 1 stair run, 5 outlines) and `rac_basic` (2 stair runs, 12
+  outlines) and fails on one `rac_advanced` ceiling it required; the head
+  after it is not yet read.
