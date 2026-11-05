@@ -30,6 +30,10 @@ class Timeouts(unittest.TestCase):
     def test_a_called_workflow_needs_none(self):
         self.assertEqual(self.errors(wf(a={"uses": "$/.github/workflows/y.yml"})), [])
 
+    def test_a_job_that_calls_a_workflow_is_left_out_even_if_it_also_names_steps(self):
+        job = {"uses": "$/.github/workflows/y.yml", "steps": STEPS}
+        self.assertEqual(self.errors(wf(a=job)), [])
+
     def test_a_timeout_that_is_not_a_limit_fails(self):
         for bad in (0, -5, True, 360, 361, "soon", "", None, 2.5):
             job = {"runs-on": "ubuntu-24.04", "steps": STEPS, "timeout-minutes": bad}
@@ -86,6 +90,9 @@ class Labels(unittest.TestCase):
 
     def test_a_called_workflow_has_no_label_to_read(self):
         self.assertEqual(self.errors(wf(a={"uses": "$/.github/workflows/y.yml"})), [])
+
+    def test_a_job_that_calls_a_workflow_is_left_out_even_if_it_names_a_runner(self):
+        self.assertEqual(self.errors(wf(a={"uses": "$/.github/workflows/y.yml", "runs-on": "ubuntu-latest"})), [])
 
 
 class Versions(unittest.TestCase):
@@ -271,6 +278,129 @@ class On(unittest.TestCase):
         self.assertEqual(cw.workflow_on({True: {"push": 1}}), {"push": 1})
         self.assertEqual(cw.workflow_on({"on": {"push": 2}}), {"push": 2})
         self.assertEqual(cw.workflow_on({}), {})
+
+
+ACTION = ".github/actions/fetch-corpus/action.yml"
+REUSABLE = ".github/workflows/viewer-test.yml"
+FILES = {
+    ACTION: {"inputs": {"repository": {"required": True}, "path": {"required": True}, "cache": {"required": True, "default": "true"}}},
+    REUSABLE: {True: {"workflow_call": {"inputs": {"legs": {"type": "string"}, "release_wasm": {"type": "boolean", "default": True}}}}},
+}
+
+
+def uses_in(job):
+    return {"w.yml": {"jobs": {"a": job}}}
+
+
+class LocalUses(unittest.TestCase):
+    def problems(self, job, files=FILES):
+        return cw.local_use_problems(uses_in(job), files.get)
+
+    def step(self, uses, **given):
+        return {"steps": [{"uses": uses, "with": given}]}
+
+    def test_a_reference_that_resolves_passes(self):
+        self.assertEqual(self.problems(self.step("$/.github/actions/fetch-corpus", repository="r", path="p")), [])
+        self.assertEqual(self.problems(self.step("./.github/actions/fetch-corpus", repository="r", path="p", cache="false")), [])
+        self.assertEqual(self.problems({"uses": "$/.github/workflows/viewer-test.yml", "with": {"legs": "[]"}}), [])
+
+    def test_a_typo_in_an_action_name_is_found(self):
+        problems = self.problems(self.step("$/.github/actions/fetch-re1x", repository="r", path="p"))
+        self.assertEqual(len(problems), 1)
+        self.assertIn("no such file", problems[0])
+
+    def test_a_typo_in_a_workflow_name_is_found(self):
+        problems = self.problems({"uses": "$/.github/workflows/nothere.yml"})
+        self.assertEqual(len(problems), 1)
+        self.assertIn("no such file", problems[0])
+
+    def test_an_input_the_target_does_not_declare_is_found(self):
+        problems = self.problems(self.step("$/.github/actions/fetch-corpus", repository="r", path="p", repositry="x"))
+        self.assertEqual(len(problems), 1)
+        self.assertIn("repositry", problems[0])
+
+    def test_an_input_the_target_requires_and_the_caller_leaves_out_is_found(self):
+        problems = self.problems(self.step("$/.github/actions/fetch-corpus", repository="r"))
+        self.assertEqual(len(problems), 1)
+        self.assertIn("`path`", problems[0])
+
+    def test_an_input_with_a_default_may_be_left_out(self):
+        self.assertEqual(self.problems(self.step("$/.github/actions/fetch-corpus", repository="r", path="p")), [])
+
+    def test_with_on_a_target_that_declares_no_inputs_is_found(self):
+        files = {REUSABLE: {True: {"workflow_call": None}}}
+        self.assertEqual(len(self.problems({"uses": "$/.github/workflows/viewer-test.yml", "with": {"legs": "[]"}}, files)), 1)
+
+    def test_a_local_reference_in_a_shape_the_check_cannot_read_is_found(self):
+        for uses in ("$/other", "$/.github/actions/with space", "./scripts/x.sh", "$/.github/workflows/x.txt", "$/.github/actions/a/b"):
+            self.assertEqual(len(self.problems(self.step(uses))), 1, uses)
+
+    def test_other_actions_are_not_this_checks_business(self):
+        for uses in ("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "docker://alpine:3", "owner/repo/.github/workflows/x.yml@v1"):
+            self.assertEqual(self.problems(self.step(uses)), [], uses)
+
+    def test_a_step_with_no_uses_or_with_does_not_crash(self):
+        self.assertEqual(self.problems({"steps": [{"run": "true"}, {"uses": None}]}), [])
+
+    def test_the_action_may_be_action_yaml(self):
+        files = {".github/actions/fetch-corpus/action.yaml": FILES[ACTION]}
+        self.assertEqual(self.problems(self.step("$/.github/actions/fetch-corpus", repository="r", path="p"), files), [])
+
+
+STATEMENTS = {
+    "README.md": "Rust 2024 edition (MSRV 1.87). Build: stable Rust 1.87 or newer.",
+    "CONTRIBUTING.md": "You need stable Rust 1.87 or newer (`rustup` installs it).",
+    ".cursor/install.sh": "# (needs Rust >= 1.87, the MSRV)\n# edition 2024 with rust-version = 1.87;",
+    "AGENTS.md": "- **Rust must be stable ≥ 1.87.** (`rust-version = \"1.87\"` in `Cargo.toml`).",
+    "docs/python.md": "# Needs a Rust toolchain (>= 1.87) and maturin.\n- Rust ≥ 1.87",
+}
+
+
+class ProseMsrv(unittest.TestCase):
+    def problems(self):
+        return cw.prose_msrv_problems("1.87", dict(STATEMENTS))
+
+    def test_agreement_passes(self):
+        self.assertEqual(self.problems(), [])
+
+    def test_each_way_of_stating_it_is_read(self):
+        for path, wrong in (
+            ("README.md", "Rust 2024 edition (MSRV 1.86)."),
+            ("CONTRIBUTING.md", "You need stable Rust 1.86 or newer."),
+            (".cursor/install.sh", "# (needs Rust >= 1.86, the MSRV)"),
+            ("AGENTS.md", "- **Rust must be stable ≥ 1.86.**"),
+            ("AGENTS.md", "(`rust-version = \"1.86\"` in `Cargo.toml`)."),
+            ("docs/python.md", "# Needs a Rust toolchain (>= 1.86) and maturin."),
+        ):
+            texts = dict(STATEMENTS)
+            texts[path] = wrong
+            problems = cw.prose_msrv_problems("1.87", texts)
+            self.assertEqual(len(problems), 1, (path, wrong))
+            self.assertIn("1.86", problems[0])
+
+    def test_one_stale_statement_among_current_ones_is_found(self):
+        texts = dict(STATEMENTS)
+        texts["README.md"] += " Build: stable Rust 1.86 or newer."
+        self.assertEqual(len(cw.prose_msrv_problems("1.87", texts)), 1)
+
+    def test_a_file_that_states_nothing_it_can_read_fails(self):
+        texts = dict(STATEMENTS)
+        texts["README.md"] = "Needs a recent compiler."
+        problems = cw.prose_msrv_problems("1.87", texts)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("states no MSRV", problems[0])
+
+    def test_a_file_that_is_gone_fails(self):
+        texts = {k: v for k, v in STATEMENTS.items() if k != "AGENTS.md"}
+        self.assertEqual(len(cw.prose_msrv_problems("1.87", texts)), 1)
+
+    def test_another_release_that_is_not_the_msrv_is_ignored(self):
+        texts = dict(STATEMENTS)
+        texts["AGENTS.md"] += " The base image shipped Rust 1.83, which cannot build it. The server needs Rust 1.88, one above."
+        self.assertEqual(cw.prose_msrv_problems("1.87", texts), [])
+
+    def test_the_msrv_moving_alone_fails_every_file(self):
+        self.assertEqual(len(cw.prose_msrv_problems("1.88", dict(STATEMENTS))), len(cw.PROSE_MSRV_FILES))
 
 
 if __name__ == "__main__":

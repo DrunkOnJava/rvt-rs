@@ -8,7 +8,10 @@
 # malformed `owner/repo@ref` reference. These two patterns ignore exactly
 # those two messages, matched whole and only for a `$/.github/` target, so any
 # other malformed `uses:` (a missing ref on a third-party action, a bad path)
-# is still reported. Delete both patterns once actionlint knows the form.
+# is still reported. What actionlint would have checked of such a reference,
+# tools/ci/check-workflows.py checks instead: the file exists, and `with:` names
+# only inputs it declares and gives those it requires. Delete both patterns once
+# actionlint knows the form.
 paths:
   .github/workflows/**/*.yml:
     ignore:

@@ -454,12 +454,14 @@ jobs:
     name: Corpus health (tier 2 — external)
     runs-on: ubuntu-24.04
     # Median 5.6 minutes, longest 10.2. The BIM4LCA and R2025 fetches end
-    # as NOT MEASURED, a warning, when their host is down, and their own
-    # retries can run for most of an hour each when a host drops packets
-    # (five tries of 300 s a request, four downloads of 900 s). The limit sits
-    # above that, so a dead host stays a warning and never becomes a red
-    # timeout.
-    timeout-minutes: 120
+    # as NOT MEASURED, a warning, when their host is down, and a host that drops
+    # packets holds them to their own retries. Both at once: BIM4LCA tries two
+    # URLs (a mirror, then the archive), each five tries of 300 s with 150 s of
+    # pauses, 55 minutes; R2025 downloads three archives, and two at their
+    # 900 s limit followed by a third refused on four tries of 900 s is 90
+    # minutes; the rest of the job is about 10, 155 in all. The limit sits above
+    # that, so a dead host stays a warning and never becomes a red timeout.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1428,6 +1430,8 @@ jobs:
     name: Python wheel / ${{ matrix.os }}
     if: inputs.fast != true
     runs-on: ${{ matrix.os }}
+    # Longest 11.6 minutes (Windows), 8.7 macOS, 7.2 Ubuntu, in 100 runs on main.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -1435,7 +1439,7 @@ jobs:
         # matrix runs on pushes to main, where the wheels are consumed.
         # Frees two scarce macOS/Windows runners per PR without loosening
         # the merge gate, which never required the wheel jobs.
-        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04", "macos-latest", "windows-latest"]') }}
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04", "macos-26", "windows-2025-vs2026"]') }}
     steps:
       # Windows CFB stream names need the same autocrlf=false guard
       # we use for the Rust Windows integration job, or LFS-bound
@@ -1966,14 +1970,17 @@ jobs:
           print(".cursor/environment.json validates against the Cursor environment schema")
           PY
       # The workflows' own rules, which no linter knows: every job that runs
-      # steps sets `timeout-minutes`, no runner label is `-latest`, the MSRV
-      # in the test matrix and in every crate is Cargo.toml's `rust-version`,
+      # steps sets `timeout-minutes`, no runner label is `-latest`, every
+      # `$/.github/...` action or workflow a job uses exists and gets the inputs
+      # it declares (actionlint cannot read that form), the MSRV in the test
+      # matrix, in every crate and in the README, CONTRIBUTING.md, AGENTS.md,
+      # docs/python.md and .cursor/install.sh is Cargo.toml's `rust-version`,
       # and the documentation-only path list is one list in CI's
       # `paths-ignore`, the viewer tests' path filter and Deploy viewer's wait
       # step. Its comparisons are tested first, on the ways they can fail.
       - name: The workflow checks' failure modes
         run: python tools/ci/test_check_workflows.py
-      - name: Workflow timeouts, runner pins, MSRV and documentation paths
+      - name: Workflow timeouts, runner pins, local references, MSRV and documentation paths
         run: python tools/ci/check-workflows.py
 
   # The one check the main-protection ruleset requires (C1), as `full / CI

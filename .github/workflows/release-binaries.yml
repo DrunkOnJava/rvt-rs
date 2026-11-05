@@ -58,6 +58,9 @@ jobs:
   build:
     name: Build / ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    # A release job must not die on its limit: each is 5 or more times the longest of its last 9 runs.
+    # Windows leg longest 16.8 minutes.
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       matrix:
@@ -69,13 +72,13 @@ jobs:
             os: ubuntu-24.04-arm
             smoke: true
           - target: aarch64-apple-darwin
-            os: macos-latest
+            os: macos-26
             smoke: true
           - target: x86_64-apple-darwin
-            os: macos-latest
+            os: macos-26
             smoke: false
           - target: x86_64-pc-windows-msvc
-            os: windows-latest
+            os: windows-2025-vs2026
             smoke: true
             rustflags: "-C target-feature=+crt-static"
     env:
@@ -212,6 +215,7 @@ jobs:
     name: SHA256SUMS
     needs: build
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -233,6 +237,7 @@ jobs:
     name: Container image
     needs: checksums
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -335,6 +340,7 @@ jobs:
     if: inputs.upload
     needs: checksums
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: write
       # Build provenance for the archives (actions/attest).

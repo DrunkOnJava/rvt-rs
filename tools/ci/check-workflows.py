@@ -18,8 +18,15 @@ Exits 1 with an `::error` line for each of:
   regex in Deploy viewer's wait step (the commits it deploys without waiting for CI) must
   name the same paths, but for the files in EXPECTED_BUILT_FROM.
 
-PENDING lists the jobs another change is still editing. They are reported as warnings, so a
-job added anywhere else without a timeout still fails.
+* Local references. Every `uses: $/.github/...` or `./.github/...` of an action or a reusable
+  workflow names a file that exists, and its `with:` names only inputs that file declares and
+  gives those it requires. actionlint does not know the `$/` form (.github/actionlint.yaml
+  ignores that message), so without this a typo in one would go unreported.
+* The MSRV in prose. README.md, CONTRIBUTING.md, .cursor/install.sh, AGENTS.md and
+  docs/python.md each state it and each must state Cargo.toml's `rust-version`.
+
+PENDING lists the jobs another change is still editing, if any. They are reported as warnings,
+so a job added anywhere else without a timeout still fails.
 
 The comparisons are pure functions, tested on the ways they can fail in
 tools/ci/test_check_workflows.py. Reading the workflows needs PyYAML
@@ -37,27 +44,11 @@ WORKFLOWS = ROOT / ".github" / "workflows"
 
 ALL = "*"
 
-# Jobs that do not meet the rules yet, because the change that does it is in another pull
-# request (issue #1457). A job here is a warning; delete its line with that change, which also
-# fixes what the warning says. A job in these files that is not listed fails like any other.
-# What each should get, from the longest successful run in the last 10 to 25 runs (2026-11-05):
-#   ci.yml python-wheel: timeout-minutes 40 (windows leg longest 11.6), and macos-26 and
-#     windows-2025-vs2026 in place of the -latest labels, as the test job has
-#   codeql.yml analyze: 30 (rust leg longest 8.3)
-#   deploy-viewer.yml build: 30 (longest 8.4)
-#   publish.yml: build-wheels 40 (windows longest 8.8), build-sdist 10, validate-wheel-install 20,
-#     release-source-smoke 45 (longest 12.2), docs-rs-preview 20, viewer-release-smoke 40
-#     (longest 14.7), publish-crate 20, publish-testpypi 10, publish 10; macos-26 and
-#     windows-2025-vs2026 for the -latest labels
-#   release-binaries.yml: build 60 (windows leg longest 16.8), checksums 10, image 20, upload 15;
-#     the same label pins
-PENDING = {
-    "ci.yml": {"python-wheel": "wheel lane"},
-    "codeql.yml": {"analyze": "CodeQL lane"},
-    "deploy-viewer.yml": {"build": "viewer WASM lane"},
-    "publish.yml": {ALL: "release lane"},
-    "release-binaries.yml": {ALL: "release lane"},
-}
+# Jobs that do not meet the rules yet, because the change that does it is still in another pull
+# request: reported as warnings, so the check passes while it lands, and a job in the same file
+# that is not listed fails like any other. Empty since every job has a timeout and no runner is
+# `-latest` (issue #1457); a file maps to {job name: why} or {ALL: why}.
+PENDING = {}
 
 # Crates whose rust-version is not the workspace's, and the version each declares.
 DELIBERATE_MSRV = {
@@ -307,9 +298,87 @@ def docs_problems(paths_ignore, viewer_run, deploy_run, expected_built_from):
     return problems
 
 
+LOCAL_USE = re.compile(r"(?:\$|\.)/(\.github/(?:actions/[A-Za-z0-9._-]+|workflows/[A-Za-z0-9._-]+\.ya?ml))")
+
+
 def workflow_on(doc):
     """The `on:` block; YAML 1.1 reads the key `on` as true."""
     return doc.get("on", doc.get(True)) or {}
+
+
+def declared_inputs(path, spec):
+    """The inputs the action or reusable workflow at `path` declares: {name: required and no default}."""
+    if path.startswith(".github/actions/"):
+        inputs = spec.get("inputs")
+    else:
+        inputs = (workflow_on(spec).get("workflow_call") or {}).get("inputs")
+    return {
+        name: bool((meta or {}).get("required")) and "default" not in (meta or {})
+        for name, meta in (inputs or {}).items()
+    }
+
+
+def local_use_problems(workflows, read):
+    """Where a `uses:` of this repository's own action or workflow names nothing, or passes `with:`
+    inputs the target does not declare or leaves out one it requires. `read(path)` is the parsed
+    YAML of a file under the repository root, or None where there is no such file."""
+    problems = []
+    for name, doc in sorted(workflows.items()):
+        for job_id, job in sorted(((doc or {}).get("jobs") or {}).items()):
+            uses = [(f"{name}: job '{job_id}'", job.get("uses"), job.get("with"))]
+            uses += [(f"{name}: job '{job_id}', step {n}", s.get("uses"), s.get("with")) for n, s in enumerate(job.get("steps") or [], 1)]
+            for where, target, given in uses:
+                if not isinstance(target, str) or not target.startswith(("$/", "./")):
+                    continue
+                match = LOCAL_USE.fullmatch(target)
+                if not match:
+                    problems.append(f"{where}: `uses: {target}` is not a local action or reusable workflow reference")
+                    continue
+                path = match[1]
+                spec = None
+                for candidate in ([path + "/action.yml", path + "/action.yaml"] if path.startswith(".github/actions/") else [path]):
+                    spec = read(candidate)
+                    if spec is not None:
+                        break
+                if spec is None:
+                    problems.append(f"{where}: `uses: {target}` names {path}, which has no such file")
+                    continue
+                inputs = declared_inputs(path, spec)
+                given = given or {}
+                for key in sorted(set(given) - set(inputs)):
+                    problems.append(f"{where}: `with: {key}` is not an input {path} declares")
+                for key in sorted(k for k, required in inputs.items() if required and k not in given):
+                    problems.append(f"{where}: {path} requires the input `{key}`, which `with:` leaves out")
+    return problems
+
+
+PROSE_MSRV_FILES = ("README.md", "CONTRIBUTING.md", ".cursor/install.sh", "AGENTS.md", "docs/python.md")
+# The ways these files state the MSRV: "(MSRV 1.87)", `rust-version = "1.87"`, "Rust >= 1.87",
+# "Rust must be stable ≥ 1.87" and "Rust 1.87 or newer". A mention of another release (a Rust 1.83
+# the old base image shipped, the 1.88 the MCP server needs) is none of these.
+PROSE_MSRV = (
+    re.compile(r"\bMSRV\s+(\d+\.\d+)"),
+    re.compile(r"rust-version\s*=\s*\"?(\d+\.\d+)"),
+    re.compile(r"\bRust\b[^\n.]{0,24}?(?:>=|≥)\s*(\d+\.\d+)"),
+    re.compile(r"\bRust\s+(\d+\.\d+)\s+or\s+newer"),
+)
+
+
+def prose_msrv_problems(root, texts):
+    """Where a file that states the MSRV in prose states another release than `root`, or states none
+    the patterns can read (a file reworded out of the check fails, rather than passing unread)."""
+    problems = []
+    for path in PROSE_MSRV_FILES:
+        text = texts.get(path)
+        if text is None:
+            problems.append(f"{path}: not found, but named in PROSE_MSRV_FILES")
+            continue
+        found = [v for rx in PROSE_MSRV for v in rx.findall(text)]
+        if not found:
+            problems.append(f"{path}: states no MSRV the check can read (reworded? then change PROSE_MSRV)")
+        for version in sorted({v for v in found if not same_version(v, root)}):
+            problems.append(f"{path}: states Rust {version}, Cargo.toml's rust-version is {root!r}")
+    return problems
 
 
 def step_run(job, **want):
@@ -354,7 +423,10 @@ def main():
         errors.append("Cargo.toml: no package rust-version")
     else:
         errors += msrv_problems(root, include if isinstance(include, str) else "", manifests, DELIBERATE_MSRV)
-        print(f"msrv: rust-version {root} in Cargo.toml, {sum(v is not None for v in manifests.values())} crates, ci.yml's test matrix")
+        texts = {path: (ROOT / path).read_text() if (ROOT / path).is_file() else None for path in PROSE_MSRV_FILES}
+        errors += prose_msrv_problems(root, texts)
+        print(f"msrv: rust-version {root} in Cargo.toml, {sum(v is not None for v in manifests.values())} crates, "
+              f"ci.yml's test matrix, {len(PROSE_MSRV_FILES)} files of prose")
 
     deploy = workflows["deploy-viewer.yml"]["jobs"]["deploy"]
     errors += docs_problems(
@@ -364,6 +436,16 @@ def main():
         EXPECTED_BUILT_FROM,
     )
     print("documentation paths: ci.yml paths-ignore, viewer-paths and Deploy viewer's wait step")
+
+    def read(path):
+        file = ROOT / path
+        return yaml.safe_load(file.read_text()) or {} if file.is_file() else None
+
+    errors += local_use_problems(workflows, read)
+    local = sum(1 for d in workflows.values() for j in (d.get("jobs") or {}).values()
+                for u in [j.get("uses")] + [s.get("uses") for s in j.get("steps") or []]
+                if isinstance(u, str) and LOCAL_USE.fullmatch(u))
+    print(f"local references: {local} uses of this repository's own actions and workflows")
 
     for error in errors:
         print(annotation("error", error))

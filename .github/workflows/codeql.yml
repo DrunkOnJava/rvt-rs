@@ -27,6 +27,8 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-24.04
+    # Longest 8.3 minutes (the Rust leg) in 15 runs, the other languages 1.5 or less.
+    timeout-minutes: 30
     permissions:
       contents: read
       actions: read
