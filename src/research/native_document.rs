@@ -180,7 +180,16 @@ struct IdNeedles {
     /// before the set is asked.
     low: Vec<u64>,
     ids: BTreeSet<u32>,
+    /// A searcher for each id's four bytes while there are at most
+    /// [`MAX_FINDERS`] of them, so that a body is searched for each by the
+    /// vectorised substring search, not scanned a window at a time; empty for
+    /// more ids, and for none (#1335).
+    finders: Vec<memchr::memmem::Finder<'static>>,
 }
+
+/// The most ids [`IdNeedles`] searches for one by one: past it, a body is
+/// scanned once, a window at a time.
+const MAX_FINDERS: usize = 16;
 
 impl IdNeedles {
     /// The word and bit of `low` that `value`'s low 16 bits select.
@@ -196,16 +205,98 @@ impl IdNeedles {
             let (word, bit) = Self::slot(id);
             low[word] |= bit;
         }
-        Self { low, ids }
+        let finders = if ids.len() <= MAX_FINDERS {
+            ids.iter()
+                .map(|id| memchr::memmem::Finder::new(&id.to_le_bytes()).into_owned())
+                .collect()
+        } else {
+            Vec::new()
+        };
+        Self { low, ids, finders }
     }
 
     /// Whether any of the ids' four bytes is anywhere in `body`.
     fn occur_in(&self, body: &[u8]) -> bool {
+        if self.finders.is_empty() {
+            return self.occur_in_windows(body);
+        }
+        self.finders
+            .iter()
+            .any(|finder| finder.find(body).is_some())
+    }
+
+    /// [`Self::occur_in`] by a scan of every four-byte window of `body`.
+    fn occur_in_windows(&self, body: &[u8]) -> bool {
         body.windows(4).any(|window| {
             let value = u32::from_le_bytes([window[0], window[1], window[2], window[3]]);
             let (word, bit) = Self::slot(value);
             self.low[word] & bit != 0 && self.ids.contains(&value)
         })
+    }
+}
+
+#[cfg(test)]
+mod needle_tests {
+    use super::{IdNeedles, MAX_FINDERS};
+
+    /// What `occur_in` and `occur_in_windows` say of `body` for `ids`.
+    fn both(ids: &[i64], body: &[u8]) -> (bool, bool) {
+        let needles = IdNeedles::new(ids.iter().copied());
+        (needles.occur_in(body), needles.occur_in_windows(body))
+    }
+
+    #[test]
+    fn an_id_in_the_last_four_bytes_is_found() {
+        let mut body = vec![0xaa, 0xbb, 0xcc];
+        body.extend_from_slice(&0x1234_5678u32.to_le_bytes());
+        assert_eq!(both(&[0x1234_5678], &body), (true, true));
+    }
+
+    #[test]
+    fn an_id_at_an_unaligned_offset_is_found() {
+        let mut body = vec![0x01];
+        body.extend_from_slice(&7u32.to_le_bytes());
+        body.extend_from_slice(&[0x02, 0x03]);
+        assert_eq!(both(&[7], &body), (true, true));
+    }
+
+    #[test]
+    fn a_body_shorter_than_an_id_holds_none() {
+        assert_eq!(both(&[7], &[7, 0, 0]), (false, false));
+        assert_eq!(both(&[7], &[]), (false, false));
+    }
+
+    #[test]
+    fn a_window_that_shares_only_the_low_sixteen_bits_is_not_an_id() {
+        let body = 0x0001_0007u32.to_le_bytes();
+        assert_eq!(both(&[7], &body), (false, false));
+        assert_eq!(both(&[0x0002_0007], &body), (false, false));
+    }
+
+    #[test]
+    fn no_ids_find_nothing() {
+        assert_eq!(both(&[], &7u32.to_le_bytes()), (false, false));
+    }
+
+    #[test]
+    fn an_eight_byte_id_is_found_by_its_first_four_bytes() {
+        let body = 0x0000_0001_0000_0009u64.to_le_bytes();
+        assert_eq!(both(&[0x0000_0001_0000_0009], &body), (true, true));
+    }
+
+    #[test]
+    fn the_search_and_the_scan_agree_below_and_above_the_most_searched_for() {
+        let present = 0x00c0_ffee_i64;
+        let mut body = vec![0u8; 5];
+        body.extend_from_slice(&(present as u32).to_le_bytes());
+        body.extend_from_slice(&[9; 6]);
+        for count in [1, MAX_FINDERS, MAX_FINDERS + 1, 40] {
+            let mut ids: Vec<i64> = (0..count as i64 - 1).map(|n| 0x7000_0000 + n).collect();
+            ids.push(present);
+            assert_eq!(both(&ids, &body), (true, true), "{count} ids");
+            let absent: Vec<i64> = (0..count as i64).map(|n| 0x7000_0000 + n).collect();
+            assert_eq!(both(&absent, &body), (false, false), "{count} absent ids");
+        }
     }
 }
 #[derive(Debug, Serialize)]
