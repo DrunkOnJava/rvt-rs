@@ -59,13 +59,15 @@ good() {
 
 # A 404 is final for a host; anything else is tried three times. Only a transfer
 # that has stopped (under 1 kB/s for 60 s) is abandoned: a slow one that keeps
-# moving is left to finish, and a crawl is ended by the step's own bound. The
-# download that took 6.9 minutes on one run (#1380) moved its first file at about
-# 25 kB/s, which no rate floor above that could have let through.
+# moving is left to finish, and a crawl is ended by the step's own bound. There
+# is no per-attempt time limit, because an attempt killed by one starts again
+# from the first byte. The download that took 6.9 minutes on one run (#1380)
+# moved its first file at about 25 kB/s, which no rate floor above that could
+# have let through, and the largest file, 13.4 MB, takes 9 minutes at that rate.
 download() {
   local code attempt
   for attempt in 1 2 3; do
-    code=$(curl -sSL --connect-timeout 20 --max-time 600 --speed-limit 1024 --speed-time 60 -o "$2" -w '%{http_code}' "$1") || code=000
+    code=$(curl -sSL --connect-timeout 20 --speed-limit 1024 --speed-time 60 -o "$2" -w '%{http_code}' "$1") || code=000
     [ "$code" = 200 ] && return 0
     [ "$code" = 404 ] && return 1
     sleep $((attempt * 5))
