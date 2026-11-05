@@ -49,7 +49,7 @@ So the export draws an Area **to the outer face of an exterior wall and to the c
 
 ## 3. The position is the offset the file stores
 
-A line picked from a wall carries `AreaMeasureCurveData`, whose `m_schemeSegments` lists, over each part of the line, the distance its area is measured from it (RE-333 section 2; `probe_re333_area_plan_topology` prints it as `line` rows). This report's first version did not look there. Joining the two probes' output line by line (`tools/re/wall_lines_vs_offsets.py`, section 10) gives, on the 2022 save (probe runs 41862228192 and 42008543772; the 2021 and 2023 saves give the same table):
+A line picked from a wall carries `AreaMeasureCurveData`, whose `m_schemeSegments` lists, over each part of the line, the distance its area is measured from it (RE-333 section 2; `probe_re333_area_plan_topology` prints it as `line` rows). This report's first version did not look there. Joining the two probes' output line by line (`tools/re/wall_lines_vs_offsets.py`, section 10) gives, on the 2022 save (probe runs 41862228192 and 42008543772, and run 42027944261 of this report's head, both probes on the 2020, 2021 and 2022 saves; the 2020, 2021 and 2023 saves give the same table):
 
 | Position by record box | Host wall | Lines | Stored offsets, feet |
 |---|---|---:|---|
@@ -125,7 +125,7 @@ Measure, `--ref main`, all green, of the archived branch. The runs of `8ed50748`
 
 **Held out and the office** (counts only): BIM Whale's IFC byte for byte main's (run 41864945459; `IfcSpace` written 0, Revit's 8, extra 0, matched 0 of 0), which is vacuous: the project draws no Area body. The office's IFC of both files byte for byte main's, an empty scorer diff (run 41868440397, `-f nordic=true`; its 689 lines are all axis lines, so no wall is read).
 
-**The unfiltered run** (run 41869173374, `-f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true`, every scorer, on `77c0716a`): 9 exports moved, exactly the nine `rac_advanced` saves above; 102 were byte for byte main's, all 19 held-out models among them; the scorer diff touched only those 9.
+**The unfiltered run** (run 41869173374, `-f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true`, every scorer, on `77c0716a`): 9 exports moved, exactly the nine `rac_advanced` saves above; 102 were byte for byte main's, all 19 held-out models among them; the scorer diff touched only those 9. The final unfiltered run, on `6ec876f2` (run 41875835920), was green; its figures are not recorded here.
 
 ## 8. Where each Area stands now
 
