@@ -318,7 +318,7 @@ Measure's `ifc.sha256` is what says that an export is identical.
   that only names the area ("improves rooms") covers nothing. `NOT MEASURED` is
   neither: it names its cause, and the check is run again once the cause is gone.
 - **NOT MEASURED, never a pass.** No key in the context, a pull request from a
-  fork or no same-repository pull request whose head is the measured commit, a
+  fork or no same-repository pull request that holds the measured commit, a
   pull request with no `## Summary` or an empty one (the template's comment
   alone) when the diff has findings, HTTP 402 or a 429 for exhausted quota (the
   credit is out; not retried), a key refused, a reply from another model than the
