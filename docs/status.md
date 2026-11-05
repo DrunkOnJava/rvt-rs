@@ -84,10 +84,18 @@ Revit 2019 (for 2015 to 2018, RE-181), 2023 (for 2019 to 2022, RE-180) and
 projects against Revit's own export of their release: BIMcollab's 2015
 structural example (RE-198) and Vitoria's 2018 `ALD26 Before` (RE-315, RE-319);
 2015's `rst_basic` is another model than its 2019 copy, so it is not measured.
-On 2026 and 2027 beams are drawn along their axes, stair runs and landings
-as their steps and treads, and sloped roofs as their planes, as on 2024 and
-2025, measured against the same Autodesk samples saved by Revit 2024 and 2025
-(RE-341).
+On 2026 and 2027 (RE-341) beams are drawn along their axes as on 2024 (on 2025
+they are not), stair runs as their steps and treads from their native records
+as on 2025, with the stair property sets and quantities read from them, and
+landings as on 2024 (not drawn on 2025); and the sketch lines' exact ends,
+curves and Sketch curve lists are read, so sketch-driven floors, ceilings,
+slabs and footprint roofs take their outline from their lines and shaft
+openings are cut from floors, roofs and ceilings, as on 2024 and 2025. That is
+measured against the same Autodesk samples saved by Revit 2024 and 2025 and, for
+one stair flight, against Revit's own 2026 and 2027 exports; no beam, landing,
+sketch outline or roof is scored against Revit's export. Sloped roofs, spiral
+runs, stair names, railing heights and lengths, a wall's profile openings, IFC
+export overrides and the opening index stay unread there.
 Conduits, conduit fittings and gutters export on every release the exporter
 reads and are measured against Revit's own export on `ALD26 Before` only (all
 178 it holds are Revit's elements, RE-319); Autodesk's MEP samples and Snowdon

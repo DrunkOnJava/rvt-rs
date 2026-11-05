@@ -138,8 +138,8 @@ drawn from that reader.
 | `native_landing_tread` | `native_landing` | `native` | The header of the landing's current native record, which gives its outline and top. Its thickness is its stair's run types' tread thickness, which has no source yet. |
 | `partition_stair_run_sketch` | `stair_run_lines`, `stair_run_ends` | `agreeing` | The element-data header of the first copy of the run's data that gave the sketch lines, or the ends; `partitions` lists the copies that did. |
 | `partition_stair_run_sketch` | `stair_run_type` | `agreeing` | `parts`: the run type's id object (where its id is stored), read once for the type and noted for each run of it; `copies` is the partitions that held the id object, `partitions` those that gave a run type. |
-| `partition_stair_run_sketch` | `native_run` | `native` | A Revit 2025 run: the header of the run's current native record, which gives its sketch, riser height and ends (RE-217). |
-| `partition_stair_run_sketch` | `native_run_type` | `native` | A Revit 2025 run: `parts`: the header of the run type's current native record, which gives the type's construction and name. |
+| `partition_stair_run_sketch` | `native_run` | `native` | A Revit 2025, 2026 or 2027 run: the header of the run's current native record, which gives its sketch, riser height and ends (RE-217, RE-341). |
+| `partition_stair_run_sketch` | `native_run_type` | `native` | A Revit 2025, 2026 or 2027 run: `parts`: the header of the run type's current native record, which gives the type's construction and name. |
 | `partition_stair_run_sketch` | `stair_run_base_cuts` | `native` | The header of the run's current native record, which gives where its underside is cut; listed only for a run whose record gave a cut. |
 | `partition_landing_slab` | `landing_lines` | `agreeing` | The element-data header of the first copy of the landing's data that gave its outline lines. |
 | `partition_landing_slab` | `native_landing` | `native` | The header of the landing's current native record, which gives its top. |
