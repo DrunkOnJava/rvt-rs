@@ -42,14 +42,16 @@ pub enum ExportKind {
 #[non_exhaustive]
 pub enum SavedMeshChoice {
     /// Doors and windows of Revit 2023 to 2027, the releases whose saved
-    /// graphics are read ([`default_scope`]): `rvt-ifc` with no switch.
+    /// graphics are read ([`default_scope`]), and the walls that embed a
+    /// curtain wall where Revit raised their base (RE-338): `rvt-ifc` with no
+    /// switch.
     #[default]
     Default,
     /// Every element whose body would be its record's bounding box
     /// (`rvt-ifc --saved-meshes`). Slower.
     All,
-    /// None: doors and windows keep their record's box
-    /// (`rvt-ifc --no-saved-meshes`).
+    /// None: doors and windows keep their record's box, and walls that embed
+    /// a curtain wall their record's body (`rvt-ifc --no-saved-meshes`).
     Off,
 }
 

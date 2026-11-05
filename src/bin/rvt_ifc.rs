@@ -359,7 +359,9 @@ fn run(args: Args) -> anyhow::Result<()> {
 /// The switches that change the model: the document exporter by default,
 /// `--placeholder` or `--diagnostic-proxies` for the others; the saved-graphics
 /// bodies are every boxed one with `--saved-meshes`, none with
-/// `--no-saved-meshes`, and otherwise doors and windows on Revit 2023 to 2027.
+/// `--no-saved-meshes`, and otherwise doors and windows, and the walls that
+/// embed a curtain wall where Revit raised their base (RE-338), on Revit 2023
+/// to 2027.
 fn export_options(args: &Args) -> ExportOptions {
     let kind = if args.placeholder {
         ExportKind::Placeholder
