@@ -175,7 +175,7 @@
           <span>Phase</span>
           <select class="mode-select" id="export-phase" aria-describedby="export-phase-hint"></select>
         </label>
-        <p class="option-hint hidden" id="export-phase-hint">The phase the model and its exports show, as rvt-ifc --phase chooses it; the last is the default. An element that does not exist in the phase, and a room whose own phase is not it, are left out. Changing this reopens the open file.</p>
+        <p class="option-hint hidden" id="export-phase-hint">The phase the model and its exports show, as rvt-ifc --phase chooses it; the last is the default. An element that does not exist in the phase, and a room whose own phase is not it, are left out. Where the last phase holds no room, the default shows the rooms of the latest phase that holds any; choosing a phase other than the default shows exactly that phase. Changing this reopens the open file.</p>
         <button class="side-btn" id="download-diagnostics" disabled type="button" aria-label="Download diagnostics JSON with the project's names replaced" title="The diagnostics with the file, project, level and material names replaced, so they can be posted publicly">Download diagnostics</button>
         <details id="diagnostics-details">
           <summary>Diagnostics details</summary>

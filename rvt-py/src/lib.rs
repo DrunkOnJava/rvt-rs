@@ -97,6 +97,48 @@ fn phase_argument(phase: Option<&Bound<'_, PyAny>>) -> PyResult<Option<String>> 
     ))
 }
 
+/// A `RuntimeWarning` with `message`.
+fn warn_runtime(py: Python<'_>, message: &str) -> PyResult<()> {
+    let category = py.import("builtins")?.getattr("RuntimeWarning")?;
+    py.import("warnings")?
+        .call_method1("warn", (message, category))?;
+    Ok(())
+}
+
+/// What a result says when the project's last phase holds no room and no phase
+/// was named, so its rooms are those of an earlier phase (#1359): `what` is the
+/// result ("the export writes"), `rooms` how many where the call knows, and
+/// `choose` how the caller names the phase.
+fn room_fallback_message(what: &str, phase: &str, rooms: Option<usize>, choose: &str) -> String {
+    let rooms = rooms.map_or_else(|| "the rooms".to_string(), |n| format!("the {n} room(s)"));
+    format!(
+        "the project's last phase holds no room, so {what} {rooms} of {phase:?}, the latest phase that holds any; every other element is of the last phase. {choose} to choose the phase exactly; naming the last phase writes no room"
+    )
+}
+
+/// How an export names the phase.
+const CHOOSE_BY_PHASE_ARGUMENT: &str = "Pass phase= (a phase's name or ElementId)";
+
+/// How a read of the elements names it: it takes the phase the handle holds.
+const CHOOSE_BY_EXPORT: &str = "Export with phase= (write_ifc, export_diagnostics or schedule_csv; the handle keeps the phase it names)";
+
+/// Warn, as [`room_fallback_message`] says, if the handle's default export
+/// falls back to an earlier phase's rooms.
+fn warn_room_fallback(
+    py: Python<'_>,
+    rf: &mut RustRevitFile,
+    what: &str,
+    choose: &str,
+) -> PyResult<()> {
+    if let Some(fallback) = rf.room_phase_fallback() {
+        let phase = fallback
+            .name
+            .unwrap_or_else(|| format!("ElementId {}", fallback.id));
+        warn_runtime(py, &room_fallback_message(what, &phase, None, choose))?;
+    }
+    Ok(())
+}
+
 /// The default IFC export of `rf` (`ifc::run_export_with_limits`, the build `rvt-ifc`
 /// runs), drawing doors and windows from their saved meshes (Revit 2023 to
 /// 2027) when `saved_meshes`, at `phase` (`None`: the project's last). Saved
@@ -128,9 +170,18 @@ fn export_run(
         .with_export_decisions(export_decisions);
     let run = ifc::run_export_with_limits(rf, &options, walker_limits).map_err(to_py_val)?;
     for note in run.notes.iter().filter(|note| note.skipped().is_some()) {
-        let category = py.import("builtins")?.getattr("RuntimeWarning")?;
-        py.import("warnings")?
-            .call_method1("warn", (note.to_string(), category))?;
+        warn_runtime(py, &note.to_string())?;
+    }
+    if let Some(fallback) = &run.diagnostics.room_phase_fallback {
+        warn_runtime(
+            py,
+            &room_fallback_message(
+                "the export writes",
+                &fallback.phase,
+                Some(fallback.rooms),
+                CHOOSE_BY_PHASE_ARGUMENT,
+            ),
+        )?;
     }
     Ok(run)
 }
@@ -745,6 +796,11 @@ impl PyRevitFile {
     /// `read_adocument()`. `typed` is the typed projection
     /// (`Level` / `Wall` / `Floor` / `Door` / `Window` / `Room` /
     /// `Material`) or `None` for other classes.
+    ///
+    /// The elements are those of the export at the phase the handle holds:
+    /// the project's last until an export names another (`write_ifc(phase=...)`).
+    /// Where the last holds no room, the rooms are those of the latest phase
+    /// that holds any, and a `RuntimeWarning` says so.
     fn decoded_elements<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         let elements: Vec<_> = walker::iter_elements_with_limits(
             &mut self.inner,
@@ -753,6 +809,9 @@ impl PyRevitFile {
         )
         .map_err(to_py_val)?
         .collect();
+        if elements.iter().any(|element| element.class == "Room") {
+            warn_room_fallback(py, &mut self.inner, "the result includes", CHOOSE_BY_EXPORT)?;
+        }
 
         // Revit 2015 to 2027 only; a file whose parameters cannot be read
         // keeps its elements, with a warning.
@@ -779,7 +838,8 @@ impl PyRevitFile {
     ///
     /// Returns `{ "total": int, "by_class": dict[str, int] }`.
     /// The `total` value matches
-    /// `export_diagnostics()["decoded"]["production_walker_elements"]`.
+    /// `export_diagnostics()["decoded"]["production_walker_elements"]`. The
+    /// phase is `decoded_elements`'s.
     fn element_counts<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let mut by_class = std::collections::BTreeMap::<String, usize>::new();
         let mut total = 0usize;
@@ -794,6 +854,9 @@ impl PyRevitFile {
             *by_class.entry(element.class).or_insert(0) += 1;
         }
 
+        if by_class.contains_key("Room") {
+            warn_room_fallback(py, &mut self.inner, "the counts include", CHOOSE_BY_EXPORT)?;
+        }
         let out = PyDict::new(py);
         out.set_item("total", total)?;
         out.set_item("by_class", by_class)?;
@@ -884,6 +947,12 @@ impl PyRevitFile {
             )
             .map_err(to_py_val)?
             .model;
+        warn_room_fallback(
+            py,
+            &mut self.inner,
+            "the schedule lists",
+            CHOOSE_BY_PHASE_ARGUMENT,
+        )?;
         let options = CsvOptions {
             unit: if metric {
                 LengthUnit::Metres

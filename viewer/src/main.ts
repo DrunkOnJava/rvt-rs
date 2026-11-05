@@ -1002,6 +1002,8 @@ interface ExportDiagnostics {
   };
   unsupported_features?: string[];
   skipped?: { reason?: string; count?: number; sample_names?: string[]; phase?: string }[];
+  /** The rooms of an earlier phase written because the last phase holds none (#1359). */
+  room_phase_fallback?: { phase?: string; rooms?: number };
   warnings?: string[];
   formats_latest_integrity?: {
     stream?: string;
@@ -1110,16 +1112,22 @@ let currentPhase = '';
 /**
  * Lists the file's phases in the select, in the project's order, the last as
  * the default. A file with no phases (a family, or a release whose phases are
- * not read) hides the field; a project with one shows it fixed.
+ * not read) hides the field; a project with one shows it fixed. Where the
+ * default shows the rooms of an earlier phase because the last holds none
+ * (`fallbackPhase`, the diagnostics' `room_phase_fallback`), the last says so.
  */
-function renderPhases(phases: ProjectPhase[]): void {
+function renderPhases(phases: ProjectPhase[], fallbackPhase?: string): void {
   exportPhaseEl.replaceChildren();
   phases.forEach((phase, index) => {
     const last = index === phases.length - 1;
     const label = phase.name ? phase.name : `ElementId ${phase.id}`;
     const option = document.createElement('option');
     option.value = last ? '' : String(phase.id);
-    option.textContent = last ? `${label} (last, default)` : label;
+    option.textContent = !last
+      ? label
+      : fallbackPhase === undefined
+        ? `${label} (last, default)`
+        : `${label} (last, default; no room in it, so the rooms of ${fallbackPhase} are shown)`;
     exportPhaseEl.append(option);
   });
   if (![...exportPhaseEl.options].some((option) => option.value === currentPhase)) {
@@ -1348,7 +1356,7 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
     lastSchedule = msg.schedule;
     // Diagnostics are saved and shown as JSON, so their maps become objects.
     currentDiagnostics = plainJson(msg.diagnostics);
-    renderPhases(msg.phases ?? []);
+    renderPhases(msg.phases ?? [], currentDiagnostics?.room_phase_fallback?.phase);
     lastFileStem = file.name.replace(/\.(rvt|rfa|rte|rft)$/i, '');
     renderScene(msg.glb);
     renderTree();
@@ -3714,6 +3722,7 @@ function anonymizedDiagnostics(diagnostics: ExportDiagnostics): ExportDiagnostic
       (_, index) => `Material ${index + 1}`,
     );
   }
+  if (copy.room_phase_fallback?.phase !== undefined) copy.room_phase_fallback.phase = redacted;
   for (const item of copy.skipped ?? []) {
     if (item.phase !== undefined) item.phase = redacted;
     item.sample_names = (item.sample_names ?? []).map((name) => {

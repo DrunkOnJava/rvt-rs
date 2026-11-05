@@ -132,7 +132,10 @@ from the same file with no `phase`: it has its own `model_id` (the hash covers
 the phase's ElementId, so a phase named by its name and by its number is one
 model), and the server keeps both. Naming the project's last phase is a model
 of its own too, since the server does not know a file's last phase until it
-reads it. A `model_id` names the phase it was opened at, so passing a different
+reads it, and it is exact: where the last phase holds no room, a model opened
+with no `phase` has the rooms of the latest phase that holds any (the
+diagnostics' `room_phase_fallback` and a line in the summary's `notes` say so,
+#1359) and one opened at the last phase has none. A `model_id` names the phase it was opened at, so passing a different
 `phase` with one is a tool error; pass the path with `phase` instead. A phase
 the file does not have is a tool error that lists the phases it does; the
 server remembers the answer, so asking again does not read the file again.

@@ -49,7 +49,7 @@ impl From<CliExportQualityMode> for ExportQualityMode {
         rvt-ifc model.rvt --diagnostics out.diagnostics.json --element-provenance   list where each element was read from\n  \
         rvt-ifc model.rvt --diagnostics out.diagnostics.json --export-decisions   list why each element was left out\n  \
         rvt-ifc model.rvt --mode geometry\n  \
-        rvt-ifc model.rvt --phase \"Working Drawings\"   export that phase, not the last\n\n\
+        rvt-ifc model.rvt --phase \"Working Drawings\"   export that phase exactly, not the last\n\n\
         SOURCE_DATE_EPOCH (Unix seconds) sets the time the IFC header and owner\n\
         history record, so two exports of the same file are the same bytes.\n\n\
         Exit status 3: a resource limit kept part of the file from being read, so\n\
@@ -204,8 +204,11 @@ struct Args {
     /// the project's last. A name is matched first and an ElementId only
     /// when no phase has that name, so a name made of digits wins. Revit's
     /// export shows one phase: an element that does not exist in it, and a
-    /// room whose own phase is not it, are left out. An unknown phase is an
-    /// error that lists the file's phases (RE-326).
+    /// room whose own phase is not it, are left out. A phase named is exact,
+    /// the last included: without --phase, a project whose last phase holds
+    /// no room writes the rooms of the latest phase that holds any, and
+    /// says so (#1359), where `--phase` with the last phase writes none. An
+    /// unknown phase is an error that lists the file's phases (RE-326).
     #[arg(long, value_name = "NAME|ID", conflicts_with = "placeholder")]
     phase: Option<String>,
     /// Raise the stream, inflate and walker-scan limits for large models:

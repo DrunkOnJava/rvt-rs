@@ -4,7 +4,7 @@
 **Issue:** the "Rooms and phases" item of #1194; follows RE-184 §5 (#328).
 **Artefacts:** 12 models with rooms and a Revit export (Core Interior, RE1 Architecture, the BIM4LCA office as built and at building permit, its two terrain variants, six R2025 room models: 621 rooms), Autodesk's sample projects of every release 2015 to 2027 (no Revit export in the corpus), and one public Revit 2018 export of Autodesk's `rac_basic_sample_project` (below). Held-out models were not read.
 **Probes:** `probes/examples/probe_re326_room_phases.rs` and `probes/examples/probe_re326_phase_census.rs`; scorers `tools/re/room_phases_vs_ifc.py` and `tools/re/phase_census_vs_ifc.py`.
-**Status:** positive for where a room's phase is stored and for the default rule; unmeasured against a Revit export made with the default setup. A room's phase is `RoomElem.m_phaseId`. Revit's exporter leaves out a room whose phase is not the export phase, the last unless the export setup or a view names another, and rvt-rs does too, with `rvt-ifc --phase <name|id>` naming the export phase (Griffin, 2026-11-04). On the 12 models that have a Revit export the rule changes nothing; the one project with rooms outside its last phase, Autodesk's `rac_basic_sample_project`, has a public Revit export that holds all 14, which the default leaves out and `--phase "Working Drawings"` writes.
+**Status:** positive for where a room's phase is stored and for the default rule; unmeasured against a Revit export made with the default setup (§9 adds a fallback for a project whose last phase holds no room, a choice by Griffin, and not a measurement). A room's phase is `RoomElem.m_phaseId`. Revit's exporter leaves out a room whose phase is not the export phase, the last unless the export setup or a view names another, and rvt-rs does too, with `rvt-ifc --phase <name|id>` naming the export phase (Griffin, 2026-11-04). On the 12 models that have a Revit export the rule changes nothing; the one project with rooms outside its last phase, Autodesk's `rac_basic_sample_project`, has a public Revit export that holds all 14, which the default leaves out and `--phase "Working Drawings"` writes.
 
 ## 1. The question
 
@@ -68,7 +68,7 @@ So the export either named Working Drawings (a setup or a view, as in §4) or Re
 - **Counts what it leaves out.** The diagnostics' `skipped` has one `room_not_in_export_phase` item for each phase the rooms sit in, with the rooms in `count` and `classes.Room` and the phase's name in `phase`; `--anonymize` replaces the name. The rooms are not in `exported.by_ifc_type.IFCSPACE`.
 - **Releases.** Revit 2016 to 2023 apply the rule as they apply the RE-184 element filter (RE-315), and 2024 to 2027 apply it. Revit 2015 and earlier write every room, as every element, because both phase rules start at Revit 2016: the element rule's only evidence on a 32-bit file is a Revit 2018 project, and a room rule that reached further than it would stand on less. Autodesk's `rac_basic_sample_project` saved by Revit 2015 therefore keeps its 14 rooms. One gate covers both rules; #1332 extends them together to Revit 2015 once a 2015 export, or a measured read of a 2015 phase order against one, supports it.
 
-On Autodesk's `rac_basic_sample_project` (phases Existing, Working Drawings, Learning Content; 14 rooms in Working Drawings), measured on the 2018 save with `tools/re/spaces_by_globalid_vs_ifc.py` against the public Revit 2018 export of §5 (Measure runs 41784415396 and 41784419457, ref `4532731d535663010438c2b5c00ace97dafc38a3`, `-f samples=true -f sample_years="2018 2018" -f keep_ifc=true`, the second with `-f ifc_flags="--phase 86961"`):
+On Autodesk's `rac_basic_sample_project` (phases Existing, Working Drawings, Learning Content; 14 rooms in Working Drawings), measured at that ref, before the fallback of §9, on the 2018 save with `tools/re/spaces_by_globalid_vs_ifc.py` against the public Revit 2018 export of §5 (Measure runs 41784415396 and 41784419457, ref `4532731d535663010438c2b5c00ace97dafc38a3`, `-f samples=true -f sample_years="2018 2018" -f keep_ifc=true`, the second with `-f ifc_flags="--phase 86961"`):
 
 | export | `IfcSpace` rvt-rs writes | in Revit's export (17) | only in Revit's export |
 |---|---:|---:|---:|
@@ -102,3 +102,46 @@ python3 tools/re/spaces_by_globalid_vs_ifc.py sample-2018-rac_basic_sample_proje
 ```
 
 The second run's `probe.txt` of `sample-2018-rac_basic_sample_project`, and the public export above, are the inputs of the last command. The GlobalIds of the 14 rooms are the `global_id` of that probe's room lines in the first run.
+
+## 9. Fallback to the rooms' phase where the last phase holds none (2026-11-05, #1359)
+
+**Status:** a choice by Griffin (2026-11-05, "Fall back to rooms' phase"), not a measurement. No Revit export made at the last phase of a project whose last phase holds no room exists, so what Revit's default writes for such a project is unmeasured. What is measured is the cause, below, and (once the run named in §9.4 finishes) what the change does to the corpus.
+
+### 9.1 The cause
+
+An outside importer reported Autodesk's `rac_basic_sample_project` going from 14 rooms (`decoded_elements()`, `IfcSpace`) in 0.13.0 to 0 in 0.14.0 (#1359). The rule of §6 is the cause: the project's phases are Existing, Working Drawings and Learning Content, all 14 `RoomElem` records have `m_phaseId` Working Drawings, and the last phase holds no room. Measure run 41985023986 (ref `b510ff3c`, the default export of `main`; the `diagnostics.json` of each save of 2016 to 2027 read) holds `IFCSPACE` 0 and `room_not_in_export_phase` 14, all in Working Drawings, on every one; the 2015 save holds `IFCSPACE` 14 and counts none, because both phase rules start at Revit 2016 (#1332). `probe_re326_room_phases` (run 41776212669, ref `458540e0`) read 14 `RoomElem` records on the 2018 and 2023 saves, every one with `m_phaseId` Working Drawings and none unset, and §3 records 14 of 14 on all 13 releases. The importer's other losses (the ANTEPROJETO house and others in #1359) are not read here: whether any of them is this rule is not known.
+
+### 9.2 The rule
+
+Where no phase is named and the project's last phase holds no room, the rooms are judged against the latest phase of the project that holds one (`PhaseFilter::room_fallback`, `room_fallback_phase`), and the rooms of every other phase are left out and counted as before.
+
+- **"Holds no room".** No `RoomElem` record whose `m_phaseId` is read and is one of the project's phases is in the last phase. A room whose phase is unset, unread, or not one of the project's does not count towards holding a room. Two reasons, both from this report: an unset phase is what every Area and every unplaced or not enclosed record carries (§2: the office's 30 Areas, 25 records of `rac_advanced` that are not rooms, 1 of `rst_basic`'s 31, Snowdon Towers' 101), and the filter reads `RoomElem` records without their category, so it cannot tell an unset placed room from an Area; counting them would suppress the fallback on any project that has an Area. Every placed room read in §3 has a set phase, so the two readings coincide on every file measured. They differ only on a project whose last phase holds no readable room but holds a room whose phase did not read: the fallback then brings in earlier rooms the other reading would have left out.
+- **Named is exact.** `--phase`, Python's `phase=` and the MCP server's `phase` are exact, including naming the last phase, which writes no room of an earlier phase. `PhaseFilter` tells a named phase from the default (`export_named`), and `RevitFile::set_export_phase` drops the memoised walk when the rooms are judged against another phase than the one named, as when it names the last phase after a default export that fell back.
+- **Every other element** follows the last phase as before (RE-184): the fallback moves rooms only.
+- **A project with a room in its last phase** has no fallback, so its export and its diagnostics are the bytes they were.
+- **The phase the filter reads.** All `RoomElem` records count, placed or not, so an unplaced record whose phase is the last also stops the fallback. That errs towards the output of §6.
+
+### 9.3 What each path does
+
+All of them take one memoised `PhaseFilter` (`RevitFile::phase_filter`), so the rooms they hold are the same:
+
+| Path | After the change |
+|---|---|
+| `rvt-ifc` | Writes the fallback rooms; prints `rvt-ifc: the project's last phase holds no room, so ...`; the diagnostics hold `room_phase_fallback` (`phase`, `rooms`). `--phase` is exact. |
+| `RevitFile.write_ifc`, `rvt_to_ifc`, `export_diagnostics`, `export_diagnostics_json`, `rvt_to_ifc_diagnostics` | The same run; a `RuntimeWarning` names the phase and the rooms and says to pass `phase=`. |
+| `RevitFile.schedule_csv` | The document exporter alone; a `RuntimeWarning` (`RevitFile.room_phase_fallback`). |
+| `RevitFile.decoded_elements`, `element_counts` | `walker::iter_elements_with_limits`, which reads the same memoised walk, so the rooms are the same. They cannot warn through the export's notes and take no `phase`, which the handle keeps from an export; they warn from `RevitFile.room_phase_fallback` when their result holds a room, and say to export with `phase=`. |
+| MCP server | Every tool decodes through `run_export_with_limits` with the model's phase, so the default is the fallback, a phase passed is exact, `get_diagnostics` holds `room_phase_fallback`, and the summary's `notes` hold the same line as `rvt-ifc`. No tool schema changed. |
+| Viewer | The wasm export runs the same pipeline; the phase select shows the last phase as the default, labelled with the fallback phase, and cannot name the last phase exactly: its last entry is the default. The downloaded diagnostics replace the phase under `--anonymize`'s rule. |
+| `rvt-gltf`, `rvt-elements`, `rvt-info` and other CLIs | They read the same walk; `rvt-gltf` has no `--phase` and prints nothing about the fallback. |
+
+### 9.4 Measured on this head
+
+Not yet. The unfiltered Measure (`-f base=main -f nordic=true -f r2025=true -f holdout=true -f samples=true`) of this change is dispatched and its figures, the models that move and the `rules:` and `mcp answers` lines of `rac_basic_sample_project`, are added here when it finishes. Expected, and to be checked: the 2016 to 2027 saves of `rac_basic_sample_project` each move to 14 `IfcSpace` and 0 `room_not_in_export_phase`, and every other model keeps its `ifc.sha256`.
+
+### 9.5 What the fallback can get wrong
+
+- **A project with no room in its last phase gets earlier rooms that Revit's default might leave out.** Revit's default is unmeasured on such a project. The rooms of a renovation project that sit in an earlier phase and have been demolished or replaced would be written; they cannot overlap each other in the phase they sit in (the reason for the choice), but they could overlap what the last phase builds.
+- **Rooms in two earlier phases** write the later phase's and leave out the earlier's, which is counted.
+- **The unset-phase reading of §9.2** differs from the other only where a room of the last phase does not read.
+- **Not measured:** a Revit export made at the last phase of such a project, or with the default setup; a project other than `rac_basic_sample_project` whose last phase holds no room (none is known in the corpus, §3).

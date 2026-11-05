@@ -166,8 +166,11 @@ and so are elements that do not exist in the project's last phase (RE-184; the o
 and so are rooms whose own phase is not the export phase (RE-326): Revit's
 exporter skips a room by its own phase (`RoomElem.m_phaseId`, not its created
 phase), and rvt-rs counts it in `skipped` as `room_not_in_export_phase`. The
-export phase is the last unless `rvt-ifc --phase` names another. A room whose
-phase is unset or unread, an Area and an MEP space are written.
+export phase is the last unless `rvt-ifc --phase` names another, which is exact.
+Where no phase is named and the last holds no room, the rooms written are those
+of the latest phase that holds any (`room_phase_fallback`, #1359, a choice and not
+a measurement of Revit's default). A room whose phase is unset or unread, an
+Area and an MEP space are written.
 
 ## What approximations look like in the output
 

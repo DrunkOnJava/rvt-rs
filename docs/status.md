@@ -1022,12 +1022,31 @@ Revit export made with the default setup, because no project in the corpus
 has a room outside its last phase and such an export: Autodesk's
 `rac_basic_sample_project` has 14 rooms in the second of its three phases, on
 all 13 releases, and a public Revit 2018 export of it holds all 14. They are
-left out by default and written with `--phase "Working Drawings"`, which
-writes 14 of that export's 17 spaces by GlobalId and changes no other entity
-(Measure runs 41784415396 and 41784419457). Revit 2015
+left out by that change's default and written with `--phase "Working Drawings"`,
+which writes 14 of that export's 17 spaces by GlobalId and changes no other
+entity (Measure runs 41784415396 and 41784419457). Revit 2015
 and earlier write every room, as every element: both phase rules start at
 Revit 2016 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
+
+**#1359 (2026-11-05)** gives the rooms a fallback, a choice by Griffin. An
+outside importer reported Autodesk's `rac_basic_sample_project` going from 14
+rooms to 0 between 0.13.0 and 0.14.0, and the cause is the RE-326 rule: all 14
+rooms are in Working Drawings, the second of three phases, and the last,
+Learning Content, holds none (Measure run 41985023986 on the 2016 to 2027 saves:
+`room_not_in_export_phase` 14 on each, all in Working Drawings). Where no phase
+is named and the project's last phase holds no room, the export now writes the
+rooms of the latest phase that holds any, because rooms all in one phase
+cannot overlap and the only Revit export of this model holds them. The
+diagnostics name the phase and count the rooms (`room_phase_fallback`),
+`rvt-ifc` and `rvt-schedule` print a line, and the Python bindings raise a
+`RuntimeWarning`. Every other element still follows the last phase, a phase
+named (`--phase`, `phase=`), the last included, is exact, and a project with a
+room in its last phase is unchanged. It is a choice and not a measurement of
+Revit's default: no Revit export made at the last phase of such a project
+exists, and a project with no room in its last phase gets earlier rooms that
+Revit's default might leave out. Measured on this change's head: not yet
+(`reports/element-framing/RE-326-room-phases.md` §9 records the run).
 
 **RE-328 (2026-11-04)** finds which test of `beam_body` keeps a beam as its
 record box when its element data holds one location line (#1247), and draws

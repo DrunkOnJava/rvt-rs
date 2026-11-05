@@ -85,7 +85,9 @@ pub struct ExportOptions {
     /// instead of the project's last (`--phase`,
     /// [`RevitFile::set_export_phase`]). An unknown phase is
     /// [`Error::InvalidInput`](crate::Error::InvalidInput) listing the file's
-    /// phases.
+    /// phases. A phase named is exact, the last included; with none named, a
+    /// project whose last phase holds no room writes the rooms of the latest
+    /// phase that holds any ([`ExportDiagnostics::room_phase_fallback`], #1359).
     pub phase: Option<String>,
     /// Also list where each decoded element was read from in the diagnostics
     /// (`decoded.element_provenance`, `rvt-ifc --element-provenance`, #1325).
@@ -333,6 +335,16 @@ pub enum ExportNote {
         /// The reason.
         error: String,
     },
+    /// The project's last phase holds no room and no phase was named, so the
+    /// rooms of the latest phase that holds any are written (#1359). Every
+    /// other element is of the last phase.
+    #[non_exhaustive]
+    RoomPhaseFallback {
+        /// The phase the rooms are written from: its name, or `ElementId <n>`.
+        phase: String,
+        /// The placed rooms of that phase.
+        rooms: usize,
+    },
 }
 
 impl ExportNote {
@@ -433,6 +445,10 @@ impl fmt::Display for ExportNote {
             Self::EmbedHostBodiesSkipped { error } => write!(
                 f,
                 "walls that embed a curtain wall not read, bodies unchanged: {error}"
+            ),
+            Self::RoomPhaseFallback { phase, rooms } => write!(
+                f,
+                "the project's last phase holds no room, so the {rooms} room(s) of {phase:?}, the latest phase that holds any, are written; every other element is of the last phase. --phase NAME|ID chooses the export phase exactly (naming the last writes no room), and Python's phase= and the MCP phase argument do the same"
             ),
         }
     }
@@ -562,6 +578,14 @@ pub fn run_export_with_limits_and_control(
     let mut diagnostics = result.diagnostics;
     let decisions = result.decisions;
     let mut notes = Vec::new();
+    // #1359: the rooms of an earlier phase, written because the last phase
+    // holds none.
+    if let Some(fallback) = &diagnostics.room_phase_fallback {
+        notes.push(ExportNote::RoomPhaseFallback {
+            phase: fallback.phase.clone(),
+            rooms: fallback.rooms,
+        });
+    }
 
     // #1325: built from the walk the exporter just made, which the handle
     // memoised, before the steps below touch the handle again. The log of
