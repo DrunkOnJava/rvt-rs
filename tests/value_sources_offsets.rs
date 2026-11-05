@@ -8,9 +8,9 @@
 //! the table on, then, without the reader that noted the choice:
 //!
 //! - looks up every element's `BodySource` in `COVERAGE`, which says which
-//!   reader and rule a body must have a value source from, or that no reader
-//!   notes its copy yet. A body that is in neither, on any model, fails the
-//!   test: nothing is excluded by being left out of the table;
+//!   reader and rule a body must have a value source from. A body that is not
+//!   in it, on any model, fails the test: nothing is excluded by being left
+//!   out of the table;
 //! - reads the bytes at the offset of each element-data copy (the readers of
 //!   a wall's or beam's line and of a family instance's transform): the
 //!   element-data header, then the element's own id, then a record that
@@ -18,6 +18,10 @@
 //!   asked again;
 //! - reads the bytes at the offset of each native record: the ElementId is the
 //!   first bytes there;
+//! - reads an Area's point at its `area_point` offset (after the Area's data
+//!   object on Revit 2024, its `01 00 00 00 · ElementId` header before) and
+//!   checks it lies inside the outline the export drew, since the point is what
+//!   picks the Area's region among its boundary lines;
 //! - reads the bytes at each record in a source's `parts`, by what the record
 //!   is: a sketch line's frame or a type symbol's frame has the element's id at
 //!   its first bytes, or, on a second-prologue frame (no id there), the id of
@@ -65,8 +69,9 @@
 //! What it does not do: say that the copy a reader took is the right one. For
 //! the `agreeing` rule every copy holds the same value, so any of them is; for
 //! `current` the choice is `native_document::current_partitions`, whose
-//! correctness this test does not measure. The bodies marked `NotYet` are
-//! counted and printed, with how many of their elements have a source anyway.
+//! correctness this test does not measure. Every `BodySource` of the models
+//! has a reader that notes its copy (#1368): a body with none would have to be
+//! added to `COVERAGE` and is reported until it is.
 //!
 //! Per model, the counts by body source and reader go to
 //! `value-sources/<model>.json` and `summary.txt` under `CARGO_TARGET_TMPDIR`,
@@ -77,12 +82,13 @@
 //! `RVT_NORDIC_LCA_DIR`; each is skipped when its variable is unset.
 
 use crate::element_parameters::nordic_dir;
-use rvt::ifc::entities::{IfcEntity, PropertyValue};
+use rvt::ifc::entities::{IfcEntity, ProfileDef, PropertyValue};
 use rvt::ifc::{ExportOptions, IfcModel, run_export};
 use rvt::research::element_record_plan_profiles::SKETCH_OWNER_OFFSET;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_family_forms::family_records_in;
 use rvt::research::native_form_geometry::FormDocument;
+use rvt::research::partition_area_records::{AREA_POINT_OFFSET, NARROW_POINT_OFFSET};
 use rvt::research::partition_beam_axes::{
     BEAM_DATA_WINDOW, BoundedArc, BoundedLine, first_bounded_arc, first_bounded_line,
     first_bounded_spline, first_circle, first_sketch_curve, scan_first_bounded_arcs,
@@ -108,6 +114,7 @@ use rvt::research::partition_room_boundaries::{
     ROOM_SOLID_TAG, ResolvedKind, is_room_outline_source, resolved_outline_of_solids,
     room_outline_at,
 };
+use rvt::research::partition_room_parameters::{DATA_OBJECT_HEADER, verified_data_object};
 use rvt::research::partition_type_parameters::{
     HOLLOW_SECTION_PARAMETER_NAMES, I_SECTION_PARAMETERS, VALUE_BLOCK_MARK,
 };
@@ -126,11 +133,9 @@ enum Coverage {
         readers: &'static [&'static str],
         rules: &'static [&'static str],
     },
-    /// No reader notes its copy yet: counted and printed, not asserted.
-    NotYet,
 }
 
-use Coverage::{NotYet, Recorded};
+use Coverage::Recorded;
 
 /// The record's box, or the box trimmed or cut by joins: read from the
 /// selected frame. `selected_frame_box` is the same where the profile is read
@@ -222,7 +227,13 @@ const COVERAGE: &[(&str, Coverage)] = &[
             rules: &["agreeing", "native"],
         },
     ),
-    ("partition_area_boundary_lines", NotYet),
+    (
+        "partition_area_boundary_lines",
+        Recorded {
+            readers: &["area_boundary_lines"],
+            rules: &["agreeing"],
+        },
+    ),
     (
         "family_type_hollow_section",
         Recorded {
@@ -265,7 +276,13 @@ const COVERAGE: &[(&str, Coverage)] = &[
             rules: &["frame"],
         },
     ),
-    ("native_slab_shape_edit", NotYet),
+    (
+        "native_slab_shape_edit",
+        Recorded {
+            readers: &["native_slab_shape"],
+            rules: &["native"],
+        },
+    ),
 ];
 
 /// The readers that at least one model of the Revit 2025 set
@@ -376,6 +393,9 @@ const MIN_READERS: &[(&str, &[&str])] = &[
             "room_solid_faces",
             "type_hollow_section",
             "pipe_connectors",
+            "area_boundary_lines",
+            "area_point",
+            "native_slab_shape",
         ],
     ),
 ];
@@ -604,6 +624,78 @@ fn element_bodies(model: &IfcModel) -> (Bodies, usize) {
     (bodies, entities)
 }
 
+/// The outline an Area drawn from its boundary lines is extruded from, in the
+/// model's plan: its profile's outer loop, relative to its placement.
+struct AreaOutline {
+    points: Vec<(f64, f64)>,
+    origin: [f64; 2],
+    rotation: f64,
+}
+
+impl AreaOutline {
+    /// Whether the model-plan point `(x, y)` lies inside the outer loop (even
+    /// and odd crossings).
+    fn contains(&self, (x, y): (f64, f64)) -> bool {
+        let (dx, dy) = (x - self.origin[0], y - self.origin[1]);
+        let (sin, cos) = self.rotation.sin_cos();
+        let (u, v) = (dx * cos + dy * sin, -dx * sin + dy * cos);
+        let mut inside = false;
+        let next = self.points.iter().cycle().skip(1);
+        for (a, b) in self.points.iter().zip(next) {
+            if (a.1 > v) != (b.1 > v) && u < a.0 + (v - a.1) * (b.0 - a.0) / (b.1 - a.1) {
+                inside = !inside;
+            }
+        }
+        self.points.len() >= 3 && inside
+    }
+}
+
+/// Each Area of `model` drawn from its boundary lines, by ElementId, with the
+/// outer loop of its profile.
+fn area_outlines(model: &IfcModel) -> BTreeMap<u32, AreaOutline> {
+    let mut out = BTreeMap::new();
+    for entity in &model.entities {
+        let IfcEntity::BuildingElement {
+            type_guid,
+            property_set,
+            location_feet: Some(location),
+            rotation_radians,
+            extrusion: Some(extrusion),
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let from_lines = property_set
+            .iter()
+            .flat_map(|set| &set.properties)
+            .any(|property| {
+                property.name == "BodySource"
+                    && matches!(&property.value, PropertyValue::Text(text)
+                    if text == "partition_area_boundary_lines")
+            });
+        let points = match &extrusion.profile_override {
+            Some(ProfileDef::ArbitraryClosed { points })
+            | Some(ProfileDef::ArbitraryWithVoids { points, .. }) => points.clone(),
+            _ => continue,
+        };
+        let Some(id) = type_guid.as_deref().and_then(|tag| tag.parse::<u32>().ok()) else {
+            continue;
+        };
+        if from_lines {
+            out.insert(
+                id,
+                AreaOutline {
+                    points,
+                    origin: [location[0], location[1]],
+                    rotation: rotation_radians.unwrap_or(0.0),
+                },
+            );
+        }
+    }
+    out
+}
+
 fn f64_at(buf: &[u8], at: usize) -> Option<f64> {
     buf.get(at..at.checked_add(8)?)
         .map(|b| f64::from_le_bytes(b.try_into().expect("8 bytes")))
@@ -752,6 +844,7 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
     // Coverage by body source: every element, listed in the table or not.
     let mut by_body: BTreeMap<String, BodyStats> = BTreeMap::new();
     let (listed_bodies, entities) = element_bodies(&run.model);
+    let area_outlines = area_outlines(&run.model);
     let distinct_ids = listed_bodies
         .keys()
         .map(|(id, _)| *id)
@@ -769,79 +862,67 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
             stats.unlisted += 1;
             continue;
         };
-        match coverage {
-            None => {}
-            Some((_, Recorded { readers, rules })) => {
-                let found = entry.value_sources.iter().find(|source| {
-                    readers.contains(&source.reader.as_str())
-                        && rules.contains(&source.rule.as_str())
-                });
-                // The frame an element's box is held to: `selected_frame`
-                // where a reader sourced its profile, else `selected_frame_box`.
-                if let Some(frame) = entry
+        if let Some((_, Recorded { readers, rules })) = coverage {
+            let found = entry.value_sources.iter().find(|source| {
+                readers.contains(&source.reader.as_str()) && rules.contains(&source.rule.as_str())
+            });
+            // The frame an element's box is held to: `selected_frame`
+            // where a reader sourced its profile, else `selected_frame_box`.
+            if let Some(frame) = entry
+                .value_sources
+                .iter()
+                .find(|held| held.rule.as_str() == "selected")
+            {
+                let sourced = entry
                     .value_sources
                     .iter()
-                    .find(|held| held.rule.as_str() == "selected")
-                {
-                    let sourced = entry
-                        .value_sources
-                        .iter()
-                        .any(|held| PROFILE_FRAME_READERS.contains(&held.reader.as_str()));
-                    let expected = if profile_elsewhere && !sourced {
-                        "selected_frame_box"
-                    } else {
-                        "selected_frame"
-                    };
-                    if frame.reader != expected {
-                        problems.push(format!(
-                            "{id}: {body} has {}, and its profile {} another record",
-                            frame.reader,
-                            if profile_elsewhere {
-                                "is read from"
-                            } else {
-                                "is not read from"
-                            }
-                        ));
-                    }
+                    .any(|held| PROFILE_FRAME_READERS.contains(&held.reader.as_str()));
+                let expected = if profile_elsewhere && !sourced {
+                    "selected_frame_box"
+                } else {
+                    "selected_frame"
+                };
+                if frame.reader != expected {
+                    problems.push(format!(
+                        "{id}: {body} has {}, and its profile {} another record",
+                        frame.reader,
+                        if profile_elsewhere {
+                            "is read from"
+                        } else {
+                            "is not read from"
+                        }
+                    ));
                 }
-                match found {
-                    Some(source) => {
-                        stats.with_source += 1;
-                        stats.box_only += usize::from(source.reader == "selected_frame_box");
-                        *stats.by_reader.entry(source.reader.clone()).or_default() += 1;
-                        if source.rule.as_str() == "selected" {
-                            // The profile's own readers, by the profile's source.
-                            let profile_readers: &[&str] = match info.profile_source.as_deref() {
-                                Some("partition_element_record_sketch_lines") => &["sketch_lines"],
-                                Some("family_type_symbol_envelope") => &["type_section"],
-                                Some(source) if is_room_outline_source(source) => {
-                                    &["room_solid_faces"]
-                                }
-                                _ => &[],
-                            };
-                            if !profile_readers.is_empty() {
-                                stats.profiled += 1;
-                                let sourced = entry
-                                    .value_sources
-                                    .iter()
-                                    .any(|held| profile_readers.contains(&held.reader.as_str()));
-                                if sourced {
-                                    stats.profile_sourced += 1;
-                                } else if stats.profile_missing.len() < 10 {
-                                    stats.profile_missing.push(id);
-                                }
+            }
+            match found {
+                Some(source) => {
+                    stats.with_source += 1;
+                    stats.box_only += usize::from(source.reader == "selected_frame_box");
+                    *stats.by_reader.entry(source.reader.clone()).or_default() += 1;
+                    if source.rule.as_str() == "selected" {
+                        // The profile's own readers, by the profile's source.
+                        let profile_readers: &[&str] = match info.profile_source.as_deref() {
+                            Some("partition_element_record_sketch_lines") => &["sketch_lines"],
+                            Some("family_type_symbol_envelope") => &["type_section"],
+                            Some(source) if is_room_outline_source(source) => &["room_solid_faces"],
+                            _ => &[],
+                        };
+                        if !profile_readers.is_empty() {
+                            stats.profiled += 1;
+                            let sourced = entry
+                                .value_sources
+                                .iter()
+                                .any(|held| profile_readers.contains(&held.reader.as_str()));
+                            if sourced {
+                                stats.profile_sourced += 1;
+                            } else if stats.profile_missing.len() < 10 {
+                                stats.profile_missing.push(id);
                             }
                         }
                     }
-                    None if stats.missing.len() < 10 => stats.missing.push(id),
-                    None => {}
                 }
-            }
-            Some((_, NotYet)) => {
-                if let Some(source) = entry.value_sources.first() {
-                    stats.with_source += 1;
-                    *stats.by_reader.entry(source.reader.clone()).or_default() += 1;
-                }
+                None if stats.missing.len() < 10 => stats.missing.push(id),
+                None => {}
             }
         }
     }
@@ -854,9 +935,7 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                 stats.profile_missing
             ));
         }
-        let recorded = COVERAGE
-            .iter()
-            .any(|(source, coverage)| source == body && matches!(coverage, Recorded { .. }));
+        let recorded = COVERAGE.iter().any(|(source, _)| source == body);
         if recorded && !stats.missing.is_empty() {
             problems.push(format!(
                 "{body}: {} of {} elements have no value source from its readers, such as {:?}",
@@ -1413,6 +1492,39 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                         }
                         first == Some(u64::from(id))
                     }
+                    // An Area's point: on Revit 2024 the data object of the
+                    // Area whose header starts at the offset, on 2015 to 2023
+                    // the `01 00 00 00 · ElementId` element-data header; the
+                    // two f64s of the point after it are finite.
+                    "frame" if source.reader == "area_point" => {
+                        let (Some(stream), Some(offset)) =
+                            (source.stream.as_deref(), source.offset)
+                        else {
+                            problems.push(format!("{id}: {} has no place", source.reader));
+                            continue;
+                        };
+                        let inflated = rf
+                            .inflated_partition(stream)
+                            .unwrap_or_else(|error| panic!("{name}: {stream}: {error}"));
+                        let bytes = inflated.bytes();
+                        let point_at = if width == 8 {
+                            verified_data_object(bytes, offset)
+                                .filter(|object| object.element_id == id)
+                                .map(|_| offset + DATA_OBJECT_HEADER + AREA_POINT_OFFSET)
+                        } else {
+                            (u32_at(bytes, offset) == Some(1)
+                                && u32_at(bytes, offset + 4) == Some(id))
+                            .then_some(offset + 8 + NARROW_POINT_OFFSET)
+                        };
+                        // The point picks the Area's region among the lines, so
+                        // it lies inside the outline the export drew.
+                        let point = point_at
+                            .and_then(|at| Some((f64_at(bytes, at)?, f64_at(bytes, at + 8)?)));
+                        match (point, area_outlines.get(&id)) {
+                            (Some(point), Some(outline)) => outline.contains(point),
+                            _ => false,
+                        }
+                    }
                     _ => false,
                 }
             };
@@ -1567,13 +1679,10 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
     }
     let mut bodies = serde_json::Map::new();
     for (body, stats) in &by_body {
-        let covered = COVERAGE.iter().find(|(source, _)| source == body).map_or(
-            "not in COVERAGE",
-            |(_, coverage)| match coverage {
-                Recorded { .. } => "recorded",
-                NotYet => "not yet",
-            },
-        );
+        let covered = COVERAGE
+            .iter()
+            .find(|(source, _)| source == body)
+            .map_or("not in COVERAGE", |_| "recorded");
         line.push_str(&format!(
             "  {body} ({covered}): {} elements, {} with a source ({} box only; {} of {} profiles sourced), {} not in the table\n",
             stats.elements,
