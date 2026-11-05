@@ -1429,12 +1429,14 @@ pub fn append_typed_production_elements(
                 slab_shapes.insert(id, top);
             }
         }
-        // RE-291: a column whose type is a plain rectangle, with the elements its pairs name.
+        // RE-291, RE-353: a column whose type is a plain rectangle or round, with the elements its pairs name.
         if policy.include_geometry
             && matches!(decoded.class.as_str(), "Column" | "StructuralColumn")
         {
+            let round = crate::partition_schema_mvp::column_diameter_from_fields(&decoded.fields);
             if let (Some(sides), Some((cut, clean))) = (
-                crate::partition_schema_mvp::column_rectangle_from_fields(&decoded.fields),
+                crate::partition_schema_mvp::column_rectangle_from_fields(&decoded.fields)
+                    .or_else(|| round.map(|diameter| [diameter, diameter])),
                 crate::partition_schema_mvp::column_partners_from_fields(&decoded.fields),
             ) {
                 pending_columns.push(column_quantities::Pending {
@@ -1442,6 +1444,7 @@ pub fn append_typed_production_elements(
                     cut,
                     clean,
                     sides,
+                    round: round.is_some(),
                 });
             }
         }

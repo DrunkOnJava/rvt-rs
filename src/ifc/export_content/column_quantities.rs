@@ -48,6 +48,13 @@
 //! volume is the cut mesh's and the area is half the surface of the mesh, so
 //! the pass writes those two and no other, from the slab's plan outline
 //! clipped to the column's section.
+//!
+//! A round column (its type holds one length parameter, `Diameter`, equal to
+//! both sides of its record box) that no pair joins gets its
+//! `OuterSurfaceArea`, the circumference times the box's height, which is
+//! Revit's exactly (RE-353). Its `CrossSectionArea`, `GrossVolume` and
+//! `NetVolume` are not the circle's and stay out: that is one column on each
+//! of the two office files, the same column.
 
 use std::collections::HashMap;
 
@@ -82,8 +89,11 @@ pub(super) struct Pending {
     pub cut: Vec<u32>,
     /// The ElementIds its clean pairs name.
     pub clean: Vec<u32>,
-    /// The sides of its type's rectangle, feet.
+    /// The sides of its type's rectangle, feet; a round column's diameter
+    /// twice.
     pub sides: [f64; 2],
+    /// Whether its type is round (RE-353).
+    pub round: bool,
 }
 
 /// Whether `body`'s two plan sides are the rectangle `sides`, in either
@@ -435,8 +445,25 @@ pub(super) fn add_joined_column_quantities(entities: &mut Vec<IfcEntity>, pendin
         if !fills_section([body.width_feet, body.depth_feet], column.sides) {
             continue;
         }
-        let (base, top) = (location[2], location[2] + body.height_feet);
         let [width, depth, height] = sizes;
+        if column.round {
+            if column.cut.is_empty() && column.clean.is_empty() {
+                found.push((
+                    column.index,
+                    PropertySet {
+                        name: "Qto_ColumnBaseQuantities".into(),
+                        properties: vec![Property {
+                            name: "OuterSurfaceArea".into(),
+                            value: PropertyValue::AreaSquareFeet(
+                                std::f64::consts::PI * column.sides[0] * height,
+                            ),
+                        }],
+                    },
+                ));
+            }
+            continue;
+        }
+        let (base, top) = (location[2], location[2] + body.height_feet);
         let area = width * depth;
         let properties = match assess(&partners, column, base, top) {
             Cut::Refused => continue,
