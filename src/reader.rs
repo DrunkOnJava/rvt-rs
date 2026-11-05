@@ -223,6 +223,11 @@ pub struct RevitFile {
     /// the schema, the element index and the increments again.
     // Tracker: B82.
     native_preamble: Option<Arc<crate::native_document::Preamble>>,
+    /// How many deferred history episode pointers the memoised preamble read:
+    /// 0 for every file the default reading accepts. Only the research route
+    /// of RE-342 reads a history that holds any, and the default reading is
+    /// never answered with a preamble that did.
+    native_preamble_deferred: usize,
     /// Memoised parameter-definition pass of native extraction, with the
     /// options it was read under (#1237).
     native_definitions: Option<(
@@ -487,6 +492,7 @@ impl RevitFile {
             data_objects: std::collections::HashMap::new(),
             header_hits: std::collections::HashMap::new(),
             native_preamble: None,
+            native_preamble_deferred: 0,
             native_definitions: None,
             native_record_index: None,
             schema_classes_memo: None,
@@ -866,15 +872,26 @@ impl RevitFile {
 
     /// What every native extraction reads before the partitions
     /// (`crate::native_document::Preamble`), memoised.
+    ///
+    /// With `deferred` unset, as every reader of the export path calls it, a
+    /// history that holds deferred `Episode` pointers is refused, whether or
+    /// not the research route (`deferred` set) has read this file's preamble
+    /// before (RE-342).
     // Tracker: B82.
     pub(crate) fn native_preamble(
         &mut self,
+        deferred: bool,
     ) -> anyhow::Result<Arc<crate::native_document::Preamble>> {
         if let Some(cached) = &self.native_preamble {
+            if !deferred && self.native_preamble_deferred != 0 {
+                anyhow::bail!("{}", crate::native_index::INLINE_EPISODES_REFUSED);
+            }
             return Ok(Arc::clone(cached));
         }
-        let preamble = Arc::new(crate::native_document::read_preamble(self)?);
+        let (preamble, pointers) = crate::native_document::read_preamble(self, deferred)?;
+        let preamble = Arc::new(preamble);
         self.native_preamble = Some(Arc::clone(&preamble));
+        self.native_preamble_deferred = pointers;
         Ok(preamble)
     }
 

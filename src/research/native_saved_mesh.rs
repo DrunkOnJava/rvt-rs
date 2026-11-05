@@ -114,15 +114,18 @@ pub const NORMAL_WINDING_TOLERANCE_DEGREES: f64 = 0.1;
 /// one lies within [`NORMAL_WINDING_TOLERANCE_DEGREES`] of the winding normal
 /// of its facet over `points`. A facet whose corners are collinear or out of
 /// range, a stored normal of no length and one that is not a number make it
-/// false. A mesh that binds its normals per facet (`m_normalsFlag` 2) is read
-/// only where this holds (RE-342): the stored normal is never taken on trust.
+/// false, and so does a mesh of no facets, which has nothing that follows
+/// anything. A mesh that binds its normals per facet (`m_normalsFlag` 2) is
+/// read only where this holds (RE-342): the stored normal is never taken on
+/// trust.
 pub fn normals_follow_winding(
     points: &[[f64; 3]],
     facets: &[[u32; 3]],
     normals: &[[f64; 3]],
 ) -> bool {
     let limit = NORMAL_WINDING_TOLERANCE_DEGREES.to_radians().cos();
-    facets.len() == normals.len()
+    !facets.is_empty()
+        && facets.len() == normals.len()
         && facets.iter().zip(normals).all(|(facet, stored)| {
             let corner = |i: u32| points.get(i as usize).copied();
             let (Some(a), Some(b), Some(c)) =
@@ -1371,7 +1374,31 @@ pub fn graphics_with_resolver_at_detail<'a>(
     resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
     detail_level: i64,
 ) -> GraphicsMeshes {
-    graphics_impl(g, resolver, detail_level, false, false)
+    graphics_impl(g, resolver, detail_level, false, false, false)
+}
+/// [`graphics_with_resolver_at_detail`] for the graphics of a file of Revit
+/// 2015 to 2022, the releases no export reads saved graphics of: a
+/// `FacetedTopology9` under normal binding 2 is read there where its stored
+/// normals follow the winding ([`normals_follow_winding`], RE-342). Every
+/// other reader of this module refuses it, and so does this one on any other
+/// release's graphics, which the caller decides by the file's release. A
+/// research route: `include_hidden` and `include_filtered` are as in
+/// [`graphics_including_hidden`] and [`graphics_including_filtered`].
+pub fn graphics_pre2023<'a>(
+    g: &'a ObjectGraph,
+    resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
+    detail_level: i64,
+    include_hidden: bool,
+    include_filtered: bool,
+) -> GraphicsMeshes {
+    graphics_impl(
+        g,
+        resolver,
+        detail_level,
+        include_hidden,
+        include_filtered,
+        true,
+    )
 }
 /// [`graphics_with_resolver_at_detail`], also decoding the branches whose
 /// visibility flags hide them; each [`Primitive`] one lies on the way to is
@@ -1381,7 +1408,7 @@ pub fn graphics_including_hidden<'a>(
     resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
     detail_level: i64,
 ) -> GraphicsMeshes {
-    graphics_impl(g, resolver, detail_level, true, false)
+    graphics_impl(g, resolver, detail_level, true, false, false)
 }
 /// [`graphics_including_hidden`], also decoding the children of a filter
 /// whose conditions reject the context or are not read; each [`Primitive`]
@@ -1391,7 +1418,7 @@ pub fn graphics_including_filtered<'a>(
     resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
     detail_level: i64,
 ) -> GraphicsMeshes {
-    graphics_impl(g, resolver, detail_level, true, true)
+    graphics_impl(g, resolver, detail_level, true, true, false)
 }
 fn graphics_impl<'a>(
     g: &'a ObjectGraph,
@@ -1399,6 +1426,7 @@ fn graphics_impl<'a>(
     detail_level: i64,
     include_hidden: bool,
     include_filtered: bool,
+    pre2023: bool,
 ) -> GraphicsMeshes {
     let selection = if include_filtered {
         crate::native_graphics_traversal::select_graphics_including_filtered_at_detail(
@@ -1493,12 +1521,15 @@ fn graphics_impl<'a>(
                 let topology = &g.objects[ti];
                 // FacetedTopology9 has FacetedTopology0's points, normals and
                 // facets and one more array, `m_edgeVisFlagsArr`, which is not
-                // read (RE-342). It is read under normal binding 2 only, and
-                // only where every stored normal follows the winding; every
-                // other class and binding stays refused.
+                // read (RE-342). It is read only in the graphics of a file of
+                // Revit 2015 to 2022 (`pre2023`, `graphics_pre2023`: no export
+                // reads those), under normal binding 2 only, and only where
+                // every stored normal follows the winding; every other class,
+                // binding and release stays refused.
                 let topology_class = topology.class_name.as_str();
                 ensure!(
-                    matches!(topology_class, "FacetedTopology0" | "FacetedTopology9"),
+                    topology_class == "FacetedTopology0"
+                        || (pre2023 && topology_class == "FacetedTopology9"),
                     "unsupported faceted topology"
                 );
                 let f = &topology.fields;
@@ -1718,6 +1749,60 @@ mod tests {
     fn fewer_normals_than_facets_are_refused() {
         let points = [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]];
         assert!(!normals_follow_winding(&points, &[[0, 1, 2]], &[]));
+    }
+
+    #[test]
+    fn more_normals_than_facets_are_refused() {
+        let points = [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]];
+        assert!(!normals_follow_winding(
+            &points,
+            &[[0, 1, 2]],
+            &[[0., 0., 1.], [0., 0., 1.]]
+        ));
+    }
+
+    #[test]
+    fn a_mesh_of_no_facets_follows_nothing() {
+        assert!(!normals_follow_winding(&[], &[], &[]));
+        assert!(!normals_follow_winding(&[[0., 0., 0.]], &[], &[]));
+    }
+
+    #[test]
+    fn a_corner_that_is_not_finite_is_refused() {
+        for bad in [f64::NAN, f64::INFINITY] {
+            let points = [[0., 0., 0.], [1., 0., 0.], [0., bad, 0.]];
+            assert!(!normals_follow_winding(
+                &points,
+                &[[0, 1, 2]],
+                &[[0., 0., 1.]]
+            ));
+        }
+    }
+
+    #[test]
+    fn a_facet_that_repeats_a_corner_has_no_winding_to_follow() {
+        let points = [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]];
+        for facet in [[0, 0, 1], [0, 1, 1], [2, 1, 2]] {
+            assert!(!normals_follow_winding(&points, &[facet], &[[0., 0., 1.]]));
+        }
+    }
+
+    // The winding normal of a facet with legs of `side` feet is `side * side`
+    // long; below 1e-12 it is no direction at all.
+    #[test]
+    fn a_facet_too_small_to_have_a_winding_direction_is_refused() {
+        let facet = |side: f64| {
+            let points = [[0., 0., 0.], [side, 0., 0.], [0., side, 0.]];
+            normals_follow_winding(&points, &[[0, 1, 2]], &[[0., 0., 1.]])
+        };
+        assert!(!facet(1e-7));
+        assert!(facet(1e-5));
+    }
+
+    #[test]
+    fn the_tolerance_is_a_tenth_of_a_degree() {
+        assert!(follows(tilted(0.099)));
+        assert!(!follows(tilted(0.101)));
     }
 
     #[test]

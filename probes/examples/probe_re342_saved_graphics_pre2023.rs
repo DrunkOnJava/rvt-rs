@@ -11,11 +11,16 @@
 //! `m_episodeList.m_oEpisodes` is not empty. Whether any of the four is met
 //! in a file CI can fetch, and whether reading it changes a mesh, is what
 //! this probe counts. Since RE-342 the readers read an `InstanceInfo` of
-//! exactly `m_Trf`, `m_symbolId` and `m_cda`, a `FacetedTopology9` under
-//! binding 2 whose stored normals all follow the winding, a set
-//! `m_bHasScale` on such an `InstanceInfo` with a rotation matrix, and
-//! deferred history episodes; the census says how many objects each rule meets
-//! and, for the normals, how many it refuses.
+//! exactly `m_Trf`, `m_symbolId` and `m_cda`, a set `m_bHasScale` on such an
+//! `InstanceInfo` with a rotation matrix, and, on this probe's research route
+//! only, deferred history episodes (`Options::deferred_history_episodes`, set
+//! below) and, in the graphics of a file of Revit 2015 to 2022, a
+//! `FacetedTopology9` under binding 2 whose stored normals all follow the
+//! winding (`native_saved_mesh::graphics_pre2023`, chosen by the file's
+//! release). No export reader takes that route. The census says how many
+//! objects each rule meets and, for the normals, how many it refuses; the
+//! `history default reading` line says what every other reader answers the
+//! same history.
 //!
 //! One file, or two (`OLDER.rvt NEWER.rvt`, the sample first and the same
 //! project saved by a newer release second, as the Measure harness calls a
@@ -232,11 +237,25 @@ fn history(rf: &mut RevitFile, registry: &Registry, tally: &mut Tally) {
             ),
         }
     }
-    match native_index::creation_episodes(&bytes, registry) {
-        Ok(episodes) => tally.add(format!("history episodes read {}", episodes.len()), 1),
+    match native_index::creation_episodes_with_deferred(&bytes, registry) {
+        Ok((episodes, _)) => tally.add(format!("history episodes read {}", episodes.len()), 1),
         Err(error) => tally.add(
             format!(
                 "history episodes refused {}",
+                norm_msg(&format!("{error:#}"))
+            ),
+            1,
+        ),
+    }
+    // What every reader but this probe's route answers the same history.
+    match native_index::creation_episodes(&bytes, registry) {
+        Ok(episodes) => tally.add(
+            format!("history default reading read {}", episodes.len()),
+            1,
+        ),
+        Err(error) => tally.add(
+            format!(
+                "history default reading refused {}",
                 norm_msg(&format!("{error:#}"))
             ),
             1,
@@ -320,6 +339,21 @@ fn topology(object: &GraphObject, imposter: bool, tally: &mut Tally) {
             1,
         );
     }
+    // The winding rule is the reader's own (`normals_follow_winding`), counted
+    // on every object under binding 2, whatever its normals: one with none, or
+    // with a count that is not its facets', is refused.
+    if flag == "2" {
+        let facet_indices: Vec<[u32; 3]> = facets
+            .iter()
+            .map(|t| t.map(|i| u32::try_from(i).unwrap_or(u32::MAX)))
+            .collect();
+        let rule = if normals_follow_winding(&points, &facet_indices, &normals) {
+            "keeps"
+        } else {
+            "refuses"
+        };
+        tally.add(format!("{key} objects the winding rule {rule}"), 1);
+    }
     if normals.is_empty() {
         return;
     }
@@ -328,16 +362,6 @@ fn topology(object: &GraphObject, imposter: bool, tally: &mut Tally) {
         return;
     }
     tally.add(format!("{key} objects with one normal per facet"), 1);
-    let facet_indices: Vec<[u32; 3]> = facets
-        .iter()
-        .map(|t| t.map(|i| u32::try_from(i).unwrap_or(u32::MAX)))
-        .collect();
-    let rule = if normals_follow_winding(&points, &facet_indices, &normals) {
-        "keeps"
-    } else {
-        "refuses"
-    };
-    tally.add(format!("{key} objects the winding rule {rule}"), 1);
     let (mut fine, mut coarse, mut opposite, mut degenerate, mut stored_zero) =
         (0u64, 0u64, 0u64, 0u64, 0u64);
     for (tri, stored) in facets.iter().zip(&normals) {
@@ -472,6 +496,7 @@ fn census(rf: &mut RevitFile, tally: &mut Tally) {
     let options = Options {
         channels: BTreeSet::from([103]),
         releases: NATIVE_RELEASES,
+        deferred_history_episodes: true,
         max_graph_values: 1_000_000,
         max_graph_objects: 1_000_000,
         ..Options::default()
@@ -530,6 +555,7 @@ fn diagnostic_kind(diagnostic: &str) -> String {
 fn scene_ids(rf: &mut RevitFile, tally: &mut Tally) -> BTreeSet<u64> {
     let options = Options {
         releases: NATIVE_RELEASES,
+        deferred_history_episodes: true,
         graph_classes: Some(BTreeSet::new()),
         ..Options::default()
     };
@@ -564,6 +590,7 @@ fn scene(rf: &mut RevitFile, tally: &mut Tally) -> BTreeMap<u64, Mesh> {
     let options = Options {
         selected_ids: ids,
         releases: NATIVE_RELEASES,
+        deferred_history_episodes: true,
         max_graph_values: 1_000_000,
         max_graph_objects: 1_000_000,
         ..Options::default()

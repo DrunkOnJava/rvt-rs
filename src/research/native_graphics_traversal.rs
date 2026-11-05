@@ -532,19 +532,23 @@ fn default_representation(info: &Value) -> bool {
         }),
     }
 }
-/// Whether the 3x3 part of `m` is a rotation: orthonormal rows and a positive
-/// determinant, no scale, shear or mirror.
+/// Whether the 3x3 part of `m` is a rotation: orthonormal rows and a
+/// determinant of 1, no scale, shear or mirror, within the tolerance the
+/// instance transforms of the partition readers hold a rotation to
+/// ([`crate::partition_instance_transforms::ROTATION_TOLERANCE`], 1e-9): a
+/// scale of 1 + 1e-7 is not one.
 fn rotation(m: &GraphicsTransform) -> bool {
+    let tolerance = crate::partition_instance_transforms::ROTATION_TOLERANCE;
     let orthonormal = (0..3).all(|a| {
         (0..3).all(|b| {
             let dot: f64 = (0..3).map(|k| m[a][k] * m[b][k]).sum();
-            (dot - f64::from(u8::from(a == b))).abs() <= 1e-6
+            (dot - f64::from(u8::from(a == b))).abs() <= tolerance
         })
     });
     let determinant = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
         - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
         + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
-    orthonormal && determinant > 0.0
+    orthonormal && (determinant - 1.0).abs() <= tolerance
 }
 fn graphics_visibility(flags: u64) -> u8 {
     let bits = flags & 0x1e0;
@@ -745,6 +749,20 @@ mod tests {
             [1., 1., 0.],
             [0., 1., 0.],
             [0., 0., 1.]
+        ])));
+    }
+
+    #[test]
+    fn a_scale_a_hair_off_one_is_not_a_rotation() {
+        assert!(!rotation(&matrix([
+            [1.0000001, 0., 0.],
+            [0., 1., 0.],
+            [0., 0., 1.]
+        ])));
+        assert!(!rotation(&matrix([
+            [1.0000001, 0., 0.],
+            [0., 1.0000001, 0.],
+            [0., 0., 1.0000001]
         ])));
     }
 
