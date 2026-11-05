@@ -72,10 +72,13 @@
 # Areas of its 2025, 2026 and 2027 saves must equal its 2024 save's in
 # GlobalId, number, name, storey, outline source, body area, top surface,
 # height and lowest vertex (tools/re/areas_across_saves.py), ending with its
-# exit status, which the workflow turns into a failed job. It runs once every
-# export is done and before any sample's IFC is deleted. When a run holds fewer
-# than the four saves (a narrower sample_years) the file says `skipped:`, names
-# the years missing, and the workflow prints a notice: nothing was checked.
+# exit status, which the workflow turns into a failed job. With its 2021 and
+# 2022 samples, OUT_DIR/areas_across_saves_2021.txt holds the 2021 save to the
+# 2022 save the same way (#1434). Each runs once every export is done and
+# before any sample's IFC is deleted. When a run holds fewer than a gate's
+# saves (a narrower sample_years, or the other shard) its file says `skipped:`,
+# names the years missing, and the workflow prints a notice: nothing was
+# checked.
 # SAMPLE_DIR does the same for Autodesk's sample projects (.rvt), adding the
 # export's diagnostics.json, rvt-ifc.log and ifc.sha256 (hashed as a model's
 # is) under OUT_DIR/sample-<file>/, and element_stage_counts.txt, the check
@@ -604,26 +607,32 @@ bodies_across_saves() {
   done
 }
 
-# The Areas of Autodesk's rac_advanced across its 2024 to 2027 saves (the
-# gate of the Areas of Revit 2025 to 2027, RE-333 section 9). With the four
-# samples in the run, a save with no IFC is a failure, not a skipped check: the
-# scorer is given all four paths and says which is missing. With fewer samples
-# than that the check is skipped, and says so.
-areas_across_saves() {
-  local year file missing="" args=()
-  for year in 2024 2025 2026 2027; do
+# The Areas of Autodesk's rac_advanced across its saves (the gates of the Areas
+# of Revit 2025 to 2027, RE-333 section 9, and of its 2021 save, #1434): the
+# later saves of a gate are held to its first. With every sample of a gate in
+# the run, a save with no IFC is a failure, not a skipped check: the scorer is
+# given every path and says which is missing. With fewer samples than that the
+# gate is skipped, and says so.
+areas_gate() { # result_file year... (the first year is the reference)
+  local result="$1" year file missing="" args=()
+  shift
+  for year in "$@"; do
     file="$SAMPLE_DIR/$year-racadvancedsampleproject.rvt"
     [ -f "$file" ] || missing="$missing $year"
     args+=("$year=$(sample_dir "$file")/model.ifc")
   done
   if [ -n "$missing" ]; then
-    echo "areas across saves: skipped: no rac_advanced sample of$missing in this run, so nothing was compared" > "$OUT/areas_across_saves.txt"
+    echo "areas across saves: skipped: no rac_advanced sample of$missing in this run, so nothing was compared" > "$result"
     return 0
   fi
   {
     timeout "$STEP_TIMEOUT" python "$SCORERS/areas_across_saves.py" "${args[@]}"
     echo "exit $?"
-  } > "$OUT/areas_across_saves.txt" 2>&1
+  } > "$result" 2>&1
+}
+areas_across_saves() {
+  areas_gate "$OUT/areas_across_saves.txt" 2024 2025 2026 2027
+  areas_gate "$OUT/areas_across_saves_2021.txt" 2022 2021
 }
 
 # Every probe runs after the items, alone, one at a time: a probe is cut off

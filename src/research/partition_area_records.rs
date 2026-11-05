@@ -53,8 +53,14 @@
 //! an arc is not finite, or it is too large to build) and the lines draw the
 //! Area, it has no body and says why, since Revit's saved area does not vouch
 //! for the lines' region. Neither is asked of a group of lines that cannot be
-//! read as a whole (a non-primary design option, a stray height, copies that
-//! disagree, a missing line). The topology draws the Areas whose lines meet
+//! read as a whole (a non-primary design option, a stray height, a copy that
+//! names another Level or scheme or lies at another height, a missing line).
+//! Where the copies of a line in several partitions disagree only in box or in
+//! the lines they name, each naming the group's Level and scheme at its height
+//! (the 2021 save of Autodesk's `rac_advanced` holds both states of the model),
+//! the lines' arrangement is not read, but the topology is: it reads the
+//! current copy of each line, and the Area is drawn from it alone, with the
+//! checks above (#1434). The topology draws the Areas whose lines meet
 //! only once offset, or include an arc or a slanted line. Where both give a
 //! region they must be the same one (the same net area and the same outline,
 //! `regions_agree`); an Area whose two regions differ has no body and says
@@ -70,9 +76,10 @@
 //!   no line that is not a straight line along the plan axes lies where the
 //!   region does (RE-330), and every declared area boundary line of the file
 //!   was read and placed on a Level. The lines its record names must be
-//!   declared lines of that scheme on that Level whose copies agree. An Area
-//!   whose region another placed Area of its scheme and Level shares has none,
-//!   whatever stops the other from being drawn. Otherwise it has none, as
+//!   declared lines of that scheme on that Level whose copies agree, unless the
+//!   region is the plan topology's and the copies differ only in place (#1434).
+//!   An Area whose region another placed Area of its scheme and Level shares has
+//!   none, whatever stops the other from being drawn. Otherwise it has none, as
 //!   before, and says why in [`AREA_BODY_REFUSAL_FIELD`].
 //! - Lines that stop short of the line they join are carried on to it, and
 //!   parallel lines that stop at the same place a wall's thickness apart are
@@ -294,15 +301,18 @@ pub const REFUSED_NO_POINT: &str = "point_not_read";
 /// The Area's record does not name one Level and one area scheme.
 pub const REFUSED_UNNAMED: &str = "level_or_scheme_not_named";
 /// A line the Area's record names is not a declared line of its scheme on its
-/// Level that was read: it has no Level or scheme, its copies disagree, or it is
-/// in a non-primary design option.
+/// Level that was read: it has no Level or scheme, its copies disagree (an Area
+/// drawn from the plan topology may name a line whose copies disagree only in
+/// place, #1434), or it is in a non-primary design option.
 pub const REFUSED_LINES: &str = "named_lines_not_in_scheme_and_level";
 /// The Area's Level and the Level above it are not both building stories, or
 /// another Level lies at the Area's.
 pub const REFUSED_HEIGHT: &str = "next_storey_not_proven";
 /// The lines of the Area's scheme on its Level cannot be read as an arrangement
 /// of straight lines along the axes, one of them may be missing, or one is in a
-/// non-primary design option; or a line that is not a straight line along an
+/// non-primary design option; or the copies of one disagree in a way that puts
+/// it in another group; or the copies of one disagree and the plan topology gave
+/// the Area no region (#1434); or a line that is not a straight line along an
 /// axis (a slanted line, an arc, a point) lies where the Area's region does, or
 /// is joined to a line that bounds it (RE-330).
 pub const REFUSED_GROUP: &str = "boundary_lines_not_readable";
@@ -684,8 +694,14 @@ struct BoundaryLines {
     by_id: BTreeMap<u32, LineRecord>,
     /// Lines whose copies in several partitions disagree.
     conflicted: BTreeSet<u32>,
+    /// The conflicted lines with a copy that names another Level or scheme than
+    /// the first, or lies at another height ([`same_place`]): each could lie in
+    /// any group on its Level. The others, whose copies differ only in box or in
+    /// the lines they name, lie in the one group their reference list names and
+    /// affect that group alone.
+    moved: BTreeSet<u32>,
     /// The height of every line that is in no group it can be named in, and
-    /// of both copies of a line whose copies disagree, feet: each could lie in
+    /// of both copies of a line that [`Self::moved`], feet: each could lie in
     /// any group on its Level.
     stray_heights: Vec<f64>,
     /// The ids of each scheme's lines on each Level, in the order met.
@@ -767,6 +783,13 @@ fn line_key(
     }
 }
 
+/// Whether two copies of a line name the same Level and scheme at the same
+/// height, so that the group a reader puts the line in does not depend on which
+/// copy it holds. A height that is not a number is another height.
+fn same_place(a: &LineRecord, b: &LineRecord) -> bool {
+    a.key == b.key && (a.height - b.height).abs() <= AREA_LEVEL_TOLERANCE_FEET
+}
+
 /// Every area boundary line of the file, from its element record. A line in
 /// a non-primary design option is left out, as an element is (RE-40).
 fn boundary_lines(
@@ -836,9 +859,12 @@ fn boundary_lines(
             }
             Some(held) if *held == line => {}
             Some(held) => {
-                out.stray_heights.push(held.height);
-                out.stray_heights.push(line.height);
                 out.conflicted.insert(record.element_id);
+                if !same_place(held, &line) {
+                    out.stray_heights.push(held.height);
+                    out.stray_heights.push(line.height);
+                    out.moved.insert(record.element_id);
+                }
             }
         }
     }
@@ -1075,10 +1101,17 @@ impl GroupArrangement {
 /// What the lines of one scheme on one Level give (RE-330, RE-333).
 enum Group {
     /// The lines cannot be read as a whole: one is in a non-primary design
-    /// option, at a stray height, has copies that disagree, or is missing. No
-    /// region of any kind is drawn from the group, Revit's plan topology's
-    /// included.
+    /// option, at a stray height, has a copy that names another Level or scheme
+    /// or lies at another height, or is missing. No region of any kind is drawn
+    /// from the group, Revit's plan topology's included.
     Unreadable,
+    /// The group is sound but for lines whose copies in several partitions
+    /// disagree in box or in the lines they name, each copy naming the group's
+    /// Level and scheme at its height (#1434). The arrangement of the lines is
+    /// not read: which copy holds the current state is not known from the
+    /// partitions. Revit's plan topology reads the current copy of each line
+    /// and may still give an Area a region.
+    Conflicted,
     /// The group is sound but its lines cannot be arranged: none is a straight
     /// line along an axis, or they overlap or are too many. Revit's plan
     /// topology may still give an Area a region.
@@ -1108,14 +1141,17 @@ fn group_arrangement(lines: &BoundaryLines, key: (u32, u32), base_feet: f64) -> 
     let mut joined: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     let mut unread: BTreeSet<u32> = BTreeSet::new();
     let mut blocked = Vec::new();
+    let mut conflicted = false;
     for id in ids {
         let Some(line) = lines.by_id.get(id) else {
             return Group::Unreadable;
         };
-        if lines.conflicted.contains(id)
-            || (line.height - base_feet).abs() > AREA_LEVEL_TOLERANCE_FEET
-        {
+        if lines.moved.contains(id) || (line.height - base_feet).abs() > AREA_LEVEL_TOLERANCE_FEET {
             return Group::Unreadable;
+        }
+        if lines.conflicted.contains(id) {
+            conflicted = true;
+            continue;
         }
         let boundary = BoundaryLine {
             id: *id,
@@ -1129,6 +1165,9 @@ fn group_arrangement(lines: &BoundaryLines, key: (u32, u32), base_feet: f64) -> 
             unread.insert(*id);
             blocked.push(segment_box(line.from, line.to));
         }
+    }
+    if conflicted {
+        return Group::Conflicted;
     }
     if readable.is_empty() {
         return Group::Unarranged;
@@ -1310,9 +1349,12 @@ fn level_elevation(levels: &[PartitionLevel], level: u32) -> Option<f64> {
 /// point in the loop and in no hole, RE-333); otherwise the region of the lines'
 /// arrangement with its joins (RE-317, RE-330): the Area's point among the lines
 /// of its scheme on its Level. A group of lines that cannot be read as a whole
-/// (a non-primary design option, a stray height, copies that disagree, a missing
-/// line) gives no region of either kind. Where both give none, the plan
-/// topology's reason is the Area's, being the more specific. Where both give a
+/// (a non-primary design option, a stray height, a copy that names another Level
+/// or scheme or lies at another height, a missing line) gives no region of
+/// either kind. A group whose lines have copies that disagree only in place
+/// ([`Group::Conflicted`]) gives the plan topology's region alone, and
+/// `boundary_lines_not_readable` where that is not read. Where both give none,
+/// the plan topology's reason is the Area's, being the more specific. Where both give a
 /// region and they are not the same one ([`regions_agree`]), the Area has none
 /// (`area_regions_disagree`). `Err` where it has
 /// no point and no topology, or its Level or scheme is not named, or its Level's
@@ -1358,7 +1400,13 @@ fn locate(
         (Group::Arranged(_), None) => Err(REFUSED_NO_POINT),
         (_, _) => Err(REFUSED_GROUP),
     };
+    let conflicted = matches!(group, Group::Conflicted);
     let (face, from_topology, records) = match topology {
+        // Lines whose partition copies disagree give no region of their own, and
+        // the topology that was not read leaves the Area with none (#1434).
+        Some(Err(reason)) if conflicted && !topology_failed_a_check(reason) => {
+            (Err(REFUSED_GROUP), false, Vec::new())
+        }
         // Both readers give a region: they must give the same one.
         Some(Ok(region))
             if by_lines
@@ -1401,8 +1449,10 @@ fn locate(
 }
 
 /// The body of one Area: its region, where the lines its record names are all
-/// declared lines of its scheme on its Level, are not conflicted and bound that
-/// region, from its Level up to the Level above (RE-317); or why it has none.
+/// declared lines of its scheme on its Level, are not conflicted (unless the
+/// region is the plan topology's and their copies differ only in place, #1434)
+/// and bound that region, from its Level up to the Level above (RE-317); or why
+/// it has none.
 fn draw_area(
     record: &AreaRecord,
     located: &Located,
@@ -1411,8 +1461,11 @@ fn draw_area(
     surroundings: &Surroundings<'_>,
 ) -> Result<AreaBody, &'static str> {
     let named_lines = record.named_ids(known_lines, AREA_LINE_ID_FLOOR);
+    // A line whose partition copies disagree in place (#1434) may be named by an
+    // Area drawn from the plan topology, which reads the current copy: the lines
+    // must still bound its region below. Any other conflicted line may not.
     let named_in_group = named_lines.iter().all(|line| {
-        !lines.conflicted.contains(line)
+        (!lines.conflicted.contains(line) || (located.topology && !lines.moved.contains(line)))
             && lines
                 .by_id
                 .get(line)
@@ -2038,6 +2091,195 @@ mod tests {
         assert!(regions_agree(
             &region(ring.clone(), vec![]),
             &face(ring, vec![])
+        ));
+    }
+
+    const KEY: GroupKey = (1, 2);
+    const BASE: f64 = 0.0;
+
+    fn line_at(key: GroupKey, height: f64, from: (f64, f64), to: (f64, f64)) -> LineRecord {
+        LineRecord {
+            from,
+            to,
+            height,
+            key,
+            names: BTreeSet::new(),
+        }
+    }
+
+    /// The four lines of a square room in the group `KEY` at `BASE`, ids 10 to 13.
+    fn room_lines() -> BoundaryLines {
+        let mut lines = BoundaryLines::default();
+        let sides = [
+            ((0.0, 0.0), (10.0, 0.0)),
+            ((10.0, 0.0), (10.0, 10.0)),
+            ((10.0, 10.0), (0.0, 10.0)),
+            ((0.0, 10.0), (0.0, 0.0)),
+        ];
+        for (index, (from, to)) in sides.into_iter().enumerate() {
+            let id = 10 + index as u32;
+            lines.groups.entry(KEY).or_default().push(id);
+            lines.by_id.insert(id, line_at(KEY, BASE, from, to));
+            lines.seen.insert(id);
+        }
+        lines
+    }
+
+    #[test]
+    fn copies_that_differ_in_box_are_in_the_same_place() {
+        let a = line_at(KEY, BASE, (0.0, 0.0), (10.0, 0.0));
+        let b = line_at(KEY, BASE, (0.0, 0.0246), (10.0, 0.0246));
+        assert!(same_place(&a, &b));
+    }
+
+    #[test]
+    fn a_copy_naming_another_scheme_is_not_in_the_same_place() {
+        let a = line_at(KEY, BASE, (0.0, 0.0), (10.0, 0.0));
+        let b = line_at((KEY.0, KEY.1 + 1), BASE, (0.0, 0.0), (10.0, 0.0));
+        assert!(!same_place(&a, &b));
+    }
+
+    #[test]
+    fn a_copy_naming_another_level_is_not_in_the_same_place() {
+        let a = line_at(KEY, BASE, (0.0, 0.0), (10.0, 0.0));
+        let b = line_at((KEY.0 + 1, KEY.1), BASE, (0.0, 0.0), (10.0, 0.0));
+        assert!(!same_place(&a, &b));
+    }
+
+    #[test]
+    fn a_copy_at_another_height_is_not_in_the_same_place() {
+        let a = line_at(KEY, BASE, (0.0, 0.0), (10.0, 0.0));
+        let b = line_at(
+            KEY,
+            BASE + 2.0 * AREA_LEVEL_TOLERANCE_FEET,
+            (0.0, 0.0),
+            (10.0, 0.0),
+        );
+        assert!(!same_place(&a, &b));
+    }
+
+    #[test]
+    fn a_copy_whose_height_is_not_a_number_is_not_in_the_same_place() {
+        let a = line_at(KEY, BASE, (0.0, 0.0), (10.0, 0.0));
+        let b = line_at(KEY, f64::NAN, (0.0, 0.0), (10.0, 0.0));
+        assert!(!same_place(&a, &b));
+        assert!(!same_place(&b, &b));
+    }
+
+    #[test]
+    fn a_height_within_the_tolerance_is_the_same_place() {
+        let a = line_at(KEY, BASE, (0.0, 0.0), (10.0, 0.0));
+        let b = line_at(
+            KEY,
+            BASE + 0.5 * AREA_LEVEL_TOLERANCE_FEET,
+            (0.0, 0.0),
+            (10.0, 0.0),
+        );
+        assert!(same_place(&a, &b));
+    }
+
+    #[test]
+    fn a_group_with_a_conflict_in_place_is_not_arranged() {
+        let mut lines = room_lines();
+        lines.conflicted.insert(11);
+        assert!(matches!(
+            group_arrangement(&lines, KEY, BASE),
+            Group::Conflicted
+        ));
+    }
+
+    #[test]
+    fn a_conflicted_line_that_moved_is_unreadable() {
+        let mut lines = room_lines();
+        lines.conflicted.insert(11);
+        lines.moved.insert(11);
+        assert!(matches!(
+            group_arrangement(&lines, KEY, BASE),
+            Group::Unreadable
+        ));
+    }
+
+    #[test]
+    fn a_stray_height_with_a_conflict_is_unreadable() {
+        let mut lines = room_lines();
+        lines.conflicted.insert(11);
+        lines.stray_heights.push(BASE);
+        assert!(matches!(
+            group_arrangement(&lines, KEY, BASE),
+            Group::Unreadable
+        ));
+    }
+
+    #[test]
+    fn a_design_option_with_a_conflict_is_unreadable() {
+        let mut lines = room_lines();
+        lines.conflicted.insert(11);
+        lines.option_groups.insert(KEY);
+        assert!(matches!(
+            group_arrangement(&lines, KEY, BASE),
+            Group::Unreadable
+        ));
+    }
+
+    #[test]
+    fn a_missing_line_with_a_conflict_is_unreadable() {
+        let mut lines = room_lines();
+        lines.conflicted.insert(11);
+        lines.by_id.remove(&13);
+        assert!(matches!(
+            group_arrangement(&lines, KEY, BASE),
+            Group::Unreadable
+        ));
+    }
+
+    #[test]
+    fn a_line_off_the_level_with_a_conflict_is_unreadable() {
+        let mut lines = room_lines();
+        lines.conflicted.insert(11);
+        if let Some(line) = lines.by_id.get_mut(&12) {
+            line.height = BASE + 1.0;
+        }
+        assert!(matches!(
+            group_arrangement(&lines, KEY, BASE),
+            Group::Unreadable
+        ));
+    }
+
+    #[test]
+    fn a_group_with_no_lines_is_unreadable() {
+        let lines = BoundaryLines::default();
+        assert!(matches!(
+            group_arrangement(&lines, KEY, BASE),
+            Group::Unreadable
+        ));
+    }
+
+    #[test]
+    fn a_group_without_a_conflict_is_not_conflicted() {
+        let lines = room_lines();
+        assert!(matches!(
+            group_arrangement(&lines, KEY, BASE),
+            Group::Arranged(_) | Group::Unarranged
+        ));
+    }
+
+    #[test]
+    fn a_conflict_in_place_in_another_group_leaves_this_one_alone() {
+        let mut lines = room_lines();
+        let other = (KEY.0, KEY.1 + 1);
+        lines.groups.entry(other).or_default().push(20);
+        lines
+            .by_id
+            .insert(20, line_at(other, BASE, (0.0, 0.0), (5.0, 0.0)));
+        lines.seen.insert(20);
+        lines.conflicted.insert(20);
+        assert!(matches!(
+            group_arrangement(&lines, KEY, BASE),
+            Group::Arranged(_) | Group::Unarranged
+        ));
+        assert!(matches!(
+            group_arrangement(&lines, other, BASE),
+            Group::Conflicted
         ));
     }
 }

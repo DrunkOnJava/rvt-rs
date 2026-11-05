@@ -167,8 +167,9 @@ beam or landing). Measure's script runs it beside each such sample, and the job
 `same-project-gates` turns the run red on a difference, a missing file, an
 unknown project, fewer bodies than the sample holds, or a check that compared
 nothing. That job also holds #1428's Areas gate (rac_advanced's Areas across its
-2024 to 2027 saves, `tools/ci/check-areas-across-saves.sh`), each as a step that
-runs whatever the other did. It is a job of its own, so a failure of either does
+2024 to 2027 saves, and its 2021 save against its 2022 save (#1434),
+`tools/ci/check-areas-across-saves.sh`), each as a step that runs whatever the
+other did. It is a job of its own, so a failure of either does
 not remove Compare's report.
 
 - **A change to a reader of Revit 2024 to 2027 is measured with

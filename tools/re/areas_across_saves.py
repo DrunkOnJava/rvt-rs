@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Check that the Areas of one project agree across its saves (#1261, #1194, RE-333).
+"""Check that the Areas of one project agree across its saves (#1261, #1194, #1434, RE-333).
 
 Autodesk's `rac_advanced` sample is saved by Revit 2024, 2025, 2026 and 2027.
 Revit's own export of its Areas exists for none of them, so the Areas of the
 2025 to 2027 saves are not measured against any Revit export. What rvt-rs can
 be held to is the 2024 save, which is read by the 2024 reader: the same project
 must give the same Areas on every later save. This is that gate (Griffin,
-2026-11-05, "Same-project gate"). For each save after the first it compares,
-Area by Area, paired by GlobalId:
+2026-11-05, "Same-project gate"). The 2021 save, which holds both states of the
+model's area boundary lines in its partitions, is held to the 2022 save the same
+way (#1434): the plan topology reads the current copy of each line, and the 2022
+save is the later state. For each save after the first it compares, Area by
+Area, paired by GlobalId:
 
 - GlobalId: every Area of the first save is in the other, and no other is;
 - number (`IfcSpace.Name`) and name (`IfcSpace.LongName`);
@@ -52,6 +55,7 @@ has no body).
 Usage:
 
     python3 tools/re/areas_across_saves.py 2024=<ifc> 2025=<ifc> 2026=<ifc> 2027=<ifc>
+    python3 tools/re/areas_across_saves.py 2022=<ifc> 2021=<ifc>
 
 The first save is the one the others are compared with. The output is counts
 and field names only, one `areas across saves:` line each. Needs IfcOpenShell

@@ -780,7 +780,9 @@ jobs:
           MCP_REQUIRE_FOLDED_FIELD: ${{ matrix.side != 'base' && '1' || '' }}
           # A run of the samples checks the Areas of rac_advanced across its
           # 2024 to 2027 saves on the head side (main writes none on 2025 to
-          # 2027) whenever all four samples are in it, and says so when not.
+          # 2027) whenever all four samples are in it, and its 2021 save against
+          # its 2022 save (main writes none on 2021) whenever both are, and says
+          # so when not.
           AREAS_ACROSS_SAVES: ${{ matrix.side != 'base' && matrix.samples && '1' || '' }}
           RVT_SCORER_FINE_MESH: ${{ inputs.fine_mesh && '1' || '' }}
           FAMILY_DIR: ${{ matrix.families && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
@@ -849,7 +851,8 @@ jobs:
   # nor of an Area on 2025 to 2027 (#1261, #1194), so each 2026 and 2027 save
   # of rac_advanced, rac_basic and rst_basic is held to the same project's 2024
   # and 2025 saves (tools/re/bodies_across_saves.py) and rac_advanced's Areas to
-  # its 2024 save's (tools/re/areas_across_saves.py). The measuring script runs
+  # its 2024 save's, its 2021 save's to its 2022 save's (#1434;
+  # tools/re/areas_across_saves.py). The measuring script runs
   # both beside the samples and writes their files; this job reads the head
   # side's shards and fails on a difference, a missing file or a check that did
   # not run for want of one. It is a job of its own, with a step for each gate
@@ -967,12 +970,21 @@ jobs:
               printf '%s\n' "${mcp_lines[@]}"
               echo
             fi
-            # The gate of the Areas of Revit 2025 to 2027: counts by field.
+            # The gates of the Areas of Revit 2025 to 2027 and of the 2021 save:
+            # counts by field.
             if [ -s measure-head/areas_across_saves.txt ]; then
               echo "### Areas of rac_advanced across its 2024 to 2027 saves"
               echo
               echo '```'
               cat measure-head/areas_across_saves.txt
+              echo '```'
+              echo
+            fi
+            if [ -s measure-head/areas_across_saves_2021.txt ]; then
+              echo "### Areas of rac_advanced on its 2021 save against its 2022 save"
+              echo
+              echo '```'
+              cat measure-head/areas_across_saves_2021.txt
               echo '```'
               echo
             fi
