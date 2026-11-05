@@ -1,5 +1,6 @@
-# The Python API tests (tests/python), the JSON schema checks and the type
-# stub check (mypy's stubtest) in CI.
+# The Python API tests (tests/python), the JSON schema checks, the type stub
+# check (mypy's stubtest) and the workflow checks (tools/ci/check-workflows.py,
+# which reads the workflows with PyYAML) in CI.
 # Dependabot proposes updates (.github/dependabot.yml).
 # requirements-test.txt pins this and every dependency with its hashes, and pip
 # installs it with --require-hashes; after changing a pin here, regenerate it
@@ -7,3 +8,4 @@
 jsonschema==4.26.0
 mypy==2.4.1
 pytest==9.2.0
+pyyaml==6.0.3

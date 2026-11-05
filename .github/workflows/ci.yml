@@ -26,7 +26,7 @@ on:
   workflow_call:
     inputs:
       fast:
-        description: Run only fmt, clippy, cargo doc, the PII guard, the env lint, Corpus health and the Ubuntu builds with their real-file checks.
+        description: Run only fmt, clippy, cargo doc, the PII guard, the env lint, Corpus health, the MCP server on Einhoven and the Ubuntu builds with their real-file checks.
         type: boolean
         default: false
 
@@ -60,10 +60,32 @@ env:
 # to Ubuntu 26 from 2026-10-19, which would change apt packages, Playwright's
 # system dependencies and the preinstalled tools under every job without a
 # commit here. Moving to 26.04 is a deliberate edit of this label.
+#
+# The Windows and macOS legs are pinned the same way, to the images that
+# `windows-latest` and `macos-latest` pointed at on 2026-11-05 (read from the
+# run logs; the labels are those actions/runner-images' README lists for them):
+# `windows-2025-vs2026` (Windows Server 2025 with Visual Studio 2026, whose
+# MSVC linker the Rust builds use) and `macos-26` (macOS 26 on arm64). A pinned
+# label retires eventually: GitHub announces the date in actions/runner-images
+# and runs brownouts first, and after it a job on the label has no runner to
+# pick it up, so the pull request waits until the label is moved. Moving to the
+# next image is a deliberate edit of the label, as for ubuntu-24.04;
+# tools/ci/check-workflows.py fails on a `-latest` label in a job it covers.
+#
+# Every job that runs steps sets `timeout-minutes` (the default is 360, six
+# hours of a hung runner). Each limit is at least three times the longest run
+# of that job among the last 96 runs on main and 29 pull-request runs
+# (2026-11-05) and never under 10 minutes, since a timeout that trips on a
+# slow runner is a false red: IfcOpenShell once took 22.9 minutes against a
+# median of 4.0, and has 70. No run in that window rebuilt the Rust
+# dependencies from an empty cache, so the margins of the build jobs (4 to 12
+# times their longest run) are what covers one. tools/ci/check-workflows.py
+# fails on a job that runs steps without a limit.
 jobs:
   fmt:
     name: cargo fmt
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -81,6 +103,7 @@ jobs:
   clippy:
     name: cargo clippy
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -131,9 +154,11 @@ jobs:
       - run: cargo clippy -p rvt-probes --examples --no-deps -- -D warnings
 
   test:
-    # Unit tests are banned (maintainer directive, 2026-09-23): this job
-    # builds every target and runs only what tools/ci/test-targets.txt
-    # classes as real-file, CLI or contract verification. Corpus LFS clones
+    # Unit tests are banned (maintainer directive, 2026-09-23), except a few
+    # failure-first tests of a pure helper with no file, network, process or
+    # clock I/O (the `--lib` step below). Apart from those, this job builds
+    # every target and runs only what tools/ci/test-targets.txt classes as
+    # real-file, CLI or contract verification. Corpus LFS clones
     # dominate wall-clock, so the Autodesk family corpus is fetched on
     # ubuntu-stable (primary) and windows-stable (CFB path-separator
     # regression); elsewhere the corpus checks skip and the CLI and
@@ -141,13 +166,18 @@ jobs:
     # check name does not change when `rust-version` does.
     name: build + real files / ${{ matrix.os }} / ${{ matrix.label || matrix.rust }}
     runs-on: ${{ matrix.os }}
+    # The longest leg took 8.9 minutes (Windows), Ubuntu 4.4. The family
+    # corpus fetch took 2 s on Linux and 10 s on Windows on main's first run
+    # after #1092 moved its pin (run 40957121621).
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       # The fast set (a draft) builds on Ubuntu only, stable and MSRV; the
       # full set on every OS. The MSRV entry's "1.87" is `rust-version` in
-      # Cargo.toml; both lists name it.
+      # Cargo.toml; both lists name it, and tools/ci/check-workflows.py (env
+      # config lint) fails when either differs from it.
       matrix:
-        include: ${{ fromJSON(inputs.fast == true && '[{"os":"ubuntu-24.04","rust":"stable","with_corpus":true},{"os":"ubuntu-24.04","rust":"1.87","label":"msrv","with_corpus":false}]' || '[{"os":"ubuntu-24.04","rust":"stable","with_corpus":true},{"os":"windows-latest","rust":"stable","with_corpus":true},{"os":"macos-latest","rust":"stable","with_corpus":false},{"os":"ubuntu-24.04","rust":"1.87","label":"msrv","with_corpus":false}]') }}
+        include: ${{ fromJSON(inputs.fast == true && '[{"os":"ubuntu-24.04","rust":"stable","with_corpus":true},{"os":"ubuntu-24.04","rust":"1.87","label":"msrv","with_corpus":false}]' || '[{"os":"ubuntu-24.04","rust":"stable","with_corpus":true},{"os":"windows-2025-vs2026","rust":"stable","with_corpus":true},{"os":"macos-26","rust":"stable","with_corpus":false},{"os":"ubuntu-24.04","rust":"1.87","label":"msrv","with_corpus":false}]') }}
     steps:
       # Windows' git default `core.autocrlf=true` mangles binary files
       # that aren't explicitly marked `binary` in `.gitattributes`.
@@ -233,7 +263,7 @@ jobs:
         # Linux owns the shared `ci-release` cache and compiles every
         # target so benches and examples stay green. macOS and Windows
         # never run benches or examples in this job, so they skip them:
-        # on windows-latest the all-targets build was 181 s of a 4.1 min
+        # on Windows the all-targets build was 181 s of a 4.1 min
         # job.
         run: cargo build --profile ci ${{ runner.os == 'Linux' && '--all-targets' || '--lib --bins --tests' }}
       # The MSRV entry checks that every target compiles on the oldest
@@ -423,6 +453,17 @@ jobs:
     # when RVT_PROJECT_CORPUS_DIR is unset.
     name: Corpus health (tier 2 — external)
     runs-on: ubuntu-24.04
+    # Median 5.6 minutes, longest 10.2. The BIM4LCA and R2025 fetches end
+    # as NOT MEASURED, a warning, when their host is down, and a host that drops
+    # packets holds them to their own retries. Both at once: BIM4LCA tries two
+    # URLs (a mirror, then the archive), each five tries of 300 s with 150 s of
+    # pauses, 55 minutes; R2025 downloads three archives, and two at their
+    # 900 s limit followed by a third refused on four tries of 900 s is 90
+    # minutes; the rest of the job is about 10, and the RE1 fetch (a red failure,
+    # not a warning) is cut off at 15 by its own `timeout 900`, with a curl that
+    # gives up on a stalled transfer, 170 in all. The limit sits above that, so a
+    # dead host stays a warning and never becomes a red timeout.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -597,6 +638,8 @@ jobs:
     # 2026-11-04).
     name: MCP server on Einhoven (tier 2 — external)
     runs-on: ubuntu-24.04
+    # Longest 4.1 minutes.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -660,6 +703,7 @@ jobs:
     name: Writer patch corpus
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -732,6 +776,10 @@ jobs:
     name: IfcOpenShell validates exports
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    # Longest 22.9 minutes (run 42034472131, every step slow), median 4.0:
+    # 3 times the longest. The EXPRESS rules step has a 25 minute limit of its
+    # own.
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1147,6 +1195,8 @@ jobs:
   doc:
     name: cargo doc
     runs-on: ubuntu-24.04
+    # Longest 2.9 minutes.
+    timeout-minutes: 30
     env:
       RUSTDOCFLAGS: "-D warnings"
     steps:
@@ -1186,6 +1236,7 @@ jobs:
     name: semver checks
     if: github.event_name == 'pull_request' && inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: read
@@ -1239,6 +1290,7 @@ jobs:
     name: cargo bench --no-run
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1276,6 +1328,7 @@ jobs:
     name: docs.rs build preview
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     env:
       # Same flags docs.rs passes, plus -D warnings so this job fails
       # instead of silently publishing broken docs.
@@ -1315,6 +1368,7 @@ jobs:
     name: fuzz targets build
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1336,6 +1390,9 @@ jobs:
     name: Python wheel / ${{ matrix.os }}
     if: inputs.fast != true
     runs-on: ${{ matrix.os }}
+    # Longest 11.6 minutes (Windows), 8.7 macOS, 7.2 Ubuntu, in 100 runs on main,
+    # before the smoke wheel was built without LTO; the limit is kept.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -1343,7 +1400,7 @@ jobs:
         # matrix runs on pushes to main, where the wheels are consumed.
         # Frees two scarce macOS/Windows runners per PR without loosening
         # the merge gate, which never required the wheel jobs.
-        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04", "macos-latest", "windows-latest"]') }}
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04", "macos-26", "windows-2025-vs2026"]') }}
     # A smoke build, so no fat LTO and 16 codegen units, as the viewer's WASM
     # is built in viewer-test.yml; publish.yml builds the wheels users get, at
     # fat LTO and one codegen unit. maturin-action hands every CARGO_* variable
@@ -1508,6 +1565,7 @@ jobs:
     name: cargo deny
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1538,6 +1596,7 @@ jobs:
     name: cargo audit
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1561,6 +1620,9 @@ jobs:
     name: viewer dependency audit
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    # The audit step retries a down advisory endpoint four times, sleeping
+    # 20 to 80 s between tries.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1632,6 +1694,7 @@ jobs:
     name: viewer tests needed
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
@@ -1688,6 +1751,7 @@ jobs:
   pii-guard:
     name: PII guard
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1700,23 +1764,34 @@ jobs:
           # any specific sensitive value. The patterns are intentionally
           # broad — they're belt-and-suspenders on top of src/redact.rs.
           # The backslashes in the Windows patterns are regex escapes.
+          # A user name begins with a letter of either case (macOS and
+          # Windows keep the case it was typed in), and a Windows profile
+          # folder may hold spaces.
           # shellcheck disable=SC1003
           PATTERNS=(
             # Absolute home paths (macOS, Linux, Windows).
-            '/Users/[a-z][a-z0-9._-]+/'
-            '/home/[a-z][a-z0-9._-]+/'
-            'C:\\Users\\[a-z][a-z0-9._-]+\\'
+            '/Users/[A-Za-z][A-Za-z0-9._-]+/'
+            '/home/[A-Za-z][A-Za-z0-9._-]+/'
+            'C:\\Users\\[A-Za-z][A-Za-z0-9._ -]+\\'
             # Autodesk employee-owned OneDrive authoring paths.
             'OneDrive - Autodesk\\[^\\]*\\Revit - [0-9]{3,}'
             # Autodesk build-server paths baked into DLLs.
             'F:\\Ship\\[0-9]{4}_'
           )
+          # Only this file is left out of the scan, since it defines the
+          # patterns; every other workflow is scanned like the rest of the
+          # tree. A `git grep` that fails (a status above 1, such as a
+          # pattern that does not compile) fails the step: it used to read as
+          # no match.
           failed=0
           for p in "${PATTERNS[@]}"; do
-            if git grep -I -n -P "$p" -- ':!.github/workflows/' ':!src/redact.rs' 2>/dev/null; then
-              echo "::error::PII-shaped pattern matched: $p"
-              failed=1
-            fi
+            status=0
+            git grep -I -n -P "$p" -- ':!.github/workflows/ci.yml' ':!src/redact.rs' || status=$?
+            case "$status" in
+              0) echo "::error::PII-shaped pattern matched: $p"; failed=1 ;;
+              1) ;;
+              *) echo "::error::git grep failed (status $status) for: $p"; failed=1 ;;
+            esac
           done
           if [ "$failed" -ne 0 ]; then
             exit 1
@@ -1782,6 +1857,14 @@ jobs:
         run: python3 tools/ci/test_same_project_verdict.py
       - name: The semantic check's verdict failure modes
         run: python3 tools/ci/test_jev_check.py
+      # The scheduled checks' pure parts (#1457): which NOT MEASURED streaks
+      # persist (a measured run ends one, a run whose job failed neither adds
+      # to it nor ends it), the label and body of the issue a failed job gets,
+      # and which Actions caches the cleaner treats as one family.
+      - name: The scheduled checks' failure modes
+        run: |
+          python3 tools/ci/test_not_measured.py
+          python3 tools/maintainer/test_clean_caches.py
       # publish.yml's preflight (#1457) refuses a tag that is lightweight or
       # unverified, on no release branch, or that disagrees with a version
       # file; these are its pure judgements, and what must never publish.
@@ -1799,17 +1882,53 @@ jobs:
   # devcontainer's tools from their lock, and validate
   # `.cursor/environment.json` against the published Cursor environment
   # schema. Keeps the env setup from silently drifting into an invalid state
-  # on any PR.
+  # on any PR. It also lints the workflows themselves: actionlint with
+  # shellcheck on every `run:` script, and tools/ci/check-workflows.py for
+  # what a linter cannot know (timeouts, pinned runner labels, values that
+  # must agree across files).
   env-config:
     name: env config lint
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # shellcheck is preinstalled on ubuntu-24.04 runners.
+      # shellcheck 0.11.0, pinned. The runner image carries a copy of its own
+      # that moves with the image, and actionlint below runs whichever
+      # shellcheck it finds first on PATH.
+      - name: Install shellcheck
+        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
+        with:
+          tool: shellcheck@0.11.0
       - name: ShellCheck .cursor/install.sh and the devcontainer's scripts
-        run: shellcheck .cursor/install.sh .devcontainer/*.sh
+        run: |
+          test "$(shellcheck --version | sed -n 's/^version: //p')" = 0.11.0
+          shellcheck .cursor/install.sh .devcontainer/*.sh
+      # actionlint, pinned to a release and to the sha256 its checksums file
+      # gives for the Linux tarball (taiki-e/install-action carries shellcheck
+      # but no actionlint). A new version is a new tag and a new hash from
+      # https://github.com/rhysd/actionlint/releases.
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl -sSfL --retry 5 --retry-all-errors -o "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  ${archive}" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/actionlint"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/actionlint" actionlint
+          echo "$RUNNER_TEMP/actionlint" >> "$GITHUB_PATH"
+      # With shellcheck on every `run:` script. .github/actionlint.yaml ignores
+      # exactly one message, about the `$/` form of local actions and workflows
+      # that actionlint does not know, and says why.
+      - name: actionlint on every workflow
+        run: |
+          actionlint -version
+          actionlint .github/workflows/*.yml
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
@@ -1824,13 +1943,14 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
+      - name: Install the Python tools
+        run: python -m pip install --require-hashes -r tools/ci/requirements-test.txt
       # Against a copy of https://cursor.com/schemas/environment.schema.json
       # taken 2026-10-05 (C8): downloading it on every pull request made the
       # check depend on cursor.com. Refresh the copy by hand when Cursor
       # changes the schema.
       - name: Validate .cursor/environment.json against the Cursor schema
         run: |
-          python -m pip install --require-hashes -r tools/ci/requirements-test.txt
           python - <<'PY'
           import json
           import jsonschema
@@ -1840,6 +1960,21 @@ jobs:
           jsonschema.validate(config, schema)
           print(".cursor/environment.json validates against the Cursor environment schema")
           PY
+      # The workflows' own rules, which no linter knows: every job that runs
+      # steps sets `timeout-minutes`, no runner label is `-latest`, every
+      # `$/.github/...` action or workflow a job uses exists and gets the inputs
+      # it declares (actionlint cannot read that form), the MSRV in the test
+      # matrix, in every crate and in the README, CONTRIBUTING.md, AGENTS.md,
+      # RELEASE.md, docs/python.md, docs/install.md and .cursor/install.sh is
+      # Cargo.toml's `rust-version` (the MCP server's, in docs/install.md, is
+      # rvt-mcp's),
+      # and the documentation-only path list is one list in CI's
+      # `paths-ignore`, the viewer tests' path filter and Deploy viewer's wait
+      # step. Its comparisons are tested first, on the ways they can fail.
+      - name: The workflow checks' failure modes
+        run: python tools/ci/test_check_workflows.py
+      - name: Workflow timeouts, runner pins, local references, MSRV and documentation paths
+        run: python tools/ci/check-workflows.py
 
   # The one check the main-protection ruleset requires (C1), as `full / CI
   # passed` when ci-pr.yml calls this for a ready pull request. It passes only
@@ -1872,6 +2007,7 @@ jobs:
       - env-config
       - semver
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Every job passed
         env:
