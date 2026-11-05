@@ -29,6 +29,10 @@ default decode does not take):
 - `get_element` on the sampled elements: the property and quantity sets, the trust markers, the
   type object (entity, Name, Tag and sets), the placement (the translation, not the rotation), the
   host, and whether the body is none or mapped, each equal to the IFC's;
+- the diagnostics' `decoded.parameter_value_count` equals the number of property values in the `Pset_`
+  sets of the IFC (#1424: a piece the writer folds into another element's body writes none), and
+  its `exported` counts are the elements the IFC holds, with `exported.body_pieces_folded` equal to
+  the summary's `folded_into_bodies`;
 - `get_diagnostics` equals the `diagnostics.json` rvt-ifc wrote, and the server's export equals
   rvt-ifc's (the hash Measure writes to `ifc.sha256`), when no flag was given; a check that was not
   measured is named in the verdict.
@@ -57,12 +61,14 @@ as such.
 Usage:
 
     python3 tools/re/mcp_answers_vs_ifc.py --server <rvt-rs-mcp> --rvt <model.rvt>
-        [--diagnostics <diagnostics.json>] [--dump <file>] [--all-details]
+        [--diagnostics <diagnostics.json>] [--dump <file>] [--all-details] [--require-folded-field]
         <rvt-rs.ifc> [<revit-export.ifc>]
 
 `--dump` writes the answers as the deterministic semantic dump (mcp_client.dump), `--all-details`
-asks `get_element` for every element instead of a sample. `RVT_IFC_FLAGS` is the flags the export
-was made with. Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins), NumPy and
+asks `get_element` for every element instead of a sample. `--require-folded-field` makes a
+diagnostics without `exported.body_pieces_folded` (a build from before #1424) a difference, where
+otherwise it is read as counting the folded pieces with the elements; Measure passes it on the head
+side. `RVT_IFC_FLAGS` is the flags the export was made with. Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins), NumPy and
 Shapely.
 """
 
@@ -387,7 +393,7 @@ def check_protocol(report, answers, status):
     report.check(W("protocol"), 5, differences)
 
 
-def check_counts(report, answers, written, diagnostics):
+def check_counts(report, answers, written, diagnostics, require_folded_field=False):
     summary = answers["summary"]
     rows = answers["rows"]
     differences = []
@@ -426,18 +432,29 @@ def check_counts(report, answers, written, diagnostics):
         exported = diagnostics["exported"]
         # The diagnostics list an opening element by type but do not count it as a building element (RE-84).
         openings = elements["by_ifc_type"].get("IFCOPENINGELEMENT", 0)
-        # The diagnostics also count the pieces the export folds into another element's body, which
-        # the summary lists apart (`folded_into_bodies`) and are not rows.
+        # The pieces the export folds into another element's body are not rows. The summary lists them
+        # apart (`folded_into_bodies`) and, from #1424, so do the diagnostics (`body_pieces_folded`),
+        # whose other counts are the elements the IFC holds. The diagnostics of a build before #1424
+        # have no such field and count the pieces with the elements; `--require-folded-field` (Measure
+        # passes it on the head side) makes a diagnostics without it a difference, so that a build
+        # that lacks the change cannot read as equal through the old arithmetic.
         folded = elements.get("folded_into_bodies", {})
-        folded_elements = sum(count for entity, count in folded.items() if entity != "IFCOPENINGELEMENT")
+        counted_with_elements = {}
+        if "body_pieces_folded" in exported or require_folded_field:
+            same("diagnostics exported body_pieces_folded", folded, exported.get("body_pieces_folded"))
+        else:
+            counted_with_elements = folded
+        folded_elements = sum(
+            count for entity, count in counted_with_elements.items() if entity != "IFCOPENINGELEMENT"
+        )
         same(
             "diagnostics exported building_elements",
             elements["total"] - openings + folded_elements,
             exported["building_elements"],
         )
         counted = {
-            entity: elements["by_ifc_type"].get(entity, 0) + folded.get(entity, 0)
-            for entity in set(elements["by_ifc_type"]) | set(folded)
+            entity: elements["by_ifc_type"].get(entity, 0) + counted_with_elements.get(entity, 0)
+            for entity in set(elements["by_ifc_type"]) | set(counted_with_elements)
         }
         same("diagnostics exported by_ifc_type", counted, exported["by_ifc_type"])
         digest = summary["diagnostics"]
@@ -792,6 +809,21 @@ def diff_json(label, a, b, out):
         out.append(f"{label}: {a!r} vs {b!r}")
 
 
+def check_parameter_values(report, written, diagnostics):
+    """`decoded.parameter_value_count` is the number of property values in the `Pset_` sets of the IFC (#1424)."""
+    if diagnostics is None:
+        report.skipped(W("parameter values"), W("no diagnostics.json beside the export, or the export was made with flags"))
+        return
+    in_file = sum(
+        len(property_set.HasProperties or ())
+        for property_set in written.file.by_type("IfcPropertySet")
+        if (property_set.Name or "").startswith("Pset_")
+    )
+    counted = diagnostics["decoded"]["parameter_value_count"]
+    differences = [] if in_file == counted else [f"the IFC holds {in_file} values in Pset_ sets, the diagnostics count {counted}"]
+    report.check(W("parameter values"), 1, differences)
+
+
 def check_diagnostics(report, answers, diagnostics):
     if diagnostics is None:
         report.skipped(W("diagnostics"), W("no diagnostics.json beside the export, or the export was made with flags"))
@@ -1001,6 +1033,7 @@ def main(argv):
     parser.add_argument("--diagnostics")
     parser.add_argument("--dump")
     parser.add_argument("--all-details", action="store_true")
+    parser.add_argument("--require-folded-field", action="store_true")
     parser.add_argument("ours")
     parser.add_argument("revit", nargs="?")
     args = parser.parse_args(argv)
@@ -1042,7 +1075,8 @@ def main(argv):
         )
         written = Written(basis)
         check_protocol(report, answers, status)
-        check_counts(report, answers, written, diagnostics)
+        check_counts(report, answers, written, diagnostics, args.require_folded_field)
+        check_parameter_values(report, written, diagnostics)
         by_gid = check_rows(report, answers, written)
         check_levels(report, answers, written, by_gid)
         check_rooms(report, answers, written)
