@@ -101,9 +101,10 @@ solve alone, as on `main` (RE-341 section 5): without its slope, so a sloped
 roof can still be drawn as its outline at the box's full height, a level
 block, which no 2026 or 2027 scorer checks. Such a roof no longer cuts the top
 of the walls under it unless its record box is exactly its type's layers
-(RE-351): the 16 walls of `rac_basic` that its 2026 save cut at roof 243274,
-up to 3.1865 m lower than its 2025 save draws them, are drawn to their record
-boxes as the 2025 save draws them (not yet measured on this head). No beam, landing, stair run or
+(RE-351): the walls of `rac_basic` that its 2024 (15), 2026 and 2027 (16)
+saves cut at roof 243274, up to 3.1865 m lower than its 2025 save draws them
+(Measure run 42106436497), are drawn to their record boxes as the 2025 save
+draws them (not yet measured on this head). No beam, landing, stair run or
 sketch outline there is scored against a Revit export: each is held to
 the same Autodesk project's earlier save (`tools/re/bodies_across_saves.py`,
 which Measure runs and fails on), and that cannot catch an error the earlier
