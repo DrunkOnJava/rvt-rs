@@ -36,10 +36,11 @@
   source; CI shows it failing on copies of Core Interior's export with the
   property renamed, every room called an area, and every room's outline
   source made an Area's, and runs it on an export with no geometry. On
-  Measure run 42019512273 (head 02072245) the 111 models and Autodesk
-  samples exported held 3,493 `IfcSpace`s, every one with a `SpaceKind`:
-  3,187 rooms, 214 Areas and 92 family instances, and no `mep_space`. The
+  Measure run 42027776156 (head 04d1b101) the 117 models and Autodesk
+  samples exported held 4,453 `IfcSpace`s, every one with a `SpaceKind`:
+  3,733 rooms, 628 Areas and 92 family instances, and no `mep_space`. The
   BIM4LCA office holds 308 at both stages (234 rooms, 30 Areas, 44 family
-  instances). The check passes on all 111: no `area` outside the Area outline
-  sources and no other kind inside them, on the 55 models and samples that hold
-  spaces and among them the 15 held-out and spent ones (counts only).
+  instances). The check passes on all 117: no `area` outside the Area outline
+  sources and no other kind inside them, on the 66 models and samples that hold
+  spaces and among them the 18 held-out ones and the six `rac_advanced` saves
+  scored against the IFC2X3 export (counts only).
