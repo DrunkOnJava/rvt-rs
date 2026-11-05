@@ -2596,7 +2596,6 @@ impl StepWriter<'_> {
         let mut unplaced_spaces: Vec<usize> = Vec::new();
         // B63: the elements a space contains, by the space's entity index;
         // they are left out of their storey's containment.
-        let space_of = elements_in_spaces(model);
         let mut per_space_elements: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         // Track (element_id, material_index) pairs so we can emit
         // IfcRelAssociatesMaterial per material after the element
@@ -2654,6 +2653,9 @@ impl StepWriter<'_> {
             )
         };
         let aggregate_parts = aggregate_parts_of_elements(model);
+        // Where each element goes in the spatial structure: the one decision
+        // the server's answers read as well (`placements`).
+        let element_placements = placements(model);
         // #400: each building element's GlobalId, see `element_global_ids`.
         // Everything the element owns (its opening, property sets, material
         // association) derives from this one.
@@ -3009,22 +3011,26 @@ impl StepWriter<'_> {
                 // RE-84: an opening standing for a door or window that draws
                 // no geometry voids its host and fills nothing. Like every
                 // opening it lives through that relation, not in a storey.
-                let hosted_opening =
-                    ifc_upper == "IFCOPENINGELEMENT" && host_element_index.is_some();
-                if let (true, Some(h_idx)) = (hosted_opening, host_element_index) {
-                    void_fill_triples.push((*h_idx, el_id, None, global_id.to_string()));
-                } else if let Some(&space) = space_of.get(&entity_idx) {
-                    per_space_elements.entry(space).or_default().push(el_id);
-                } else if ifc_upper == "IFCSPACE" {
-                    match idx {
-                        Some(index) => per_storey_spaces[index].push(el_id),
-                        None => unplaced_spaces.push(el_id),
+                let is_space = ifc_upper == "IFCSPACE";
+                let hosted_opening = matches!(
+                    element_placements[entity_idx],
+                    Some(Placement::Opening { .. })
+                );
+                match element_placements[entity_idx] {
+                    Some(Placement::Opening { host }) => {
+                        void_fill_triples.push((host, el_id, None, global_id.to_string()));
                     }
-                } else if !aggregate_parts.contains(&entity_idx) {
-                    match idx {
-                        Some(index) => per_storey_elements[index].push(el_id),
-                        None => unplaced_elements.push(el_id),
+                    Some(Placement::InSpace(space)) => {
+                        per_space_elements.entry(space).or_default().push(el_id);
                     }
+                    Some(Placement::OnStorey(index)) if is_space => {
+                        per_storey_spaces[index].push(el_id);
+                    }
+                    Some(Placement::OnStorey(index)) => per_storey_elements[index].push(el_id),
+                    Some(Placement::InBuilding) if is_space => unplaced_spaces.push(el_id),
+                    Some(Placement::InBuilding) => unplaced_elements.push(el_id),
+                    // A part reaches the structure through its whole.
+                    Some(Placement::PartOf(_) | Placement::Folded) | None => {}
                 }
                 entity_index_to_el_id[entity_idx] = Some(el_id);
                 entity_index_to_placement[entity_idx] = Some(placement_id);
@@ -4525,33 +4531,140 @@ fn elements_in_spaces(model: &IfcModel) -> HashMap<usize, usize> {
         .collect()
 }
 
-/// The parts of every aggregate whose whole is a building element (#323):
-/// they reach the spatial structure through that whole.
-fn aggregate_parts_of_elements(model: &IfcModel) -> std::collections::BTreeSet<usize> {
+/// Where [`write_step`] puts a building element in the spatial structure,
+/// by [`placements`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Placement {
+    /// Not written as an element: a further piece of an element of separate
+    /// loops, written as an item of the body of the element that owns it
+    /// (#823).
+    Folded,
+    /// The opening of a door or window that draws no geometry. It voids its
+    /// host (an index into `IfcModel::entities`) and is contained nowhere.
+    #[non_exhaustive]
+    Opening {
+        /// The host, an index into `IfcModel::entities`.
+        host: usize,
+    },
+    /// Contained in a space (an index into `IfcModel::entities`).
+    InSpace(usize),
+    /// A part of an aggregate (#323): it reaches the spatial structure
+    /// through its whole (an index into `IfcModel::entities`).
+    PartOf(usize),
+    /// Contained in a storey (an index into `IfcModel::building_storeys`), or,
+    /// for a space, aggregated under it.
+    OnStorey(usize),
+    /// Contained in the building, or, for a space, aggregated under it: no
+    /// storey reached it.
+    InBuilding,
+}
+
+/// Where [`write_step`] puts each entity of `model` in the spatial structure,
+/// by index into `model.entities`; `None` for an entity that is not a
+/// building element. The writer writes with exactly this, so a reader that
+/// wants an element's storey or whether it is written at all asks here.
+pub fn placements(model: &IfcModel) -> Vec<Option<Placement>> {
+    let (_, folded) = fold_body_pieces(model);
+    let in_spaces = elements_in_spaces(model);
+    let wholes = aggregate_wholes(model);
+    model
+        .entities
+        .iter()
+        .enumerate()
+        .map(|(index, entity)| {
+            let super::entities::IfcEntity::BuildingElement {
+                ifc_type,
+                storey_index,
+                host_element_index,
+                ..
+            } = entity
+            else {
+                return None;
+            };
+            if folded.contains(&index) {
+                return Some(Placement::Folded);
+            }
+            // An out-of-range index is a caller bug; treat it as unbound
+            // rather than silently dropping the element or pinning it to an
+            // unrelated storey.
+            let storey = storey_index.filter(|storey| *storey < model.building_storeys.len());
+            let on_storey = || storey.map_or(Placement::InBuilding, Placement::OnStorey);
+            let is_space = ifc_type.eq_ignore_ascii_case("IFCSPACE");
+            // RE-84: an opening standing for a door or window that draws no
+            // geometry voids its host and fills nothing. Like every opening
+            // it lives through that relation, not in a storey.
+            if let (true, Some(host)) = (
+                ifc_type.eq_ignore_ascii_case("IFCOPENINGELEMENT"),
+                host_element_index,
+            ) {
+                Some(Placement::Opening { host: *host })
+            } else if let Some(&space) = in_spaces.get(&index) {
+                Some(Placement::InSpace(space))
+            } else if is_space {
+                Some(on_storey())
+            } else if let Some(&whole) = wholes.get(&index) {
+                Some(Placement::PartOf(whole))
+            } else {
+                Some(on_storey())
+            }
+        })
+        .collect()
+}
+
+/// The storey of the entity at `index` as [`write_step`] puts it, an index
+/// into `IfcModel::building_storeys`, by the `placements` of its model: the
+/// storey it is contained in, that of the space that contains it, that of the
+/// whole it is a part of, or that of the host an opening cuts. `None` where it
+/// is in the building only, or is not written.
+pub fn storey_of(placements: &[Option<Placement>], index: usize) -> Option<usize> {
+    let mut at = index;
+    // A chain of spaces, wholes and hosts is short; a cycle ends the walk.
+    for _ in 0..16 {
+        match (*placements.get(at)?)? {
+            Placement::OnStorey(storey) => return Some(storey),
+            Placement::InBuilding | Placement::Folded => return None,
+            Placement::InSpace(next)
+            | Placement::PartOf(next)
+            | Placement::Opening { host: next } => {
+                at = next;
+            }
+        }
+    }
+    None
+}
+
+/// The whole of every part of an aggregate whose whole is a building element
+/// (#323): the part reaches the spatial structure through that whole. A part
+/// of several wholes has the first.
+fn aggregate_wholes(model: &IfcModel) -> BTreeMap<usize, usize> {
     let is_building_element = |index: usize| {
         matches!(
             model.entities.get(index),
             Some(super::entities::IfcEntity::BuildingElement { .. })
         )
     };
-    model
-        .entities
-        .iter()
-        .filter_map(|entity| match entity {
-            super::entities::IfcEntity::Aggregate { whole, parts }
-                if is_building_element(*whole) =>
-            {
-                Some(
-                    parts
-                        .iter()
-                        .copied()
-                        .filter(|part| *part != *whole && is_building_element(*part)),
-                )
+    let mut wholes = BTreeMap::new();
+    for entity in &model.entities {
+        let super::entities::IfcEntity::Aggregate { whole, parts } = entity else {
+            continue;
+        };
+        if !is_building_element(*whole) {
+            continue;
+        }
+        for part in parts {
+            if *part != *whole && is_building_element(*part) {
+                wholes.entry(*part).or_insert(*whole);
             }
-            _ => None,
-        })
-        .flatten()
-        .collect()
+        }
+    }
+    wholes
+}
+
+/// The parts of every aggregate whose whole is a building element (#323):
+/// they reach the spatial structure through that whole.
+fn aggregate_parts_of_elements(model: &IfcModel) -> std::collections::BTreeSet<usize> {
+    aggregate_wholes(model).into_keys().collect()
 }
 
 /// #823: the further pieces of an element written as items of its body,
@@ -4593,36 +4706,22 @@ fn fold_body_pieces(model: &IfcModel) -> (PieceBodies<'_>, std::collections::BTr
 
 /// Whether every storey of `model` contains an element: an element written
 /// in its own `IfcRelContainedInSpatialStructure` with that storey, as the
-/// writer places it (not a space, a hosted opening, a body piece written as
-/// an item of its owner, a part of an aggregate or an element a space
-/// contains). Revit's exporter up to IFC 26.0 counts the storeys that
-/// contain an element as `NumberOfStoreys`, and from 26.1 every storey, so
-/// the two agree only here (RE-263; the maintainer, 2026-10-29).
+/// writer places it (`placements`: not a space, a hosted opening, a body
+/// piece written as an item of its owner, a part of an aggregate or an
+/// element a space contains). Revit's exporter up to IFC 26.0 counts the
+/// storeys that contain an element as `NumberOfStoreys`, and from 26.1 every
+/// storey, so the two agree only here (RE-263; the maintainer, 2026-10-29).
 pub(crate) fn every_storey_holds_an_element(model: &IfcModel) -> bool {
-    let storeys = model.building_storeys.len();
-    let in_spaces = elements_in_spaces(model);
-    let parts = aggregate_parts_of_elements(model);
-    let (_, folded) = fold_body_pieces(model);
-    let mut holding = vec![false; storeys];
-    for (index, entity) in model.entities.iter().enumerate() {
-        let super::entities::IfcEntity::BuildingElement {
-            ifc_type,
-            storey_index: Some(storey),
-            host_element_index,
-            ..
-        } = entity
-        else {
+    let mut holding = vec![false; model.building_storeys.len()];
+    for (entity, placement) in model.entities.iter().zip(placements(model)) {
+        let super::entities::IfcEntity::BuildingElement { ifc_type, .. } = entity else {
             continue;
         };
-        let ifc_upper = ifc_type.to_ascii_uppercase();
-        let contained = *storey < storeys
-            && !folded.contains(&index)
-            && !(ifc_upper == "IFCOPENINGELEMENT" && host_element_index.is_some())
-            && !in_spaces.contains_key(&index)
-            && ifc_upper != "IFCSPACE"
-            && !parts.contains(&index);
-        if contained {
-            holding[*storey] = true;
+        match placement {
+            Some(Placement::OnStorey(storey)) if !ifc_type.eq_ignore_ascii_case("IFCSPACE") => {
+                holding[storey] = true;
+            }
+            _ => {}
         }
     }
     holding.iter().all(|held| *held)

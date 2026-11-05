@@ -4616,6 +4616,10 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut wall_base_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut resolved_outline_spaces = 0usize;
     let mut approximate_outline_spaces = 0usize;
+    // Where the writer puts each element: an element is bound to a storey when
+    // the export contains it in one, through its space, its whole or its host
+    // as well as directly.
+    let placements = step_writer::placements(model);
     for (index, entity) in model.entities.iter().enumerate() {
         if let entities::IfcEntity::BuildingElement {
             ifc_type,
@@ -4623,7 +4627,6 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             extrusion,
             solid_shape,
             representation_map_index,
-            storey_index,
             property_set,
             ..
         } = entity
@@ -4693,7 +4696,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             }
             building_elements += 1;
             *by_ifc_type.entry(ifc_type.clone()).or_insert(0) += 1;
-            if storey_index.is_some() {
+            if step_writer::storey_of(&placements, index).is_some() {
                 storey_bound_elements += 1;
             }
             if location_feet.is_some()
