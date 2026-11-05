@@ -15,6 +15,43 @@
     "warnings",
     "confidence"
   ],
+  "$defs": {
+    "element_record_stage_counts": {
+      "type": "object",
+      "description": "What became of the frames at the element-record markers of one partition stream, or of the whole file (#1389). markers = frame_outside_stream + category_out_of_range + box_not_valid + no_declared_id + records; records = not_placed_instances + placed_instances; placed_instances = without_volume + with_volume; with_volume = superseded + nested_components + selected; selected = in_non_primary_design_option + not_in_export_phase + nested_in_door_or_window + category_not_exported + handed_to_export. declared_id and id_from_enclosing_record are counted beside the steps and do not enter them.",
+      "required": [
+        "markers",
+        "records",
+        "placed_instances",
+        "with_volume",
+        "selected",
+        "handed_to_export"
+      ],
+      "properties": {
+        "markers": { "type": "integer", "minimum": 0, "description": "Places that hold the file's element-record marker: the tags of Outline, four ff bytes and the tag of ElementParents." },
+        "declared_id": { "type": "integer", "minimum": 0, "description": "Of the markers, those with a u32 ElementId that Global/ElemTable declares 52 bytes before them (48 on Revit 2008) and the tag of ElementHeader 8 bytes after it. A marker without one can still give a record through the record around it." },
+        "frame_outside_stream": { "type": "integer", "minimum": 0, "description": "Markers stopped because a field of their frame lies outside the stream." },
+        "category_out_of_range": { "type": "integer", "minimum": 0, "description": "Markers stopped because their BuiltInCategory is outside the range of Revit's categories." },
+        "box_not_valid": { "type": "integer", "minimum": 0, "description": "Markers stopped because their bounding box is not finite or ends before it starts." },
+        "no_declared_id": { "type": "integer", "minimum": 0, "description": "Markers stopped because the frame has no declared ElementId of its own and none from a record around it. It can include frames inside the documents of loaded families (RE-135), whose ids no ElemTable record declares: a count here is not a count of lost elements." },
+        "records": { "type": "integer", "minimum": 0, "description": "Markers that gave a record." },
+        "id_from_enclosing_record": { "type": "integer", "minimum": 0, "description": "Of the records, those whose ElementId is the one of the record around the frame (the second prologue, RE-315)." },
+        "not_placed_instances": { "type": "integer", "minimum": 0, "description": "Records that are not placed instances: container members and type symbols." },
+        "placed_instances": { "type": "integer", "minimum": 0, "description": "Records that are placed instances (no container reference, the placed-instance kind)." },
+        "without_volume": { "type": "integer", "minimum": 0, "description": "Placed instances whose bounding box has no volume; Revit's export leaves them out (#309)." },
+        "with_volume": { "type": "integer", "minimum": 0, "description": "Placed instances whose bounding box has volume." },
+        "superseded": { "type": "integer", "minimum": 0, "description": "Frames with volume that a newer frame of the same ElementId replaces." },
+        "nested_components": { "type": "integer", "minimum": 0, "description": "Frames with volume that are nested MEP components, left out of the export (#96)." },
+        "selected": { "type": "integer", "minimum": 0, "description": "The newest frame of each ElementId, without the nested components." },
+        "in_non_primary_design_option": { "type": "integer", "minimum": 0, "description": "Selected frames in a design option other than the primary one." },
+        "not_in_export_phase": { "type": "integer", "minimum": 0, "description": "Selected frames of an element that does not exist in the export phase." },
+        "nested_in_door_or_window": { "type": "integer", "minimum": 0, "description": "Selected frames of a component nested in a door or window." },
+        "category_not_exported": { "type": "integer", "minimum": 0, "description": "Selected frames whose category no class of the export has." },
+        "handed_to_export": { "type": "integer", "minimum": 0, "description": "Selected frames that became elements handed to the export." },
+        "stream_not_read": { "type": "integer", "minimum": 0, "description": "Partition streams that did not inflate, so that their markers are not counted: 1 on the entry of such a stream. It enters no step." }
+      }
+    }
+  },
   "properties": {
     "schema_version": {
       "type": "integer",
@@ -192,6 +229,49 @@
             "minimum": 0
           },
           "uniqueItems": true
+        },
+        "element_record_stages": {
+          "type": "object",
+          "description": "Where the element records of a Revit 2008 to 2023 file stop, stage by stage, per partition stream and in total (#1389): the markers found, those with a declared ElementId, those that gave a record, the placed instances, those with volume, the frames kept, the elements handed to the export and the elements written. Each count is exactly what the one before it passed on and left, so a stream's counts add up. Present for a file that takes that record layout, even when every count is zero, and absent for Revit 2024 and later, whose rejected frames are in skipped (element_record_without_element_id and the reasons after it), and for a placeholder export. A family file reads its elements from Global/Latest, so its zero records mean nothing. Not written in the IFC file.",
+          "required": ["layout_release", "total", "streams", "written_to_model"],
+          "properties": {
+            "layout_release": {
+              "type": "integer",
+              "minimum": 2008,
+              "maximum": 2023,
+              "description": "The release whose record layout the file takes."
+            },
+            "total": { "$ref": "#/$defs/element_record_stage_counts" },
+            "streams": {
+              "type": "object",
+              "description": "The counts of each Partitions/NN stream the scan read, by name.",
+              "additionalProperties": { "$ref": "#/$defs/element_record_stage_counts" }
+            },
+            "written_to_model": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Of total.handed_to_export, the elements the IFC model holds, one for each ElementId, counted from the model."
+            },
+            "id_already_held": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Of total.handed_to_export, the elements the walk dropped because an element of an earlier reader (an ArcWall, a Global/Latest instance) already held the ElementId."
+            },
+            "below_min_confidence": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Of total.handed_to_export, the elements below the minimum confidence, which the default export hides."
+            },
+            "not_written_by_class": {
+              "type": "object",
+              "description": "The rest of total.handed_to_export, by the Revit class they were handed as: elements the exporter writes nothing for. Counted by class and not attributed to a cause beyond it. Absent when there is none. total.handed_to_export is written_to_model + id_already_held + below_min_confidence + the sum of these.",
+              "additionalProperties": { "type": "integer", "minimum": 0 }
+            },
+            "stopped_at": {
+              "type": "string",
+              "description": "Present only when written_to_model is 0: the stage the records stopped at. One of elem_table_not_read, schema_has_no_element_marker, stream_not_read, no_markers, the stage the markers stopped at most often (frame_outside_stream, category_out_of_range, box_not_valid, no_declared_id), no_placed_instances, without_volume, nested_components, the way the selected frames were left out most often (in_non_primary_design_option, not_in_export_phase, nested_in_door_or_window, category_not_exported), or, of the elements handed to the export, the cause that set aside most (id_already_held, below_min_confidence, class_not_exported)."
+            }
+          }
         },
         "element_provenance": {
           "type": "object",
@@ -538,7 +618,7 @@
         "properties": {
           "reason": {
             "type": "string",
-            "description": "Machine-readable reason, including unsupported_geometry_* buckets for incomplete element geometry and element_record_without_element_id for element records with no attributable ElementId (RE-30), element_record_without_volume for placed instances with no 3D body, left out as Revit's export leaves them out (#309), and element_record_in_non_primary_design_option for placed instances in a design option other than their set's primary one, also left out as Revit's export leaves them out (RE-40), element_record_not_in_export_phase for placed instances that do not exist in the export phase, the project's last or the one `rvt-ifc --phase` names, also left out as Revit's export leaves them out (RE-184), room_not_in_export_phase for placed rooms whose own phase is not the export phase, left out as Revit's export leaves them out and counted, one item for each phase, by the phase they sit in (`phase`, RE-326), and element_record_empty_curtain_panel for curtain panels of the Empty System Panel family, left out as Revit's export leaves them out (#309), and area_without_proven_body for the Areas of a Revit 2015 to 2023 file that are not written because their region and body are not proven, counted by the reason their body has none in classes (RE-324)."
+            "description": "Machine-readable reason, including unsupported_geometry_* buckets for incomplete element geometry and element_record_without_element_id for element records with no attributable ElementId (RE-30), element_record_without_volume for placed instances with no 3D body, left out as Revit's export leaves them out (#309), and element_record_in_non_primary_design_option for placed instances in a design option other than their set's primary one, also left out as Revit's export leaves them out (RE-40), element_record_not_in_export_phase for placed instances that do not exist in the export phase, the project's last or the one `rvt-ifc --phase` names, also left out as Revit's export leaves them out (RE-184), room_not_in_export_phase for placed rooms whose own phase is not the export phase, left out as Revit's export leaves them out and counted, one item for each phase, by the phase they sit in (`phase`, RE-326), and element_record_empty_curtain_panel for curtain panels of the Empty System Panel family, left out as Revit's export leaves them out (#309), and area_without_proven_body for the Areas of a Revit 2015 to 2023 file that are not written because their region and body are not proven, counted by the reason their body has none in classes (RE-324), and element_record_frame_stopped for the frames of a Revit 2008 to 2023 file's markers that did not become an element, counted by the stage they stopped at in classes: frame_outside_stream, category_out_of_range, box_not_valid, no_declared_id, and without_volume for placed instances with no 3D body, which Revit's export leaves out. They are frames of every category, not lost elements (#1389, decoded.element_record_stages)."
           },
           "count": {
             "type": "integer",
@@ -828,7 +908,7 @@
               },
               "class": {
                 "type": "string",
-                "description": "The class the aggregate counts it under: a Revit class for the element-record reasons, an IFC entity such as IFCDOOR for the geometry gaps and the exported counts."
+                "description": "The class the aggregate counts it under: a Revit class for the element-record reasons, an IFC entity such as IFCDOOR for the geometry gaps and the exported counts, and the stage the frame stopped at for element_record_frame_stopped (frame_outside_stream, category_out_of_range, box_not_valid, no_declared_id or without_volume)."
               },
               "stream": {
                 "type": "string",

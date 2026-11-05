@@ -1578,6 +1578,13 @@ pub(crate) fn walk_shared(
             for decoded in mvp.into_elements() {
                 if let Some(id) = decoded.id {
                     if !seen_ids.insert(id) {
+                        // #1389: the diagnostics count the element records
+                        // an element of an earlier reader set aside.
+                        if decoded.provenance.record_kind.as_deref()
+                            == Some("partition_element_record")
+                        {
+                            rf.note_id_already_held(id);
+                        }
                         continue;
                     }
                 }
