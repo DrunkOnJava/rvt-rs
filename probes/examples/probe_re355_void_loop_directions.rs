@@ -318,6 +318,10 @@ struct Reading {
     stored: Option<Way>,
     pred_ids: Option<u64>,
     pred_stored: Option<u64>,
+    /// Whether the lowest line is stored along the counter-clockwise walk, and
+    /// the tag that says (RE-355): that line, or the one after it on the walk.
+    first_along: Option<bool>,
+    pred_first: Option<u64>,
     /// Round the loop counter-clockwise from its lowest line: each line's rank
     /// by ElementId and whether it is stored along that way (`f`) or against it
     /// (`b`).
@@ -378,6 +382,10 @@ fn read_loop(
                 .join(" ")
         })
         .unwrap_or_default();
+    let first_along = ring(&counter_clockwise, geom).and_then(|starts| {
+        let line = geom.get(&lowest)?;
+        Some(near(line.0, *starts.get(at)?))
+    });
     let stored = stored_way(&ids, geom);
     Ok(Reading {
         lines: n,
@@ -387,6 +395,8 @@ fn read_loop(
         stored,
         pred_ids: ids_way.map(|way| if way == Way::Ccw { lowest } else { after }),
         pred_stored: stored.map(|way| if way == Way::Ccw { after } else { lowest }),
+        first_along,
+        pred_first: first_along.map(|along| if along { after } else { lowest }),
         pattern,
     })
 }
@@ -405,6 +415,9 @@ struct Counts {
     stored_right: usize,
     both_read: usize,
     both_agree: usize,
+    first_against: usize,
+    first_along: usize,
+    first_right: usize,
 }
 
 fn probe(path: &str) -> Result<()> {
@@ -514,6 +527,12 @@ fn probe(path: &str) -> Result<()> {
             counts.stored_read += 1;
             counts.stored_right += usize::from(reading.pred_stored == Some(opening.tag));
         }
+        match reading.first_along {
+            Some(true) => counts.first_along += 1,
+            Some(false) => counts.first_against += 1,
+            None => {}
+        }
+        counts.first_right += usize::from(reading.pred_first == Some(opening.tag));
         if reading.pred_ids.is_some() && reading.pred_stored.is_some() {
             counts.both_read += 1;
             counts.both_agree += usize::from(reading.pred_ids == reading.pred_stored);
@@ -549,6 +568,14 @@ fn probe(path: &str) -> Result<()> {
         counts.stored_right,
         counts.both_read,
         counts.both_agree,
+    );
+    let read = counts.voids - counts.irregular;
+    println!(
+        "void rule: loops read {read}, first line against the walk {}, along it {}, no direction {}, tag right {}",
+        counts.first_against,
+        counts.first_along,
+        read - counts.first_against - counts.first_along,
+        counts.first_right,
     );
     Ok(())
 }

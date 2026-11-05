@@ -451,7 +451,7 @@ pub fn plan_profiles_from_sketch_line_records(
                 .zip(&boxes)
                 .map(|(id, b)| (*id, ((b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0), true))
                 .collect();
-            tag_voids(&mut profile, &lines);
+            tag_voids(&mut profile, &lines, &StoredEnds::new());
             profile.segment_ids = ids;
             out.insert(owner, profile);
         }
@@ -463,20 +463,35 @@ pub fn plan_profiles_from_sketch_line_records(
 /// it (RE-151), feet.
 pub const ON_LOOP_EPS_FEET: f64 = 1e-4;
 
+/// The start and end in plan, feet, that a sketch line is stored with, by the
+/// line's ElementId: the direction it runs in (RE-355).
+pub type StoredEnds = BTreeMap<u32, ((f64, f64), (f64, f64))>;
+
+/// How far a line's stored end may lie from the vertex of its loop it is read
+/// against, feet (RE-355).
+pub const STORED_END_EPS_FEET: f64 = 5e-3;
+
 /// Tag each void of `profile` with the ElementId of the sketch line its loop
-/// starts at (RE-151, RE-339), `lines` each sketch line's ElementId, a point
-/// of it on the edge it makes (a straight line's box centre, its midpoint, or
-/// the midpoint of the first chord a curve is drawn with) and whether it is
-/// straight. A line is on a loop where that point lies on one of the loop's
-/// edges. A void with no line on it is left untagged.
-pub fn tag_voids(profile: &mut PlanProfile, lines: &[(u32, (f64, f64), bool)]) {
+/// starts at (RE-151, RE-339, RE-355), `lines` each sketch line's ElementId, a
+/// point of it on the edge it makes (a straight line's box centre, its
+/// midpoint, or the midpoint of the first chord a curve is drawn with) and
+/// whether it is straight, and `stored` the ends of the lines whose stored
+/// direction is known. A line is on a loop where that point lies on one of the
+/// loop's edges. The tag is `first_line_tag`'s where it reads the direction
+/// of the loop's first line, and `void_tag`'s elsewhere. A void with no line
+/// on it is left untagged.
+pub fn tag_voids(
+    profile: &mut PlanProfile,
+    lines: &[(u32, (f64, f64), bool)],
+    stored: &StoredEnds,
+) {
     let voids = std::iter::once(&profile.inner_xy)
         .chain(profile.pieces.iter().map(|piece| &piece.inner_xy))
         .enumerate()
         .flat_map(|(piece, inner)| inner.iter().map(move |ring| (piece, ring)));
     let mut tagged = Vec::new();
     for (piece, ring) in voids {
-        if let Some(tag) = void_tag(ring, lines) {
+        if let Some(tag) = first_line_tag(ring, lines, stored).or_else(|| void_tag(ring, lines)) {
             let mut outline_xy = ring.clone();
             outline_xy.reverse();
             tagged.push(VoidOpening {
@@ -487,6 +502,85 @@ pub fn tag_voids(profile: &mut PlanProfile, lines: &[(u32, (f64, f64), bool)]) {
         }
     }
     profile.void_openings = tagged;
+}
+
+/// The lowest ElementId on each void's loop of `profile`: the line whose stored
+/// direction `first_line_tag` reads (RE-355). `lines` are as for
+/// [`tag_voids`].
+pub fn void_first_lines(profile: &PlanProfile, lines: &[(u32, (f64, f64), bool)]) -> Vec<u32> {
+    std::iter::once(&profile.inner_xy)
+        .chain(profile.pieces.iter().map(|piece| &piece.inner_xy))
+        .flat_map(|inner| inner.iter())
+        .filter_map(|ring| {
+            lines
+                .iter()
+                .filter(|(_, point, _)| edge_of(ring, *point).is_some())
+                .map(|(id, _, _)| *id)
+                .min()
+        })
+        .collect()
+}
+
+/// The ElementId Revit's export tags a void with where the direction its first
+/// line is stored in is read (RE-355): take the line with the lowest ElementId,
+/// the first drawn, and walk the loop counter-clockwise. A first line stored
+/// running against that walk is the tag; one stored running along it makes the
+/// tag the line after it on the walk. That is Revit's tag on 133 of 133 voids of
+/// the BIM4LCA office as built and at building permit and Core Interior.
+///
+/// `None`, so that [`void_tag`] decides, unless every edge of the loop has
+/// exactly one line and all are straight (three or more of them), `stored` has
+/// the first line's ends, and they lie at the two vertices of that line's edge,
+/// in one order or the other, to within [`STORED_END_EPS_FEET`], the other order
+/// further than that.
+fn first_line_tag(
+    ring: &[(f64, f64)],
+    lines: &[(u32, (f64, f64), bool)],
+    stored: &StoredEnds,
+) -> Option<u32> {
+    let mut on: Vec<(u32, usize, bool)> = lines
+        .iter()
+        .filter_map(|(id, point, straight)| {
+            edge_of(ring, *point).map(|edge| (*id, edge, *straight))
+        })
+        .collect();
+    on.sort_unstable();
+    let edges = ring.len();
+    if edges < 3 || on.len() != edges || on.iter().any(|&(_, _, straight)| !straight) {
+        return None;
+    }
+    let mut taken = vec![false; edges];
+    for &(_, edge, _) in &on {
+        if std::mem::replace(taken.get_mut(edge)?, true) {
+            return None;
+        }
+    }
+    let &(first, edge, _) = on.first()?;
+    let (start, end) = *stored.get(&first)?;
+    let from = *ring.get(edge)?;
+    let to = *ring.get((edge + 1) % edges)?;
+    let gap = |p: (f64, f64), q: (f64, f64)| (p.0 - q.0).hypot(p.1 - q.1);
+    let along_ring = gap(start, from).max(gap(end, to));
+    let against_ring = gap(start, to).max(gap(end, from));
+    let ring_order = if along_ring <= STORED_END_EPS_FEET && against_ring > STORED_END_EPS_FEET {
+        true
+    } else if against_ring <= STORED_END_EPS_FEET && along_ring > STORED_END_EPS_FEET {
+        false
+    } else {
+        return None;
+    };
+    let counter_clockwise = signed_area(ring) > 0.0;
+    if ring_order != counter_clockwise {
+        return Some(first);
+    }
+    let next = if counter_clockwise {
+        (edge + 1) % edges
+    } else {
+        (edge + edges - 1) % edges
+    };
+    on.iter()
+        .find(|&&(_, on_edge, _)| on_edge == next)
+        .map(|&(id, _, _)| id)
 }
 
 /// The ElementId Revit's export tags a void with (RE-151, RE-339): the lowest
@@ -1305,5 +1399,93 @@ mod void_tag_tests {
         assert_eq!(void_tag(&ring, &lines_on(&ring, &[3, 2, 1, 0])), Some(13));
         let ring = clockwise_square();
         assert_eq!(void_tag(&ring, &lines_on(&ring, &[0, 1, 2, 3])), Some(13));
+    }
+}
+
+#[cfg(test)]
+mod first_line_tag_tests {
+    use super::{StoredEnds, first_line_tag};
+
+    /// Lines 10 to 13 on the edges 3, 2, 1, 0 of the square below, in the
+    /// order they are listed, each at its edge's midpoint.
+    fn lines() -> Vec<(u32, (f64, f64), bool)> {
+        vec![
+            (10, (0.0, 2.0), true),
+            (11, (2.0, 4.0), true),
+            (12, (4.0, 2.0), true),
+            (13, (2.0, 0.0), true),
+        ]
+    }
+
+    fn counter_clockwise_square() -> Vec<(f64, f64)> {
+        vec![(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)]
+    }
+
+    fn stored(start: (f64, f64), end: (f64, f64)) -> StoredEnds {
+        [(10, (start, end))].into_iter().collect()
+    }
+
+    // Line 10 is on edge 3, from (0, 4) to (0, 0) round the square.
+    #[test]
+    fn a_first_line_stored_against_the_walk_is_the_tag() {
+        let ring = counter_clockwise_square();
+        let ends = stored((0.0, 0.0), (0.0, 4.0));
+        assert_eq!(first_line_tag(&ring, &lines(), &ends), Some(10));
+    }
+
+    #[test]
+    fn a_first_line_stored_along_the_walk_gives_the_next_line() {
+        let ring = counter_clockwise_square();
+        let ends = stored((0.0, 4.0), (0.0, 0.0));
+        assert_eq!(first_line_tag(&ring, &lines(), &ends), Some(13));
+    }
+
+    // Round a clockwise ring, the counter-clockwise walk is the other way.
+    #[test]
+    fn a_clockwise_ring_is_walked_counter_clockwise() {
+        let ring = vec![(0.0, 0.0), (0.0, 4.0), (4.0, 4.0), (4.0, 0.0)];
+        let along = stored((0.0, 4.0), (0.0, 0.0));
+        assert_eq!(first_line_tag(&ring, &lines(), &along), Some(13));
+        let against = stored((0.0, 0.0), (0.0, 4.0));
+        assert_eq!(first_line_tag(&ring, &lines(), &against), Some(10));
+    }
+
+    #[test]
+    fn a_first_line_with_no_stored_ends_is_not_read() {
+        let ring = counter_clockwise_square();
+        assert_eq!(first_line_tag(&ring, &lines(), &StoredEnds::new()), None);
+    }
+
+    #[test]
+    fn stored_ends_off_the_loop_are_not_read() {
+        let ring = counter_clockwise_square();
+        let ends = stored((1.0, 1.0), (2.0, 2.0));
+        assert_eq!(first_line_tag(&ring, &lines(), &ends), None);
+    }
+
+    #[test]
+    fn a_curve_in_the_loop_is_not_read() {
+        let ring = counter_clockwise_square();
+        let mut curved = lines();
+        curved[2].2 = false;
+        let ends = stored((0.0, 0.0), (0.0, 4.0));
+        assert_eq!(first_line_tag(&ring, &curved, &ends), None);
+    }
+
+    #[test]
+    fn two_lines_on_one_edge_are_not_read() {
+        let ring = counter_clockwise_square();
+        let mut shared = lines();
+        shared[1].1 = (0.0, 3.0);
+        let ends = stored((0.0, 0.0), (0.0, 4.0));
+        assert_eq!(first_line_tag(&ring, &shared, &ends), None);
+    }
+
+    #[test]
+    fn an_edge_with_no_line_is_not_read() {
+        let ring = counter_clockwise_square();
+        let few = lines()[..3].to_vec();
+        let ends = stored((0.0, 0.0), (0.0, 4.0));
+        assert_eq!(first_line_tag(&ring, &few, &ends), None);
     }
 }
