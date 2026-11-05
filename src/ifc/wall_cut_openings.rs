@@ -21,8 +21,7 @@
 //!   and across the wall the wall's thickness and half a foot beyond each
 //!   face, written only where nothing trims it: Revit cuts the opening back
 //!   where the curtain wall reaches the wall's end or another wall lies
-//!   beside its box, which the body rvt-rs draws does not say to the
-//!   foot.
+//!   beside its box, by amounts nothing read gives.
 //!
 //! Every step that is not written is counted with its reason.
 
@@ -55,6 +54,7 @@ const DOOR_SLENDERNESS: f64 = 2.0;
 /// axis, for the wall to be the one it reaches, feet: Revit's export writes
 /// the opening where the box only touches the wall's face or end, and on the
 /// office where it lies up to 0.164 ft off.
+const DOOR_REACH_FEET: f64 = 0.25;
 
 /// Why a step of a wall's record writes no opening, as the diagnostics
 /// count it (`exported.wall_cut_openings_left_out`).
