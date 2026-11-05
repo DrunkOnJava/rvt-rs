@@ -23,8 +23,10 @@
 # field names and normalised error text, in a restricted alphabet; its JSON
 # example lines, which carry ElementIds, are dropped), the `native readers:`
 # count lines of the RE-283 to RE-285 probes and scorers (the same alphabet;
-# their `native readers example:` lines name ElementIds and are dropped) and
-# of its quantity census (the totals and each quantity's counts, the walls it
+# their `native readers example:` lines name ElementIds and are dropped), the
+# `saved graphics pre2023:` count lines of probe_re342_saved_graphics_pre2023
+# (RE-342: counts, schema class and field names and normalised error text, in
+# the same alphabet; it prints no ElementId) and of its quantity census (the totals and each quantity's counts, the walls it
 # counts apart for their two lengths (RE-252), for each value that
 # differs only the quantity and rvt-rs's value over Revit's, and for the
 # quantities rvt-rs writes that Revit's export does not only each quantity's
@@ -80,6 +82,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^type (refs|copies): [A-Za-z ,;:()-]+[0-9][0-9A-Za-z ,;:()-]*$' "$f" || true
       grep -E '^native framing: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      grep -E '^saved graphics pre2023: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
     done
     for f in "$dir"qtos_vs_ifc*.txt; do
       [ -f "$f" ] || continue
