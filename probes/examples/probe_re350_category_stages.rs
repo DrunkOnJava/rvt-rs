@@ -54,7 +54,9 @@
 //! view=<0|1> option=<0|1> demolished=<0|1> created=<phase id> <count> <ids>`,
 //! the group `unframed` or `frame<category>`, the flags those of the Element
 //! base (`1` where an id is set), then `native records without a record <n>
-//! absent from the index <n>`.
+//! absent from the index <n>`. A `FamilyInstance` of the `unframed` group also
+//! names its family symbol (`symbol=<id>`) and the category of the symbol's
+//! own frame (`symbol_category=<category or none>`).
 //!
 //! ```bash
 //! cargo run --profile ci -p rvt-probes --example probe_re350_category_stages -- model.rvt [--records]
@@ -388,6 +390,12 @@ fn base_key(record: &Record) -> String {
 /// Prints the native class of the ids with a record and no frame and of the
 /// frames of `WATCHED`, grouped with the flags of their Element base.
 fn print_native_classes(rf: &mut RevitFile, unframed: &[u32], any: &Ids) {
+    let mut category_of: BTreeMap<u32, i64> = BTreeMap::new();
+    for (category, ids) in any {
+        for id in ids {
+            category_of.entry(*id).or_insert(*category);
+        }
+    }
     let mut group_of: BTreeMap<u64, String> = BTreeMap::new();
     for category in WATCHED {
         for id in any.get(&category).into_iter().flatten() {
@@ -409,10 +417,18 @@ fn print_native_classes(rf: &mut RevitFile, unframed: &[u32], any: &Ids) {
     let summary = extract_graphs(rf, &options, |record: Record| {
         let id = record.identity.element_id;
         if let (Some(group), Ok(id)) = (group_of.get(&id), u32::try_from(id)) {
-            groups
-                .entry((group.clone(), base_key(&record)))
-                .or_default()
-                .insert(id);
+            let mut key = base_key(&record);
+            if group == "unframed" && record.class_name.as_deref() == Some("FamilyInstance") {
+                let symbol = record.base.as_ref().map_or(-1, |base| base.family_id);
+                let category = u32::try_from(symbol)
+                    .ok()
+                    .and_then(|symbol| category_of.get(&symbol));
+                key.push_str(&format!(
+                    " symbol={symbol} symbol_category={}",
+                    category.map_or_else(|| "none".to_string(), i64::to_string)
+                ));
+            }
+            groups.entry((group.clone(), key)).or_default().insert(id);
         }
         Ok(())
     });
