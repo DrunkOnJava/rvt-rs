@@ -156,7 +156,14 @@ pub fn decode_graph_with_catalog_usage(
     limits: &GraphLimits,
     catalog: Option<&crate::native_extensible_storage::Catalog>,
 ) -> Result<(ObjectGraph, GraphUsage)> {
-    decode_graph_in(body, registry, limits, catalog, None)
+    decode_graph_in(
+        body,
+        registry,
+        limits,
+        catalog,
+        None,
+        &mut PlanCache::default(),
+    )
 }
 /// [`decode_graph_with_catalog_usage`] keeping only the fields of every object
 /// whose key is in `keep` (a bare field name, or `Declaring::name` where the
@@ -176,7 +183,46 @@ pub fn decode_graph_projected(
     catalog: Option<&crate::native_extensible_storage::Catalog>,
     keep: &[&str],
 ) -> Result<(ObjectGraph, GraphUsage)> {
-    decode_graph_in(body, registry, limits, catalog, Some(keep))
+    decode_graph_in(
+        body,
+        registry,
+        limits,
+        catalog,
+        Some(keep),
+        &mut PlanCache::default(),
+    )
+}
+/// The class plans of the decodes that share it, kept so that each class's is
+/// made once for a pass over a file's records, not once for each record
+/// (#1335: building them was 3.1% of the export time of the 33 samples of
+/// Revit 2015 to 2023). A plan depends on the schema, the class and the fields
+/// a projected decode keeps, and nothing else, so a decode that finds a plan
+/// made by an earlier one reads exactly as it would have with its own. A cache
+/// is for one schema: [`decode_graph_cached`] empties it when it is given
+/// another.
+#[derive(Debug, Default)]
+pub struct PlanCache {
+    /// The checksum of the schema the plans were made for.
+    registry: String,
+    /// By class tag and the address and length of the fields kept; the plan
+    /// says which fields, so that the same address holding other fields is
+    /// not taken for the same list.
+    plans: HashMap<PlanKey, Rc<ClassPlan>>,
+}
+/// A class's tag and the address and length of the fields a decode keeps.
+type PlanKey = (u16, usize, usize);
+/// [`decode_graph_with_catalog_usage`], or [`decode_graph_projected`] where
+/// `keep` is given, taking the class plans from `plans` and leaving there those
+/// it makes. The graph is the one the decode without a cache gives.
+pub fn decode_graph_cached(
+    body: &[u8],
+    registry: &Registry,
+    limits: &GraphLimits,
+    catalog: Option<&crate::native_extensible_storage::Catalog>,
+    keep: Option<&[&str]>,
+    plans: &mut PlanCache,
+) -> Result<(ObjectGraph, GraphUsage)> {
+    decode_graph_in(body, registry, limits, catalog, keep, plans)
 }
 fn decode_graph_in(
     body: &[u8],
@@ -184,6 +230,7 @@ fn decode_graph_in(
     limits: &GraphLimits,
     catalog: Option<&crate::native_extensible_storage::Catalog>,
     keep: Option<&[&str]>,
+    plans: &mut PlanCache,
 ) -> Result<(ObjectGraph, GraphUsage)> {
     ensure!(
         limits.max_values > 0 && limits.max_objects > 0 && limits.max_depth > 0,
@@ -191,7 +238,12 @@ fn decode_graph_in(
     );
     let tag =
         le_bytes::u16_at(body, 0).ok_or_else(|| anyhow::anyhow!("truncated root object tag"))?;
-    let mut cursor = Cursor::new(body, registry, catalog, 2, *limits, Spans::None).with_keep(keep);
+    if plans.registry != registry.source_sha256 {
+        plans.plans.clear();
+        plans.registry.clone_from(&registry.source_sha256);
+    }
+    let mut cursor =
+        Cursor::new(body, registry, catalog, 2, *limits, Spans::None, plans).with_keep(keep);
     let mut objects = Vec::new();
     let mut edges = Vec::new();
     let mut shared = BTreeMap::<u32, (usize, u16)>::new();
@@ -338,7 +390,8 @@ pub fn decode_object_fields_spanning(
         .ok_or_else(|| anyhow::anyhow!("native object class absent"))?
         .name
         .clone();
-    let mut cursor = Cursor::new(body, registry, None, start, *limits, spans);
+    let mut plans = PlanCache::default();
+    let mut cursor = Cursor::new(body, registry, None, start, *limits, spans, &mut plans);
     let fields = cursor.class::<true>(class_tag, 0)?;
     Ok(ObjectFields {
         class_tag,
@@ -360,8 +413,10 @@ struct PendingPointer {
 /// where the chain declares that name more than once. It depends on the
 /// schema alone, so a decode makes it once for each class it meets (#1237:
 /// most of an object's allocations were this, made again for every one).
-struct ClassPlan<'a> {
-    lineage: Vec<&'a Class>,
+#[derive(Debug)]
+struct ClassPlan {
+    /// The tags of the chain's classes, as the schema registry finds them.
+    lineage: Vec<u16>,
     keys: Vec<Vec<String>>,
     /// Whether each field is one a projected decode keeps
     /// ([`decode_graph_projected`]); empty for a decode that is not one.
@@ -372,6 +427,21 @@ struct ClassPlan<'a> {
     /// built one meets there. Found only for a projected decode; `None`
     /// otherwise.
     duplicate: Option<(usize, usize)>,
+    /// The fields the plan was made for, where it was made for a projected
+    /// decode.
+    keep: Option<Vec<String>>,
+}
+impl ClassPlan {
+    /// Whether the plan was made for the fields `keep` names.
+    fn is_for(&self, keep: Option<&[&str]>) -> bool {
+        match (&self.keep, keep) {
+            (None, None) => true,
+            (Some(own), Some(wanted)) => {
+                own.len() == wanted.len() && own.iter().zip(wanted).all(|(a, b)| a.as_str() == *b)
+            }
+            _ => false,
+        }
+    }
 }
 struct Cursor<'a> {
     body: &'a [u8],
@@ -382,7 +452,7 @@ struct Cursor<'a> {
     pending: Vec<PendingPointer>,
     spans: Vec<FieldSpan>,
     keep_spans: Spans,
-    plans: HashMap<u16, Rc<ClassPlan<'a>>>,
+    plans: &'a mut PlanCache,
     limits: GraphLimits,
     /// The fields a projected decode keeps ([`decode_graph_projected`]).
     keep: Option<&'a [&'a str]>,
@@ -395,6 +465,7 @@ impl<'a> Cursor<'a> {
         pos: usize,
         limits: GraphLimits,
         keep_spans: Spans,
+        plans: &'a mut PlanCache,
     ) -> Self {
         Self {
             body,
@@ -405,7 +476,7 @@ impl<'a> Cursor<'a> {
             pending: Vec::new(),
             spans: Vec::new(),
             keep_spans,
-            plans: HashMap::new(),
+            plans,
             limits,
             keep: None,
         }
@@ -590,9 +661,13 @@ impl<'a> Cursor<'a> {
             "native class recursion budget exceeded"
         );
         let plan = self.plan(tag, depth)?;
+        let registry = self.registry;
         let project = BUILD && top && self.keep.is_some();
         let mut values = Map::new();
-        for (distance, c) in plan.lineage.iter().enumerate().rev() {
+        for (distance, class_tag) in plan.lineage.iter().enumerate().rev() {
+            let c = registry
+                .class(*class_tag)
+                .ok_or_else(|| anyhow::anyhow!("unknown inline native class {class_tag}"))?;
             for (field_index, f) in c.fields.iter().enumerate() {
                 // Measured VWall transient flags; other flags remain unsupported.
                 if f.uninterpreted_flags & 2 != 0 {
@@ -692,16 +767,25 @@ impl<'a> Cursor<'a> {
             Spans::Class(only) => only == tag,
         }
     }
-    /// The class `tag`'s [`ClassPlan`], made on first use.
-    fn plan(&mut self, tag: u16, depth: usize) -> Result<Rc<ClassPlan<'a>>> {
-        if let Some(plan) = self.plans.get(&tag) {
-            // The chain was made under a budget that held at its own depth:
-            // the check that matters is the one before its last class.
-            ensure!(
-                depth + plan.lineage.len() - 1 < self.limits.max_depth,
-                "native class recursion budget exceeded"
-            );
-            return Ok(Rc::clone(plan));
+    /// The class `tag`'s [`ClassPlan`], made on first use by any decode that
+    /// shares this cursor's [`PlanCache`].
+    fn plan(&mut self, tag: u16, depth: usize) -> Result<Rc<ClassPlan>> {
+        let key = (
+            tag,
+            self.keep.map_or(0, |keep| keep.as_ptr() as usize),
+            self.keep.map_or(0, |keep| keep.len()),
+        );
+        if let Some(plan) = self.plans.plans.get(&key) {
+            if plan.is_for(self.keep) {
+                // The chain was made under a budget that held at its own
+                // depth: the check that matters is the one before its last
+                // class.
+                ensure!(
+                    depth + plan.lineage.len() - 1 < self.limits.max_depth,
+                    "native class recursion budget exceeded"
+                );
+                return Ok(Rc::clone(plan));
+            }
         }
         // The lineage borrows the registry's classes: cloning them, every
         // field name with them, for each object decoded was most of a
@@ -789,12 +873,15 @@ impl<'a> Cursor<'a> {
             None
         };
         let plan = Rc::new(ClassPlan {
-            lineage,
+            lineage: lineage.iter().map(|c| c.tag).collect(),
             keys,
             kept,
             duplicate,
+            keep: self
+                .keep
+                .map(|keep| keep.iter().map(|field| (*field).to_string()).collect()),
         });
-        self.plans.insert(tag, Rc::clone(&plan));
+        self.plans.plans.insert(key, Rc::clone(&plan));
         Ok(plan)
     }
     fn field<const BUILD: bool>(&mut self, f: &Field, depth: usize) -> Result<Value> {
@@ -934,7 +1021,16 @@ fn identifier(value: &Value) -> Result<i64> {
 /// remain unconsumed. Callers must separately establish current record ownership.
 pub fn decode(body: &[u8], registry: &Registry) -> Result<Parameters> {
     let base = crate::native_element::decode_base(body, registry)?;
-    let mut cursor = Cursor::new(body, registry, None, 2, GraphLimits::default(), Spans::None);
+    let mut plans = PlanCache::default();
+    let mut cursor = Cursor::new(
+        body,
+        registry,
+        None,
+        2,
+        GraphLimits::default(),
+        Spans::None,
+        &mut plans,
+    );
     let fields = cursor.class::<true>(base.class_tag, 0)?;
     let derived_fields_end = cursor.pos;
     let mut parameters = Vec::new();
