@@ -265,6 +265,13 @@ pub struct ElementCounts {
     pub by_ifc_type: BTreeMap<String, usize>,
     /// By the Revit class the record names, such as `Wall`.
     pub by_revit_class: BTreeMap<String, usize>,
+    /// By IFC entity: the elements the model holds that the export does not
+    /// write as elements, each a further piece of an element of separate
+    /// loops, written as an item of the body of the element that owns it.
+    /// They are not in `total`, `by_ifc_type` or the lists, and the
+    /// diagnostics' `exported` counts include them.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub folded_into_bodies: BTreeMap<String, usize>,
 }
 
 /// What `open_model` and `get_summary` return.

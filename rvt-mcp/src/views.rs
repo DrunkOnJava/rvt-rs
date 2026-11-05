@@ -134,7 +134,6 @@ fn element_row(computed: &Computed, index: usize) -> Option<ElementRow> {
         name,
         type_guid,
         predefined_type,
-        storey_index,
         ..
     } = computed.model.entities.get(index)?
     else {
@@ -143,7 +142,7 @@ fn element_row(computed: &Computed, index: usize) -> Option<ElementRow> {
     Some(ElementRow {
         id: type_guid.clone(),
         name: name.clone(),
-        level: storey_name(&computed.model, *storey_index),
+        level: storey_name(&computed.model, computed.storey(index)),
         predefined_type: predefined_type.clone(),
         provenance: provenance(computed, index, false)?,
     })
@@ -189,12 +188,11 @@ fn diagnostics_summary(computed: &Computed) -> DiagnosticsSummary {
 pub fn levels(computed: &Computed) -> Vec<LevelOut> {
     let model = &computed.model;
     let mut counts = vec![0usize; model.building_storeys.len()];
-    for entity in &model.entities {
-        if let IfcEntity::BuildingElement {
-            storey_index: Some(index),
-            ..
-        } = entity
-            && let Some(count) = counts.get_mut(*index)
+    for (index, entity) in model.entities.iter().enumerate() {
+        if matches!(entity, IfcEntity::BuildingElement { .. })
+            && computed.is_written(index)
+            && let Some(storey) = computed.storey(index)
+            && let Some(count) = counts.get_mut(storey)
         {
             *count += 1;
         }
@@ -226,7 +224,8 @@ pub fn summary(entry: &Entry, computed: &Computed) -> SummaryOut {
     let mut room_count = 0usize;
     let mut by_ifc_type: BTreeMap<String, usize> = BTreeMap::new();
     let mut by_revit_class: BTreeMap<String, usize> = BTreeMap::new();
-    for entity in &computed.model.entities {
+    let mut folded_into_bodies: BTreeMap<String, usize> = BTreeMap::new();
+    for (index, entity) in computed.model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
             property_set,
@@ -235,6 +234,10 @@ pub fn summary(entry: &Entry, computed: &Computed) -> SummaryOut {
         else {
             continue;
         };
+        if !computed.is_written(index) {
+            *folded_into_bodies.entry(ifc_type.clone()).or_insert(0) += 1;
+            continue;
+        }
         total += 1;
         *by_ifc_type.entry(ifc_type.clone()).or_insert(0) += 1;
         if let Some(class) = text_property(property_set.as_ref(), "RevitClass") {
@@ -261,6 +264,7 @@ pub fn summary(entry: &Entry, computed: &Computed) -> SummaryOut {
             total,
             by_ifc_type,
             by_revit_class,
+            folded_into_bodies,
         },
         levels: levels(computed),
         room_count,
@@ -306,13 +310,15 @@ pub fn list_elements(
     for (index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
-            storey_index,
             property_set,
             ..
         } = entity
         else {
             continue;
         };
+        if !computed.is_written(index) {
+            continue;
+        }
         if let Some(wanted) = filter.category
             && !category_matches(ifc_type, wanted)
         {
@@ -325,7 +331,7 @@ pub fn list_elements(
             }
         }
         if let Some(wanted) = filter.level {
-            let level = storey_name(model, *storey_index);
+            let level = storey_name(model, computed.storey(index));
             if !level.is_some_and(|level| level.eq_ignore_ascii_case(wanted.trim())) {
                 continue;
             }
@@ -458,7 +464,9 @@ fn find_entities(computed: &Computed, id: &str) -> Vec<usize> {
         .iter()
         .enumerate()
         .filter_map(|(index, entity)| match entity {
-            IfcEntity::BuildingElement { type_guid, .. } if type_guid.as_deref() == Some(id) => {
+            IfcEntity::BuildingElement { type_guid, .. }
+                if type_guid.as_deref() == Some(id) && computed.is_written(index) =>
+            {
                 Some(index)
             }
             _ => None,
@@ -471,7 +479,9 @@ fn find_entities(computed: &Computed, id: &str) -> Vec<usize> {
         .global_ids
         .iter()
         .enumerate()
-        .filter_map(|(index, global_id)| (global_id.as_deref() == Some(id)).then_some(index))
+        .filter_map(|(index, global_id)| {
+            (global_id.as_deref() == Some(id) && computed.is_written(index)).then_some(index)
+        })
         .collect()
 }
 
@@ -612,7 +622,6 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
         name,
         type_guid,
         predefined_type,
-        storey_index,
         property_set,
         location_feet,
         rotation_radians,
@@ -627,7 +636,7 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
     };
     let provenance = provenance(computed, index, true)
         .ok_or_else(|| format!("{id:?} is not a building element"))?;
-    let level = storey_index.and_then(|storey| {
+    let level = computed.storey(index).and_then(|storey| {
         model.building_storeys.get(storey).map(|found| LevelRefOut {
             index: storey,
             name: found.name.clone(),

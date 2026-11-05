@@ -159,6 +159,18 @@ that says to call `open_model` again. The tool descriptions say the same.
 | `export_ifc` | Writes IFC4 to `out_path` and returns a summary and a `resource_link` to the file. `options` takes `rvt-ifc`'s switches: `mode`, `saved_meshes` (`doors_and_windows`, `all`, `off`), `revit_property_sets`, `revit_set_placement`, `no_base_quantities`, `allow_partial`. |
 | `export_gltf` | Writes binary glTF to `out_path` and returns the same kind of summary and link. |
 
+### Elements and levels as the export writes them
+
+The lists, counts and levels are the elements the IFC export writes, in the
+storey it puts them in (`rvt::ifc::step_writer::placements`, which the writer
+writes with). A part of a stair, a railing or a curtain wall has the level of
+its whole, an element in a room the level of the room, and an opening the
+level of its host, as the IFC's containment and aggregation say. A further
+piece of an element of separate loops, which the export writes as an item of
+the owner's body and not as an element, is not a row and not in `total` or
+`by_ifc_type`; the summary counts it by IFC entity in `folded_into_bodies`,
+and the diagnostics' `exported` counts include it.
+
 ### Exports
 
 An export goes to the path the caller names. The path must end in `.ifc` or

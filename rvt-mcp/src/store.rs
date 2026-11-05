@@ -18,7 +18,7 @@ use rvt::control::WalkerControl;
 use rvt::elem_table::RecordFraming;
 use rvt::ifc::element_provenance::ElementProvenanceTable;
 use rvt::ifc::export_decisions::ExportDecisionLog;
-use rvt::ifc::step_writer::element_global_ids;
+use rvt::ifc::step_writer::{Placement, element_global_ids, placements, storey_of};
 use rvt::ifc::{
     ExportDiagnostics, ExportNote, ExportOptions, ExportRun, IfcModel,
     run_export_with_limits_and_control,
@@ -170,9 +170,25 @@ pub struct Computed {
     /// out of `diagnostics` as the provenance table is: `explain_element`
     /// reads it.
     pub export_decisions: Option<ExportDecisionLog>,
+    /// Where the IFC export puts each entity in the spatial structure, by
+    /// index into the model's entities.
+    pub placements: Vec<Option<Placement>>,
 }
 
 impl Computed {
+    /// Whether the export writes the entity at `index` as an element: a piece
+    /// folded into the body of the element that owns it is not.
+    pub fn is_written(&self, index: usize) -> bool {
+        !matches!(self.placements.get(index), Some(Some(Placement::Folded)))
+    }
+
+    /// The storey of the entity at `index` as the export puts it: the one it
+    /// is contained in, that of its space or whole, or that of the host an
+    /// opening cuts.
+    pub fn storey(&self, index: usize) -> Option<usize> {
+        storey_of(&self.placements, index)
+    }
+
     fn new(mut run: ExportRun, mut file: FileProvenance) -> Self {
         let element_provenance = run.diagnostics.decoded.element_provenance.take();
         let export_decisions = run.diagnostics.export_decisions.take();
@@ -180,6 +196,7 @@ impl Computed {
             .as_ref()
             .map(|table| table.omitted_entries);
         let global_ids = element_global_ids(&run.model);
+        let placements = placements(&run.model);
         let notes = note_texts(&run.notes);
         Self {
             model: run.model,
@@ -190,6 +207,7 @@ impl Computed {
             file,
             element_provenance,
             export_decisions,
+            placements,
         }
     }
 }
