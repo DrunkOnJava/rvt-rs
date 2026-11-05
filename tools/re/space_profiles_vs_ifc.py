@@ -60,6 +60,7 @@ RECORD_BOX = "record_box"
 AREA_BOUNDARY = "area_boundary"
 AREA_BOUNDARY_JOINED = "area_boundary_joined"
 AREA_PLAN_TOPOLOGY = "area_plan_topology"
+AREA_PLAN_TOPOLOGY_UNCHECKED = "area_plan_topology_unchecked"
 NO_BODY = "none"
 ROOM_SOLID_SOURCE = "partition_room_solid_faces"
 
@@ -87,7 +88,13 @@ def sources(path):
         named = "RoomNumber" in props or "RoomName" in props
         kind = "room" if named else "family instance" if props else "space"
         # An Area is named as a room is; its marker tells it apart (RE-317).
-        if marker in (AREA_BOUNDARY, AREA_BOUNDARY_JOINED, AREA_PLAN_TOPOLOGY, NO_BODY):
+        if marker in (
+            AREA_BOUNDARY,
+            AREA_BOUNDARY_JOINED,
+            AREA_PLAN_TOPOLOGY,
+            AREA_PLAN_TOPOLOGY_UNCHECKED,
+            NO_BODY,
+        ):
             kind = "area"
         out[space.GlobalId] = (source, kind)
     return out

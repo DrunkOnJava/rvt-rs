@@ -236,6 +236,29 @@ pub const AREA_JOINED_FIELD: &str = "m_area_body_joined";
 /// topology (RE-333) and not the arrangement of its lines.
 pub const AREA_TOPOLOGY_FIELD: &str = "m_area_body_plan_topology";
 
+/// The field of an Area, true where its region is the loop of Revit's plan
+/// topology and its release is one whose Areas nothing outside the file checks
+/// ([`area_release_unchecked`]).
+pub const AREA_TOPOLOGY_UNCHECKED_FIELD: &str = "m_area_body_plan_topology_unchecked";
+
+/// The releases whose Areas, read from the plan topology, are marked
+/// `SpaceOutlineSource` `area_plan_topology_unchecked` instead of
+/// `area_plan_topology` (Griffin, 2026-11-05, "Mark 2025 to 2027 in the file"):
+/// Revit 2025, 2026 and 2027. Nothing outside the file checks them: no Revit
+/// export of one exists, and the only check is that the same project's 2024
+/// save gives the same Areas. 2024 is not among them although Snowdon Towers'
+/// 2024 samples have no Revit export either, because a 2024 Area takes the code
+/// path and shares the release of the office's, whose Areas Revit's IFC4 export
+/// checks, and a release is not split. 2015 to 2023 keep `area_plan_topology`:
+/// they have the IFC2X3 export's check, and the docs say how far it goes.
+pub const AREA_UNCHECKED_RELEASES: std::ops::RangeInclusive<u32> = 2025..=2027;
+
+/// Whether the Areas of Revit `revit_version` that are read from the plan
+/// topology say `area_plan_topology_unchecked`. The one place this is decided.
+pub fn area_release_unchecked(revit_version: u32) -> bool {
+    AREA_UNCHECKED_RELEASES.contains(&revit_version)
+}
+
 /// The field of an Area that holds the arcs of its outline and holes, where it
 /// has any (RE-333): a vector with one entry for the outline and one for each
 /// hole, each a vector with one entry for each edge, from a vertex to the next,
@@ -1819,6 +1842,12 @@ pub fn areas_from_partition_chain_records(
                 }
                 if body.topology {
                     fields.push((AREA_TOPOLOGY_FIELD.into(), InstanceField::Bool(true)));
+                    if area_release_unchecked(revit_version) {
+                        fields.push((
+                            AREA_TOPOLOGY_UNCHECKED_FIELD.into(),
+                            InstanceField::Bool(true),
+                        ));
+                    }
                 }
             }
             DecodedElement {

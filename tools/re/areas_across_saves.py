@@ -14,7 +14,13 @@ Area by Area, paired by GlobalId:
 - storey: the name of the `IfcBuildingStorey` the space is aggregated under
   (rvt-rs writes an `IfcSpace` under its storey with `IfcRelAggregates`, as
   Revit's export does); an Area with no storey is a failure;
-- outline source: `RvtElementRecordGeometry.SpaceOutlineSource`;
+- outline source: `RvtElementRecordGeometry.SpaceOutlineSource`, which must be
+  the one its release gets, not merely an Area value: `area_plan_topology` on
+  the 2024 save and `area_plan_topology_unchecked` on the 2025, 2026 and 2027
+  saves (Griffin, 2026-11-05, "Mark 2025 to 2027 in the file"; the rule is
+  `partition_area_records::area_release_unchecked`). A 2025 Area that reads
+  `area_plan_topology`, and a 2024 Area that reads the unchecked value, are
+  failures;
 - body area: the plan area of its top surface, within 1e-6 relative;
 - top surface: the area of the symmetric difference of the two top surfaces,
   in Revit's internal frame, within 1e-6 relative of the body area, so a
@@ -40,7 +46,8 @@ that any Area is Revit's.
 
 An Area is an `IfcSpace` whose `RvtElementRecordGeometry.SpaceOutlineSource` is
 one of the Area values (`area_boundary`, `area_boundary_joined`,
-`area_plan_topology`, or `none`, the Area that has no body).
+`area_plan_topology`, `area_plan_topology_unchecked`, or `none`, the Area that
+has no body).
 
 Usage:
 
@@ -55,7 +62,18 @@ import os
 import sys
 
 SET = "RvtElementRecordGeometry"
-AREA_VALUES = ("area_boundary", "area_boundary_joined", "area_plan_topology", "none")
+AREA_VALUES = (
+    "area_boundary",
+    "area_boundary_joined",
+    "area_plan_topology",
+    "area_plan_topology_unchecked",
+    "none",
+)
+CHECKED_SOURCE = "area_plan_topology"
+UNCHECKED_SOURCE = "area_plan_topology_unchecked"
+# The releases whose Areas are marked unchecked: `AREA_UNCHECKED_RELEASES` in
+# src/research/partition_area_records.rs.
+UNCHECKED_RELEASES = (2025, 2026, 2027)
 EXPECTED_AREAS = 25
 AREA_TOLERANCE = 1e-6
 SURFACE_TOLERANCE = 1e-6
@@ -71,6 +89,17 @@ FIELDS = (
     "height",
     "lowest vertex",
 )
+
+
+def expected_source(label):
+    """The outline source the Areas of the save labelled `label` (its release)
+    must read: the unchecked one for 2025 to 2027, `area_plan_topology` for the
+    rest. A label that is not a release gets `area_plan_topology`."""
+    try:
+        release = int(label)
+    except ValueError:
+        return CHECKED_SOURCE
+    return UNCHECKED_SOURCE if release in UNCHECKED_RELEASES else CHECKED_SOURCE
 
 
 def storey_of(space):
@@ -139,10 +168,13 @@ def surface_gap(a, b):
     return float(a.symmetric_difference(b).area), max(float(a.area), float(b.area))
 
 
-def compare(reference, other):
+def compare(reference, other, reference_source=CHECKED_SOURCE, other_source=CHECKED_SOURCE):
     """Counts of the Areas of `other` against `reference`: how many were
     compared (in both), how many are missing from `other` or extra in it, and
-    for each field how many are equal and how many differ."""
+    for each field how many are equal and how many differ. The outline source
+    of each save must be the one its release gets (`reference_source`,
+    `other_source`), so 2024 against 2025 expects the pair `area_plan_topology`
+    and `area_plan_topology_unchecked`."""
     common = sorted(set(reference) & set(other))
     equal = {field: 0 for field in FIELDS}
     different = {field: 0 for field in FIELDS}
@@ -166,6 +198,8 @@ def compare(reference, other):
                 bad = gap is None or gap > SURFACE_TOLERANCE * max(larger, 1.0)
             elif field == "storey":
                 bad = x is None or y is None or x != y
+            elif field == "outline source":
+                bad = x != reference_source or y != other_source
             else:
                 bad = differs(field, x, y)
             if bad:
@@ -200,13 +234,17 @@ def judge(labels, saves):
         unplaced = sum(a["storey"] is None for a in areas.values())
         if unplaced:
             failures.append(f"{label}: {unplaced} Areas without a storey")
+        wanted = expected_source(label)
+        wrong = sum(a["source"] != wanted for a in areas.values())
+        if wrong:
+            failures.append(f"{label}: {wrong} Areas whose outline source is not {wanted}")
     first = labels[0]
     reference = saves.get(first)
     for label in labels[1:]:
         other = saves.get(label)
         if reference is None or other is None:
             continue
-        counts = compare(reference, other)
+        counts = compare(reference, other, expected_source(first), expected_source(label))
         fields = ", ".join(
             f"{field} {counts['equal'][field]} equal {counts['different'][field]} different"
             for field in FIELDS

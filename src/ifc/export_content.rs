@@ -289,6 +289,9 @@ struct AreaDrawn {
     joined: bool,
     /// Whether its region is the loop of Revit's plan topology (RE-333).
     topology: bool,
+    /// Whether it is of a release whose topology Areas are marked unchecked
+    /// (`partition_area_records::area_release_unchecked`).
+    topology_unchecked: bool,
 }
 
 /// The body an Area's decoded fields hold: the profile its boundary lines
@@ -327,6 +330,10 @@ fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
     });
     let topology = decoded.fields.iter().any(|(field, value)| {
         field == crate::partition_area_records::AREA_TOPOLOGY_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
+    let topology_unchecked = decoded.fields.iter().any(|(field, value)| {
+        field == crate::partition_area_records::AREA_TOPOLOGY_UNCHECKED_FIELD
             && matches!(value, InstanceField::Bool(true))
     });
     let arcs = area_arcs(&decoded.fields, &profile)?;
@@ -398,6 +405,7 @@ fn area_body_from_decoded(decoded: &DecodedElement) -> Option<AreaDrawn> {
         profile,
         joined,
         topology,
+        topology_unchecked,
     })
 }
 
@@ -605,6 +613,9 @@ fn area_property_set(decoded: &DecodedElement, drawn: Option<&AreaDrawn>) -> Pro
         name: SPACE_OUTLINE_SOURCE_PROPERTY.into(),
         value: PropertyValue::Text(
             match drawn {
+                Some(drawn) if drawn.topology && drawn.topology_unchecked => {
+                    SPACE_OUTLINE_AREA_PLAN_TOPOLOGY_UNCHECKED
+                }
                 Some(drawn) if drawn.topology => SPACE_OUTLINE_AREA_PLAN_TOPOLOGY,
                 Some(drawn) if drawn.joined => SPACE_OUTLINE_AREA_BOUNDARY_JOINED,
                 Some(_) => SPACE_OUTLINE_AREA_BOUNDARY,
@@ -4255,7 +4266,8 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
                     && matches!(&p.value, PropertyValue::Text(source)
                         if source == SPACE_OUTLINE_AREA_BOUNDARY
                             || source == SPACE_OUTLINE_AREA_BOUNDARY_JOINED
-                            || source == SPACE_OUTLINE_AREA_PLAN_TOPOLOGY)
+                            || source == SPACE_OUTLINE_AREA_PLAN_TOPOLOGY
+                            || source == SPACE_OUTLINE_AREA_PLAN_TOPOLOGY_UNCHECKED)
             })
         })
     };
@@ -4700,6 +4712,15 @@ pub const SPACE_OUTLINE_AREA_BOUNDARY_JOINED: &str = "area_boundary_joined";
 /// comes before the lines' arrangement, so on a file it reads every Area says
 /// this.
 pub const SPACE_OUTLINE_AREA_PLAN_TOPOLOGY: &str = "area_plan_topology";
+
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of an Area of Revit 2025, 2026 or 2027
+/// drawn as the loop of Revit's plan topology: the same region as
+/// [`SPACE_OUTLINE_AREA_PLAN_TOPOLOGY`], marked apart because nothing outside
+/// the file checks these Areas: no Revit export of one exists, and the only
+/// check is that the same project's 2024 save gives the same Areas
+/// (`partition_area_records::area_release_unchecked`; Griffin, 2026-11-05,
+/// "Mark 2025 to 2027 in the file").
+pub const SPACE_OUTLINE_AREA_PLAN_TOPOLOGY_UNCHECKED: &str = "area_plan_topology_unchecked";
 
 /// `BodyHeightSource` of an Area's body: from its Level up to the Level above
 /// it, when both are building stories (RE-317).
