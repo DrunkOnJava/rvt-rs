@@ -2733,6 +2733,10 @@ impl StepWriter<'_> {
                 // no geometry voids its host and fills nothing. Like every
                 // opening it lives through that relation, not in a storey.
                 let is_space = ifc_upper == "IFCSPACE";
+                let hosted_opening = matches!(
+                    element_placements[entity_idx],
+                    Some(Placement::Opening { .. })
+                );
                 match element_placements[entity_idx] {
                     Some(Placement::Opening { host }) => {
                         void_fill_triples.push((host, el_id, None, global_id.to_string()));
