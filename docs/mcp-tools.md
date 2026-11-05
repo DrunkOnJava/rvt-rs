@@ -137,7 +137,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 ## get_element
 
-One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance (the carrier its record was read from, its stream and byte offset, and in value_sources the copy each reader took a value of its body from), and the file's: Revit release and build, schema class count, partition count and ElemTable record layout. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
+One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its type object as the export writes it (element_type: the IFC entity, name and Tag, and the sets it holds; absent where the export writes none), its provenance (the carrier its record was read from, its stream and byte offset, and in value_sources the copy each reader took a value of its body from), and the file's: Revit release and build, schema class count, partition count and ElemTable record layout. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
 
 Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
@@ -154,14 +154,15 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `body` | string | yes | `extrusion`, `solid`, `mapped` or `none`: the kind of body the export writes for the element. |
-| `element_type` | [TypeOut](#typeout) \| null | no | The element's type object and its sets, where the model has them. |
+| `element_type` | [TypeOut](#typeout) \| null | no | The type object the export writes for the element, with its sets; absent where the export writes none for it. |
 | `file` | [FileProvenance](#fileprovenance) | yes | The file the element comes from. |
 | `host_id` | string \| null | no | The ElementId of the wall that hosts a door or window. |
 | `id` | string \| null | no | The Revit ElementId. |
 | `level` | [LevelRefOut](#levelrefout) \| null | no |  |
 | `location_feet` | array of number (3 items) \| null | no | Where the element is placed, in the model's feet. |
+| `long_name` | string \| null | no | An `IfcSpace`'s `LongName`, its room name, as in `list_elements`. |
 | `model_id` | string | yes |  |
-| `name` | string | yes |  |
+| `name` | string \| null | no | The `Name` the IFC export writes, as in `list_elements`: absent for a room whose model name is a placeholder. |
 | `other_entities` | array of [EntityRefOut](#entityrefout) | yes | Other entities with the same ElementId. |
 | `predefined_type` | string \| null | no |  |
 | `property_sets` | array of [PropertySetOut](#propertysetout) | yes |  |
@@ -201,7 +202,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 ## list_elements
 
-List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. The rows leave out value_sources, the copy each reader took a value of the body from: get_element lists them. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
+List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name and long_name (the IFC Name and LongName: an IfcSpace's are its room number and its room name, and name is absent for a room with neither), level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. The rows leave out value_sources, the copy each reader took a value of the body from: get_element lists them. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
 
 Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
@@ -385,7 +386,8 @@ One element in a list.
 |---|---|---|---|
 | `id` | string \| null | no | The Revit ElementId. |
 | `level` | string \| null | no | The name of the storey the element is on. |
-| `name` | string | yes |  |
+| `long_name` | string \| null | no | An `IfcSpace`'s `LongName`, its room name. Absent for any other element and for a room whose name was not read. |
+| `name` | string \| null | no | The `Name` the IFC export writes. An `IfcSpace`'s is its room number, or `<room name>:<ElementId>` for a room with no number. Absent for a room with neither a number nor a name: the model's own name for it is made from its class and ElementId, where no source named it, and is not served as a name. |
 | `predefined_type` | string \| null | no | The IFC4 `PredefinedType` the export writes. |
 | `provenance` | [ElementProvenance](#elementprovenance) | yes |  |
 
@@ -561,8 +563,10 @@ The type object an element is typed by.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `element_id` | string | yes | The type's Revit ElementId. |
-| `property_sets` | array of [PropertySetOut](#propertysetout) | yes |  |
+| `element_id` | string | yes | The type object's `Tag`: the type's Revit ElementId, or the ElementId of the room an `IfcSpaceType` is made for. |
+| `ifc_type` | string | yes | The type object's IFC entity, such as `IFCWALLTYPE`. |
+| `name` | string | yes | The type object's `Name`. |
+| `property_sets` | array of [PropertySetOut](#propertysetout) | yes | The sets the export writes on the type object, `Other` and `Identity Data` among them. |
 
 ### UnreadOut
 
