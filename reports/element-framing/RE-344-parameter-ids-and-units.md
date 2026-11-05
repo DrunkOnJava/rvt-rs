@@ -5,8 +5,8 @@
 **Credit:** mahach666, author of RvtIO (a .NET reader of Revit files, MIT), who published findings on both issues in Discussion #1241 on 2026-11-05: the record shapes of the parameter stores, the sign rule of parameter ids, the unit factors, the two millimetre conversions and the form parameters of extrusions and revolutions, with the count tables for Autodesk's samples that section 4 answers. This report restates facts with that credit and copies none of their tables or prose.
 **Artefacts:** Autodesk's sample projects of Revit 2015 to 2027 as `research/autodesk-sample-projects.tsv` pins them, the `phi-ag/rvt` family corpus, the BIM4LCA office, Core Interior, the RE1 models and puzzbobb's R2025 models, as Measure fetches them; none is committed.
 **Probe:** `probes/examples/probe_re344_parameter_ids_and_units.rs`
-**Runs:** Measure 42028541274 (`main` at 5988d839, the samples of 2021 to 2027, section 4), 42031090233 (the same head, the class sets of `racadv-2020` against Revit's public IFC2X3 export, section 4), 42030865532 (the probe at 27875749, section 5)
-**Status:** open. Section 4's counts are measured. Section 5, the probe's measurements, is not written yet: no figure of it is claimed on this head.
+**Runs:** Measure 42028541274 (`main` at 5988d839, the samples of 2021 to 2027, section 4), 42031090233 (the same head, the class sets of `racadv-2020` against Revit's public IFC2X3 export, section 4.2), 42030865532 (the probe at 27875749, section 5)
+**Status:** open. Section 4's counts are measured (runs 42028541274 and 42031090233). Section 5, the probe's measurements, is not written yet: no figure of it is claimed on this head.
 
 ## 1. What the findings rest on, and what may be used
 
@@ -94,12 +94,23 @@ Their category counts (`ifc_building_by_category`) set against rvt-rs's `decoded
 - **Roofs.** RvtIO has 3 elements of the Roofs category in `rac_basic` and rvt-rs reads 2. Not explained.
 - **Storeys.** rvt-rs writes 6 for `rac_basic` on every release and 5 for `rac_advanced`; for `rst_basic` 5 on the 2022 file and 2 from 2024. RvtIO writes none for `rst_basic` and 6 for `rac_basic`, so the 3 in their table is rvt-rs's figure at an earlier head.
 - **Spaces.** `rac_basic`'s 14 rooms are in the project's second phase, not its last, so `main` writes none and counts 14 as `room_not_in_export_phase`. #1435 writes them (its Measure run 42011174043, at its head `992196c6`, reports 464 entities for the 2016 to 2027 saves of `rac_basic`, 14 more than the 450 here). RvtIO writes none for `rac_basic` either. `rac_advanced`'s 116 spaces are 91 rooms and 25 Areas; the 2021 save writes the rooms only, as it refuses the 25 Areas of that release (`area_without_proven_body`, `boundary_lines_not_readable`). RvtIO's `rst_basic` and rvt-rs's from 2024 each write 1 space; on the 2022 file rvt-rs writes none.
-- **Curtain panels and mullions.** In `rac_advanced` RvtIO writes 1,541 panels on every file from 2023 and 1,349 on its 2022 file, the figure rvt-rs reads on every release, 2021 to 2027. In `rac_basic` RvtIO's 2022 file has 144 mullions and 44 panels, rvt-rs's figures, and from 2023 148 and 46. The same project gives RvtIO more panels from 2023 on and rvt-rs the same on every save. One Revit export of `rac_advanced` exists, as a public IFC2X3 file: section 4.2.
-- **One door** (101 against 100 in `rac_advanced`) is not explained here.
+- **Curtain panels and mullions.** In `rac_advanced` RvtIO writes 1,541 panels on its 2021 file and on every file from 2023, and 1,349 on its 2022 file, the figure rvt-rs reads on every release, 2021 to 2027. In `rac_basic` RvtIO's 2022 file has 144 mullions and 44 panels, rvt-rs's figures, and from 2023 148 and 46. The same project gives RvtIO more panels on some saves and rvt-rs the same on every save. Revit's one public export of `rac_advanced` holds 1,349: section 4.2.
+- **One door** (101 against 100 in `rac_advanced`). RvtIO's 2022 file has 100, and so do rvt-rs on every release and Revit's export (section 4.2); its 2021 and 2023 to 2027 files have 101.
 
 ### 4.2 Revit's own export of `rac_advanced`
 
-Run 42031090233 runs `class_sets_vs_ifc` on `racadv-2020` against the one public Revit export of the project (an IFC2X3 export by Revit 2021, RE-330, counted apart everywhere and never removing a value). Not yet read: no figure of it is claimed on this head.
+Run 42031090233 (`main` at 5988d839, `-f racadv=true -f models="racadv-2020" -f scorers=class_sets_vs_ifc`) pairs rvt-rs's export of the 2020 save with the one public Revit export of the project, an IFC2X3 export by Revit 2021 (RE-330). That export is counted apart everywhere: it confirms a reader and decides nothing between two exporters. It pairs 5,555 elements and spaces of Revit's (83 repeated Tags left out) with 5,631 of rvt-rs's. Per class of Revit's export, elements rvt-rs writes as the same class:
+
+| Revit's class | Revit | rvt-rs writes it as the same class | as another class | not written |
+|---|---:|---:|---:|---:|
+| `IfcPlate` | 1,349 | 1,349 | 0 | 0 |
+| `IfcDoor` | 100 | 100 | 0 | 0 |
+| `IfcMember` | 3,281 | 3,276 | 5 (`IfcStair`) | 0 |
+| `IfcSpace` | 116 | 116 | 0 | 0 |
+| `IfcColumn`, `IfcCovering`, `IfcRailing`, `IfcRoof`, `IfcSlab`, `IfcWindow` | 176, 65, 22, 6, 16, 24 | all | 0 | 0 |
+| `IfcBuildingElementProxy` | 75 | 72 | 0 | 3 |
+
+The 34 curtain walls, 140 standard-case walls, 41 flow terminals and 104 furnishing elements of Revit's export are written as the class rvt-rs uses for each (`IfcWall` for the first two, `IfcLightFixture`, `IfcFurniture`), and the other 6 walls as `IfcWall`, 38 beams and 40 proxies and a slab are written that Revit's export does not hold, and Revit's export has no `IfcElementAssembly`. The 1,349 panels and 100 doors are what rvt-rs reads on every release and what RvtIO reads on its 2022 file; RvtIO's 2021 and 2023 to 2027 files give 1,541 and 101. The 2020 export cannot say whether those saves hold 192 panels and a door more, or whether RvtIO reads some where Revit's export of the earlier state has none: they are different files of the sample, and no Revit export of them exists.
 
 ## 5. Measured
 
