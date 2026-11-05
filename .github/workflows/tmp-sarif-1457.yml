@@ -1,0 +1,161 @@
+# TEMPORARY (#1457): the SARIF retry shapes with a first upload that fails after codeql-action's
+# category check, removed before the pull request leaves draft. CODEQL_ACTION_ANALYSIS_KEY is set
+# on the first uploads so that the action needs no API call before it sends the file: a refused
+# token then fails the upload itself, as the two observed failures did.
+name: tmp sarif retry 1457
+
+on:
+  push:
+    branches: [ci/speed-wheels-codeql-re1-sarif]
+    paths:
+      - ".github/workflows/tmp-sarif-1457.yml"
+
+permissions: {}
+
+jobs:
+  same-job-control:
+    name: tmp the old shape, a second upload in the same job
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: A SARIF with no results
+        shell: bash
+        run: |
+          printf '%s\n' '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[{"tool":{"driver":{"name":"tmp-1457-same-job","rules":[]}},"results":[]}]}' > empty.sarif
+      - name: First upload, with a token GitHub refuses
+        id: first
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        env:
+          CODEQL_ACTION_ANALYSIS_KEY: tmp-1457-key
+        with:
+          sarif_file: empty.sarif
+          category: tmp-1457-same-job
+          token: not-a-token
+      - name: Second upload in the same job, with the real token
+        id: second
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        env:
+          CODEQL_ACTION_ANALYSIS_KEY: tmp-1457-key
+        with:
+          sarif_file: empty.sarif
+          category: tmp-1457-same-job
+      - name: Both failed
+        shell: bash
+        env:
+          FIRST: ${{ steps.first.outcome }}
+          SECOND: ${{ steps.second.outcome }}
+        run: |
+          echo "first: ${FIRST}, second: ${SECOND}"
+          test "${FIRST}" = failure
+          test "${SECOND}" = failure
+
+  scorecard-shape:
+    name: tmp the Scorecard shape, first upload
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    outputs:
+      upload: ${{ steps.sarif.outcome }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: A SARIF of two runs, each with a category of its own
+        shell: bash
+        run: |
+          printf '%s\n' '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[{"tool":{"driver":{"name":"tmp-1457-scorecard","rules":[]}},"automationDetails":{"id":"tmp-1457/one/"},"results":[]},{"tool":{"driver":{"name":"tmp-1457-scorecard","rules":[]}},"automationDetails":{"id":"tmp-1457/two/"},"results":[]}]}' > results.sarif
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: tmp-scorecard-results
+          path: results.sarif
+          retention-days: 1
+      - name: Upload the results to code scanning, with a token GitHub refuses
+        id: sarif
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        env:
+          CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/scorecard.yml:analysis
+        with:
+          sarif_file: results.sarif
+          token: not-a-token
+
+  scorecard-shape-retry:
+    name: tmp the Scorecard shape, retry job
+    needs: scorecard-shape
+    if: needs.scorecard-shape.outputs.upload == 'failure'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Say that the first upload failed
+        run: echo "::warning::the upload of the results to code scanning failed; trying once more"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: tmp-scorecard-results
+      - name: Upload the results to code scanning (retry)
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        env:
+          CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/scorecard.yml:analysis
+        with:
+          sarif_file: results.sarif
+
+  zizmor-shape:
+    name: tmp the zizmor shape, first upload
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    outputs:
+      attempt: ${{ steps.sarif.outcome }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: A SARIF with the tool zizmor's upload carries
+        shell: bash
+        run: |
+          printf '%s\n' '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[{"tool":{"driver":{"name":"zizmor","rules":[]}},"results":[]}]}' > zizmor.sarif
+      - name: Upload with a token GitHub refuses, under zizmor's category
+        id: sarif
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        env:
+          CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/zizmor.yml:zizmor
+        with:
+          sarif_file: zizmor.sarif
+          category: zizmor
+          token: not-a-token
+
+  zizmor-shape-retry:
+    name: tmp the zizmor shape, retry job
+    needs: zizmor-shape
+    if: needs.zizmor-shape.outputs.attempt == 'failure'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - name: Say that the first run failed
+        run: echo "::warning::zizmor or its upload to code scanning failed; running it once more"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: zizmor (retry)
+        uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        env:
+          CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/zizmor.yml:zizmor
+        with:
+          version: "1.30.1"
