@@ -36,6 +36,13 @@
 #     ProjectInformation stream. The IFC export reads only a PartAtom stream,
 #     which none of these models has (diagnostics.json says has_part_atom
 #     false), so this, and the families below, are what measure that parser;
+#   - mcp_answers_vs_ifc.txt and mcp-dump.json, when BIN holds rvt-rs-mcp (#1327):
+#     what the MCP server answers about the model, scored against the model's
+#     export (a difference is a failure, exit 1) and against Revit's export
+#     (tools/re/mcp_answers_vs_ifc.py); mcp-dump.json is the answers as the
+#     deterministic semantic dump (tools/re/mcp_client.py), which the semantic
+#     merge check (#1334) reads. Of a model that is kept as counts only, the
+#     lines starting `mcp answers:` leave the runner;
 #   - probe.txt, when PROBE names a probe (the rvt-probes crate's
 #     examples) already built in BIN_DIR/examples: its output on the model, ending with its exit status;
 #   - probe_score.txt, when PROBE_SCORER also names a scorer in
@@ -193,7 +200,7 @@ wanted() { # step
 # Whether a step is in a scorer list or is one of the steps run by name.
 listed() { # step
   local s
-  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc none; do
+  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc mcp_answers_vs_ifc none; do
     [ "$s" = "$1" ] && return 0
   done
   return 1
@@ -352,6 +359,15 @@ model_tasks() { # name rvt ref
   wanted schema && echo "5 schema"
   wanted witness && [ -n "$(witness_artifacts "$name")" ] && echo "2 witness"
   wanted_glb && echo "4 glb"
+  # #1327: the MCP server's answers need the model's export and its .rvt, not
+  # Revit's export, so a model with none (Einhoven) is scored for consistency.
+  if wanted mcp_answers_vs_ifc; then
+    if [ -x "$BIN/rvt-rs-mcp" ]; then
+      echo "6 mcp"
+    else
+      echo "$name: no rvt-rs-mcp in $BIN (a ref older than the crate), mcp_answers_vs_ifc not measured" >&2
+    fi
+  fi
   if [ "$ref" != "-" ]; then
     for s in $IFC_SCORERS; do
       wanted "$s" || continue
@@ -420,6 +436,16 @@ model_task() { # name rvt ref task
       else
         score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
       fi
+      ;;
+    mcp)
+      # The server decodes the model again and answers the fixed query set from
+      # it (tools/re/mcp_client.py): a program run, so never from the score cache.
+      extra=()
+      [ "$ref" != "-" ] && extra=("$MODELS/$ref")
+      score "$dir/mcp_answers_vs_ifc.txt" "$SCORERS/mcp_answers_vs_ifc.py" \
+        --server "$BIN/rvt-rs-mcp" --rvt "$MODELS/$rvt" \
+        --diagnostics "$dir/diagnostics.json" --dump "$dir/mcp-dump.json" \
+        "$dir/model.ifc" ${extra[@]+"${extra[@]}"}
       ;;
     meshes)
       for s in saved_meshes_vs_ifc mesh_bodies_vs_ifc; do

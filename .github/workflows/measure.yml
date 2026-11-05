@@ -85,6 +85,22 @@
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f score_cache=off
 #
+# The MCP server's answers are scored on every model (#1327): the built
+# rvt-rs-mcp is started by a scripted client with no language model
+# (tools/re/mcp_client.py), asked a fixed query set about the model (summary,
+# levels, every element's row, rooms with areas, get_element for a spread of
+# each entity, diagnostics, export_ifc), and its answers are compared with the
+# model's own IFC export (a difference is a bug in the server or the export:
+# the step's output ends `exit 1`, and the run summary lists each model's
+# verdict) and, where Revit gave an export, with Revit's, with the pairing and
+# tolerances of the class sets, storeys, space profiles, property sets and
+# quantities scorers (tools/re/mcp_answers_vs_ifc.py). The server is built only
+# when the run names no scorers or names this one; mcp-dump.json, each model's
+# answers as the deterministic semantic dump, is in the artifact. Autodesk's
+# sample projects are not asked.
+#
+#   gh workflow run measure.yml -f ref=my-branch -f base=none -f models="core-interior einhoven" -f scorers=mcp_answers_vs_ifc
+#
 # `fine_mesh=true` sets RVT_SCORER_FINE_MESH for the scorers: the three body
 # scorers then also mesh both IFC files at one equal, fine deflection and print
 # their `fine` rows after the output they always print (tools/re/fine_mesh.py,
@@ -177,7 +193,7 @@ on:
         required: false
         default: ""
       scorers:
-        description: Only these steps on the models, tools/re scorers and info, gltf, schema, witness (e.g. "qtos_vs_ifc witness"; a tools/re script in no scorer list runs as an IFC scorer), none for none, empty for all; every model is still exported and hashed
+        description: Only these steps on the models, tools/re scorers and info, gltf, schema, witness, mcp_answers_vs_ifc (e.g. "qtos_vs_ifc witness"; a tools/re script in no scorer list runs as an IFC scorer), none for none, empty for all; every model is still exported and hashed
         required: false
         default: ""
       score_cache:
@@ -470,14 +486,26 @@ jobs:
       # builds to, so a run of any ref may save it, and only a run of that
       # commit restores it. A ref that is not a full SHA is built each time.
       # The probe examples are always built.
+      # #1327: the MCP server (rvt-rs-mcp, a crate of its own, rustc 1.88 or
+      # later) is built too when the run scores its answers, which a run that
+      # names other scorers does not, and the key says which set of binaries
+      # the entry holds. A ref older than the crate has none to build.
       - name: Binary cache key
         id: binaries-key
         shell: bash
         env:
           MEASURED: ${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}
+          SCORERS: ${{ inputs.scorers }}
         run: |
+          mcp=false
+          case " $SCORERS " in
+            "  " | *" mcp_answers_vs_ifc "*) mcp=true ;;
+          esac
+          echo "mcp=$mcp" >> "$GITHUB_OUTPUT"
           if [[ "$MEASURED" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "key=rvt-bin-v1-$MEASURED-$RUNNER_OS-$RUNNER_ARCH-$(rustc -vV | sha256sum | cut -c1-16)-ci" >> "$GITHUB_OUTPUT"
+            suffix=""
+            [ "$mcp" = true ] && suffix="-mcp"
+            echo "key=rvt-bin-v2-$MEASURED-$RUNNER_OS-$RUNNER_ARCH-$(rustc -vV | sha256sum | cut -c1-16)-ci$suffix" >> "$GITHUB_OUTPUT"
           else
             echo "the measured ref is not a full SHA, so its binaries are built each time"
           fi
@@ -490,15 +518,23 @@ jobs:
             measured/target/ci/rvt-ifc
             measured/target/ci/rvt-gltf
             measured/target/ci/rvt-info
+            measured/target/ci/rvt-rs-mcp
           key: ${{ steps.binaries-key.outputs.key }}
       - name: Build
         working-directory: measured
         run: |
           git log -1 --format='%H %s' > ../measured-commit.txt
           if [ "$BINARIES_CACHED" = true ]; then
-            echo "rvt-ifc, rvt-gltf and rvt-info restored from the binary cache"
+            echo "rvt-ifc, rvt-gltf and rvt-info (and rvt-rs-mcp, where the key says so) restored from the binary cache"
           else
             cargo build --profile ci --bin rvt-ifc --bin rvt-gltf --bin rvt-info
+            if [ "$WITH_MCP" = true ]; then
+              if [ -f rvt-mcp/Cargo.toml ]; then
+                cargo build --profile ci -p rvt-rs-mcp --bin rvt-rs-mcp
+              else
+                echo "::warning::the measured ref has no rvt-mcp crate: the MCP server's answers are NOT MEASURED on this side"
+              fi
+            fi
           fi
           # A base older than a probe has no such example; it is skipped there.
           # Probes live in the rvt-probes crate (probes/examples) since it was
@@ -522,6 +558,7 @@ jobs:
         env:
           PROBE: ${{ inputs.probe }}
           BINARIES_CACHED: ${{ steps.binaries.outputs.cache-hit }}
+          WITH_MCP: ${{ steps.binaries-key.outputs.mcp }}
       # Every shard of a commit misses at once and saves the same key; the one
       # that reserves it first stores it and the others are told it is taken.
       # A run from a pull request saves nothing, its cache being its own.
@@ -533,6 +570,7 @@ jobs:
             measured/target/ci/rvt-ifc
             measured/target/ci/rvt-gltf
             measured/target/ci/rvt-info
+            measured/target/ci/rvt-rs-mcp
           key: ${{ steps.binaries-key.outputs.key }}
       # Restored after the Build step, so that no build script of the measured
       # ref ever sees a writable score cache.
@@ -813,6 +851,20 @@ jobs:
             echo "head: $(cat measure-head/commit.txt)"
             [ -d measure-base ] && echo "base: $(cat measure-base/commit.txt)"
             echo
+            # #1327: what the MCP server answered, per model, against the
+            # model's own export. A difference is a bug in the server or in the
+            # export (tools/re/mcp_answers_vs_ifc.py); it fails no job here.
+            if grep -qs '^mcp answers: consistency ' measure-head/*/mcp_answers_vs_ifc.txt measure-head/*/counts.txt; then
+              echo "### MCP server answers against the export"
+              echo
+              for f in measure-head/*/mcp_answers_vs_ifc.txt measure-head/*/counts.txt; do
+                [ -f "$f" ] || continue
+                verdict=$(grep -E '^mcp answers: consistency (PASS|FAIL|NOT MEASURED)' "$f" | head -n 1 | sed -E 's/^mcp answers: consistency //')
+                [ -n "$verdict" ] || continue
+                echo "- $(basename "$(dirname "$f")"): $verdict"
+              done
+              echo
+            fi
             if [ -d measure-base ]; then
               echo "### Models and samples whose IFC differs (export time ignored)"
               echo
@@ -841,8 +893,11 @@ jobs:
               # text they made a 3 GB summary GitHub refused (run
               # 41537426493). The whole diff is the compare-scorer-diff
               # artifact; the summary shows its start, under GitHub's 1 MiB.
+              # mcp-dump.json is the MCP answers' semantic dump (#1327, read by
+              # #1334's merge check), megabytes on the office: in the artifact,
+              # not in this diff.
               diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json \
-                -x '*.ifc' -x '*.glb' measure-base measure-head > scorer-diff.txt || true
+                -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base measure-head > scorer-diff.txt || true
               limit=$((640 * 1024))
               size=$(stat -c %s scorer-diff.txt)
               echo '```diff'

@@ -102,6 +102,45 @@ when a release ships.
   ([`changelog.d/`](../changelog.d/README.md)) change in the same pull request
   as the capability they describe.
 
+## Measure and the MCP server's answers
+
+Measure also scores what `rvt-rs-mcp` tells an agent about each model it
+exports (`tools/re/mcp_answers_vs_ifc.py`, #1327). A scripted client with no
+language model (`tools/re/mcp_client.py`, JSON-RPC over the server's stdio, the
+2026-07-28 lifecycle) opens the model's `.rvt` in the built server and asks a
+fixed query set: the summary, the levels, every element's row, the totals per
+IFC entity, Revit class and level, the rooms with their areas, `get_element`
+for up to five elements of each IFC entity, the diagnostics and an
+`export_ifc`. Run it by name on any model:
+
+    gh workflow run measure.yml --ref <branch> -f ref=<sha> -f base=none \
+      -f models="core-interior einhoven" -f scorers=mcp_answers_vs_ifc
+
+- **Consistency** is a check, not a measurement: every answer must equal the
+  IFC export of the same run (the elements and spaces by GlobalId, the
+  storeys, the rooms' number, name, storey and plan area, the property and
+  quantity sets of the sampled elements, their types, placement and host, the
+  diagnostics against `diagnostics.json`, the server's export against
+  `ifc.sha256`). A difference ends the output with `exit 1` and is listed
+  under its check; the run summary names each model's verdict and fails no
+  job. With `ifc_flags` the server's default decode is compared with its own
+  export instead, since it takes none of the flags.
+- **The oracle** scores the same answers against Revit's export with the
+  pairing and tolerances of `class_sets_vs_ifc`, `storeys_vs_ifc`,
+  `space_profiles_vs_ifc`, `psets_vs_ifc` and `qtos_vs_ifc`. Those lines are
+  measurements, diffed by `base=main` like every scorer's.
+- **Held-out models** keep the lines starting `mcp answers:` (fixed words,
+  counts and IFC entity names) and nothing else
+  (`tools/ci/scrub-holdout-results.sh`). Nothing is cached: the step runs the
+  server.
+- **The dump** (`mcp-dump.json` in each model's artifact, left out of the
+  diff) is the same answers as one deterministic document: sorted, floats at
+  six decimals, no handle, time or path. `python3 tools/re/mcp_client.py
+  <rvt-rs-mcp> <model.rvt> [--all]` writes it alone, with `get_element` for a
+  sample or for every element, which the semantic merge check (#1334) reads.
+- The server is built (`cargo build -p rvt-rs-mcp`) only in a run that names
+  no scorers or names this one; Autodesk's sample projects are not asked.
+
 ## Measure's score cache
 
 Measure runs about 40 scorers and four schema checks on every model, and most

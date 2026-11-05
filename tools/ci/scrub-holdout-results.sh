@@ -35,7 +35,10 @@
 # class-set totals and each class's revit / same / other / absent counts and
 # the extra elements' count by class, the GlobalId agreement counts, and the
 # storey verdict counts by kind, and
-# the `native levels:` lines of tools/re/native_levels_vs_ifc.py (RE-281:
+# the `mcp answers:` count lines of tools/re/mcp_answers_vs_ifc.py (#1327: the
+# MCP server's answers against the export and Revit's, as counts and verdicts
+# beside an IFC entity name, never an element), the `native levels:` lines of
+# tools/re/native_levels_vs_ifc.py (RE-281:
 # counts, the same restricted alphabet), the totals and per property counts of
 # its property set census (standard Pset_ and Qto_ names only; RE-281),
 # the `space profiles:` count lines of tools/re/space_profiles_vs_ifc.py
@@ -137,6 +140,13 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E "^((Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){5,6}|decided by the fine tessellation \(both files write true curves\): [0-9]+ of [0-9]+ elements)$" "$f" | sed 's/^/saved meshes: /' || true
       grep -E "^(fine tessellation: IfcOpenShell mesher-linear-deflection [0-9.e-]+ m \(1e-5 ft\) and mesher-angular-deflection [0-9.]+ rad, both files; [0-9]+ of [0-9]+ sampled elements meshed|fine (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){7})$" "$f" | sed 's/^/saved meshes: /' || true
     done
+    # What the MCP server answered about the model (#1327): the lines starting
+    # `mcp answers:` are made of fixed words, numbers and IFC entity names (the
+    # scorer's docstring); the lines under them with an element's id, name or
+    # value start with spaces and are dropped.
+    if [ -f "${dir}mcp_answers_vs_ifc.txt" ]; then
+      grep -E '^mcp answers: [A-Za-z0-9 _:.,;()=%/+-]+$' "${dir}mcp_answers_vs_ifc.txt" || true
+    fi
     for f in "$dir"storeys_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E "^([0-9]+ elements, [0-9]+ not on a storey|against Revit's export:| +[0-9]+  Ifc[A-Za-z0-9]+| +[0-9]+  (same storey as Revit's|on no storey; Revit's is (a storey|another container)|on a storey; Revit contains it in <Ifc[A-Za-z0-9]+>|a different storey from Revit's)|  different, by type: Ifc[A-Za-z0-9]+ [0-9]+(, Ifc[A-Za-z0-9]+ [0-9]+)*)$" "$f" | sed 's/^/storeys: /' || true
