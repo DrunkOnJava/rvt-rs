@@ -316,13 +316,9 @@ fn load(
     );
     let registry =
         crate::schema_registry::parse(&native_document::read_single(rf, "Formats/Latest")?)?;
-    let mut streams: Vec<String> = rf
-        .stream_names()
-        .iter()
-        .filter(|name| name.starts_with("Partitions/"))
-        .cloned()
-        .collect();
-    streams.sort();
+    // In partition-number order, the oldest copy of a record first: a reader
+    // that keeps the last copy of a record gets the newest (#1356).
+    let streams = rf.partition_stream_names();
 
     // Each wanted family's record outside every block, and every block key.
     let mut bodies: Vec<(u64, Vec<u8>)> = Vec::new();
@@ -575,16 +571,40 @@ pub fn family_records_in(
     releases: &std::ops::RangeInclusive<u32>,
     ids: Option<&BTreeSet<u64>>,
 ) -> anyhow::Result<BTreeMap<u64, Vec<(u64, ObjectGraph)>>> {
-    let mut out: BTreeMap<u64, Vec<(u64, ObjectGraph)>> = BTreeMap::new();
+    Ok(family_records_at(rf, families, classes, releases, ids, false)?.0)
+}
+
+/// The records of a family's document by the family's ElementId.
+pub type FamilyRecords = BTreeMap<u64, Vec<(u64, ObjectGraph)>>;
+
+/// Where each record of a family's document starts, by the family's ElementId
+/// and the record's: the partition and the offset in it inflated (#1368). Of a
+/// record held in several partitions, the place of the copy in the highest
+/// partition, the copy a `FormDocument` keeps; none where that copy's bytes
+/// are not the partition's own.
+pub type RecordPlaces = BTreeMap<(u64, u64), (String, usize)>;
+
+/// [`family_records_in`], also giving, when `want_places` asks, where each
+/// record starts (#1368). Nothing is kept for the places when it does not.
+pub fn family_records_at(
+    rf: &mut RevitFile,
+    families: &BTreeSet<u64>,
+    classes: &BTreeSet<String>,
+    releases: &std::ops::RangeInclusive<u32>,
+    ids: Option<&BTreeSet<u64>>,
+    want_places: bool,
+) -> anyhow::Result<(FamilyRecords, RecordPlaces)> {
+    let mut out: FamilyRecords = BTreeMap::new();
+    let mut places = RecordPlaces::new();
     let Some(loaded) = load(rf, families, releases)? else {
-        return Ok(out);
+        return Ok((out, places));
     };
     let tags: BTreeSet<u16> = classes
         .iter()
         .filter_map(|name| loaded.registry.named(name).map(|class| class.tag))
         .collect();
     if !classes.is_empty() && tags.is_empty() {
-        return Ok(out);
+        return Ok((out, places));
     }
     let budget = native_document::group_budget(rf, native_document::DEFAULT_MAX_GROUP_BYTES);
     for name in &loaded.streams {
@@ -611,7 +631,7 @@ pub fn family_records_in(
                 else {
                     return Ok(());
                 };
-                for (id, _, start, end) in records {
+                for (id, pos, start, end) in records {
                     let body = &bytes[start..end];
                     let Some(class) = le_bytes::u16_at(body, 0) else {
                         continue;
@@ -623,6 +643,22 @@ pub fn family_records_in(
                         continue;
                     }
                     if let Ok(graph) = native_parameters::decode_graph(body, &loaded.registry) {
+                        if want_places {
+                            // The last copy's place, as the last copy's graph
+                            // is the one a `FormDocument` keeps: a copy whose
+                            // bytes are not the partition's own leaves no place.
+                            let at = source
+                                .inflated_offset
+                                .and_then(|base| base.checked_add(pos));
+                            match at {
+                                Some(at) => {
+                                    places.insert((*family, id), (name.clone(), at));
+                                }
+                                None => {
+                                    places.remove(&(*family, id));
+                                }
+                            }
+                        }
                         out.entry(*family).or_default().push((id, graph));
                     }
                 }
@@ -630,7 +666,7 @@ pub fn family_records_in(
             },
         )?;
     }
-    Ok(out)
+    Ok((out, places))
 }
 
 /// Each selected record's graph, by ElementId.

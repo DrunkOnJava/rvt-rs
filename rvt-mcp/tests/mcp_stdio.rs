@@ -16,6 +16,8 @@ use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
+use std::sync::Once;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, channel};
 use std::time::{Duration, Instant};
 
@@ -105,11 +107,57 @@ fn object(value: Value) -> serde_json::Map<String, Value> {
     }
 }
 
+/// Where the test keeps each tool's `outputSchema` (from the `tools/list` of
+/// each session [`drive`] runs) and every structured answer the test is given,
+/// through the rmcp client's [`call`] or a raw request, for `tools/ci/validate-mcp-answers.py` to check
+/// each answer against its tool's schema (#1415): `RVT_MCP_ANSWERS_DIR`, an
+/// absolute path (the test runs in `rvt-mcp/`). The raw JSON-RPC tests'
+/// answers are kept too ([`Raw::recv`]). Unset, nothing is kept.
+fn answers_dir() -> Option<PathBuf> {
+    std::env::var_os("RVT_MCP_ANSWERS_DIR").map(PathBuf::from)
+}
+
+/// The number of the next file [`keep`] writes, so that tests running at
+/// once never write the same name.
+static KEPT: AtomicUsize = AtomicUsize::new(0);
+
+/// The directory is emptied once per run, before the first file is written,
+/// so a run never leaves an earlier run's schemas or answers beside its own.
+static CLEARED: Once = Once::new();
+
+/// Write `value` as `<RVT_MCP_ANSWERS_DIR>/<kind>/<tool>/<pid>-<n>.json`.
+fn keep(kind: &str, tool: &str, value: &Value) {
+    let Some(root) = answers_dir() else {
+        return;
+    };
+    CLEARED.call_once(|| {
+        if root.exists() {
+            std::fs::remove_dir_all(&root)
+                .unwrap_or_else(|error| panic!("clear {}: {error}", root.display()));
+        }
+    });
+    let dir = root.join(kind).join(tool);
+    std::fs::create_dir_all(&dir)
+        .unwrap_or_else(|error| panic!("create {}: {error}", dir.display()));
+    let n = KEPT.fetch_add(1, Ordering::Relaxed);
+    let path = dir.join(format!("{}-{n}.json", std::process::id()));
+    let bytes = serde_json::to_vec_pretty(value).expect("a JSON value serialises");
+    std::fs::write(&path, bytes)
+        .unwrap_or_else(|error| panic!("write {}: {error}", path.display()));
+}
+
 async fn call(client: &Client, name: &'static str, arguments: Value) -> CallToolResult {
-    client
+    let result = client
         .call_tool(CallToolRequestParams::new(name).with_arguments(object(arguments)))
         .await
-        .unwrap_or_else(|error| panic!("tools/call {name}: {error}"))
+        .unwrap_or_else(|error| panic!("tools/call {name}: {error}"));
+    if let (false, Some(structured)) = (
+        result.is_error == Some(true),
+        result.structured_content.as_ref(),
+    ) {
+        keep("answers", name, structured);
+    }
+    result
 }
 
 fn error_text(result: &CallToolResult) -> String {
@@ -198,11 +246,11 @@ async fn drive(client: &Client, modern: bool, model: &Path, out: &Path, real_pro
         .collect();
     assert_eq!(names, TOOLS, "tools/list is sorted by name");
     for tool in &list.tools {
-        assert!(
-            tool.output_schema.is_some(),
-            "{} declares no outputSchema",
-            tool.name
-        );
+        let schema = tool
+            .output_schema
+            .as_ref()
+            .unwrap_or_else(|| panic!("{} declares no outputSchema", tool.name));
+        keep("schemas", &tool.name, &Value::Object((**schema).clone()));
     }
     for tool in &list.tools {
         assert!(
@@ -661,10 +709,18 @@ async fn element_checks(client: &Client, model_id: &str, row: &Value, model: &Pa
     assert!(detail["property_sets"].is_array());
     assert!(detail["trust_markers"].is_object());
     assert!(detail["file"]["revit_release"].is_number());
-    assert_eq!(
-        detail["provenance"], row["provenance"],
-        "list and detail agree"
+    // The list leaves out the value sources by design, to stay small; the
+    // detail lists them, and is otherwise the row's provenance (#1360).
+    assert!(
+        row["provenance"].get("value_sources").is_none(),
+        "the list omits value sources"
     );
+    let mut detailed = detail["provenance"].clone();
+    detailed
+        .as_object_mut()
+        .expect("provenance is an object")
+        .remove("value_sources");
+    assert_eq!(detailed, row["provenance"], "list and detail agree");
     assert_eq!(detail["provenance"]["element_id"], row["id"]);
     let category = detail["provenance"]["category"].as_str().expect("category");
     let global_id = detail["provenance"]["global_id"]
@@ -998,6 +1054,9 @@ struct Raw {
     child: Child,
     stdin: Option<ChildStdin>,
     lines: Receiver<Result<Value, String>>,
+    /// The tool each `tools/call` request names, by request id, so that
+    /// [`Raw::recv`] can keep its structured answer for the schema check.
+    calls: std::cell::RefCell<std::collections::BTreeMap<String, String>>,
 }
 
 impl Raw {
@@ -1028,20 +1087,41 @@ impl Raw {
             child,
             stdin,
             lines,
+            calls: std::cell::RefCell::default(),
         }
     }
 
     fn send(&mut self, message: &Value) {
+        if let (Some("tools/call"), Some(tool)) = (
+            message["method"].as_str(),
+            message["params"]["name"].as_str(),
+        ) {
+            self.calls
+                .borrow_mut()
+                .insert(message["id"].to_string(), tool.to_string());
+        }
         let stdin = self.stdin.as_mut().expect("stdin is open");
         writeln!(stdin, "{message}").expect("write a request");
         stdin.flush().expect("flush");
     }
 
     fn recv(&self) -> Value {
-        self.lines
+        let message = self
+            .lines
             .recv_timeout(Duration::from_secs(120))
             .expect("the server answered in time")
-            .unwrap_or_else(|problem| panic!("{problem}"))
+            .unwrap_or_else(|problem| panic!("{problem}"));
+        // A successful tools/call answer is kept for the schema check, as
+        // [`call`] keeps the rmcp client's (#1415).
+        let tool = self.calls.borrow().get(&message["id"].to_string()).cloned();
+        if let (Some(tool), Some(structured), false) = (
+            tool,
+            message["result"].get("structuredContent"),
+            message["result"]["isError"] == json!(true),
+        ) {
+            keep("answers", &tool, structured);
+        }
+        message
     }
 
     /// Closes stdin and waits for the server to exit.

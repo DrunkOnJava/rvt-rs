@@ -183,6 +183,15 @@ pub struct RevitFile {
     /// The Areas of a Revit 2015 to 2023 file the reader left unwritten, by
     /// why (RE-324), set when the Areas are read.
     unwritten_areas: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
+    /// What became of each frame at the markers of a Revit 2008 to 2023 file
+    /// (#1389), set when its element records are recovered.
+    element_record_stages: Option<crate::partition_element_records_2023::RecordStages>,
+    /// Whether the recovery lists the frames that stop, for the log of
+    /// decisions ([`Self::record_frame_decisions`], #1389).
+    frame_decisions: bool,
+    /// The chain records of Revit 2024 and later, declared, whose entry block
+    /// did not read when the Areas were looked for (RE-333).
+    dropped_chain_entries: usize,
     /// Memoised production walk: the elements
     /// [`crate::walker::iter_elements_with_control`] yields for a minimum
     /// score and walker limits. An export walks once to write and again for
@@ -244,12 +253,23 @@ pub struct RevitFile {
     /// Doors and windows written as such though their type's record was not
     /// read (#1247).
     unread_type_doors_windows: BTreeSet<u32>,
+    /// Memoised steps of the walls' native records that name a cutting element
+    /// (`research::native_wall_cuts::wall_cut_steps`), by wall, and the walls
+    /// whose record was looked for, found or not: the openings the walls
+    /// carry and the walls drawn from their saved mesh (RE-340) each asked for
+    /// the same records.
+    pub(crate) wall_cut_steps_memo: BTreeMap<u64, Vec<crate::native_wall_cuts::WallCutStep>>,
+    pub(crate) wall_cut_steps_asked: BTreeSet<u64>,
     /// Family instances written as spaces that were left out because their
     /// family draws no model form (RE-312, #1262), by class.
     bodiless_family_spaces: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
     /// How many family instances written as spaces were not checked for a 3D
     /// body, and why, where the check could not run (RE-312).
     bodiless_family_space_error: Option<(usize, String)>,
+    /// The copy of an element's data each reader took a value from, by
+    /// ElementId, noted where the reader chose it (#1360). `None` unless the
+    /// export asked for the provenance table: the readers then note nothing.
+    value_sources: Option<crate::ifc::element_provenance::ValueSourceNotes>,
 }
 
 /// The limits it was opened with and how many streams it has inflated so
@@ -458,6 +478,9 @@ impl RevitFile {
             phase_filter: None,
             chosen_export_phase: None,
             unwritten_areas: BTreeMap::new(),
+            element_record_stages: None,
+            frame_decisions: false,
+            dropped_chain_entries: 0,
             walk: None,
             arc_wall_scan: None,
             partition_progress: None,
@@ -473,8 +496,11 @@ impl RevitFile {
             category_style_materials: None,
             unread_streams: Vec::new(),
             unread_type_doors_windows: BTreeSet::new(),
+            wall_cut_steps_memo: BTreeMap::new(),
+            wall_cut_steps_asked: BTreeSet::new(),
             bodiless_family_spaces: BTreeMap::new(),
             bodiless_family_space_error: None,
+            value_sources: None,
         })
     }
 
@@ -496,6 +522,48 @@ impl RevitFile {
 
     pub(crate) fn note_unread_type_doors_windows(&mut self, ids: impl IntoIterator<Item = u32>) {
         self.unread_type_doors_windows.extend(ids);
+    }
+
+    /// What became of each frame at the markers of this Revit 2008 to 2023
+    /// file in the recovery of its element records (#1389); `None` where that
+    /// recovery has not run, or the file takes another layout.
+    pub(crate) fn element_record_stages(
+        &self,
+    ) -> Option<&crate::partition_element_records_2023::RecordStages> {
+        self.element_record_stages.as_ref()
+    }
+
+    pub(crate) fn note_element_record_stages(
+        &mut self,
+        stages: crate::partition_element_records_2023::RecordStages,
+    ) {
+        self.element_record_stages = Some(stages);
+    }
+
+    /// Note that the walk dropped the element the record recovery handed under
+    /// `id`, because an element with that ElementId was already in it (#1389).
+    pub(crate) fn note_id_already_held(&mut self, id: u32) {
+        if let Some(stages) = self.element_record_stages.as_mut() {
+            stages.note_held(id);
+        }
+    }
+
+    /// Start or stop listing, as the recovery of a Revit 2008 to 2023 file's
+    /// element records goes, each frame that stops (#1389), which the log of
+    /// decisions holds. The counts need no list and are kept either way.
+    /// Starting drops the memoised production walk, since a walk made without
+    /// the list has none to give.
+    pub(crate) fn record_frame_decisions(&mut self, on: bool) {
+        if on && !self.frame_decisions {
+            self.walk = None;
+        }
+        self.frame_decisions = on;
+    }
+
+    /// Whether the recovery lists the frames that stop
+    /// ([`Self::record_frame_decisions`]).
+    pub(crate) fn recording_frame_decisions(&self) -> bool {
+        self.frame_decisions
     }
 
     /// The family instances written as spaces that this handle's export left
@@ -521,10 +589,116 @@ impl RevitFile {
     /// only when it finds some, so each walk starts from none: the notes
     /// follow the memoised walk that produced them.
     pub(crate) fn reset_export_notes(&mut self) {
+        self.element_record_stages = None;
         self.unwritten_areas.clear();
+        self.dropped_chain_entries = 0;
         self.bodiless_family_spaces.clear();
         self.bodiless_family_space_error = None;
         self.unread_type_doors_windows.clear();
+        if let Some(noted) = self.value_sources.as_mut() {
+            noted.clear();
+        }
+    }
+
+    /// Whether the readers note the copy they took each value from
+    /// ([`Self::record_value_sources`]).
+    pub(crate) fn recording_value_sources(&self) -> bool {
+        self.value_sources.is_some()
+    }
+
+    /// Start or stop noting the copy each reader takes a value from (#1360),
+    /// which the provenance table lists. Starting drops the memoised
+    /// production walk, since a walk made while the readers noted nothing has
+    /// no notes to give; stopping drops the notes. A reader that is not asked
+    /// notes nothing, so the default export does no extra work.
+    pub(crate) fn record_value_sources(&mut self, on: bool) {
+        if on == self.value_sources.is_some() {
+            return;
+        }
+        if on {
+            self.value_sources = Some(BTreeMap::new());
+            self.walk = None;
+        } else {
+            self.value_sources = None;
+        }
+    }
+
+    /// Note that a reader took a value of the element `element_id` from
+    /// `source`, in place of an earlier note of the same reader's. Does
+    /// nothing unless [`Self::record_value_sources`] is on.
+    pub(crate) fn note_value_source(
+        &mut self,
+        element_id: u32,
+        source: crate::ifc::element_provenance::ValueSource,
+    ) {
+        let Some(noted) = self.value_sources.as_mut() else {
+            return;
+        };
+        let sources = noted.entry(element_id).or_default();
+        match sources.iter_mut().find(|held| held.reader == source.reader) {
+            Some(held) => *held = source,
+            None => sources.push(source),
+        }
+    }
+
+    /// Note for `owner`, under `as_reader`, the value source that `from` has
+    /// under `reader`, where the record was read once for `from` and `owner`
+    /// uses it: a type's parameters, read for the instances of the type
+    /// (#1368). The record is `from`'s, so it is listed in `parts` with
+    /// `from`'s id. Does nothing unless [`Self::record_value_sources`] is on
+    /// and `from` has one.
+    pub(crate) fn attribute_value_source(
+        &mut self,
+        from: u32,
+        reader: &str,
+        owner: u32,
+        as_reader: &str,
+    ) {
+        let source = self
+            .value_sources
+            .as_ref()
+            .and_then(|noted| noted.get(&from))
+            .and_then(|sources| sources.iter().find(|held| held.reader == reader))
+            .cloned();
+        if let Some(mut source) = source {
+            source.reader = as_reader.to_string();
+            // The record is the other element's: name it in `parts`.
+            if let (true, Some(stream), Some(offset)) = (
+                source.parts.is_empty(),
+                source.stream.take(),
+                source.offset.take(),
+            ) {
+                source
+                    .parts
+                    .push(crate::ifc::element_provenance::SourcePart {
+                        element_id: from,
+                        stream,
+                        offset,
+                    });
+            }
+            self.note_value_source(owner, source);
+        }
+    }
+
+    /// Take back the note of `reader` for `element_id`, where the value was
+    /// not used after all (a record selected, then found not to give the
+    /// value). Does nothing unless [`Self::record_value_sources`] is on.
+    pub(crate) fn forget_value_source(&mut self, element_id: u32, reader: &str) {
+        if let Some(sources) = self
+            .value_sources
+            .as_mut()
+            .and_then(|noted| noted.get_mut(&element_id))
+        {
+            sources.retain(|held| held.reader != reader);
+        }
+    }
+
+    /// The notes of [`Self::note_value_source`], by ElementId; `None` unless
+    /// [`Self::record_value_sources`] is on.
+    pub(crate) fn value_sources(
+        &self,
+    ) -> Option<&crate::ifc::element_provenance::ValueSourceNotes> {
+        self.value_sources.as_ref()
     }
 
     /// How many family instances written as spaces were not checked for a 3D
@@ -1053,6 +1227,18 @@ impl RevitFile {
         by_reason: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
     ) {
         self.unwritten_areas = by_reason;
+    }
+
+    /// Record the number of declared chain records of a Revit 2024 or later
+    /// file whose entry block did not read (RE-333).
+    pub(crate) fn set_dropped_chain_entries(&mut self, dropped: usize) {
+        self.dropped_chain_entries = dropped;
+    }
+
+    /// The declared chain records whose entry block did not read when the
+    /// Areas were looked for; 0 until they are (RE-333).
+    pub(crate) fn dropped_chain_entries(&self) -> usize {
+        self.dropped_chain_entries
     }
 
     /// The Areas of a Revit 2015 to 2023 file left unwritten because their

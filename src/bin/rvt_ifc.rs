@@ -12,7 +12,10 @@ use rvt::{
     ifc::{
         ExportDiagnostics, ExportKind, ExportOptions, ExportQualityMode, SavedMeshChoice,
         run_export_with_limits,
-        step_writer::{StepOptions, write_step_to, write_step_with_options},
+        step_writer::{
+            StepOptions, write_step_to, write_step_to_with_space_materials,
+            write_step_with_options, write_step_with_space_materials,
+        },
     },
     walker::WalkerLimits,
 };
@@ -86,20 +89,22 @@ struct Args {
     /// Draw every element whose body would be its record's bounding box
     /// (furniture, fixtures, equipment and the rest) from the mesh Revit
     /// saved for display (#255). Doors and windows are drawn so by default
-    /// on Revit 2023 to 2027. Slower on large files.
+    /// on Revit 2023 to 2027, and so are the walls that embed a curtain wall
+    /// where Revit raised their base, on Revit 2024 to 2027 (RE-340). Slower
+    /// on large files.
     #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
     saved_meshes: bool,
-    /// Keep doors and windows as their record's bounding box instead of the
-    /// mesh Revit saved for them.
+    /// Keep doors and windows as their record's bounding box, and the walls
+    /// that embed a curtain wall as their record's body, instead of the mesh
+    /// Revit saved for them.
     #[arg(long, conflicts_with = "placeholder")]
     no_saved_meshes: bool,
     /// Draw a family instance from its family's own extrusions (the sketch
     /// lines they were drawn from, swept between their offsets) instead of
     /// its saved mesh, where they reproduce the mesh; every other instance
-    /// keeps it (#156). An arc in a profile is written as the arc, but an
-    /// instance with an arc over 0.12 ft in radius keeps its mesh, since
-    /// Revit's two exporters write a circle in two forms that IfcOpenShell cuts
-    /// differently (#1346, #1355). Off by default. Implies `--saved-meshes`.
+    /// keeps it (#156). An arc in a profile is written as the arc, whatever
+    /// its radius, in the form Revit 24.0.5's IFC4 export gives it (#1366).
+    /// Off by default. Implies `--saved-meshes`.
     /// Each instance is checked against its own mesh. Revit 2024 to 2027 files
     /// (measured on 2024 and 2025). Slower on large files.
     #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
@@ -117,7 +122,10 @@ struct Args {
     /// text parameter named `<set>.<property>` for a property the set's IFC4
     /// definition lacks (`Pset_SpaceCommon.FloorCovering`) (RE-235). By
     /// default every property is in the set buildingSMART's IFC4 definitions
-    /// put it in.
+    /// put it in. It also keeps the material Revit's export associates with
+    /// an `IfcSpace`, which IFC4's `IfcRelAssociatesMaterial.AllowedElements`
+    /// does not allow: with it the output breaks that rule, as Revit's own
+    /// export does (#1430).
     #[arg(long, conflicts_with = "placeholder")]
     revit_set_placement: bool,
     /// Leave out the base quantities (the `Qto_` sets: lengths, areas and
@@ -144,9 +152,9 @@ struct Args {
     /// read from (#1325): the kind of record, its stream and byte offset in
     /// the inflated stream (what rvt-dump writes as Partitions_NN.decomp),
     /// where its ElementId is stored, its class and its native record. Off by
-    /// default: the list is about 140 times the rest of the pretty-printed
-    /// sidecar on a large model (7.4 MB against 53 KB on the BIM4LCA office
-    /// as built). Never written into the IFC.
+    /// default: on a large model the list is hundreds of times the rest of
+    /// the sidecar (docs/export-diagnostics.md, "Provenance table size", gives
+    /// the measured sizes). Never written into the IFC.
     #[arg(long, requires = "diagnostics", conflicts_with = "placeholder")]
     element_provenance: bool,
     /// Also list, in the diagnostics sidecar, each fail-closed decision per
@@ -306,7 +314,11 @@ fn run(args: Args) -> anyhow::Result<()> {
     let mut observed_step = None;
     drop(rf);
     let written = if args.observation.is_some() {
-        let step = write_step_with_options(&model, &options);
+        let step = if args.revit_set_placement {
+            write_step_with_space_materials(&model, &options)
+        } else {
+            write_step_with_options(&model, &options)
+        };
         std::fs::write(&out_path, step.as_bytes())?;
         let written = step.len() as u64;
         observed_step = Some(step);
@@ -318,7 +330,13 @@ fn run(args: Args) -> anyhow::Result<()> {
         partial.push(".partial");
         let partial = PathBuf::from(partial);
         let streamed = std::fs::File::create(&partial)
-            .and_then(|file| write_step_to(&model, &options, file))
+            .and_then(|file| {
+                if args.revit_set_placement {
+                    write_step_to_with_space_materials(&model, &options, file)
+                } else {
+                    write_step_to(&model, &options, file)
+                }
+            })
             .and_then(|written| std::fs::rename(&partial, &out_path).map(|()| written));
         match streamed {
             Ok(written) => written,
@@ -329,7 +347,11 @@ fn run(args: Args) -> anyhow::Result<()> {
         }
     };
     eprintln!("rvt-ifc: wrote {written} bytes to {}", out_path.display());
-    for line in export_summary(&diagnostics, args.diagnostics.is_some()) {
+    for line in export_summary(
+        &diagnostics,
+        args.diagnostics.is_some(),
+        is_family_file(&args.input),
+    ) {
         eprintln!("{line}");
     }
     if let Some(diagnostics_path) = &args.diagnostics {
@@ -356,7 +378,9 @@ fn run(args: Args) -> anyhow::Result<()> {
 /// The switches that change the model: the document exporter by default,
 /// `--placeholder` or `--diagnostic-proxies` for the others; the saved-graphics
 /// bodies are every boxed one with `--saved-meshes`, none with
-/// `--no-saved-meshes`, and otherwise doors and windows on Revit 2023 to 2027.
+/// `--no-saved-meshes`, and otherwise doors and windows on Revit 2023 to 2027
+/// and the walls that embed a curtain wall where Revit raised their base on
+/// Revit 2024 to 2027 (RE-340).
 fn export_options(args: &Args) -> ExportOptions {
     let kind = if args.placeholder {
         ExportKind::Placeholder
@@ -874,9 +898,25 @@ fn format_elevation_feet(feet: f64) -> String {
 /// How many IFC types the summary names before "and N more".
 const SUMMARY_TYPES: usize = 6;
 
+/// Whether `path` names a family (`.rfa`) or a family template (`.rft`), whose
+/// elements are read from `Global/Latest` and not from the project element
+/// records.
+fn is_family_file(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            ["rfa", "rft"]
+                .iter()
+                .any(|family| extension.eq_ignore_ascii_case(family))
+        })
+}
+
 /// A few lines saying what the IFC holds: building elements by IFC type,
 /// what was left out on purpose, and the readiness level.
-fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<String> {
+///
+/// `family` is whether the input is a family file, for which the element
+/// records of a project say nothing.
+fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool, family: bool) -> Vec<String> {
     let mut lines = Vec::new();
     let exported = &diagnostics.exported;
     if exported.building_elements > 0 {
@@ -953,6 +993,23 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool) -> Vec<Str
             "  left out as Revit's own export leaves them out: {}",
             left_out.join(", ")
         ));
+    }
+    // #1389: a Revit 2008 to 2023 project none of whose element records was
+    // written says where they stopped, on a line of its own (it can be the only
+    // line, when nothing else was exported). A family file reads its elements
+    // from `Global/Latest`, so for one it says nothing.
+    if let Some(stages) = diagnostics
+        .decoded
+        .element_record_stages
+        .as_ref()
+        .filter(|_| !family)
+    {
+        if let Some(stopped) = &stages.stopped_at {
+            lines.push(format!(
+                "rvt-ifc: no element record of this Revit {} layout was written: {} marker(s) found, they stopped at {stopped} (decoded.element_record_stages in the diagnostics)",
+                stages.layout_release, stages.total.markers
+            ));
+        }
     }
     // A scaffold-only export already warned with the same advice.
     let hint = if has_sidecar || diagnostics.confidence.level == "scaffold" {

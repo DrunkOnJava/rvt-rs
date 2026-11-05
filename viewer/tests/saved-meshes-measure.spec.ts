@@ -27,14 +27,17 @@ import { fileURLToPath } from 'node:url';
 // log and the job summary; Deploy viewer uploads the JSON. It runs on its own
 // (RVT_VIEWER_MEASURE=1, one worker) so another spec does not compete for the
 // CPU, and it asserts behaviour only: the timings are for reading, not pinned.
+// The toggle test at the end is not a measurement: it is the suite's check of
+// the toggle on Core Interior, and runs there, not in the measurement.
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const corpus = path.resolve(__dirname, '../../_project_corpus/Revit');
 const outFile =
   process.env.RVT_VIEWER_MEASURE_OUT ?? path.resolve(__dirname, '../measurements/saved-meshes.json');
-// Deploy viewer fetches every model and sets this, so a model missing there
-// fails; elsewhere it is a skip.
+// CI fetches every model and sets this, so a model missing there fails;
+// elsewhere it is a skip.
 const required = process.env.RVT_VIEWER_REQUIRE_JOURNEYS === '1';
+const measuring = process.env.RVT_VIEWER_MEASURE === '1';
 
 // Chromium rounds the JavaScript heap sizes it reports unless told otherwise.
 test.use({ launchOptions: { args: ['--enable-precise-memory-info'] } });
@@ -299,7 +302,7 @@ test.afterAll(() => {
 
 for (const [index, model] of models.entries()) {
   const source = path.join(corpus, model.file);
-  const modelTest = required || fs.existsSync(source) ? test : test.skip;
+  const modelTest = measuring && (required || fs.existsSync(source)) ? test : test.skip;
 
   modelTest(`${model.file} opens with and without saved meshes`, async ({ browser }) => {
     test.setTimeout(900_000);
@@ -344,7 +347,7 @@ for (const [index, model] of models.entries()) {
 
 const coreInterior = models[0];
 const coreInteriorSource = path.join(corpus, coreInterior.file);
-const toggleTest = required || fs.existsSync(coreInteriorSource) ? test : test.skip;
+const toggleTest = !measuring && (required || fs.existsSync(coreInteriorSource)) ? test : test.skip;
 
 toggleTest('the toggle reopens the open file with the option changed', async ({ page }) => {
   test.setTimeout(900_000);

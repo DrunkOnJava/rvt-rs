@@ -8,9 +8,11 @@ use std::collections::BTreeMap;
 
 use rvt::ifc::ELEMENT_RECORD_PROPERTY_SET;
 use rvt::ifc::IfcModel;
+use rvt::ifc::element_provenance::ValueSource;
 use rvt::ifc::entities::{IfcEntity, Property, PropertySet, PropertyValue};
 use rvt::ifc::export_content::SPACE_OUTLINE_SOURCE_PROPERTY;
 use rvt::ifc::schedule_csv::room_rows;
+use rvt::ifc::step_writer::written_names;
 use rvt::reader::UnreadStream;
 use serde_json::Value;
 
@@ -18,7 +20,7 @@ use crate::schema::{
     DecisionOut, DiagnosticsOut, DiagnosticsSummary, ElementCounts, ElementDetail,
     ElementProvenance, ElementRow, EntityRefOut, ExplainElementOut, LevelOut, LevelRefOut,
     LevelsOut, ListElementsOut, NativeRecordOut, PropertyOut, PropertySetOut, RoomOut, RoomsOut,
-    SkippedOut, SummaryOut, TypeOut, UnreadOut,
+    SkippedOut, SourcePartOut, SummaryOut, TypeOut, UnreadOut, ValueSourceOut,
 };
 use crate::store::{Computed, Entry};
 
@@ -52,8 +54,33 @@ fn storey_name(model: &IfcModel, storey_index: Option<usize>) -> Option<String> 
         .map(|storey| storey.name.clone())
 }
 
+/// A value source as the answers write it.
+fn value_source_out(source: &ValueSource) -> ValueSourceOut {
+    ValueSourceOut {
+        reader: source.reader.clone(),
+        rule: source.rule.as_str().to_string(),
+        copies: source.copies,
+        stream: source.stream.clone(),
+        offset: source.offset,
+        partitions: source.partitions.clone(),
+        parts: source
+            .parts
+            .iter()
+            .map(|part| SourcePartOut {
+                element_id: part.element_id,
+                stream: part.stream.clone(),
+                offset: part.offset,
+            })
+            .collect(),
+        parts_left_out: source.parts_left_out,
+        differs_from_frame: source.differs_from_frame,
+    }
+}
+
 /// The provenance of the building element at `index` of the model's entities.
-fn provenance(computed: &Computed, index: usize) -> Option<ElementProvenance> {
+/// `sources` says whether the answer lists the element's value sources, which
+/// a list of elements does not.
+fn provenance(computed: &Computed, index: usize, sources: bool) -> Option<ElementProvenance> {
     let IfcEntity::BuildingElement {
         ifc_type,
         type_guid,
@@ -96,26 +123,33 @@ fn provenance(computed: &Computed, index: usize) -> Option<ElementProvenance> {
                 class_name: native.class_name.clone(),
             }),
         provenance_omitted: omitted.then_some(true),
+        value_sources: source
+            .filter(|_| sources)
+            .map(|entry| entry.value_sources.iter().map(value_source_out).collect())
+            .unwrap_or_default(),
     })
 }
 
 fn element_row(computed: &Computed, index: usize) -> Option<ElementRow> {
     let IfcEntity::BuildingElement {
+        ifc_type,
         name,
         type_guid,
         predefined_type,
-        storey_index,
+        property_set,
         ..
     } = computed.model.entities.get(index)?
     else {
         return None;
     };
+    let names = written_names(ifc_type, name, type_guid.as_deref(), property_set.as_ref());
     Some(ElementRow {
         id: type_guid.clone(),
-        name: name.clone(),
-        level: storey_name(&computed.model, *storey_index),
+        name: (!names.name_is_placeholder).then_some(names.name),
+        long_name: names.long_name,
+        level: storey_name(&computed.model, computed.storey(index)),
         predefined_type: predefined_type.clone(),
-        provenance: provenance(computed, index)?,
+        provenance: provenance(computed, index, false)?,
     })
 }
 
@@ -159,12 +193,11 @@ fn diagnostics_summary(computed: &Computed) -> DiagnosticsSummary {
 pub fn levels(computed: &Computed) -> Vec<LevelOut> {
     let model = &computed.model;
     let mut counts = vec![0usize; model.building_storeys.len()];
-    for entity in &model.entities {
-        if let IfcEntity::BuildingElement {
-            storey_index: Some(index),
-            ..
-        } = entity
-            && let Some(count) = counts.get_mut(*index)
+    for (index, entity) in model.entities.iter().enumerate() {
+        if matches!(entity, IfcEntity::BuildingElement { .. })
+            && computed.is_written(index)
+            && let Some(storey) = computed.storey(index)
+            && let Some(count) = counts.get_mut(storey)
         {
             *count += 1;
         }
@@ -196,7 +229,8 @@ pub fn summary(entry: &Entry, computed: &Computed) -> SummaryOut {
     let mut room_count = 0usize;
     let mut by_ifc_type: BTreeMap<String, usize> = BTreeMap::new();
     let mut by_revit_class: BTreeMap<String, usize> = BTreeMap::new();
-    for entity in &computed.model.entities {
+    let mut folded_into_bodies: BTreeMap<String, usize> = BTreeMap::new();
+    for (index, entity) in computed.model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
             property_set,
@@ -205,6 +239,10 @@ pub fn summary(entry: &Entry, computed: &Computed) -> SummaryOut {
         else {
             continue;
         };
+        if !computed.is_written(index) {
+            *folded_into_bodies.entry(ifc_type.clone()).or_insert(0) += 1;
+            continue;
+        }
         total += 1;
         *by_ifc_type.entry(ifc_type.clone()).or_insert(0) += 1;
         if let Some(class) = text_property(property_set.as_ref(), "RevitClass") {
@@ -231,6 +269,7 @@ pub fn summary(entry: &Entry, computed: &Computed) -> SummaryOut {
             total,
             by_ifc_type,
             by_revit_class,
+            folded_into_bodies,
         },
         levels: levels(computed),
         room_count,
@@ -276,13 +315,15 @@ pub fn list_elements(
     for (index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
-            storey_index,
             property_set,
             ..
         } = entity
         else {
             continue;
         };
+        if !computed.is_written(index) {
+            continue;
+        }
         if let Some(wanted) = filter.category
             && !category_matches(ifc_type, wanted)
         {
@@ -295,7 +336,7 @@ pub fn list_elements(
             }
         }
         if let Some(wanted) = filter.level {
-            let level = storey_name(model, *storey_index);
+            let level = storey_name(model, computed.storey(index));
             if !level.is_some_and(|level| level.eq_ignore_ascii_case(wanted.trim())) {
                 continue;
             }
@@ -400,22 +441,20 @@ fn property_set_out(set: &PropertySet) -> Option<PropertySetOut> {
     })
 }
 
-/// The type object of the element with Revit ElementId `id`, with its sets.
-fn type_out(model: &IfcModel, id: &str) -> Option<TypeOut> {
-    let tag = id.parse::<u32>().ok()?;
-    let type_id = model.element_type_ids.get(&tag)?;
-    let mut property_sets: Vec<PropertySetOut> = Vec::new();
-    if let Some(sets) = model.type_property_sets.get(type_id) {
-        property_sets.extend(sets.iter().filter_map(property_set_out));
-    }
-    if let Some(by_entity) = model.type_entity_sets.get(type_id) {
-        for sets in by_entity.values() {
-            property_sets.extend(sets.iter().filter_map(property_set_out));
-        }
-    }
+/// The type object the export writes for the entity at `index`, with its
+/// sets, as the writer decides it (`rvt::ifc::step_writer::type_objects`):
+/// none where the writer makes none.
+fn type_out(computed: &Computed, index: usize) -> Option<TypeOut> {
+    let object = computed.type_object(index)?;
     Some(TypeOut {
-        element_id: type_id.to_string(),
-        property_sets,
+        element_id: object.tag.clone(),
+        ifc_type: object.entity.clone(),
+        name: object.name.clone(),
+        property_sets: object
+            .property_sets
+            .iter()
+            .filter_map(property_set_out)
+            .collect(),
     })
 }
 
@@ -428,7 +467,9 @@ fn find_entities(computed: &Computed, id: &str) -> Vec<usize> {
         .iter()
         .enumerate()
         .filter_map(|(index, entity)| match entity {
-            IfcEntity::BuildingElement { type_guid, .. } if type_guid.as_deref() == Some(id) => {
+            IfcEntity::BuildingElement { type_guid, .. }
+                if type_guid.as_deref() == Some(id) && computed.is_written(index) =>
+            {
                 Some(index)
             }
             _ => None,
@@ -441,7 +482,9 @@ fn find_entities(computed: &Computed, id: &str) -> Vec<usize> {
         .global_ids
         .iter()
         .enumerate()
-        .filter_map(|(index, global_id)| (global_id.as_deref() == Some(id)).then_some(index))
+        .filter_map(|(index, global_id)| {
+            (global_id.as_deref() == Some(id) && computed.is_written(index)).then_some(index)
+        })
         .collect()
 }
 
@@ -499,15 +542,16 @@ pub fn explain_element(
         .copied()
         .and_then(|index| match model.entities.get(index)? {
             IfcEntity::BuildingElement {
+                ifc_type,
                 name,
                 type_guid,
                 property_set,
                 ..
-            } => Some((index, name, type_guid, property_set)),
+            } => Some((index, ifc_type, name, type_guid, property_set)),
             _ => None,
         });
     let element_id: Option<u32> = match found {
-        Some((_, _, type_guid, _)) => type_guid.as_deref().and_then(|tag| tag.parse().ok()),
+        Some((_, _, _, type_guid, _)) => type_guid.as_deref().and_then(|tag| tag.parse().ok()),
         None => id.parse().ok(),
     };
     let log = computed.export_decisions.as_ref();
@@ -547,11 +591,12 @@ pub fn explain_element(
         });
     }
     let (name, provenance_out, trust_markers) = match found {
-        Some((index, name, _, property_set)) => {
+        Some((index, ifc_type, name, type_guid, property_set)) => {
             let property_sets = element_property_sets(model, index, property_set);
+            let names = written_names(ifc_type, name, type_guid.as_deref(), property_set.as_ref());
             (
-                Some(name.clone()),
-                provenance(computed, index),
+                (!names.name_is_placeholder).then_some(names.name),
+                provenance(computed, index, true),
                 trust_markers_of(&property_sets),
             )
         }
@@ -579,10 +624,10 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
         ));
     };
     let Some(IfcEntity::BuildingElement {
+        ifc_type,
         name,
         type_guid,
         predefined_type,
-        storey_index,
         property_set,
         location_feet,
         rotation_radians,
@@ -595,9 +640,9 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
     else {
         return Err(format!("{id:?} is not a building element"));
     };
-    let provenance =
-        provenance(computed, index).ok_or_else(|| format!("{id:?} is not a building element"))?;
-    let level = storey_index.and_then(|storey| {
+    let provenance = provenance(computed, index, true)
+        .ok_or_else(|| format!("{id:?} is not a building element"))?;
+    let level = computed.storey(index).and_then(|storey| {
         model.building_storeys.get(storey).map(|found| LevelRefOut {
             index: storey,
             name: found.name.clone(),
@@ -626,19 +671,28 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
         .iter()
         .skip(1)
         .filter_map(|&other| match model.entities.get(other)? {
-            IfcEntity::BuildingElement { ifc_type, name, .. } => Some(EntityRefOut {
+            IfcEntity::BuildingElement {
+                ifc_type,
+                name,
+                type_guid,
+                property_set,
+                ..
+            } => Some(EntityRefOut {
                 ifc_type: ifc_type.clone(),
-                name: name.clone(),
+                name: written_names(ifc_type, name, type_guid.as_deref(), property_set.as_ref())
+                    .name,
                 global_id: computed.global_ids.get(other).cloned().flatten(),
             }),
             _ => None,
         })
         .collect();
 
+    let names = written_names(ifc_type, name, type_guid.as_deref(), property_set.as_ref());
     Ok(ElementDetail {
         model_id: entry.id.clone(),
         id: type_guid.clone(),
-        name: name.clone(),
+        name: (!names.name_is_placeholder).then_some(names.name),
+        long_name: names.long_name,
         level,
         predefined_type: predefined_type.clone(),
         location_feet: *location_feet,
@@ -651,7 +705,7 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
         file: computed.file.clone(),
         trust_markers,
         property_sets,
-        element_type: type_guid.as_deref().and_then(|tag| type_out(model, tag)),
+        element_type: type_out(computed, index),
         other_entities,
     })
 }
@@ -670,7 +724,7 @@ pub fn rooms(entry: &Entry, computed: &Computed) -> RoomsOut {
                 area_square_metres: row
                     .area_square_feet
                     .map(|area| area * SQUARE_METRES_PER_SQUARE_FOOT),
-                provenance: provenance(computed, row.entity_index)?,
+                provenance: provenance(computed, row.entity_index, false)?,
             })
         })
         .collect();

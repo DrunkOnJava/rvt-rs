@@ -13,9 +13,11 @@
 //! disagree: every item of `skipped` has a reason here whose `total` is its
 //! count, and, for a reason that dropped none, whose entries by class are its
 //! classes. The decisions behind `exported.bounding_box_bodies`,
-//! `exported.bounding_box_spaces` and `exported.area_body_refusals` are here
-//! too (`body_is_record_box`, `space_outline_is_record_box`,
-//! `area_body_refused`).
+//! `exported.bounding_box_spaces`, `exported.area_body_refusals`,
+//! `exported.slab_shape_refusals`, `exported.wall_base_refusals` and
+//! `exported.wall_end_refusals` are here too (`body_is_record_box`,
+//! `space_outline_is_record_box`, `area_body_refused`, `slab_shape_refused`,
+//! `wall_base_cut_refused`, `wall_end_extension_refused`).
 //!
 //! The log is off unless asked for (`ExportOptions::with_export_decisions`,
 //! `rvt-ifc --export-decisions`) and bounded: it keeps at most
@@ -37,6 +39,14 @@
 //!   element ([`super::element_provenance`], `select_instance_records`) is
 //!   the one with the greatest extent, so the two can name different frames
 //!   of the same element.
+//! - `element_record_frame_stopped` is made on Revit 2008 to 2023 files, from the
+//!   frames of their marker scan that did not become an element: its `class` is
+//!   the stage the frame stopped at (`frame_outside_stream`,
+//!   `category_out_of_range`, `box_not_valid`, `no_declared_id` or
+//!   `without_volume`, [`super::element_record_stages`]). Its `offset` is where the
+//!   frame's ElementId is stored, 52 bytes before the marker (48 on Revit 2008),
+//!   in the stream inflated; a frame stopped before its record has no ElementId,
+//!   and one with no volume has its record's.
 //! - The reasons made from the model (the geometry gaps, `body_is_record_box`,
 //!   `space_outline_is_record_box`, `area_body_refused`) take the table's
 //!   stream and offset for the element.
@@ -55,18 +65,26 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use super::element_provenance::ElementProvenanceTable;
+use super::element_record_stages::{FRAME_STOP_STAGES, FRAME_STOPPED_REASON};
 use crate::partition_room_parameters::partition_number;
 
 /// The most entries the log keeps of one reason. The rest are counted in
-/// [`ExportDecisionReason::dropped`].
+/// [`ExportDecisionReason::dropped`]. The reason `element_record_frame_stopped`
+/// holds five stages, so its cap is shared out: it keeps at most this many
+/// divided by the number of stages for each stage, in ElementId order, the
+/// frames with no ElementId first, and the stage that fills its share does not
+/// crowd the others out (#1389).
 pub const MAX_DECISIONS_PER_REASON: usize = 5_000;
 
 /// The reasons whose `detail` is a code rvt-rs writes, not text from the
 /// project, so [`ExportDecisionLog::anonymize`] keeps it.
-const CODE_DETAIL_REASONS: [&str; 3] = [
+const CODE_DETAIL_REASONS: [&str; 6] = [
     "area_without_proven_body",
     "area_body_refused",
     "body_is_record_box",
+    "slab_shape_refused",
+    "wall_base_cut_refused",
+    "wall_end_extension_refused",
 ];
 
 /// Which fail-closed step made a decision.
@@ -79,7 +97,11 @@ pub enum DecisionStage {
     /// The element is written with no body: its curve, profile or dimensions
     /// were not read.
     BodyNotDrawn,
-    /// The element's body is only its record's bounding box.
+    /// The element's body is only its record's bounding box, or keeps its
+    /// record's extent where a shape or a cut Revit applies is not read: a
+    /// shape-edited floor (`slab_shape_refused`), the base of a wall
+    /// (`wall_base_cut_refused`, #1384) or the end of a wall
+    /// (`wall_end_extension_refused`, #1396).
     BodyLeftAsBox,
     /// A door or window has no host to cut, or an opening index row has no
     /// host geometry: no opening is cut.
@@ -116,8 +138,10 @@ pub struct ExportDecision {
     /// The step that made it.
     pub stage: DecisionStage,
     /// The reason code: the `reason` of the `skipped` item it is counted in,
-    /// or `body_is_record_box`, `space_outline_is_record_box` or
-    /// `area_body_refused` for the decisions behind the `exported` counts.
+    /// or `body_is_record_box`, `space_outline_is_record_box`,
+    /// `area_body_refused`, `slab_shape_refused`, `wall_base_cut_refused` or
+    /// `wall_end_extension_refused` for the decisions behind the `exported`
+    /// counts.
     pub reason: String,
     /// The element's Revit ElementId. Absent for a frame that carries none
     /// (`element_record_without_element_id`).
@@ -125,7 +149,10 @@ pub struct ExportDecision {
     pub element_id: Option<u32>,
     /// The class the aggregate counts it under: a Revit class for the
     /// element-record reasons, an IFC entity such as `IFCDOOR` for the
-    /// geometry gaps and the decisions behind the `exported` counts.
+    /// geometry gaps and the decisions behind the `exported` counts. For
+    /// `element_record_frame_stopped` it is the stage the frame stopped at
+    /// (`frame_outside_stream`, `category_out_of_range`, `box_not_valid`,
+    /// `no_declared_id` or `without_volume`), not a Revit class.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub class: Option<String>,
     /// The stream the evidence was read from, where known.
@@ -159,6 +186,17 @@ impl ExportDecision {
             offset: None,
             detail: None,
         }
+    }
+}
+
+/// The stage a decision of a reason that holds several is counted under, which
+/// the log sorts and caps by: the class of an `element_record_frame_stopped`
+/// decision, none for any other reason.
+fn stage_of(decision: &ExportDecision) -> Option<&String> {
+    if decision.reason == FRAME_STOPPED_REASON {
+        decision.class.as_ref()
+    } else {
+        None
     }
 }
 
@@ -207,6 +245,7 @@ impl ExportDecisionLog {
         decisions.sort_by(|a, b| {
             (
                 &a.reason,
+                stage_of(a),
                 a.element_id,
                 number(a),
                 &a.stream,
@@ -215,6 +254,7 @@ impl ExportDecisionLog {
             )
                 .cmp(&(
                     &b.reason,
+                    stage_of(b),
                     b.element_id,
                     number(b),
                     &b.stream,
@@ -226,7 +266,10 @@ impl ExportDecisionLog {
             cap_per_reason: MAX_DECISIONS_PER_REASON,
             ..Self::default()
         };
+        let share = MAX_DECISIONS_PER_REASON / FRAME_STOP_STAGES.len();
+        let mut recorded_by_stage: BTreeMap<String, usize> = BTreeMap::new();
         for mut decision in decisions {
+            let stage = stage_of(&decision);
             let reason = log
                 .reasons
                 .entry(decision.reason.clone())
@@ -237,7 +280,16 @@ impl ExportDecisionLog {
                     dropped: 0,
                 });
             reason.total += 1;
-            if reason.recorded >= MAX_DECISIONS_PER_REASON {
+            let full = match stage {
+                Some(stage) => {
+                    let held = recorded_by_stage.entry(stage.clone()).or_default();
+                    let full = *held >= share;
+                    *held += usize::from(!full);
+                    full
+                }
+                None => reason.recorded >= MAX_DECISIONS_PER_REASON,
+            };
+            if full {
                 reason.dropped += 1;
                 log.dropped += 1;
                 continue;

@@ -417,7 +417,8 @@ pub fn file_metadata(bytes: &[u8]) -> Result<JsValue, JsValue> {
 
 /// Spreadsheet schedule of an exported model as CSV
 /// ([`rvt::ifc::schedule_csv`]): `kind` is `"elements"` (every building
-/// element) or `"rooms"`; `metric` switches lengths to metres; `excel`
+/// element the IFC export writes, on the storey it puts it on) or `"rooms"`;
+/// `metric` switches lengths to metres; `excel`
 /// prefixes a UTF-8 byte-order mark so Excel on Windows reads non-ASCII
 /// names correctly.
 #[wasm_bindgen(js_name = scheduleCsv)]
@@ -475,7 +476,8 @@ pub fn js_element_info_panel(model: JsValue, entity_index: usize) -> Result<JsVa
     serde_wasm_bindgen::to_value(&panel).map_err(err_str)
 }
 
-/// Build a flat schedule table of every BuildingElement.
+/// Build a flat schedule table of the BuildingElements the IFC export
+/// writes, each on the storey it puts it on.
 #[wasm_bindgen(js_name = buildSchedule)]
 pub fn js_build_schedule(model: JsValue) -> Result<JsValue, JsValue> {
     install_panic_hook();

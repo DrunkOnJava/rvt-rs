@@ -1208,7 +1208,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 
 [[package]]
 name = "rvt"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "cfb",
@@ -1247,7 +1247,7 @@ dependencies = [
 
 [[package]]
 name = "rvt-py"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "anyhow",
  "pyo3",
@@ -1259,7 +1259,7 @@ dependencies = [
 
 [[package]]
 name = "rvt-rs-mcp"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "clap",
  "rmcp",
@@ -1276,7 +1276,7 @@ dependencies = [
 
 [[package]]
 name = "rvt-wasm"
-version = "0.14.0"
+version = "0.15.0"
 dependencies = [
  "js-sys",
  "rvt",

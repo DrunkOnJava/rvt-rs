@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # Reduce the Measure results of each model fetched without a licence to
-# redistribute it, the held-out models (research/holdout-models.tsv, RE-252)
-# and BIMcollab's example model (research/bimcollab-models.tsv, RE-198), to
-# summary counts before they are uploaded.
+# redistribute it, the held-out models (research/holdout-models.tsv, RE-252),
+# BIMcollab's example model (research/bimcollab-models.tsv, RE-198) and
+# Autodesk's rac_advanced sample scored against an IFC2X3 export that carries
+# no licence (research/rac-advanced-export.tsv, #1354; the main session,
+# 2026-11-04, after Griffin's precedent for BIMcollab), to summary counts
+# before they are uploaded.
 #
 # Usage:
 #   tools/ci/scrub-holdout-results.sh RESULTS_DIR
 #
 # A public repository's artifacts can be downloaded by anyone, so nothing taken
 # from those models per element may be uploaded (Griffin, 2026-10-26). For
-# each RESULTS_DIR/holdout-*/ and RESULTS_DIR/bimcollab-*/ this keeps
+# each RESULTS_DIR/holdout-*/, RESULTS_DIR/bimcollab-*/ and RESULTS_DIR/racadv-*/
+# this keeps
 # counts.txt, made of the summary lines of its probe scores (the wall length
 # rule, with the walls it is wrong on as a count, the export's version, the
 # census of its wall representations, the hours between its save and its
@@ -31,7 +35,10 @@
 # class-set totals and each class's revit / same / other / absent counts and
 # the extra elements' count by class, the GlobalId agreement counts, and the
 # storey verdict counts by kind, and
-# the `native levels:` lines of tools/re/native_levels_vs_ifc.py (RE-281:
+# the `mcp answers:` count lines of tools/re/mcp_answers_vs_ifc.py (#1327: the
+# MCP server's answers against the export and Revit's, as counts and verdicts
+# beside an IFC entity name, never an element), the `native levels:` lines of
+# tools/re/native_levels_vs_ifc.py (RE-281:
 # counts, the same restricted alphabet), the totals and per property counts of
 # its property set census (standard Pset_ and Qto_ names only; RE-281),
 # the `space profiles:` count lines of tools/re/space_profiles_vs_ifc.py
@@ -41,12 +48,17 @@
 # the area of Revit's upward faces, floor or every face, never a GlobalId), the
 # totals and per-class rows of mesh_bodies_vs_ifc.py, box_bodies_vs_ifc.py and
 # saved_meshes_vs_ifc.py (RE-329: numbers beside an IFC class name, never a
-# family, type or element), and
+# family, type or element), with the `fine` rows the two body scorers print under
+# RVT_SCORER_FINE_MESH (RE-331: the same), the last column those two print when the
+# fine tessellation decides some bodies and the line that counts them (RE-331
+# section 8, #1365: the same), the counts of the IFC4 schema's findings on
+# the export (`schema validate:` and `schema rules:` lines, #1430: a number, and
+# for a rule finding the entity and rule that name it, never its message), and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
 RESULTS="${1:?usage: scrub-holdout-results.sh RESULTS_DIR}"
-for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
+for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; do
   [ -d "$dir" ] || continue
   {
     for f in "$dir"probe_score*.txt; do
@@ -118,7 +130,8 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
     # type, are dropped (RE-329).
     for f in "$dir"mesh_bodies_vs_ifc.txt; do
       [ -f "$f" ] || continue
-      grep -E "^(saved_graphics_mesh bodies scored: [0-9]+; in Revit's export [0-9]+|Ifc[A-Za-z0-9]+: [0-9]+ bodies, every [0-9]+th scored|Ifc[A-Za-z0-9]+ +[0-9]+( +[0-9]+){5} +([0-9]+\.[0-9]+|nan|-))$" "$f" | sed 's/^/mesh bodies: /' || true
+      grep -E "^(saved_graphics_mesh bodies scored: [0-9]+; in Revit's export [0-9]+|Ifc[A-Za-z0-9]+: [0-9]+ bodies, every [0-9]+th scored|Ifc[A-Za-z0-9]+ +[0-9]+( +[0-9]+){5} +([0-9]+\.[0-9]+|nan|-)( +[0-9]+)?|decided by the fine tessellation \(both files write true curves\): [0-9]+ of [0-9]+ bodies)$" "$f" | sed 's/^/mesh bodies: /' || true
+      grep -E "^(fine tessellation: IfcOpenShell mesher-linear-deflection [0-9.e-]+ m \(1e-5 ft\) and mesher-angular-deflection [0-9.]+ rad, both files; [0-9]+ of [0-9]+ bodies meshed in both, [0-9]+ of them meshed differently|fine (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){8}  ([0-9]+\.[0-9]+|nan|inf) [0-9]+\.[0-9]+|fine change (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){9}|fine bodies that miss 'ref on ours': [0-9]+)$" "$f" | sed 's/^/mesh bodies: /' || true
     done
     for f in "$dir"box_bodies_vs_ifc.txt; do
       [ -f "$f" ] || continue
@@ -126,11 +139,47 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/; do
     done
     for f in "$dir"saved_meshes_vs_ifc.txt; do
       [ -f "$f" ] || continue
-      grep -E "^(Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){5}$" "$f" | sed 's/^/saved meshes: /' || true
+      grep -E "^((Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){5,6}|decided by the fine tessellation \(both files write true curves\): [0-9]+ of [0-9]+ elements)$" "$f" | sed 's/^/saved meshes: /' || true
+      grep -E "^(fine tessellation: IfcOpenShell mesher-linear-deflection [0-9.e-]+ m \(1e-5 ft\) and mesher-angular-deflection [0-9.]+ rad, both files; [0-9]+ of [0-9]+ sampled elements meshed|fine (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){7})$" "$f" | sed 's/^/saved meshes: /' || true
     done
+    # What the MCP server answered about the model (#1327): the lines starting
+    # `mcp answers:` are made of fixed words, numbers and IFC entity names (the
+    # scorer's docstring); the lines under them with an element's id, name or
+    # value start with spaces and are dropped. The `exit N` line stays, as an
+    # `mcp answers:` line, so a crash (no verdict line) is told from a model
+    # that was not scored.
+    if [ -f "${dir}mcp_answers_vs_ifc.txt" ]; then
+      grep -E '^(mcp answers: [A-Za-z0-9 _:.,;()=%/+-]+|exit [0-9]+)$' "${dir}mcp_answers_vs_ifc.txt" \
+        | sed -E 's/^exit ([0-9]+)$/mcp answers: exit \1/' || true
+    fi
     for f in "$dir"storeys_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E "^([0-9]+ elements, [0-9]+ not on a storey|against Revit's export:| +[0-9]+  Ifc[A-Za-z0-9]+| +[0-9]+  (same storey as Revit's|on no storey; Revit's is (a storey|another container)|on a storey; Revit contains it in <Ifc[A-Za-z0-9]+>|a different storey from Revit's)|  different, by type: Ifc[A-Za-z0-9]+ [0-9]+(, Ifc[A-Za-z0-9]+ [0-9]+)*)$" "$f" | sed 's/^/storeys: /' || true
+    done
+    # The IFC4 schema's findings on the export (#1430), as counts: the number
+    # of findings of the default validation and of the EXPRESS rules check,
+    # and for each kind of rule finding its count beside the entity and rule
+    # that name it (`IfcShapeRepresentation.CorrectItemsForType`), never the
+    # message, which holds the instances. Only the lines of the validation and
+    # rules sections are read, up to the property sets. A check skipped for
+    # the file's size keeps its line, and a rules check that left no count (it
+    # timed out, or did not read the file) says `not read`, so a model it did
+    # not cover is told from one it passed.
+    for f in "$dir"schema.txt; do
+      [ -f "$f" ] || continue
+      awk '/^validate: skipped, over [0-9]+ MB$/ { print "schema: " $0; section = ""; next }
+           $0 == "validate:" { section = "validate"; next }
+           $0 == "rules:" { section = "rules"; rules_seen = 1; next }
+           $0 == "arity:" { section = ""; next }
+           $0 == "property sets:" { exit }
+           section == "validate" && /^findings [0-9]+$/ { print "schema validate: " $0; next }
+           section == "rules" && /^findings [0-9]+$/ { print "schema rules: " $0; rules_counted = 1; next }
+           section == "rules" && /^[0-9]+ Ifc[A-Za-z0-9]+ Ifc[A-Za-z0-9]+\.[A-Za-z0-9]+:/ {
+             split($0, parts, ":"); print "schema rules: " parts[1]; next }
+           section != "" && /^unreadable:/ {
+             if (section == "rules") rules_counted = 1
+             print "schema " section ": not read" }
+           END { if (rules_seen && !rules_counted) print "schema rules: not read" }' "$f"
     done
   } > "$RUNNER_TEMP/counts.txt"
   find "$dir" -mindepth 1 ! -name ifc.sha256 -delete

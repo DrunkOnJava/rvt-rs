@@ -1,7 +1,7 @@
 [
   {
     "name": "explain_element",
-    "description": "Why an element is in the export as it is, or is not in it: its provenance, its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record) and every fail-closed decision recorded for it, each with a stage (element_skipped, body_not_drawn, body_left_as_box, opening_not_cut, outline_not_read, storey_not_bound), a reason code (the reason of the skipped item in get_diagnostics, or body_is_record_box, space_outline_is_record_box, area_body_refused), the stream and byte offset its record was read from where known, and a detail. Takes a Revit ElementId whether or not the export holds the element (a left-out element has decisions and no provenance), or the GlobalId of an exported one. The log keeps at most 5000 decisions a reason; capped_reasons names the reasons that dropped some, whose decisions about this element may be missing. A frame with no ElementId has no entry. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "description": "Why an element is in the export as it is, or is not in it: its provenance (with value_sources, the copy each reader took a value of its body from), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record) and every fail-closed decision recorded for it, each with a stage (element_skipped, body_not_drawn, body_left_as_box, opening_not_cut, outline_not_read, storey_not_bound), a reason code (the reason of the skipped item in get_diagnostics, or body_is_record_box, space_outline_is_record_box, area_body_refused, slab_shape_refused, wall_base_cut_refused, wall_end_extension_refused), the stream and byte offset its record was read from where known, and a detail. Takes a Revit ElementId whether or not the export holds the element (a left-out element has decisions and no provenance), or the GlobalId of an exported one. The log keeps at most 5000 decisions a reason; capped_reasons names the reasons that dropped some, whose decisions about this element may be missing. A frame with no ElementId has no entry. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {
       "$defs": {
         "IdArg": {
@@ -70,7 +70,7 @@
               ]
             },
             "reason": {
-              "description": "The reason code: the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box` or `area_body_refused`.",
+              "description": "The reason code: the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box`, `area_body_refused`, `slab_shape_refused`, `wall_base_cut_refused` or `wall_end_extension_refused`.",
               "type": "string"
             },
             "stage": {
@@ -214,7 +214,7 @@
               "description": "The element's native record, where the export's native passes indexed one."
             },
             "offset": {
-              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy; `value_sources` names it.",
               "format": "uint",
               "minimum": 0,
               "type": [
@@ -246,7 +246,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary`,\n`area_boundary_joined`, `area_boundary_wall_line` or `none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (Revit 2025 to 2027, which nothing\noutside the file checks), `area_boundary`, `area_boundary_joined` or\n`none`.",
               "type": [
                 "string",
                 "null"
@@ -258,6 +258,13 @@
                 "string",
                 "null"
               ]
+            },
+            "value_sources": {
+              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.",
+              "items": {
+                "$ref": "#/$defs/ValueSourceOut"
+              },
+              "type": "array"
             }
           },
           "type": "object"
@@ -361,7 +368,7 @@
               ]
             },
             "stream": {
-              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, the frame the exporter selected. The record a reader decoded is in `provenance.value_sources`, where that reader notes its choice.",
               "type": [
                 "string",
                 "null"
@@ -371,6 +378,101 @@
           "required": [
             "copies",
             "copy"
+          ],
+          "type": "object"
+        },
+        "SourcePartOut": {
+          "description": "One record a value source is made of.",
+          "properties": {
+            "element_id": {
+              "description": "The ElementId of the record's element, which need not be the element the source is of.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset": {
+              "description": "Where the record starts in that partition inflated; what starts there depends on the reader.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stream": {
+              "description": "The partition the record is in, such as `Partitions/46`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "element_id",
+            "stream",
+            "offset"
+          ],
+          "type": "object"
+        },
+        "ValueSourceOut": {
+          "description": "The copy of an element's data a reader took a value from. The readers, the rules and what each source's `parts` are, are listed in `docs/export-diagnostics.md`, \"Value sources\".",
+          "properties": {
+            "copies": {
+              "description": "In how many partitions the element's data named it, so how many copies there were to choose from; for a source made of several `parts`, how many records it is made of; for one record, in how many partitions that record was held.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "differs_from_frame": {
+              "description": "True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, where every copy holds the same value, so is every copy; for a source made of `parts`, none of them is in the frame's partition (`docs/export-diagnostics.md` says where a profile's records count as held there).",
+              "type": "boolean"
+            },
+            "offset": {
+              "description": "Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for a body read from the frame.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "partitions": {
+              "description": "Where every copy holds the same value, the numbers of the partitions that hold a copy; the copy named is the lowest-numbered partition's.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "parts": {
+              "description": "The records the value is made of, where it is made of several or of another element's, at most 64. Such a source has no `stream` or `offset` of its own.",
+              "items": {
+                "$ref": "#/$defs/SourcePartOut"
+              },
+              "type": "array"
+            },
+            "parts_left_out": {
+              "description": "How many more records than the 64 listed in `parts` the value is made of.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reader": {
+              "description": "The name of the reader that took the value, such as the reader of a wall's location line or of a type's parameters. Each reader and the body it belongs to is listed in `docs/export-diagnostics.md`, \"Value sources\".",
+              "type": "string"
+            },
+            "rule": {
+              "description": "How the copy was chosen. The rules are listed in `docs/export-diagnostics.md`, \"Value sources\"; for a source made of `parts` it is how each record's copy was chosen.",
+              "type": "string"
+            },
+            "stream": {
+              "description": "The partition of the copy, such as `Partitions/46`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "reader",
+            "rule",
+            "copies",
+            "differs_from_frame"
           ],
           "type": "object"
         }
@@ -407,7 +509,7 @@
           "type": "string"
         },
         "name": {
-          "description": "The element's name in the export, where it is exported.",
+          "description": "The `Name` the export writes for the element, as in `list_elements`:\nabsent where the element is not exported, and for a room whose name is\nexactly the exporter's `<class>-<ElementId>` placeholder.",
           "type": [
             "string",
             "null"
@@ -450,7 +552,7 @@
   },
   {
     "name": "export_gltf",
-    "description": "Write the model as a binary glTF 2.0 file to out_path, which must end in .glb, must not be the model, and must not exist unless overwrite is true. The file is the one rvt-gltf writes. If a resource limit kept part of the file unread, nothing is written unless allow_partial is true. Returns a summary (entity counts, unread streams, size and sha256) and a resource_link to the file; the glb is never returned inline. Sends progress notifications when the request carries a progress token, and cancelling it stops the export with nothing written. Writes only the file it is asked for. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "description": "Write the model as a binary glTF 2.0 file to out_path, which must end in .glb, must not be the model, and must not exist unless overwrite is true. The file is the one rvt-gltf writes. If a resource limit kept part of the file unread, nothing is written unless allow_partial is true. Returns a summary (entity counts, unread streams, size and sha256) and a resource_link to the file; the glb is never returned inline. The entity counts are those of the IFC export: the glb also draws the pieces of elements of separate loops that the IFC folds into another element's body, and notes says how many. Sends progress notifications when the request carries a progress token, and cancelling it stops the export with nothing written. Writes only the file it is asked for. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -551,7 +653,7 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "building_elements": {
-          "description": "Building elements the export wrote.",
+          "description": "Building elements the IFC export writes (the diagnostics'\n`exported.building_elements`), for `export_gltf` too: the glb also\ndraws each piece of an element of separate loops that the IFC folds\ninto the body of another element (`elements.folded_into_bodies`), which\nis not counted here or in `entity_counts`, and `notes` says how many.",
           "format": "uint",
           "minimum": 0,
           "type": "integer"
@@ -649,7 +751,7 @@
             },
             "revit_set_placement": {
               "default": false,
-              "description": "Also place properties where Revit's exporter does\n(`--revit-set-placement`).",
+              "description": "Also place properties where Revit's exporter does, and keep the\nmaterial it associates with an `IfcSpace`, which IFC4 does not allow\n(`--revit-set-placement`).",
               "type": "boolean"
             },
             "saved_meshes": {
@@ -803,7 +905,7 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "building_elements": {
-          "description": "Building elements the export wrote.",
+          "description": "Building elements the IFC export writes (the diagnostics'\n`exported.building_elements`), for `export_gltf` too: the glb also\ndraws each piece of an element of separate loops that the IFC folds\ninto the body of another element (`elements.folded_into_bodies`), which\nis not counted here or in `entity_counts`, and `notes` says how many.",
           "format": "uint",
           "minimum": 0,
           "type": "integer"
@@ -972,7 +1074,7 @@
   },
   {
     "name": "get_element",
-    "description": "One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its provenance (the carrier its record was read from, and its stream and byte offset), and the file's: Revit release and build, schema class count, partition count and ElemTable record layout. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "description": "One element, by Revit ElementId or IFC GlobalId (the Revit Mark parameter is not decoded, so it cannot be looked up). Returns its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units), its trust markers (the ...Source, ...Resolved and ...Refusal properties of its record, such as BodySource), its name and long_name as list_elements gives them, its type object as the export writes it (element_type: the IFC entity as ifc_type, name and element_id, the type object's Tag, and the sets it holds; absent where the export writes none), its provenance (the carrier its record was read from, its stream and byte offset, and in value_sources the copy each reader took a value of its body from), and the file's: Revit release and build, schema class count, partition count and ElemTable record layout. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {
       "$defs": {
         "IdArg": {
@@ -1137,7 +1239,7 @@
               "description": "The element's native record, where the export's native passes indexed one."
             },
             "offset": {
-              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy; `value_sources` names it.",
               "format": "uint",
               "minimum": 0,
               "type": [
@@ -1169,7 +1271,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary`,\n`area_boundary_joined`, `area_boundary_wall_line` or `none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (Revit 2025 to 2027, which nothing\noutside the file checks), `area_boundary`, `area_boundary_joined` or\n`none`.",
               "type": [
                 "string",
                 "null"
@@ -1181,12 +1283,19 @@
                 "string",
                 "null"
               ]
+            },
+            "value_sources": {
+              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.",
+              "items": {
+                "$ref": "#/$defs/ValueSourceOut"
+              },
+              "type": "array"
             }
           },
           "type": "object"
         },
         "EntityRefOut": {
-          "description": "Another entity the export writes for the same ElementId (a slab's further\npieces, a curtain wall's parts).",
+          "description": "Another entity the export writes as an element for the same ElementId (a\nslab's further pieces written as elements of their own, a curtain wall's\nparts); a piece folded into another element's body is none.",
           "properties": {
             "global_id": {
               "type": [
@@ -1329,7 +1438,7 @@
               ]
             },
             "stream": {
-              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, the frame the exporter selected. The record a reader decoded is in `provenance.value_sources`, where that reader notes its choice.",
               "type": [
                 "string",
                 "null"
@@ -1396,14 +1505,50 @@
           ],
           "type": "object"
         },
+        "SourcePartOut": {
+          "description": "One record a value source is made of.",
+          "properties": {
+            "element_id": {
+              "description": "The ElementId of the record's element, which need not be the element the source is of.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset": {
+              "description": "Where the record starts in that partition inflated; what starts there depends on the reader.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stream": {
+              "description": "The partition the record is in, such as `Partitions/46`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "element_id",
+            "stream",
+            "offset"
+          ],
+          "type": "object"
+        },
         "TypeOut": {
           "description": "The type object an element is typed by.",
           "properties": {
             "element_id": {
-              "description": "The type's Revit ElementId.",
+              "description": "The type object's `Tag`: the type's Revit ElementId, or the ElementId\nof the room an `IfcSpaceType` is made for.",
+              "type": "string"
+            },
+            "ifc_type": {
+              "description": "The type object's IFC entity, such as `IFCWALLTYPE`.",
+              "type": "string"
+            },
+            "name": {
+              "description": "The type object's `Name`.",
               "type": "string"
             },
             "property_sets": {
+              "description": "The sets the export writes on the type object, `Other` and\n`Identity Data` among them.",
               "items": {
                 "$ref": "#/$defs/PropertySetOut"
               },
@@ -1412,7 +1557,77 @@
           },
           "required": [
             "element_id",
+            "ifc_type",
+            "name",
             "property_sets"
+          ],
+          "type": "object"
+        },
+        "ValueSourceOut": {
+          "description": "The copy of an element's data a reader took a value from. The readers, the rules and what each source's `parts` are, are listed in `docs/export-diagnostics.md`, \"Value sources\".",
+          "properties": {
+            "copies": {
+              "description": "In how many partitions the element's data named it, so how many copies there were to choose from; for a source made of several `parts`, how many records it is made of; for one record, in how many partitions that record was held.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "differs_from_frame": {
+              "description": "True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, where every copy holds the same value, so is every copy; for a source made of `parts`, none of them is in the frame's partition (`docs/export-diagnostics.md` says where a profile's records count as held there).",
+              "type": "boolean"
+            },
+            "offset": {
+              "description": "Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for a body read from the frame.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "partitions": {
+              "description": "Where every copy holds the same value, the numbers of the partitions that hold a copy; the copy named is the lowest-numbered partition's.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "parts": {
+              "description": "The records the value is made of, where it is made of several or of another element's, at most 64. Such a source has no `stream` or `offset` of its own.",
+              "items": {
+                "$ref": "#/$defs/SourcePartOut"
+              },
+              "type": "array"
+            },
+            "parts_left_out": {
+              "description": "How many more records than the 64 listed in `parts` the value is made of.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reader": {
+              "description": "The name of the reader that took the value, such as the reader of a wall's location line or of a type's parameters. Each reader and the body it belongs to is listed in `docs/export-diagnostics.md`, \"Value sources\".",
+              "type": "string"
+            },
+            "rule": {
+              "description": "How the copy was chosen. The rules are listed in `docs/export-diagnostics.md`, \"Value sources\"; for a source made of `parts` it is how each record's copy was chosen.",
+              "type": "string"
+            },
+            "stream": {
+              "description": "The partition of the copy, such as `Partitions/46`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "reader",
+            "rule",
+            "copies",
+            "differs_from_frame"
           ],
           "type": "object"
         }
@@ -1432,7 +1647,7 @@
               "type": "null"
             }
           ],
-          "description": "The element's type object and its sets, where the model has them."
+          "description": "The type object the export writes for the element, with its sets;\nabsent where the export writes none for it."
         },
         "file": {
           "$ref": "#/$defs/FileProvenance",
@@ -1475,14 +1690,25 @@
             "null"
           ]
         },
+        "long_name": {
+          "description": "An `IfcSpace`'s `LongName`, its room name, as in `list_elements`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "model_id": {
           "type": "string"
         },
         "name": {
-          "type": "string"
+          "description": "The `Name` the IFC export writes, as in `list_elements`: absent only\nfor a room whose name is exactly the exporter's `<class>-<ElementId>`.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "other_entities": {
-          "description": "Other entities with the same ElementId.",
+          "description": "Other entities the export writes as elements with the same ElementId:\nnot a piece folded into the body of the element, which is no entity of\nits own.",
           "items": {
             "$ref": "#/$defs/EntityRefOut"
           },
@@ -1518,7 +1744,6 @@
       },
       "required": [
         "model_id",
-        "name",
         "body",
         "provenance",
         "file",
@@ -1537,7 +1762,7 @@
   },
   {
     "name": "get_summary",
-    "description": "The summary open_model returns, for a model_id or a path: release and build, element counts by IFC entity and Revit class, levels, room count and the diagnostics summary (what was read, approximated, skipped and left unread). What is not read: rvt-rs decodes a subset of a Revit file, and this server answers from the model the IFC export writes. An element's body is often only its record's bounding box (provenance.body_source says which); family files give no family geometry; an element's property sets hold the parameters the export writes, and Revit's own parameter sets need export_ifc with options.revit_property_sets; the Revit Mark parameter is not decoded; files saved by Revit 2015 to 2022, 2026 and 2027 are experimental, and 2008 to 2014 more so (release_support in the summary); get_diagnostics lists what the export skipped or approximated and why. docs/status.md in the rvt-rs repository (https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md) states what is read per release and category.",
+    "description": "The summary open_model returns, for a model_id or a path: release and build, element counts by IFC entity and Revit class, levels, room count and the diagnostics summary (what was read, approximated, skipped and left unread). Element counts and lists are the elements the export writes: the further pieces of an element of separate loops, which it folds into the owner's body, are not rows and not counted (elements.folded_into_bodies counts them by IFC entity, as the diagnostics' exported.body_pieces_folded does). What is not read: rvt-rs decodes a subset of a Revit file, and this server answers from the model the IFC export writes. An element's body is often only its record's bounding box (provenance.body_source says which); family files give no family geometry; an element's property sets hold the parameters the export writes, and Revit's own parameter sets need export_ifc with options.revit_property_sets; the Revit Mark parameter is not decoded; files saved by Revit 2015 to 2022, 2026 and 2027 are experimental, and 2008 to 2014 more so (release_support in the summary); get_diagnostics lists what the export skipped or approximated and why. docs/status.md in the rvt-rs repository (https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md) states what is read per release and category.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1695,6 +1920,15 @@
               "description": "By the Revit class the record names, such as `Wall`.",
               "type": "object"
             },
+            "folded_into_bodies": {
+              "additionalProperties": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "description": "By IFC entity: the elements the model holds that the export does not\nwrite as elements, each a further piece of an element of separate\nloops, written as an item of the body of the element that owns it.\nThey are not in `total`, `by_ifc_type` or the lists, nor in the\ndiagnostics' `exported` counts, which hold them apart in\n`exported.body_pieces_folded`. Always present, empty where the export\nfolds none.",
+              "type": "object"
+            },
             "total": {
               "format": "uint",
               "minimum": 0,
@@ -1704,7 +1938,8 @@
           "required": [
             "total",
             "by_ifc_type",
-            "by_revit_class"
+            "by_revit_class",
+            "folded_into_bodies"
           ],
           "type": "object"
         },
@@ -1817,6 +2052,7 @@
           "description": "Something the export left out or approximated, with how many.",
           "properties": {
             "count": {
+              "description": "How many the reason counts. Mostly elements; for\n`element_record_frame_stopped` it is frames of record markers in every\ncategory (several frames can belong to one element), not lost elements.",
               "format": "uint",
               "minimum": 0,
               "type": "integer"
@@ -1948,7 +2184,7 @@
   },
   {
     "name": "list_elements",
-    "description": "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. Each row has the Revit ElementId, name, level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "description": "List the building elements of a model, optionally by category (IFC entity such as IFCWALL), class (Revit class such as Wall) and level (storey name), paged by limit (100 by default, at most 1000) and offset. The rows are the elements the export writes, not the pieces it folds into another element's body (the summary counts those in elements.folded_into_bodies). Each row has the Revit ElementId, name and long_name (the IFC Name and LongName: an IfcSpace's are its room number (or <room name>:<ElementId> for a room with a name and no number) and its room name; name is absent only for a room with neither whose name is exactly the exporter's <Revit class>-<ElementId> placeholder, and the placeholder names of other elements are still served as name), level and a provenance object: element_id, global_id, category, class, body_source, profile_source, space_outline_source and area_body_refusal, and where the element's record sits: carrier, stream, offset, record_offset, enclosing_record_id, class_tag, class_name and native_record, each present only where the model has it. The rows leave out value_sources, the copy each reader took a value of the body from: get_element lists them. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -2097,7 +2333,7 @@
               "description": "The element's native record, where the export's native passes indexed one."
             },
             "offset": {
-              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy; `value_sources` names it.",
               "format": "uint",
               "minimum": 0,
               "type": [
@@ -2129,7 +2365,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary`,\n`area_boundary_joined`, `area_boundary_wall_line` or `none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (Revit 2025 to 2027, which nothing\noutside the file checks), `area_boundary`, `area_boundary_joined` or\n`none`.",
               "type": [
                 "string",
                 "null"
@@ -2141,6 +2377,13 @@
                 "string",
                 "null"
               ]
+            },
+            "value_sources": {
+              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.",
+              "items": {
+                "$ref": "#/$defs/ValueSourceOut"
+              },
+              "type": "array"
             }
           },
           "type": "object"
@@ -2162,8 +2405,19 @@
                 "null"
               ]
             },
+            "long_name": {
+              "description": "An `IfcSpace`'s `LongName`, its room name. Absent for any other\nelement and for a room whose name was not read.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "name": {
-              "type": "string"
+              "description": "The `Name` the IFC export writes. An `IfcSpace`'s is its room number,\nor `<room name>:<ElementId>` for a room with a name and no number.\nAbsent only for a room with neither whose name is exactly the\nexporter's `<Revit class>-<ElementId>`, made where no source named\nit: that placeholder is not served as a name. The placeholder names\nof other elements (a wall nothing named is `Wall-<ElementId>`) are\nstill served.",
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "predefined_type": {
               "description": "The IFC4 `PredefinedType` the export writes.",
@@ -2177,7 +2431,6 @@
             }
           },
           "required": [
-            "name",
             "provenance"
           ],
           "type": "object"
@@ -2212,7 +2465,7 @@
               ]
             },
             "stream": {
-              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, the frame the exporter selected. The record a reader decoded is in `provenance.value_sources`, where that reader notes its choice.",
               "type": [
                 "string",
                 "null"
@@ -2222,6 +2475,101 @@
           "required": [
             "copies",
             "copy"
+          ],
+          "type": "object"
+        },
+        "SourcePartOut": {
+          "description": "One record a value source is made of.",
+          "properties": {
+            "element_id": {
+              "description": "The ElementId of the record's element, which need not be the element the source is of.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset": {
+              "description": "Where the record starts in that partition inflated; what starts there depends on the reader.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stream": {
+              "description": "The partition the record is in, such as `Partitions/46`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "element_id",
+            "stream",
+            "offset"
+          ],
+          "type": "object"
+        },
+        "ValueSourceOut": {
+          "description": "The copy of an element's data a reader took a value from. The readers, the rules and what each source's `parts` are, are listed in `docs/export-diagnostics.md`, \"Value sources\".",
+          "properties": {
+            "copies": {
+              "description": "In how many partitions the element's data named it, so how many copies there were to choose from; for a source made of several `parts`, how many records it is made of; for one record, in how many partitions that record was held.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "differs_from_frame": {
+              "description": "True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, where every copy holds the same value, so is every copy; for a source made of `parts`, none of them is in the frame's partition (`docs/export-diagnostics.md` says where a profile's records count as held there).",
+              "type": "boolean"
+            },
+            "offset": {
+              "description": "Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for a body read from the frame.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "partitions": {
+              "description": "Where every copy holds the same value, the numbers of the partitions that hold a copy; the copy named is the lowest-numbered partition's.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "parts": {
+              "description": "The records the value is made of, where it is made of several or of another element's, at most 64. Such a source has no `stream` or `offset` of its own.",
+              "items": {
+                "$ref": "#/$defs/SourcePartOut"
+              },
+              "type": "array"
+            },
+            "parts_left_out": {
+              "description": "How many more records than the 64 listed in `parts` the value is made of.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reader": {
+              "description": "The name of the reader that took the value, such as the reader of a wall's location line or of a type's parameters. Each reader and the body it belongs to is listed in `docs/export-diagnostics.md`, \"Value sources\".",
+              "type": "string"
+            },
+            "rule": {
+              "description": "How the copy was chosen. The rules are listed in `docs/export-diagnostics.md`, \"Value sources\"; for a source made of `parts` it is how each record's copy was chosen.",
+              "type": "string"
+            },
+            "stream": {
+              "description": "The partition of the copy, such as `Partitions/46`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "reader",
+            "rule",
+            "copies",
+            "differs_from_frame"
           ],
           "type": "object"
         }
@@ -2365,7 +2713,7 @@
   },
   {
     "name": "list_rooms",
-    "description": "List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_boundary, area_boundary_joined or area_boundary_wall_line for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
+    "description": "List the rooms and spaces of a model: ElementId, number, name, level, area and provenance, whose space_outline_source says where the outline came from. The area is present only where the outline was read exactly (space_outline_source stored_solid, stored_solid_faces, or area_plan_topology, area_boundary or area_boundary_joined for an Area); a room that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -2475,7 +2823,7 @@
               "description": "The element's native record, where the export's native passes indexed one."
             },
             "offset": {
-              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy, so it can name another partition than `native_record.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy; `value_sources` names it.",
               "format": "uint",
               "minimum": 0,
               "type": [
@@ -2507,7 +2855,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_boundary`,\n`area_boundary_joined`, `area_boundary_wall_line` or `none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (Revit 2025 to 2027, which nothing\noutside the file checks), `area_boundary`, `area_boundary_joined` or\n`none`.",
               "type": [
                 "string",
                 "null"
@@ -2519,6 +2867,13 @@
                 "string",
                 "null"
               ]
+            },
+            "value_sources": {
+              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.",
+              "items": {
+                "$ref": "#/$defs/ValueSourceOut"
+              },
+              "type": "array"
             }
           },
           "type": "object"
@@ -2553,7 +2908,7 @@
               ]
             },
             "stream": {
-              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, and neither is guaranteed to be the copy a body came from.",
+              "description": "The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, the frame the exporter selected. The record a reader decoded is in `provenance.value_sources`, where that reader notes its choice.",
               "type": [
                 "string",
                 "null"
@@ -2570,7 +2925,7 @@
           "description": "One room.",
           "properties": {
             "area_square_feet": {
-              "description": "The plan area of the room's outline, where the outline is one read\nexactly (`space_outline_source` is `stored_solid`, `stored_solid_faces`\nor, for an Area, `area_boundary`, `area_boundary_joined` or\n`area_boundary_wall_line`). Absent for\n`record_box`, where the area of a box is not the area of a room, and for\n`stored_solid_approximate`.",
+              "description": "The plan area of the room's outline, where the outline is one read\nexactly (`space_outline_source` is `stored_solid`, `stored_solid_faces`\nor, for an Area, `area_plan_topology`, `area_plan_topology_unchecked`,\n`area_boundary` or `area_boundary_joined`). Absent for\n`record_box`, where the area of a box is not the area of a room, and for\n`stored_solid_approximate`.",
               "format": "double",
               "type": [
                 "number",
@@ -2623,6 +2978,101 @@
             "provenance"
           ],
           "type": "object"
+        },
+        "SourcePartOut": {
+          "description": "One record a value source is made of.",
+          "properties": {
+            "element_id": {
+              "description": "The ElementId of the record's element, which need not be the element the source is of.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "offset": {
+              "description": "Where the record starts in that partition inflated; what starts there depends on the reader.",
+              "format": "uint",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stream": {
+              "description": "The partition the record is in, such as `Partitions/46`.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "element_id",
+            "stream",
+            "offset"
+          ],
+          "type": "object"
+        },
+        "ValueSourceOut": {
+          "description": "The copy of an element's data a reader took a value from. The readers, the rules and what each source's `parts` are, are listed in `docs/export-diagnostics.md`, \"Value sources\".",
+          "properties": {
+            "copies": {
+              "description": "In how many partitions the element's data named it, so how many copies there were to choose from; for a source made of several `parts`, how many records it is made of; for one record, in how many partitions that record was held.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "differs_from_frame": {
+              "description": "True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, where every copy holds the same value, so is every copy; for a source made of `parts`, none of them is in the frame's partition (`docs/export-diagnostics.md` says where a profile's records count as held there).",
+              "type": "boolean"
+            },
+            "offset": {
+              "description": "Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for a body read from the frame.",
+              "format": "uint",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "partitions": {
+              "description": "Where every copy holds the same value, the numbers of the partitions that hold a copy; the copy named is the lowest-numbered partition's.",
+              "items": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "parts": {
+              "description": "The records the value is made of, where it is made of several or of another element's, at most 64. Such a source has no `stream` or `offset` of its own.",
+              "items": {
+                "$ref": "#/$defs/SourcePartOut"
+              },
+              "type": "array"
+            },
+            "parts_left_out": {
+              "description": "How many more records than the 64 listed in `parts` the value is made of.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "reader": {
+              "description": "The name of the reader that took the value, such as the reader of a wall's location line or of a type's parameters. Each reader and the body it belongs to is listed in `docs/export-diagnostics.md`, \"Value sources\".",
+              "type": "string"
+            },
+            "rule": {
+              "description": "How the copy was chosen. The rules are listed in `docs/export-diagnostics.md`, \"Value sources\"; for a source made of `parts` it is how each record's copy was chosen.",
+              "type": "string"
+            },
+            "stream": {
+              "description": "The partition of the copy, such as `Partitions/46`.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "reader",
+            "rule",
+            "copies",
+            "differs_from_frame"
+          ],
+          "type": "object"
         }
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2652,7 +3102,7 @@
   },
   {
     "name": "open_model",
-    "description": "Open a Revit file (.rvt, .rfa, .rte or .rft) and decode it once, with the same decode rvt-ifc runs. Every other tool answers from that decoded model and the IFC export is written from it, so an answer and the export cannot disagree. Returns model_id, the Revit release and build, element counts by IFC entity and Revit class, levels, and what was left out (diagnostics, unread streams). Handle lifetime: model_id is opaque and stays valid while this server process runs and the model is among the most recently used ones the server keeps (2 by default); after an eviction or a restart a tool returns an error and you call open_model again. Every tool also takes the file path in place of the model_id. Phase: pass phase (a phase name or ElementId) with the path to read a project phase other than the last, as rvt-ifc --phase does; the model_id then names that phase, and get_diagnostics lists the rooms it leaves out. Reads the file only: no Revit install, no network call, nothing is written. What is not read: rvt-rs decodes a subset of a Revit file, and this server answers from the model the IFC export writes. An element's body is often only its record's bounding box (provenance.body_source says which); family files give no family geometry; an element's property sets hold the parameters the export writes, and Revit's own parameter sets need export_ifc with options.revit_property_sets; the Revit Mark parameter is not decoded; files saved by Revit 2015 to 2022, 2026 and 2027 are experimental, and 2008 to 2014 more so (release_support in the summary); get_diagnostics lists what the export skipped or approximated and why. docs/status.md in the rvt-rs repository (https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md) states what is read per release and category.",
+    "description": "Open a Revit file (.rvt, .rfa, .rte or .rft) and decode it once, with the same decode rvt-ifc runs. Every other tool answers from that decoded model and the IFC export is written from it, so an answer and the export cannot disagree. Returns model_id, the Revit release and build, element counts by IFC entity and Revit class, levels, and what was left out (diagnostics, unread streams). Element counts and lists are the elements the export writes: the further pieces of an element of separate loops, which it folds into the owner's body, are not rows and not counted (elements.folded_into_bodies counts them by IFC entity, as the diagnostics' exported.body_pieces_folded does). Handle lifetime: model_id is opaque and stays valid while this server process runs and the model is among the most recently used ones the server keeps (2 by default); after an eviction or a restart a tool returns an error and you call open_model again. Every tool also takes the file path in place of the model_id. Phase: pass phase (a phase name or ElementId) with the path to read a project phase other than the last, as rvt-ifc --phase does; the model_id then names that phase, and get_diagnostics lists the rooms it leaves out. Reads the file only: no Revit install, no network call, nothing is written. What is not read: rvt-rs decodes a subset of a Revit file, and this server answers from the model the IFC export writes. An element's body is often only its record's bounding box (provenance.body_source says which); family files give no family geometry; an element's property sets hold the parameters the export writes, and Revit's own parameter sets need export_ifc with options.revit_property_sets; the Revit Mark parameter is not decoded; files saved by Revit 2015 to 2022, 2026 and 2027 are experimental, and 2008 to 2014 more so (release_support in the summary); get_diagnostics lists what the export skipped or approximated and why. docs/status.md in the rvt-rs repository (https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/status.md) states what is read per release and category.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -2810,6 +3260,15 @@
               "description": "By the Revit class the record names, such as `Wall`.",
               "type": "object"
             },
+            "folded_into_bodies": {
+              "additionalProperties": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "description": "By IFC entity: the elements the model holds that the export does not\nwrite as elements, each a further piece of an element of separate\nloops, written as an item of the body of the element that owns it.\nThey are not in `total`, `by_ifc_type` or the lists, nor in the\ndiagnostics' `exported` counts, which hold them apart in\n`exported.body_pieces_folded`. Always present, empty where the export\nfolds none.",
+              "type": "object"
+            },
             "total": {
               "format": "uint",
               "minimum": 0,
@@ -2819,7 +3278,8 @@
           "required": [
             "total",
             "by_ifc_type",
-            "by_revit_class"
+            "by_revit_class",
+            "folded_into_bodies"
           ],
           "type": "object"
         },
@@ -2932,6 +3392,7 @@
           "description": "Something the export left out or approximated, with how many.",
           "properties": {
             "count": {
+              "description": "How many the reason counts. Mostly elements; for\n`element_record_frame_stopped` it is frames of record markers in every\ncategory (several frames can belong to one element), not lost elements.",
               "format": "uint",
               "minimum": 0,
               "type": "integer"

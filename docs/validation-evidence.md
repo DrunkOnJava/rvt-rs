@@ -64,6 +64,26 @@ write:
    witnesses also run against Revit's full Core Interior export. The claimed
    fields are deliberately few; what rvt-rs cannot claim yet is excluded by
    name, with its tracking issue.
+8. **Every export the job writes holds the schema's EXPRESS rules.**
+   [`tools/ci/ifc_validate_summary.py --gate`](../tools/ci/ifc_validate_summary.py)
+   runs IfcOpenShell's check of the IFC4 schema's WHERE rules and global
+   rules, which `ifcopenshell.validate` leaves out, on the tier-1 exports,
+   the synthetic pair, the Einhoven and Core Interior exports (with and
+   without saved meshes, and as the two witness steps write it) and the four
+   RE1 projects, and fails on any finding (#1430). It runs after the witness
+   steps, so a failing gate never drops the observations a replay fix needs. Measure reports the same check in the `rules:` section of
+   each model's `schema.txt` on the models CI does not hold (the BIM4LCA
+   office, the Revit 2025 models, Autodesk's samples), and as counts for the
+   held-out ones. Revit's own exports break some of these rules (the check
+   finds 1,194 in the BIM4LCA office's As-Built export, among them `USERDEFINED`
+   types with no `ElementType` and a material on an `IfcSpace`; IfcOpenShell
+   0.9.0.post1, 2026-11-05), so a value rvt-rs writes as Revit does is not
+   evidence that it holds them. The gate and Measure's `rules:` section read
+   the default output. With `rvt-ifc --revit-set-placement` an `IfcSpace`
+   keeps the material Revit's export associates with it, which breaks
+   `IfcRelAssociatesMaterial.AllowedElements` as Revit's export does (Griffin,
+   2026-11-05: valid IFC4 by default, Revit's behind the flag), so that
+   output is not held to it.
 
 ## What is measured against Revit's own exports
 
@@ -71,9 +91,11 @@ The Measure workflow (`.github/workflows/measure.yml`) exports the six
 redistributable reference models (Core Interior, Einhoven and the four RE1
 models) and scores the five that come with Revit's own IFC export (all but
 Einhoven, which is only exported and schema-checked) against it (by
-default; `-f nordic=true`, `r2025=true`, `bimcollab=true`, `holdout=true`
-and `samples=true` add the BIM4LCA office, puzzbobb's Revit 2025 models,
-BIMcollab's 2015 example, the holdout pack and Autodesk's sample projects), with the
+default; `-f nordic=true`, `r2025=true`, `bimcollab=true`, `racadv=true`,
+`holdout=true` and `samples=true` add the BIM4LCA office, puzzbobb's Revit
+2025 models, BIMcollab's 2015 example, Autodesk's `rac_advanced` saves of
+2015 to 2020 against the one IFC2X3 export of them, the holdout pack and
+Autodesk's sample projects), with the
 scorers under `tools/re/`: element counts, ElementIds,
 bodies, materials, storeys, openings and more. It is not part of
 `CI passed`. It runs when the measurement itself changes and is dispatched

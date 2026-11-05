@@ -9,7 +9,7 @@ use std::io::Write;
 use rmcp::model::Resource;
 use rvt::control::WalkerControl;
 use rvt::ifc::gltf::model_to_glb;
-use rvt::ifc::step_writer::{StepOptions, write_step_to};
+use rvt::ifc::step_writer::{StepOptions, write_step_to, write_step_to_with_space_materials};
 use rvt::ifc::{ExportDiagnostics, ExportOptions, IfcModel};
 use rvt::reader::UnreadStream;
 
@@ -88,6 +88,13 @@ fn finish(
             "{format} export of {}; sha256 {}",
             entry.id, written.sha256
         ));
+    let mut notes = source.notes.to_vec();
+    let folded: usize = diagnostics.exported.body_pieces_folded.values().sum();
+    if format == "glb" && folded > 0 {
+        notes.push(format!(
+            "The glb also draws {folded} piece(s) of elements of separate loops that the IFC export folds into the body of another element (exported.body_pieces_folded): building_elements and entity_counts count the elements the IFC writes and leave them out."
+        ));
+    }
     let out = ExportOut {
         model_id: entry.id.clone(),
         format: format.to_string(),
@@ -101,7 +108,7 @@ fn finish(
         entity_counts: diagnostics.exported.by_ifc_type.clone(),
         partial: !source.unread.is_empty(),
         unread_streams: unread_out(source.unread),
-        notes: source.notes.to_vec(),
+        notes,
         diagnostics: if with_diagnostics {
             serde_json::to_value(diagnostics).ok()
         } else {
@@ -161,7 +168,11 @@ pub fn ifc(
     control.check().map_err(|_| Failure::Cancelled)?;
     let step_options = StepOptions { timestamp };
     let written = output::write(&target, args.overwrite, control, |writer| {
-        write_step_to(source.model, &step_options, writer).map(|_| ())
+        if switches.revit_set_placement {
+            write_step_to_with_space_materials(source.model, &step_options, writer).map(|_| ())
+        } else {
+            write_step_to(source.model, &step_options, writer).map(|_| ())
+        }
     })?;
     Ok(finish(
         &entry,

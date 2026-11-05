@@ -186,6 +186,30 @@ fn named_by_steps<'a>(
     Some((joined, paired))
 }
 
+/// The ElementIds named by a wall's base join: every `JoinToRoofGStep` with
+/// `m_baseOrTop` 0, its `m_ids`, from the `(class, fields)` of the objects of
+/// its record; a null reference (an id of 0 or less) names nothing. `None`
+/// where a base join names its elements in a shape that is not read.
+fn base_joined_by_steps<'a>(
+    steps: impl Iterator<Item = (&'a str, &'a Value)>,
+) -> Option<BTreeSet<u64>> {
+    let mut named = BTreeSet::new();
+    for (class, fields) in steps {
+        if class != "JoinToRoofGStep"
+            || fields.get("m_baseOrTop").and_then(Value::as_i64) != Some(0)
+        {
+            continue;
+        }
+        for reference in fields.get("m_ids")?.as_array()? {
+            let id = element_id_i64(reference)?;
+            if id > 0 {
+                named.insert(u64::try_from(id).ok()?);
+            }
+        }
+    }
+    Some(named)
+}
+
 /// The members of one control join, as (member, end it joins by) pairs.
 fn join_members(control: &Value) -> Vec<(u64, u32)> {
     control
@@ -306,6 +330,12 @@ pub struct WallRecords {
     /// `CutPairGStep`s name, in ascending order. A wall that names none, or
     /// one of whose steps is not readable, is left out.
     pub top_cutters: BTreeMap<u64, Vec<u64>>,
+    /// The ElementIds each wall's base join names (every `JoinToRoofGStep`
+    /// with `m_baseOrTop` 0, its `m_ids`), in ascending order (#1384): the
+    /// floors and footings the export may cut its base at. A wall that names
+    /// none, or one of whose base joins names its elements in a shape that is
+    /// not read, is left out.
+    pub base_cutters: BTreeMap<u64, Vec<u64>>,
     /// Those of [`Self::top_cutters`] that only a `CutPairGStep` names, never
     /// the top join (RE-320): a Join Geometry cut takes the volume the element
     /// shares with the wall, which is the wall's top only where the element
@@ -498,6 +528,7 @@ pub fn native_walls_and_top_joins_into(
     let mut top_joined: BTreeMap<u64, bool> = BTreeMap::new();
     let mut uncut: BTreeSet<u64> = BTreeSet::new();
     let mut top_cutters: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
+    let mut base_cutters: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut pair_only: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut whole: BTreeSet<u64> = BTreeSet::new();
     let mut bounded: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
@@ -561,6 +592,13 @@ pub fn native_walls_and_top_joins_into(
             if !only.is_empty() {
                 pair_only.insert(id, only);
             }
+        }
+        let steps = graph
+            .objects
+            .iter()
+            .map(|object| (object.class_name.as_str(), &object.fields));
+        if let Some(named) = base_joined_by_steps(steps).filter(|named| !named.is_empty()) {
+            base_cutters.insert(id, named.into_iter().collect());
         }
         if graph.objects.iter().all(|object| {
             !object.class_name.ends_with("Step")
@@ -718,6 +756,7 @@ pub fn native_walls_and_top_joins_into(
         top_joined,
         uncut,
         top_cutters,
+        base_cutters,
         pair_only,
         whole,
         bounded,

@@ -2,9 +2,9 @@
 //!
 //! Two schedules, one row per element, in storey order:
 //!
-//! - [`elements_csv`]: every building element — Revit ElementId, IFC type,
-//!   level, material, placement, body size where decoded, the host wall of a
-//!   door or window, and where the body came from.
+//! - [`elements_csv`]: every building element the IFC export writes — Revit
+//!   ElementId, IFC type, level, material, placement, body size where decoded,
+//!   the host wall of a door or window, and where the body came from.
 //! - [`rooms_csv`]: every `IfcSpace` with its recovered room number, name
 //!   and, where the room's outline was read from its stored solid (RE-101),
 //!   its plan area.
@@ -24,6 +24,7 @@ use super::entities::{Extrusion, IfcEntity, ProfileDef, PropertyValue};
 use super::export_content::{
     ROOM_NAME_PROPERTY, ROOM_NUMBER_PROPERTY, SPACE_OUTLINE_SOURCE_PROPERTY,
 };
+use super::step_writer::{Placement, associates_material, placements, storey_of};
 
 const FEET_TO_METRES: f64 = 0.3048;
 
@@ -106,7 +107,24 @@ pub fn room_columns(unit: LengthUnit) -> Vec<String> {
     ]
 }
 
-/// One row per building element (rooms included, as `IFCSPACE`).
+/// One row per building element the IFC export writes (rooms included, as
+/// `IFCSPACE`), on the storey the export puts it on.
+///
+/// Both follow [`step_writer::placements`](super::step_writer::placements),
+/// the writer's own decision, as the MCP server does. An element the export
+/// folds into the body of another element (a further piece of an element of
+/// separate loops, [`Placement::Folded`]) is not written as an element and has
+/// no row. The `level` and `level_elevation` cells are the storey of
+/// [`storey_of`]: the one the element is contained in, that of the space that
+/// contains it, that of the whole it is a part of (a stair's run, landing or
+/// stringer, or a curtain wall's member), or that of the host an opening cuts;
+/// empty where `storey_of` gives none (the export contains the element in the
+/// building only, or its chain of spaces, wholes and hosts ends in no storey).
+///
+/// The size columns describe the body the writer emits for a plain
+/// extrusion. An element with folded pieces is written with a body of several
+/// items, which one width, depth and height cannot state, so its size cells
+/// are empty.
 ///
 /// # Examples
 ///
@@ -123,6 +141,9 @@ pub fn room_columns(unit: LengthUnit) -> Vec<String> {
 pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
     let unit = options.unit;
     let mut rows: Vec<(f64, String, Vec<String>)> = Vec::new();
+    // Where the export puts each element: whether it is written at all, and
+    // its storey (`step_writer::placements`).
+    let placements = placements(model);
     // The first constituent set naming each entity, found once rather than
     // by a search of every set for every entity.
     let mut constituent_set_of: std::collections::HashMap<
@@ -140,7 +161,7 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
             name,
             type_guid,
             predefined_type,
-            storey_index,
+            storey_index: _,
             material_index,
             property_set,
             location_feet,
@@ -155,11 +176,25 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
         else {
             continue;
         };
-        let storey = storey_index.and_then(|i| model.building_storeys.get(i));
+        if matches!(placements.get(entity_index), Some(Some(Placement::Folded))) {
+            continue;
+        }
+        let has_folded_pieces = model.body_pieces.get(&entity_index).is_some_and(|pieces| {
+            pieces
+                .iter()
+                .any(|piece| matches!(placements.get(*piece), Some(Some(Placement::Folded))))
+        });
+        let storey =
+            storey_of(&placements, entity_index).and_then(|i| model.building_storeys.get(i));
         // Same precedence as the STEP writer: profile set > layer set >
-        // single material > constituent set.
+        // single material > constituent set, and the same elements: an
+        // `IfcSpace` has no material (`step_writer::associates_material`,
+        // #1430), which `rvt-ifc --revit-set-placement` gives it in the IFC
+        // and no schedule's flag does.
+        let holds_material = associates_material(ifc_type);
         // A profile set names its section; its one material is the material.
         let material = material_profile_set_index
+            .filter(|_| holds_material)
             .and_then(|i| model.material_profile_sets.get(i))
             .map(|set| match set.profiles.as_slice() {
                 [profile] => model
@@ -170,11 +205,13 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
             })
             .or_else(|| {
                 material_layer_set_index
+                    .filter(|_| holds_material)
                     .and_then(|i| model.material_layer_sets.get(i))
                     .map(|m| m.name.clone())
             })
             .or_else(|| {
                 material_index
+                    .filter(|_| holds_material)
                     .and_then(|i| model.materials.get(i))
                     .map(|m| m.name.clone())
             })
@@ -182,7 +219,9 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
             // materials where its body is not a layer set (RE-88), each
             // once, in the order the STEP writer lists them.
             .or_else(|| {
-                let set = constituent_set_of.get(&entity_index)?;
+                let set = constituent_set_of
+                    .get(&entity_index)
+                    .filter(|_| holds_material)?;
                 let mut names: Vec<&str> = Vec::new();
                 for name in set
                     .material_indices
@@ -197,8 +236,11 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
             })
             .unwrap_or_default();
         // Size columns describe the body the writer emits: only the
-        // extrusion path, and width / depth only for a rectangle.
-        let body_is_extrusion = solid_shape.is_none() && representation_map_index.is_none();
+        // extrusion path, and width / depth only for a rectangle. An owner
+        // with folded pieces has a body of several items, and its extrusion
+        // is the first loop alone.
+        let body_is_extrusion =
+            solid_shape.is_none() && representation_map_index.is_none() && !has_folded_pieces;
         let (width, depth, height) = match extrusion.as_ref().filter(|_| body_is_extrusion) {
             Some(e) => {
                 let (w, d) = match &e.profile_override {
@@ -321,11 +363,12 @@ pub struct RoomRow {
 /// elevation, then room number.
 pub fn room_rows(model: &IfcModel) -> Vec<RoomRow> {
     let mut rows = Vec::new();
+    // The storey the export puts a room in (`step_writer::placements`).
+    let placements = placements(model);
     for (entity_index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
             type_guid,
-            storey_index,
             property_set,
             extrusion,
             ..
@@ -346,12 +389,14 @@ pub fn room_rows(model: &IfcModel) -> Vec<RoomRow> {
                 _ => String::new(),
             }
         };
-        let storey = storey_index.and_then(|i| model.building_storeys.get(i));
+        let storey =
+            storey_of(&placements, entity_index).and_then(|i| model.building_storeys.get(i));
         let area_square_feet = (property("ProfileSource")
             == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE
             || property("ProfileSource")
                 == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE_FACES
-            || property("ProfileSource") == crate::partition_area_records::AREA_BOUNDARY_SOURCE)
+            || property("ProfileSource") == crate::partition_area_records::AREA_BOUNDARY_SOURCE
+            || property("ProfileSource") == crate::partition_area_records::AREA_TOPOLOGY_SOURCE)
             .then(|| extrusion.as_ref().and_then(outline_area_square_feet))
             .flatten();
         rows.push(RoomRow {
@@ -391,6 +436,22 @@ fn outline_area_square_feet(extrusion: &Extrusion) -> Option<f64> {
         ProfileDef::ArbitraryClosed { points } => Some(ring(points)),
         ProfileDef::ArbitraryWithVoids { points, voids } => {
             Some(ring(points) - voids.iter().map(|void| ring(void)).sum::<f64>())
+        }
+        // Lines and arcs: the arcs count as themselves, not as their chords.
+        ProfileDef::IndexedPolyCurve { points, segments } => {
+            let outer = super::entities::IndexedCurve {
+                points: points.clone(),
+                segments: segments.clone(),
+            };
+            super::export_content::curve_area_length(&outer).map(|(area, _)| area.abs())
+        }
+        ProfileDef::IndexedPolyCurveWithVoids { outer, voids } => {
+            let (area, _) = super::export_content::curve_area_length(outer)?;
+            let mut net = area.abs();
+            for void in voids {
+                net -= super::export_content::curve_area_length(void)?.0.abs();
+            }
+            Some(net)
         }
         _ => None,
     }

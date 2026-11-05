@@ -60,8 +60,22 @@ pub fn write_step(model: &IfcModel) -> String {
 /// function of `(model, t)` — no wall-clock access. Use this in
 /// tests and regression fixtures.
 pub fn write_step_with_options(model: &IfcModel, options: &StepOptions) -> String {
+    write_step_string(model, options, false)
+}
+
+/// [`write_step_with_options`], also associating a material with every
+/// `IfcSpace` that has one, as Revit's own export does (`rvt-ifc
+/// --revit-set-placement`). IFC4's `IfcRelAssociatesMaterial.AllowedElements`
+/// takes no `IfcSpace`, so this output breaks that rule, as Revit's does;
+/// [`write_step_with_options`] leaves those associations out (#1430).
+pub fn write_step_with_space_materials(model: &IfcModel, options: &StepOptions) -> String {
+    write_step_string(model, options, true)
+}
+
+fn write_step_string(model: &IfcModel, options: &StepOptions, space_materials: bool) -> String {
     let now = options.timestamp.unwrap_or_else(unix_seconds);
     let mut w = StepWriter::new(now);
+    w.space_materials = space_materials;
     w.emit_header(model);
     w.emit_data(model);
     w.finish()
@@ -78,10 +92,34 @@ pub fn write_step_with_options(model: &IfcModel, options: &StepOptions) -> Strin
 pub fn write_step_to<W: std::io::Write>(
     model: &IfcModel,
     options: &StepOptions,
+    out: W,
+) -> std::io::Result<u64> {
+    write_step_to_sink(model, options, false, out)
+}
+
+/// [`write_step_to`], also associating a material with every `IfcSpace` that
+/// has one, as [`write_step_with_space_materials`] does.
+///
+/// # Errors
+///
+/// The first error `out` returns. What was written before it stays written.
+pub fn write_step_to_with_space_materials<W: std::io::Write>(
+    model: &IfcModel,
+    options: &StepOptions,
+    out: W,
+) -> std::io::Result<u64> {
+    write_step_to_sink(model, options, true, out)
+}
+
+fn write_step_to_sink<W: std::io::Write>(
+    model: &IfcModel,
+    options: &StepOptions,
+    space_materials: bool,
     mut out: W,
 ) -> std::io::Result<u64> {
     let now = options.timestamp.unwrap_or_else(unix_seconds);
     let mut w = StepWriter::new(now);
+    w.space_materials = space_materials;
     w.sink = Some(Sink {
         writer: &mut out,
         written: 0,
@@ -134,6 +172,93 @@ pub fn element_global_ids(model: &IfcModel) -> Vec<Option<String>> {
         element_gids[entity_idx] = Some(element_gid);
     }
     element_gids
+}
+
+/// The `Name` and `LongName` [`write_step`] gives a building element
+/// (RE-117, RE-196), by [`written_names`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct WrittenNames {
+    /// The element's `Name`.
+    pub name: String,
+    /// True when `name` is the exporter's own `<Revit class>-<ElementId>`,
+    /// kept for a space because neither a room number nor a room name was
+    /// read: a placeholder made where no source named the element. It is
+    /// only ever true for an `IfcSpace`; the other elements' names are not
+    /// told apart from their own.
+    pub name_is_placeholder: bool,
+    /// An `IfcSpace`'s `LongName`, its room name; `None` for any other
+    /// element and for a space whose name was not read.
+    pub long_name: Option<String>,
+}
+
+/// The `Name` and `LongName` [`write_step`] writes for a building element of
+/// `ifc_type` with the model name `name`, ElementId `type_guid` and record
+/// property set `property_set`.
+///
+/// An `IfcSpace` is named by its room number and described by its room name,
+/// as Revit's own exporter writes it (RE-117): `Name` the number, `LongName`
+/// the name. A room with a name and no number is named `<name>:<ElementId>`,
+/// the name Revit's exporter falls back to (RE-196); one with neither keeps
+/// the model's own name, which is a placeholder (`name_is_placeholder`); one
+/// with no name has no `LongName`. Any other element keeps its name.
+pub fn written_names(
+    ifc_type: &str,
+    name: &str,
+    type_guid: Option<&str>,
+    property_set: Option<&PropertySet>,
+) -> WrittenNames {
+    use super::entities::PropertyValue;
+    use super::export_content::{ROOM_NAME_PROPERTY, ROOM_NUMBER_PROPERTY};
+    if !ifc_type.eq_ignore_ascii_case("IFCSPACE") {
+        return WrittenNames {
+            name: name.to_string(),
+            name_is_placeholder: false,
+            long_name: None,
+        };
+    }
+    // A room's own text property, when recovered and not blank.
+    let room_text = |key: &str| {
+        property_set.and_then(|set| {
+            set.properties
+                .iter()
+                .find(|p| p.name == key)
+                .and_then(|p| match &p.value {
+                    PropertyValue::Text(text) if !text.trim().is_empty() => Some(text.clone()),
+                    _ => None,
+                })
+        })
+    };
+    let room_name = property_set.and_then(|set| {
+        set.properties.iter().find_map(|p| match &p.value {
+            PropertyValue::Text(text)
+                if p.name == ROOM_NAME_PROPERTY && !text.trim().is_empty() =>
+            {
+                Some(text.as_str())
+            }
+            _ => None,
+        })
+    });
+    let unnumbered = room_name
+        .zip(type_guid)
+        .map(|(room_name, tag)| format!("{room_name}:{tag}"));
+    let named = room_text(ROOM_NUMBER_PROPERTY).or(unnumbered);
+    // The model's own name for an element it read no name of is
+    // `<class>-<ElementId>`, or `<class>-unnamed` without an ElementId.
+    let made = name.rsplit_once('-').is_some_and(|(class, id)| {
+        !class.is_empty()
+            && class.bytes().all(|byte| byte.is_ascii_alphanumeric())
+            && match type_guid {
+                Some(tag) => id == tag,
+                None => id == "unnamed",
+            }
+    });
+    let name_is_placeholder = named.is_none() && made;
+    WrittenNames {
+        name: named.unwrap_or_else(|| name.to_string()),
+        name_is_placeholder,
+        long_name: room_text(ROOM_NAME_PROPERTY),
+    }
 }
 
 /// Attribute layout of the tail an IFC4 building-element instance
@@ -281,16 +406,84 @@ fn type_entity_for(ifc_upper: &str, predefined: Option<&str>) -> Option<(String,
     Some((format!("{ifc_upper}TYPE"), tail))
 }
 
-/// The values of the `Pset_` sets the writer gives the type objects from
-/// [`IfcModel::type_entity_sets`] (RE-286), for the diagnostics' parameter
-/// value count: the sets of each type object the writer makes, which are the
-/// groups of elements named `Family:Type` by type, entity, predefined type
-/// and GlobalId (see the grouping in the writer, which this follows).
-pub(super) fn type_object_pset_values(model: &IfcModel) -> usize {
-    let mut groups: std::collections::BTreeSet<(u32, String, String, Option<String>)> =
-        Default::default();
+/// One IFC type object the writer makes, and the building elements it
+/// types (RE-110), by [`type_objects`].
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub struct TypeObject {
+    /// The type object's IFC entity, such as `IFCWALLTYPE`.
+    pub entity: String,
+    /// Its `Name`.
+    pub name: String,
+    /// Its `Tag`: the ElementId of the type, or of the room an `IfcSpaceType`
+    /// is made for.
+    pub tag: String,
+    /// The property sets it holds, in the order the writer writes them:
+    /// `Other` (the category and the family name), `Identity Data` (the type
+    /// name) and the type's own parameter sets.
+    pub property_sets: Vec<PropertySet>,
+    /// The elements it types, as indices into `IfcModel::entities`.
+    pub elements: Vec<usize>,
+    type_id: u32,
+    tail: String,
+    predefined: String,
+    global_id: Option<String>,
+    first_element: u32,
+}
+
+/// The type objects [`write_step`] makes for a model.
+#[derive(Debug, Clone, Default)]
+#[non_exhaustive]
+pub struct TypeObjects {
+    /// One per type, entity and predefined type of the elements named
+    /// `Family:Type` whose type is read (RE-110).
+    pub groups: Vec<TypeObject>,
+    /// One `IfcSpaceType` per room whose name was read.
+    pub rooms: Vec<TypeObject>,
+}
+
+impl TypeObjects {
+    /// Every type object, the groups and then the rooms'.
+    pub fn all(&self) -> impl Iterator<Item = &TypeObject> {
+        self.groups.iter().chain(self.rooms.iter())
+    }
+}
+
+/// The type objects [`write_step`] makes for `model`: which elements are
+/// typed by which, and the sets each holds. The writer writes exactly these,
+/// so a reader of the model that wants an element's type object asks here
+/// rather than grouping the elements again.
+pub fn type_objects(model: &IfcModel) -> TypeObjects {
+    use super::entities::{IfcEntity, Property, PropertyValue};
+    use super::export_content::{
+        FAMILY_NAME_PROPERTY, REVIT_OTHER_SET, ROOM_NAME_PROPERTY, ROOM_NUMBER_PROPERTY,
+        TYPE_NAME_PROPERTY,
+    };
+    // A piece folded into another element's body is not written as an
+    // element, so it has no type object (#823).
+    let (_, folded) = fold_body_pieces(model);
+    // Spike 257: the Category an element's `Other` set names, which its
+    // type object's own `Other` set repeats, as Revit writes it.
+    let mut categories: HashMap<usize, String> = HashMap::new();
     for entity in &model.entities {
-        let super::entities::IfcEntity::BuildingElement {
+        let IfcEntity::ElementPropertySet { element, set } = entity else {
+            continue;
+        };
+        if set.name != REVIT_OTHER_SET {
+            continue;
+        }
+        if let Some(PropertyValue::Label(category)) = set
+            .properties
+            .iter()
+            .find(|p| p.name == "Category")
+            .map(|p| &p.value)
+        {
+            categories.insert(*element, category.clone());
+        }
+    }
+    let mut groups: Vec<TypeObject> = Vec::new();
+    for (entity_idx, entity) in model.entities.iter().enumerate() {
+        let IfcEntity::BuildingElement {
             ifc_type,
             type_guid,
             predefined_type,
@@ -300,36 +493,195 @@ pub(super) fn type_object_pset_values(model: &IfcModel) -> usize {
         else {
             continue;
         };
-        let element = type_guid.as_deref().and_then(|tag| tag.parse::<u32>().ok());
-        let Some(type_id) = element.and_then(|id| model.element_type_ids.get(&id)) else {
+        if folded.contains(&entity_idx) {
+            continue;
+        }
+        let Some(type_id) = type_guid
+            .as_deref()
+            .and_then(|tag| tag.parse::<u32>().ok())
+            .and_then(|id| model.element_type_ids.get(&id))
+        else {
             continue;
         };
-        let has_text = |key: &str| {
-            property_set.as_ref().is_some_and(|set| {
-                set.properties.iter().any(|property| {
-                    matches!(property.value, super::entities::PropertyValue::Text(_))
-                        && property.name == key
+        let property_text = |key: &str| {
+            property_set.as_ref().and_then(|set| {
+                set.properties.iter().find_map(|p| match &p.value {
+                    PropertyValue::Text(text) if p.name == key => Some(text.clone()),
+                    _ => None,
                 })
             })
         };
-        if !has_text(super::export_content::FAMILY_NAME_PROPERTY)
-            || !has_text(super::export_content::TYPE_NAME_PROPERTY)
-        {
+        let (Some(family), Some(type_name)) = (
+            property_text(FAMILY_NAME_PROPERTY),
+            property_text(TYPE_NAME_PROPERTY),
+        ) else {
             continue;
-        }
+        };
         let Some((entity_name, tail)) =
             type_entity_for(&ifc_type.to_ascii_uppercase(), predefined_type.as_deref())
         else {
             continue;
         };
-        let global_id = element
+        // RE-167: Revit writes a type object per original symbol, with
+        // that symbol's GlobalId and the instance's symbol's Tag.
+        let global_id = type_guid
+            .as_deref()
+            .and_then(|tag| tag.parse::<u32>().ok())
             .and_then(|id| model.global_ids.element_types.get(&id))
             .cloned();
-        groups.insert((*type_id, entity_name, tail, global_id));
+        let element_id = type_guid
+            .as_deref()
+            .and_then(|tag| tag.parse::<u32>().ok())
+            .unwrap_or(u32::MAX);
+        // Revit writes a type object per entity and predefined type (B73).
+        match groups.iter_mut().find(|group| {
+            group.type_id == *type_id
+                && group.entity == entity_name
+                && group.tail == tail
+                && group.global_id == global_id
+        }) {
+            Some(group) => {
+                group.elements.push(entity_idx);
+                group.first_element = group.first_element.min(element_id);
+            }
+            None => {
+                // Spike 257: Revit's type parameters Category, Family Name
+                // and Type Name, in the sets Revit's export gives a type
+                // object.
+                let text = |name: &str, value: String| Property {
+                    name: name.into(),
+                    value: PropertyValue::Text(value),
+                };
+                let mut other = Vec::new();
+                if let Some(category) = categories.get(&entity_idx) {
+                    other.push(Property {
+                        name: "Category".into(),
+                        value: PropertyValue::Label(category.clone()),
+                    });
+                }
+                other.push(text("Family Name", family.clone()));
+                let mut property_sets = vec![
+                    PropertySet {
+                        name: REVIT_OTHER_SET.into(),
+                        properties: other,
+                    },
+                    PropertySet {
+                        name: "Identity Data".into(),
+                        properties: vec![text("Type Name", type_name.clone())],
+                    },
+                ];
+                // RE-210: Revit's own sets of the type's parameters, each
+                // into the set of its name, the properties it does not hold
+                // yet.
+                let by_entity = model
+                    .type_entity_sets
+                    .get(type_id)
+                    .and_then(|sets| sets.get(entity_name.as_str()))
+                    .into_iter()
+                    .flatten();
+                for extra in model
+                    .type_property_sets
+                    .get(type_id)
+                    .into_iter()
+                    .flatten()
+                    .chain(by_entity)
+                {
+                    match property_sets.iter_mut().find(|set| set.name == extra.name) {
+                        Some(set) => {
+                            for property in &extra.properties {
+                                if !set.properties.iter().any(|p| p.name == property.name) {
+                                    set.properties.push(property.clone());
+                                }
+                            }
+                        }
+                        None => property_sets.push(extra.clone()),
+                    }
+                }
+                groups.push(TypeObject {
+                    // #763: Revit names a family instance's `IfcSpaceType`
+                    // after its type alone.
+                    name: if entity_name == "IFCSPACETYPE" {
+                        type_name
+                    } else {
+                        format!("{family}:{type_name}")
+                    },
+                    entity: entity_name,
+                    tag: type_id.to_string(),
+                    property_sets,
+                    elements: vec![entity_idx],
+                    type_id: *type_id,
+                    tail,
+                    predefined: predefined_type
+                        .as_deref()
+                        .and_then(step_enum_token)
+                        .unwrap_or_else(|| "NOTDEFINED".into()),
+                    global_id,
+                    first_element: element_id,
+                });
+            }
+        }
     }
-    groups
+    let mut rooms: Vec<TypeObject> = Vec::new();
+    for (entity_idx, entity) in model.entities.iter().enumerate() {
+        let IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid: Some(tag),
+            property_set,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if !ifc_type.eq_ignore_ascii_case("IFCSPACE") || folded.contains(&entity_idx) {
+            continue;
+        }
+        let room_text = |key: &str| {
+            property_set.as_ref().and_then(|set| {
+                set.properties.iter().find_map(|p| match &p.value {
+                    PropertyValue::Text(text) if p.name == key && !text.trim().is_empty() => {
+                        Some(text.clone())
+                    }
+                    _ => None,
+                })
+            })
+        };
+        let Some(room_name) = room_text(ROOM_NAME_PROPERTY) else {
+            continue;
+        };
+        let display = match room_text(ROOM_NUMBER_PROPERTY) {
+            Some(number) => format!("{room_name} {number}"),
+            None => room_name,
+        };
+        rooms.push(TypeObject {
+            entity: "IFCSPACETYPE".into(),
+            name: format!("{display}:{tag}"),
+            tag: tag.clone(),
+            property_sets: Vec::new(),
+            elements: vec![entity_idx],
+            type_id: 0,
+            tail: String::new(),
+            predefined: String::new(),
+            global_id: None,
+            first_element: u32::MAX,
+        });
+    }
+    TypeObjects { groups, rooms }
+}
+
+/// The values of the `Pset_` sets the writer gives the type objects from
+/// [`IfcModel::type_entity_sets`] (RE-286), for the diagnostics' parameter
+/// value count: the sets of each type object [`type_objects`] makes for the
+/// elements named `Family:Type`.
+pub(super) fn type_object_pset_values(model: &IfcModel) -> usize {
+    type_objects(model)
+        .groups
         .iter()
-        .filter_map(|(type_id, entity, _, _)| model.type_entity_sets.get(type_id)?.get(entity))
+        .filter_map(|group| {
+            model
+                .type_entity_sets
+                .get(&group.type_id)?
+                .get(&group.entity)
+        })
         .flatten()
         .filter(|set| set.name.starts_with("Pset_"))
         .map(|set| set.properties.len())
@@ -436,6 +788,10 @@ struct StepWriter<'a> {
     /// Injected at construction so the output is a pure function of
     /// `(model, timestamp)` when a fixed timestamp is supplied.
     timestamp: i64,
+    /// Whether an `IfcSpace` keeps its material association, which IFC4's
+    /// `IfcRelAssociatesMaterial.AllowedElements` does not allow and Revit's
+    /// export writes (#1430): [`write_step_with_space_materials`].
+    space_materials: bool,
 }
 
 /// A writer [`write_step_to`] streams to, the bytes it took and its first
@@ -448,6 +804,66 @@ struct Sink<'a> {
 
 /// How much text [`StepWriter`] holds before handing it to its sink.
 const SPILL_BYTES: usize = 1 << 20;
+
+/// The `IfcShapeRepresentation.RepresentationType` IFC4's
+/// `IfcShapeRepresentationTypes` accepts for items of every kind in `kinds`
+/// (the tokens `emit_solid_shape` returns), or `None` where there are none or
+/// no one type holds them all (#1430):
+/// - `AdvancedSweptSolid` takes every `IfcSweptAreaSolid`, extruded and
+///   revolved ones too;
+/// - `SolidModel` takes those and `IfcFacetedBrep`;
+/// - `SurfaceOrSolidModel` takes those and `IfcTriangulatedFaceSet`;
+/// - `CSG` takes `IfcBooleanResult` alone, and no other type takes one; a mix
+///   with a boolean result is written as the union of its items, a
+///   triangulated one as a faceted brep.
+fn shared_representation_type(
+    kinds: &std::collections::BTreeSet<&'static str>,
+) -> Option<&'static str> {
+    let within = |allowed: &[&str]| kinds.iter().all(|kind| allowed.contains(kind));
+    if kinds.len() <= 1 {
+        kinds.iter().next().copied()
+    } else if within(&["SweptSolid", "AdvancedSweptSolid"]) {
+        Some("AdvancedSweptSolid")
+    } else if within(&["SweptSolid", "AdvancedSweptSolid", "Brep"]) {
+        Some("SolidModel")
+    } else if within(&["SweptSolid", "AdvancedSweptSolid", "Brep", "Tessellation"]) {
+        Some("SurfaceOrSolidModel")
+    } else {
+        None
+    }
+}
+
+/// Whether the default export associates a material with an element of IFC
+/// type `ifc_type`. An `IfcSpace` is none of the entities IFC4's
+/// `IfcRelAssociatesMaterial.AllowedElements` takes (elements, element types,
+/// door and window styles, structural members and ports), so it has none
+/// (#1430), though Revit's own export associates one, which
+/// [`write_step_with_space_materials`] also does. The consumers that list an
+/// element's material (the elements CSV, the viewer's panels) follow this, as
+/// they follow `placements`.
+pub(super) fn associates_material(ifc_type: &str) -> bool {
+    !ifc_type.eq_ignore_ascii_case("IFCSPACE")
+}
+
+/// The token `emit_solid_shape` returns for `shape`, worked out before it is
+/// written, so that a compound whose items have no shared type is written
+/// with its items as union operands.
+fn solid_kind(shape: &SolidShape) -> &'static str {
+    match shape {
+        SolidShape::ExtrudedArea(_)
+        | SolidShape::RevolvedArea { .. }
+        | SolidShape::PlacedExtrusion { .. } => "SweptSolid",
+        SolidShape::SweptPath { .. } => "AdvancedSweptSolid",
+        SolidShape::FacetedBrep { .. } => "Brep",
+        SolidShape::TriangulatedFaceSet { .. } => "Tessellation",
+        SolidShape::BooleanResult { .. } => "CSG",
+        SolidShape::Compound(items) => match items.as_slice() {
+            [] => "Tessellation",
+            [one] => solid_kind(one),
+            _ => "CSG",
+        },
+    }
+}
 
 impl StepWriter<'_> {
     /// The `Position` and depth, metres, of an opening's extruded solid: the
@@ -542,6 +958,7 @@ impl StepWriter<'_> {
             sink: None,
             next_id: 1,
             timestamp,
+            space_materials: false,
         }
     }
 
@@ -1009,8 +1426,11 @@ impl StepWriter<'_> {
     /// return `(solid_entity_id, representation_type_token)`. The
     /// second value is the `IfcShapeRepresentation.RepresentationType`
     /// token that the caller should use: `"SweptSolid"` for
-    /// extruded / revolved, `"CSG"` for boolean results, `"Brep"`
-    /// for faceted breps.
+    /// extruded / revolved, `"AdvancedSweptSolid"` for a profile swept
+    /// along a directrix, `"CSG"` for boolean results, `"Brep"` for
+    /// faceted breps and `"Tessellation"` for triangulated face sets.
+    /// IFC4's `IfcShapeRepresentationTypes` accepts only those item
+    /// classes under each token (#1430).
     ///
     /// The caller is responsible for wrapping the returned entity
     /// ID in an `IfcShapeRepresentation` + `IfcProductDefinitionShape`
@@ -1031,6 +1451,11 @@ impl StepWriter<'_> {
     /// The representation items of `shape`: each of a
     /// [`SolidShape::Compound`]'s solids, else the one solid
     /// [`Self::emit_solid_shape`] writes, with the representation type.
+    ///
+    /// Where no one type takes all the items of a compound
+    /// ([`shared_representation_type`]: a boolean result beside another kind)
+    /// they are written as their union, whose operands are solids
+    /// (`emit_solid_shape`'s `operand`), under `CSG`.
     fn emit_solid_items(
         &mut self,
         shape: &SolidShape,
@@ -1039,31 +1464,62 @@ impl StepWriter<'_> {
     ) -> (Vec<usize>, &'static str) {
         match shape {
             SolidShape::Compound(items) if !items.is_empty() => {
-                let mut ids = Vec::with_capacity(items.len());
-                let mut kinds = std::collections::BTreeSet::new();
-                for item in items {
-                    let (id, kind) = self.emit_solid_shape(item, solid_position, z_axis);
-                    ids.push(id);
-                    kinds.insert(kind);
+                let kinds: std::collections::BTreeSet<&'static str> =
+                    items.iter().map(solid_kind).collect();
+                let shared = shared_representation_type(&kinds);
+                // `CSG` takes boolean results alone, and no other type takes
+                // one: without a shared type the items are written as their
+                // union, so as operands.
+                let operand = shared.is_none();
+                let ids: Vec<usize> = items
+                    .iter()
+                    .map(|item| {
+                        self.emit_solid_shape(item, solid_position, z_axis, operand)
+                            .0
+                    })
+                    .collect();
+                if let Some(kind) = shared {
+                    return (ids, kind);
                 }
-                let kind = match kinds.into_iter().collect::<Vec<_>>().as_slice() {
-                    [one] => *one,
-                    _ => "CSG",
-                };
-                (ids, kind)
+                match ids.split_first() {
+                    Some((first, rest)) => (vec![self.emit_union(*first, rest)], "CSG"),
+                    None => (Vec::new(), "CSG"),
+                }
             }
             _ => {
-                let (id, kind) = self.emit_solid_shape(shape, solid_position, z_axis);
+                let (id, kind) = self.emit_solid_shape(shape, solid_position, z_axis, false);
                 (vec![id], kind)
             }
         }
     }
 
+    /// The union of solids `first` and `rest`, as nested `IfcBooleanResult`s.
+    fn emit_union(&mut self, first: usize, rest: &[usize]) -> usize {
+        let mut solid_id = first;
+        for other in rest {
+            let union = self.id();
+            self.emit_entity(
+                union,
+                format!("IFCBOOLEANRESULT(.UNION.,#{solid_id},#{other})"),
+            );
+            solid_id = union;
+        }
+        solid_id
+    }
+
+    /// One solid of a body. `operand` says it is an operand of an
+    /// `IfcBooleanResult` (a union of a compound's items, or an operand of a
+    /// [`SolidShape::BooleanResult`]): IFC4 takes a tessellated operand only
+    /// where it is closed (`IfcBooleanResult.FirstOperandClosed` and
+    /// `SecondOperandClosed`), and the face set records `Closed` as `$`, so a
+    /// triangulated operand is written as the faceted brep of the same
+    /// triangles, a solid with no such rule (#1430).
     fn emit_solid_shape(
         &mut self,
         shape: &SolidShape,
         solid_position: usize,
         z_axis: usize,
+        operand: bool,
     ) -> (usize, &'static str) {
         match shape {
             SolidShape::ExtrudedArea(ex) => {
@@ -1154,10 +1610,14 @@ impl StepWriter<'_> {
             }
             SolidShape::Compound(items) => {
                 // Nested in another solid, the items are one: their union.
-                let mut ids = items
+                let union = items.len() > 1;
+                let parts: Vec<(usize, &'static str)> = items
                     .iter()
-                    .map(|item| self.emit_solid_shape(item, solid_position, z_axis).0);
-                let Some(mut solid_id) = ids.next() else {
+                    .map(|item| {
+                        self.emit_solid_shape(item, solid_position, z_axis, operand || union)
+                    })
+                    .collect();
+                let Some(((first, kind), rest)) = parts.split_first() else {
                     return self.emit_solid_shape(
                         &SolidShape::TriangulatedFaceSet {
                             vertices_feet: Vec::new(),
@@ -1165,21 +1625,14 @@ impl StepWriter<'_> {
                         },
                         solid_position,
                         z_axis,
+                        operand,
                     );
                 };
-                let rest: Vec<usize> = ids.collect();
                 if rest.is_empty() {
-                    return (solid_id, "SweptSolid");
+                    return (*first, *kind);
                 }
-                for other in rest {
-                    let union = self.id();
-                    self.emit_entity(
-                        union,
-                        format!("IFCBOOLEANRESULT(.UNION.,#{solid_id},#{other})"),
-                    );
-                    solid_id = union;
-                }
-                (solid_id, "CSG")
+                let rest: Vec<usize> = rest.iter().map(|(id, _)| *id).collect();
+                (self.emit_union(*first, &rest), "CSG")
             }
             SolidShape::BooleanResult {
                 op,
@@ -1189,8 +1642,8 @@ impl StepWriter<'_> {
                 // Recursively emit operands, then wrap in
                 // IFCBOOLEANRESULT(op, first, second). Nested
                 // booleans compose naturally.
-                let (a_id, _rep_a) = self.emit_solid_shape(operand_a, solid_position, z_axis);
-                let (b_id, _rep_b) = self.emit_solid_shape(operand_b, solid_position, z_axis);
+                let (a_id, _rep_a) = self.emit_solid_shape(operand_a, solid_position, z_axis, true);
+                let (b_id, _rep_b) = self.emit_solid_shape(operand_b, solid_position, z_axis, true);
                 let solid_id = self.id();
                 self.emit_entity(
                     solid_id,
@@ -1258,6 +1711,21 @@ impl StepWriter<'_> {
                     ),
                 );
                 (brep_id, "Brep")
+            }
+            SolidShape::TriangulatedFaceSet {
+                vertices_feet,
+                triangles,
+            } if operand => {
+                let count = vertices_feet.len();
+                let brep = SolidShape::FacetedBrep {
+                    vertices_feet: vertices_feet.clone(),
+                    triangles: triangles
+                        .iter()
+                        .filter(|t| [t.0, t.1, t.2].iter().all(|&i| (i as usize) < count))
+                        .cloned()
+                        .collect(),
+                };
+                self.emit_solid_shape(&brep, solid_position, z_axis, false)
             }
             SolidShape::TriangulatedFaceSet {
                 vertices_feet,
@@ -1358,7 +1826,10 @@ impl StepWriter<'_> {
                         "IFCFIXEDREFERENCESWEPTAREASOLID(#{profile_id},#{solid_position},#{directrix},$,$,#{fixed_ref_id})"
                     ),
                 );
-                (solid_id, "SweptSolid")
+                // IFC4 reserves `SweptSolid` for extruded and revolved
+                // solids; a fixed-reference sweep is `AdvancedSweptSolid`
+                // (IfcShapeRepresentationTypes, #1430).
+                (solid_id, "AdvancedSweptSolid")
             }
             SolidShape::PlacedExtrusion {
                 profile,
@@ -2235,10 +2706,11 @@ impl StepWriter<'_> {
                 map_placement,
                 format!("IFCAXIS2PLACEMENT3D(#{map_origin_pt},#{z_axis},#{x_axis})"),
             );
-            // Emit the shared shape body. The emission helper returns
-            // (solid_entity_id, rep_type_token). For the map's own
-            // IfcShapeRepresentation we use the returned rep_type
-            // (SweptSolid / CSG / Brep).
+            // Emit the shared shape body. The emission helper returns the
+            // solids' entity ids and the one RepresentationType IFC4 takes
+            // for them (SweptSolid, AdvancedSweptSolid, SolidModel,
+            // SurfaceOrSolidModel, CSG, Brep or Tessellation), which is the
+            // map's own IfcShapeRepresentation's.
             //
             // Passing `map_placement` as the solid `Position` here is
             // not the #232 double-translation: a mapped item resolves
@@ -2282,7 +2754,6 @@ impl StepWriter<'_> {
         let mut unplaced_spaces: Vec<usize> = Vec::new();
         // B63: the elements a space contains, by the space's entity index;
         // they are left out of their storey's containment.
-        let space_of = elements_in_spaces(model);
         let mut per_space_elements: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         // Track (element_id, material_index) pairs so we can emit
         // IfcRelAssociatesMaterial per material after the element
@@ -2340,6 +2811,9 @@ impl StepWriter<'_> {
             )
         };
         let aggregate_parts = aggregate_parts_of_elements(model);
+        // Where each element goes in the spatial structure: the one decision
+        // the server's answers read as well (`placements`).
+        let element_placements = placements(model);
         // #400: each building element's GlobalId, see `element_global_ids`.
         // Everything the element owns (its opening, property sets, material
         // association) derives from this one.
@@ -2622,50 +3096,15 @@ impl StepWriter<'_> {
                 };
 
                 let el_id = self.id();
-                // A room's own text property, when recovered and not blank.
-                let room_text = |key: &str| {
-                    property_set.as_ref().and_then(|set| {
-                        set.properties
-                            .iter()
-                            .find(|p| p.name == key)
-                            .and_then(|p| match &p.value {
-                                super::entities::PropertyValue::Text(text)
-                                    if !text.trim().is_empty() =>
-                                {
-                                    Some(quoted_or_dollar(&escape(text)))
-                                }
-                                _ => None,
-                            })
-                    })
-                };
-                let is_space = ifc_type.eq_ignore_ascii_case("IFCSPACE");
-                // An `IfcSpace` is named by its room number and described
-                // by its room name, as Revit's own exporter writes it
-                // (RE-117): `Name` the number, `LongName` the name. A room
-                // with a name and no number is named `<name>:<ElementId>`,
-                // the name Revit's exporter falls back to (RE-196); one with
-                // neither keeps the `Room-<ElementId>` Name, and one with no
-                // name has no LongName.
-                let room_name = property_set.as_ref().and_then(|set| {
-                    set.properties.iter().find_map(|p| match &p.value {
-                        super::entities::PropertyValue::Text(text)
-                            if p.name == super::export_content::ROOM_NAME_PROPERTY
-                                && !text.trim().is_empty() =>
-                        {
-                            Some(text.as_str())
-                        }
-                        _ => None,
-                    })
-                });
-                let unnumbered = room_name.zip(type_guid.as_deref()).map(|(room_name, tag)| {
-                    quoted_or_dollar(&escape(&format!("{room_name}:{tag}")))
-                });
-                let name_quoted = is_space
-                    .then(|| room_text(super::export_content::ROOM_NUMBER_PROPERTY).or(unnumbered))
-                    .flatten()
-                    .unwrap_or_else(|| quoted_or_dollar(&escape(name)));
-                let long_name_quoted = room_text(super::export_content::ROOM_NAME_PROPERTY)
-                    .unwrap_or_else(|| "$".into());
+                // The Name and LongName of an element, a space's number and
+                // room name (`written_names`).
+                let names =
+                    written_names(ifc_type, name, type_guid.as_deref(), property_set.as_ref());
+                let name_quoted = quoted_or_dollar(&escape(&names.name));
+                let long_name_quoted = names
+                    .long_name
+                    .as_deref()
+                    .map_or_else(|| "$".into(), |text| quoted_or_dollar(&escape(text)));
                 // `ObjectType` is `Family:Type` when RE-38 named the
                 // element's family and type, as in Revit's own export.
                 let property_text = |key: &str| {
@@ -2706,6 +3145,13 @@ impl StepWriter<'_> {
                 // the type, so a reader can index PredefinedType
                 // instead of hitting "index out of range".
                 let ifc_upper = ifc_type.to_ascii_uppercase();
+                // IFC4's CorrectPredefinedType: a `USERDEFINED` occurrence
+                // states its user-defined type in `ObjectType`. With none
+                // read the element cannot say which, and the writer invents
+                // no value, so its `PredefinedType` is left unset (#1430).
+                let predefined = predefined_type.as_deref().filter(|token| {
+                    !(token.eq_ignore_ascii_case("USERDEFINED") && object_type_quoted == "$")
+                });
                 // RE-93, RE-94: a window's or door's OverallHeight and
                 // OverallWidth are its opening's, which Revit's export writes
                 // there; `IfcModel::filler_sizes` has what they are worked out
@@ -2715,7 +3161,7 @@ impl StepWriter<'_> {
                 let tail = element_attribute_tail(
                     &ifc_upper,
                     &tag_quoted,
-                    predefined_type.as_deref(),
+                    predefined,
                     &long_name_quoted,
                     overall,
                 );
@@ -2730,22 +3176,26 @@ impl StepWriter<'_> {
                 // RE-84: an opening standing for a door or window that draws
                 // no geometry voids its host and fills nothing. Like every
                 // opening it lives through that relation, not in a storey.
-                let hosted_opening =
-                    ifc_upper == "IFCOPENINGELEMENT" && host_element_index.is_some();
-                if let (true, Some(h_idx)) = (hosted_opening, host_element_index) {
-                    void_fill_triples.push((*h_idx, el_id, None, global_id.to_string()));
-                } else if let Some(&space) = space_of.get(&entity_idx) {
-                    per_space_elements.entry(space).or_default().push(el_id);
-                } else if ifc_upper == "IFCSPACE" {
-                    match idx {
-                        Some(index) => per_storey_spaces[index].push(el_id),
-                        None => unplaced_spaces.push(el_id),
+                let is_space = ifc_upper == "IFCSPACE";
+                let hosted_opening = matches!(
+                    element_placements[entity_idx],
+                    Some(Placement::Opening { .. })
+                );
+                match element_placements[entity_idx] {
+                    Some(Placement::Opening { host }) => {
+                        void_fill_triples.push((host, el_id, None, global_id.to_string()));
                     }
-                } else if !aggregate_parts.contains(&entity_idx) {
-                    match idx {
-                        Some(index) => per_storey_elements[index].push(el_id),
-                        None => unplaced_elements.push(el_id),
+                    Some(Placement::InSpace(space)) => {
+                        per_space_elements.entry(space).or_default().push(el_id);
                     }
+                    Some(Placement::OnStorey(index)) if is_space => {
+                        per_storey_spaces[index].push(el_id);
+                    }
+                    Some(Placement::OnStorey(index)) => per_storey_elements[index].push(el_id),
+                    Some(Placement::InBuilding) if is_space => unplaced_spaces.push(el_id),
+                    Some(Placement::InBuilding) => unplaced_elements.push(el_id),
+                    // A part reaches the structure through its whole.
+                    Some(Placement::PartOf(_) | Placement::Folded) | None => {}
                 }
                 entity_index_to_el_id[entity_idx] = Some(el_id);
                 entity_index_to_placement[entity_idx] = Some(placement_id);
@@ -2754,6 +3204,20 @@ impl StepWriter<'_> {
                 // material. Try each in order; `profile_or_layer_applied`
                 // carries the "already emitted" flag through so the
                 // single-material path below doesn't double-associate.
+                //
+                // An IfcSpace is none of the entities IFC4's
+                // IfcRelAssociatesMaterial.AllowedElements takes (elements,
+                // element types, door and window styles, structural members
+                // and ports), so a space is associated with no material
+                // (#1430), though Revit's own export associates one, which
+                // `write_step_with_space_materials` also does.
+                let holds_material = associates_material(ifc_type) || self.space_materials;
+                let material_index = material_index.as_ref().filter(|_| holds_material);
+                let material_profile_set_index = material_profile_set_index
+                    .as_ref()
+                    .filter(|_| holds_material);
+                let material_layer_set_index =
+                    material_layer_set_index.as_ref().filter(|_| holds_material);
                 let profile_set_applied = if let Some(ps_idx) = material_profile_set_index {
                     if let Some(&ps_id) = profile_set_ids.get(*ps_idx) {
                         let usage_id = self.id();
@@ -2837,7 +3301,10 @@ impl StepWriter<'_> {
                         if *m_idx < material_ids.len() {
                             element_material_pairs.push((el_id, *m_idx));
                         }
-                    } else if let Some(&set) = constituent_set_of.get(&entity_idx) {
+                    } else if let Some(&set) = constituent_set_of
+                        .get(&entity_idx)
+                        .filter(|_| holds_material)
+                    {
                         element_constituent_pairs.push((el_id, set));
                     }
                 }
@@ -3203,13 +3670,15 @@ impl StepWriter<'_> {
             void_fill_triples.push((*host, opening_id, None, opening_gid));
         }
 
-        // RE-321: the opening a rectangular wall opening cuts in a wall,
-        // which nothing fills. Placed in the wall's frame as the opening of
-        // its elevation profile is, tagged with the opening's ElementId and
-        // named for the wall. Its Reference is the wall's type name, and its
-        // GlobalId Revit's: revit-ifc's `OpeningUtil` hashes the opening's
-        // number in the wall's openings with the wall's and the opening
-        // record's GlobalIds (CLEANROOM.md source 5).
+        // RE-321: an opening an element cuts in a wall besides the one a door
+        // or window fills: a rectangular wall opening's, a cabinet's, a door's
+        // in a second wall or a curtain wall's. Placed in the wall's frame as
+        // the opening of its elevation profile is, tagged with the cutter's
+        // ElementId and named for the wall. Its Reference is the cutter's
+        // type name, and its GlobalId Revit's where the cutter is an element
+        // of the export: revit-ifc's `OpeningUtil` hashes its number in the
+        // wall's openings with the wall's and the cutter's GlobalIds
+        // (CLEANROOM.md source 5).
         for entity in &model.entities {
             let super::entities::IfcEntity::WallCutOpening {
                 host,
@@ -3217,10 +3686,13 @@ impl StepWriter<'_> {
                 tag,
                 name,
                 cutter_global_id,
+                reference_from,
                 outline_feet,
                 axis_turn_radians,
                 plane_offset_feet,
                 thickness_feet,
+                recess,
+                quantities: with_quantities,
             } = entity
             else {
                 continue;
@@ -3308,12 +3780,13 @@ impl StepWriter<'_> {
             self.emit_entity(
                 opening_id,
                 format!(
-                    "IFCOPENINGELEMENT('{opening_gid}',#{owner_hist},{},$,$,#{placement_id},#{prod_shape_id},'{}',.OPENING.)",
+                    "IFCOPENINGELEMENT('{opening_gid}',#{owner_hist},{},$,$,#{placement_id},#{prod_shape_id},'{}',{})",
                     quoted_or_dollar(&escape(name)),
                     escape(tag),
+                    if *recess { ".RECESS." } else { ".OPENING." },
                 ),
             );
-            if let Some(reference) = host_references.get(host) {
+            if let Some(reference) = host_references.get(reference_from) {
                 for set_name in [
                     "Pset_OpeningElementCommon",
                     "Pset_EnvironmentalImpactIndicators",
@@ -3339,7 +3812,7 @@ impl StepWriter<'_> {
             // which are the right way round on a rectangular opening (not on
             // a door's, RE-244). With base quantities off the wall has none
             // and the opening none either.
-            if wall_widths.contains_key(host) {
+            if *with_quantities && wall_widths.contains_key(host) {
                 let extent = |axis: fn(&(f64, f64)) -> f64| {
                     let low = outline_feet.iter().map(axis).fold(f64::INFINITY, f64::min);
                     let high = outline_feet
@@ -3878,132 +4351,13 @@ impl StepWriter<'_> {
         // RE-110: every element named `Family:Type` whose type is read is
         // typed by one IFC type object per type, as in Revit's own export:
         // named `Family:Type`, its `Tag` the type's ElementId and its
-        // GlobalId Revit's.
-        struct TypeGroup {
-            type_id: u32,
-            entity: String,
-            name: String,
-            tail: String,
-            predefined: String,
-            global_id: Option<String>,
-            first_element: u32,
-            elements: Vec<usize>,
-            family: String,
-            type_name: String,
-            category: Option<String>,
-        }
-        // Spike 257: the Category an element's `Other` set names, which its
-        // type object's own `Other` set repeats, as Revit writes it.
-        let mut categories: HashMap<usize, String> = HashMap::new();
-        for entity in &model.entities {
-            let super::entities::IfcEntity::ElementPropertySet { element, set } = entity else {
-                continue;
-            };
-            if set.name != super::export_content::REVIT_OTHER_SET {
-                continue;
-            }
-            if let Some(super::entities::PropertyValue::Label(category)) = set
-                .properties
-                .iter()
-                .find(|p| p.name == "Category")
-                .map(|p| &p.value)
-            {
-                categories.insert(*element, category.clone());
-            }
-        }
-        let mut type_groups: Vec<TypeGroup> = Vec::new();
-        for (entity_idx, entity) in model.entities.iter().enumerate() {
-            let super::entities::IfcEntity::BuildingElement {
-                ifc_type,
-                type_guid,
-                predefined_type,
-                property_set,
-                ..
-            } = entity
-            else {
-                continue;
-            };
-            let (Some(el_id), Some(type_id)) = (
-                entity_index_to_el_id[entity_idx],
-                type_guid
-                    .as_deref()
-                    .and_then(|tag| tag.parse::<u32>().ok())
-                    .and_then(|id| model.element_type_ids.get(&id)),
-            ) else {
-                continue;
-            };
-            let property_text = |key: &str| {
-                property_set.as_ref().and_then(|set| {
-                    set.properties.iter().find_map(|p| match &p.value {
-                        super::entities::PropertyValue::Text(text) if p.name == key => {
-                            Some(text.clone())
-                        }
-                        _ => None,
-                    })
-                })
-            };
-            let (Some(family), Some(type_name)) = (
-                property_text(super::export_content::FAMILY_NAME_PROPERTY),
-                property_text(super::export_content::TYPE_NAME_PROPERTY),
-            ) else {
-                continue;
-            };
-            let Some((entity_name, tail)) =
-                type_entity_for(&ifc_type.to_ascii_uppercase(), predefined_type.as_deref())
-            else {
-                continue;
-            };
-            // RE-167: Revit writes a type object per original symbol, with
-            // that symbol's GlobalId and the instance's symbol's Tag.
-            let global_id = type_guid
-                .as_deref()
-                .and_then(|tag| tag.parse::<u32>().ok())
-                .and_then(|id| model.global_ids.element_types.get(&id))
-                .cloned();
-            let element_id = type_guid
-                .as_deref()
-                .and_then(|tag| tag.parse::<u32>().ok())
-                .unwrap_or(u32::MAX);
-            // Revit writes a type object per entity and predefined type (B73).
-            match type_groups.iter_mut().find(|group| {
-                group.type_id == *type_id
-                    && group.entity == entity_name
-                    && group.tail == tail
-                    && group.global_id == global_id
-            }) {
-                Some(group) => {
-                    group.elements.push(el_id);
-                    group.first_element = group.first_element.min(element_id);
-                }
-                None => type_groups.push(TypeGroup {
-                    type_id: *type_id,
-                    // #763: Revit names a family instance's `IfcSpaceType`
-                    // after its type alone.
-                    name: if entity_name == "IFCSPACETYPE" {
-                        type_name.clone()
-                    } else {
-                        format!("{family}:{type_name}")
-                    },
-                    entity: entity_name,
-                    category: categories.get(&entity_idx).cloned(),
-                    family,
-                    type_name,
-                    tail,
-                    predefined: predefined_type
-                        .as_deref()
-                        .and_then(step_enum_token)
-                        .unwrap_or_else(|| "NOTDEFINED".into()),
-                    global_id,
-                    first_element: element_id,
-                    elements: vec![el_id],
-                }),
-            }
-        }
+        // GlobalId Revit's. `type_objects` decides which, and what each holds.
+        let type_plan = type_objects(model);
         // B73: of the type objects a type is written as, the one holding its
         // lowest ElementId takes the type's own GlobalId; Revit's exporter
         // keys the others by entity and predefined type.
         let mut plain_owner: BTreeMap<u32, (u32, usize)> = Default::default();
-        for (index, group) in type_groups.iter().enumerate() {
+        for (index, group) in type_plan.groups.iter().enumerate() {
             if group.global_id.is_some() {
                 continue;
             }
@@ -4017,22 +4371,20 @@ impl StepWriter<'_> {
         let mut used_gids: std::collections::BTreeSet<String> = Default::default();
         for (
             index,
-            TypeGroup {
+            TypeObject {
                 type_id,
                 entity: entity_name,
                 name,
+                tag,
                 tail,
                 predefined,
                 global_id,
                 elements,
-                family,
-                type_name,
-                category,
+                property_sets,
                 ..
             },
-        ) in type_groups.iter().enumerate()
+        ) in type_plan.groups.iter().enumerate()
         {
-            let tag = type_id.to_string();
             let revit = match global_id {
                 Some(global_id) => Some(global_id.clone()),
                 None => model.global_ids.types.get(type_id).and_then(|own| {
@@ -4052,59 +4404,9 @@ impl StepWriter<'_> {
             };
             let type_gid = match revit {
                 Some(global_id) if used_gids.insert(global_id.clone()) => global_id,
-                _ => gid(&["type", entity_name, &tag]),
+                _ => gid(&["type", entity_name, tag]),
             };
-            // Spike 257: Revit's type parameters Category, Family Name and
-            // Type Name, in the sets Revit's export gives a type object.
-            let text = |name: &str, value: String| super::entities::Property {
-                name: name.into(),
-                value: super::entities::PropertyValue::Text(value),
-            };
-            let mut other = Vec::new();
-            if let Some(category) = category {
-                other.push(super::entities::Property {
-                    name: "Category".into(),
-                    value: super::entities::PropertyValue::Label(category.clone()),
-                });
-            }
-            other.push(text("Family Name", family.clone()));
-            let mut type_sets = vec![
-                PropertySet {
-                    name: super::export_content::REVIT_OTHER_SET.into(),
-                    properties: other,
-                },
-                PropertySet {
-                    name: "Identity Data".into(),
-                    properties: vec![text("Type Name", type_name.clone())],
-                },
-            ];
-            // RE-210: Revit's own sets of the type's parameters, each into
-            // the set of its name, the properties it does not hold yet.
-            let by_entity = model
-                .type_entity_sets
-                .get(type_id)
-                .and_then(|sets| sets.get(entity_name.as_str()))
-                .into_iter()
-                .flatten();
-            for extra in model
-                .type_property_sets
-                .get(type_id)
-                .into_iter()
-                .flatten()
-                .chain(by_entity)
-            {
-                match type_sets.iter_mut().find(|set| set.name == extra.name) {
-                    Some(set) => {
-                        for property in &extra.properties {
-                            if !set.properties.iter().any(|p| p.name == property.name) {
-                                set.properties.push(property.clone());
-                            }
-                        }
-                    }
-                    None => type_sets.push(extra.clone()),
-                }
-            }
-            let set_ids: Vec<String> = type_sets
+            let set_ids: Vec<String> = property_sets
                 .iter()
                 .map(|set| {
                     let set_gid = gid(&["type-pset", &type_gid, &set.name]);
@@ -4114,11 +4416,25 @@ impl StepWriter<'_> {
                     )
                 })
                 .collect();
+            // IFC4's CorrectPredefinedType on every element type: a
+            // USERDEFINED type states which user-defined type it is in
+            // ElementType. Revit's export writes `$` there (and breaks the
+            // rule on the same objects), so rvt-rs names the type by its own
+            // Name and leaves PredefinedType, which the type GlobalIds hash,
+            // as Revit has it (#1430).
+            // An unnamed type (an `IfcSpaceType` whose type name is empty)
+            // still states it, as an empty label, since the rule asks that
+            // the attribute exist.
+            let element_type = if predefined == "USERDEFINED" {
+                format!("'{}'", escape(name))
+            } else {
+                "$".into()
+            };
             let type_el_id = self.id();
             self.emit_entity(
                 type_el_id,
                 format!(
-                    "{entity_name}('{type_gid}',#{owner_hist},{},$,$,({}),$,'{tag}',$,{tail})",
+                    "{entity_name}('{type_gid}',#{owner_hist},{},$,$,({}),$,'{tag}',{element_type},{tail})",
                     quoted_or_dollar(&escape(name)),
                     set_ids.join(","),
                 ),
@@ -4131,6 +4447,7 @@ impl StepWriter<'_> {
                     gid(&["defines-by-type", &type_gid]),
                     elements
                         .iter()
+                        .filter_map(|index| entity_index_to_el_id[*index])
                         .map(|id| format!("#{id}"))
                         .collect::<Vec<_>>()
                         .join(","),
@@ -4143,44 +4460,19 @@ impl StepWriter<'_> {
         // <ElementId>`, or `<name>:<ElementId>` for a room with no number
         // (RE-196), its Tag the room's ElementId, and its GlobalId the room's
         // as a sub-element (`InstanceAsType`).
-        for (entity_idx, entity) in model.entities.iter().enumerate() {
-            let super::entities::IfcEntity::BuildingElement {
-                ifc_type,
-                type_guid: Some(tag),
-                property_set,
-                ..
-            } = entity
+        for room in &type_plan.rooms {
+            let Some(el_id) = room
+                .elements
+                .first()
+                .and_then(|index| entity_index_to_el_id.get(*index))
+                .and_then(|slot| *slot)
             else {
                 continue;
             };
-            if !ifc_type.eq_ignore_ascii_case("IFCSPACE") {
-                continue;
-            }
-            let Some(el_id) = entity_index_to_el_id.get(entity_idx).and_then(|slot| *slot) else {
+            let Some(space_gid) = el_id_to_gid.get(&el_id) else {
                 continue;
             };
-            let room_text = |key: &str| {
-                property_set.as_ref().and_then(|set| {
-                    set.properties.iter().find_map(|p| match &p.value {
-                        super::entities::PropertyValue::Text(text)
-                            if p.name == key && !text.trim().is_empty() =>
-                        {
-                            Some(text.clone())
-                        }
-                        _ => None,
-                    })
-                })
-            };
-            let (Some(room_name), Some(space_gid)) = (
-                room_text(super::export_content::ROOM_NAME_PROPERTY),
-                el_id_to_gid.get(&el_id),
-            ) else {
-                continue;
-            };
-            let display = match room_text(super::export_content::ROOM_NUMBER_PROPERTY) {
-                Some(number) => format!("{room_name} {number}"),
-                None => room_name,
-            };
+            let tag = &room.tag;
             let type_gid =
                 crate::revit_global_ids::sub_element_global_id(space_gid, super::INSTANCE_AS_TYPE)
                     .filter(|global_id| used_gids.insert(global_id.clone()))
@@ -4190,7 +4482,7 @@ impl StepWriter<'_> {
                 type_el_id,
                 format!(
                     "IFCSPACETYPE('{type_gid}',#{owner_hist},'{}',$,$,$,$,'{}',$,.NOTDEFINED.,$)",
-                    escape(&format!("{display}:{tag}")),
+                    escape(&room.name),
                     escape(tag),
                 ),
             );
@@ -4435,33 +4727,140 @@ fn elements_in_spaces(model: &IfcModel) -> HashMap<usize, usize> {
         .collect()
 }
 
-/// The parts of every aggregate whose whole is a building element (#323):
-/// they reach the spatial structure through that whole.
-fn aggregate_parts_of_elements(model: &IfcModel) -> std::collections::BTreeSet<usize> {
+/// Where [`write_step`] puts a building element in the spatial structure,
+/// by [`placements`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Placement {
+    /// Not written as an element: a further piece of an element of separate
+    /// loops, written as an item of the body of the element that owns it
+    /// (#823).
+    Folded,
+    /// The opening of a door or window that draws no geometry. It voids its
+    /// host (an index into `IfcModel::entities`) and is contained nowhere.
+    #[non_exhaustive]
+    Opening {
+        /// The host, an index into `IfcModel::entities`.
+        host: usize,
+    },
+    /// Contained in a space (an index into `IfcModel::entities`).
+    InSpace(usize),
+    /// A part of an aggregate (#323): it reaches the spatial structure
+    /// through its whole (an index into `IfcModel::entities`).
+    PartOf(usize),
+    /// Contained in a storey (an index into `IfcModel::building_storeys`), or,
+    /// for a space, aggregated under it.
+    OnStorey(usize),
+    /// Contained in the building, or, for a space, aggregated under it: no
+    /// storey reached it.
+    InBuilding,
+}
+
+/// Where [`write_step`] puts each entity of `model` in the spatial structure,
+/// by index into `model.entities`; `None` for an entity that is not a
+/// building element. The writer writes with exactly this, so a reader that
+/// wants an element's storey or whether it is written at all asks here.
+pub fn placements(model: &IfcModel) -> Vec<Option<Placement>> {
+    let (_, folded) = fold_body_pieces(model);
+    let in_spaces = elements_in_spaces(model);
+    let wholes = aggregate_wholes(model);
+    model
+        .entities
+        .iter()
+        .enumerate()
+        .map(|(index, entity)| {
+            let super::entities::IfcEntity::BuildingElement {
+                ifc_type,
+                storey_index,
+                host_element_index,
+                ..
+            } = entity
+            else {
+                return None;
+            };
+            if folded.contains(&index) {
+                return Some(Placement::Folded);
+            }
+            // An out-of-range index is a caller bug; treat it as unbound
+            // rather than silently dropping the element or pinning it to an
+            // unrelated storey.
+            let storey = storey_index.filter(|storey| *storey < model.building_storeys.len());
+            let on_storey = || storey.map_or(Placement::InBuilding, Placement::OnStorey);
+            let is_space = ifc_type.eq_ignore_ascii_case("IFCSPACE");
+            // RE-84: an opening standing for a door or window that draws no
+            // geometry voids its host and fills nothing. Like every opening
+            // it lives through that relation, not in a storey.
+            if let (true, Some(host)) = (
+                ifc_type.eq_ignore_ascii_case("IFCOPENINGELEMENT"),
+                host_element_index,
+            ) {
+                Some(Placement::Opening { host: *host })
+            } else if let Some(&space) = in_spaces.get(&index) {
+                Some(Placement::InSpace(space))
+            } else if is_space {
+                Some(on_storey())
+            } else if let Some(&whole) = wholes.get(&index) {
+                Some(Placement::PartOf(whole))
+            } else {
+                Some(on_storey())
+            }
+        })
+        .collect()
+}
+
+/// The storey of the entity at `index` as [`write_step`] puts it, an index
+/// into `IfcModel::building_storeys`, by the `placements` of its model: the
+/// storey it is contained in, that of the space that contains it, that of the
+/// whole it is a part of, or that of the host an opening cuts. `None` where it
+/// is in the building only, or is not written.
+pub fn storey_of(placements: &[Option<Placement>], index: usize) -> Option<usize> {
+    let mut at = index;
+    // A chain of spaces, wholes and hosts is short; a cycle ends the walk.
+    for _ in 0..16 {
+        match (*placements.get(at)?)? {
+            Placement::OnStorey(storey) => return Some(storey),
+            Placement::InBuilding | Placement::Folded => return None,
+            Placement::InSpace(next)
+            | Placement::PartOf(next)
+            | Placement::Opening { host: next } => {
+                at = next;
+            }
+        }
+    }
+    None
+}
+
+/// The whole of every part of an aggregate whose whole is a building element
+/// (#323): the part reaches the spatial structure through that whole. A part
+/// of several wholes has the first.
+fn aggregate_wholes(model: &IfcModel) -> BTreeMap<usize, usize> {
     let is_building_element = |index: usize| {
         matches!(
             model.entities.get(index),
             Some(super::entities::IfcEntity::BuildingElement { .. })
         )
     };
-    model
-        .entities
-        .iter()
-        .filter_map(|entity| match entity {
-            super::entities::IfcEntity::Aggregate { whole, parts }
-                if is_building_element(*whole) =>
-            {
-                Some(
-                    parts
-                        .iter()
-                        .copied()
-                        .filter(|part| *part != *whole && is_building_element(*part)),
-                )
+    let mut wholes = BTreeMap::new();
+    for entity in &model.entities {
+        let super::entities::IfcEntity::Aggregate { whole, parts } = entity else {
+            continue;
+        };
+        if !is_building_element(*whole) {
+            continue;
+        }
+        for part in parts {
+            if *part != *whole && is_building_element(*part) {
+                wholes.entry(*part).or_insert(*whole);
             }
-            _ => None,
-        })
-        .flatten()
-        .collect()
+        }
+    }
+    wholes
+}
+
+/// The parts of every aggregate whose whole is a building element (#323):
+/// they reach the spatial structure through that whole.
+fn aggregate_parts_of_elements(model: &IfcModel) -> std::collections::BTreeSet<usize> {
+    aggregate_wholes(model).into_keys().collect()
 }
 
 /// #823: the further pieces of an element written as items of its body,
@@ -4503,36 +4902,22 @@ fn fold_body_pieces(model: &IfcModel) -> (PieceBodies<'_>, std::collections::BTr
 
 /// Whether every storey of `model` contains an element: an element written
 /// in its own `IfcRelContainedInSpatialStructure` with that storey, as the
-/// writer places it (not a space, a hosted opening, a body piece written as
-/// an item of its owner, a part of an aggregate or an element a space
-/// contains). Revit's exporter up to IFC 26.0 counts the storeys that
-/// contain an element as `NumberOfStoreys`, and from 26.1 every storey, so
-/// the two agree only here (RE-263; the maintainer, 2026-10-29).
+/// writer places it (`placements`: not a space, a hosted opening, a body
+/// piece written as an item of its owner, a part of an aggregate or an
+/// element a space contains). Revit's exporter up to IFC 26.0 counts the
+/// storeys that contain an element as `NumberOfStoreys`, and from 26.1 every
+/// storey, so the two agree only here (RE-263; the maintainer, 2026-10-29).
 pub(crate) fn every_storey_holds_an_element(model: &IfcModel) -> bool {
-    let storeys = model.building_storeys.len();
-    let in_spaces = elements_in_spaces(model);
-    let parts = aggregate_parts_of_elements(model);
-    let (_, folded) = fold_body_pieces(model);
-    let mut holding = vec![false; storeys];
-    for (index, entity) in model.entities.iter().enumerate() {
-        let super::entities::IfcEntity::BuildingElement {
-            ifc_type,
-            storey_index: Some(storey),
-            host_element_index,
-            ..
-        } = entity
-        else {
+    let mut holding = vec![false; model.building_storeys.len()];
+    for (entity, placement) in model.entities.iter().zip(placements(model)) {
+        let super::entities::IfcEntity::BuildingElement { ifc_type, .. } = entity else {
             continue;
         };
-        let ifc_upper = ifc_type.to_ascii_uppercase();
-        let contained = *storey < storeys
-            && !folded.contains(&index)
-            && !(ifc_upper == "IFCOPENINGELEMENT" && host_element_index.is_some())
-            && !in_spaces.contains_key(&index)
-            && ifc_upper != "IFCSPACE"
-            && !parts.contains(&index);
-        if contained {
-            holding[*storey] = true;
+        match placement {
+            Some(Placement::OnStorey(storey)) if !ifc_type.eq_ignore_ascii_case("IFCSPACE") => {
+                holding[storey] = true;
+            }
+            _ => {}
         }
     }
     holding.iter().all(|held| *held)

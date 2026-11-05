@@ -415,14 +415,28 @@ jobs:
       # exports of them (Drshelden/IFC-ECS, MIT), pinned by commit and checked by hash,
       # placed beside the magnetar projects so tests/element_records_2025.rs
       # runs here instead of skipping.
+      # The download took 3 s on most runs and 6.9 min on one (#1380), so the
+      # files are kept in the Actions cache under their pinned commit, saved on
+      # main; every file is still checked against its hash, and only a missing
+      # or changed one is fetched.
+      - name: Restore the Revit 2025 oracle
+        id: re1-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _re1
+          key: re1-oracle-9e8b37175a0fba1397f7011aeee917fe52de7623
       - name: Fetch the Revit 2025 oracle (Drshelden/IFC-ECS RE1, MIT)
         run: |
           set -euo pipefail
           base=https://raw.githubusercontent.com/Drshelden/IFC-ECS/9e8b37175a0fba1397f7011aeee917fe52de7623/data/RE1
           dir="${GITHUB_WORKSPACE}/_project_corpus/Revit"
+          mkdir -p _re1
           while read -r name sum; do
-            curl -sSfL --retry 5 --retry-all-errors -o "${dir}/${name}" "${base}/${name}"
-            echo "${sum}  ${dir}/${name}" | sha256sum -c -
+            if ! echo "${sum}  _re1/${name}" | sha256sum -c --status - 2>/dev/null; then
+              curl -sSfL --retry 5 --retry-all-errors -o "_re1/${name}" "${base}/${name}"
+              echo "${sum}  _re1/${name}" | sha256sum -c -
+            fi
+            cp "_re1/${name}" "${dir}/${name}"
           done <<'LIST'
           RE1-Architecture.rvt 4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4
           RE1-Architecture.ifc a9b5d36677aa6a8bb91b77d8bc354ed9028a7ca3e9e2491a47ba14cfd8e26200
@@ -433,6 +447,12 @@ jobs:
           RE1-Electrical.rvt 9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b
           RE1-Electrical.ifc c7002a10c8e10ab2fca64ff61dcf38db04da652924f65ce53c2064827dfa9e16
           LIST
+      - name: Save the Revit 2025 oracle
+        if: github.ref == 'refs/heads/main' && steps.re1-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _re1
+          key: ${{ steps.re1-cache.outputs.cache-primary-key }}
       # #766: four Revit 2024 models of VTT's BIM4LCA example buildings and
       # Revit's IFC export of one (CC BY-SA 4.0), read by byte range from the
       # 1.58 GB ARCH.zip by tools/ci/fetch-bim4lca.py and checked against
@@ -466,6 +486,44 @@ jobs:
         with:
           path: _bim4lca
           key: ${{ steps.bim4lca-cache.outputs.cache-primary-key }}
+      # #1368: puzzbobb's Revit 2025 models (Apache-2.0, #356, pinned in
+      # research/r2025-models.tsv), the only models of the gate whose roofs are
+      # drawn from their slopes and from an extrusion, so the only ones that
+      # let tests/value_sources_offsets.rs read those sources. Kept in the
+      # Actions cache under the key Measure uses for them, saved on main and
+      # restored by pull requests. An unreachable host leaves RVT_R2025_DIR
+      # unset and the target skips; an archive that no longer matches its pin
+      # fails the job.
+      - name: Restore the R2025 models
+        id: r2025-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _r2025
+          key: r2025-${{ hashFiles('research/r2025-models.tsv', 'tools/ci/fetch-r2025-models.sh') }}
+      - name: Fetch the Revit 2025 models (puzzbobb, Apache-2.0)
+        shell: bash
+        env:
+          HIT: ${{ steps.r2025-cache.outputs.cache-hit }}
+        run: |
+          if [ "$HIT" != true ]; then
+            set +e
+            tools/ci/fetch-r2025-models.sh research/r2025-models.tsv _r2025
+            status=$?
+            set -e
+          else
+            status=0
+          fi
+          case "$status" in
+            0) echo "RVT_R2025_DIR=${GITHUB_WORKSPACE}/_r2025/r2025" >> "$GITHUB_ENV" ;;
+            2) echo "::warning::R2025 models NOT MEASURED: the archive could not be downloaded, so the target that reads them skips" ;;
+            *) echo "::error::an R2025 archive no longer matches research/r2025-models.tsv"; exit 1 ;;
+          esac
+      - name: Save the R2025 models
+        if: github.ref == 'refs/heads/main' && steps.r2025-cache.outputs.cache-hit != 'true' && env.RVT_R2025_DIR != ''
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: _r2025
+          key: ${{ steps.r2025-cache.outputs.cache-primary-key }}
       - name: Install Rust stable
         shell: bash
         run: |
@@ -519,6 +577,21 @@ jobs:
           path: target/tmp/export-decisions/
           if-no-files-found: ignore
           retention-days: 14
+      # #1360: tests/value_sources_offsets.rs re-reads the copy each body
+      # reader took its value from; its report, per model, body source and
+      # reader, is printed and kept.
+      - name: Print the value sources report
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: cat target/tmp/value-sources/summary.txt || echo "no value sources report was written"
+      - name: Upload the value sources report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: value-sources
+          path: target/tmp/value-sources/
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Upload the element provenance report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -527,6 +600,35 @@ jobs:
           path: target/tmp/element-provenance/
           if-no-files-found: ignore
           retention-days: 14
+  corpus-mcp:
+    # The MCP server's end-to-end test on Einhoven, a job of its own beside
+    # Corpus health rather than a step after its tier-two gates: run after
+    # them it made Corpus health, already the slowest job on every pull
+    # request, about 3 minutes longer (8.1 to 10.2 minutes on main,
+    # 2026-11-04).
+    name: MCP server on Einhoven (tier 2 — external)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch project corpus (magnetar MIT)
+        uses: $/.github/actions/fetch-corpus
+        with:
+          repository: magnetar-io/revit-test-datasets
+          path: _project_corpus
+      - name: Install Rust stable
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: false
+          shared-key: ci-release
       # The MCP server's end-to-end test on Einhoven: elements, GlobalIds
       # looked up and found in the exported IFC, the exports against rvt-ifc's.
       - name: MCP server end to end on Einhoven
@@ -534,12 +636,32 @@ jobs:
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
           RVT_REQUIRE_CLI_PARITY: "1"
+          RVT_MCP_ANSWERS_DIR: ${{ github.workspace }}/target/tmp/mcp-answers
         # The test compares the server's exports with rvt-ifc's and
         # rvt-gltf's, which it finds beside the server in target/ci: built
         # here, not left to a step that may not have run.
         run: |
           cargo build --profile ci --bin rvt-ifc --bin rvt-gltf
           cargo test --profile ci -p rvt-rs-mcp --no-fail-fast
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      # #1415: every structured answer the test was given, on the synthetic
+      # fixture and Einhoven, against the outputSchema its tool declared. A
+      # field the schema requires and an answer leaves out fails here, as it
+      # would for a client that validates structuredContent (#1414).
+      - name: Check every MCP answer against its tool's output schema
+        run: |
+          python -m pip install --require-hashes -r tools/ci/requirements-test.txt
+          python tools/ci/validate-mcp-answers.py --require-all target/tmp/mcp-answers
+      - name: Upload the MCP answers and schemas
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mcp-answers
+          path: target/tmp/mcp-answers/
+          if-no-files-found: ignore
+          retention-days: 14
 
   writer-patch-corpus:
     # M9-01: stream-level writer coverage for real family + project
@@ -737,7 +859,7 @@ jobs:
       # GlobalId from pairing by position instead. A model's
       # rooms are scored here, not by `Corpus health`, because only this
       # job has IfcOpenShell, NumPy and Shapely.
-      - name: Fetch RE1 Architecture and Revit's export of it (Drshelden/IFC-ECS, MIT)
+      - name: Fetch the RE1 projects and Revit's export of RE1 Architecture (Drshelden/IFC-ECS, MIT)
         run: |
           set -euo pipefail
           base=https://raw.githubusercontent.com/Drshelden/IFC-ECS/9e8b37175a0fba1397f7011aeee917fe52de7623/data/RE1
@@ -748,6 +870,9 @@ jobs:
           done <<'LIST'
           RE1-Architecture.rvt 4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4
           RE1-Architecture.ifc a9b5d36677aa6a8bb91b77d8bc354ed9028a7ca3e9e2491a47ba14cfd8e26200
+          RE1-Mechanical.rvt d559720177aa0ec435133f804e7c45d60da2deb9d5585bb3d55f4830139c014b
+          RE1-Plumbing.rvt 03689df2aa426031a216e65051b9f19d3265d6fe96884dd47373b17435f9e54c
+          RE1-Electrical.rvt 9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b
           LIST
       - name: Room areas and outlines against Revit's exports
         env:
@@ -888,6 +1013,46 @@ jobs:
             --out /tmp/witness-slim/verdict.json \
             --registry research/witness-registry.json \
             --compare-committed research/witness/magnetar-2024-core-interior-slim/observations
+      # #1430: IfcOpenShell's check of the schema's EXPRESS rules (the WHERE
+      # rules and global rules), which `ifcopenshell.validate` leaves out and
+      # Measure reports in the `rules:` section of each model's schema.txt,
+      # on every export this job writes: the tier-1 projects, the synthetic
+      # pair, Einhoven and Core Interior (also with their saved meshes and as
+      # the two witness steps write it) and the four RE1 projects. Any
+      # finding, or a file that does not open, fails the job. It reads the
+      # default output: `rvt-ifc --revit-set-placement` keeps the material
+      # Revit associates with an `IfcSpace`, which breaks
+      # IfcRelAssociatesMaterial.AllowedElements as Revit's export does, and
+      # no export here is written with it. It runs after the witness steps,
+      # whatever they did, so that a failing gate never drops the fresh
+      # observations a REPLAY_DRIFT fix needs; a file an earlier failed step
+      # did not write is a finding of its own. Measure alone reports the
+      # models this job does not hold (the BIM4LCA office, the Revit 2025
+      # models, Autodesk's samples, the held-out and the IFC2X3 ones). The
+      # step is bounded by its timeout; Measure's validation and rules
+      # together took 228 s on the BIM4LCA office export, the largest it
+      # checks (run 41988011289).
+      - name: EXPRESS rules hold on every export
+        if: ${{ !cancelled() }}
+        timeout-minutes: 25
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: |
+          set -euo pipefail
+          for m in Electrical Mechanical Plumbing; do
+            ./target/ci/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/RE1-$m.rvt" -o "/tmp/re1-$m.ifc"
+          done
+          python tools/ci/ifc_validate_summary.py --gate \
+            /tmp/tier1-*.ifc \
+            target/tmp/synthetic-fixtures/synthetic-project.ifc \
+            target/tmp/synthetic-fixtures/synthetic-structural.ifc \
+            /tmp/walker-real-project.ifc \
+            /tmp/core-interior.ifc \
+            /tmp/re1-architecture.ifc \
+            /tmp/re1-Electrical.ifc /tmp/re1-Mechanical.ifc /tmp/re1-Plumbing.ifc \
+            /tmp/Revit_IFC5_Einhoven-saved.ifc /tmp/2024_Core_Interior-saved.ifc \
+            /tmp/witness/core-interior.rvt-rs.ifc \
+            /tmp/witness-slim/core-interior-slim.rvt-rs.ifc
       # §10.6: publish observations + verdict for human review of any
       # disagreement without re-running the gate.
       - name: Publish witness observations and verdict
@@ -1353,6 +1518,71 @@ jobs:
           path: ${{ steps.pnpm-store.outputs.dir }}
           key: ${{ steps.pnpm-cache.outputs.cache-primary-key }}
 
+  # The viewer's browser tests are part of `CI passed` (#1374). They used to
+  # run in Deploy viewer's pull-request run, which `CI passed` did not wait
+  # for: #1370 merged before that run had finished, and Deploy viewer went red
+  # on main. They run in the full set only (a ready pull request, or a push to
+  # main); a draft's fast set leaves them out, and viewer-test.yml can be
+  # dispatched on a draft's branch. A pull request that changes nothing but
+  # documentation skips them, as Deploy viewer's deploy step skips waiting for
+  # CI on such a commit; a skipped job passes `CI passed`.
+  viewer-paths:
+    name: viewer tests needed
+    if: inputs.fast != true
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run: ${{ steps.paths.outputs.run }}
+    steps:
+      - name: Does the change touch more than documentation
+        id: paths
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ "${EVENT}" != pull_request ]; then
+            echo "not a pull request; the viewer tests run"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Every page of the pull request's files. An answer that does not
+          # come, or an empty one, runs the tests: a skip needs the list.
+          if ! files=$(gh api --paginate "repos/${GH_REPO}/pulls/${PR}/files" --jq '.[].filename') || [ -z "${files}" ]; then
+            echo "::warning::could not list the files of pull request ${PR}; the viewer tests run"
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The files Deploy viewer's deploy step counts as documentation, but
+          # for the two JSON files under docs/ that the viewer is built from:
+          # the demo catalogue and, through src/capability.rs, the support
+          # matrix.
+          rest=$(grep -vE '(\.md$|^docs/|^LICENSE|^\.gitignore$|^\.github/ISSUE_TEMPLATE/|^CITATION\.cff$)' <<<"$files" || true)
+          built_from=$(grep -E '^docs/(viewer-demos|support-matrix)\.json$' <<<"$files" || true)
+          if [ -n "${rest}" ] || [ -n "${built_from}" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "only documentation changed; the viewer tests are skipped"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  viewer:
+    name: viewer tests
+    needs: viewer-paths
+    if: inputs.fast != true && needs.viewer-paths.outputs.run == 'true'
+    uses: $/.github/workflows/viewer-test.yml
+    permissions:
+      contents: read
+    with:
+      # The WASM without LTO: a third of the build time (viewer-test.yml says
+      # why). Deploy viewer tests the release build before it publishes it.
+      release_wasm: false
+
   pii-guard:
     name: PII guard
     runs-on: ubuntu-24.04
@@ -1430,6 +1660,19 @@ jobs:
       # docs/support-matrix.json, so it cannot claim more than the matrix.
       - name: The README support table matches the support matrix
         run: python3 tools/ci/readme-matrix.py --check
+      # The semantic merge check's diff (#1334) is a pure function of two JSON
+      # documents; its three failure modes (a change hidden as cosmetic, a
+      # reorder reported as a change, a bulk collapse that hides a different
+      # value) are tested with no file, network or clock.
+      - name: The semantic diff's failure modes
+        run: python3 tools/re/test_semantic_diff.py
+      # The check's verdict logic (#1334) is pure too: a model with no dump, a
+      # diff that failed or a dropped group never reads as a pass; an answer that
+      # does not add up never reads as "stated"; a chunk is never sent over the
+      # cap once its text is not ASCII; a commit, a manifest or a pull request
+      # text that is not what it should be never reaches a URL, a crash or Jev.
+      - name: The semantic check's verdict failure modes
+        run: python3 tools/ci/test_jev_check.py
 
   # Guards the development environments' config: shellcheck the Cursor
   # install script and the devcontainer's scripts, install the
@@ -1492,6 +1735,7 @@ jobs:
       - test
       - i686-overflow
       - corpus-tier2
+      - corpus-mcp
       - writer-patch-corpus
       - ifcopenshell-validate
       - doc
@@ -1502,6 +1746,8 @@ jobs:
       - deny
       - audit
       - viewer-dependencies
+      - viewer-paths
+      - viewer
       - pii-guard
       - env-config
       - semver

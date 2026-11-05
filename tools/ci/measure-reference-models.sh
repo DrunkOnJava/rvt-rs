@@ -9,7 +9,9 @@
 # where tools/fetch-reference-models.sh put the models, with the R2025 models
 # in its r2025/ folder when tools/ci/fetch-r2025-models.sh fetched them, and
 # BIMcollab's Revit 2015 model in its bimcollab/ folder when
-# tools/ci/fetch-bimcollab.sh fetched it. For
+# tools/ci/fetch-bimcollab.sh fetched it, and Autodesk's rac_advanced samples
+# of 2015 to 2020 with their IFC2X3 export in its racadv/ folder when
+# tools/ci/fetch-rac-advanced-pair.sh fetched them. For
 # each model this writes OUT_DIR/<model>/:
 #   - model.ifc, when KEEP_IFC is set: the exported IFC itself;
 #   - ifc.sha256: the exported IFC's hash without its FILE_NAME and
@@ -34,6 +36,16 @@
 #     ProjectInformation stream. The IFC export reads only a PartAtom stream,
 #     which none of these models has (diagnostics.json says has_part_atom
 #     false), so this, and the families below, are what measure that parser;
+#   - mcp_answers_vs_ifc.txt and mcp-dump.json, when BIN holds rvt-rs-mcp (#1327):
+#     what the MCP server answers about the model, scored against the model's
+#     export (a difference is a failure, exit 1) and against Revit's export
+#     (tools/re/mcp_answers_vs_ifc.py); mcp-dump.json is the answers as the
+#     deterministic semantic dump (tools/re/mcp_client.py), which the semantic
+#     merge check (#1334) reads. Of a model that is kept as counts only, the
+#     lines starting `mcp answers:` leave the runner. With
+#     MCP_REQUIRE_FOLDED_FIELD set (the workflow sets it on the head side), the
+#     scorer is run with --require-folded-field: diagnostics without
+#     `exported.body_pieces_folded` (#1424) are a difference;
 #   - probe.txt, when PROBE names a probe (the rvt-probes crate's
 #     examples) already built in BIN_DIR/examples: its output on the model, ending with its exit status;
 #   - probe_score.txt, when PROBE_SCORER also names a scorer in
@@ -54,9 +66,21 @@
 # OUT_DIR/family-<file>/ with the same info.json and info.exit (a family
 # carries its Atom entry in a PartAtom stream) and, when PROBE is built, the
 # same probe.txt. A family has no Revit export, so nothing else is measured on it.
+# When AREAS_ACROSS_SAVES is set and SAMPLE_DIR holds Autodesk's rac_advanced
+# samples of 2024, 2025, 2026 and 2027, OUT_DIR/areas_across_saves.txt is the
+# gate of #1261 and #1194 (Griffin, 2026-11-05, "Same-project gate"): the 25
+# Areas of its 2025, 2026 and 2027 saves must equal its 2024 save's in
+# GlobalId, number, name, storey, outline source, body area, top surface,
+# height and lowest vertex (tools/re/areas_across_saves.py), ending with its
+# exit status, which the workflow turns into a failed job. It runs once every
+# export is done and before any sample's IFC is deleted. When a run holds fewer
+# than the four saves (a narrower sample_years) the file says `skipped:`, names
+# the years missing, and the workflow prints a notice: nothing was checked.
 # SAMPLE_DIR does the same for Autodesk's sample projects (.rvt), adding the
 # export's diagnostics.json, rvt-ifc.log and ifc.sha256 (hashed as a model's
-# is) under OUT_DIR/sample-<file>/. When
+# is) under OUT_DIR/sample-<file>/, and element_stage_counts.txt, the check
+# (tools/re/element_stage_counts.py, #1389) that a Revit 2008 to 2023 export's
+# element-record stage counts add up, ending with its exit status. When
 # PROBE_PAIR_RELEASE names a release, the probe also runs on each sample of
 # another release and the same project saved by that one, the sample first,
 # into probe-pair.txt, ending with its exit status: the cross-release
@@ -114,6 +138,20 @@ fi
 if [ -f "$MODELS/bimcollab/02_BIMcollab_Example_STR.rvt" ]; then
   MODELS_LIST="$MODELS_LIST
 bimcollab-str-2015|bimcollab/02_BIMcollab_Example_STR.rvt|bimcollab/02_BIMcollab_Example_STR_optimized.ifc"
+fi
+# Autodesk's rac_advanced sample of 2015 to 2020, each scored against the one
+# IFC2X3 export of the project (research/rac-advanced-export.tsv, #1354), only
+# with `-f racadv=true`. The export is counted apart as IFC2X3 everywhere, these
+# models are never looked up in or stored to the score cache, and only their
+# summary counts leave the runner (tools/ci/scrub-holdout-results.sh).
+if [ -d "$MODELS/racadv" ]; then
+  for model in "$MODELS"/racadv/*.rvt; do
+    [ -f "$model" ] || continue
+    stem=$(basename "$model" .rvt)
+    [ -f "$MODELS/racadv/rac_advanced_sample_project.ifc" ] || { echo "racadv: no export beside the models, not measured" >&2; break; }
+    MODELS_LIST="$MODELS_LIST
+racadv-${stem%%-*}|racadv/$stem.rvt|racadv/rac_advanced_sample_project.ifc"
+  done
 fi
 # The held-out models (research/holdout-models.tsv, RE-252, and the archived
 # ones research/holdout-archive-models.tsv lists, #408, #1261), only with
@@ -175,7 +213,7 @@ wanted() { # step
 # Whether a step is in a scorer list or is one of the steps run by name.
 listed() { # step
   local s
-  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc none; do
+  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc mcp_answers_vs_ifc none; do
     [ "$s" = "$1" ] && return 0
   done
   return 1
@@ -223,8 +261,8 @@ score() { # name args...
 # its directory: a step whose every input is as it was in an earlier run takes
 # that run's output, and `<step> cached` stands for its time in timings.log. A
 # step is kept only if it finished with status 0, and the models whose results
-# only leave the runner as counts (holdout-*, bimcollab-*), and the pairs that
-# were once held out (spent-*), are never cached.
+# only leave the runner as counts (holdout-*, bimcollab-*, racadv-*), and the
+# pairs that were once held out (spent-*), are never cached.
 CACHE_TOOL="$(dirname "$0")/measure-cache.py"
 cscore() { # name args...: `score`, from the cache when the scorer and its inputs are unchanged
   local out="$1" dir step found=2; shift
@@ -334,6 +372,15 @@ model_tasks() { # name rvt ref
   wanted schema && echo "5 schema"
   wanted witness && [ -n "$(witness_artifacts "$name")" ] && echo "2 witness"
   wanted_glb && echo "4 glb"
+  # #1327: the MCP server's answers need the model's export and its .rvt, not
+  # Revit's export, so a model with none (Einhoven) is scored for consistency.
+  if wanted mcp_answers_vs_ifc; then
+    if [ -x "$BIN/rvt-rs-mcp" ]; then
+      echo "6 mcp"
+    else
+      echo "$name: no rvt-rs-mcp in $BIN (a ref older than the crate), mcp_answers_vs_ifc not measured" >&2
+    fi
+  fi
   if [ "$ref" != "-" ]; then
     for s in $IFC_SCORERS; do
       wanted "$s" || continue
@@ -359,7 +406,7 @@ model_tasks() { # name rvt ref
 }
 
 model_task() { # name rvt ref task
-  local name="$1" rvt="$2" ref="$3" task="$4" dir s artifact sets flags extra
+  local name="$1" rvt="$2" ref="$3" task="$4" dir s artifact sets flags extra dump
   dir=$(model_dir "$name")
   case "$task" in
     base)
@@ -402,6 +449,29 @@ model_task() { # name rvt ref task
       else
         score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
       fi
+      ;;
+    mcp)
+      # The server decodes the model again and answers the fixed query set from
+      # it (tools/re/mcp_client.py): a program run, so never from the score cache.
+      extra=()
+      [ "$ref" != "-" ] && extra=("$MODELS/$ref")
+      # The dump (GlobalIds, names, values) is for the semantic merge check
+      # (#1334), which reads openly licensed models only: it is written for
+      # the models named here, and for no other (not the held-out, spent,
+      # BIMcollab or rac_advanced ones, nor a model added later).
+      dump=()
+      case "$name" in
+        core-interior | einhoven | re1-* | nordic-office-* | r2025-*)
+          dump=(--dump "$dir/mcp-dump.json")
+          ;;
+      esac
+      require=()
+      [ -n "${MCP_REQUIRE_FOLDED_FIELD:-}" ] && require=(--require-folded-field)
+      score "$dir/mcp_answers_vs_ifc.txt" "$SCORERS/mcp_answers_vs_ifc.py" \
+        --server "$BIN/rvt-rs-mcp" --rvt "$MODELS/$rvt" \
+        --diagnostics "$dir/diagnostics.json" ${dump[@]+"${dump[@]}"} \
+        ${require[@]+"${require[@]}"} \
+        "$dir/model.ifc" ${extra[@]+"${extra[@]}"}
       ;;
     meshes)
       for s in saved_meshes_vs_ifc mesh_bodies_vs_ifc; do
@@ -472,6 +542,12 @@ measure_sample() { # sample
   item_started=$(date +%s%N)
   dir=$(sample_dir "$sample"); mkdir -p "$dir"
   timed "$dir" rvt-info info "$sample" "$dir"
+  # #1389: the stage counts of a Revit 2008 to 2023 export add up, and an export
+  # that wrote no record says where its records stopped. Reads the diagnostics
+  # alone, so it runs for every sample, whatever its release.
+  if [ -s "$dir/diagnostics.json" ]; then
+    score "$dir/element_stage_counts.txt" "$SCORERS/element_stage_counts.py" "$dir/diagnostics.json"
+  fi
   # C9: the IFC4 schema's view of the export, so a writer path only the
   # samples reach (I-shape profiles and profile set usages on the
   # structural samples) is checked somewhere. Attribute counts on every
@@ -484,6 +560,28 @@ measure_sample() { # sample
   [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
   rm -f "$dir/validation.jsonl"
   finished "$dir" "$(basename "$sample")" "$item_started"
+}
+
+# The Areas of Autodesk's rac_advanced across its 2024 to 2027 saves (the
+# gate of the Areas of Revit 2025 to 2027, RE-333 section 9). With the four
+# samples in the run, a save with no IFC is a failure, not a skipped check: the
+# scorer is given all four paths and says which is missing. With fewer samples
+# than that the check is skipped, and says so.
+areas_across_saves() {
+  local year file missing="" args=()
+  for year in 2024 2025 2026 2027; do
+    file="$SAMPLE_DIR/$year-racadvancedsampleproject.rvt"
+    [ -f "$file" ] || missing="$missing $year"
+    args+=("$year=$(sample_dir "$file")/model.ifc")
+  done
+  if [ -n "$missing" ]; then
+    echo "areas across saves: skipped: no rac_advanced sample of$missing in this run, so nothing was compared" > "$OUT/areas_across_saves.txt"
+    return 0
+  fi
+  {
+    timeout "$STEP_TIMEOUT" python "$SCORERS/areas_across_saves.py" "${args[@]}"
+    echo "exit $?"
+  } > "$OUT/areas_across_saves.txt" 2>&1
 }
 
 # Every probe runs after the items, alone, one at a time: a probe is cut off
@@ -585,6 +683,10 @@ while IFS='|' read -r _ run first second _; do
   esac
 done <<< "$items"
 wait
+# Before any sample's IFC is deleted at the end of its measure_sample.
+if [ -n "${AREAS_ACROSS_SAVES:-}" ] && [ -d "${SAMPLE_DIR:-}" ]; then
+  areas_across_saves
+fi
 tasks=""
 while IFS='|' read -r rank run first second third; do
   case "$run" in

@@ -61,6 +61,7 @@ real      element_materials
 real      element_names
 real      element_parameters
 real      element_provenance_offsets
+real      element_record_stages
 real      element_records_2025
 real      export_decisions_counts
 real      family_instance_ports
@@ -104,6 +105,7 @@ real      tapered_walls_2025
 real      type_global_ids
 real      typed_no_geometry_types
 real      unfilled_openings
+real      value_sources_offsets
 real      walker_to_ifc_integration
 real      wall_profile_openings
 

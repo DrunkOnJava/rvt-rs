@@ -85,6 +85,7 @@ pub mod category_map;
 pub mod clipping;
 pub mod compare;
 pub mod element_provenance;
+pub mod element_record_stages;
 pub mod entities;
 pub mod export_content;
 pub mod export_decisions;
@@ -224,6 +225,12 @@ pub struct IfcModel {
     /// element with no entry gets `$` for both.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub filler_sizes: std::collections::BTreeMap<usize, entities::FillerSize>,
+    /// The steps of the walls' native records that write no further opening
+    /// (RE-321, RE-338), by why: a rectangular wall opening, a cabinet, a
+    /// door in a second wall or a curtain wall whose opening was not proven.
+    /// Counted in `exported.wall_cut_openings_left_out`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub wall_cut_openings_left_out: std::collections::BTreeMap<String, usize>,
 }
 
 /// A layered element's layers across its thickness (RE-53).
@@ -663,13 +670,23 @@ pub struct DecodedExportDiagnostics {
     /// ElementId is stored, its class tag and the class that names in the
     /// file's schema, and its native record. Present only when asked for
     /// (`rvt-ifc --element-provenance`,
-    /// [`ExportOptions::with_element_provenance`]): the table is about 116
-    /// times the rest of the diagnostics on the BIM4LCA office, so without the
+    /// [`ExportOptions::with_element_provenance`]): the table is large
+    /// (`docs/export-diagnostics.md`, "Provenance table size"), so without the
     /// option the field is absent and the diagnostics are the bytes they were
     /// before it existed. Not written in the IFC file; see
     /// [`element_provenance`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub element_provenance: Option<element_provenance::ElementProvenanceTable>,
+    /// Where the element records of a Revit 2008 to 2023 file stopped, stage
+    /// by stage, per partition stream and in total (#1389): the markers found,
+    /// those with a declared ElementId, those that gave a record, the placed
+    /// instances, those with volume, the frames kept, the elements handed to the
+    /// export and written, and, when none is written, the stage they stopped at.
+    /// Present only for a file that takes that record layout; absent for Revit
+    /// 2024 and later, whose rejected frames are in `skipped`. Not written in
+    /// the IFC file; see [`element_record_stages`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub element_record_stages: Option<element_record_stages::ElementRecordStages>,
 }
 
 fn default_min_element_confidence_serde() -> f32 {
@@ -740,6 +757,26 @@ pub struct ExportedModelDiagnostics {
     /// `boundary_lines_not_readable` or `point_in_no_single_region`.
     #[serde(default)]
     pub area_body_refusals: std::collections::BTreeMap<String, usize>,
+    /// Of the exported floors, roofs and ceilings whose corner vertices are
+    /// shape-edited and that keep their record's box, why, by reason: the
+    /// `SlabShapeRefusal` property of each (#1384, RE-336), such as
+    /// `interior_edge_vertices_or_creases` or `corners_not_in_one_plane`.
+    #[serde(default)]
+    pub slab_shape_refusals: std::collections::BTreeMap<String, usize>,
+    /// Of the exported walls whose base join names a floor, roof or ceiling
+    /// with shape-edited corners and that keep their base, why, by reason: the
+    /// `BaseCoverRefusal` property of each (#1384, RE-336), such as
+    /// `slab_shape_not_read` or `no_element_covers_the_wall_plan`.
+    #[serde(default)]
+    pub wall_base_refusals: std::collections::BTreeMap<String, usize>,
+    /// Of the exported walls with an edited elevation profile that stop short
+    /// of the wall beneath them and keep the end their record gives, why, by
+    /// reason: the `BodyEndRefusal` property of each (#1396, RE-337), such as
+    /// `walls_beneath_reach_the_end_at_different_faces`,
+    /// `base_cut_lost_on_extended_plan`, `base_not_cut_over_the_extended_plan`,
+    /// `wall_beneath_not_one_rectangle` or `wall_stands_in_the_added_end`.
+    #[serde(default)]
+    pub wall_end_refusals: std::collections::BTreeMap<String, usize>,
     /// Of the exported `IfcSpace`s, the rooms whose outline was read from the
     /// faces their stored solid lists, up to the solid's own end, where the
     /// walk of RE-101 did not close them (`SpaceOutlineSource` is
@@ -757,6 +794,29 @@ pub struct ExportedModelDiagnostics {
     /// Revit's export does not take the column off.
     #[serde(default)]
     pub approximate_outline_spaces: usize,
+    /// The steps of the walls' native records that name a rectangular wall
+    /// opening, a fire hose cabinet, a door in a second wall or a curtain
+    /// wall and write no opening for it, by why (RE-321, RE-338):
+    /// `curtain_wall_within_half_foot_of_wall_end`,
+    /// `curtain_wall_box_beside_another_wall`,
+    /// `door_second_wall_parallel_to_door_wall` and the others of
+    /// `docs/export-diagnostics.md`. Empty when every step is written or the
+    /// export has no geometry.
+    #[serde(default)]
+    pub wall_cut_openings_left_out: std::collections::BTreeMap<String, usize>,
+    /// The further pieces of an element of separate loops that the STEP
+    /// writer folds into the body of the element that owns them instead of
+    /// writing each as an element (#823, #1424), by IFC entity. They are the
+    /// entities [`step_writer::placements`] marks
+    /// [`step_writer::Placement::Folded`], and are in none of
+    /// [`Self::building_elements`], [`Self::by_ifc_type`] and the other
+    /// counts of the elements the IFC writes. Before #1424 `building_elements`
+    /// and `by_ifc_type` counted them, so their figure from before is the
+    /// written count plus these (per entity, for `by_ifc_type`); the other
+    /// counts took a piece's properties, which clone its owner's, and are not
+    /// recoverable from this. Empty where the export folds none.
+    #[serde(default)]
+    pub body_pieces_folded: std::collections::BTreeMap<String, usize>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -988,6 +1048,7 @@ impl Exporter for PlaceholderExporter {
             body_pieces: Default::default(),
             storey_properties: Default::default(),
             filler_sizes: Default::default(),
+            wall_cut_openings_left_out: Default::default(),
         })
     }
 }
@@ -1449,11 +1510,15 @@ fn export_rvt_doc_reporting(
     // #824: the openings a face-hosted door's or window's symbol cuts in the
     // element whose face hosts it.
     attach_hosted_cut_openings(rf, &mut entities);
-    // RE-321: the openings rectangular wall openings cut in a wall, which
-    // nothing fills.
-    if policy.include_geometry {
-        wall_cut_openings::attach_wall_cut_openings(rf, &mut entities);
-    }
+    // RE-321: the openings a rectangular wall opening, a cabinet, a door in
+    // a second wall and a curtain wall cut in a wall, which nothing fills.
+    let early_opening_cuts = policy
+        .include_geometry
+        .then(|| opening_cuts_through_hosts(&entities, &record_handoffs));
+    let wall_cut_openings_left_out = match &early_opening_cuts {
+        Some(cuts) => wall_cut_openings::attach_wall_cut_openings(rf, &mut entities, cuts),
+        None => Default::default(),
+    };
 
     if !policy.include_geometry {
         export_content::strip_building_element_geometry(&mut entities);
@@ -1482,7 +1547,8 @@ fn export_rvt_doc_reporting(
     material_constituent_sets.extend(layer_constituent_sets);
     let material_profile_sets =
         material_profile_sets_from_sections(&mut entities, &mut material_constituent_sets);
-    let opening_cuts = opening_cuts_through_hosts(&entities, &record_handoffs);
+    let opening_cuts = early_opening_cuts
+        .unwrap_or_else(|| opening_cuts_through_hosts(&entities, &record_handoffs));
     let filler_sizes = filler_sizes_from_handoffs(&record_handoffs);
 
     Ok(IfcModel {
@@ -1508,6 +1574,7 @@ fn export_rvt_doc_reporting(
         body_pieces,
         storey_properties,
         filler_sizes,
+        wall_cut_openings_left_out,
     })
 }
 
@@ -3827,6 +3894,17 @@ pub(crate) fn build_export_diagnostics_and_decisions(
 
     let mut skipped = Vec::new();
     let mut decisions: Vec<ExportDecision> = Vec::new();
+    // The ElementIds below the minimum confidence, which the stage report of a
+    // Revit 2008 to 2023 file sets against the elements it handed to the export.
+    let below_min_ids: std::collections::BTreeSet<u32> = if rf.element_record_stages().is_some() {
+        walker_stats
+            .below_min_confidence
+            .iter()
+            .filter_map(|element| element.element_id)
+            .collect()
+    } else {
+        std::collections::BTreeSet::new()
+    };
     let below_min = left_out_decisions(
         "below_min_element_confidence",
         None,
@@ -3887,6 +3965,32 @@ pub(crate) fn build_export_diagnostics_and_decisions(
         unattributed_frames,
         ClassesBy::Class,
     );
+    // #1389: on a Revit 2008 to 2023 file the layout above is not read, and
+    // the counts of what became of each frame at its markers are the ones the
+    // recovery of its records made as it decided.
+    // A placeholder export writes none of what was decoded, so it has no
+    // report. Every other export of a file of this layout has one, even when
+    // each count is zero: that is what says where the records stopped. A family
+    // reads its elements from `Global/Latest`, and `rvt-ifc` prints no line for
+    // one (the file name tells; the streams do not, as a synthetic project
+    // carries a `PartAtom` stream too).
+    let element_record_stages = match rf.element_record_stages() {
+        Some(stages) if mode != ExportDiagnosticsMode::Placeholder => Some(
+            element_record_stages::ElementRecordStages::build(stages, model, &below_min_ids),
+        ),
+        _ => None,
+    };
+    if let Some(report) = &element_record_stages {
+        skipped.extend(report.skipped_item());
+        // The frames themselves are listed only for the log of decisions.
+        if rf.recording_frame_decisions() {
+            if let Some(stages) = rf.element_record_stages() {
+                decisions.extend(element_record_stages::frame_stopped_decisions(
+                    &stages.stopped,
+                ));
+            }
+        }
+    }
     // #309: placed instances with no 3D body are left out by design, as
     // Revit's own export leaves them out. They are not missing, so they
     // do not count toward `unexported_element_records`.
@@ -3986,6 +4090,14 @@ pub(crate) fn build_export_diagnostics_and_decisions(
 
     let recovered_units = recover_project_units(rf);
     let mut warnings = diagnostic_candidates.warnings;
+    // RE-333: a declared chain record whose entry block does not read is not
+    // seen, an Area among them with it.
+    let dropped_chain_entries = rf.dropped_chain_entries();
+    if dropped_chain_entries > 0 {
+        warnings.push(format!(
+            "{dropped_chain_entries} declared chain record(s), counted by ElementId, of this Revit 2024 or later file have an entry block that does not read in some partition (it does not fit the record, or an entry's second word is not -1); an Area among them is not seen, and an area boundary line among them is not among the lines an Area is checked against (RE-333)."
+        ));
+    }
     // #328: a failed read of the project's phases leaves the filter empty, so
     // every element is written, including any that Revit's export leaves out
     // for its phase.
@@ -4318,6 +4430,7 @@ pub(crate) fn build_export_diagnostics_and_decisions(
             wall_curve_lengths_feet: walker_stats.wall_curve_lengths_feet,
             walls_type_confirmed: walker_stats.walls_type_confirmed,
             element_provenance: None,
+            element_record_stages,
         },
         source_coverage: {
             let coverage = SourceCoverageDiagnostics::measure(
@@ -4528,8 +4641,16 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut bounding_box_bodies = 0usize;
     let mut bounding_box_spaces = 0usize;
     let mut area_body_refusals = std::collections::BTreeMap::<String, usize>::new();
+    let mut slab_shape_refusals = std::collections::BTreeMap::<String, usize>::new();
+    let mut wall_base_refusals = std::collections::BTreeMap::<String, usize>::new();
+    let mut wall_end_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut resolved_outline_spaces = 0usize;
     let mut approximate_outline_spaces = 0usize;
+    let mut body_pieces_folded = std::collections::BTreeMap::<String, usize>::new();
+    // Where the writer puts each element: an element is bound to a storey when
+    // the export contains it in one, through its space, its whole or its host
+    // as well as directly.
+    let placements = step_writer::placements(model);
     for (index, entity) in model.entities.iter().enumerate() {
         if let entities::IfcEntity::BuildingElement {
             ifc_type,
@@ -4537,11 +4658,18 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             extrusion,
             solid_shape,
             representation_map_index,
-            storey_index,
             property_set,
             ..
         } = entity
         {
+            // #1424: a piece the writer folds into another element's body is
+            // not written as an element. It clones its owner's properties,
+            // so it is counted apart and in none of the counts of the
+            // elements the IFC holds.
+            if matches!(placements[index], Some(step_writer::Placement::Folded)) {
+                *body_pieces_folded.entry(ifc_type.clone()).or_insert(0) += 1;
+                continue;
+            }
             // An opening (RE-84) is listed by type but is not a building
             // element: it has no body of its own, only the void it cuts.
             if ifc_type == "IFCOPENINGELEMENT" {
@@ -4558,6 +4686,18 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                         export_content::AREA_BODY_REFUSAL_PROPERTY,
                         entities::PropertyValue::Text(text),
                     ) => *area_body_refusals.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::SLAB_SHAPE_REFUSAL_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *slab_shape_refusals.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_BASE_REFUSAL_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *wall_base_refusals.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_END_REFUSAL_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *wall_end_refusals.entry(text.clone()).or_insert(0) += 1,
                     ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
                     (
                         export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
@@ -4599,7 +4739,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             }
             building_elements += 1;
             *by_ifc_type.entry(ifc_type.clone()).or_insert(0) += 1;
-            if storey_index.is_some() {
+            if step_writer::storey_of(&placements, index).is_some() {
                 storey_bound_elements += 1;
             }
             if location_feet.is_some()
@@ -4647,8 +4787,13 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         bounding_box_bodies,
         bounding_box_spaces,
         area_body_refusals,
+        slab_shape_refusals,
+        wall_base_refusals,
+        wall_end_refusals,
         resolved_outline_spaces,
         approximate_outline_spaces,
+        wall_cut_openings_left_out: model.wall_cut_openings_left_out.clone(),
+        body_pieces_folded,
     }
 }
 
@@ -4710,7 +4855,8 @@ fn element_tag(type_guid: &Option<String>) -> Option<u32> {
 }
 
 /// The geometry gaps of `model` as `skipped` items, and the decision behind
-/// each element counted in them (#1326).
+/// each element counted in them (#1326). A piece the writer folds into another
+/// element's body is none of the elements counted (#1424).
 fn geometry_gap_skipped_items(
     model: &IfcModel,
 ) -> (
@@ -4743,7 +4889,8 @@ fn geometry_gap_skipped_items(
         DecisionStage::OpeningNotCut,
     );
 
-    for entity in &model.entities {
+    let placements = step_writer::placements(model);
+    for (index, entity) in model.entities.iter().enumerate() {
         let entities::IfcEntity::BuildingElement {
             ifc_type,
             name,
@@ -4760,6 +4907,12 @@ fn geometry_gap_skipped_items(
         else {
             continue;
         };
+        // #1424: a piece folded into another element's body is no element of
+        // the IFC and clones its owner's properties and storey: a gap it
+        // shares with its owner is one gap.
+        if matches!(placements[index], Some(step_writer::Placement::Folded)) {
+            continue;
+        }
         let id = element_tag(type_guid);
 
         let has_body_shape =
@@ -4818,14 +4971,20 @@ fn geometry_gap_skipped_items(
 }
 
 /// The decisions behind `exported.bounding_box_bodies`,
-/// `exported.bounding_box_spaces` and `exported.area_body_refusals` (#1326),
-/// read from `model` as [`exported_model_diagnostics`] counts them: a body
-/// that is only its record's box, a room or space whose outline is its
-/// record's box, and an Area with no body, each with its ElementId.
+/// `exported.bounding_box_spaces`, `exported.area_body_refusals`,
+/// `exported.slab_shape_refusals`, `exported.wall_base_refusals` and
+/// `exported.wall_end_refusals` (#1326, #1384, #1396), read from `model` as
+/// [`exported_model_diagnostics`] counts them: a body that is only its
+/// record's box, a room or space whose outline is its record's box, an Area
+/// with no body, a shape-edited floor kept as its box, a wall that keeps its
+/// base and a wall that keeps its end, each with its ElementId. A piece the
+/// writer folds into another element's body (#1424) has none: it clones its
+/// owner's properties and is not an element the IFC holds.
 pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportDecision> {
     use export_decisions::{DecisionStage, ExportDecision};
     let mut decisions = Vec::new();
-    for entity in &model.entities {
+    let placements = step_writer::placements(model);
+    for (index, entity) in model.entities.iter().enumerate() {
         let entities::IfcEntity::BuildingElement {
             ifc_type,
             type_guid,
@@ -4835,6 +4994,9 @@ pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportD
         else {
             continue;
         };
+        if matches!(placements[index], Some(step_writer::Placement::Folded)) {
+            continue;
+        }
         if ifc_type == "IFCOPENINGELEMENT" {
             continue;
         }
@@ -4842,6 +5004,9 @@ pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportD
         let mut source = None;
         let mut space_outline = None;
         let mut refusals: Vec<&String> = Vec::new();
+        let mut slab_refusals: Vec<&String> = Vec::new();
+        let mut base_refusals: Vec<&String> = Vec::new();
+        let mut end_refusals: Vec<&String> = Vec::new();
         let mut profile_resolved = false;
         for property in property_set.iter().flat_map(|set| &set.properties) {
             match (property.name.as_str(), &property.value) {
@@ -4849,6 +5014,18 @@ pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportD
                     export_content::AREA_BODY_REFUSAL_PROPERTY,
                     entities::PropertyValue::Text(text),
                 ) => refusals.push(text),
+                (
+                    export_content::SLAB_SHAPE_REFUSAL_PROPERTY,
+                    entities::PropertyValue::Text(text),
+                ) => slab_refusals.push(text),
+                (
+                    export_content::WALL_BASE_REFUSAL_PROPERTY,
+                    entities::PropertyValue::Text(text),
+                ) => base_refusals.push(text),
+                (
+                    export_content::WALL_END_REFUSAL_PROPERTY,
+                    entities::PropertyValue::Text(text),
+                ) => end_refusals.push(text),
                 ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
                 (
                     export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
@@ -4871,6 +5048,27 @@ pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportD
             push(
                 DecisionStage::OutlineNotRead,
                 "area_body_refused",
+                Some(text),
+            );
+        }
+        for text in slab_refusals {
+            push(
+                DecisionStage::BodyLeftAsBox,
+                "slab_shape_refused",
+                Some(text),
+            );
+        }
+        for text in base_refusals {
+            push(
+                DecisionStage::BodyLeftAsBox,
+                "wall_base_cut_refused",
+                Some(text),
+            );
+        }
+        for text in end_refusals {
+            push(
+                DecisionStage::BodyLeftAsBox,
+                "wall_end_extension_refused",
                 Some(text),
             );
         }
@@ -5179,7 +5377,9 @@ pub(crate) fn host_references(model: &IfcModel) -> std::collections::HashMap<usi
 /// The property values `write_step` writes in `Pset_` sets, counted as it
 /// emits them: every building element's own set and further sets, then each
 /// storey's sets and the building's when the model has a storey, and an
-/// opening of its host's own geometry's `Reference` (RE-237).
+/// opening of its host's own geometry's `Reference` (RE-237). A piece the
+/// writer folds into another element's body writes none (#1424): it is no
+/// element of the IFC, though it holds the sets of its owner.
 fn pset_property_value_count(model: &IfcModel) -> usize {
     let values = |set: &entities::PropertySet| {
         if set.name.starts_with("Pset_") {
@@ -5188,22 +5388,27 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             0
         }
     };
-    let is_building_element = |index: usize| {
+    let placements = step_writer::placements(model);
+    let is_written_element = |index: usize| {
         matches!(
             model.entities.get(index),
             Some(entities::IfcEntity::BuildingElement { .. })
+        ) && !matches!(
+            placements.get(index),
+            Some(Some(step_writer::Placement::Folded))
         )
     };
     let elements: usize = model
         .entities
         .iter()
-        .map(|entity| match entity {
+        .enumerate()
+        .map(|(index, entity)| match entity {
             entities::IfcEntity::BuildingElement {
                 property_set: Some(set),
                 ..
-            } => values(set),
+            } if is_written_element(index) => values(set),
             entities::IfcEntity::ElementPropertySet { element, set }
-                if is_building_element(*element) =>
+                if is_written_element(*element) =>
             {
                 values(set)
             }
@@ -5220,13 +5425,15 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             _ => false,
         })
         .count();
-    // RE-321: a wall's cut opening holds the wall's type name twice, in
+    // RE-321: a wall's cut opening holds its cutter's type name twice, in
     // `Pset_OpeningElementCommon` and `Pset_EnvironmentalImpactIndicators`.
     let wall_cuts = 2 * model
         .entities
         .iter()
         .filter(|entity| match entity {
-            entities::IfcEntity::WallCutOpening { host, .. } => references.contains_key(host),
+            entities::IfcEntity::WallCutOpening { reference_from, .. } => {
+                references.contains_key(reference_from)
+            }
             _ => false,
         })
         .count();

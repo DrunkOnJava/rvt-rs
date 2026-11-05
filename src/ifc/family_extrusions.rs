@@ -7,24 +7,16 @@
 //! family's extrusions and draws the instance from them instead, as
 //! `IfcExtrudedAreaSolid`s over `IfcIndexedPolyCurve` profiles.
 //!
-//! An arc in a profile of 0.12 ft in radius or less is written as the arc
-//! (`IfcIndexedPolyCurve` arcs, the form Revit 24.0.5's IFC4 export gives it;
-//! an arc too flat to survive the writer's micrometre rounding is a line). An
-//! instance with an arc over 0.12 ft in radius keeps its mesh, in every
-//! release, since Revit's two exporters write a circle in two forms: as arcs in
-//! Revit 24.0.5's IFC4 export (the BIM4LCA office) and as an
-//! `IfcCircleProfileDef` in Revit 26.2's IFC2X3 export (RE1). IfcOpenShell's
-//! default tessellation of the two forms of a circle has the same chords up to
-//! 0.164 ft and at 0.3281 ft and one chord more or fewer at 0.2292, 0.4921,
-//! 0.9843 and 1.9685 ft (27 against 28 for the toilet-paper dispenser of RE1
-//! Architecture, element 360331, 0.2292 ft in radius, whose vertices lay
-//! 0.001439 ft from rvt-rs's surface); over 0.137 ft the chord's own deviation
-//! passes the 0.001 ft bar, so a difference in the chord count or in where the
-//! circle starts misses it, and a partial arc is as exposed as a whole circle.
-//! No one form meets both exporters under that tessellation, and which one will
-//! read a file is not in the `.rvt`. An arc of 0.12 ft or less is within
-//! 0.00088 ft of itself in either form (RE-327 section 11, #1346; the scorers'
-//! tessellation is #1355).
+//! An arc in a profile is written as the arc, whatever its radius, in the
+//! form Revit 24.0.5's IFC4 export gives it: an `IfcIndexedPolyCurve` arc in
+//! three points (a span over a half turn is two arcs, so a circle is two half
+//! arcs; an arc too flat to survive the writer's micrometre rounding is a
+//! line). Revit 26.2's IFC2X3 export writes a circle as an `IfcCircleProfileDef`
+//! instead, and IfcOpenShell's default tessellation of the two forms has a
+//! chord more or fewer at some radii (27 against 28 for a circle of 0.2292 ft),
+//! so no vertex coincides. That is the tessellation's, not a difference of
+//! shape: the body scorers judge a body that both files write as true curves in
+//! a fine tessellation, where the forms coincide (RE-327 section 11, RE-331).
 //!
 //! An instance keeps its saved mesh unless the extrusions reproduce it. The
 //! family's document holds the family as saved, and a placed instance is
@@ -84,12 +76,6 @@ const VERTEX_TOLERANCE: f64 = 1e-4;
 /// feet: the 0.001 ft chords the mesh draws arcs with (the largest of the
 /// 6,014 printed forms is 0.000998 ft), and a tenth more.
 const SURFACE_TOLERANCE: f64 = 1.1e-3;
-/// The largest radius, feet, of an arc that is drawn. IfcOpenShell 0.9 cuts an
-/// arc into chords of at most 0.2417 rad, which for a radius of 0.12 ft is a
-/// chord 0.00088 ft off the arc whatever form the arc is in (the bar is 0.001
-/// ft); over 0.137 ft the chord passes the bar, and a vertex of Revit's can lie
-/// up to 0.0016 ft from the other form's surface (RE-327 section 11).
-const ARC_MAX_RADIUS: f64 = 0.12;
 /// How far an arc's midpoint may lie from its chord, feet, for the arc to be
 /// written as a line: the writer rounds coordinates to a micrometre (3.3e-6
 /// ft), and a midpoint that close to the chord can round onto it, which leaves
@@ -99,8 +85,7 @@ const FLAT_ARC_SAGITTA: f64 = 1.6e-5;
 
 /// What [`attach`] did. Every instance drawn from a saved mesh is counted
 /// once: `candidates = replaced + not_rebuilt + unplaced + unchecked +
-/// volume_differs + vertices_differ + surface_differs + arcs +
-/// unwritable`.
+/// volume_differs + vertices_differ + surface_differs + unwritable`.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
 #[non_exhaustive]
 pub struct FamilyExtrusionReport {
@@ -130,15 +115,12 @@ pub struct FamilyExtrusionReport {
     pub volume_differs: usize,
     pub vertices_differ: usize,
     pub surface_differs: usize,
-    /// Candidates the extrusions reproduce, left with their mesh for an arc
-    /// over 0.12 ft in radius, whose circle Revit 24.0.5's IFC4 export writes
-    /// as arcs and Revit 26.2's IFC2X3 export as an `IfcCircleProfileDef`
-    /// (RE-327 section 11).
-    pub arcs: usize,
     /// Candidates the extrusions reproduce whose profile cannot be written: a
     /// solid of no depth.
     pub unwritable: usize,
-    /// Of `replaced`, instances with an arc in a profile.
+    /// Of `replaced`, instances with an arc written in a profile: an
+    /// `IfcArcIndex` segment, not an arc of the sketch that was too flat to
+    /// survive the writer's rounding and came out as a line.
     pub with_arcs: usize,
 }
 
@@ -188,8 +170,16 @@ fn root_ids(
 
 /// The solids of a family's visible extrusions, or `None` where it has a
 /// void or an extrusion the reader does not rebuild.
-fn family_parts(document: &FormDocument) -> Option<Vec<ExtrusionSolid>> {
+///
+/// With the solids, where `recording` asks, the records of the document they
+/// were read from (#1368): each extrusion, its sketch plane and its sketch's
+/// curves. Not asked, none is collected.
+fn family_parts(
+    document: &FormDocument,
+    recording: bool,
+) -> Option<(Vec<ExtrusionSolid>, BTreeSet<u64>)> {
     let mut parts = Vec::new();
+    let mut records = BTreeSet::new();
     for id in document.extrusion_ids() {
         let extrusion = document.extrusion(id).ok()?;
         if extrusion.cutting {
@@ -199,8 +189,54 @@ fn family_parts(document: &FormDocument) -> Option<Vec<ExtrusionSolid>> {
             continue;
         }
         parts.push(extrusion.default_solid().ok()?);
+        if recording {
+            records.insert(extrusion.id);
+            records.insert(extrusion.plane_id);
+            records.extend(extrusion.curve_ids.iter().copied());
+        }
     }
-    (!parts.is_empty()).then_some(parts)
+    (!parts.is_empty()).then_some((parts, records))
+}
+
+/// Note, for the instance `id` now drawn from its family's extrusions, the
+/// records of the family's document they were rebuilt from, one part for each
+/// (#1368). The instance's transform is the `instance_transform` source the
+/// transform scan noted for it.
+fn note_forms(
+    rf: &mut crate::RevitFile,
+    id: u64,
+    family: u64,
+    forms: &BTreeMap<u64, BTreeSet<u64>>,
+    places: &native_family_forms::RecordPlaces,
+) {
+    use super::element_provenance::{CopyRule, SourcePart, ValueSource};
+    let Ok(instance) = u32::try_from(id) else {
+        return;
+    };
+    let mut parts = Vec::new();
+    for record in forms.get(&family).into_iter().flatten() {
+        let (Some((stream, offset)), Ok(element_id)) =
+            (places.get(&(family, *record)), u32::try_from(*record))
+        else {
+            // A record with no place (its group is not the partition's own
+            // bytes) leaves the source unnoted: a part list that left a record
+            // out would not be the records the body was rebuilt from.
+            return;
+        };
+        parts.push(SourcePart {
+            element_id,
+            stream: stream.clone(),
+            offset: *offset,
+        });
+    }
+    if parts.is_empty() {
+        return;
+    }
+    let copies = parts.len();
+    rf.note_value_source(
+        instance,
+        ValueSource::from_parts("family_forms", CopyRule::Frame, copies, parts),
+    );
 }
 
 /// `solid`, a solid in a family's coordinates, in the frame of an element
@@ -238,17 +274,6 @@ fn to_element_frame(
         },
         low: solid.low,
         high: solid.high,
-    })
-}
-
-/// Whether a loop has an arc the rule does not draw: one over `ARC_MAX_RADIUS`
-/// in radius, or whose radius does not read.
-fn has_arc_beyond_the_rule(source: &Loop) -> bool {
-    source.curves.iter().any(|curve| {
-        matches!(
-            curve,
-            Curve::Arc { radius, .. } if !radius.is_finite() || *radius > ARC_MAX_RADIUS
-        )
     })
 }
 
@@ -316,6 +341,23 @@ fn indexed_curve(source: &Loop, counter_clockwise: bool, handed: f64) -> Option<
         }
     }
     Some(IndexedCurve { points, segments })
+}
+
+/// Whether a written profile has an arc: an `IfcArcIndex` segment in its outline
+/// or in a hole.
+fn profile_has_arc(profile: &ProfileDef) -> bool {
+    let arcs = |segments: &[CurveSegment]| {
+        segments
+            .iter()
+            .any(|segment| matches!(segment, CurveSegment::Arc(_)))
+    };
+    match profile {
+        ProfileDef::IndexedPolyCurve { segments, .. } => arcs(segments),
+        ProfileDef::IndexedPolyCurveWithVoids { outer, voids } => {
+            arcs(&outer.segments) || voids.iter().any(|hole| arcs(&hole.segments))
+        }
+        _ => false,
+    }
 }
 
 /// A solid as `IfcExtrudedAreaSolid`s, one for each outline of its profile
@@ -435,23 +477,31 @@ pub fn attach_with_control(
         .iter()
         .map(|class| class.to_string())
         .collect();
-    let records = native_family_forms::family_records_in(
+    // The records' places are kept only while the handle records value
+    // sources (`--element-provenance`).
+    let recording = rf.recording_value_sources();
+    let (records, places) = native_family_forms::family_records_at(
         rf,
         &families,
         &classes,
         &native_document::Options::default().releases,
         None,
+        recording,
     )?;
     report.families = records.len();
     let mut parts: BTreeMap<u64, Vec<ExtrusionSolid>> = BTreeMap::new();
+    let mut forms: BTreeMap<u64, BTreeSet<u64>> = BTreeMap::new();
     for (family, items) in records {
         control.check()?;
         let mut document = FormDocument::default();
         for (id, graph) in items {
             document.insert(id, graph);
         }
-        if let Some(solids) = family_parts(&document) {
+        if let Some((solids, used)) = family_parts(&document, recording) {
             parts.insert(family, solids);
+            if recording {
+                forms.insert(family, used);
+            }
         }
     }
     report.families_rebuilt = parts.len();
@@ -472,10 +522,11 @@ pub fn attach_with_control(
 
     for (id, index) in &by_id {
         control.check()?;
-        let Some(solids) = symbol_of
+        let family = symbol_of
             .get(id)
             .and_then(|symbol| family_of_symbol.get(symbol))
-            .and_then(|family| parts.get(family))
+            .copied();
+        let Some((family, solids)) = family.and_then(|family| Some((family, parts.get(&family)?)))
         else {
             report.not_rebuilt += 1;
             continue;
@@ -525,24 +576,14 @@ pub fn attach_with_control(
             report.surface_differs += 1;
             continue;
         }
-        let with_arcs = local
-            .iter()
-            .flat_map(|solid| solid.profile.loops.iter())
-            .flat_map(|profile_loop| profile_loop.curves.iter())
-            .any(|curve| matches!(curve, Curve::Arc { .. }));
-        let big_arc = local
-            .iter()
-            .flat_map(|solid| solid.profile.loops.iter())
-            .any(has_arc_beyond_the_rule);
-        if big_arc {
-            report.arcs += 1;
-            continue;
-        }
         let placed: Option<Vec<Vec<SolidShape>>> = local.iter().map(placed_extrusions).collect();
         let Some(placed) = placed else {
             report.unwritable += 1;
             continue;
         };
+        let with_arcs = placed.iter().flatten().any(|shape| {
+            matches!(shape, SolidShape::PlacedExtrusion { profile, .. } if profile_has_arc(profile))
+        });
         let IfcEntity::BuildingElement {
             solid_shape,
             property_set: Some(set),
@@ -561,6 +602,9 @@ pub fn attach_with_control(
         }
         report.replaced += 1;
         report.with_arcs += usize::from(with_arcs);
+        if recording {
+            note_forms(rf, *id, family, &forms, &places);
+        }
     }
     Ok(report)
 }

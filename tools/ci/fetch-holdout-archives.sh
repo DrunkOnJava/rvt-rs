@@ -33,9 +33,11 @@ check() { # file name sha bytes
   fi
   echo "$2: matches its pin"
 }
+# shellcheck source=tools/ci/fetch-resume.sh
+. "$(dirname "$0")/fetch-resume.sh"
 fetch() { # url out
-  curl -fsSL --retry 3 --retry-all-errors --retry-delay 5 --max-time 900 \
-    -A "rvt-rs-ci (https://github.com/DrunkOnJava/rvt-rs)" -o "$2" "$1"
+  rm -f "$2"
+  fetch_resume "$1" "$2"
 }
 while IFS=$'\t' read -r kind name source sha bytes; do
   case "$kind" in

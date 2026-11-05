@@ -24,17 +24,41 @@
 //! 40932136360). Every other class is opt-in ([`SavedMeshScope::All`],
 //! `rvt-ifc --saved-meshes`, `rvt-gltf --saved-meshes`): reading saved
 //! graphics is slow on large files, and some partial meshes record nothing.
+//!
+//! One kind of wall is drawn from its saved mesh in every scope that reads
+//! graphics, on Revit 2024 to 2027, the releases whose wall records name what
+//! embeds in them: a wall that embeds a curtain wall (`WallEmbedWallGStep`,
+//! RE-335) whose saved mesh starts at least half a foot above the wall's base
+//! (#1385, RE-340). Revit draws such a wall less the curtain wall's prism and less the
+//! volumes of the elements that cut its end stubs, which no record read so far
+//! tells apart from a wall that keeps them; the mesh Revit last drew is the
+//! body, and its lowest vertex is Revit's lowest point on all 113 walls
+//! measured. A wall with an opening hosted in it, a Tag shared with another
+//! entity, a body that is neither a plain extrusion nor one with a stepped top
+//! (RE-320) or a mesh that did not decode whole keeps the body it had, as does
+//! one whose mesh starts at its base.
 
 use super::IfcModel;
-use super::entities::{BrepTriangle, IfcEntity, PropertyValue, SolidShape};
+use super::entities::{BrepTriangle, IfcEntity, Property, PropertySet, PropertyValue, SolidShape};
 use super::export_content::{
     BEAM_BOX_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE, SPACE_OUTLINE_SAVED_MESH,
-    SPACE_OUTLINE_SOURCE_PROPERTY,
+    SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
+use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
+use crate::native_wall_cuts::WallCutKind;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// `BodySource` of a body drawn from the element's saved graphics.
 pub const SAVED_MESH_BODY_SOURCE: &str = "saved_graphics_mesh";
+
+/// How far above its base a wall's saved mesh must start, and below its top,
+/// for [`attach_scoped_with_control`] to draw a wall that embeds a curtain
+/// wall from it, feet (#1385, RE-340). On the BIM4LCA office as built and at
+/// building permit the lowest vertex of such a wall's saved mesh is Revit's
+/// lowest point within 0.003 ft on 113 of 113 walls: 14 stand 8.2021 or
+/// 9.514 ft above their base, the curtain wall's height, and the other 99 on
+/// it to within 0.001 ft.
+const EMBED_RAISE_MIN_FEET: f64 = 0.5;
 
 /// What [`attach`] did.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
@@ -49,6 +73,55 @@ pub struct SavedMeshReport {
     pub partial: usize,
     /// Triangles written in all.
     pub triangles: usize,
+    /// Walls that embed a curtain wall, drawn as plain or stepped extrusions with nothing
+    /// hosted in them (#1385, RE-340).
+    pub embed_hosts: usize,
+    /// Of those, walls now drawn from their saved mesh, Revit having raised
+    /// their base to the top of the curtain wall.
+    pub embed_raised: usize,
+    /// Of those, walls keeping their body because part of their saved
+    /// graphics did not decode (RE-224).
+    pub embed_partial: usize,
+    /// Why the walls' native records were not read, where they were not: no
+    /// wall that embeds a curtain wall is then drawn from its mesh.
+    pub embed_error: Option<String>,
+}
+
+/// Whether some face or branch of `meshes` did not decode (RE-224): on the
+/// BIM4LCA office 357 such meshes, none of them Revit's body. Only branches
+/// left out for their view semantics leave a mesh whole.
+fn is_partial(meshes: &GraphicsMeshes) -> bool {
+    meshes.diagnostics.iter().any(|diagnostic| {
+        !diagnostic.ends_with(crate::native_graphics_traversal::NESTED_DETAIL_FILTER_DIAGNOSTIC)
+            && !diagnostic.ends_with(crate::native_graphics_traversal::VIEW_COMPONENT_DIAGNOSTIC)
+    })
+}
+
+/// The vertices and triangles of `primitives`, in the frame of an element at
+/// `origin` turned `rotation_radians`, feet.
+fn local_mesh(
+    primitives: &[Primitive],
+    origin: [f64; 3],
+    rotation_radians: Option<f64>,
+) -> (Vec<[f64; 3]>, Vec<BrepTriangle>) {
+    let (sin, cos) = (-rotation_radians.unwrap_or(0.0)).sin_cos();
+    let mut vertices = Vec::new();
+    let mut triangles = Vec::new();
+    for primitive in primitives {
+        let base = vertices.len() as u32;
+        vertices.extend(primitive.vertices.iter().map(|p| {
+            let (dx, dy) = (p[0] - origin[0], p[1] - origin[1]);
+            [dx * cos - dy * sin, dx * sin + dy * cos, p[2] - origin[2]]
+        }));
+        triangles.extend(
+            primitive
+                .triangles
+                .iter()
+                .filter(|t| t.iter().all(|&v| (v as usize) < primitive.vertices.len()))
+                .map(|t| BrepTriangle(base + t[0], base + t[1], base + t[2])),
+        );
+    }
+    (vertices, triangles)
 }
 
 /// Which bounding-box bodies [`attach_scoped_with_control`] replaces.
@@ -97,7 +170,9 @@ pub fn attach_with_control(
     attach_scoped_with_control(rf, model, SavedMeshScope::All, control)
 }
 
-/// Same as [`attach_with_control`], for the bodies `scope` names only.
+/// Same as [`attach_with_control`], for the bodies `scope` names only, and
+/// for the walls that embed a curtain wall whatever the scope (see the
+/// module).
 pub fn attach_scoped_with_control(
     rf: &mut crate::RevitFile,
     model: &mut IfcModel,
@@ -157,13 +232,26 @@ pub fn attach_scoped_with_control(
         report.candidates += 1;
         by_id.entry(id).or_default().push(index);
     }
-    if by_id.is_empty() {
+    let hosts = match embed_hosts(rf, model, &by_id) {
+        Ok(hosts) => hosts,
+        Err(error) => {
+            report.embed_error = Some(error);
+            BTreeMap::new()
+        }
+    };
+    report.embed_hosts = hosts.len();
+    if by_id.is_empty() && hosts.is_empty() {
         return Ok(report);
     }
     let options = crate::native_document::Options {
-        selected_ids: by_id.keys().copied().collect::<BTreeSet<_>>(),
+        selected_ids: by_id
+            .keys()
+            .chain(hosts.keys())
+            .copied()
+            .collect::<BTreeSet<_>>(),
         max_graph_values: 1_000_000,
         max_graph_objects: 1_000_000,
+        value_source: Some("saved_graphics"),
         ..Default::default()
     };
     // Each element is taken as it is meshed and its decoded graphs freed with
@@ -175,6 +263,10 @@ pub fn attach_scoped_with_control(
         3,
         control,
         |element| {
+            if let Some(&index) = hosts.get(&element.identity.element_id) {
+                raise_embed_host(model, index, &element.meshes, &mut report);
+                return Ok(());
+            }
             let Some(indices) = by_id.get(&element.identity.element_id) else {
                 return Ok(());
             };
@@ -187,17 +279,7 @@ pub fn attach_scoped_with_control(
             if primitives.is_empty() {
                 return Ok(());
             }
-            // RE-224: a mesh some face or branch of which did not decode is only
-            // part of the body (on the BIM4LCA office 357 such meshes, none of
-            // them Revit's body). Only branches left out for their view semantics
-            // leave it whole.
-            let partial = element.meshes.diagnostics.iter().any(|diagnostic| {
-                !diagnostic
-                    .ends_with(crate::native_graphics_traversal::NESTED_DETAIL_FILTER_DIAGNOSTIC)
-                    && !diagnostic
-                        .ends_with(crate::native_graphics_traversal::VIEW_COMPONENT_DIAGNOSTIC)
-            });
-            if partial {
+            if is_partial(&element.meshes) {
                 report.partial += 1;
                 return Ok(());
             }
@@ -211,23 +293,7 @@ pub fn attach_scoped_with_control(
             else {
                 return Ok(());
             };
-            let (sin, cos) = (-rotation_radians.unwrap_or(0.0)).sin_cos();
-            let mut vertices = Vec::new();
-            let mut triangles = Vec::new();
-            for primitive in primitives {
-                let base = vertices.len() as u32;
-                vertices.extend(primitive.vertices.iter().map(|p| {
-                    let (dx, dy) = (p[0] - origin[0], p[1] - origin[1]);
-                    [dx * cos - dy * sin, dx * sin + dy * cos, p[2] - origin[2]]
-                }));
-                triangles.extend(
-                    primitive
-                        .triangles
-                        .iter()
-                        .filter(|t| t.iter().all(|&v| (v as usize) < primitive.vertices.len()))
-                        .map(|t| BrepTriangle(base + t[0], base + t[1], base + t[2])),
-                );
-            }
+            let (vertices, triangles) = local_mesh(primitives, *origin, *rotation_radians);
             if triangles.is_empty() {
                 return Ok(());
             }
@@ -248,4 +314,207 @@ pub fn attach_scoped_with_control(
         },
     )?;
     Ok(report)
+}
+
+/// Whether `set` has a property called `name`.
+fn has_property(set: &PropertySet, name: &str) -> bool {
+    set.properties.iter().any(|property| property.name == name)
+}
+
+/// Whether `set` has the text property `name` with the value `text`.
+fn has_text_property(set: &PropertySet, name: &str, text: &str) -> bool {
+    set.properties.iter().any(|property| {
+        property.name == name && matches!(&property.value, PropertyValue::Text(t) if t == text)
+    })
+}
+
+/// Whether a wall's body is a plain extrusion or one with RE-320's stepped top,
+/// which a saved mesh includes. A base cut at a floor (#1384) is neither.
+fn plain_or_stepped(solid_shape: &Option<SolidShape>, property_set: &Option<PropertySet>) -> bool {
+    match (solid_shape, property_set) {
+        (None, Some(set)) => !has_property(set, WALL_BASE_SOURCE_PROPERTY),
+        (Some(_), Some(set)) => {
+            has_text_property(set, "BodyHeightSource", WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE)
+                && !has_property(set, WALL_BASE_SOURCE_PROPERTY)
+        }
+        _ => false,
+    }
+}
+
+/// The walls that embed a curtain wall (`WallEmbedWallGStep`), ElementId to
+/// entity index: drawn as plain or stepped extrusions, alone in their Tag
+/// (no other entity of any kind has it), not in `taken`, and with nothing
+/// hosted in them but the opening their own curtain wall cuts (an
+/// `IfcEntity::WallCutOpening` whose Tag is the curtain wall's: Revit's export
+/// holds that void and the raised strip both). Nothing where the model has no
+/// curtain wall, so a file without one reads no wall record here. An `Err`
+/// names why the walls' native records were not read.
+fn embed_hosts(
+    rf: &mut crate::RevitFile,
+    model: &IfcModel,
+    taken: &BTreeMap<u64, Vec<usize>>,
+) -> Result<BTreeMap<u64, usize>, String> {
+    let element_id = |entity: &IfcEntity, wanted: &str| match entity {
+        IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid: Some(tag),
+            ..
+        } if ifc_type == wanted => tag.parse::<u64>().ok(),
+        _ => None,
+    };
+    let curtain: BTreeSet<u64> = model
+        .entities
+        .iter()
+        .filter_map(|entity| element_id(entity, "IFCCURTAINWALL"))
+        .collect();
+    if curtain.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    // Alone in the Tag is decided over every entity that has it, before any
+    // piece is dropped for what it is hosting or how its base was cut.
+    let mut by_tag: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
+    for (index, entity) in model.entities.iter().enumerate() {
+        if let IfcEntity::BuildingElement {
+            type_guid: Some(tag),
+            ..
+        } = entity
+        {
+            if let Ok(id) = tag.parse::<u64>() {
+                by_tag.entry(id).or_default().push(index);
+            }
+        }
+    }
+    let mut walls: BTreeMap<u64, usize> = BTreeMap::new();
+    for (id, indices) in &by_tag {
+        let [index] = indices.as_slice() else {
+            continue;
+        };
+        let IfcEntity::BuildingElement {
+            ifc_type,
+            location_feet: Some(_),
+            extrusion: Some(_),
+            solid_shape,
+            property_set,
+            ..
+        } = &model.entities[*index]
+        else {
+            continue;
+        };
+        if ifc_type == "IFCWALL"
+            && !taken.contains_key(id)
+            && plain_or_stepped(solid_shape, property_set)
+        {
+            walls.insert(*id, *index);
+        }
+    }
+    let ids: BTreeSet<u64> = walls.keys().copied().collect();
+    let steps =
+        crate::native_wall_cuts::wall_cut_steps(rf, &ids).map_err(|error| format!("{error:#}"))?;
+    // What is hosted in a wall: a mesh already holds the holes Revit cuts in
+    // it, so an opening that voids it again would cut twice.
+    let mut foreign: BTreeSet<usize> = BTreeSet::new();
+    let mut cut_by: BTreeMap<usize, BTreeSet<u64>> = BTreeMap::new();
+    for entity in &model.entities {
+        match entity {
+            IfcEntity::BuildingElement {
+                host_element_index: Some(host),
+                ..
+            }
+            | IfcEntity::VoidOpening { host, .. }
+            | IfcEntity::WallProfileOpening { host, .. }
+            | IfcEntity::HostedCutOpening { host, .. } => {
+                foreign.insert(*host);
+            }
+            IfcEntity::WallCutOpening { host, tag, .. } => match tag.parse::<u64>() {
+                Ok(cutter) => {
+                    cut_by.entry(*host).or_default().insert(cutter);
+                }
+                Err(_) => {
+                    foreign.insert(*host);
+                }
+            },
+            _ => {}
+        }
+    }
+    Ok(walls
+        .into_iter()
+        .filter_map(|(id, index)| {
+            let cutters: BTreeSet<u64> = steps
+                .get(&id)
+                .into_iter()
+                .flatten()
+                .filter(|step| step.kind == WallCutKind::Embed && curtain.contains(&step.cutter))
+                .map(|step| step.cutter)
+                .collect();
+            let own_only = cut_by
+                .get(&index)
+                .is_none_or(|openings| openings.is_subset(&cutters));
+            (!cutters.is_empty() && own_only && !foreign.contains(&index)).then_some((id, index))
+        })
+        .collect())
+}
+
+/// Draw the wall at `index`, one that embeds a curtain wall, from its saved
+/// `meshes` where they start [`EMBED_RAISE_MIN_FEET`] above its base and end
+/// as far below its top: Revit has cut its end stubs away and raised its base
+/// (#1385, RE-340). A wall whose mesh starts at its base keeps its body, as
+/// does one whose mesh did not decode whole.
+fn raise_embed_host(
+    model: &mut IfcModel,
+    index: usize,
+    meshes: &GraphicsMeshes,
+    report: &mut SavedMeshReport,
+) {
+    if meshes.primitives.is_empty() {
+        return;
+    }
+    if is_partial(meshes) {
+        report.embed_partial += 1;
+        return;
+    }
+    let IfcEntity::BuildingElement {
+        location_feet: Some(origin),
+        rotation_radians,
+        extrusion: Some(body),
+        solid_shape,
+        property_set,
+        ..
+    } = &mut model.entities[index]
+    else {
+        return;
+    };
+    let lowest = meshes
+        .primitives
+        .iter()
+        .flat_map(|primitive| primitive.vertices.iter())
+        .map(|vertex| vertex[2])
+        .fold(f64::INFINITY, f64::min);
+    let (base, top) = (origin[2], origin[2] + body.height_feet);
+    if !(lowest - base >= EMBED_RAISE_MIN_FEET && top - lowest >= EMBED_RAISE_MIN_FEET) {
+        return;
+    }
+    let (vertices, triangles) = local_mesh(&meshes.primitives, *origin, *rotation_radians);
+    if triangles.is_empty() {
+        return;
+    }
+    report.embed_raised += 1;
+    *solid_shape = Some(SolidShape::TriangulatedFaceSet {
+        vertices_feet: vertices,
+        triangles,
+    });
+    if let Some(set) = property_set {
+        let mut named = false;
+        for property in &mut set.properties {
+            if property.name == "BodySource" {
+                property.value = PropertyValue::Text(SAVED_MESH_BODY_SOURCE.into());
+                named = true;
+            }
+        }
+        if !named {
+            set.properties.push(Property {
+                name: "BodySource".into(),
+                value: PropertyValue::Text(SAVED_MESH_BODY_SOURCE.into()),
+            });
+        }
+    }
 }

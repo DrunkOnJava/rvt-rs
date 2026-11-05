@@ -33,16 +33,19 @@
 //! `u32`, a flag word and the size again. [`record_spans`] walks them, and
 //! [`scan_records`] gives a placed-instance frame the id of the declared
 //! record around it when the frame's own reference list names that id
-//! (RE-315, #1261).
+//! (RE-315, #1261). [`scan_records_counted`] is the same scan that also counts,
+//! per partition stream, the markers and where each one stops, for the
+//! diagnostics' `decoded.element_record_stages` (#1389).
 
 use crate::RevitFile;
+use crate::ifc::element_record_stages::StageCounts;
 use crate::le_bytes;
 use crate::partition_element_records::{
     BBOX_MARKER_OFFSET, BBOX_OFFSET, BUILTIN_CATEGORY_MAX, BUILTIN_CATEGORY_MIN, CLASS_TAG_OFFSET,
-    CONTAINER_NONE, OST_CURTAIN_WALL_PANELS, PLACEMENT_KIND_INSTANCE, PLACEMENT_KIND_OFFSET,
-    PartitionElementRecord,
+    CONTAINER_NONE, LeftOutElement, OST_CURTAIN_WALL_PANELS, PLACEMENT_KIND_INSTANCE,
+    PLACEMENT_KIND_OFFSET, PartitionElementRecord,
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// The release this layout is first measured on.
 pub const REVIT_2023: u32 = 2023;
@@ -340,65 +343,249 @@ impl<'a> PartitionSpans<'a> {
     }
 }
 
+/// Where a frame at a marker stopped before it became a record (#1389). A frame
+/// is counted once, at the first check it fails, and the checks run in the order
+/// of the scan: the category is read and checked before the container, the
+/// placement kind, the class tag and the box are read, the box is checked before
+/// the ElementId is settled. A frame with an out-of-range category, a bad box
+/// and no declared id is a `Category` stop; one with a bad box and no declared id
+/// is a `BoxNotValid` stop; only a frame that passes both is a `NoDeclaredId`
+/// stop. A field outside the stream stops the frame at the first one read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stop {
+    /// A field of the frame lies outside the stream.
+    OutsideStream,
+    /// The `BuiltInCategory` is outside Revit's range.
+    Category,
+    /// The bounding box is not finite or ends before it starts.
+    BoxNotValid,
+    /// No declared ElementId of its own, and none from a record around it.
+    NoDeclaredId,
+}
+
+impl Stop {
+    /// The stage as the diagnostics name it.
+    fn code(self) -> &'static str {
+        match self {
+            Self::OutsideStream => "frame_outside_stream",
+            Self::Category => "category_out_of_range",
+            Self::BoxNotValid => "box_not_valid",
+            Self::NoDeclaredId => "no_declared_id",
+        }
+    }
+}
+
+/// What a scan of a Revit 2008 to 2023 file's markers found and what the
+/// recovery after it did with the frames (#1389): the counts of each partition
+/// stream and the ElementIds handed to the export. A count is an integer added
+/// where the scan already decides, so the default export keeps no list and
+/// allocates no name for a frame; the frames themselves are listed only when the
+/// log of decisions is asked for (`want_frames`).
+/// `ElementRecordStages` in `rvt::ifc::element_record_stages` is the report made
+/// from it.
+#[derive(Debug, Clone, Default)]
+pub struct RecordStages {
+    /// The release whose record layout the file takes.
+    pub layout_release: u32,
+    /// Why the scan could not start, where it could not: `elem_table_not_read`
+    /// or `schema_has_no_element_marker`.
+    pub setup: Option<&'static str>,
+    /// The counts of each partition stream the scan read or failed to inflate,
+    /// in the order of the scan.
+    pub streams: Vec<(String, StageCounts)>,
+    /// Whether the frames that stopped are listed in [`Self::stopped`].
+    pub want_frames: bool,
+    /// The frames that stopped before they became records, and the placed
+    /// instances with no volume, each with the stage it stopped at as its class.
+    /// Empty unless [`Self::want_frames`].
+    pub stopped: Vec<LeftOutElement>,
+    /// The ElementIds of the elements handed to the export, each with the Revit
+    /// class it was handed as.
+    pub handed: BTreeMap<u32, &'static str>,
+    /// Of the handed ElementIds, those whose element the walk dropped because an
+    /// element with the same ElementId was already in it.
+    pub held: BTreeSet<u32>,
+}
+
+impl RecordStages {
+    /// The counts of `stream`. A name met for the first time is added; a name
+    /// already there is found without allocating.
+    pub fn counts_mut(&mut self, stream: &str) -> &mut StageCounts {
+        let index = match self.streams.iter().position(|(name, _)| name == stream) {
+            Some(index) => index,
+            None => {
+                self.streams
+                    .push((stream.to_string(), StageCounts::default()));
+                self.streams.len() - 1
+            }
+        };
+        &mut self.streams[index].1
+    }
+
+    /// Note the frame of `record` as one the export leaves out for want of a
+    /// volume, where the frames are listed.
+    pub fn note_volumeless(&mut self, record: &PartitionElementRecord) {
+        if !self.want_frames {
+            return;
+        }
+        self.stopped.push(LeftOutElement {
+            element_id: Some(record.element_id),
+            class: "without_volume".to_string(),
+            stream: Some(record.stream.clone()),
+            offset: Some(record.offset),
+            detail: None,
+        });
+    }
+
+    /// Note that the walk dropped the element handed under `id`, because an
+    /// element with that ElementId was already in it.
+    pub fn note_held(&mut self, id: u32) {
+        if self.handed.contains_key(&id) {
+            self.held.insert(id);
+        }
+    }
+}
+
 /// Every 2008 to 2023 element record in the file whose ElementId is
 /// declared in `Global/ElemTable`: a frame that opens with its declared id,
 /// and a placed-instance frame without one (the second prologue) that sits
 /// in a declared record whose id its reference list names (RE-315). Empty
 /// for any other release (fail closed).
 pub fn scan_records(rf: &mut RevitFile, revit_version: u32) -> Vec<PartitionElementRecord> {
+    scan_records_into(rf, revit_version, None)
+}
+
+/// [`scan_records`], also counting, per stream, the markers and where each
+/// stopped (#1389). It is the same pass: the counts are integers added to it.
+/// With `want_frames` the frames that stop are also listed, with their stream
+/// and place.
+pub fn scan_records_counted(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    want_frames: bool,
+) -> (Vec<PartitionElementRecord>, RecordStages) {
+    let mut stages = RecordStages {
+        layout_release: revit_version,
+        want_frames,
+        ..RecordStages::default()
+    };
+    let records = scan_records_into(rf, revit_version, Some(&mut stages));
+    (records, stages)
+}
+
+fn scan_records_into(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    mut stages: Option<&mut RecordStages>,
+) -> Vec<PartitionElementRecord> {
     if !is_32bit_release(revit_version) {
         return Vec::new();
     }
     let Ok(table) = crate::elem_table::parse_records(rf) else {
+        if let Some(stages) = stages.as_mut() {
+            stages.setup = Some("elem_table_not_read");
+        }
         return Vec::new();
     };
     let declared = crate::elem_table::declared_ids(&table);
     let Some((marker, header_tag)) = record_marker(rf) else {
+        if let Some(stages) = stages.as_mut() {
+            stages.setup = Some("schema_has_no_element_marker");
+        }
         return Vec::new();
     };
+    let shortfall = envelope_shortfall(revit_version);
+    let want_frames = stages.as_ref().is_some_and(|stages| stages.want_frames);
     let mut out = Vec::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
+            if let Some(stages) = stages.as_mut() {
+                stages.streams.push((
+                    stream.clone(),
+                    StageCounts {
+                        stream_not_read: 1,
+                        ..StageCounts::default()
+                    },
+                ));
+            }
             continue;
         };
         let buf = inflated.bytes();
         let mut spans = PartitionSpans::new(buf, header_tag, &declared);
+        let mut counts = StageCounts::default();
+        let mut stopped = Vec::new();
         for at in memchr::memmem::find_iter(buf, &marker) {
-            if let Some(record) = decode_at_marker(
-                &stream,
-                buf,
-                at,
-                &declared,
-                header_tag,
-                envelope_shortfall(revit_version),
-                &mut spans,
-            ) {
-                out.push(record);
+            counts.markers += 1;
+            let own_id = own_declared_id(buf, at, &declared, header_tag, shortfall);
+            counts.declared_id += usize::from(own_id.is_some());
+            match decode_at_marker(&stream, buf, at, own_id, shortfall, &mut spans) {
+                Ok(record) => {
+                    counts.records += 1;
+                    counts.id_from_enclosing_record += usize::from(record.id_from_enclosing_record);
+                    out.push(record);
+                }
+                Err(stop) => {
+                    match stop {
+                        Stop::OutsideStream => counts.frame_outside_stream += 1,
+                        Stop::Category => counts.category_out_of_range += 1,
+                        Stop::BoxNotValid => counts.box_not_valid += 1,
+                        Stop::NoDeclaredId => counts.no_declared_id += 1,
+                    }
+                    if want_frames {
+                        stopped.push(LeftOutElement {
+                            element_id: None,
+                            class: stop.code().to_string(),
+                            stream: Some(stream.clone()),
+                            offset: Some(at.saturating_sub(ID_BEFORE_MARKER - shortfall)),
+                            detail: None,
+                        });
+                    }
+                }
             }
+        }
+        if let Some(stages) = stages.as_mut() {
+            stages.streams.push((stream.clone(), counts));
+            stages.stopped.append(&mut stopped);
         }
     }
     out
 }
 
-/// Decode the 2023 record whose marker is at `at`.
-fn decode_at_marker(
-    stream: &str,
+/// The declared ElementId a marker's frame opens with: a `u32` 52 bytes before
+/// the marker (48 on Revit 2008) that `Global/ElemTable` declares, with the tag
+/// of `ElementHeader` 8 bytes after it.
+fn own_declared_id(
     buf: &[u8],
     at: usize,
     declared: &BTreeSet<u32>,
     header_tag: u16,
     shortfall: usize,
-    spans: &mut PartitionSpans<'_>,
-) -> Option<PartitionElementRecord> {
+) -> Option<u32> {
     let id_at = at.checked_sub(ID_BEFORE_MARKER - shortfall)?;
     let leading = le_bytes::u32_at(buf, id_at)?;
-    let own_id = (declared.contains(&leading)
+    (declared.contains(&leading)
         && le_bytes::u16_at(buf, id_at + HEADER_TAG_AFTER_ID) == Some(header_tag))
-    .then_some(leading);
+    .then_some(leading)
+}
+
+/// Decode the 2023 record whose marker is at `at`, or say where its frame
+/// stopped. `own_id` is [`own_declared_id`] of it.
+fn decode_at_marker(
+    stream: &str,
+    buf: &[u8],
+    at: usize,
+    own_id: Option<u32>,
+    shortfall: usize,
+    spans: &mut PartitionSpans<'_>,
+) -> Result<PartitionElementRecord, Stop> {
+    let id_at = at
+        .checked_sub(ID_BEFORE_MARKER - shortfall)
+        .ok_or(Stop::OutsideStream)?;
+    let leading = le_bytes::u32_at(buf, id_at).ok_or(Stop::OutsideStream)?;
     let category_at = at - (CATEGORY_BEFORE_MARKER - shortfall);
-    let builtin_category = le_bytes::i64_at(buf, category_at)?;
+    let builtin_category = le_bytes::i64_at(buf, category_at).ok_or(Stop::OutsideStream)?;
     if !(BUILTIN_CATEGORY_MIN..=BUILTIN_CATEGORY_MAX).contains(&builtin_category) {
-        return None;
+        return Err(Stop::Category);
     }
     // Relative to a 2024-shaped record start, which can lie before the
     // start of the partition: every field below is read from the marker.
@@ -407,23 +594,31 @@ fn decode_at_marker(
         let from = usize::try_from(base + offset as isize).ok()?;
         buf.get(from..from + len)
     };
-    let container_at = at.checked_sub(CONTAINER_BEFORE_MARKER)?;
-    let container = match le_bytes::u32_at(buf, container_at)? {
+    let container_at = at
+        .checked_sub(CONTAINER_BEFORE_MARKER)
+        .ok_or(Stop::OutsideStream)?;
+    let container = match le_bytes::u32_at(buf, container_at).ok_or(Stop::OutsideStream)? {
         u32::MAX => u64::MAX,
         id => u64::from(id),
     };
-    let placement_kind = le_bytes::u32_at(field(PLACEMENT_KIND_OFFSET, 4)?, 0)?;
-    let class_tag = le_bytes::u16_at(field(CLASS_TAG_OFFSET, 2)?, 0)?;
+    let placement_kind = field(PLACEMENT_KIND_OFFSET, 4)
+        .and_then(|bytes| le_bytes::u32_at(bytes, 0))
+        .ok_or(Stop::OutsideStream)?;
+    let class_tag = field(CLASS_TAG_OFFSET, 2)
+        .and_then(|bytes| le_bytes::u16_at(bytes, 0))
+        .ok_or(Stop::OutsideStream)?;
     let mut bbox_feet = [0.0f64; 6];
     for (index, slot) in bbox_feet.iter_mut().enumerate() {
-        let value = le_bytes::f64_at(field(BBOX_OFFSET + index * 8, 8)?, 0)?;
+        let value = field(BBOX_OFFSET + index * 8, 8)
+            .and_then(|bytes| le_bytes::f64_at(bytes, 0))
+            .ok_or(Stop::OutsideStream)?;
         if !value.is_finite() {
-            return None;
+            return Err(Stop::BoxNotValid);
         }
         *slot = value;
     }
     if (0..3).any(|axis| bbox_feet[axis + 3] < bbox_feet[axis]) {
-        return None;
+        return Err(Stop::BoxNotValid);
     }
     let list_at = at + 8 + 48;
     let references = u32_list(buf, list_at).unwrap_or_default();
@@ -442,11 +637,12 @@ fn decode_at_marker(
                 container,
                 placement_kind,
                 &references,
-            )?;
+            )
+            .ok_or(Stop::NoDeclaredId)?;
             (id, true)
         }
     };
-    Some(PartitionElementRecord {
+    Ok(PartitionElementRecord {
         stream: stream.to_string(),
         offset: id_at,
         element_id,

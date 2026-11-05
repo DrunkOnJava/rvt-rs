@@ -41,6 +41,18 @@
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f bimcollab=true
 #
+# Autodesk's rac_advanced sample project of the releases 2015 to 2020 is scored
+# against the one public IFC2X3 export of it, from the three.js repository
+# (research/rac-advanced-export.tsv, no licence of its own, #1354, RE-330)
+# when `racadv` is set, as models racadv-2015 to racadv-2020; the export and the
+# files are fetched for the run and never stored or cached, only their summary
+# counts are uploaded (tools/ci/scrub-holdout-results.sh), as for BIMcollab's
+# example, and the export is counted apart as IFC2X3 everywhere. Name the
+# scorers, since most of the suite says nothing of an IFC2X3 export; the kept
+# IFC of a model is deleted with the rest of its files:
+#
+#   gh workflow run measure.yml -f ref=my-branch -f base=none -f racadv=true -f models="racadv-*" -f scorers=space_profiles_vs_ifc
+#
 # With `holdout`, the held-out models (research/holdout-models.tsv, RE-252,
 # and research/holdout-archive-models.tsv, #1261), for checking a rule against
 # files it was not derived on: only their summary counts are uploaded
@@ -72,6 +84,42 @@
 # run. `score_cache=off` runs every step, as before.
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f score_cache=off
+#
+# The MCP server's answers are scored on every model (#1327): the built
+# rvt-rs-mcp is started by a scripted client with no language model
+# (tools/re/mcp_client.py), asked a fixed query set about the model (summary,
+# levels, every element's row, rooms with areas, get_element for a spread of
+# each entity, diagnostics, export_ifc), and its answers are compared with the
+# model's own IFC export (a difference is a bug in the server or the export:
+# the step's output ends `exit 1`, and the run summary lists each model's
+# verdict) and, where Revit gave an export, with Revit's, with the pairing and
+# tolerances of the class sets, storeys, space profiles, property sets and
+# quantities scorers (tools/re/mcp_answers_vs_ifc.py). The server is built only
+# when the run names no scorers or names this one; mcp-dump.json, each model's
+# answers as the deterministic semantic dump, is in the artifact. Autodesk's
+# sample projects are not asked.
+#
+#   gh workflow run measure.yml -f ref=my-branch -f base=none -f models="core-interior einhoven" -f scorers=mcp_answers_vs_ifc
+#
+# A run with a base also diffs the two sides' dumps (#1334): for each openly
+# licensed model with a dump on both sides, tools/re/semantic_diff.py writes the
+# semantic diff (elements added, removed and changed, offsets that moved for
+# unrelated reasons dropped, identical changes collapsed) into the
+# `semantic-diff` artifact. The Semantic check workflow (semantic-check.yml)
+# scores that artifact with Jev and writes the `semantic diff (advisory)`
+# check run on the measured head commit. A model that is not openly licensed
+# has no dump and gets no diff; a dump in one fails the compare job. Only a run
+# of every open model writes the check: no `models` filter, and the office and
+# the Revit 2025 models on (the BIM4LCA office is where most output changes
+# land). A run with a filter gets its diffs in the artifact and no check run.
+# `scorers=mcp_answers_vs_ifc` keeps every model and leaves the other scorers out.
+#
+#   gh workflow run measure.yml -f ref=<pull request head> -f base=main -f nordic=true -f r2025=true -f scorers=mcp_answers_vs_ifc
+#
+# `fine_mesh=true` sets RVT_SCORER_FINE_MESH for the scorers: the three body
+# scorers then also mesh both IFC files at one equal, fine deflection and print
+# their `fine` rows after the output they always print (tools/re/fine_mesh.py,
+# #1355, RE-331). The score cache keys on the variable.
 
 name: Measure
 
@@ -145,6 +193,11 @@ on:
         type: boolean
         required: false
         default: false
+      racadv:
+        description: Also score Autodesk's rac_advanced sample project of 2015 to 2020 (models racadv-2015 to racadv-2020) against the IFC2X3 export of it from the three.js repository (research/rac-advanced-export.tsv, no licence stated, fetched for the run, never stored or cached; only the summary counts are uploaded)
+        type: boolean
+        required: false
+        default: false
       holdout:
         description: Also score the held-out models against Revit's exports of them (research/holdout-models.tsv and research/holdout-archive-models.tsv, fetched for the run; only their summary counts are uploaded)
         type: boolean
@@ -155,13 +208,18 @@ on:
         required: false
         default: ""
       scorers:
-        description: Only these steps on the models, tools/re scorers and info, gltf, schema, witness (e.g. "qtos_vs_ifc witness"; a tools/re script in no scorer list runs as an IFC scorer), none for none, empty for all; every model is still exported and hashed
+        description: Only these steps on the models, tools/re scorers and info, gltf, schema, witness, mcp_answers_vs_ifc (e.g. "qtos_vs_ifc witness"; a tools/re script in no scorer list runs as an IFC scorer), none for none, empty for all; every model is still exported and hashed
         required: false
         default: ""
       score_cache:
         description: 'The score cache (tools/ci/measure-cache.py, docs/maintaining.md): empty for the shared one, off to run every step, or a name for a cache of its own that this run saves to from any ref (the shared one is read as well)'
         required: false
         default: ""
+      fine_mesh:
+        description: 'The body scorers (mesh_bodies_vs_ifc, saved_meshes_vs_ifc, family_extrusion_bodies_vs_ifc) also mesh both IFC files at one equal, fine deflection and print `fine` rows after their own (tools/re/fine_mesh.py, #1355); their other output is as it was'
+        type: boolean
+        required: false
+        default: false
   # A change to the measurement itself measures its own PR against main.
   pull_request:
     paths:
@@ -244,6 +302,7 @@ jobs:
           R2025: ${{ inputs.r2025 && 'true' || 'false' }}
           HOLDOUT: ${{ inputs.holdout && 'true' || 'false' }}
           BIMCOLLAB: ${{ inputs.bimcollab && 'true' || 'false' }}
+          RACADV: ${{ inputs.racadv && 'true' || 'false' }}
           FAMILIES: ${{ (inputs.families || github.event_name == 'pull_request') && 'true' || 'false' }}
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
@@ -253,13 +312,14 @@ jobs:
               return e[name] == "true"
           base = e["EVENT"] == "pull_request" or e["BASE"] not in ("", "none")
           def shard(name, models="", skip="", families=False, samples=False,
-                    years="", nordic=False, r2025=False, holdout=False, bimcollab=False):
+                    years="", nordic=False, r2025=False, holdout=False, bimcollab=False,
+                    racadv=False):
               return dict(shard=name, models=models, skip=skip, families=families,
                           samples=samples, years=years, nordic=nordic, r2025=r2025,
-                          holdout=holdout, bimcollab=bimcollab)
+                          holdout=holdout, bimcollab=bimcollab, racadv=racadv)
           rest = dict(families=flag("FAMILIES"), nordic=flag("NORDIC"),
                       r2025=flag("R2025"), holdout=flag("HOLDOUT"),
-                      bimcollab=flag("BIMCOLLAB"))
+                      bimcollab=flag("BIMCOLLAB"), racadv=flag("RACADV"))
           offices = {"office-as-built": "nordic-office-as-built",
                      "office-permit": "nordic-office-permit"}
           if e["MODELS"] or e["YEARS"] or e["PAIR"]:
@@ -279,8 +339,10 @@ jobs:
               if flag("HOLDOUT"):
                   # The held-out fetch brings the spent pairs too.
                   shards.append(shard("held-out", models="holdout-* spent-*", holdout=True))
+              if flag("RACADV"):
+                  shards.append(shard("racadv", models="racadv-*", racadv=True))
               skip = " ".join(offices.values()) if flag("NORDIC") else ""
-              shards.append(shard("rest", skip=skip, **dict(rest, holdout=False)))
+              shards.append(shard("rest", skip=skip, **dict(rest, holdout=False, racadv=False)))
           sides = ["head", "base"] if base else ["head"]
           include = [dict(side=side, **s) for side in sides for s in shards]
           print("matrix=" + json.dumps({"include": include}))
@@ -388,8 +450,9 @@ jobs:
       # keeps a cache of its own, named by the shard whatever the shard is
       # called, and ends its name with a `.` that no shard name holds, so one
       # shard's prefix is never another's.
-      # The held-out models, BIMcollab's and the pairs once held out (spent-*)
-      # are never cached (RE-252).
+      # The held-out models, BIMcollab's, Autodesk's rac_advanced sample scored
+      # against an export with no licence (racadv-*) and the pairs once held out
+      # (spent-*) are never cached (RE-252).
       - name: Score cache key
         id: score-cache-key
         shell: bash
@@ -438,14 +501,26 @@ jobs:
       # builds to, so a run of any ref may save it, and only a run of that
       # commit restores it. A ref that is not a full SHA is built each time.
       # The probe examples are always built.
+      # #1327: the MCP server (rvt-rs-mcp, a crate of its own, rustc 1.88 or
+      # later) is built too when the run scores its answers, which a run that
+      # names other scorers does not, and the key says which set of binaries
+      # the entry holds. A ref older than the crate has none to build.
       - name: Binary cache key
         id: binaries-key
         shell: bash
         env:
           MEASURED: ${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}
+          SCORERS: ${{ inputs.scorers }}
         run: |
+          mcp=false
+          case " $SCORERS " in
+            "  " | *" mcp_answers_vs_ifc "*) mcp=true ;;
+          esac
+          echo "mcp=$mcp" >> "$GITHUB_OUTPUT"
           if [[ "$MEASURED" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "key=rvt-bin-v1-$MEASURED-$RUNNER_OS-$RUNNER_ARCH-$(rustc -vV | sha256sum | cut -c1-16)-ci" >> "$GITHUB_OUTPUT"
+            suffix=""
+            [ "$mcp" = true ] && suffix="-mcp"
+            echo "key=rvt-bin-v2-$MEASURED-$RUNNER_OS-$RUNNER_ARCH-$(rustc -vV | sha256sum | cut -c1-16)-ci$suffix" >> "$GITHUB_OUTPUT"
           else
             echo "the measured ref is not a full SHA, so its binaries are built each time"
           fi
@@ -458,15 +533,29 @@ jobs:
             measured/target/ci/rvt-ifc
             measured/target/ci/rvt-gltf
             measured/target/ci/rvt-info
+            measured/target/ci/rvt-rs-mcp
           key: ${{ steps.binaries-key.outputs.key }}
       - name: Build
+        id: build
         working-directory: measured
         run: |
           git log -1 --format='%H %s' > ../measured-commit.txt
           if [ "$BINARIES_CACHED" = true ]; then
-            echo "rvt-ifc, rvt-gltf and rvt-info restored from the binary cache"
+            echo "rvt-ifc, rvt-gltf and rvt-info (and rvt-rs-mcp, where the key says so) restored from the binary cache"
           else
             cargo build --profile ci --bin rvt-ifc --bin rvt-gltf --bin rvt-info
+            # The server is optional: a ref without the crate, or one whose
+            # server does not build, leaves the answers NOT MEASURED on this
+            # side and fails no other scorer.
+            if [ "$WITH_MCP" = true ]; then
+              if [ ! -f rvt-mcp/Cargo.toml ]; then
+                echo "::warning::the measured ref has no rvt-mcp crate: the MCP server's answers are NOT MEASURED on this side"
+              elif cargo build --profile ci -p rvt-rs-mcp --bin rvt-rs-mcp; then
+                echo "mcp_built=true" >> "$GITHUB_OUTPUT"
+              else
+                echo "::warning::rvt-rs-mcp did not build at the measured ref: the MCP server's answers are NOT MEASURED on this side"
+              fi
+            fi
           fi
           # A base older than a probe has no such example; it is skipped there.
           # Probes live in the rvt-probes crate (probes/examples) since it was
@@ -490,17 +579,20 @@ jobs:
         env:
           PROBE: ${{ inputs.probe }}
           BINARIES_CACHED: ${{ steps.binaries.outputs.cache-hit }}
+          WITH_MCP: ${{ steps.binaries-key.outputs.mcp }}
       # Every shard of a commit misses at once and saves the same key; the one
       # that reserves it first stores it and the others are told it is taken.
-      # A run from a pull request saves nothing, its cache being its own.
+      # A run from a pull request saves nothing, its cache being its own. A key
+      # that says the server is in it is saved only when the server was built.
       - name: Save the binaries
-        if: ${{ success() && github.event_name == 'workflow_dispatch' && steps.binaries-key.outputs.key != '' && steps.binaries.outputs.cache-hit != 'true' }}
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && steps.binaries-key.outputs.key != '' && steps.binaries.outputs.cache-hit != 'true' && (steps.binaries-key.outputs.mcp != 'true' || steps.build.outputs.mcp_built == 'true') }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             measured/target/ci/rvt-ifc
             measured/target/ci/rvt-gltf
             measured/target/ci/rvt-info
+            measured/target/ci/rvt-rs-mcp
           key: ${{ steps.binaries-key.outputs.key }}
       # Restored after the Build step, so that no build script of the measured
       # ref ever sees a writable score cache.
@@ -611,8 +703,25 @@ jobs:
             2) echo "::warning::BIMcollab example model NOT MEASURED: an archive could not be downloaded" ;;
             *) echo "::error::the BIMcollab example model no longer matches research/bimcollab-models.tsv"; exit 1 ;;
           esac
-      # A held-out model's host being unreachable is NOT MEASURED; a file
-      # that no longer matches its pin fails the run.
+      # The export's host being unreachable is NOT MEASURED; a file that no
+      # longer matches its pin fails the run. Nothing is cached.
+      - name: Fetch Autodesk's rac_advanced sample and its IFC2X3 export
+        if: matrix.racadv
+        shell: bash
+        run: |
+          set +e
+          tools/ci/fetch-rac-advanced-pair.sh models
+          status=$?
+          set -e
+          case "$status" in
+            0) ;;
+            2) echo "::warning::rac_advanced and its IFC2X3 export NOT MEASURED: a file could not be downloaded" ;;
+            *) echo "::error::a rac_advanced file or its export no longer matches its pin (research/rac-advanced-export.tsv, research/autodesk-sample-projects.tsv)"; exit 1 ;;
+          esac
+      # A held-out model's host still unreachable after the fetchers' resumed
+      # retries (tools/ci/fetch-resume.sh) fails the run with NOT MEASURED, as a
+      # file that no longer matches its pin does: a run asked for the held-out
+      # check that checked nothing must not read as a pass (#1392).
       - name: Fetch the held-out models
         if: matrix.holdout
         shell: bash
@@ -627,7 +736,7 @@ jobs:
           set -e
           case "$status" in
             0) ;;
-            2) echo "::warning::held-out models NOT MEASURED: a file could not be downloaded" ;;
+            2) echo "::error::held-out models NOT MEASURED: a file could not be downloaded after every retry"; exit 1 ;;
             *) echo "::error::a held-out model no longer matches its pin in research/holdout-models.tsv or research/holdout-archive-models.tsv"; exit 1 ;;
           esac
       - name: Fetch the family corpus
@@ -660,6 +769,12 @@ jobs:
           MEASURE_SCORERS: ${{ inputs.scorers }}
           PSETS_MISSING: ${{ inputs.psets_missing }}
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
+          MCP_REQUIRE_FOLDED_FIELD: ${{ matrix.side != 'base' && '1' || '' }}
+          # A run of the samples checks the Areas of rac_advanced across its
+          # 2024 to 2027 saves on the head side (main writes none on 2025 to
+          # 2027) whenever all four samples are in it, and says so when not.
+          AREAS_ACROSS_SAVES: ${{ matrix.side != 'base' && matrix.samples && '1' || '' }}
+          RVT_SCORER_FINE_MESH: ${{ inputs.fine_mesh && '1' || '' }}
           FAMILY_DIR: ${{ matrix.families && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           SAMPLE_DIR: ${{ matrix.samples && format('{0}/_samples', github.workspace) || '' }}
           SHARD: ${{ matrix.shard }}
@@ -694,8 +809,22 @@ jobs:
         with:
           path: _score-cache
           key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-      # The held-out models and BIMcollab's carry no licence: only their
-      # counts leave the runner (RE-252).
+      # The held-out models, BIMcollab's and the racadv-* models (scored against
+      # an export that carries no licence) leave the runner as counts only
+      # (RE-252, #1354).
+      # A shard asked for the held-out check that produced no held-out result
+      # (every model filtered out by `models`, or nothing scored) fails, so an
+      # empty check never reads as a pass (#1392).
+      - name: The held-out check measured something
+        if: matrix.holdout
+        shell: bash
+        run: |
+          measured=$(find results -maxdepth 1 -type d \( -name 'holdout-*' -o -name 'spent-*' \) | wc -l | tr -d ' ')
+          echo "held-out and spent models measured: ${measured}"
+          if [ "${measured}" = 0 ]; then
+            echo "::error::holdout=true but no held-out model was measured: the models input excluded them (use models=\"holdout-* spent-*\" or leave it empty), or none could be scored"
+            exit 1
+          fi
       - name: Keep only the unlicensed models' counts
         shell: bash
         run: tools/ci/scrub-holdout-results.sh results
@@ -706,12 +835,49 @@ jobs:
           if-no-files-found: error
           # Compare re-uploads them merged as measure-head and measure-base.
           retention-days: 7
+      # The gate of the Areas of Revit 2025 to 2027 (#1261, #1194; Griffin,
+      # 2026-11-05, "Same-project gate"): rac_advanced's Areas on its 2025,
+      # 2026 and 2027 saves equal its 2024 save's. With the four samples in the
+      # run, a failed check, a missing result and a result that read other than
+      # 25 Areas, 25 of them with a body, on any save each turn the job red,
+      # after the results are uploaded; a pass needs the scorer's own `passed`
+      # line. A run with fewer than the four samples (a narrower sample_years)
+      # checks nothing and says so in a notice. Measure is not a required
+      # check: the failure is read before landing, by the landing rule.
+      - name: The Areas agree across rac_advanced's saves
+        if: ${{ !cancelled() && matrix.side != 'base' && matrix.samples }}
+        shell: bash
+        run: |
+          file=results/areas_across_saves.txt
+          if [ ! -s "$file" ]; then
+            echo "::error::the Areas of rac_advanced were not compared across its saves: no result, so nothing was checked"
+            exit 1
+          fi
+          cat "$file"
+          if grep -q '^areas across saves: skipped:' "$file"; then
+            echo "::notice::$(sed -n '1p' "$file")"
+            exit 0
+          fi
+          if [ "$(sed -n '$p' "$file")" != "exit 0" ] || ! grep -q '^areas across saves: passed: 25 Areas, 25 with a body, on each of 4 saves' "$file"; then
+            echo "::error::the Areas of rac_advanced differ across its 2024 to 2027 saves, or other than 25 Areas with a body were read on a save, or a save is missing (areas_across_saves.txt)"
+            exit 1
+          fi
 
   compare:
     name: Compare
     needs: [plan, measure]
     runs-on: ubuntu-24.04
     steps:
+      # The semantic diff's script, from the workflow's own ref (this job holds
+      # no secret and runs no measured code). First, since a checkout cleans the
+      # workspace.
+      - name: Workflow tools
+        if: needs.plan.outputs.base == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/re/semantic_diff.py
+          sparse-checkout-cone-mode: false
       # Each side's shards hold disjoint models; merged, they are the
       # measure-head and measure-base directories one runner used to write.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
@@ -749,6 +915,37 @@ jobs:
             echo "head: $(cat measure-head/commit.txt)"
             [ -d measure-base ] && echo "base: $(cat measure-base/commit.txt)"
             echo
+            # #1327: what the MCP server answered, per model, against the
+            # model's own export. A difference is a bug in the server or in the
+            # export (tools/re/mcp_answers_vs_ifc.py); it fails no job here.
+            mcp_lines=()
+            for f in measure-head/*/mcp_answers_vs_ifc.txt measure-head/*/counts.txt; do
+              [ -f "$f" ] || continue
+              # A counts.txt is a restricted model's, which may hold no MCP line at all.
+              if [ "$(basename "$f")" = counts.txt ] && ! grep -qs '^mcp answers: ' "$f"; then continue; fi
+              verdict=$(grep -E '^mcp answers: consistency (PASS|FAIL|NOT MEASURED)' "$f" | head -n 1 | sed -E 's/^mcp answers: consistency //')
+              if [ -z "$verdict" ]; then
+                # A crash leaves no verdict: told apart from a pass and a fail.
+                status=$(grep -E '^(mcp answers: )?exit [0-9]+$' "$f" | sed -n '$p' | sed -E 's/^(mcp answers: )?exit //')
+                verdict="no verdict, exit ${status:-unknown}: see its mcp_answers_vs_ifc.txt"
+              fi
+              mcp_lines+=("- $(basename "$(dirname "$f")"): $verdict")
+            done
+            if [ "${#mcp_lines[@]}" -gt 0 ]; then
+              echo "### MCP server answers against the export"
+              echo
+              printf '%s\n' "${mcp_lines[@]}"
+              echo
+            fi
+            # The gate of the Areas of Revit 2025 to 2027: counts by field.
+            if [ -s measure-head/areas_across_saves.txt ]; then
+              echo "### Areas of rac_advanced across its 2024 to 2027 saves"
+              echo
+              echo '```'
+              cat measure-head/areas_across_saves.txt
+              echo '```'
+              echo
+            fi
             if [ -d measure-base ]; then
               echo "### Models and samples whose IFC differs (export time ignored)"
               echo
@@ -777,8 +974,11 @@ jobs:
               # text they made a 3 GB summary GitHub refused (run
               # 41537426493). The whole diff is the compare-scorer-diff
               # artifact; the summary shows its start, under GitHub's 1 MiB.
+              # mcp-dump.json is the MCP answers' semantic dump (#1327, read by
+              # #1334's merge check), megabytes on the office: in the artifact,
+              # not in this diff.
               diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json \
-                -x '*.ifc' -x '*.glb' measure-base measure-head > scorer-diff.txt || true
+                -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base measure-head > scorer-diff.txt || true
               limit=$((640 * 1024))
               size=$(stat -c %s scorer-diff.txt)
               echo '```diff'
@@ -799,6 +999,46 @@ jobs:
             exit 1
           fi
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
+      # #1334: the semantic diff of the two sides' MCP dumps, per openly
+      # licensed model. A dump in a model that is restricted or on neither list
+      # (tools/re/semantic_diff.py OPEN_MODELS) fails this step. A run with no
+      # dump on either side (a probe run, scorers that leave the server out)
+      # writes nothing, so it gets no check; one side's dump alone is written
+      # as a manifest, which the Semantic check reports as NOT MEASURED. The
+      # check is written only for a run that was asked for every open model: a
+      # dispatched run with no `models` filter and the office and the Revit 2025
+      # models on (the manifest says so; the Semantic check does not rely on it
+      # to pass anything, it compares the models it finds with its own list).
+      - name: Semantic diff of the MCP dumps
+        if: needs.plan.outputs.base == 'true'
+        shell: bash
+        env:
+          REQUESTED_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.models == '' && inputs.nordic && inputs.r2025 && 'true' || 'false' }}
+          # The commits the plan job resolved from the inputs, not the commit.txt of a result folder: that
+          # file is written by a shard job that runs the measured code, which could name any commit.
+          HEAD_SHA: ${{ needs.plan.outputs.head_sha }}
+          BASE_SHA: ${{ needs.plan.outputs.base_sha }}
+        run: |
+          status=0
+          args=(--head-sha "$HEAD_SHA" --base-sha "$BASE_SHA")
+          [ "$REQUESTED_ALL" = true ] && args+=(--requested-all)
+          python3 tools/re/semantic_diff.py measure measure-base measure-head semantic-diff "${args[@]}" > semantic-diff.log 2>&1 || status=$?
+          cat semantic-diff.log
+          {
+            echo "### Semantic diff of the MCP dumps"
+            echo
+            echo '```'
+            cat semantic-diff.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: needs.plan.outputs.base == 'true' && hashFiles('semantic-diff/manifest.json') != ''
+        with:
+          name: semantic-diff
+          path: semantic-diff
+          if-no-files-found: error
+          retention-days: 7
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         # Also when the summary failed for its size: the diff is then the
         # only place the scorer differences are.

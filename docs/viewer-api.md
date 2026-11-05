@@ -45,8 +45,10 @@ model finishes parsing.
 `scheduleCsv(model, kind, metric, excel)` returns a CSV schedule of an
 exported model (`rvt::ifc::schedule_csv`): `kind` is `"elements"` or
 `"rooms"`, `metric` switches lengths to metres, `excel` prefixes a UTF-8
-byte-order mark. The viewer's Schedule panel downloads both with
-`excel = true`, since most people open them in Excel.
+byte-order mark. The element schedule lists the elements the IFC export
+writes, each on the storey it puts it on, so a piece the export folds into
+another element's body has no row. The viewer's Schedule panel downloads both
+with `excel = true`, since most people open them in Excel.
 
 ## Scene graph
 
@@ -61,7 +63,17 @@ use rvt::ifc::scene_graph::{
 
 - `build_scene_graph(&IfcModel) -> SceneNode` — project → storey
   → element tree with hosted doors/windows nested under their
-  wall.
+  wall where it is on the same storey. An element is under the storey
+  the IFC export puts it in (`step_writer::storey_of` over
+  `step_writer::placements`, the writer's own decision, which the MCP
+  server and the elements CSV read as well): the storey it is contained
+  in, that of its room, that of its whole (a stair's run, landing or
+  stringer, or a curtain wall's member) or that of the host an opening
+  cuts. An element the
+  export contains in the building only, with no storey, is under the
+  synthetic `Unassigned` storey. A piece the export folds into the body of
+  another element (a further piece of an element of separate loops) is not
+  an element there and has no node.
 - `distinct_ifc_types(&SceneNode) -> Vec<String>` — populate the
   layer-toggle UI.
 - `element_info_panel(&IfcModel, entity_index) -> Option<ElementInfoPanel>` —
@@ -80,8 +92,25 @@ use rvt::ifc::scene_graph::{
     stops at its near face, and `wall` is the other wall as a
     `RelatedElement`. The viewer lists them under the host rows.
   - `storey: Option<PanelStorey { index, name, elevation_feet, elevation_label }>`
-    resolves `storey_index`; `index` addresses the same
-    `IFCBUILDINGSTOREY` scene node, so the viewer can jump to it.
+    is the storey the IFC export puts the element in (`storey_of`: its own,
+    or that of its room, its whole or, for an opening, its host), the one
+    its row has in the schedule and the tree; `index` addresses the same
+    `IFCBUILDINGSTOREY` scene node, so the viewer can jump to it. It is
+    `None` where the export contains the element in the building only.
+    `storey_name` and `storey_elevation_feet` are the same storey. A piece
+    the export folds into the body of another element is still drawn, so a
+    click can pick it, and its panel is that of the element whose body it is
+    part of.
+  - `entity_index` is the index of the element the panel describes: the one
+    asked for or, for a folded piece, the element that owns it. The viewer
+    selects that element (its tree row, its GlobalId, and a highlight and a
+    zoom over the element and all its pieces, `IfcModel::body_pieces`), so a
+    click on any loop of a ceiling of separate loops selects the ceiling.
+    Serialised models from before it carry none: it reads as 0.
+  - `extent_rows` is empty for an element with folded pieces: the export
+    writes its body as several items, which one width, depth and height
+    cannot state, and the elements CSV leaves the same size cells empty. Its
+    `missing` does not list `extents`.
   - `material: Option<PanelMaterial { index, name, element_count }>`
     resolves `material_index` and counts the elements using it, directly
     or as one of their layers.
@@ -108,7 +137,10 @@ use rvt::ifc::scene_graph::{
     The viewer reports one as "not recovered" only where the
     export diagnostics agree it is a known decode gap.
 - `build_schedule(&IfcModel) -> Schedule` — tabular element export
-  (the CSV writer is `schedule_csv`, above). `Schedule::groups` is the
+  (the CSV writer is `schedule_csv`, above): one row for each element the
+  IFC export writes, each on the storey it puts it in (`ScheduleRow::storey`,
+  empty where the export contains it in the building only), so a piece the
+  export folds into another element's body has no row. `Schedule::groups` is the
   per-IFC-type breakdown (`ScheduleTypeGroup { ifc_type, count, entity_indices,
   storeys }`, biggest first) that drives the viewer's schedule
   panel and its per-type scene highlight. Rebuild it with
@@ -496,11 +528,11 @@ describing the error.
 | `openRvtBytesWithDiagnosticsModeAndOpenLimits` | `bytes`, `mode: string`, `limits: { largeModel?, maxStreamBytes?, maxInflateBytes?, savedMeshes?, phase? }` or `null`, `progress?: (stage: string, done: number, total: number \| null) => void` | `{ model, diagnostics, phases }` | `openRvtBytesWithDiagnosticsMode` under the reader's resource limits: `largeModel` is `rvt-ifc --large-model` (streams up to 2 GiB, inflating up to the 4 GiB wasm32 holds, the walker's scan cap lifted to match), `maxStreamBytes` and `maxInflateBytes` are whole numbers of bytes that win over it, and a field left out keeps its default. `savedMeshes` (default `true`) draws the doors and windows of Revit 2023 to 2027 files from the meshes Revit saved for them, as `rvt-ifc` does by default; `false` keeps their bounding boxes and skips the pass over the saved graphics. `phase` (a phase's name, matched exactly first, or its ElementId as a number) exports that project phase, as `rvt-ifc --phase` does; see [Export phase](#export-phase). A stream a limit stops is listed in the diagnostics (`stream_not_read_resource_limit`, a `Not read whole:` warning each) and the viewer offers "Retry with large-model limits"; unknown fields and fractional or negative limits throw. When the saved graphics cannot be read the model keeps its boxes and the diagnostics carry a warning. `progress`, when given, is called as the decoder works with the stage name (`schema-parse`, `candidate-scan`, `element-decode`, `partition-scan`, `saved-graphics`, `saved-meshes`) and how many of how many it has done (`total` is `null` where the stage has no count yet), at a stage's start, its end and each whole percent between; see [Decode progress](#decode-progress). A function that throws is ignored |
 | `quickSummary` | `bytes` | `Summary` | Release, build, PartAtom and the stream inventory, read without decoding the model |
 | `fileMetadata` | `bytes` | `FileMetadata` | Document identity (release, worksharing, last save, GUID, save counter), from the two identity streams only |
-| `scheduleCsv` | `model`, `kind: string`, `metric: boolean`, `excel: boolean` | `string` | The element (`kind` `"elements"`) or room (`"rooms"`) schedule as CSV, the columns of the [user guide](user-guide.md#get-a-schedule-into-excel) |
+| `scheduleCsv` | `model`, `kind: string`, `metric: boolean`, `excel: boolean` | `string` | The element (`kind` `"elements"`: the elements the IFC export writes, each on the storey it puts it on) or room (`"rooms"`) schedule as CSV, the columns of the [user guide](user-guide.md#get-a-schedule-into-excel) |
 | `buildSceneGraph` | `model` | scene tree | The model's scene graph |
 | `distinctIfcTypes` | `scene` | `string[]` | The IFC types in a scene, for the layer toggles |
-| `elementInfoPanel` | `model`, `entity_index: number` | info panel | What the info panel shows for one element |
-| `buildSchedule` | `model` | schedule table | A flat table of every building element |
+| `elementInfoPanel` | `model`, `entity_index: number` | info panel | What the info panel shows for one element, on the storey the IFC export puts it in |
+| `buildSchedule` | `model` | schedule table | A flat table of the building elements the IFC export writes, each on the storey it puts it in |
 | `modelToGlb` | `model` | `Uint8Array` | The model as a glTF 2.0 binary |
 | `modelToIfcStep` | `model` | `string` | The model as an IFC4 STEP document |
 | `renderPlanSvg` | `model`, `options: SheetOptions` or `null` | `string` | A plan view as SVG |

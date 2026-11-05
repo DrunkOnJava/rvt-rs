@@ -59,6 +59,7 @@
 //!
 //! ## Native records
 //!
+//! - [`native_area_regions`]: An Area's region from Revit's own plan topology, with area-rule offsets and arcs (#1261, RE-333)
 //! - [`native_column_joins`]: The wall a column is first joined to, and the side of it the column stands on (RE-202, #355)
 //! - [`native_connectors`]: A family symbol's connectors, from its own native record and its family's (#528)
 //! - [`native_document`]: Streaming current-record extraction with structural schemas and native IDs
@@ -88,7 +89,7 @@
 //! - [`native_symbol_cuts`]: The outline a door or window cuts in its host, from the native record of the symbol that draws it (RE-215)
 //! - [`native_stairs`]: A Revit 2025 stair run's sketch and type, read by member name from its native records (#357)
 //! - [`native_type_materials`]: The materials a family type's geometry is drawn in (RE-203, #355)
-//! - [`native_wall_cuts`]: The elements a wall's native record names as cutting it, and the rectangle of a rectangular wall opening (RE-321, #1165)
+//! - [`native_wall_cuts`]: The elements a wall's native record names as cutting it, and the boxes of those that cut an opening (RE-321, #1165)
 //! - [`native_wall_types`]: A wall's type Function, from the native records of the wall and its type (RE-185, RE-193)
 //!
 //! ## Other research
@@ -110,6 +111,7 @@ pub mod element_record_wall_joins;
 pub mod es_refs;
 pub mod evidence;
 pub mod identity;
+pub mod native_area_regions;
 pub mod native_column_joins;
 pub mod native_connectors;
 pub mod native_document;

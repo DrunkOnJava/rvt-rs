@@ -33,6 +33,7 @@
 //! the roofs of `R2025_Models.zip` (#356: sheds, a gable, hips, L-shaped hips)
 //! every defining edge and its angle match Revit's own IFC export.
 
+use crate::ifc::element_provenance::CopyTrail;
 use crate::le_bytes;
 use crate::native_json::element_id_i64;
 use crate::{Result, RevitFile};
@@ -122,6 +123,8 @@ pub fn scan_edge_slopes(
         _ => return Ok(BTreeMap::new()),
     };
     let mut found: BTreeMap<u32, Option<EdgeSlope>> = BTreeMap::new();
+    let recording = rf.recording_value_sources();
+    let mut trail = CopyTrail::default();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -144,12 +147,22 @@ pub fn scan_edge_slopes(
                 .unwrap_or(buf.len())
                 .min(hit.saturating_add(EDGE_SLOPE_WINDOW))
                 .min(buf.len());
+            if recording {
+                trail.named(
+                    id,
+                    crate::partition_room_parameters::partition_number(&stream),
+                );
+            }
             let Some(slope) = buf
                 .get(id_at + 8..end)
                 .and_then(|data| edge_slope_in(data, revit_version))
             else {
                 continue;
             };
+            if recording {
+                let partition = crate::partition_room_parameters::partition_number(&stream);
+                trail.gave(id, partition, hit);
+            }
             match found.get_mut(&id) {
                 None => {
                     found.insert(id, Some(slope));
@@ -162,10 +175,14 @@ pub fn scan_edge_slopes(
             }
         }
     }
-    Ok(found
+    let kept: BTreeMap<u32, EdgeSlope> = found
         .into_iter()
         .filter_map(|(id, slope)| slope.map(|s| (id, s)))
-        .collect())
+        .collect();
+    if recording {
+        trail.note(rf, "edge_slope", kept.keys().copied());
+    }
+    Ok(kept)
 }
 
 /// A slope arrow's heights (RE-199): the `SlopeCurveData` an arrow sketch
@@ -259,6 +276,8 @@ pub fn scan_arrow_heights(
         _ => return Ok(BTreeMap::new()),
     };
     let mut found: BTreeMap<u32, Option<ArrowHeights>> = BTreeMap::new();
+    let recording = rf.recording_value_sources();
+    let mut trail = CopyTrail::default();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -281,9 +300,19 @@ pub fn scan_arrow_heights(
                 .unwrap_or(buf.len())
                 .min(hit.saturating_add(EDGE_SLOPE_WINDOW))
                 .min(buf.len());
+            if recording {
+                trail.named(
+                    id,
+                    crate::partition_room_parameters::partition_number(&stream),
+                );
+            }
             let Some(heights) = buf.get(id_at + 8..end).and_then(arrow_heights) else {
                 continue;
             };
+            if recording {
+                let partition = crate::partition_room_parameters::partition_number(&stream);
+                trail.gave(id, partition, hit);
+            }
             match found.get_mut(&id) {
                 None => {
                     found.insert(id, Some(heights));
@@ -296,10 +325,14 @@ pub fn scan_arrow_heights(
             }
         }
     }
-    Ok(found
+    let kept: BTreeMap<u32, ArrowHeights> = found
         .into_iter()
         .filter_map(|(id, heights)| heights.map(|h| (id, h)))
-        .collect())
+        .collect();
+    if recording {
+        trail.note(rf, "arrow_heights", kept.keys().copied());
+    }
+    Ok(kept)
 }
 
 /// The parameter id the roof's fascia depth precedes in its element data
@@ -329,6 +362,8 @@ pub fn scan_fascia_depths(
         _ => return Ok(BTreeMap::new()),
     };
     let mut found: BTreeMap<u32, Option<f64>> = BTreeMap::new();
+    let recording = rf.recording_value_sources();
+    let mut trail = CopyTrail::default();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -351,9 +386,19 @@ pub fn scan_fascia_depths(
                 .unwrap_or(buf.len())
                 .min(hit.saturating_add(EDGE_SLOPE_WINDOW))
                 .min(buf.len());
+            if recording {
+                trail.named(
+                    id,
+                    crate::partition_room_parameters::partition_number(&stream),
+                );
+            }
             let Some(depth) = buf.get(id_at + 8..end).and_then(fascia_depth) else {
                 continue;
             };
+            if recording {
+                let partition = crate::partition_room_parameters::partition_number(&stream);
+                trail.gave(id, partition, hit);
+            }
             match found.get_mut(&id) {
                 None => {
                     found.insert(id, Some(depth));
@@ -366,10 +411,14 @@ pub fn scan_fascia_depths(
             }
         }
     }
-    Ok(found
+    let kept: BTreeMap<u32, f64> = found
         .into_iter()
         .filter_map(|(id, depth)| depth.map(|d| (id, d)))
-        .collect())
+        .collect();
+    if recording {
+        trail.note(rf, "roof_fascia_depth", kept.keys().copied());
+    }
+    Ok(kept)
 }
 
 /// A footprint roof's "Rafter Cut" (RE-199).
@@ -437,6 +486,7 @@ pub fn scan_rafter_cuts(
     }
     let options = crate::native_document::Options {
         selected_ids: roofs.iter().map(|&id| u64::from(id)).collect(),
+        value_source: Some("roof_rafter_cut"),
         ..crate::native_document::Options::default()
     };
     let _ = crate::native_document::extract_graphs(rf, &options, |record| {
@@ -462,5 +512,11 @@ pub fn scan_rafter_cuts(
         }
         Ok(())
     });
+    // A selected record that gave no cut is not a source of one (#1368).
+    if rf.recording_value_sources() {
+        for roof in roofs.iter().filter(|roof| !found.contains_key(*roof)) {
+            rf.forget_value_source(*roof, "roof_rafter_cut");
+        }
+    }
     found
 }

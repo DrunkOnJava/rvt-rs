@@ -1,0 +1,352 @@
+name: Viewer tests
+
+# The viewer's browser tests (VW1, W9; #1374): the WASM build, the type check
+# and the Playwright suite against the built viewer, on the public project
+# corpus and the four RE1 models. ci.yml calls this as its `viewer` job in the
+# full set (a ready pull request, or a push to main), so `CI passed` waits for
+# them: a pull request cannot merge before they have passed on its head, which
+# Deploy viewer's own pull-request run could not guarantee (#1370 merged
+# before it had finished). It can also be dispatched on a branch, to check a
+# draft's viewer by hand. Deploy viewer builds and publishes the site, and runs
+# the saved-mesh measurement through this workflow; its deploy job waits for
+# `CI passed`, so a commit is published only after the tests have passed on it.
+#
+# `legs` is the list of jobs that run at once, each building the viewer itself:
+# for ci.yml, the suite in three groups of spec files; for Deploy viewer, the
+# saved-mesh measurement, which runs alone so nothing else competes for the
+# CPU. One job of all of it took 12 to 20 minutes, which the rest of CI (6 to
+# 9 minutes) would have waited for. The groups are by file, not by Playwright's
+# `--shard`, which cuts the tests in file order into runs of equal length in
+# tests: with four shards the four Core Interior tests of
+# viewer-regression.spec.ts, 26 to 34 s each, landed in two of them, whose
+# tests took 140 and 165 s against 75 s for the others. The longest single
+# test, the toggle in saved-meshes-measure.spec.ts, is 114 s and sits in a
+# group with short files, and the group with viewer-regression.spec.ts (four
+# Core Interior opens) has no other long file: it took 213 to 227 s in four
+# runs while the others took 77 to 143. Every spec file must be in a group: the
+# first step of a leg fails on one that is not.
+#
+# `release_wasm: false` builds the WASM without LTO, at 16 codegen units: 55 s
+# warm against 150 to 225 s for the release profile (fat LTO, one codegen
+# unit), and every leg waits for the build before it tests anything. ci.yml
+# tests that build, so that `CI passed` does not wait for the release one;
+# Deploy viewer runs the suite and the measurement again on the release build
+# it publishes, and its deploy job waits for both.
+
+on:
+  workflow_call:
+    inputs:
+      legs:
+        description: JSON list of the legs to run, each with a `name` and either `files` (the spec files of the suite it runs, as Playwright path filters) or `measure` true (the saved-mesh measurement)
+        type: string
+        default: '[{"name":"browser tests 1/3","files":"/folded-pieces\\.spec /parameters-row\\.spec /saved-meshes-measure\\.spec /wasm-no-network-imports\\.spec /worker-failures\\.spec"},{"name":"browser tests 2/3","files":"/export-phase\\.spec /journey\\.spec /load-progress\\.spec /memory-ceiling\\.spec /memory-ceiling-capped\\.spec"},{"name":"browser tests 3/3","files":"/large-model-retry\\.spec /no-network\\.spec /viewer-regression\\.spec"}]'
+      release_wasm:
+        description: Build the WASM as Deploy viewer publishes it (fat LTO, one codegen unit); false builds it in a third of the time, with no LTO and 16 codegen units
+        type: boolean
+        default: true
+  workflow_dispatch:
+    inputs:
+      legs:
+        description: JSON list of the legs to run, each with a `name` and either `files` (the spec files of the suite it runs, as Playwright path filters) or `measure` true (the saved-mesh measurement)
+        type: string
+        default: '[{"name":"browser tests 1/3","files":"/folded-pieces\\.spec /parameters-row\\.spec /saved-meshes-measure\\.spec /wasm-no-network-imports\\.spec /worker-failures\\.spec"},{"name":"browser tests 2/3","files":"/export-phase\\.spec /journey\\.spec /load-progress\\.spec /memory-ceiling\\.spec /memory-ceiling-capped\\.spec"},{"name":"browser tests 3/3","files":"/large-model-retry\\.spec /no-network\\.spec /viewer-regression\\.spec"}]'
+      release_wasm:
+        description: Build the WASM as Deploy viewer publishes it (fat LTO, one codegen unit); false builds it in a third of the time, with no LTO and 16 codegen units
+        type: boolean
+        default: true
+
+# Read-only. The jobs run pnpm dependencies and Playwright, and hold no write
+# scope. The caller passes `contents: read` through.
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RE1_COMMIT: 9e8b37175a0fba1397f7011aeee917fe52de7623
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(inputs.legs) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A spec file that no leg lists would run nowhere, and `CI passed` would
+      # be green without it.
+      - name: Every spec file is in a leg
+        if: ${{ matrix.files }}
+        shell: bash
+        env:
+          LEGS: ${{ inputs.legs }}
+        run: |
+          set -euo pipefail
+          mapfile -t patterns < <(jq -r '.[].files // empty | split(" ")[]' <<<"${LEGS}")
+          status=0
+          for spec in viewer/tests/*.spec.ts; do
+            covered=false
+            for pattern in "${patterns[@]}"; do
+              if [[ "/$(basename "${spec}")" =~ ${pattern} ]]; then covered=true; fi
+            done
+            if [ "${covered}" = false ]; then
+              echo "::error::${spec} is in no leg of the viewer tests"
+              status=1
+            fi
+          done
+          exit "${status}"
+
+      # Tier-1 + synthetic demos stage from in-repo corpus/tier1/ and
+      # gen-fixture — no Autodesk LFS needed for Playwright MVP coverage.
+      # The MIT magnetar project samples (Einhoven 2023, Core Interior
+      # 2024) are staged from this checkout as real-project gallery demos
+      # (sha256-pinned in docs/viewer-demos.json) and power the
+      # real-project viewer regression (RVT_VIEWER_SAMPLE / projectSampleTest).
+      - name: Checkout public project corpus
+        uses: $/.github/actions/fetch-corpus
+        with:
+          repository: magnetar-io/revit-test-datasets
+          path: _project_corpus
+      # W9: the viewer journey (viewer/tests/journey.spec.ts) also runs on the
+      # four RE1 models (Drshelden/IFC-ECS, MIT), pinned by commit and hash
+      # as ci.yml fetches them.
+      # The four files, cached on the commit they are pinned at: the download
+      # from raw.githubusercontent.com took 1 to 6 s, and 47 and 101 s in two
+      # legs of other runs. A file restored is checked against its hash all the
+      # same.
+      - name: Cache the RE1 models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: _project_corpus/Revit/RE1-*.rvt
+          key: re1-${{ env.RE1_COMMIT }}
+      - name: Fetch the RE1 models (Drshelden/IFC-ECS, MIT)
+        run: |
+          set -euo pipefail
+          base="https://raw.githubusercontent.com/Drshelden/IFC-ECS/${RE1_COMMIT}/data/RE1"
+          dir="${GITHUB_WORKSPACE}/_project_corpus/Revit"
+          while read -r name sum; do
+            if [ -f "${dir}/${name}" ] && echo "${sum}  ${dir}/${name}" | sha256sum -c - >/dev/null 2>&1; then
+              continue
+            fi
+            curl -sSfL --retry 5 --retry-all-errors -o "${dir}/${name}" "${base}/${name}"
+            echo "${sum}  ${dir}/${name}" | sha256sum -c -
+          done <<'LIST'
+          RE1-Architecture.rvt 4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4
+          RE1-Mechanical.rvt d559720177aa0ec435133f804e7c45d60da2deb9d5585bb3d55f4830139c014b
+          RE1-Plumbing.rvt 03689df2aa426031a216e65051b9f19d3265d6fe96884dd47373b17435f9e54c
+          RE1-Electrical.rvt 9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b
+          LIST
+
+      # folded-pieces.spec.ts opens the BIM4LCA office as built, the one model with
+      # a piece folded into another element's body (CC BY-SA 4.0). A file restored
+      # is checked against its pin like a fetched one, and only main saves a file
+      # that was verified. The host being unreachable says nothing about the
+      # viewer, so that test is then not measured, and says so: `timeout`, since
+      # this host has held a job for 27 minutes (#1237). A file that no longer
+      # matches its pin fails. Deploy viewer's leg runs every file ("/").
+      - name: Restore the BIM4LCA office as built
+        id: office-cache
+        if: ${{ contains(matrix.files, 'folded-pieces') || matrix.files == '/' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: _bim4lca-viewer
+          key: bim4lca-viewer-${{ hashFiles('research/bim4lca-measure.tsv', 'tools/ci/fetch-bim4lca.py') }}
+      - name: Fetch the BIM4LCA office as built
+        id: office
+        if: ${{ contains(matrix.files, 'folded-pieces') || matrix.files == '/' }}
+        shell: bash
+        run: |
+          name=ARK_NordicLCA_Office_Concrete_As-Built.rvt
+          awk -F'\t' -v tail="/${name}" '$1 != "entry" || substr($2, length($2) - length(tail) + 1) == tail' \
+            research/bim4lca-measure.tsv > "${RUNNER_TEMP}/office-pin.tsv"
+          set +e
+          timeout 240 python3 tools/ci/fetch-bim4lca.py "${RUNNER_TEMP}/office-pin.tsv" _bim4lca-viewer
+          status=$?
+          set -e
+          case "$status" in
+            0) echo "path=${GITHUB_WORKSPACE}/_bim4lca-viewer/${name}" >> "$GITHUB_OUTPUT" ;;
+            2|124) echo "::warning::folded-pieces.spec.ts NOT MEASURED: the host of the BIM4LCA office was unreachable" ;;
+            *) echo "::error::the BIM4LCA office no longer matches research/bim4lca-measure.tsv"; exit 1 ;;
+          esac
+      - name: Save the BIM4LCA office as built
+        if: ${{ steps.office.outputs.path != '' && steps.office-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/main' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: _bim4lca-viewer
+          key: bim4lca-viewer-${{ hashFiles('research/bim4lca-measure.tsv', 'tools/ci/fetch-bim4lca.py') }}
+
+      - name: Install Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update --target wasm32-unknown-unknown
+          rustup default stable
+          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+          rustc --version
+
+      # The two builds are cached apart: the faster WASM has other profile
+      # settings, so none of the release build's dependencies would be reused.
+      # `target-native` is gen-fixture's, below.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0  # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: ${{ inputs.release_wasm && 'viewer-wasm' || 'viewer-wasm-fast' }}
+          cache-directories: target-native
+
+      - name: Locked wasm-bindgen version
+        # wasm-pack fetches the wasm-bindgen CLI that Cargo.lock pins at build
+        # time, from GitHub and then by `cargo install`, which retries for
+        # seconds: a 40 s DNS outage failed both and turned main red (CI run 41954251714). The
+        # prebuilt binary of the locked version is installed below by
+        # install-action, which retries each download for about a minute, and
+        # wasm-pack uses the one it finds on PATH.
+        id: wasm-bindgen
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/version = |"/, ""); print; exit }' Cargo.lock)
+          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::no wasm-bindgen version in Cargo.lock (read '${version}')"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+      - name: Install wasm-pack and wasm-bindgen
+        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68  # v2.88.1
+        with:
+          tool: wasm-pack@0.14.0,wasm-bindgen@${{ steps.wasm-bindgen.outputs.version }}
+
+      - name: Build WASM, and gen-fixture beside it
+        shell: bash
+        env:
+          RELEASE_WASM: ${{ inputs.release_wasm }}
+        # The bindings are their own crate, rvt-wasm (C6). `--out-dir` is
+        # relative to that crate, so `../viewer/pkg` writes straight into the
+        # viewer; `--out-name rvt` keeps the files `rvt.js` and
+        # `rvt_bg.wasm`.
+        #
+        # gen-fixture generates the synthetic-mvp demo. It is built with the CI
+        # profile (the release profile's full LTO rebuilt the crate: 39 s) in a
+        # target directory of its own, so that it does not wait for the WASM
+        # build's lock on target/, and at the same time: it finishes well
+        # inside the WASM build, which took 150 to 225 s while the two
+        # builds in turn took 200 to 290 s. The stager finds the binary on PATH.
+        run: |
+          set -euo pipefail
+          CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target-native" cargo build --profile ci --bin gen-fixture &
+          fixture=$!
+          if [ "${RELEASE_WASM}" != true ]; then
+            export CARGO_PROFILE_RELEASE_LTO=off CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+          fi
+          wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
+          wait "${fixture}"
+          echo "${GITHUB_WORKSPACE}/target-native/ci" >> "$GITHUB_PATH"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413  # v6.1.0
+        with:
+          package_json_file: viewer/package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: '24'
+          # The pnpm store, keyed on the lockfile (C6).
+          cache: pnpm
+          cache-dependency-path: viewer/pnpm-lock.yaml
+
+      # Every import of the wasm, by name and by the body of its shim in the
+      # glue; the script says why a name alone is not enough.
+      - name: Verify no network imports in wasm (VW1-21)
+        working-directory: viewer
+        run: node scripts/audit-wasm-imports.mjs
+
+      - name: Install dependencies
+        working-directory: viewer
+        run: pnpm install --frozen-lockfile
+
+      - name: Stage redistributable demos
+        working-directory: viewer
+        run: pnpm run stage:demos
+
+      - name: Playwright version
+        id: playwright
+        working-directory: viewer
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      # The browser download, keyed on the Playwright version (C6).
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      # Without `--with-deps`: its apt step added only fonts (CJK, Thai,
+      # Unifont) to a runner image that carries Chrome and so every library
+      # Chromium links, and the mirror stalled on them for four minutes in
+      # two of three legs of one run. A missing library would fail the launch.
+      - name: Install Playwright Chromium
+        working-directory: viewer
+        run: pnpm exec playwright install chromium
+
+      - name: Typecheck
+        working-directory: viewer
+        run: pnpm run typecheck
+
+      - name: Build viewer
+        working-directory: viewer
+        run: pnpm run build
+
+      - name: Browser regression tests
+        if: ${{ !matrix.measure }}
+        working-directory: viewer
+        env:
+          RVT_VIEWER_SAMPLE: ../_project_corpus/Revit/Revit_IFC5_Einhoven.rvt
+          RVT_VIEWER_REQUIRE_JOURNEYS: "1"
+          RVT_VIEWER_FULLY_PARALLEL: "1"
+          RVT_VIEWER_OFFICE: ${{ steps.office.outputs.path }}
+          FILES: ${{ matrix.files }}
+        # `pnpm run test:browser`, on this leg's spec files.
+        run: |
+          read -ra files <<<"${FILES}"
+          pnpm exec playwright test --config playwright.config.ts "${files[@]}"
+
+      # The viewer draws doors and windows from their saved meshes by default,
+      # on the condition (Griffin, 2026-10-30) that its memory and load time
+      # are measured in Playwright on the reference models. Each is opened
+      # with the option on and off; the spec asserts behaviour, not timings,
+      # and writes the figures to viewer/measurements/ and the job summary.
+      # It runs in a leg of its own, alone, so nothing else competes for the
+      # CPU. Its one assertion about the toggle that gates a merge, on Core
+      # Interior, is in the suite.
+      - name: Measure the viewer with and without saved meshes
+        if: ${{ matrix.measure && !cancelled() }}
+        working-directory: viewer
+        env:
+          RVT_VIEWER_MEASURE: "1"
+          RVT_VIEWER_REQUIRE_JOURNEYS: "1"
+        run: pnpm exec playwright test --config playwright.config.ts --reporter=list --output=test-results/measure
+
+      - name: Upload the saved-mesh measurement
+        if: ${{ matrix.measure && !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: viewer-saved-meshes-measurement
+          path: viewer/measurements/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      # The HTML report and each failed test's trace, kept for 14 days.
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: playwright-report-${{ strategy.job-index }}
+          path: |
+            viewer/playwright-report/
+            viewer/test-results/
+          if-no-files-found: ignore
+          retention-days: 14

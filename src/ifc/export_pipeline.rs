@@ -42,14 +42,17 @@ pub enum ExportKind {
 #[non_exhaustive]
 pub enum SavedMeshChoice {
     /// Doors and windows of Revit 2023 to 2027, the releases whose saved
-    /// graphics are read ([`default_scope`]): `rvt-ifc` with no switch.
+    /// graphics are read ([`default_scope`]), and the walls that embed a
+    /// curtain wall where Revit raised their base, on Revit 2024 to 2027, the
+    /// releases whose wall records name what embeds in them (RE-340): `rvt-ifc`
+    /// with no switch.
     #[default]
     Default,
     /// Every element whose body would be its record's bounding box
     /// (`rvt-ifc --saved-meshes`). Slower.
     All,
-    /// None: doors and windows keep their record's box
-    /// (`rvt-ifc --no-saved-meshes`).
+    /// None: doors and windows keep their record's box, and walls that embed
+    /// a curtain wall their record's body (`rvt-ifc --no-saved-meshes`).
     Off,
 }
 
@@ -74,7 +77,26 @@ pub struct ExportOptions {
     /// Also write Revit's own parameter sets (`--revit-property-sets`).
     pub revit_property_sets: bool,
     /// Also place properties where Revit's exporter does
-    /// (`--revit-set-placement`).
+    /// (`--revit-set-placement`). This option places properties only, in the
+    /// model it builds.
+    ///
+    /// The other half of `rvt-ifc --revit-set-placement` is not a setting of
+    /// the model but of the writer: keeping the material Revit's export
+    /// associates with an `IfcSpace`, which IFC4's
+    /// `IfcRelAssociatesMaterial.AllowedElements` does not allow (#1430). It
+    /// is the entry points
+    /// [`write_step_with_space_materials`](super::step_writer::write_step_with_space_materials)
+    /// and
+    /// [`write_step_to_with_space_materials`](super::step_writer::write_step_to_with_space_materials),
+    /// which `rvt-ifc` and the MCP server pick by this option. A caller of
+    /// the library, Python or the wasm bindings that writes the IFC with
+    /// `write_step` or `write_step_to` gets the default: no material on a
+    /// space. The two are not one setting because a setting both read would
+    /// be a field of [`StepOptions`](super::step_writer::StepOptions), a
+    /// struct the crate's callers construct by literal (so a new field is a
+    /// semver break), or of the model, which would also take the material
+    /// from the glTF and the viewer, where a colour on a space's mesh is a
+    /// drawing choice and not an association.
     pub revit_set_placement: bool,
     /// Leave out the base quantities (`--no-base-quantities`).
     pub no_base_quantities: bool,
@@ -86,9 +108,9 @@ pub struct ExportOptions {
     pub phase: Option<String>,
     /// Also list where each decoded element was read from in the diagnostics
     /// (`decoded.element_provenance`, `rvt-ifc --element-provenance`, #1325).
-    /// Off by default: the table is large (on the BIM4LCA office as built
-    /// 4,462,401 bytes of compact JSON against 38,640 bytes of diagnostics
-    /// without it, about 116 times) and never goes into the IFC.
+    /// Off by default: the table is large (`docs/export-diagnostics.md`,
+    /// "Provenance table size") and never goes into the IFC. While it is
+    /// on, the readers also note the copy they take each value from (#1360).
     pub element_provenance: bool,
     /// Also list each fail-closed decision per element in the diagnostics
     /// (`export_decisions`, `rvt-ifc --export-decisions`, #1326): why an
@@ -96,7 +118,7 @@ pub struct ExportOptions {
     /// by default; the diagnostics are then the bytes they were. It is a
     /// switch of its own, not part of `element_provenance`, because the log
     /// is bounded (at most 5,000 entries a reason) where the table grows with
-    /// the model (116 times the diagnostics on the BIM4LCA office), and it
+    /// the model (`docs/export-diagnostics.md`, "Provenance table size"), and it
     /// needs no table in the diagnostics: where an entry's evidence is an
     /// element the walk decoded, its stream and offset are read from a table
     /// built for the purpose and dropped.
@@ -295,12 +317,11 @@ pub enum ExportNote {
         vertices_differ: usize,
         /// By a sampled point of the extrusions' surface off the mesh.
         surface_differs: usize,
-        /// Reproduced, but left with their mesh for an arc over 0.12 ft in
-        /// radius.
-        arcs: usize,
         /// Reproduced, but their profile cannot be written.
         unwritable: usize,
-        /// Of the replaced, instances with an arc in a profile.
+        /// Of the replaced, instances with an arc written in a profile (an
+        /// arc too flat to survive the writer's rounding is written as a line
+        /// and not counted).
         with_arcs: usize,
         /// Instances left alone for sharing a Tag with another entity.
         ambiguous: usize,
@@ -308,6 +329,26 @@ pub enum ExportNote {
     /// The family extrusions could not be read; the bodies are unchanged.
     #[non_exhaustive]
     FamilyExtrusionsSkipped {
+        /// The reason.
+        error: String,
+    },
+    /// Walls that embed a curtain wall, drawn from their saved graphics where
+    /// Revit raised their base, on Revit 2024 to 2027 (#1385, RE-340).
+    #[non_exhaustive]
+    EmbedHostBodies {
+        /// Walls that embed a curtain wall, drawn as plain or stepped extrusions with
+        /// nothing hosted in them.
+        hosts: usize,
+        /// Of those, walls now drawn from their saved mesh.
+        raised: usize,
+        /// Of those, walls keeping their body because part of their saved
+        /// graphics did not decode (RE-224).
+        partial: usize,
+    },
+    /// The records of the walls that may embed a curtain wall could not be
+    /// read; their bodies are unchanged.
+    #[non_exhaustive]
+    EmbedHostBodiesSkipped {
         /// The reason.
         error: String,
     },
@@ -321,7 +362,8 @@ impl ExportNote {
             Self::SavedMeshesSkipped { error }
             | Self::FamilyExtrusionsSkipped { error }
             | Self::RevitPropertySetsSkipped { error }
-            | Self::RevitSetPlacementSkipped { error } => Some(error),
+            | Self::RevitSetPlacementSkipped { error }
+            | Self::EmbedHostBodiesSkipped { error } => Some(error),
             _ => None,
         }
     }
@@ -389,17 +431,28 @@ impl fmt::Display for ExportNote {
                 volume_differs,
                 vertices_differ,
                 surface_differs,
-                arcs,
                 unwritable,
                 with_arcs,
                 ambiguous,
             } => write!(
                 f,
-                "{replaced} of {candidates} saved-mesh bodies drawn from their family's extrusions ({families} families found, {families_rebuilt} rebuilt; {not_rebuilt} had no rebuilt family, {unplaced} no instance transform, {unchecked} a mesh too large to compare; the extrusions did not reproduce the mesh of {volume_differs} by volume, {vertices_differ} by vertices and {surface_differs} by surface; {arcs} reproduced but left with the mesh for an arc over 0.12 ft in radius, {unwritable} reproduced but not writable; {with_arcs} of the drawn ones have an arc in a profile; {ambiguous} left alone for sharing a Tag)"
+                "{replaced} of {candidates} saved-mesh bodies drawn from their family's extrusions ({families} families found, {families_rebuilt} rebuilt; {not_rebuilt} had no rebuilt family, {unplaced} no instance transform, {unchecked} a mesh too large to compare; the extrusions did not reproduce the mesh of {volume_differs} by volume, {vertices_differ} by vertices and {surface_differs} by surface; {unwritable} reproduced but not writable; {with_arcs} of the drawn ones have an arc written in a profile; {ambiguous} left alone for sharing a Tag)"
             ),
             Self::FamilyExtrusionsSkipped { error } => {
                 write!(f, "family extrusions not read, bodies unchanged: {error}")
             }
+            Self::EmbedHostBodies {
+                hosts,
+                raised,
+                partial,
+            } => write!(
+                f,
+                "{raised} of {hosts} walls that embed a curtain wall drawn from their saved graphics, Revit having raised their base; {partial} kept their body, their saved graphics not decoding whole"
+            ),
+            Self::EmbedHostBodiesSkipped { error } => write!(
+                f,
+                "walls that embed a curtain wall not read, bodies unchanged: {error}"
+            ),
         }
     }
 }
@@ -506,6 +559,12 @@ pub fn run_export_with_limits_and_control(
     if let Some(phase) = &options.phase {
         rf.set_export_phase(phase)?;
     }
+    // #1360: the readers note the copy they take each value from only when the
+    // table that lists them is asked for.
+    rf.record_value_sources(options.element_provenance && options.kind != ExportKind::Placeholder);
+    // #1389: the frames of a Revit 2008 to 2023 file that stop are listed only
+    // for the log of decisions; their counts are kept either way.
+    rf.record_frame_decisions(options.export_decisions);
     let result = match options.kind {
         ExportKind::Document => RvtDocExporter.export_with_diagnostics_mode_limits_and_control(
             rf,
@@ -559,6 +618,16 @@ pub fn run_export_with_limits_and_control(
                         triangles: report.triangles,
                     });
                 }
+                if report.embed_hosts > 0 {
+                    notes.push(ExportNote::EmbedHostBodies {
+                        hosts: report.embed_hosts,
+                        raised: report.embed_raised,
+                        partial: report.embed_partial,
+                    });
+                }
+                if let Some(error) = report.embed_error {
+                    notes.push(ExportNote::EmbedHostBodiesSkipped { error });
+                }
             }
             Err(error) => {
                 control.check()?;
@@ -584,7 +653,6 @@ pub fn run_export_with_limits_and_control(
                     volume_differs: report.volume_differs,
                     vertices_differ: report.vertices_differ,
                     surface_differs: report.surface_differs,
-                    arcs: report.arcs,
                     unwritable: report.unwritable,
                     with_arcs: report.with_arcs,
                     ambiguous: report.ambiguous,
@@ -640,6 +708,12 @@ pub fn run_export_with_limits_and_control(
         let left_out = leave_out_base_quantities(&mut model);
         recount_exported(&mut diagnostics, &model);
         notes.push(ExportNote::BaseQuantities { left_out });
+    }
+
+    // #1360: the model is final, so the bodies the saved graphics and the
+    // family extrusions replaced name their own sources.
+    if let Some(table) = diagnostics.decoded.element_provenance.as_mut() {
+        super::element_provenance::attach_value_sources(table, rf, &model);
     }
 
     // #1326: the decisions the `skipped` counts were made from, and those
