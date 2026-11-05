@@ -68,9 +68,9 @@
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f samples=true -f sample_years="2026 2027" -f probe=probe_re179_revit_2027 -f probe_pair_release=2026
 #
-# That run holds no 2024 or 2025 sample, so the check of the 2026 and 2027
+# That run holds no 2024 or 2025 sample, so the check of the 2025, 2026 and 2027
 # bodies against the same project's earlier saves (tools/re/bodies_across_saves.py,
-# RE-341) compares nothing: it prints a notice and a line in the run summary,
+# RE-341, RE-345) compares nothing: it prints a notice and a line in the run summary,
 # and is not a pass. A change to a reader of Revit 2024 to 2027 is measured with
 # `samples=true` and every year (or "2024 2027"), which runs that check and
 # turns the run red on a difference; without `samples=true` it does not run,
@@ -845,11 +845,12 @@ jobs:
           # Compare re-uploads them merged as measure-head and measure-base.
           retention-days: 7
 
-  # The same-project gates. No Revit export of a 2026 or 2027 beam, tread
-  # landing, stair run or sketch outline exists to score them against (RE-341),
-  # nor of an Area on 2025 to 2027 (#1261, #1194), so each 2026 and 2027 save
-  # of rac_advanced, rac_basic and rst_basic is held to the same project's 2024
-  # and 2025 saves (tools/re/bodies_across_saves.py) and rac_advanced's Areas to
+  # The same-project gates. No Revit export of a 2025, 2026 or 2027 sample's
+  # beam, tread landing, stair run or sketch outline exists to score them
+  # against (RE-341, RE-345), nor of an Area on 2025 to 2027 (#1261, #1194), so
+  # each 2025, 2026 and 2027 save of rac_advanced, rac_basic and rst_basic is
+  # held to the same project's earlier 2024 and 2025 saves
+  # (tools/re/bodies_across_saves.py) and rac_advanced's Areas to
   # its 2024 save's (tools/re/areas_across_saves.py). The measuring script runs
   # both beside the samples and writes their files; this job reads the head
   # side's shards and fails on a difference, a missing file or a check that did
@@ -857,8 +858,8 @@ jobs:
   # that runs whatever the other did, so that a failure turns the run red and
   # Compare, which does not need it, still reports (a failed step in a measure
   # shard would skip Compare). The base side is not gated: its files show what
-  # each check says of `main`. A check skipped on purpose (no `samples`, no 2026
-  # or 2027 sample, the `scorers` excluding it, a run without the earlier saves,
+  # each check says of `main`. A check skipped on purpose (no `samples`, no 2025,
+  # 2026 or 2027 sample, the `scorers` excluding it, a run without the earlier saves,
   # a run with `ifc_flags`) says so in a notice and in the run summary. Measure is not a required check:
   # the failure is read before landing, by the landing rule.
   same-project-gates:
