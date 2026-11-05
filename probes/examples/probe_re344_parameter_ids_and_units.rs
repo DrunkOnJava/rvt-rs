@@ -1,0 +1,492 @@
+//! RE-344 (#155, Discussion #1241): parameter ids, stored lengths and the
+//! parameters of a family's forms, read against what mahach666 (RvtIO)
+//! reported for them.
+//!
+//! FACTS under test, all from bytes. Arithmetic: `n / 25.4 / 12` and
+//! `n / 304.8` differ in the last bits for 57,067 of the integers 1 to
+//! 100,000 (54,471 by one unit in the last place, 2,596 by two). Sign rule: a
+//! parameter id in an element's typed sets or in the slots of its
+//! `FamilyParams` is negative for a built-in parameter, and a positive id is
+//! the ElementId of a definition element (`ParamElem*`) of the same document;
+//! the `sign` lines count the ids by store and by what a positive id resolves
+//! to, and a positive id with no definition, or a negative one with one,
+//! falsifies it. Stored lengths: among the stored doubles that are whole or
+//! tenth millimetres and not whole 1/256 inches (RE-310's selection), which of
+//! six conversions reproduce the stored bits, by store (the typed `Double`
+//! sets, and the `m_value` of every `FamilyParams` slot) and by kind
+//! (built-in, a declared definition, other), on Revit 2015 to 2027 (RE-310 read
+//! the type value blocks of 2024 to 2027 only). Forms: the `Double` sets of a
+//! family's forms hold -1001800 and -1001801 on an `ExtrusionElem`, -1001802
+//! and -1001803 on a `RevolutionElem` (a full turn stored with the end
+//! 0x401921fb54442d11, 2 pi less seven units in the last place), -1001804 and
+//! -1001805 on a `BlendElem` and a `SweptBlendElem`, and none of them on a
+//! `SweepElem`. `PartAtom`: the stream of a family holds no string shaped like
+//! a GUID.
+//!
+//! The six conversions of a whole or tenth millimetre `mm` to feet: `chain`
+//! `mm / 25.4 / 12`, `div` `mm / 304.8`, `mul` `mm * (1 / 304.8)`, `inch`
+//! `mm * (1 / 25.4) / 12`, `inv12` `mm / 12 / 25.4`, `metre`
+//! `mm / 1000 / 0.3048`.
+//!
+//! Output, one record per line:
+//!   file <name> release <layout release> kind project|family
+//!   arith <pair> <ulp distance> <n> ...      the pure arithmetic over 1 to 100000
+//!   partatom bytes <n> guid_like <n> | partatom absent
+//!   walked groups <n> keyed <n> unframed <n> records <n>    (a family file)
+//!   sample ...                               the first 12 stored lengths no
+//!                                            conversion, or only some, reproduce
+//!   tally <key> <n>                          sorted
+//!
+//! Usage:
+//!   cargo run --profile ci -p rvt-probes --example probe_re344_parameter_ids_and_units -- FILE.rvt|FILE.rfa
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::f64::consts::TAU;
+
+use anyhow::Result;
+use rvt::RevitFile;
+use rvt::research::native_document::{self, Options};
+use rvt::research::native_family_forms::family_records_in;
+use rvt::research::native_form_geometry;
+use rvt::research::native_metadata::{self, SavedMetadata};
+use rvt::research::native_parameters::{self, GraphLimits, ObjectGraph};
+use serde_json::Value;
+
+type Tally = BTreeMap<String, usize>;
+type Owner<'a> = &'a dyn Fn(i64) -> Option<String>;
+
+const LIMITS: GraphLimits = GraphLimits {
+    max_values: 2_000_000,
+    max_objects: 2_000_000,
+    max_depth: 128,
+};
+const FORMS: [&str; 6] = [
+    "ExtrusionElem",
+    "RevolutionElem",
+    "SweepElem",
+    "BlendElem",
+    "SweptBlendElem",
+    "FreeFormElement",
+];
+const CONVERSIONS: [&str; 6] = ["chain", "div", "mul", "inch", "inv12", "metre"];
+const EXTRUSION_START: i64 = -1_001_800;
+const EXTRUSION_END: i64 = -1_001_801;
+const REVOLUTION_START: i64 = -1_001_802;
+const REVOLUTION_END: i64 = -1_001_803;
+const BLEND_START: i64 = -1_001_804;
+const BLEND_END: i64 = -1_001_805;
+
+fn bump(tally: &mut Tally, key: impl Into<String>) {
+    *tally.entry(key.into()).or_default() += 1;
+}
+
+fn conversions(mm: f64) -> [f64; 6] {
+    [
+        mm / 25.4 / 12.0,
+        mm / 304.8,
+        mm * (1.0 / 304.8),
+        mm * (1.0 / 25.4) / 12.0,
+        mm / 12.0 / 25.4,
+        mm / 1000.0 / 0.3048,
+    ]
+}
+
+fn ulps(a: f64, b: f64) -> i64 {
+    (a.to_bits() as i64).wrapping_sub(b.to_bits() as i64)
+}
+
+fn identifier(value: &Value) -> Option<i64> {
+    let inner = value.get("m_id")?;
+    inner.as_i64().or_else(|| {
+        inner
+            .get("m_id64")
+            .or_else(|| inner.get("m_id"))
+            .and_then(Value::as_i64)
+    })
+}
+
+fn arithmetic() {
+    let mut chain: BTreeMap<i64, usize> = BTreeMap::new();
+    let mut mul: BTreeMap<i64, usize> = BTreeMap::new();
+    let mut inch: BTreeMap<i64, usize> = BTreeMap::new();
+    for n in 1..=100_000u32 {
+        let mm = f64::from(n);
+        let all = conversions(mm);
+        *chain.entry(ulps(all[0], all[1])).or_default() += 1;
+        *mul.entry(ulps(all[2], all[1])).or_default() += 1;
+        *inch.entry(ulps(all[3], all[1])).or_default() += 1;
+    }
+    for (name, counts) in [("chain", &chain), ("mul", &mul), ("inch", &inch)] {
+        let line: Vec<String> = counts.iter().map(|(d, n)| format!("{d}={n}")).collect();
+        println!("arith {name}-minus-div {}", line.join(" "));
+    }
+    println!("arith 25.4*12 {:?}", 25.4f64 * 12.0);
+}
+
+fn guid_at(bytes: &[u8], at: usize) -> bool {
+    let mut pos = at;
+    for (group, len) in [8usize, 4, 4, 4, 12].into_iter().enumerate() {
+        if group > 0 {
+            if bytes.get(pos) != Some(&b'-') {
+                return false;
+            }
+            pos += 1;
+        }
+        for _ in 0..len {
+            if !bytes.get(pos).is_some_and(u8::is_ascii_hexdigit) {
+                return false;
+            }
+            pos += 1;
+        }
+    }
+    true
+}
+
+fn count_guid_like(bytes: &[u8]) -> usize {
+    let mut count = 0;
+    let mut at = 0;
+    while at + 36 <= bytes.len() {
+        if guid_at(bytes, at) {
+            count += 1;
+            at += 36;
+        } else {
+            at += 1;
+        }
+    }
+    count
+}
+
+fn part_atom(rf: &mut RevitFile) {
+    if !rf
+        .stream_names()
+        .iter()
+        .any(|name| name == rvt::streams::PART_ATOM)
+    {
+        println!("partatom absent");
+        return;
+    }
+    match rf.read_stream(rvt::streams::PART_ATOM) {
+        Ok(bytes) => println!(
+            "partatom bytes {} guid_like {}",
+            bytes.len(),
+            count_guid_like(&bytes)
+        ),
+        Err(error) => println!("partatom unread {error}"),
+    }
+}
+
+fn sign(tally: &mut Tally, store: &str, storage: &str, id: i64, owner: Owner<'_>) {
+    let what = if id == 0 {
+        "zero".to_string()
+    } else if id < 0 {
+        match owner(id) {
+            Some(class) => format!("negative defined {class}"),
+            None => "negative".to_string(),
+        }
+    } else {
+        match owner(id) {
+            Some(class) => format!("positive {class}"),
+            None => "positive undefined".to_string(),
+        }
+    };
+    bump(tally, format!("sign {store} {storage} {what}"));
+}
+
+fn lengths(
+    tally: &mut Tally,
+    samples: &mut Vec<String>,
+    store: &str,
+    id: i64,
+    value: f64,
+    owner: Owner<'_>,
+) {
+    if value == 0.0 || !value.is_finite() {
+        return;
+    }
+    let kind = if id < 0 {
+        "builtin"
+    } else if owner(id).is_some() {
+        "declared"
+    } else {
+        "other"
+    };
+    let raw = value * 304.8;
+    let mm = if (raw - raw.round()).abs() < 1e-6 {
+        raw.round()
+    } else if (raw * 10.0 - (raw * 10.0).round()).abs() < 1e-5 {
+        (raw * 10.0).round() / 10.0
+    } else {
+        return;
+    };
+    let prefix = format!("ulp {store} {kind}");
+    let steps = value * 3072.0;
+    if (steps - steps.round()).abs() < 1e-6 {
+        bump(tally, format!("{prefix} imperial"));
+        return;
+    }
+    bump(tally, format!("{prefix} candidates"));
+    let all = conversions(mm);
+    if all.iter().all(|c| c.to_bits() == all[0].to_bits()) {
+        bump(tally, format!("{prefix} agree"));
+        return;
+    }
+    bump(tally, format!("{prefix} differ"));
+    let matched: Vec<&str> = CONVERSIONS
+        .iter()
+        .zip(all.iter())
+        .filter(|(_, c)| c.to_bits() == value.to_bits())
+        .map(|(name, _)| *name)
+        .collect();
+    let set = if matched.is_empty() {
+        "none".to_string()
+    } else {
+        matched.join("+")
+    };
+    bump(tally, format!("{prefix} match {set}"));
+    let distance = ulps(value, all[1]);
+    if matched.is_empty() {
+        let bucket = if distance.abs() <= 3 {
+            distance.to_string()
+        } else {
+            "far".to_string()
+        };
+        bump(tally, format!("{prefix} none distance {bucket}"));
+    }
+    if samples.len() < 12 {
+        samples.push(format!(
+            "sample store={store} parameter={id} mm={mm} bits={:016x} ulps_from_div={distance} matches={set}",
+            value.to_bits()
+        ));
+    }
+}
+
+fn census(
+    metadata: &SavedMetadata,
+    owner: Owner<'_>,
+    tally: &mut Tally,
+    samples: &mut Vec<String>,
+) {
+    for set in &metadata.parameter_sets {
+        for parameter in &set.parameters {
+            let id = parameter.serialized_parameter_id;
+            sign(tally, "typed", &parameter.storage_type, id, owner);
+            let double = (parameter.storage_type == "Double")
+                .then(|| parameter.raw_value.as_f64())
+                .flatten();
+            if let Some(value) = double {
+                lengths(tally, samples, "typed", id, value, owner);
+            }
+        }
+    }
+    for slot in &metadata.family_parameter_slots {
+        sign(tally, "slot", "-", slot.parameter_id, owner);
+        if let Some(value) = slot.double_slot.as_f64() {
+            lengths(tally, samples, "slot", slot.parameter_id, value, owner);
+        }
+    }
+}
+
+fn form(graph: &ObjectGraph, tally: &mut Tally) {
+    let Some(root) = graph.objects.first() else {
+        return;
+    };
+    let class = root.class_name.as_str();
+    let mut doubles: BTreeMap<i64, f64> = BTreeMap::new();
+    for object in &graph.objects {
+        let storage = match object.class_name.as_str() {
+            "ParamValueSetDouble" => "Double",
+            "ParamValueSetInt" => "Integer",
+            "ParamValueSetAString" => "String",
+            "ParamValueSetElementId" => "ElementId",
+            _ => continue,
+        };
+        let entries = object.fields.get("m_paramSet").and_then(Value::as_array);
+        for entry in entries.into_iter().flatten() {
+            let Some(id) = entry.get("m_paramId").and_then(identifier) else {
+                continue;
+            };
+            bump(tally, format!("form {class} {storage} {id}"));
+            let value = (storage == "Double")
+                .then(|| entry.get("m_value").and_then(Value::as_f64))
+                .flatten();
+            if let Some(value) = value {
+                doubles.insert(id, value);
+            }
+        }
+    }
+    bump(tally, format!("form {class} records"));
+    let pair = |start: i64, end: i64| (doubles.get(&start).copied(), doubles.get(&end).copied());
+    match class {
+        "ExtrusionElem" => match pair(EXTRUSION_START, EXTRUSION_END) {
+            (Some(start), Some(_)) => {
+                bump(tally, "extrusion both extents");
+                if start == 0.0 {
+                    bump(tally, "extrusion start is zero");
+                }
+            }
+            _ => bump(tally, "extrusion without both extents"),
+        },
+        "RevolutionElem" => match pair(REVOLUTION_START, REVOLUTION_END) {
+            (Some(start), Some(end)) => {
+                bump(tally, "revolution both angles");
+                bump(tally, format!("revolution start {:016x}", start.to_bits()));
+                bump(tally, format!("revolution end {:016x}", end.to_bits()));
+                let span = if (end - start - TAU).abs() < 1e-9 {
+                    "full turn"
+                } else {
+                    "partial"
+                };
+                bump(tally, format!("revolution span {span}"));
+                let end_kind = if end.to_bits() == TAU.to_bits() {
+                    "2pi"
+                } else if end.to_bits() == TAU.to_bits() - 7 {
+                    "2pi minus 7 ulp"
+                } else {
+                    "other"
+                };
+                bump(tally, format!("revolution end is {end_kind}"));
+            }
+            _ => bump(tally, "revolution without both angles"),
+        },
+        "BlendElem" | "SweptBlendElem" => match pair(BLEND_START, BLEND_END) {
+            (Some(_), Some(_)) => bump(tally, format!("{class} both blend extents")),
+            _ => bump(tally, format!("{class} without both blend extents")),
+        },
+        "SweepElem" => {
+            let held = (BLEND_END..=EXTRUSION_START)
+                .filter(|id| doubles.contains_key(id))
+                .count();
+            bump(tally, format!("sweep extent ids held {held}"));
+        }
+        _ => {}
+    }
+}
+
+fn family_file(rf: &mut RevitFile, tally: &mut Tally, samples: &mut Vec<String>) -> Result<()> {
+    let document = native_form_geometry::open(rf)?;
+    let mut definitions: BTreeMap<i64, String> = BTreeMap::new();
+    native_form_geometry::walk(rf, &document, &[102], |entry| {
+        let class = entry.class.unwrap_or("-");
+        if class.starts_with("ParamElem") {
+            if let Ok(id) = i64::try_from(entry.id) {
+                definitions.insert(id, class.to_string());
+            }
+            bump(tally, format!("definition {class}"));
+        }
+        Ok(())
+    })?;
+    let owner = |id: i64| definitions.get(&id).cloned();
+    let walked = native_form_geometry::walk(rf, &document, &[102], |entry| {
+        let Ok(graph) =
+            native_parameters::decode_graph_with_limits(entry.body, &document.registry, &LIMITS)
+        else {
+            bump(tally, "record undecoded");
+            return Ok(());
+        };
+        if entry.class.is_some_and(|class| FORMS.contains(&class)) {
+            form(&graph, tally);
+        }
+        match native_metadata::project(&graph) {
+            Ok(metadata) => census(&metadata, &owner, tally, samples),
+            Err(_) => bump(tally, "metadata refused"),
+        }
+        Ok(())
+    })?;
+    println!(
+        "walked groups {} keyed {} unframed {} records {}",
+        walked.groups, walked.keyed_groups, walked.unframed_groups, walked.records
+    );
+    Ok(())
+}
+
+fn project_file(rf: &mut RevitFile, tally: &mut Tally, samples: &mut Vec<String>) -> Result<()> {
+    let records = rvt::elem_table::parse_records(rf)?;
+    let ids: BTreeSet<u64> = rvt::elem_table::declared_ids(&records)
+        .into_iter()
+        .map(u64::from)
+        .collect();
+    let options = Options {
+        selected_ids: ids,
+        releases: native_document::NATIVE_RELEASES,
+        ..Options::default()
+    };
+    native_document::extract(rf, &options, |record| {
+        bump(tally, "records");
+        let Some(metadata) = record.saved_metadata.as_ref() else {
+            bump(tally, "records without metadata");
+            return Ok(());
+        };
+        let owner = |id: i64| {
+            metadata
+                .parameter_definitions
+                .iter()
+                .find(|definition| definition.parameter_id == id)
+                .map(|definition| definition.owner_class.clone())
+        };
+        census(metadata, &owner, tally, samples);
+        Ok(())
+    })?;
+    let family_options = Options {
+        selected_classes: BTreeSet::from(["Family".to_string()]),
+        releases: native_document::NATIVE_RELEASES,
+        ..Options::default()
+    };
+    let mut families: BTreeSet<u64> = BTreeSet::new();
+    native_document::extract_graphs(rf, &family_options, |record| {
+        if record.graph.is_some() {
+            families.insert(record.identity.element_id);
+        }
+        Ok(())
+    })?;
+    println!("families {}", families.len());
+    let classes: BTreeSet<String> = FORMS.iter().map(|class| class.to_string()).collect();
+    let forms = family_records_in(
+        rf,
+        &families,
+        &classes,
+        &native_document::NATIVE_RELEASES,
+        None,
+    )?;
+    for items in forms.values() {
+        for (_, graph) in items {
+            form(graph, tally);
+        }
+    }
+    Ok(())
+}
+
+fn main() -> Result<()> {
+    let Some(path) = std::env::args().nth(1) else {
+        anyhow::bail!("usage: probe_re344_parameter_ids_and_units FILE.rvt|FILE.rfa");
+    };
+    let name = std::path::Path::new(&path)
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let family = path.to_ascii_lowercase().ends_with(".rfa");
+    let mut rf = RevitFile::open_with_limits(&path, rvt::cli::open_limits(None, None, true))?;
+    let release = rf.layout_release()?;
+    println!(
+        "file {name} release {release} kind {}",
+        if family { "family" } else { "project" }
+    );
+    arithmetic();
+    part_atom(&mut rf);
+    let mut tally = Tally::new();
+    let mut samples = Vec::new();
+    let result = if family {
+        family_file(&mut rf, &mut tally, &mut samples)
+    } else {
+        project_file(&mut rf, &mut tally, &mut samples)
+    };
+    if let Err(error) = result {
+        println!("native: {error:#}");
+    }
+    for line in &samples {
+        println!("{line}");
+    }
+    for (key, n) in &tally {
+        println!("tally {key} {n}");
+    }
+    Ok(())
+}
