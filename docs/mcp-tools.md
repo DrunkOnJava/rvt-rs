@@ -53,7 +53,7 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 ## export_gltf
 
-Write the model as a binary glTF 2.0 file to out_path, which must end in .glb, must not be the model, and must not exist unless overwrite is true. The file is the one rvt-gltf writes. If a resource limit kept part of the file unread, nothing is written unless allow_partial is true. Returns a summary (entity counts, unread streams, size and sha256) and a resource_link to the file; the glb is never returned inline. Sends progress notifications when the request carries a progress token, and cancelling it stops the export with nothing written. Writes only the file it is asked for. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
+Write the model as a binary glTF 2.0 file to out_path, which must end in .glb, must not be the model, and must not exist unless overwrite is true. The file is the one rvt-gltf writes. If a resource limit kept part of the file unread, nothing is written unless allow_partial is true. Returns a summary (entity counts, unread streams, size and sha256) and a resource_link to the file; the glb is never returned inline. The entity counts are those of the IFC export: the glb also draws the pieces of elements of separate loops that the IFC folds into another element's body, and notes says how many. Sends progress notifications when the request carries a progress token, and cancelling it stops the export with nothing written. Writes only the file it is asked for. Not read: family geometry, the Revit Mark parameter, and any body but the record's bounding box where provenance.body_source says so; see the summary's not_read and docs/status.md in the rvt-rs repository.
 
 Hints: read-only: no, may overwrite: yes, idempotent: yes, open world: no.
 
@@ -71,7 +71,7 @@ Hints: read-only: no, may overwrite: yes, idempotent: yes, open world: no.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `building_elements` | integer | yes | Building elements the export wrote. |
+| `building_elements` | integer | yes | Building elements the IFC export writes (the diagnostics' `exported.building_elements`), for `export_gltf` too: the glb also draws each piece of an element of separate loops that the IFC folds into the body of another element (`elements.folded_into_bodies`), which is not counted here or in `entity_counts`, and `notes` says how many. |
 | `building_elements_with_geometry` | integer | yes |  |
 | `diagnostics` | any | no | The export diagnostics (`ifc` only), as for `get_diagnostics`. |
 | `entity_counts` | object of integer by name | yes | By IFC entity. |
@@ -102,7 +102,7 @@ Hints: read-only: no, may overwrite: yes, idempotent: yes, open world: no.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `building_elements` | integer | yes | Building elements the export wrote. |
+| `building_elements` | integer | yes | Building elements the IFC export writes (the diagnostics' `exported.building_elements`), for `export_gltf` too: the glb also draws each piece of an element of separate loops that the IFC folds into the body of another element (`elements.folded_into_bodies`), which is not counted here or in `entity_counts`, and `notes` says how many. |
 | `building_elements_with_geometry` | integer | yes |  |
 | `diagnostics` | any | no | The export diagnostics (`ifc` only), as for `get_diagnostics`. |
 | `entity_counts` | object of integer by name | yes | By IFC entity. |
