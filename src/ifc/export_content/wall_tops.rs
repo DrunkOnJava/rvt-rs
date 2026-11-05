@@ -10,7 +10,11 @@
 //! - the element is a slab, roof or footing drawn as a plain extrusion (or
 //!   several pieces at one height), so that its underside is level across
 //!   the wall. A roof drawn from its slopes is a solid and is left out, which
-//!   keeps the R2025 roofs off the walls that sit under them;
+//!   keeps the R2025 roofs off the walls that sit under them. A roof drawn as
+//!   a plain extrusion counts only where its record box is exactly its
+//!   type's layers: a roof by extrusion that the release's readers do not read
+//!   is its record box, deeper than its layers, whose underside is its lowest
+//!   point and not a level the walls stop at (RE-351);
 //! - the underside lies between the wall's base and top;
 //! - the element's plan covers the whole of the wall's plan and none of the
 //!   wall's plan lies in an opening of the element: the wall's plan outside
@@ -727,9 +731,31 @@ enum Cut {
     },
 }
 
+/// Whether the slab, roof or footing made of `pieces` (ElementId `id`) has an
+/// underside a wall's top may be cut at: any slab or footing, and a roof only
+/// where it is one of `plates`, its record box exactly its type's layers
+/// (RE-351). A roof whose box is deeper than its layers is not a level plate
+/// (a roof by extrusion, a slope its reader does not read): its box is drawn
+/// as a plain extrusion, but the box's underside is its lowest point, not a
+/// level the walls under it stop at.
+fn level_underside(
+    entities: &[IfcEntity],
+    pieces: &[usize],
+    id: u32,
+    plates: &HashSet<u32>,
+) -> bool {
+    plates.contains(&id)
+        || !pieces.iter().any(|&index| {
+            matches!(
+                entities.get(index),
+                Some(IfcEntity::BuildingElement { ifc_type, .. }) if ifc_type.as_str() == "IFCROOF"
+            )
+        })
+}
+
 /// For each of `pending` (a wall's entity index and the ElementIds its top
 /// join and cut pairs name) that is cut: its index and how.
-fn decide(entities: &[IfcEntity], pending: &[Pending]) -> Vec<(usize, Cut)> {
+fn decide(entities: &[IfcEntity], pending: &[Pending], plates: &HashSet<u32>) -> Vec<(usize, Cut)> {
     let Gathered {
         pieces,
         voids,
@@ -760,6 +786,9 @@ fn decide(entities: &[IfcEntity], pending: &[Pending]) -> Vec<(usize, Cut)> {
             let Some(found) = pieces.get(&id) else {
                 continue;
             };
+            if !level_underside(entities, found, id, plates) {
+                continue;
+            }
             let Some(cutter) = cutters
                 .entry(id)
                 .or_insert_with(|| build_cutter(entities, found, &voids, false))
@@ -863,11 +892,15 @@ fn to_local(placement: &Placement, point: Point2) -> Point2 {
 /// covers it (see the module): a whole wall's extrusion height becomes the
 /// underside less its base, and a wall a floor covers in part gets the stepped
 /// body of the module as its `solid_shape`.
-pub(super) fn cut_wall_tops(entities: &mut [IfcEntity], pending: &[Pending]) {
+pub(super) fn cut_wall_tops(
+    entities: &mut [IfcEntity],
+    pending: &[Pending],
+    plates: &HashSet<u32>,
+) {
     if pending.is_empty() {
         return;
     }
-    let cuts = decide(entities, pending);
+    let cuts = decide(entities, pending, plates);
     for (index, cut) in cuts {
         let Some(IfcEntity::BuildingElement {
             extrusion: Some(body),

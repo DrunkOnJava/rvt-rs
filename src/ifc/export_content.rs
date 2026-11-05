@@ -30,7 +30,7 @@ use crate::geometry::{
 };
 use crate::partition_area_boundaries::ArcMids;
 use crate::walker::{DecodedElement, InstanceField};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 mod column_quantities;
 mod wall_areas;
@@ -722,6 +722,9 @@ pub fn append_typed_production_elements(
     // profile, for the cut-out carried on to the wall's end.
     let mut pending_profiles: Vec<wall_profile::Pending> = Vec::new();
     let mut slab_shapes: HashMap<u32, wall_tops::SlabTop> = HashMap::new();
+    // RE-351: the roofs whose record box is exactly their type's layers, the
+    // only roofs whose underside a wall's top may be cut at.
+    let mut plate_roofs: HashSet<u32> = HashSet::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
     // entity; `None` once two of its elements disagree.
@@ -1465,6 +1468,12 @@ pub fn append_typed_production_elements(
                     None => wall_tops::SlabTop::Flat,
                 };
                 slab_shapes.insert(id, top);
+                if decoded.class == "Roof"
+                    && crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+                        .is_some_and(|layers| layers.stacked)
+                {
+                    plate_roofs.insert(id);
+                }
             }
         }
         // RE-291, RE-353: a column whose type is a plain rectangle or round, with the elements its pairs name.
@@ -1736,7 +1745,7 @@ pub fn append_typed_production_elements(
     }
 
     // RE-267: a wall's top is cut at the underside of the floor that covers it.
-    wall_tops::cut_wall_tops(entities, &pending_tops);
+    wall_tops::cut_wall_tops(entities, &pending_tops, &plate_roofs);
 
     // #1396: a wall with an edited elevation profile that stops short of the
     // wall beneath it is drawn to that wall's face, where its base is still cut.
