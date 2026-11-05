@@ -83,7 +83,7 @@ for name in "${expected[@]}"; do
     passed=$((passed + 1))
     echo "$name: PASS"
     # What each check compared, in the log and under the sample in the run summary.
-    counts=$(grep -E '^(beams and landings|stair runs|sketch outlines|named elements|pipes|cut openings|ports|properties|census|named [0-9]+, [0-9]+ save): ' "$file" || true)
+    counts=$(grep -E '^(beams and landings|stair runs|sketch outlines|named elements|pipes|cut openings|ports|properties|door and window sizes|census|named [0-9]+, [0-9]+ save): ' "$file" || true)
     echo "$counts"
     printf -- '- %s: PASS\n' "$name" >> "$summary"
     while IFS= read -r line; do

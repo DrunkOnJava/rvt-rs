@@ -136,6 +136,11 @@ OUTLINE_LEAST = {
     "racadvancedsampleproject": {2025: 86, 2026: 82, 2027: 82},
     "racbasicsampleproject": {2025: 13, 2026: 12, 2027: 12},
     "rstbasicsampleproject": {2025: 5, 2026: 5, 2027: 5},
+    # The MEP samples, first held here (RE-346): 42 IfcCovering and 36 IfcSlab in each of
+    # their 2025, 2026 and 2027 saves, scored with this script on the IFC files of run
+    # 42091457764 (head 830a4d94), whose 2026 and 2027 outlines this change does not move.
+    "rmeadvancedsampleproject": {2025: 78, 2026: 78, 2027: 78},
+    "rmebasicsampleproject": {2025: 78, 2026: 78, 2027: 78},
 }
 # rac_advanced's ceiling 147534, which the 2024 save draws as its record box
 # and the 2026 save drew as an outline before a Sketch's curve list was read
@@ -212,9 +217,27 @@ def products(path, named=frozenset()):
             continue
         source, resolved = properties(element)
         out[tag].append((element, source, group_of(element, source, resolved, tag in named)))
-    for tag in out:
-        out[tag].sort(key=lambda item: item[0].GlobalId or "")
+    # Products that share a Tag (a floor Revit writes as several, one stair for each
+    # storey) are ordered by what they are, not by GlobalId: all but the first carry a
+    # GlobalId derived from the export, which differs between two saves of one project
+    # and would pair them crosswise (rme_advanced's floors, RE-346). Storey, then the
+    # volume and the centre of the body, then the GlobalId.
+    settings = ifcopenshell.geom.settings()
+    settings.set("use-world-coords", True)
+    for tag, items in out.items():
+        if len(items) > 1:
+            items.sort(key=lambda item: (storey(item[0]) or "", shape_key(settings, item[0]), item[0].GlobalId or ""))
     return model, out
+
+
+def shape_key(settings, element):
+    """The body's volume to three places and its centre to four, in metres, or
+    nothing where it does not mesh."""
+    shape = mesh(settings, element)
+    if isinstance(shape, str):
+        return (-1.0, 0.0, 0.0, 0.0)
+    centre = shape[1].mean(axis=0)
+    return (round(float(shape[0]), 3), *(round(float(c), 4) for c in centre))
 
 
 def storey(element):
@@ -403,6 +426,8 @@ def main():
             ok = True
             for left, right in zip(chosen[tag], selected):
                 for field, mine, theirs in differences(settings, (scale_candidate, scale_earlier), left, right):
+                    if field == "GlobalId" and len(chosen[tag]) > 1:
+                        continue
                     ok = False
                     detail = f"{mine} here, {theirs} in the {year} save" if theirs != "" else mine
                     fail(f"{group}: {tag} {left[0].is_a()} differs in {field}: {detail}")

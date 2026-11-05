@@ -65,7 +65,7 @@ CENSUS_SHOW = 400
 CUT_OPENINGS = "cut openings"
 CUT_HOSTS = "hosts of cut openings"
 PORTS = "ports"
-FILLERS = "doors and windows"
+FILLERS = "door and window sizes"
 PROPERTIES = "properties"
 
 # (class, property set, name), as regular expressions matched whole, of the
