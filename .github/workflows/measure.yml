@@ -769,6 +769,7 @@ jobs:
           MEASURE_SCORERS: ${{ inputs.scorers }}
           PSETS_MISSING: ${{ inputs.psets_missing }}
           KEEP_IFC: ${{ inputs.keep_ifc && '1' || '' }}
+          MCP_REQUIRE_FOLDED_FIELD: ${{ matrix.side != 'base' && '1' || '' }}
           RVT_SCORER_FINE_MESH: ${{ inputs.fine_mesh && '1' || '' }}
           FAMILY_DIR: ${{ matrix.families && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           SAMPLE_DIR: ${{ matrix.samples && format('{0}/_samples', github.workspace) || '' }}

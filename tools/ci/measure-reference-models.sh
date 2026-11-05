@@ -42,7 +42,10 @@
 #     (tools/re/mcp_answers_vs_ifc.py); mcp-dump.json is the answers as the
 #     deterministic semantic dump (tools/re/mcp_client.py), which the semantic
 #     merge check (#1334) reads. Of a model that is kept as counts only, the
-#     lines starting `mcp answers:` leave the runner;
+#     lines starting `mcp answers:` leave the runner. With
+#     MCP_REQUIRE_FOLDED_FIELD set (the workflow sets it on the head side), the
+#     scorer is run with --require-folded-field: diagnostics without
+#     `exported.body_pieces_folded` (#1424) are a difference;
 #   - probe.txt, when PROBE names a probe (the rvt-probes crate's
 #     examples) already built in BIN_DIR/examples: its output on the model, ending with its exit status;
 #   - probe_score.txt, when PROBE_SCORER also names a scorer in
@@ -452,9 +455,12 @@ model_task() { # name rvt ref task
           dump=(--dump "$dir/mcp-dump.json")
           ;;
       esac
+      require=()
+      [ -n "${MCP_REQUIRE_FOLDED_FIELD:-}" ] && require=(--require-folded-field)
       score "$dir/mcp_answers_vs_ifc.txt" "$SCORERS/mcp_answers_vs_ifc.py" \
         --server "$BIN/rvt-rs-mcp" --rvt "$MODELS/$rvt" \
         --diagnostics "$dir/diagnostics.json" ${dump[@]+"${dump[@]}"} \
+        ${require[@]+"${require[@]}"} \
         "$dir/model.ifc" ${extra[@]+"${extra[@]}"}
       ;;
     meshes)
