@@ -115,7 +115,7 @@ drawn from that reader.
 |---|---|---|---|
 | `partition_element_record_bbox`, `partition_element_record_join_trimmed`, `partition_element_record_join_cut`, `partition_element_record_column_cut` | `selected_frame` | `selected` | The frame itself (a trim or cut also reads the joined elements' frames, which are not named). |
 | The same bodies where the profile is read from a record no reader notes yet: a `profile_source` that is not the `body_source` | `selected_frame_box` | `selected` | The frame, for the box and the placement only. The profile's copy has no source yet. |
-| The same bodies where the profile is solved from sketch lines (`profile_source` `partition_element_record_sketch_lines`: floors, slabs and ceilings, and roofs whose body is the record's box; a roof drawn from its slope or extrusion has no source yet) | `sketch_lines` | `agreeing` or `current` | `parts`: the frame of each sketch line the solve was given, the first of its frames by frame order (`agreeing`), or the current partition's where its frames disagree (`current`, RE-216). The element's `selected_frame` names the frame for the box. |
+| The same bodies where the profile is solved from sketch lines (`profile_source` `partition_element_record_sketch_lines`: floors, slabs and ceilings, and roofs whose body is the record's box; a roof drawn from its slope or extrusion has the `roof_*` rows below) | `sketch_lines` | `agreeing` or `current` | `parts`: the frame of each sketch line the solve was given, the first of its frames by frame order (`agreeing`), or the current partition's where its frames disagree (`current`, RE-216). The element's `selected_frame` names the frame for the box. |
 | The same | `sketch_list` | `agreeing` or `current` | The element-data header of the Sketch's curve list that names the lines (RE-97), the lowest-numbered partition's or the current one. Where the element has one. |
 | The same, where the outline is read from the lines' own ends rather than their boxes | `sketch_line_data` | `agreeing` or `current` | `parts`: the element-data header of each line's copy (as `bounded_line`). |
 | The same bodies where the section is the type symbol's box (`profile_source` `family_type_symbol_envelope`: columns) | `type_section` | `agreeing` or `frame` | `parts`: the type symbol's frame, the last of its frames the column scan kept; `agreeing` (with `partitions`) where every frame of the symbol gives the same box, `frame` where they do not. |
@@ -123,12 +123,13 @@ drawn from that reader.
 | `family_type_hollow_section` | `type_hollow_section` | `agreeing` | `parts`: the entries of the column type's parameters `b`, `Ht`, `t` and `kr` (`f64`, `ff` x 8, `i64` parameter id), in the type's value block; the first copy of each, every copy holding the same value. A parameter whose value block holds two different values, or whose copies in two partitions differ, is skipped (the type then has no section): that is not counted as a disagreement among copies. The element's `selected_frame` names the frame whose box the section is held to. |
 | `family_type_i_section` | `type_i_section` | `agreeing` | `parts`: the six entries of the type's I section (width, height, web and flange thickness, the centroid both ways), as for the hollow section. `instance_transform` (as below) gives the plan angle of the column's X axis. On Core Interior, the BIM4LCA office and the RE1 models no element has this body (Measure run 41887789579), so this reader is untested on real files. |
 | `partition_pipe_axis` | `pipe_connectors` | `agreeing` | `parts`: the two connector entries (`u64` element, `u32` index, `u32` 1, the point) whose points are the pipe's ends, in the partition of its record. An entry is found by where its point falls, never by whose it is (RE-131): at a connected end it is keyed by the element connected there, so a part's `element_id` may be a neighbour of the pipe (a fitting), not the pipe. The radius is the record box's, held in the element's `selected_frame`. Where the pipe's body came from two partitions they agree. |
-| `partition_roof_slope` | `roof_slope_edges` | `agreeing` | `parts`: the element-data header of the slope block of each sketch line the slope was made from (the defining edges, or the slope arrow and the boundary lines it rises from), the first copy, every copy holding the same block (RE-56, RE-199, RE-307). |
+| `partition_roof_slope` | `roof_slope_edges` | `agreeing` | `parts`: the element-data header of the slope block of each sketch line the slope was made from: the defining edges of a roof with some (its flat edges are not listed), the slope arrow's line alone for a roof with one arrow, and for a roof with several arrows (RE-307) the arrows and the boundary lines they rise from. The first copy of each; every copy decodes to the same slope (the reader compares the decoded values, not the bytes) (RE-56, RE-199, RE-307). |
 | `partition_roof_slope`, `partition_roof_extrusion` | `roof_line_data` | `agreeing` or `current` | `parts`: the element-data header of the copy of each of those sketch lines (a roof by extrusion: all of its lines) the line or spline was read from, as `sketch_line_data` (RE-211). |
 | `partition_roof_slope` | `roof_fascia_depth` | `agreeing` | The element-data header of the roof's own data that gave its fascia depth, where it was read (RE-199). |
 | `partition_roof_slope` | `roof_rafter_cut` | `native` | The header of the roof's current native record, which gives its rafter cut, where it was read (RE-199). |
 | `partition_roof_slope`, `partition_roof_extrusion` | `roof_type_layers` | `agreeing` | `parts`: the element-data header of the roof type's layers, whose widths sum to the roof's thickness, read once for the type and noted for each roof of it. |
-| `partition_roof_slope`, `partition_roof_extrusion` | `sketch_lines`, `sketch_list` | as above | The roof's outline (a sloped roof) as for a floor; for a roof by extrusion `sketch_lines` lists the first frame of each of its sketch lines, rule `frame` (the other frames are not compared). The element's `selected_frame` names the frame whose box the section is held to. |
+| `partition_roof_slope`, `partition_roof_extrusion` | `sketch_lines`, `sketch_list` | as above | The roof's outline (a sloped roof) as for a floor; for a roof by extrusion `sketch_lines` lists the first frame of each of its sketch lines, rule `frame` (the other frames are not compared), and `sketch_list` is listed only when the roof's Sketch lists its curves (RE-97): `11_RoofByExtrusion` has none, its lines are found by their owner reference. The element's `selected_frame` names the frame whose box the section is held to. |
+| `family_extrusions` | `family_forms` | `frame` | Only with `--element-provenance` and `--family-extrusions` both on. `parts`: the records of the family's own embedded document that the instance's extrusions were rebuilt from: each visible extrusion (`ExtrusionElem`), its sketch plane (`SketchPlane`) and the curves of its sketch (`CurveElem`), at the place the document's group puts the record in its partition (the record's id, then its length and body). The ids are the family document's, not the model's, so a part's `element_id` can equal another element's. The document is read once, as it is embedded. A record the file holds in several partitions is named at its copy in the highest partition (partitions taken in number order), the copy the rebuild reads; the other copies are not compared. An instance one of whose records has no place (its group's bytes are not the partition's own consecutive members) gets no `family_forms` source, because a part list that left a record out would not be the records the body was rebuilt from; it keeps its other sources. The instance's own `selected_frame` and `instance_transform` are listed beside it: the transform places the extrusions, and the frame is the location and rotation they are drawn at. The saved mesh the extrusions are checked against is not a source of the body. |
 | `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_beam_axis`, `partition_beam_box_along_axis` | `bounded_line` | `agreeing` | The element-data header of the lowest-numbered partition's copy of its location line. Every copy holds the same line; a wall or beam whose copies differ is drawn as its box instead. |
 | `partition_wall_arc` | `bounded_arc` | `agreeing` | As `bounded_line`, for a curved wall's arc. |
 | `partition_family_instance_turned_box`, `partition_family_instance_oriented_box` | `instance_transform` | `agreeing` or `current` | The element-data header of the copy: the lowest-numbered partition's where the copies agree, the current partition's where they differ (RE-216). |
@@ -144,8 +145,8 @@ drawn from that reader.
 | `partition_landing_slab` | `native_landing` | `native` | The header of the landing's current native record, which gives its top. |
 | `partition_landing_slab` | `native_landing_type` | `native` | `parts`: the header of the landing type's current native record, which gives the thickness (monolithic types only). |
 
-No reader notes its copy yet for `partition_area_boundary_lines` and
-`family_extrusions`, nor for the other values a body reads (a wall's layers, a beam's I section, the
+No reader notes its copy yet for `partition_area_boundary_lines`, nor
+for the other values a body reads (a wall's layers, a beam's I section, the
 parameters of a rectangular column's section). An element of those bodies has
 no value source; an element whose box is the body but whose profile is read
 from a record no reader notes yet has `selected_frame_box` and nothing for the
@@ -180,7 +181,10 @@ decodes to a slope or a slope arrow, and its sketch line to a line, an arc or a
 spline; a pipe's connector
 entry is the keyed element's `u64`, an index of at most 255, the `u32` 1 and a
 point, and the two parts' points make a cylinder (`pipe_body`) with the pipe's
-record box; a run type or a native type record starts with its id; and a
+record box; a form record of a family's document is the record's id, a length, a
+body of that length that opens with the tag of an extrusion, a curve or a sketch
+plane, and the length again; a run type or a native type record starts with its
+id; and a
 Sketch's curve list is a header followed by the sketched element's id. A frame of a 32-bit release with no id at its first
 bytes is counted as not read. It does not say the
 copy taken is the right one: `agreeing` copies are equal, and `current` is
@@ -216,6 +220,12 @@ The roof sources of #1368 (run 41902619175) added 16% to the shed roof's
 compact table (9,614 bytes), 6% to the roof by extrusion's (10,541) and 21% to
 the T and U roofs' (15,602), and nothing to the office's or Core Interior's,
 which have no roof drawn from its slopes or an extrusion.
+With `--family-extrusions` as well, the sources of the family instances drawn
+from their families' extrusions (run 41907345226, against main with the same
+flags) added 1.1% to the office's compact table (6,187,946 to 6,255,099 bytes),
+10% to Core Interior's (729,071 to 802,767), 17% to RE1 Architecture's (56,627
+to 66,305), 15% to RE1 Electrical's (31,875 to 36,614) and 13% to each terrain
+file's (41,891 to 47,354 for the concrete one).
 RE1 Architecture's sidecar grew from 13,956 to 85,470 bytes before the value
 sources and has not been measured since.
 
@@ -261,7 +271,7 @@ for each, so an empty log cannot pass.
 
 | Stage | Reason | What was decided | Counted in |
 |---|---|---|---|
-| `element_skipped` | `below_min_element_confidence`, `low_confidence_schema_scan_candidate`, `element_record_without_element_id`, `element_record_without_volume`, `element_record_in_non_primary_design_option`, `element_record_not_in_export_phase`, `room_not_in_export_phase`, `element_record_empty_curtain_panel`, `element_record_family_space_without_body`, `area_without_proven_body` | The element is not in the export. | the `skipped` item of the same reason |
+| `element_skipped` | `below_min_element_confidence`, `low_confidence_schema_scan_candidate`, `element_record_without_element_id`, `element_record_frame_stopped` (`class`: the stage), `element_record_without_volume`, `element_record_in_non_primary_design_option`, `element_record_not_in_export_phase`, `room_not_in_export_phase`, `element_record_empty_curtain_panel`, `element_record_family_space_without_body`, `area_without_proven_body` | The element is not in the export. | the `skipped` item of the same reason |
 | `body_not_drawn` | `unsupported_geometry_curve`, `unsupported_geometry_profile`, `unsupported_geometry_missing_dimensions` | The element is written with no body. | the `skipped` item |
 | `opening_not_cut` | `unsupported_geometry_unresolved_host`, `opening_index_without_host_geometry` | A door or window has no host to cut, or an opening index row has no host geometry. | the `skipped` item |
 | `storey_not_bound` | `unsupported_geometry_missing_level` | The element is written outside any storey. | the `skipped` item |
@@ -289,6 +299,16 @@ What an entry's `offset` is, and what has been measured:
   the exporter selected (`select_instance_records`: on Revit 2024 and later the
   greatest vertical extent), so the two can name different frames of the same
   element.
+- On Revit 2008 to 2023 files `element_record_frame_stopped` is made from the
+  frames of the marker scan that did not become an element (see
+  [Element record stages](#element-record-stages)): its `class` is the stage the
+  frame stopped at (a stage code, not a Revit class), and its `offset` is where
+  the frame's ElementId is stored, 52 bytes before the marker (48 on Revit 2008).
+  A frame stopped before its record has no ElementId; a frame with no volume has
+  its record's.
+  `tests/element_record_stages.rs` re-reads the bytes at those entries on
+  Revit_IFC5_Einhoven (Revit 2023): a marker 52 bytes on and, where the entry
+  has an ElementId, that id at the offset.
 - `tests/export_decisions_counts.rs` re-reads the bytes at the entries of those
   seven frame reasons (the six above and `element_record_family_space_without_body`)
   on Revit 2024 and later, and finds the element's id there or a second-prologue
@@ -297,13 +317,129 @@ What an entry's `offset` is, and what has been measured:
   provenance table only against that table. Those are not verified.
 
 Why a switch of its own, not `--element-provenance`: the log is bounded (at most
-5,000 entries a reason, whatever the model) where the provenance table lists
+5,000 entries a reason, whatever the model; 1,000 of each stage for
+`element_record_frame_stopped`, whose counts in `skipped` are complete) where the provenance table lists
 every element ([Provenance table size](#provenance-table-size)), and it needs no table in the
 sidecar. Where an entry's
 evidence is an element the walk decoded, its stream and offset are read from a
 table built for the purpose and dropped. Someone asking why an element was left
 out should not have to pay for the table, and someone checking offsets should not
 get the log.
+
+### Element record stages
+
+A Revit 2008 to 2023 file takes another element-record layout than 2024 and
+later: an ElementId 52 bytes before the record marker (48 on Revit 2008), not the
+frame's first bytes. The rejected-frame reasons above (`element_record_without_element_id`,
+`element_record_without_volume`) read the 2024 layout and count nothing on these
+files, so a file that exported no element showed only
+`low_confidence_schema_scan_candidate` and nobody could tell which stage lost
+its elements (#1389, from the files reported on #421). `decoded.element_record_stages`
+counts what became of the frames at the file's markers, per partition stream
+(`streams`) and in total (`total`), where the scan and the recovery already decide:
+no further pass over the file. It is present for any export of a file that takes
+that layout, which includes a file saved by Revit 2024 or later whose schema is an
+older release's, even when each count is zero (that is what says where the records
+stopped), and absent otherwise and for a placeholder export, which writes none of
+what was decoded. A family file (`.rfa`, `.rft`) reads its elements from
+`Global/Latest`, so its project records are none and mean nothing: its report is
+there, and `rvt-ifc` prints no line for it. The file name decides that, not the
+file's streams: the synthetic project fixtures carry a `PartAtom` stream, as a
+family does. It is in the diagnostics only; the IFC is not changed.
+
+The counts are integers added where the scan already decides, whatever the export
+asks for: the default export lists no frame and allocates no name for one. Only
+`--export-decisions` lists the frames that stopped (below), by asking the
+recovery for them before the walk is made.
+
+| Count | What it is |
+|---|---|
+| `markers` | Places that hold the file's marker: the tags of `Outline`, four `ff` bytes and `ElementParents`. |
+| `stream_not_read` | Partition streams that did not inflate, so that their markers are not counted: 1 on the entry of such a stream. It enters no step; when it is all a file has, `stopped_at` is `stream_not_read`, not `no_markers`. |
+| `declared_id` | Of the markers, those with a `u32` ElementId that `Global/ElemTable` declares 52 bytes before them and the tag of `ElementHeader` 8 bytes after it. Counted beside the steps: a placed instance whose frame lies inside its element's record gets that record's id (`id_from_enclosing_record`, RE-315). |
+| `frame_outside_stream`, `category_out_of_range`, `box_not_valid`, `no_declared_id` | Markers that gave no record, by where they stopped: a field of the frame lies outside the stream; the `BuiltInCategory` is out of range; the bounding box is not finite or ends before it starts; the frame has no declared id of its own and none from a record around it (this one can include frames inside the documents of loaded families, RE-135, whose ids no ElemTable record declares: it is not a count of lost elements). |
+| `records` | Markers that gave a record. |
+| `not_placed_instances`, `placed_instances` | Records that are container members or type symbols, and those that pass the RE-21 instance rule. |
+| `without_volume`, `with_volume` | Placed instances whose box has no volume (Revit's export leaves them out, #309), and those whose box has. These are frames of every category, and an element can have a frame of each. |
+| `superseded`, `nested_components`, `selected` | Of the frames with volume, those a newer frame of the same ElementId replaces, the nested MEP components the export leaves out (#96), and the newest frame of each ElementId. |
+| `in_non_primary_design_option`, `not_in_export_phase`, `nested_in_door_or_window`, `category_not_exported`, `handed_to_export` | Of the selected frames, those left out for their design option, their phase, being nested in a door or window, or a category no class of the export has, and those that became elements handed to the export. |
+
+A frame is counted once, at the first check it fails, and the checks run in the
+order of the scan: a field outside the stream stops it at the first one read; the
+category is checked before the container, the placement kind, the class tag and
+the box are read; the box is checked before the ElementId is settled. A frame with
+an out-of-range category and no declared id is therefore a `category_out_of_range`
+stop, not a `no_declared_id` one, and a frame with a bad box and no declared id is
+a `box_not_valid` stop.
+
+Each step counts exactly what the one before it passed on and left, so the
+counts add up, per stream and in total: `markers` is the four stops plus
+`records`, `records` is `not_placed_instances` plus `placed_instances`, and so on
+down to `selected`, which is the four ways it is left out plus `handed_to_export`.
+The elements handed to the export then add up to what became of them:
+`written_to_model` counts, in the IFC model, the elements the model holds, one for
+each ElementId, and the rest were set aside after the recovery, each for one
+cause. `id_already_held` counts those the walk dropped because an element of an
+earlier reader (an ArcWall, a `Global/Latest` instance) already held the
+ElementId; `below_min_confidence` those below the minimum confidence, which the
+default export hides; `not_written_by_class` the others, by the Revit class they
+were handed as, which are elements the exporter writes nothing for. That last
+bucket is counted by class and not attributed to a cause beyond it.
+`handed_to_export` is `written_to_model` plus `id_already_held` plus
+`below_min_confidence` plus the sum of `not_written_by_class`.
+`exported.building_elements` also holds the elements other readers write (Areas,
+ArcWalls, the parts of stairs and curtain walls), so `written_to_model` is checked
+to be no more than it, not equal to it. When `written_to_model` is 0,
+`stopped_at` names the stage the file's records stopped at:
+`elem_table_not_read` or `schema_has_no_element_marker` (the scan could not
+start), `stream_not_read`, `no_markers`, the stop that took most of the markers,
+`no_placed_instances`, `without_volume`, `nested_components`, the way that left
+out most of the selected frames, or, of the elements handed to the export, the
+cause that set aside most (`id_already_held`, `below_min_confidence`,
+`class_not_exported`). `rvt-ifc` prints a line of its own with it on stderr.
+
+The frames that stopped before they were records, and the placed instances with
+no volume, are also in `skipped` as `element_record_frame_stopped`: `count` is
+their number, counted from the integers above, and `classes` counts them by stage
+(`frame_outside_stream`, `category_out_of_range`, `box_not_valid`,
+`no_declared_id`, `without_volume`). They are frames, not elements: they are of
+every category, an element with a frame of no volume and a newer one with volume
+is written, and a count such as 1,837 is not 1,837 lost elements (the MCP server's
+`diagnostics_summary` says the same of its `count`). The item does not feed
+`unexported_element_records` or the warning of `element_record_without_element_id`.
+With `--export-decisions` the log of decisions has an entry for each frame, with
+the stream and the offset of the place where the frame's ElementId is stored. The
+counts are complete and the log is capped: it keeps at most 5,000 entries of a
+reason, and of this reason 1,000 of each stage, in ElementId order with the frames
+that have no ElementId first, so that a stage with many frames does not leave the
+others out; `export_decisions.reasons` gives the total, the number recorded and the
+number dropped.
+
+Measured on Autodesk's 33 sample projects of 2015 to 2023 by Measure run
+41932213967 (head f44b028d), before the set-aside causes above were added: every
+count added up, per stream and in total (`element_stage_counts.txt` ended `ok` on
+all 33), and the IFC was byte-identical to main's. Together the 33 projects (41
+partition streams) have 197,463 markers, 196,482 of them with a declared
+ElementId; 4,477 stopped at the category and 175 at the id, none at the box or
+outside the stream, and 192,811 gave a record; 167,702 records are placed
+instances, 66,250 of them with no volume, and 101,452 with; 98,119 frames were
+selected (3,333 superseded, on one project saved with two partitions, and none
+nested), and 87,366 were handed to the export, of which the models hold 87,315.
+The 51 not written (1 to 6 on each of 22 projects) were not attributed to a cause
+in that run; the causes above count them, and are not yet measured on this head.
+
+`tests/element_record_stages.rs` checks it on Revit_IFC5_Einhoven (Revit 2023):
+the markers, and the markers with a declared id, are counted again from the
+partitions' bytes, stream by stream; every step adds up; the elements handed to
+the export are the elements written and those set aside; the item and the log
+have the stages' counts, and the default export has the same counts and item; each
+log entry points at a marker 52 bytes on. On the committed synthetic
+`corpus/tier1/structural-2023` project, whose partitions hold no record, nothing
+is written, `stopped_at` names a stage before any marker and `rvt-ifc` prints it;
+on the committed family `tests/fixtures/families/empty.rfa` `rvt-ifc` prints no
+line. `tools/re/element_stage_counts.py` makes the same checks on a
+`diagnostics.json`; Measure runs it on each of Autodesk's sample projects
+(`-f samples=true`, `element_stage_counts.txt`).
 
 ## Schema
 
