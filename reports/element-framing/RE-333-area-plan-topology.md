@@ -1,14 +1,14 @@
-# RE-330: an Area's region from Revit's own plan topology
+# RE-333: an Area's region from Revit's own plan topology
 
 **Date:** 2026-11-04
 **Issues:** #1261 (BIM Whale's Areas), #1194 (Areas beyond Revit 2024), #763 (Areas as spaces); follows RE-317 (an Area's region from its area boundary lines) and RE-324 (the Areas of Revit 2015 to 2023)
 **Artefacts:** Autodesk's `rac_advanced` sample project, every save from 2015 to 2027 that `research/autodesk-sample-projects.tsv` pins and 2026 and 2027 (fetched, never stored); the BIM4LCA office, concrete structure, as built and at building permit (Revit 2024), with Revit's own IFC export of each (`research/bim4lca-measure.tsv`, CC BY-SA 4.0, never stored)
-**Probe:** `probes/examples/probe_re330_area_plan_topology.rs`
-**Status:** positive. Every Area of every file read here has its region: 25 of 25 on each `rac_advanced` save, 30 of 30 on each office file. Each region has the area Revit saves for its loop, and on the office the area of Revit's own export of the Area.
+**Probe:** `probes/examples/probe_re333_area_plan_topology.rs`
+**Status:** positive; section 8 has what the merged reader writes. Every Area of every file read here has a region from the plan topology: 25 of 25 on each `rac_advanced` save, 30 of 30 on each office file, each with the area Revit saves for its loop, and on the office the area of Revit's own export of the Area. The exporter writes them on every `rac_advanced` save but 2021's, where two copies of 16 lines make the group unreadable and the topology is not asked.
 
 ## 1. Before
 
-RE-317 draws an Area's region from the boxes of its scheme's area boundary lines on its Level, where every line is straight along a plan axis and the lines meet. On `rac_advanced` that drew 3 of the 25 Areas. RE-317 §6 put the other 22 down to lines that are not along an axis (18) and to Areas "bounded partly by walls" (4), whose point lay in no loop of the lines. RE-324 drew the same 3 on the 2015 to 2023 saves and left the rest unwritten (`area_without_proven_body`).
+RE-317 draws an Area's region from the boxes of its scheme's area boundary lines on its Level, where every line is straight along a plan axis and the lines meet. On `rac_advanced` that drew 3 of the 25 Areas. RE-317 §6 put the other 22 down to lines that are not along an axis (18) and to Areas "bounded partly by walls" (4), whose point lay in no loop of the lines. RE-324 drew the same 3 on the 2015 to 2023 saves and left the rest unwritten (`area_without_proven_body`). RE-330 (#1351) carries lines on to the lines that name them and joins parallel lines that stop at the same place, and draws **16 of the 25** on every save but 2021's: main writes 16, not 3, on the saves where it applies. The 9 it leaves out are the ones this report's topology covers.
 
 Neither cause is the one. On that sample 71 of the 127 area boundary lines are drawn a distance from where the area is measured: the area scheme measures to a wall's face, and the line's box is the measured line, not the drawn one. Lines that meet where they are drawn do not meet where they are measured. Revit closes the loop by meeting the measured lines where they cross, which the boxes cannot show.
 
@@ -63,7 +63,7 @@ Reading the plans and lines takes 80 to 95 ms on `rac_advanced` and about 0.3 s 
 ## Reproduce
 
 ```bash
-cargo run --profile ci -p rvt-probes --example probe_re330_area_plan_topology -- rac_advanced_sample_project.rvt
+cargo run --profile ci -p rvt-probes --example probe_re333_area_plan_topology -- rac_advanced_sample_project.rvt
 rvt-ifc rac_advanced_sample_project.rvt -o out.ifc --diagnostics out.json
 python3 tools/re/space_profiles_vs_ifc.py office.ifc office_Revit.ifc --match globalid
 ```

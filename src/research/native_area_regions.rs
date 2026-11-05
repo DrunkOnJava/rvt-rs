@@ -1,4 +1,4 @@
-//! Areas' regions from Revit's own plan topology (#1261, RE-330).
+//! Areas' regions from Revit's own plan topology (#1261, RE-333).
 //!
 //! Revit keeps, for each area scheme on each Level, a `LevelRoomPlan`
 //! element whose `PlanTopology` is the arrangement of that scheme's area
@@ -35,6 +35,7 @@
 //! none (fail closed).
 
 use crate::RevitFile;
+use crate::ifc::element_provenance::SourcePart;
 use crate::native_json::identifier_i64;
 use crate::research::native_document;
 use serde_json::Value;
@@ -114,6 +115,15 @@ pub struct AreaRegion {
     pub hole_arcs: Vec<Vec<Option<(f64, f64)>>>,
     /// The ElementIds of the lines that bound the region, its holes' too.
     pub line_ids: BTreeSet<u32>,
+    /// The native records the region was read from, kept only while the handle
+    /// records value sources (#1368): the Area's `RoomElem` (its circuit and
+    /// point), the `LevelRoomPlan` that holds the circuit and each bounding
+    /// line's `CurveElem` (its curve and its area rule's offsets), each with
+    /// the partition and offset of its current copy. Empty where the handle
+    /// does not record them or one of the records has no place in the
+    /// partition's own bytes: a list that left a record out would not be the
+    /// records the region was read from.
+    pub records: Vec<SourcePart>,
 }
 
 impl AreaRegion {
@@ -257,6 +267,8 @@ struct Circuit {
 /// circuit (holes), and its Areas.
 #[derive(Default)]
 struct Plan {
+    /// The `LevelRoomPlan` record the topology was read from.
+    record: Option<SourcePart>,
     segments: BTreeMap<SegmentKey, Segment>,
     circuits: BTreeMap<i64, Circuit>,
     holes: BTreeMap<i64, Vec<i64>>,
@@ -264,10 +276,13 @@ struct Plan {
     /// The ends of the segments that bound a region (a segment no circuit
     /// runs only as a spur), by cell, to count the segments that meet at a
     /// node.
-    nodes: BTreeMap<(i64, i64), Vec<(f64, f64)>>,
+    nodes: BTreeMap<NodeCell, Vec<(f64, f64)>>,
 }
 
-fn node_cell(point: (f64, f64)) -> (i64, i64) {
+/// A cell of the grid the plan's nodes are kept in.
+type NodeCell = (i64, i64);
+
+fn node_cell(point: (f64, f64)) -> NodeCell {
     (
         (point.0 / NODE_CELL_FEET).floor() as i64,
         (point.1 / NODE_CELL_FEET).floor() as i64,
@@ -298,6 +313,8 @@ impl Plan {
 struct AreaPlace {
     circuit: i64,
     point: (f64, f64),
+    /// The Area's `RoomElem` record.
+    record: Option<SourcePart>,
 }
 
 /// An area boundary line's curve in plan.
@@ -324,6 +341,8 @@ enum Curve {
 struct BoundaryCurve {
     curve: Curve,
     offsets: Vec<(f64, f64, f64)>,
+    /// The line's `CurveElem` record.
+    record: Option<SourcePart>,
 }
 
 impl Curve {
@@ -587,7 +606,11 @@ fn boundary_curve(objects: &[crate::native_parameters::GraphObject]) -> Option<B
         .iter()
         .find(|o| o.class_name == "AreaMeasureCurveData")
     {
-        for part in data.fields.get("m_schemeSegments")?.as_array()? {
+        let parts = data.fields.get("m_schemeSegments")?.as_array()?;
+        if parts.len() > MAX_OFFSET_PARTS {
+            return None;
+        }
+        for part in parts {
             offsets.push((
                 part.get("m_startParam")?.as_f64()?,
                 part.get("m_endParam")?.as_f64()?,
@@ -595,7 +618,11 @@ fn boundary_curve(objects: &[crate::native_parameters::GraphObject]) -> Option<B
             ));
         }
     }
-    Some(BoundaryCurve { curve, offsets })
+    Some(BoundaryCurve {
+        curve,
+        offsets,
+        record: None,
+    })
 }
 
 impl BoundaryCurve {
@@ -751,12 +778,10 @@ fn crossings(a: &Edge, b: &Edge) -> Vec<(f64, f64)> {
     }
 }
 
-/// The edges of one circuit, each moved by its offset and met by its
-/// neighbours where their curves cross, or `None` where a side is not read.
 /// A segment key with its direction left out: the segment a side runs.
 fn segment_of(side: SegmentKey) -> SegmentKey {
     let (line, major, sub) = side;
-    (line, major, if sub < 0 { -sub - 1 } else { sub })
+    (line, major, if sub < 0 { !sub } else { sub })
 }
 
 /// `sides` without its spurs: a segment run one way and, by the next side,
@@ -793,6 +818,8 @@ struct Loop {
     keep: Vec<bool>,
 }
 
+/// The edges of one circuit, each moved by its offset and met by its
+/// neighbours where their curves cross, or `None` where a side is not read.
 fn circuit_edges(
     plan: &Plan,
     circuit: &Circuit,
@@ -806,7 +833,7 @@ fn circuit_edges(
     let mut pieces: Vec<Side> = Vec::new();
     for (line, major, sub) in without_spurs(&circuit.sides) {
         let backwards = sub < 0;
-        let index = if backwards { -sub - 1 } else { sub };
+        let index = if backwards { !sub } else { sub };
         let segment = plan.segments.get(&(line, major, index))?;
         let curve = curves.get(&line)?;
         if major != 0 {
@@ -1078,12 +1105,56 @@ fn region(
     if !inside(&test_outer, place.point) || test_holes.iter().any(|h| inside(h, place.point)) {
         return Err(REFUSED_POINT);
     }
+    let records = region_records(plan, place, curves, &line_ids);
     Ok(AreaRegion {
         outer,
         outer_arcs,
         holes,
         hole_arcs,
         line_ids,
+        records,
+    })
+}
+
+/// The native records a region was read from, one part each: the Area's
+/// record, its plan's and the record of every line that bounds it. Empty
+/// where one has no place.
+fn region_records(
+    plan: &Plan,
+    place: &AreaPlace,
+    curves: &BTreeMap<i64, BoundaryCurve>,
+    line_ids: &BTreeSet<u32>,
+) -> Vec<SourcePart> {
+    let (Some(area), Some(topology)) = (&place.record, &plan.record) else {
+        return Vec::new();
+    };
+    let mut records = vec![area.clone(), topology.clone()];
+    for line in line_ids {
+        match curves
+            .get(&i64::from(*line))
+            .and_then(|curve| curve.record.clone())
+        {
+            Some(record) => records.push(record),
+            None => return Vec::new(),
+        }
+    }
+    records
+}
+
+/// Where a native record starts, as a part of a value source: its element, its
+/// partition and the offset of its header in that partition inflated. `None`
+/// where the record's group is not the partition's own bytes, or its
+/// ElementId is not a `u32`.
+fn record_place(record: &native_document::Record) -> Option<SourcePart> {
+    let offset = record
+        .source
+        .group
+        .inflated_offset?
+        .checked_add(record.source.group_record_offset)?;
+    Some(SourcePart {
+        element_id: u32::try_from(record.identity.element_id).ok()?,
+        stream: record.source.stream.clone(),
+        offset,
     })
 }
 
@@ -1098,6 +1169,7 @@ pub fn area_regions(
     if areas.is_empty() {
         return out;
     }
+    let recording = rf.recording_value_sources();
     let mut plans: Vec<Plan> = Vec::new();
     let mut places: BTreeMap<u64, AreaPlace> = BTreeMap::new();
     let options = native_document::Options {
@@ -1110,14 +1182,31 @@ pub fn area_regions(
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
         };
+        let place = if recording {
+            record_place(&record)
+        } else {
+            None
+        };
         for object in &graph.objects {
             match object.class_name.as_str() {
-                "PlanTopology" => plans.extend(plan(&object.fields)),
+                "PlanTopology" => {
+                    if let Some(mut read) = plan(&object.fields) {
+                        read.record = place.clone();
+                        plans.push(read);
+                    }
+                }
                 "RoomElem" if areas.contains(&record.identity.element_id) => {
                     let circuit = object.fields.get("m_cachedCircuitId").and_then(circuit_id);
                     let point = object.fields.get("m_point").and_then(plan_point);
                     if let (Some(circuit), Some(point)) = (circuit, point) {
-                        places.insert(record.identity.element_id, AreaPlace { circuit, point });
+                        places.insert(
+                            record.identity.element_id,
+                            AreaPlace {
+                                circuit,
+                                point,
+                                record: place.clone(),
+                            },
+                        );
                     }
                 }
                 _ => {}
@@ -1174,7 +1263,10 @@ pub fn area_regions(
                 record.graph.as_ref(),
                 i64::try_from(record.identity.element_id),
             ) {
-                if let Some(curve) = boundary_curve(&graph.objects) {
+                if let Some(mut curve) = boundary_curve(&graph.objects) {
+                    if recording {
+                        curve.record = record_place(&record);
+                    }
                     curves.insert(id, curve);
                 }
             }

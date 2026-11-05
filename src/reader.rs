@@ -189,6 +189,9 @@ pub struct RevitFile {
     /// Whether the recovery lists the frames that stop, for the log of
     /// decisions ([`Self::record_frame_decisions`], #1389).
     frame_decisions: bool,
+    /// The chain records of Revit 2024 and later, declared, whose entry block
+    /// did not read when the Areas were looked for (RE-333).
+    dropped_chain_entries: usize,
     /// Memoised production walk: the elements
     /// [`crate::walker::iter_elements_with_control`] yields for a minimum
     /// score and walker limits. An export walks once to write and again for
@@ -477,6 +480,7 @@ impl RevitFile {
             unwritten_areas: BTreeMap::new(),
             element_record_stages: None,
             frame_decisions: false,
+            dropped_chain_entries: 0,
             walk: None,
             arc_wall_scan: None,
             partition_progress: None,
@@ -587,6 +591,7 @@ impl RevitFile {
     pub(crate) fn reset_export_notes(&mut self) {
         self.element_record_stages = None;
         self.unwritten_areas.clear();
+        self.dropped_chain_entries = 0;
         self.bodiless_family_spaces.clear();
         self.bodiless_family_space_error = None;
         self.unread_type_doors_windows.clear();
@@ -1222,6 +1227,18 @@ impl RevitFile {
         by_reason: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
     ) {
         self.unwritten_areas = by_reason;
+    }
+
+    /// Record the number of declared chain records of a Revit 2024 or later
+    /// file whose entry block did not read (RE-333).
+    pub(crate) fn set_dropped_chain_entries(&mut self, dropped: usize) {
+        self.dropped_chain_entries = dropped;
+    }
+
+    /// The declared chain records whose entry block did not read when the
+    /// Areas were looked for; 0 until they are (RE-333).
+    pub(crate) fn dropped_chain_entries(&self) -> usize {
+        self.dropped_chain_entries
     }
 
     /// The Areas of a Revit 2015 to 2023 file left unwritten because their

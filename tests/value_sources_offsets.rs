@@ -41,6 +41,12 @@
 //!   header followed, at a fixed place, by the sketched element's id. Frames of
 //!   a 32-bit release that carry no id at their first bytes are counted as not
 //!   read;
+//! - for an Area drawn from the loop of Revit's plan topology
+//!   (`area_plan_topology`), reads its parts' records again from their ElementIds:
+//!   the Area's own record names a circuit and a point, exactly one part is the
+//!   `LevelRoomPlan` whose topology holds that circuit and the Area, and the other
+//!   parts are the area boundary lines (`CurveElem`) that the circuit's sides,
+//!   and the circuits enclosed by it, run, all of them and no others;
 //! - requires an element whose profile is solved from sketch lines, or is a
 //!   type symbol's box, to have a source from the reader of that profile;
 //! - checks that a `selected` source names the frame the element's entry
@@ -230,8 +236,8 @@ const COVERAGE: &[(&str, Coverage)] = &[
     (
         "partition_area_boundary_lines",
         Recorded {
-            readers: &["area_boundary_lines"],
-            rules: &["agreeing"],
+            readers: &["area_boundary_lines", "area_plan_topology"],
+            rules: &["agreeing", "native"],
         },
     ),
     (
@@ -393,11 +399,16 @@ const MIN_READERS: &[(&str, &[&str])] = &[
             "room_solid_faces",
             "type_hollow_section",
             "pipe_connectors",
-            "area_boundary_lines",
-            "area_point",
+            "area_plan_topology",
             "native_slab_shape",
         ],
     ),
+    // `area_boundary_lines` and `area_point` (an Area drawn from the
+    // arrangement of its lines) are not pinned: the office's 30 Areas all have
+    // a region from Revit's plan topology, which is taken first, and no other
+    // model of this test has an Area. They are exercised by an Area whose plan
+    // topology is not read or fails a check, such as a scheme whose Areas are
+    // on two plans; no model of the gate has one.
 ];
 
 /// The ElementId an `Identifier` field holds: `m_id.m_id64` from Revit 2024,
@@ -803,6 +814,162 @@ struct BodyStats {
     by_reader: BTreeMap<String, usize>,
 }
 
+/// The ElementIds of the records an Area drawn from the plan topology lists
+/// and whether the list is whole.
+type TopologyParts = (Vec<u32>, bool);
+
+/// A plan topology a part holds and, if it holds the Area, the lines of its
+/// circuit.
+type PlanLines = (u64, Option<BTreeSet<u64>>);
+
+/// The class and fields of each object of a record's graph.
+type RecordObjects = Vec<(String, serde_json::Value)>;
+
+/// The ElementIds of the lines a circuit of a plan topology runs, the
+/// circuits it encloses included: the `m_linkInstOrHostId` of each side of
+/// the circuit `circuit` and of the outer circuit of each component the
+/// circuit encloses.
+fn circuit_lines(topology: &serde_json::Value, circuit: i64) -> Option<BTreeSet<u64>> {
+    let id_of = |value: &serde_json::Value| value.get("m_id")?.as_i64();
+    let mut circuits = vec![circuit];
+    for component in topology.get("m_components")?.as_array()? {
+        if id_of(component.get("m_enclosingCircuit")?)? == circuit {
+            circuits.push(id_of(component.get("m_outerCircuit")?)?);
+        }
+    }
+    let mut lines = BTreeSet::new();
+    for wanted in circuits {
+        let held = topology
+            .get("m_circuits")?
+            .as_array()?
+            .iter()
+            .find(|held| held.get("m_id").and_then(id_of) == Some(wanted))?;
+        for side in held.get("m_sides")?.as_array()? {
+            let line = identifier_of(side.get("m_item")?.get("m_linkInstOrHostId")?)?;
+            lines.insert(u64::try_from(line).ok()?);
+        }
+    }
+    Some(lines)
+}
+
+/// The records each Area drawn from Revit's plan topology lists (`areas`: the
+/// Area's ElementId, the ElementIds of its parts and whether the list is
+/// whole), read again from their ElementIds: the Area's own record names a
+/// circuit and a point, exactly one part is the plan whose topology holds
+/// that circuit and the Area, and the other parts are the area boundary lines
+/// the circuit's sides and its holes run, all of them and no others. What a
+/// reader returns for the same records is not compared: only what the records
+/// say.
+fn check_topology_areas(rf: &mut RevitFile, areas: &BTreeMap<u32, TopologyParts>) -> Vec<String> {
+    let mut problems = Vec::new();
+    if areas.is_empty() {
+        return problems;
+    }
+    let wanted: BTreeSet<u64> = areas
+        .iter()
+        .flat_map(|(area, (parts, _))| {
+            std::iter::once(u64::from(*area)).chain(parts.iter().map(|part| u64::from(*part)))
+        })
+        .collect();
+    let options = Options {
+        selected_ids: wanted,
+        ..Options::default()
+    };
+    let mut objects: BTreeMap<u64, RecordObjects> = BTreeMap::new();
+    extract_graphs(rf, &options, |record| {
+        if let Some(graph) = record.graph.as_ref() {
+            objects.insert(
+                record.identity.element_id,
+                graph
+                    .objects
+                    .iter()
+                    .map(|object| (object.class_name.clone(), object.fields.clone()))
+                    .collect(),
+            );
+        }
+        Ok(())
+    })
+    .expect("read the records of the Areas drawn from the plan topology");
+    let object_of = |id: u64, class: &str| {
+        objects
+            .get(&id)?
+            .iter()
+            .find(|(held, _)| held == class)
+            .map(|(_, fields)| fields)
+    };
+    for (&area, (parts, whole)) in areas {
+        let area_id = u64::from(area);
+        let circuit = object_of(area_id, "RoomElem")
+            .and_then(|room| room.get("m_cachedCircuitId")?.get("m_id")?.as_i64());
+        let point_read = object_of(area_id, "RoomElem")
+            .and_then(|room| room.get("m_point")?.as_array())
+            .is_some_and(|point| {
+                point.len() >= 2
+                    && point
+                        .iter()
+                        .take(2)
+                        .all(|v| v.as_f64().is_some_and(f64::is_finite))
+            });
+        let Some(circuit) = circuit.filter(|_| point_read) else {
+            problems.push(format!(
+                "{area}: area_plan_topology: the Area's own record names no circuit and point"
+            ));
+            continue;
+        };
+        if !parts.contains(&area) {
+            problems.push(format!(
+                "{area}: area_plan_topology does not list the Area's own record"
+            ));
+        }
+        let plans: Vec<PlanLines> = parts
+            .iter()
+            .filter_map(|part| {
+                let part = u64::from(*part);
+                let topology = object_of(part, "PlanTopology")?;
+                let holds_area = topology
+                    .get("m_rooms")?
+                    .as_array()?
+                    .iter()
+                    .any(|room| identifier_of(room) == i64::try_from(area_id).ok());
+                Some((
+                    part,
+                    holds_area
+                        .then(|| circuit_lines(topology, circuit))
+                        .flatten(),
+                ))
+            })
+            .collect();
+        let [(plan, Some(lines))] = plans.as_slice() else {
+            problems.push(format!(
+                "{area}: area_plan_topology lists {} plan topologies, of which the ones that hold the Area and its circuit are not exactly one",
+                plans.len()
+            ));
+            continue;
+        };
+        let listed: BTreeSet<u64> = parts
+            .iter()
+            .map(|part| u64::from(*part))
+            .filter(|part| *part != area_id && part != plan)
+            .collect();
+        let curves = listed.iter().all(|line| {
+            object_of(*line, "CurveElem").is_some_and(|curve| {
+                curve.get("m_isAreaMeasurementScheme") == Some(&serde_json::Value::Bool(true))
+            })
+        });
+        let same = if *whole {
+            listed == *lines
+        } else {
+            listed.is_subset(lines)
+        };
+        if !curves || !same {
+            problems.push(format!(
+                "{area}: area_plan_topology lists the lines {listed:?}, the circuit and its holes run {lines:?}"
+            ));
+        }
+    }
+    problems
+}
+
 fn check_model(name: &str, path: &Path) -> BTreeSet<String> {
     check_model_with(name, path, false)
 }
@@ -976,6 +1143,9 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
     } else {
         BTreeSet::new()
     };
+    // The Areas drawn from Revit's plan topology, with the ElementIds of the
+    // records each lists and whether the list is whole.
+    let mut topology_areas: BTreeMap<u32, TopologyParts> = BTreeMap::new();
     let mut parts_checked = 0usize;
     let mut parts_confirmed = 0usize;
     let mut parts_by_record = 0usize;
@@ -1117,6 +1287,15 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                 } else {
                     None
                 };
+                if source.reader == "area_plan_topology" {
+                    topology_areas.insert(
+                        id,
+                        (
+                            source.parts.iter().map(|part| part.element_id).collect(),
+                            source.parts_left_out == 0,
+                        ),
+                    );
+                }
                 for part in &source.parts {
                     parts_checked += 1;
                     let inflated = rf
@@ -1306,6 +1485,23 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                                 .and_then(|roles| roles.get(&wanted))
                                 .copied();
                             if first == Some(wanted) && role.is_some() && kind == role {
+                                Part::Confirmed
+                            } else {
+                                Part::Failed
+                            }
+                        }
+                        // A record of the native framing that an Area drawn from
+                        // Revit's plan topology was read from: its id is at its
+                        // first bytes. What the record is, and that the parts
+                        // are the Area's, its plan's and its lines', is read
+                        // again below from the ElementIds.
+                        "area_plan_topology" => {
+                            let first = if width == 8 {
+                                u64_at(bytes, part.offset)
+                            } else {
+                                u32_at(bytes, part.offset).map(u64::from)
+                            };
+                            if first == Some(wanted) {
                                 Part::Confirmed
                             } else {
                                 Part::Failed
@@ -1541,6 +1737,8 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
             }
         }
     }
+
+    problems.extend(check_topology_areas(&mut rf, &topology_areas));
 
     // A roof's rafter cut is read again by the reader, from its own record.
     if !rafter_roofs.is_empty() {

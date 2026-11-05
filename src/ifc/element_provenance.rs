@@ -990,6 +990,7 @@ fn body_readers(body: &str) -> &'static [&'static str] {
         crate::partition_area_records::AREA_BOUNDARY_SOURCE => &[
             crate::partition_area_records::AREA_LINES_READER,
             crate::partition_area_records::AREA_POINT_READER,
+            crate::partition_area_records::AREA_TOPOLOGY_READER,
         ],
         ec::FLOOR_SHAPE_BODY_SOURCE => &[
             SELECTED_FRAME_READER,

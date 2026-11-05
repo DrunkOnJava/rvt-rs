@@ -1,4 +1,4 @@
-//! RE-330: an Area's region from Revit's own plan topology.
+//! RE-333: an Area's region from Revit's own plan topology.
 //!
 //! FACT under test: for each area scheme on each Level Revit keeps a
 //! `LevelRoomPlan` whose `PlanTopology` holds the scheme's area boundary
@@ -29,7 +29,7 @@
 //! `tools/re/space_profiles_vs_ifc.py` on rvt-rs's export.
 //!
 //! Usage:
-//!   cargo run --profile ci -p rvt-probes --example probe_re330_area_plan_topology -- FILE.rvt
+//!   cargo run --profile ci -p rvt-probes --example probe_re333_area_plan_topology -- FILE.rvt
 
 use rvt::RevitFile;
 use rvt::research::{native_area_regions, native_document, partition_element_records};

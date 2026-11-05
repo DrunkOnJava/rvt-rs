@@ -43,15 +43,17 @@
 //! (within 0.01 ft), and 29 of the 30 in the mesh's vertices
 //! (`reports/element-framing/RE-317-area-boundaries.md`).
 //!
-//! Where the lines' arrangement finds no region, the region of Revit's own
-//! plan topology is used ([`crate::native_area_regions`], RE-330): the loop
-//! Revit computed for the Area, with each line moved by its area rule's
-//! offset and arcs drawn, checked against the area Revit saves for it and
-//! against the Area's point. It draws the Areas whose lines meet only once
-//! offset or include an arc or a slanted line. Where both give a region they
-//! agree (the BIM4LCA office, 30 of 30, and the 3 of Autodesk's
-//! `rac_advanced` the lines draw). Every other check below applies to it as
-//! to the lines' region.
+//! The region of Revit's own plan topology comes first
+//! ([`crate::native_area_regions`], RE-333): the loop Revit computed for the
+//! Area, with each line moved by its area rule's offset and arcs drawn, checked
+//! against the area Revit saves for it and against the Area's point. Where it
+//! is not read or fails a check, the region is the lines' arrangement with its
+//! joins (RE-317, RE-330). Neither is asked of a group of lines that cannot be
+//! read as a whole (a non-primary design option, a stray height, copies that
+//! disagree, a missing line). The topology draws the Areas whose lines meet
+//! only once offset, or include an arc or a slanted line; where both give a
+//! region they are expected to agree (RE-333 section 7 has the counts). Every
+//! other check below applies to it as to the lines' region.
 //!
 //! # Honesty
 //!
@@ -83,10 +85,11 @@
 //!   measured. An Area on the top storey has none.
 //! - The base offset of the Area is read as zero, which is what the office
 //!   measures.
-//! - An Area whose lines meet only once moved by their area rule's offsets
-//!   has its point in no region of the lines' boxes; its region is Revit's
-//!   plan topology's where that is read (RE-330), and none otherwise.
-//! - Revit 2015 to 2027 are read (RE-324, RE-330); Revit 2025 to 2027 are
+//! - An Area whose lines do not close, even with their joins, or meet only once
+//!   moved by their area rule's offsets, has its point in no region of the
+//!   lines' boxes; its region is Revit's plan topology's where that is read and
+//!   passes its checks (RE-333), and none otherwise.
+//! - Revit 2015 to 2027 are read (RE-324, RE-333); Revit 2025 to 2027 are
 //!   measured against the same project's 2024 save, not against a Revit
 //!   export. Earlier releases are not read (fail closed).
 //!
@@ -119,6 +122,7 @@
 
 use crate::RevitFile;
 use crate::element_record_plan_profiles::{PLAN_PROFILE_SOURCE_FIELD, PlanProfile};
+use crate::ifc::element_provenance::SourcePart;
 use crate::le_bytes;
 use crate::native_area_regions::AreaRegion;
 use crate::partition_area_boundaries::{AreaFace, Arrangement, BoundaryLine};
@@ -200,6 +204,11 @@ pub const AREA_LINES_READER: &str = "area_boundary_lines";
 /// The value-source reader of the element data that gave an Area's point
 /// (#1368).
 pub const AREA_POINT_READER: &str = "area_point";
+
+/// The value-source reader of the native records an Area's region was read
+/// from where it is the loop of Revit's plan topology (#1368, RE-333): the
+/// Area's own record, its plan's and its bounding lines'.
+pub const AREA_TOPOLOGY_READER: &str = "area_plan_topology";
 
 /// The field of an Area that holds the elevation of its body's base, feet.
 pub const AREA_BODY_BASE_FIELD: &str = "m_area_body_base";
@@ -284,13 +293,13 @@ struct ChainSpan {
     start: usize,
     end: usize,
     id: u32,
-    /// The bytes of the record's entry block (Revit 2027, RE-330), which the
+    /// The bytes of the record's entry block (Revit 2027, RE-333), which the
     /// body follows; 0 where it has none.
     entries: usize,
 }
 
 /// Where a 2024 and later chain record says how many entries come before
-/// its body: a `u16` after the class tag at `+0x0c` (RE-330).
+/// its body: a `u16` after the class tag at `+0x0c` (RE-333).
 const CHAIN_ENTRY_COUNT_OFFSET: usize = 0x0e;
 
 /// Where the entries of a chain record start, and where its body starts when
@@ -337,22 +346,32 @@ impl Layout {
         }
     }
 
-    /// The declared records of one inflated partition's chain.
-    fn chain(self, buf: &[u8], declared: &BTreeSet<u32>) -> Vec<ChainSpan> {
+    /// The declared records of one inflated partition's chain. A declared
+    /// record of the wide layout whose entry block does not read is left out
+    /// and counted in `dropped`: an Area among them is not seen.
+    fn chain(self, buf: &[u8], declared: &BTreeSet<u32>, dropped: &mut usize) -> Vec<ChainSpan> {
         match self {
-            Self::Wide(marker) => partition_record_chain(buf, &marker)
-                .into_iter()
-                .filter_map(|span| {
-                    let id = u32::try_from(span.element_id).ok()?;
-                    let entries = chain_entries(buf, span.start, span.end)?;
-                    declared.contains(&id).then_some(ChainSpan {
-                        start: span.start,
-                        end: span.end,
-                        id,
-                        entries,
-                    })
-                })
-                .collect(),
+            Self::Wide(marker) => {
+                let mut spans = Vec::new();
+                for span in partition_record_chain(buf, &marker) {
+                    let Ok(id) = u32::try_from(span.element_id) else {
+                        continue;
+                    };
+                    if !declared.contains(&id) {
+                        continue;
+                    }
+                    match chain_entries(buf, span.start, span.end) {
+                        Some(entries) => spans.push(ChainSpan {
+                            start: span.start,
+                            end: span.end,
+                            id,
+                            entries,
+                        }),
+                        None => *dropped += 1,
+                    }
+                }
+                spans
+            }
             Self::Narrow(tag) => per32::record_spans(buf, tag, declared)
                 .into_iter()
                 .map(|span| ChainSpan {
@@ -402,6 +421,9 @@ struct ChainCensus {
     scheme_ids: BTreeSet<u32>,
     /// The ElementIds of every declared area boundary line.
     line_ids: BTreeSet<u32>,
+    /// The declared chain records of the wide layout whose entry block did not
+    /// read, so that whatever they are was not seen (RE-333).
+    dropped: usize,
 }
 
 /// The ascending counted lists of at least two declared ElementIds that a
@@ -441,13 +463,14 @@ fn area_records(rf: &mut RevitFile, layout: Layout, declared: &BTreeSet<u32>) ->
     let mut found = LatestCopy::default();
     let mut schemes = BTreeSet::new();
     let mut line_ids = BTreeSet::new();
+    let mut dropped = 0usize;
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
         let partition = partition_number(&stream);
         let buf = inflated.bytes();
-        for span in layout.chain(buf, declared) {
+        for span in layout.chain(buf, declared, &mut dropped) {
             let id = span.id;
             let category =
                 le_bytes::u64_at(buf, span.start + span.entries + layout.category_offset())
@@ -464,9 +487,25 @@ fn area_records(rf: &mut RevitFile, layout: Layout, declared: &BTreeSet<u32>) ->
                 continue;
             }
             // The record as Revit 2024 to 2026 write it: a 2027 record's
-            // entries are left out, so its fields are where theirs are.
-            let body = span.start + CHAIN_ENTRIES_FROM;
-            let bytes = [&buf[span.start..body], &buf[body + span.entries..span.end]].concat();
+            // entries are left out, so its fields are where theirs are. Only
+            // the wide layout has any; a narrow record is taken whole, and a
+            // span that does not lie in the partition is not read.
+            let bytes = match layout {
+                Layout::Wide(_) => {
+                    let body = span.start + CHAIN_ENTRIES_FROM;
+                    match (
+                        buf.get(span.start..body),
+                        buf.get(body + span.entries..span.end),
+                    ) {
+                        (Some(head), Some(tail)) => [head, tail].concat(),
+                        _ => continue,
+                    }
+                }
+                Layout::Narrow(_) => match buf.get(span.start..span.end) {
+                    Some(record) => record.to_vec(),
+                    None => continue,
+                },
+            };
             let lists = match layout {
                 Layout::Wide(_) => Vec::new(),
                 Layout::Narrow(_) => counted_lists(&bytes, NARROW_LISTS_FROM, declared),
@@ -488,6 +527,7 @@ fn area_records(rf: &mut RevitFile, layout: Layout, declared: &BTreeSet<u32>) ->
         areas: found.into_values(),
         scheme_ids: schemes,
         line_ids,
+        dropped,
     }
 }
 
@@ -616,6 +656,9 @@ struct AreaBody {
     joined: bool,
     /// Whether the region is the plan topology's (RE-333).
     topology: bool,
+    /// The native records the plan topology's region was read from, while the
+    /// handle records value sources (#1368); empty otherwise.
+    records: Vec<SourcePart>,
 }
 
 /// What is known of the file around its Areas.
@@ -973,36 +1016,50 @@ impl GroupArrangement {
     }
 }
 
-/// The arrangement of the lines of one scheme on one Level, or `None` where a
-/// line may be missing, its copies disagree, or none can be read. A line that is
-/// not a straight line along an axis is not read, and an Area whose region it
-/// may change is refused ([`GroupArrangement::blocks`], RE-330).
-fn group_arrangement(
-    lines: &BoundaryLines,
-    key: (u32, u32),
-    base_feet: f64,
-) -> Option<GroupArrangement> {
+/// What the lines of one scheme on one Level give (RE-330, RE-333).
+enum Group {
+    /// The lines cannot be read as a whole: one is in a non-primary design
+    /// option, at a stray height, has copies that disagree, or is missing. No
+    /// region of any kind is drawn from the group, Revit's plan topology's
+    /// included.
+    Unreadable,
+    /// The group is sound but its lines cannot be arranged: none is a straight
+    /// line along an axis, or they overlap or are too many. Revit's plan
+    /// topology may still give an Area a region.
+    Unarranged,
+    /// The arrangement of the lines that can be read.
+    Arranged(GroupArrangement),
+}
+
+/// The arrangement of the lines of one scheme on one Level (RE-330). A line that
+/// is not a straight line along an axis is not read, and an Area whose region it
+/// may change is refused ([`GroupArrangement::blocks`]).
+fn group_arrangement(lines: &BoundaryLines, key: (u32, u32), base_feet: f64) -> Group {
     if lines
         .stray_heights
         .iter()
         .any(|height| (height - base_feet).abs() <= AREA_LEVEL_TOLERANCE_FEET)
     {
-        return None;
+        return Group::Unreadable;
     }
     if lines.option_groups.contains(&key) {
-        return None;
+        return Group::Unreadable;
     }
-    let ids = lines.groups.get(&key)?;
+    let Some(ids) = lines.groups.get(&key) else {
+        return Group::Unreadable;
+    };
     let mut readable = Vec::with_capacity(ids.len());
     let mut joined: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     let mut unread: BTreeSet<u32> = BTreeSet::new();
     let mut blocked = Vec::new();
     for id in ids {
-        let line = lines.by_id.get(id)?;
+        let Some(line) = lines.by_id.get(id) else {
+            return Group::Unreadable;
+        };
         if lines.conflicted.contains(id)
             || (line.height - base_feet).abs() > AREA_LEVEL_TOLERANCE_FEET
         {
-            return None;
+            return Group::Unreadable;
         }
         let boundary = BoundaryLine {
             id: *id,
@@ -1018,7 +1075,7 @@ fn group_arrangement(
         }
     }
     if readable.is_empty() {
-        return None;
+        return Group::Unarranged;
     }
     for boundary in &readable {
         let names_unread = joined
@@ -1028,11 +1085,13 @@ fn group_arrangement(
             blocked.push(segment_box(boundary.from, boundary.to));
         }
     }
-    let arrangement = Arrangement::new(&readable, &joined)?;
-    Some(GroupArrangement {
-        arrangement,
-        blocked,
-    })
+    match Arrangement::new(&readable, &joined) {
+        Some(arrangement) => Group::Arranged(GroupArrangement {
+            arrangement,
+            blocked,
+        }),
+        None => Group::Unarranged,
+    }
 }
 
 /// The Areas of a file that have a body, and why the others have none.
@@ -1056,6 +1115,8 @@ struct Located {
     face: Result<AreaFace, &'static str>,
     /// Whether the region is the plan topology's (RE-333).
     topology: bool,
+    /// The native records the plan topology's region was read from (#1368).
+    records: Vec<SourcePart>,
 }
 
 /// The elevation of the Level `level`, feet.
@@ -1067,22 +1128,28 @@ fn level_elevation(levels: &[PartitionLevel], level: u32) -> Option<f64> {
     elevation.is_finite().then_some(elevation)
 }
 
-/// The region of one Area, whatever else stops it from being drawn: its point
-/// among the lines of its scheme on its Level, else the region of Revit's
-/// plan topology, `topology`, where it is read (RE-330). `Err` where it has
-/// no point, or its Level or scheme is not named, or its Level's elevation is
-/// not known.
+/// The region of one Area, whatever else stops it from being drawn. Revit's
+/// plan topology's region, `topology`, comes first where it was read and passed
+/// its checks (the loop's area against the area Revit saves for it, the Area's
+/// point in the loop and in no hole, RE-333); otherwise the region of the lines'
+/// arrangement with its joins (RE-317, RE-330): the Area's point among the lines
+/// of its scheme on its Level. A group of lines that cannot be read as a whole
+/// (a non-primary design option, a stray height, copies that disagree, a missing
+/// line) gives no region of either kind. Where both give none, the plan
+/// topology's reason is the Area's, being the more specific. `Err` where it has
+/// no point and no topology, or its Level or scheme is not named, or its Level's
+/// elevation is not known.
 fn locate(
     record: &AreaRecord,
     point: Option<(f64, f64)>,
-    topology: Option<AreaRegion>,
+    topology: Option<Result<AreaRegion, &'static str>>,
     lines: &BoundaryLines,
     surroundings: &Surroundings<'_>,
-    arrangements: &mut BTreeMap<GroupKey, Option<GroupArrangement>>,
+    arrangements: &mut BTreeMap<GroupKey, Group>,
 ) -> Result<Located, &'static str> {
     // An Area whose point is not read can still have the plan topology's
     // region, which is checked against the point the topology's Area saves.
-    if point.is_none() && topology.is_none() {
+    if point.is_none() && !matches!(topology, Some(Ok(_))) {
         return Err(REFUSED_NO_POINT);
     }
     let (Some(level), Some(scheme)) = (
@@ -1101,6 +1168,7 @@ fn locate(
             key,
             face: Err(REFUSED_GROUP),
             topology: false,
+            records: Vec::new(),
         });
     }
     let by_lines = match (&*group, point) {
@@ -1112,7 +1180,7 @@ fn locate(
         (Group::Arranged(_), None) => Err(REFUSED_NO_POINT),
         (_, _) => Err(REFUSED_GROUP),
     };
-    let (face, from_topology) = match topology {
+    let (face, from_topology, records) = match topology {
         Some(Ok(region)) => (
             Ok(AreaFace {
                 outer: region.outer,
@@ -1123,14 +1191,16 @@ fn locate(
                 joined: false,
             }),
             true,
+            region.records,
         ),
-        Some(Err(reason)) => (by_lines.map_err(|_| reason), false),
-        None => (by_lines, false),
+        Some(Err(reason)) => (by_lines.map_err(|_| reason), false, Vec::new()),
+        None => (by_lines, false, Vec::new()),
     };
     Ok(Located {
         key,
         face,
         topology: from_topology,
+        records,
     })
 }
 
@@ -1167,7 +1237,31 @@ fn draw_area(
         height_feet,
         joined: face.joined,
         topology: located.topology,
+        records: located.records.clone(),
     })
+}
+
+/// Note, under an Area drawn from Revit's plan topology, the native records
+/// its region was read from (#1368): its own record (the circuit it names and
+/// its point), the plan's (the circuit's sides and saved area) and the record
+/// of each line that bounds it (its curve and its area rule's offsets), the
+/// current copy of each. Nothing is noted where one of them has no place.
+/// The frames of the lines and the Area's partition point
+/// ([`note_area_sources`]) are not noted: the region was not drawn from them.
+fn note_topology_source(rf: &mut RevitFile, id: u32, records: &[SourcePart]) {
+    use crate::ifc::element_provenance::{CopyRule, ValueSource};
+    if records.is_empty() {
+        return;
+    }
+    rf.note_value_source(
+        id,
+        ValueSource::from_parts(
+            AREA_TOPOLOGY_READER,
+            CopyRule::Native,
+            records.len(),
+            records.to_vec(),
+        ),
+    );
 }
 
 /// Note, under a drawn Area, the records its body was drawn from (#1368): the
@@ -1187,7 +1281,7 @@ fn note_area_sources(
     lines: &BoundaryLines,
     point_at: Option<usize>,
 ) {
-    use crate::ifc::element_provenance::{CopyRule, SourcePart, ValueSource};
+    use crate::ifc::element_provenance::{CopyRule, ValueSource};
     let parts: Option<Vec<SourcePart>> = face
         .line_ids
         .iter()
@@ -1258,13 +1352,14 @@ fn area_bodies(
         return out;
     }
     let points = area_points(rf, revit_version, placed, surroundings.level_ids);
+    let record_sources = rf.recording_value_sources();
     let ids: BTreeSet<u64> = placed.keys().map(|&id| u64::from(id)).collect();
     let mut topology = crate::native_area_regions::area_regions(rf, &ids);
-    let mut arrangements: BTreeMap<GroupKey, Option<Arrangement>> = BTreeMap::new();
+    let mut arrangements: BTreeMap<GroupKey, Group> = BTreeMap::new();
     let mut located: BTreeMap<u32, Result<Located, &'static str>> = BTreeMap::new();
     for (&id, record) in placed {
-        let point = points.get(&id).copied();
-        let region = topology.remove(&u64::from(id)).and_then(Result::ok);
+        let point = points.get(&id).map(|(point, _)| *point);
+        let region = topology.remove(&u64::from(id));
         located.insert(
             id,
             locate(
@@ -1319,7 +1414,9 @@ fn area_bodies(
                 out.refused.insert(id, REFUSED_REDUNDANT);
             }
             Ok(body) => {
-                if record_sources {
+                if record_sources && body.topology {
+                    note_topology_source(rf, id, &body.records);
+                } else if record_sources {
                     note_area_sources(
                         rf,
                         id,
