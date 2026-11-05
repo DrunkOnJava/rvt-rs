@@ -44,9 +44,10 @@ use std::time::{Duration, Instant};
 const BUDGET: Duration = Duration::from_secs(12 * 60);
 const SHOWN: usize = 12;
 
-const KEEPS: [&[&str]; 6] = [
+const KEEPS: [&[&str]; 7] = [
     &["m_id", "m_categoryId"],
     &["m_id", "m_familyId"],
+    &["m_id", "m_WallAttributesId", "m_baseOrTop"],
     &["m_id", "m_WallAttributesId", "m_function", "m_baseOrTop"],
     &[
         "m_id",
