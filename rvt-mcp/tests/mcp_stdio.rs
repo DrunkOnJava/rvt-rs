@@ -138,10 +138,11 @@ async fn call(client: &Client, name: &'static str, arguments: Value) -> CallTool
         .call_tool(CallToolRequestParams::new(name).with_arguments(object(arguments)))
         .await
         .unwrap_or_else(|error| panic!("tools/call {name}: {error}"));
-    if result.is_error != Some(true) {
-        if let Some(structured) = &result.structured_content {
-            keep("answers", name, structured);
-        }
+    if let (false, Some(structured)) = (
+        result.is_error == Some(true),
+        result.structured_content.as_ref(),
+    ) {
+        keep("answers", name, structured);
     }
     result
 }
