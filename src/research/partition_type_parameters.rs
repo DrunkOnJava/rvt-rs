@@ -91,7 +91,7 @@ pub fn scan_partition(
     for (parameter, name) in TYPE_TEXT_PARAMETERS {
         for at in memchr::memmem::find_iter(buf, &parameter.to_le_bytes()) {
             if let Some(text) = text_at(buf, at + 8) {
-                note(at, *name, text);
+                note(at, name, text);
             }
         }
     }
@@ -100,7 +100,7 @@ pub fn scan_partition(
         mark[8..].copy_from_slice(&parameter.to_le_bytes());
         for at in memchr::memmem::find_iter(buf, &mark) {
             if let Some(text) = table_text_before(buf, at) {
-                note(at, *name, text);
+                note(at, name, text);
             }
         }
     }
