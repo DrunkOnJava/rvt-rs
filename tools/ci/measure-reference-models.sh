@@ -568,7 +568,10 @@ measure_sample() { # sample
 # failure on the head side into a red run (tools/ci/check-bodies-across-saves.sh).
 bodies_across_saves() {
   local candidate earlier sample dir references
-  wanted bodies_across_saves || return 0
+  if ! wanted bodies_across_saves; then
+    echo "::notice::bodies_across_saves skipped: the scorers asked for exclude it"
+    return 0
+  fi
   for candidate in "$SAMPLE_DIR"/202[67]-*.rvt; do
     [ -f "$candidate" ] || continue
     case "$(pair_key "$candidate")" in racadvanced | racbasic | rstbasic) ;; *) continue ;; esac
@@ -578,6 +581,11 @@ bodies_across_saves() {
       references+=("$(basename "$earlier" | cut -c1-4)=$(sample_dir "$earlier")/model.ifc")
     done
     dir=$(sample_dir "$candidate")
+    if [ "${#references[@]}" -eq 0 ]; then
+      echo "::notice::$(basename "$dir"): no 2024 or 2025 save of its project is in this run, so bodies_across_saves compared nothing"
+      printf 'bodies across saves: SKIPPED (no 2024 or 2025 save of the project is in this run)\nexit 0\n' > "$dir/bodies_across_saves.txt"
+      continue
+    fi
     score "$dir/bodies_across_saves.txt" "$SCORERS/bodies_across_saves.py" "$dir/model.ifc" "${references[@]}"
   done
   for sample in "$SAMPLE_DIR"/*.rvt; do

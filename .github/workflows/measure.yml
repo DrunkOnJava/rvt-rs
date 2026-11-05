@@ -68,6 +68,14 @@
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=none -f samples=true -f sample_years="2026 2027" -f probe=probe_re179_revit_2027 -f probe_pair_release=2026
 #
+# That run holds no 2024 or 2025 sample, so the check of the 2026 and 2027
+# bodies against the same project's earlier saves (tools/re/bodies_across_saves.py,
+# RE-341) compares nothing: it prints a notice and a line in the run summary,
+# and is not a pass. A change to a reader of Revit 2024 to 2027 is measured with
+# `samples=true` and every year (or "2024 2027"), which runs that check and
+# turns the run red on a difference; without `samples=true` it does not run,
+# and the summary says so.
+#
 # `models` keeps only the models whose names match its patterns, and
 # `scorers` runs only the steps it names on them (tools/re scorers, and info,
 # gltf, schema and witness; "none" for none), so a probe's run spends nothing
@@ -831,20 +839,42 @@ jobs:
           if-no-files-found: error
           # Compare re-uploads them merged as measure-head and measure-base.
           retention-days: 7
-      # RE-341: no Revit export of a 2026 or 2027 beam, landing, stair run or
-      # sketch outline exists to score them against, so each 2026 and 2027
-      # save of rac_advanced, rac_basic and rst_basic is held to the same
-      # project's 2024 and 2025 saves (tools/re/bodies_across_saves.py). On the
-      # head side a difference, a missing save or a check that did not run
-      # fails the shard; it runs after the upload so the results are kept. The
-      # base side is not gated: it shows what the check says of `main`.
+
+  # RE-341: no Revit export of a 2026 or 2027 beam, tread landing, stair run or
+  # sketch outline exists to score them against, so each 2026 and 2027 save of
+  # rac_advanced, rac_basic and rst_basic is held to the same project's 2024
+  # and 2025 saves (tools/re/bodies_across_saves.py, run by the measuring
+  # script beside each sample). This job reads the head side's results and
+  # fails on a difference, a missing file or a check that did not run for want
+  # of one. It is a job of its own so that a failure turns the run red and
+  # Compare, which does not need it, still reports. The base side is not
+  # gated: its files show what the check says of `main`. A check skipped on
+  # purpose (no `samples`, no 2026 or 2027 sample, the `scorers` excluding it,
+  # a run without the earlier saves) says so in a notice and in the run summary.
+  bodies-across-saves:
+    name: Bodies across saves
+    needs: [plan, measure]
+    if: ${{ !cancelled() && needs.measure.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Workflow tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/ci/check-bodies-across-saves.sh
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: measure-head-*
+          path: measure-head
+          merge-multiple: true
       - name: Bodies match the same project's earlier save
-        if: ${{ !cancelled() && matrix.samples && matrix.side == 'head' }}
         shell: bash
         env:
-          SAMPLE_YEARS: ${{ matrix.years }}
+          SAMPLES: ${{ inputs.samples }}
+          SAMPLE_YEARS: ${{ inputs.sample_years }}
           SCORERS: ${{ inputs.scorers }}
-        run: tools/ci/check-bodies-across-saves.sh results
+        run: tools/ci/check-bodies-across-saves.sh measure-head
 
   compare:
     name: Compare

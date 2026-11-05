@@ -36,9 +36,15 @@ earlier save has no counterpart for, one the earlier save draws otherwise, one
 of the earlier save's that this save lacks altogether, a missing file, fewer
 elements than the sample is known to hold (MINIMUMS, OUTLINE_LEAST), a
 required element not compared equal (REQUIRED), and a check that compared
-nothing. An element the earlier
-save draws and this one leaves as a record box is counted, not scored: a body
-left out is fail closed.
+nothing, and on a directory whose project is not one of MINIMUMS'. An element
+the earlier save draws and this one leaves as a record box is counted, not
+scored: a body left out is fail closed.
+
+An earlier save that is not among the arguments (a run that fetched only some
+years) is not compared, and the verdict is `PARTIAL (not compared: ...)`, never
+`PASS`; an argument whose export is missing fails. Sketch outlines are also
+compared, without scoring, with the 2025 save, so that where the 2024 and 2025
+saves disagree the output says so.
 
 Usage:
 
@@ -47,7 +53,7 @@ Usage:
 
 The candidate's directory is named `sample-<year>-<project>`, as Measure
 names it. Exits 1 on any failure. The last line is `bodies across saves:
-PASS` or `FAIL`.
+PASS`, `PARTIAL (...)` or `FAIL (...)`.
 """
 
 import collections
@@ -108,6 +114,13 @@ OUTLINE_LEAST = {"racadvancedsampleproject": 82, "racbasicsampleproject": 12, "r
 # there (run 42010304828, base side): compared under whatever source each save
 # gives it, with its source and volume printed.
 NAMED_TAGS = {"racadvancedsampleproject": {"147534"}}
+# Also printed in every save, with its vertex count: rac_advanced's floor 139803,
+# which the 2024 save and the 2026 and 2027 saves draw one way (volume 441.111228
+# m3) and the 2025 save, and the 2026 save before this change, another (440.512245).
+PRINT_TAGS = {"racadvancedsampleproject": frozenset({"139803"})}
+# Sketch outlines are also compared, without scoring, with this other earlier
+# save, so that where the 2024 and 2025 saves disagree the lines say so.
+OTHER_YEAR = {SKETCH_OUTLINES: 2025}
 # Elements that must be among those compared equal, by group: rac_advanced's
 # floor the sketch lines draw as the 2024 save's, and the ceiling above.
 REQUIRED = {"racadvancedsampleproject": {SKETCH_OUTLINES: {"139803"}, NAMED_ELEMENTS: {"147534"}}}
@@ -252,7 +265,7 @@ def describe(settings, items):
     for element, source, _ in items:
         resolved = properties(element)[1]
         shape = mesh(settings, element)
-        volume = shape if isinstance(shape, str) else f"{shape[0]:.9g} m3"
+        volume = shape if isinstance(shape, str) else f"{shape[0]:.9g} m3, {len(shape[1])} vertices"
         parts.append(f"{element.is_a()} BodySource={source} ProfileResolved={resolved} volume={volume}")
     return "; ".join(parts)
 
@@ -273,14 +286,18 @@ def main():
     own_year = match.group(1) if match else "this"
     named_tags = NAMED_TAGS.get(project, frozenset())
     failures = []
+    not_compared = []
 
     def fail(text):
         failures.append(text)
 
     print(f"bodies across saves: {parent}, held to the {', '.join(str(y) for y in sorted(earlier_paths))} saves")
+    if project not in MINIMUMS:
+        fail(f"{parent!r} names no project this check knows ({', '.join(sorted(MINIMUMS))}), so nothing is known of what it should hold")
+        report_and_exit(failures, not_compared)
     if not os.path.isfile(candidate_path):
         fail(f"this save's export is missing: {candidate_path}")
-        report_and_exit(failures)
+        report_and_exit(failures, not_compared)
     model, candidate = products(candidate_path, named_tags)
     scale_candidate = ifcopenshell.util.unit.calculate_unit_scale(model)
     settings = ifcopenshell.geom.settings()
@@ -294,7 +311,7 @@ def main():
     total = 0
     minimums = MINIMUMS.get(project, {})
     required = REQUIRED.get(project, {})
-    for tag in sorted(named_tags):
+    for tag in sorted(named_tags | PRINT_TAGS.get(project, frozenset())):
         print(f"named {tag}, {own_year} save: {describe(settings, candidate.get(tag))}")
         for year, (_, reference) in sorted(earlier.items()):
             print(f"named {tag}, {year} save: {describe(settings, reference.get(tag))}")
@@ -309,9 +326,12 @@ def main():
         for source, least in minimums.get(group, {}).items():
             if by_source.get(source, 0) < least:
                 fail(f"{group}: {by_source.get(source, 0)} drawn as {source}, fewer than the {least} it holds")
+        if year not in earlier_paths:
+            not_compared.append(f"{group} ({len(chosen)} here; the {year} save is not in this run)")
+            print(f"{group}: not compared, the {year} save is not in this run ({len(chosen)} drawn here)")
+            continue
         if year not in earlier:
-            fail(f"{group}: the {year} save is missing, nothing to hold {len(chosen)} tags to")
-            print(f"{group}: not compared, the {year} save is missing")
+            print(f"{group}: not compared, the {year} save's export is missing")
             continue
         earlier_model, reference = earlier[year]
         scale_earlier = ifcopenshell.util.unit.calculate_unit_scale(earlier_model)
@@ -356,12 +376,37 @@ def main():
             f"left as boxes here, drawn in the {year} save, not scored: {sum(left_out.values())}"
             + (f" ({', '.join(f'{c} {n}' for c, n in sorted(left_out.items()))})" if left_out else "")
         )
+        other = OTHER_YEAR.get(group)
+        if other in earlier and chosen:
+            against_other(settings, (scale_candidate, ifcopenshell.util.unit.calculate_unit_scale(earlier[other][0])), chosen, earlier[other][1], group, other)
     if total == 0:
         fail("nothing was compared")
-    report_and_exit(failures)
+    report_and_exit(failures, not_compared)
 
 
-def report_and_exit(failures):
+def against_other(settings, scale, chosen, reference, group, year):
+    """Print, without scoring, how the candidate's `group` elements compare
+    with the other earlier save's: equal, different, or drawn otherwise there.
+    Where the two earlier saves disagree, the answer is in these lines."""
+    equal, differ, otherwise = 0, [], 0
+    for tag in sorted(chosen, key=lambda t: (0, int(t)) if t.isdigit() else (1, t)):
+        selected = [item for item in reference.get(tag, []) if item[2] == group]
+        if len(selected) != len(chosen[tag]):
+            otherwise += 1
+            continue
+        found = []
+        for left, right in zip(chosen[tag], selected):
+            found += [(left[0].is_a(), *field) for field in differences(settings, scale, left, right)]
+        if found:
+            differ.append((tag, found))
+        else:
+            equal += 1
+    print(f"{group} against the {year} save, not scored: {equal} equal, {len(differ)} differ, {otherwise} drawn otherwise there")
+    for tag, found in differ[:10]:
+        print(f"  {group} against the {year} save: {tag} " + "; ".join(f"{cls} {field}: {mine} here" + (f", {theirs} there" if theirs else "") for cls, field, mine, theirs in found))
+
+
+def report_and_exit(failures, not_compared):
     for line in failures[:SHOW]:
         print(f"  {line}")
     if len(failures) > SHOW:
@@ -369,6 +414,9 @@ def report_and_exit(failures):
     if failures:
         print(f"bodies across saves: FAIL ({len(failures)} differences)")
         sys.exit(1)
+    if not_compared:
+        print(f"bodies across saves: PARTIAL (not compared: {'; '.join(not_compared)})")
+        sys.exit(0)
     print("bodies across saves: PASS")
     sys.exit(0)
 
