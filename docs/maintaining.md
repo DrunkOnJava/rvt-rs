@@ -573,9 +573,13 @@ shard of a commit missed the binary cache at once and built the same binaries
   crate leaves the server's answers NOT MEASURED on that side (a warning in the
   Build job), and a probe that does not exist at the base ref is skipped there
   (a notice).
-- **A failed build** fails the run and skips the shards, Compare and the gates'
-  two checks; the `same-project gates` job still runs and writes the verdict as
-  NOT MEASURED (`neutral`), never a pass. Read the Build job, not Compare.
+- **A failed build** fails the run. That side's shards fail at the artifact
+  download and the other side's still run (its results, and the `same-project
+  gates` verdict, are not lost with it); Compare, which needs every shard, is
+  skipped, so the run never reads as a pass. The gates' job still runs and
+  writes the verdict as NOT MEASURED (`neutral`), or a failure if a result that
+  did arrive fails, never a success; with no head result at all it leaves its two
+  checks out. Read the Build job, not Compare.
 - **A ref that is not a full SHA** (`refs/pull/N/head`) is checked out as given by
   the Build job and by every shard; a shard fails if the ref moved between them,
   since the binaries and its source would be two commits.

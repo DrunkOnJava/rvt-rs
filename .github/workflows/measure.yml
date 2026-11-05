@@ -422,9 +422,10 @@ jobs:
   # once on a commit the binary cache had not seen, built the same binaries:
   # over 36 dispatched runs Build was 150 of 720 job-minutes (#1457), and a run
   # of 12 shards built 12 times. A shard now runs no cargo, no rustc and no
-  # build script of the measured ref. A build that fails fails the run and
-  # skips the shards and Compare; the gates' job still runs and writes
-  # NOT MEASURED.
+  # build script of the measured ref. A side whose build fails fails the run:
+  # that side's shards fail at the artifact download, the other side's still
+  # run, Compare (which needs every shard) is skipped, and the gates' job
+  # writes NOT MEASURED.
   build:
     name: Build ${{ matrix.side }}
     needs: plan
@@ -609,6 +610,11 @@ jobs:
   measure:
     name: Measure ${{ matrix.side }} ${{ matrix.shard }}
     needs: [plan, build]
+    # Also when a Build job failed: a shard of that side then fails at the
+    # artifact download, and the other side's shards still run, so its results
+    # and the gates' verdict are not lost with it. The run is red either way,
+    # and Compare, which needs every shard, is skipped.
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
@@ -953,6 +959,8 @@ jobs:
           name: measure-${{ matrix.side }}-${{ matrix.shard }}
           path: results
           if-no-files-found: error
+          # A re-run of all jobs uploads the same names again.
+          overwrite: true
           # Compare re-uploads them merged as measure-head and measure-base.
           retention-days: 7
 
@@ -972,9 +980,12 @@ jobs:
   # or 2027 sample, the `scorers` excluding it, a run without the earlier saves,
   # a run with `ifc_flags`) says so in a notice and in the run summary. Measure is not a required check:
   # the failure is read before landing, by the landing rule.
-  # A failed Build job skips every shard, so there are no results to read: the
-  # two checks are left out (they would fail on a missing directory, which
-  # says nothing) and the verdict, written all the same, reads NOT MEASURED.
+  # A failed Build job of the head side leaves no head results to read: the two
+  # checks are then left out (they would fail on a missing directory, which
+  # says nothing) and the verdict, written all the same, reads NOT MEASURED. A
+  # failed Build job of the base side leaves the head results, which are
+  # checked as always; the verdict then reads NOT MEASURED, or fails if a
+  # result does, since a measure shard ended red.
   same-project-gates:
     name: Same-project gates
     needs: [plan, build, measure]
@@ -1000,17 +1011,23 @@ jobs:
         with:
           pattern: measure-head-*
           path: measure-head
-      - name: No shard ran
-        if: ${{ needs.measure.result == 'skipped' }}
+      - name: Head results
+        id: results
         shell: bash
         env:
           BUILD_RESULT: ${{ needs.build.result }}
+          MEASURE_RESULT: ${{ needs.measure.result }}
         run: |
-          msg="No measure shard ran (the Build job ended $BUILD_RESULT): the same-project gates compared nothing, and their verdict reads NOT MEASURED."
-          echo "::warning::$msg"
-          printf -- '- %s\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$(find measure-head -type f -print -quit 2>/dev/null)" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            msg="No head shard left a result (the Build jobs ended $BUILD_RESULT, the measure shards $MEASURE_RESULT): the same-project gates compared nothing, and their verdict reads NOT MEASURED."
+            echo "::warning::$msg"
+            printf -- '- %s\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Bodies match the same project's earlier save
-        if: ${{ needs.measure.result != 'skipped' }}
+        if: ${{ steps.results.outputs.present == 'true' }}
         shell: bash
         env:
           SAMPLES: ${{ inputs.samples }}
@@ -1018,7 +1035,7 @@ jobs:
           SCORERS: ${{ inputs.scorers }}
         run: tools/ci/check-bodies-across-saves.sh measure-head
       - name: The Areas agree across rac_advanced's saves
-        if: ${{ !cancelled() && needs.measure.result != 'skipped' }}
+        if: ${{ !cancelled() && steps.results.outputs.present == 'true' }}
         shell: bash
         env:
           SAMPLES: ${{ inputs.samples }}
@@ -1039,8 +1056,8 @@ jobs:
           SAMPLE_YEARS: ${{ inputs.sample_years }}
           SCORERS: ${{ inputs.scorers }}
           IFC_FLAGS: ${{ inputs.ifc_flags }}
-          # Skipped shards are told apart from a red one: the build is why.
-          MEASURE_RESULT: ${{ needs.measure.result == 'skipped' && format('skipped, the Build job ended {0}', needs.build.result) || needs.measure.result }}
+          # A shard that ended red because its side's build did is told apart.
+          MEASURE_RESULT: ${{ needs.build.result != 'success' && format('{0}, the Build jobs ended {1}', needs.measure.result, needs.build.result) || needs.measure.result }}
         run: |
           sha=$(gh api "repos/$REPO/commits/$MEASURED" --jq .sha)
           # The `=` forms: `--saved-meshes` is a value ifc_flags takes.
