@@ -314,7 +314,7 @@ pub enum ExportNote {
     /// Revit raised their base (#1385, RE-338).
     #[non_exhaustive]
     EmbedHostBodies {
-        /// Walls that embed a curtain wall, drawn as plain extrusions with
+        /// Walls that embed a curtain wall, drawn as plain or stepped extrusions with
         /// nothing hosted in them.
         hosts: usize,
         /// Of those, walls now drawn from their saved mesh.

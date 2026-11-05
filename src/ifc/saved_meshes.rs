@@ -33,8 +33,9 @@
 //! tells apart from a wall that keeps them; the mesh Revit last drew is the
 //! body, and its lowest vertex is Revit's lowest point on all 113 walls
 //! measured. A wall with an opening hosted in it, a Tag shared with another
-//! entity, a body that is not a plain extrusion or a mesh that did not decode
-//! whole keeps the body it had, as does one whose mesh starts at its base.
+//! entity, a body that is neither a plain extrusion nor one with a stepped top
+//! (RE-320) or a mesh that did not decode whole keeps the body it had, as does
+//! one whose mesh starts at its base.
 
 use super::IfcModel;
 use super::entities::{BrepTriangle, IfcEntity, Property, PropertyValue, SolidShape};
@@ -42,6 +43,7 @@ use super::export_content::{
     BEAM_BOX_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE, SPACE_OUTLINE_SAVED_MESH,
     SPACE_OUTLINE_SOURCE_PROPERTY,
 };
+use super::wall_cut_openings::is_stepped;
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
 use crate::native_wall_cuts::WallCutKind;
 use std::collections::{BTreeMap, BTreeSet};
@@ -71,7 +73,7 @@ pub struct SavedMeshReport {
     pub partial: usize,
     /// Triangles written in all.
     pub triangles: usize,
-    /// Walls that embed a curtain wall, drawn as plain extrusions with nothing
+    /// Walls that embed a curtain wall, drawn as plain or stepped extrusions with nothing
     /// hosted in them (#1385, RE-338).
     pub embed_hosts: usize,
     /// Of those, walls now drawn from their saved mesh, Revit having raised
@@ -306,7 +308,7 @@ pub fn attach_scoped_with_control(
 }
 
 /// The walls that embed a curtain wall (`WallEmbedWallGStep`), ElementId to
-/// entity index: drawn as plain extrusions, alone in their Tag, with nothing
+/// entity index: drawn as plain or stepped extrusions, alone in their Tag, with nothing
 /// hosted in them and not in `taken`. Nothing where the model has no curtain
 /// wall, so a file without one reads no wall record here, or where the walls'
 /// native records are not read.
@@ -354,13 +356,16 @@ fn embed_hosts(
         let IfcEntity::BuildingElement {
             location_feet: Some(_),
             extrusion: Some(_),
-            solid_shape: None,
+            solid_shape,
+            property_set,
             ..
         } = entity
         else {
             continue;
         };
-        if hosted.contains(&index) {
+        // A plain extrusion, or RE-320's stepped top, which the mesh includes.
+        if hosted.contains(&index) || (solid_shape.is_some() && !is_stepped(property_set.as_ref()))
+        {
             continue;
         }
         if let Some(id) = element_id(entity, "IFCWALL") {

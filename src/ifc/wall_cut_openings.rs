@@ -68,7 +68,7 @@ impl Host {
 
 /// Whether a wall's body is RE-320's stepped one: its `extrusion` is still
 /// the whole prism, and an opening voids every piece of the body.
-fn is_stepped(set: Option<&PropertySet>) -> bool {
+pub(super) fn is_stepped(set: Option<&PropertySet>) -> bool {
     set.is_some_and(|set| {
         set.properties.iter().any(|property| {
             property.name == "BodyHeightSource"
