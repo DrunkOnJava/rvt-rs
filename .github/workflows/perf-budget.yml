@@ -74,3 +74,18 @@ jobs:
           name: perf-budget-json
           path: target/perf-budgets/perf-budget.json
           if-no-files-found: warn
+
+  # A failed run opens an issue under `scheduled:runtime-and-memory-budgets`, or
+  # leaves the open one alone (report-failure.yml). Before this nobody read a red
+  # week. A manual run is a dry run: it prints the issue it would open.
+  report:
+    name: Report a failed week
+    needs: perf-budget
+    if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    uses: $/.github/workflows/report-failure.yml
+    with:
+      dry_run: ${{ github.event_name != 'schedule' }}

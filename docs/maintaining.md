@@ -679,16 +679,27 @@ line names what to fix (its rulesets check needs an admin token). The list:
    cited commit GitHub does not have at all; whether a ref reaches it is not
    checked automatically.
 3. The Actions cache is under its 10 GB limit. `python3
-   tools/maintainer/clean_caches.py` (a dry run; `--delete` acts) removes the
+   tools/maintainer/clean_caches.py` (a dry run; `--delete` acts, and
+   `scheduled-checks.yml` runs it with `--delete` every day) removes the
    caches of closed pull requests and deleted branches, and `main`'s superseded
-   rust-cache generations and CodeQL overlay base databases (per CodeQL version): a new lockfile
+   rust-cache generations, CodeQL overlay base databases (per CodeQL version)
+   and Fuzz corpus generations (per target): a new lockfile
    saves a new cache under a new key, and each CodeQL analysis of `main` saves
-   a new base database, and the old ones are never read again. `main`'s newest
+   a new base database and each nightly Fuzz run a new corpus, and the old ones
+   are never read again. `main`'s newest
    two generations of each family, live branches' and open pull requests'
    caches are kept.
 4. Workflow runs on `main` are green. A red check is a defect to fix, or an
    issue to file with its cause, and a check that fails only because a service
-   is down reports "not measured" rather than failing.
+   is down reports "not measured" rather than failing. A "not measured"
+   warning that is on every run of `main` for a day (three runs or more) opens
+   an issue under `scheduled:not-measured-<what>`
+   (`tools/ci/not_measured.py`, in `scheduled-checks.yml`). That workflow also
+   audits the three lockfiles (the root's, the fuzz workspace's and the
+   witness's) for advisories every day and builds the docs on a floating
+   nightly every Monday, and Corpus nightly and Performance Budgets report
+   through the same piece: a failed job opens an issue under
+   `scheduled:<job name>`, or leaves the open one alone, and never comments.
 5. Open Dependabot and code scanning alerts are triaged, each fixed or
    dismissed with a reason, and Dependabot watches every lockfile (a pip
    requirements file pinned with hashes among them), Dockerfile, composite

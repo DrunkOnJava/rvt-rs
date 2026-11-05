@@ -1,0 +1,50 @@
+name: Report failed scheduled checks
+
+# Called by the last job of a scheduled workflow (scheduled-checks.yml,
+# corpus-nightly.yml, perf-budget.yml), which runs `if: failure()` and holds
+# `actions: read` and `issues: write` for it. For each job of the calling run
+# that failed it opens one issue under the label `scheduled:<the job's name>`,
+# or leaves alone the one already open under that label: no comment, no edit.
+# A comment on an issue is the maintainer's to write, and a check that keeps
+# failing leaves one open issue rather than one a night. The logic is
+# tools/ci/open_issue.py, which a dry run exercises without opening anything.
+#
+# The checks whose failure is not a failed job (a NOT MEASURED warning that
+# persists) call the same script from their own job.
+
+on:
+  workflow_call:
+    inputs:
+      dry_run:
+        description: Print the issues that would be opened and open none.
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  report:
+    name: Open an issue for each failed job
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/ci/open_issue.py
+          sparse-checkout-cone-mode: false
+      - name: Open the issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=()
+          if [ "$DRY_RUN" = true ]; then
+            args+=(--dry-run)
+          fi
+          python3 tools/ci/open_issue.py failed-jobs "${args[@]}"

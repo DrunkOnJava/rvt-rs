@@ -11,7 +11,10 @@
 - on `main`, the superseded generations of Measure's score cache, which a run
   restores from the newest of its prefix and saves anew, and all but the newest
   sixteen of its binary caches, one per commit built, which only runs of that
-  commit read.
+  commit read;
+- on `main`, the superseded generations of Fuzz's corpus of each target: every night
+  saves a new key, `fuzz-corpus-<target>-<run id>`, and the next night restores only
+  the newest of the target's prefix.
 
 The caches of live branches, of open pull requests, of tags, and `main`'s newest
 generations are kept. The repository's cache limit is 10 GB and GitHub evicts the
@@ -51,6 +54,9 @@ SCORE_CACHE_KEY = re.compile(r"(measure-scores-v\d+-.+?)(?:-[0-9a-f]{40})?-\d+-\
 # per commit built. A commit's key is read only by runs of that commit, which are
 # the last few: the newest BINARY_GENERATIONS are kept.
 BINARY_CACHE_KEY = re.compile(r"(rvt-bin-v\d+)-[0-9a-f]{40}-.+")
+# Fuzz's corpus (fuzz.yml): fuzz-corpus-<target>-<run id>, a new key per target per night. The
+# next run restores the newest key of its target's prefix, so the family is the target.
+FUZZ_CORPUS_KEY = re.compile(r"(fuzz-corpus-[a-z0-9_]+)-\d+")
 BINARY_GENERATIONS = 16
 
 
@@ -94,6 +100,7 @@ def unusable(caches, open_prs, live_branches, keep):
                     or CODEQL_OVERLAY_KEY.fullmatch(c["key"])
                     or SCORE_CACHE_KEY.fullmatch(c["key"])
                     or BINARY_CACHE_KEY.fullmatch(c["key"])
+                    or FUZZ_CORPUS_KEY.fullmatch(c["key"])
                 )
                 if k:
                     generations.setdefault(k.group(1), []).append(c)
@@ -107,7 +114,7 @@ def unusable(caches, open_prs, live_branches, keep):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--repo", default="DrunkOnJava/rvt-rs")
-    ap.add_argument("--keep", type=int, default=2, help="newest generations of each rust-cache or CodeQL family kept on main")
+    ap.add_argument("--keep", type=int, default=2, help="newest generations of each rust-cache, CodeQL, score or Fuzz corpus family kept on main")
     ap.add_argument("--delete", action="store_true", help="delete them; without it, only print")
     args = ap.parse_args()
     repo = args.repo
