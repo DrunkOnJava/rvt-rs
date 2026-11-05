@@ -1439,12 +1439,27 @@ pub fn append_typed_production_elements(
                     .or_else(|| round.map(|diameter| [diameter, diameter])),
                 crate::partition_schema_mvp::column_partners_from_fields(&decoded.fields),
             ) {
+                let float_field = |wanted: &str| {
+                    decoded.fields.iter().any(|(name, value)| {
+                        name == wanted && matches!(value, InstanceField::Float { .. })
+                    })
+                };
                 pending_columns.push(column_quantities::Pending {
                     index: entity_index,
                     cut,
                     clean,
                     sides,
                     round: round.is_some(),
+                    trimmed: float_field(crate::partition_schema_mvp::COLUMN_BODY_BOTTOM_FIELD)
+                        && float_field(crate::partition_schema_mvp::COLUMN_BODY_TOP_FIELD),
+                    release: decoded.fields.iter().find_map(|(name, value)| match value {
+                        InstanceField::Integer { value, .. }
+                            if name == crate::partition_schema_mvp::COLUMN_RELEASE_FIELD =>
+                        {
+                            u32::try_from(*value).ok()
+                        }
+                        _ => None,
+                    }),
                 });
             }
         }
@@ -1704,7 +1719,7 @@ pub fn append_typed_production_elements(
 
     // RE-291: the base quantities of the columns a clean pair joins, where
     // nothing they are paired with cuts them.
-    column_quantities::add_joined_column_quantities(entities, &pending_columns);
+    column_quantities::add_joined_column_quantities(entities, &pending_columns, &slab_shapes);
 
     // #323: group each whole's parts into one aggregate.
     let mut parts_by_whole: BTreeMap<usize, Vec<usize>> = BTreeMap::new();

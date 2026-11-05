@@ -34,11 +34,15 @@ Checked offline: the probe prints each column's and each partner's plan placemen
 
 ## 3. The rule
 
-A column is taken as cut, and gets `CrossSectionArea` and `NetVolume` as above and no other quantity, when its body is the record box and its type a plain rectangle (RE-291), a clean pair joins it, and
+A column is taken as cut, and gets `NetVolume` and, where the next limit allows, `CrossSectionArea` as above and no other quantity, when its body is the record box and its type a plain rectangle (RE-291), a clean pair joins it, and
 
-- every element its cut pairs name is a slab lying wholly above or wholly below it, except one slab whose span starts inside the column and reaches its top (a wall, a covering or any other cut partner leaves the column out);
+- every element its cut pairs name is a slab lying wholly above or wholly below it, except one slab whose span starts inside the column and reaches its top (a wall, a covering or any other cut partner leaves the column out), and a clean pair names that slab too;
 - every element its clean pairs name is a wall, a covering, a column, a slab lying clear, that slab, or another slab across its top that has no plan area inside the column's section;
-- the slab is one piece with a rectangle, a closed polyline or a polyline with voids as its outline, and the part of it inside the column's section is more than a nick and less than the whole.
+- the slab, and any other slab across the top, is one exported extrusion whose profile was set (a rectangle, a closed polyline or one with voids: a floor whose sketch was not read is its record box and has none), and the wall pass knows its top as flat (`SlabTop::Flat`: its record was read and no shape edit moves it). A sloped or shape-edited floor's underside is not its base, so the slab's base is only the cut's where the top is flat. A floor with a shaft: the shaft is cut from the floor's outline on Revit 2024, the one release read, and the later releases that leave the floor whole are not read;
+- the part of the slab inside the column's section is more than a nick and less than the whole;
+- the file is Revit 2024 and the column's body is not one RE-178 trimmed (it keeps the record box's source though its body is cut).
+
+`CrossSectionArea` as half the surface of the cut box is measured on 18 meshes whose every face is parallel to a side of the column's section, and those cannot tell it from any other one-sided area: on a cut face that is oblique to the section's sides it may differ. So it is written only where every edge of the slab inside the section runs parallel to a side of it (to 1e-6 in the sine of the angle), and where one does not, `NetVolume` alone is written, which is exact geometry. The 17 columns measured here all have square cuts. The pass reads Revit 2024 alone because the office is the only file either rule is measured on; the files of 2023 and 2025 to 2027 have no cut column measured, and `samples=true` does not compare column quantities, so a release is not opened by a run that cannot see it.
 
 Measured on the office at permit: 17 of the 18 (section 5). Left out, with the reason: 1343915, whose cut pairs name a wall that only touches it (a wall that cuts a column changes its section, RE-291 section 2, so a cut wall is refused without testing where it lies). Its two quantities the same formulas give Revit's to 1e-13 offline.
 
@@ -54,13 +58,15 @@ Measured on the office at permit: 17 of the 18 (section 5). Left out, with the r
 | `GrossVolume` | 0.10595871038880049 m³ | 0.1060287520 | 0.99934 |
 | `NetVolume` | 0.10600540431829328 m³ | 0.1060287520 | 0.99978 |
 
-- `OuterSurfaceArea` is the circumference times the height, exactly. rvt-rs writes it where the type's named lengths are `Diameter`, equal to both sides of the record box, and at most `Offset Base` and `Offset Top` each exactly 0 (any other named length, `b` or `h` among them, leaves it out), and no pair joins the column. That is one column on each of the two files, the same column; no other measured file has a round column, so this is a formula checked on one column, not a rule measured across several.
+- `OuterSurfaceArea` is the circumference times the height, exactly. The column is taken as round from the caption `Diameter` of its type's length parameter alone, with the two zero offsets, and not from its body (rvt-rs draws it as a box, W6); that is one column, and it is read on Revit 2024 only and not where RE-178 trimmed the column, as for the cut columns. rvt-rs writes it where the type's named lengths are `Diameter`, equal to both sides of the record box, and at most `Offset Base` and `Offset Top` each exactly 0 (any other named length, `b` or `h` among them, leaves it out), and no pair joins the column. That is one column on each of the two files, the same column; no other measured file has a round column, so this is a formula checked on one column, not a rule measured across several.
 - `CrossSectionArea` and `GrossVolume` (which is the area times the length to 1e-15) are not the circle's: Revit's extrusion area is 0.99934 of it. No whole numbers of chords for the three arcs give a tessellation that reproduces it: a search over 1 to 400 chords of the half circle and 1 to 300 of each quarter finds the nearest at 8e-12 with 319, 13 and 48 chords, about what chance gives for 18 million combinations and not a tessellation anyone would choose. The area is the exporter's own, not a function of the diameter that rvt-rs has.
 - `NetVolume` is the element's computed volume parameter (section 1), 0.99978 of the cylinder's. It differs from `GrossVolume`, and from the circle's, by amounts no formula of the diameter and the height gives; the same column would need its joins and cuts, and none is recorded.
 
 So the three stay out. A formula has to explain both volumes or stay out, and none does.
 
 ## 5. Measured
+
+These figures are from the run below at 223968aa. The limits of section 3 (the flat slab and set profile, the square cut for `CrossSectionArea`, the release gate, the trimmed column, the slab joined by a clean pair) were added after it and are not yet measured on this head; the 17 columns are the ones they are meant to keep.
 
 Measure run [42122584803](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42122584803) (head 223968aa against `main` at 16682a7a, `qtos_vs_ifc` and `psets_vs_ifc` with `--revit-set-placement`, the office as built and at permit, the 18 held-out models, the 24 R2025 models, the four RE1 models, Core Interior and Einhoven), after [42117851460](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42117851460) (head 0a5d2ad1, before the round column's offsets were read):
 
@@ -79,7 +85,9 @@ The gains are the 17 columns' two quantities at permit (34) and the round column
 ## 6. What stays out
 
 - The round column's `CrossSectionArea`, `GrossVolume` and `NetVolume` (section 4).
-- Column 1343915's two quantities (section 3), and any meshed column whose slab is not one piece, has an outline with an arc, or lies wholly across the section.
+- Column 1343915's two quantities (section 3), and any meshed column whose slab is not one piece, has an outline with an arc, has no outline set, is sloped or shape-edited, or lies wholly across the section.
+- `CrossSectionArea` where an edge of the slab inside the section is oblique to its sides: `NetVolume` alone is written.
+- The cut columns and the round column on any release but Revit 2024, and a column RE-178 trimmed.
 - The three extruded columns with a slab across their top by a clean pair alone (RE-291): unchanged.
 - Every other form of cut: a column cut by a wall, a beam, a roof or a footing.
 
