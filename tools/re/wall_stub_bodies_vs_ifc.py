@@ -20,6 +20,8 @@ Usage:
 
     python3 tools/re/wall_stub_bodies_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc>
 
+The columns the hosts have cut partners with (`PARTNERS`) are listed the same way.
+
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
 
@@ -35,6 +37,14 @@ HOSTS = {
     2178914, 2178961, 2180467, 2180468, 2181428, 2181501, 2293116, 2294996, 2491432,
     2495664, 2496491, 2500627, 2724158, 2964905, 3449245, 3450274, 3458395, 3458466,
     3458467, 3458528, 3458559, 1378125, 1416796, 1341937, 1348324,
+}
+
+# The elements those walls have a CutPairGStep or a CleanPairGStep with, on the
+# columns: their volume against the prism of their box tells which of the pair
+# the other cuts.
+PARTNERS = {
+    1927726, 1927727, 3461614, 3461615, 1926699, 1926727, 1926731, 1928007, 1928008,
+    1929253, 1929254, 2294995, 1343915,
 }
 
 
@@ -58,12 +68,12 @@ def report(name, path):
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     f = ifcopenshell.open(path)
-    for wall in f.by_type("IfcWall"):
+    for wall in list(f.by_type("IfcWall")) + list(f.by_type("IfcColumn")):
         try:
             tag = int(wall.Tag)
         except (TypeError, ValueError):
             continue
-        if tag not in HOSTS or wall.Representation is None:
+        if tag not in HOSTS | PARTNERS or wall.Representation is None:
             continue
         mesh = body_mesh(settings, wall)
         if mesh is None:
