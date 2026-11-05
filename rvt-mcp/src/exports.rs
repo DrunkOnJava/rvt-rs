@@ -88,6 +88,13 @@ fn finish(
             "{format} export of {}; sha256 {}",
             entry.id, written.sha256
         ));
+    let mut notes = source.notes.to_vec();
+    let folded: usize = diagnostics.exported.body_pieces_folded.values().sum();
+    if format == "glb" && folded > 0 {
+        notes.push(format!(
+            "The glb also draws {folded} piece(s) of elements of separate loops that the IFC export folds into the body of another element (exported.body_pieces_folded): building_elements and entity_counts count the elements the IFC writes and leave them out."
+        ));
+    }
     let out = ExportOut {
         model_id: entry.id.clone(),
         format: format.to_string(),
@@ -101,7 +108,7 @@ fn finish(
         entity_counts: diagnostics.exported.by_ifc_type.clone(),
         partial: !source.unread.is_empty(),
         unread_streams: unread_out(source.unread),
-        notes: source.notes.to_vec(),
+        notes,
         diagnostics: if with_diagnostics {
             serde_json::to_value(diagnostics).ok()
         } else {

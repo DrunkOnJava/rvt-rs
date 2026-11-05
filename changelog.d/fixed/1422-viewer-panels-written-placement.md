@@ -61,6 +61,5 @@
   (`ExportOptions::default()`). The probe's checks derive from `placements`,
   so they prove the viewer's views follow the writer's decision and not that
   the decision is right (the MCP scorer reading the written IFC does, run
-  41977947391). The diagnostics' count of folded pieces is #1424, until which
-  the Schedule panel's total can read 47 below the diagnostics' on the
-  office.
+  41977947391). The diagnostics' count of folded pieces is #1424's: before it
+  the Schedule panel's total read 47 below the diagnostics' on the office.
