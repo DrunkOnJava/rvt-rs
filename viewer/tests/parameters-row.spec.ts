@@ -420,8 +420,8 @@ sampleTest(
 // An element selected again is not read again: the page keeps each answer for
 // the open file, a bounded few, and starts afresh when a file is opened.
 sampleTest(
-  'an element selected again is not read again, and a file opened again starts a new map',
-  async ({ page }) => {
+  'an element selected again is not read again, and another file opened starts a new map',
+  async ({ page }, testInfo) => {
     test.setTimeout(300_000);
     const expected = oracle();
     await page.addInitScript(() => {
@@ -461,9 +461,13 @@ sampleTest(
     expect(againB.cacheElements).toBe(2);
     expect(againB.cacheCharacters!).toBeGreaterThan(0);
 
-    // The same file opened again: nothing is carried over.
+    // Another file opened (a copy under another name: the browser raises no
+    // change when the file input is given the file it already holds): nothing
+    // is carried over.
     const before = await page.locator('#status').getAttribute('data-load-stats');
-    await page.locator('#file-input').setInputFiles(sample!);
+    const copy = testInfo.outputPath('Einhoven-copy.rvt');
+    fs.copyFileSync(sample!, copy);
+    await page.locator('#file-input').setInputFiles(copy);
     // The open's figures are removed when it starts and written when it ends.
     await expect
       .poll(
@@ -477,9 +481,10 @@ sampleTest(
     await expect(page.locator('#status')).toHaveText(/Loaded/);
     await select(page, a!.index);
     const afresh = await settled(page);
-    expect(await reads(), 'a file opened again kept an answer').toBe(3);
+    expect(await reads(), 'another file opened kept an answer').toBe(3);
     expect(afresh.cacheElements).toBe(1);
     expect(differences(a!.id, afresh, expected.get(a!.id)!)).toEqual([]);
+    fs.rmSync(copy, { force: true });
   },
 );
 
