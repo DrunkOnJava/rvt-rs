@@ -51,6 +51,10 @@ const AXIS_TOLERANCE: f64 = 1e-6;
 /// How much longer than thick a door's opening is, at the least, for the
 /// door's wall to run along its long side.
 const DOOR_SLENDERNESS: f64 = 2.0;
+/// How far a door's opening box may lie from a second wall's body, on either
+/// axis, for the wall to be the one it reaches, feet: Revit's export writes
+/// the opening where the box only touches the wall's face or end, and on the
+/// office where it lies up to 0.164 ft off.
 
 /// Why a step of a wall's record writes no opening, as the diagnostics
 /// count it (`exported.wall_cut_openings_left_out`).
@@ -389,7 +393,7 @@ fn door_box(door: &IfcEntity, cut: &OpeningCut) -> Option<[f64; 6]> {
 }
 
 /// A door that also cuts a second wall: its own opening box, where the
-/// wall runs across the door's wall. The door's wall runs along the long
+/// wall runs across the door's wall and the box reaches it. The door's wall runs along the long
 /// side of the box; a second wall along it is not written, for the opening
 /// then reaches five feet either side of the plane its symbol cuts in,
 /// which is not read.
@@ -405,7 +409,8 @@ fn door_cut(host: &Host, world: &[f64; 6], door: usize) -> Result<Cut, &'static 
         return Err(reason::DOOR_WALL_PARALLEL);
     }
     let (along, left, up) = host.ranges(world);
-    if overlap(left, host.band) <= 0.0 || overlap(along, host.along) <= MIN_EXTENT_FEET {
+    if overlap(left, host.band) < -DOOR_REACH_FEET || overlap(along, host.along) < -DOOR_REACH_FEET
+    {
         return Err(reason::DOOR_NOT_IN_WALL);
     }
     Ok(Cut {
