@@ -816,6 +816,20 @@ jobs:
           if-no-files-found: error
           # Compare re-uploads them merged as measure-head and measure-base.
           retention-days: 7
+      # RE-341: no Revit export of a 2026 or 2027 beam, landing, stair run or
+      # sketch outline exists to score them against, so each 2026 and 2027
+      # save of rac_advanced, rac_basic and rst_basic is held to the same
+      # project's 2024 and 2025 saves (tools/re/bodies_across_saves.py). On the
+      # head side a difference, a missing save or a check that did not run
+      # fails the shard; it runs after the upload so the results are kept. The
+      # base side is not gated: it shows what the check says of `main`.
+      - name: Bodies match the same project's earlier save
+        if: ${{ !cancelled() && matrix.samples && matrix.side == 'head' }}
+        shell: bash
+        env:
+          SAMPLE_YEARS: ${{ matrix.years }}
+          SCORERS: ${{ inputs.scorers }}
+        run: tools/ci/check-bodies-across-saves.sh results
 
   compare:
     name: Compare
