@@ -4,7 +4,7 @@
 **Issues:** #255, #227
 **Credit:** rosejn (#255: the native object-graph and saved-graphics reader, `native_saved_scene` and the modules under it, extracted with their authorship).
 
-**Result:** positive for doors, shading devices, columns, members, plates, furniture and most fixtures; negative for windows. Opt-in.
+**Result:** positive for doors, columns, members, plates, furniture and most fixtures; negative for windows. Opt-in. Core Interior's shading devices, which this result first named, and its rooms are not saved-mesh bodies on `main` (the note under the first table, 2026-11-05, #1492).
 
 - A Revit file keeps the graphics it last drew for each element. rosejn's reader decodes them per ElementId in document feet, at a chosen detail level (Fine here).
 - `saved_meshes::attach` replaces every body that is only its element record's bounding box (`BodySource` `partition_element_record_bbox`, no resolved profile) with the element's saved mesh, in the element's own placement. Elements drawn from decoded data keep their bodies, and so do aggregate wholes (stairs, curtain walls), whose parts are already drawn. A Tag carried by several entities is left alone.
@@ -17,7 +17,7 @@
 | file | category | n | within 0.01 ft, saved mesh | within 0.01 ft, box |
 |---|---|---:|---:|---:|
 | Core Interior (2024) | IfcDoor | 132 | 132 | 0 |
-| | IfcShadingDevice | 20 | 20 | |
+| | IfcShadingDevice, before RE-95 (see the note below) | 20 | 20 | |
 | | IfcWindow | 6 | 6 | |
 | Snowdon Towers (2024) | IfcMember | 1,595 | 1,565 | 641 |
 | | IfcPlate | 484 | 461 | 228 |
@@ -31,7 +31,9 @@
 | | IfcCovering | 68 | 68 | 51 |
 | | all replaced | 3,736 | 3,332 | 1,138 |
 
-Core Interior's 116 rooms also take their saved mesh: the room volume, with the same extents as the record box but the room's own outline (up to 31 triangles, not 12). Revit's reference export carries no spaces to score them against.
+Core Interior's 116 rooms also took their saved mesh when this was measured: the room volume, with the same extents as the record box but the room's own outline (up to 31 triangles, not 12). Revit's reference export carries no spaces to score them against.
+
+**Note, 2026-11-05 (#1492): Core Interior's 20 shading devices and 116 rooms are not saved-mesh bodies on `main`, and never were.** The two Core Interior rows above and the sentence on its rooms were measured on 2026-09-27, when the 20 shading-device plates and the rooms were still record boxes. RE-95 (#467, merged 2026-09-28) closed the plates' sketch outlines, so each plate is drawn as an extrusion of its own 28-vertex outline with one void, and RE-101 (#473, merged 2026-09-28) gave each room the outline of its stored solid and `ProfileResolved` true (RE-313: 116 of 116 rooms on a stored solid). `saved_meshes::attach` replaces a body only where its `BodySource` is the record box and its `ProfileResolved` is false, and that condition is in `src/ifc/saved_meshes.rs` as it stands at 73861770, the first commit on `main` with `--saved-meshes`, whose history holds both #467 and #473. So the option never drew the plates or the rooms on `main`, and no body that measured exact was lost: they stopped being record boxes before they could be replaced by a mesh. Core Interior's candidates are its 132 doors and 6 windows, 138 in all, which is what `rvt-ifc --saved-meshes` prints (`138 of 138 bounding-box bodies drawn from their saved graphics`, Measure run 41850769925 at `e024f03c`); the count of 158 in the rows above is the branch's from before its rebase onto `main` on 2026-09-30, and PR #420's description repeats it. The Snowdon rows are from the same earlier tree, are local only and have not been re-run.
 
 Snowdon Towers: 3,789 of 4,744 bounding-box bodies replaced, 2.55 M triangles, 37 s and 5.6 GB peak memory for the export (`--profile ci`). Without the option the IFC is 12 MB.
 
