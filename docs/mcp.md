@@ -170,7 +170,9 @@ aggregation say. A further piece of an element of separate loops, which the
 export writes as an item of the owner's body and not as an element, is not a
 row and not in `total` or `by_ifc_type`; the summary counts it by IFC entity
 in `folded_into_bodies` (always present, empty where none is folded), and the
-diagnostics' `exported` counts include it. A part of several wholes takes the storey of the first,
+diagnostics' `exported` counts leave it out too, holding it apart in
+`exported.body_pieces_folded` (the same counts). A part of several wholes
+takes the storey of the first,
 which is not measured. The diagnostics' `storey_bound_elements` and the rooms
 schedule (`room_rows`) read the same placement, so a part counts as bound to
 its whole's storey in both.
@@ -183,8 +185,8 @@ of a space). The exporter names an element nothing named
 as its `Name`, and the server leaves it out (`name` is absent), but the same
 placeholder on any other element is still served as its `name` (a wall nothing
 named is `Wall-<ElementId>`). On the models Measure runs, 23 of Einhoven's 37
-rows, 3 of RE1 Electrical's 49 and 52 of the BIM4LCA office's 13,021 as built
-carry one. The path where a row has no `name` is not measured: no row of the
+rows, 3 of RE1 Electrical's 49 and 52 of the BIM4LCA office's 12,974 as built
+(52 of 13,020 at permit; Measure run 41986491801) carry one. The path where a row has no `name` is not measured: no row of the
 32 models' dumps lacks one. `explain_element`'s `name` follows the same rule
 (it was the model's name, placeholder included, before).
 

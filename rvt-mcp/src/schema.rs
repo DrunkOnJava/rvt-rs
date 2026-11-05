@@ -284,9 +284,10 @@ pub struct ElementCounts {
     /// By IFC entity: the elements the model holds that the export does not
     /// write as elements, each a further piece of an element of separate
     /// loops, written as an item of the body of the element that owns it.
-    /// They are not in `total`, `by_ifc_type` or the lists, and the
-    /// diagnostics' `exported` counts include them. Always present, empty
-    /// where the export folds none.
+    /// They are not in `total`, `by_ifc_type` or the lists, nor in the
+    /// diagnostics' `exported` counts, which hold them apart in
+    /// `exported.body_pieces_folded`. Always present, empty where the export
+    /// folds none.
     pub folded_into_bodies: BTreeMap<String, usize>,
 }
 
@@ -549,7 +550,11 @@ pub struct ExportOut {
     /// `ifc` or `glb`.
     pub format: String,
     pub output: OutputOut,
-    /// Building elements the export wrote.
+    /// Building elements the IFC export writes (the diagnostics'
+    /// `exported.building_elements`), for `export_gltf` too: the glb also
+    /// draws each piece of an element of separate loops that the IFC folds
+    /// into the body of another element (`elements.folded_into_bodies`), which
+    /// is not counted here or in `entity_counts`, and `notes` says how many.
     pub building_elements: usize,
     pub building_elements_with_geometry: usize,
     /// By IFC entity.
