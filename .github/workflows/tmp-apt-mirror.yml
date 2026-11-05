@@ -1,0 +1,47 @@
+name: tmp apt mirror proof
+on:
+  push:
+    branches: [fix/i686-apt-mirror]
+permissions: {}
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        fail_first: [0, 1, 2, 3]
+    steps:
+      - name: The step, with the first attempts forced to fail
+        run: |
+          apt=(sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+          packages=(--no-install-recommends gcc-multilib)
+          azure=http://azure.archive.ubuntu.com/ubuntu/
+          archive=http://archive.ubuntu.com/ubuntu/
+          kernel=https://mirrors.edge.kernel.org/ubuntu/
+          retries=("$archive $kernel $azure" "$kernel $archive $azure")
+          if ! grep -rqs 'mirror+file:/etc/apt/apt-mirrors.txt' /etc/apt/sources.list /etc/apt/sources.list.d; then
+            echo "::warning::apt no longer reads /etc/apt/apt-mirrors.txt on this image, so a retry cannot change mirror"
+          fi
+          for attempt in 1 2 3; do
+            if (( attempt > ${{ matrix.fail_first }} )) \
+              && timeout 60 "${apt[@]}" update \
+              && timeout 120 "${apt[@]}" install -y --download-only "${packages[@]}"; then
+              timeout 300 "${apt[@]}" install -y --no-download "${packages[@]}"
+              cat /etc/apt/apt-mirrors.txt
+              echo 'int main(void){return 0;}' > t.c && gcc -m32 t.c -o t && ./t && echo "m32 links on attempt $attempt"
+              exit 0
+            fi
+            if (( attempt < 3 )); then
+              list=${retries[attempt - 1]}
+              echo "::warning::apt attempt $attempt did not finish; retrying, first mirror ${list%% *}"
+              priority=0
+              for mirror in $list; do
+                priority=$((priority + 1))
+                printf '%s\tpriority:%d\n' "$mirror" "$priority"
+              done | sudo tee /etc/apt/apt-mirrors.txt
+              sleep 15
+            fi
+          done
+          echo "::error::apt did not finish on three mirrors"
+          exit 1
