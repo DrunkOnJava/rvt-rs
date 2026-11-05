@@ -20,13 +20,23 @@ pub fn decode(bytes: &[u8], registry: &Registry) -> Result<(Catalog, Value)> {
         bytes[end..] == [0; 4],
         "ES global fixed footer is not the qualified zero value"
     );
-    let graph = native_parameters::decode_graph_with_limits(
+    // What is read below: the root's pointer to the app info manager, its
+    // array of pointers, and the schema storage's two maps. Every other field
+    // of the document is read and checked, not built (#1335).
+    let (graph, _) = native_parameters::decode_graph_projected(
         &bytes[..end],
         registry,
         &GraphLimits {
             max_values: 2_000_000,
             ..Default::default()
         },
+        None,
+        &[
+            "m_pAppInfoManager",
+            "m_appInfoArr",
+            "m_storedSchemas",
+            "m_schemaUsageMap",
+        ],
     )?;
     let root = graph
         .objects
@@ -122,7 +132,7 @@ pub fn decode(bytes: &[u8], registry: &Registry) -> Result<(Catalog, Value)> {
     }
     Ok((
         catalog,
-        json!({"stream":"Global/Latest","inflated_sha256":Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect::<String>(),"graph_bytes":end,"stream_bytes":bytes.len(),"fixed_footer":0,"root_class":"ADocument","app_info_object_index":manager,"storage_object_index":storages[0],"storage_start":storage.start,"storage_end":storage.fields_end,"complete_global_graph":true,"scope":"Owned file-local schemas; general nonzero fixed footers remain unqualified"}),
+        json!({"stream":"Global/Latest","inflated_sha256":crate::native_document::lower_hex(&Sha256::digest(bytes)),"graph_bytes":end,"stream_bytes":bytes.len(),"fixed_footer":0,"root_class":"ADocument","app_info_object_index":manager,"storage_object_index":storages[0],"storage_start":storage.start,"storage_end":storage.fields_end,"complete_global_graph":true,"scope":"Owned file-local schemas; general nonzero fixed footers remain unqualified"}),
     ))
 }
 fn string(v: &Value, key: &str) -> Result<String> {
