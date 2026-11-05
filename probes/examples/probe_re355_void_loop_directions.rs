@@ -318,6 +318,10 @@ struct Reading {
     stored: Option<Way>,
     pred_ids: Option<u64>,
     pred_stored: Option<u64>,
+    /// Round the loop counter-clockwise from its lowest line: each line's rank
+    /// by ElementId and whether it is stored along that way (`f`) or against it
+    /// (`b`).
+    pattern: String,
 }
 
 fn read_loop(
@@ -360,6 +364,20 @@ fn read_loop(
     } else {
         None
     };
+    let pattern = ring(&counter_clockwise, geom)
+        .map(|starts| {
+            (0..n)
+                .filter_map(|step| {
+                    let place = (at + step) % n;
+                    let id = counter_clockwise.get(place)?;
+                    let forward = near(geom.get(id)?.0, *starts.get(place)?);
+                    let rank = sorted.iter().position(|other| other == id)?;
+                    Some(format!("{rank}{}", if forward { 'f' } else { 'b' }))
+                })
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .unwrap_or_default();
     let stored = stored_way(&ids, geom);
     Ok(Reading {
         lines: n,
@@ -369,6 +387,7 @@ fn read_loop(
         stored,
         pred_ids: ids_way.map(|way| if way == Way::Ccw { lowest } else { after }),
         pred_stored: stored.map(|way| if way == Way::Ccw { after } else { lowest }),
+        pattern,
     })
 }
 
@@ -501,13 +520,14 @@ fn probe(path: &str) -> Result<()> {
         }
         let show = |id: Option<u64>| id.map_or_else(|| "-".to_string(), |id| id.to_string());
         println!(
-            "void {} host {host} lines {} tag {which} ids {} stored {} pred_ids {} pred_stored {}",
+            "void {} host {host} lines {} tag {which} ids {} stored {} pred_ids {} pred_stored {} cycle {}",
             opening.tag,
             reading.lines,
             Way::word(reading.ids_way, "?"),
             Way::word(reading.stored, "nochain"),
             show(reading.pred_ids),
             show(reading.pred_stored),
+            reading.pattern,
         );
     }
     println!(
