@@ -18,5 +18,12 @@
     reader, with the reason for each in `docs/export-diagnostics.md`: a wall's
     layers, a beam's I section, a rectangular column's two sides and an Area's
     Levels.
-  - Not yet measured on this head: the new sources on the office's tread
-    landing and spiral run, and that the exports are byte for byte unchanged.
+  - Measured (Measure run 42115109274 at b4d34de3, against main, both sides with
+    `--element-provenance`): the exports of Core Interior and the office as built
+    and at building permit are byte for byte main's (`ifc.sha256`), and on both
+    office files `native_run_type` goes from 0 to 2 elements (the spiral run and
+    the tread landing) and `native_landing_type` from 21 to 22; Core Interior's
+    table and the `current` counts (3 and 1 on the permit file) are as before.
+    The default export, with no flag, runs none of the new code and was not
+    measured separately. Not yet run on this head: `tests/value_sources_offsets.rs`
+    against the permit office and its new part check.

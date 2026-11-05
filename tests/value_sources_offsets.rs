@@ -607,8 +607,8 @@ fn office_model() -> Vec<(String, PathBuf)> {
 
 /// The BIM4LCA office at building permit (`RVT_NORDIC_LCA_DIR`, #1368): the one
 /// model of the 92 that Measure's run 42111951132 read (Core Interior, the RE1
-/// models, Einhoven, the four BIM4LCA office files, puzzbobb's 23 Revit 2025
-/// models and Autodesk's 59 samples) whose table has the `current` copy rule:
+/// models, Einhoven, the four BIM4LCA office files, the 24 Revit 2025 models of
+/// puzzbobb's archives and Autodesk's 58 samples) whose table has the `current` copy rule:
 /// the sketch lines of 3 of its floors, and the Sketch's curve list of one.
 fn office_permit_model() -> Vec<(String, PathBuf)> {
     let Some(dir) = nordic_dir() else {
