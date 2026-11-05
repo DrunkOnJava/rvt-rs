@@ -18,13 +18,22 @@
 //! ```
 //!
 //! Hosted elements (doors / windows whose `host_element_index`
-//! points at a wall) are nested under their host rather than
-//! alongside it — the tree matches how a 3D viewer should render
-//! them visually (door "inside" wall).
+//! points at a wall on the same storey) are nested under their host
+//! rather than alongside it — the tree matches how a 3D viewer should
+//! render them visually (door "inside" wall).
+//!
+//! Every list here is of the elements the IFC export writes, each on the
+//! storey it puts it in: the one it is contained in, that of the space that
+//! contains it, that of the whole it is a part of, or that of the host an
+//! opening cuts ([`step_writer::placements`](super::step_writer::placements)
+//! and [`storey_of`], the writer's own decision, as the MCP server and the
+//! elements CSV read it). A piece the export folds into the body of another
+//! element ([`Placement::Folded`]) is not an element there and is in no list.
 // Tracker: VW1-05.
 
 use super::IfcModel;
 use super::entities::IfcEntity;
+use super::step_writer::{Placement, placements, storey_of};
 use serde::{Deserialize, Serialize};
 
 /// A single node in the rendered scene graph.
@@ -139,10 +148,10 @@ pub struct PanelPropertyGroup {
     pub properties: Vec<PanelProperty>,
 }
 
-/// The storey an element sits on, resolved from `storey_index` to
-/// the name the model gives it. `index` is the same index
-/// the scene graph puts on its `IFCBUILDINGSTOREY` nodes, so the
-/// viewer can jump to that node the way #269 jumps to a host.
+/// The storey the IFC export puts an element in, resolved to the name the
+/// model gives it. `index` is the same index the scene graph puts on its
+/// `IFCBUILDINGSTOREY` nodes, so the viewer can jump to that node the way
+/// #269 jumps to a host.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct PanelStorey {
@@ -221,10 +230,13 @@ pub struct ElementInfoPanel {
     /// when the category map assigned one.
     #[serde(default)]
     pub predefined_type: Option<String>,
-    /// Storey display name when the element is contained in one.
+    /// Name of the storey the IFC export puts the element in
+    /// ([`storey_of`]: the one it is contained in, that of its space or its
+    /// whole, or that of the host an opening cuts). `None` where the export
+    /// contains it in the building only.
     pub storey_name: Option<String>,
-    /// Storey elevation in feet (native Revit unit). `None` when
-    /// the element hasn't been bound to a storey.
+    /// That storey's elevation in feet (native Revit unit). `None` when
+    /// `storey_name` is.
     pub storey_elevation_feet: Option<f64>,
     /// The same storey, resolved to a jump target.
     #[serde(default)]
@@ -291,15 +303,23 @@ pub struct ElementInfoPanel {
 /// out of range or the entity at that index isn't a
 /// `BuildingElement` (project / type-object entities have no
 /// viewer-side info panel).
+///
+/// The panel's storey is the one the IFC export puts the element in
+/// ([`storey_of`] over [`placements`]). A piece the export folds into the body
+/// of another element ([`Placement::Folded`]), which the 3-D view still draws
+/// and a click can pick, has no element of its own there: its panel is that of
+/// the element whose body it is part of.
 // Tracker: VW1-08.
 pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<ElementInfoPanel> {
+    let placed = placements(model);
+    let entity_index = written_element(model, &placed, entity_index);
     let ent = model.entities.get(entity_index)?;
     let IfcEntity::BuildingElement {
         ifc_type,
         name,
         type_guid,
         predefined_type,
-        storey_index,
+        storey_index: _,
         material_index,
         material_layer_set_index,
         property_set,
@@ -312,7 +332,7 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
     else {
         return None;
     };
-    let storey = storey_index
+    let storey = storey_of(&placed, entity_index)
         .and_then(|i| model.building_storeys.get(i).map(|s| (i, s)))
         .map(|(index, s)| PanelStorey {
             index,
@@ -417,14 +437,14 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         .entities
         .iter()
         .enumerate()
-        .filter(|(_, e)| {
+        .filter(|(i, e)| {
             matches!(
                 e,
                 IfcEntity::BuildingElement {
                     host_element_index: Some(h),
                     ..
                 } if *h == entity_index
-            )
+            ) && !is_folded(&placed, *i)
         })
         .filter_map(|(i, _)| related_element(model, i))
         .collect();
@@ -452,6 +472,27 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         joins,
         missing,
     })
+}
+
+/// Whether the export folds the entity at `index` into the body of another
+/// element ([`Placement::Folded`]), by the `placements` of its model.
+fn is_folded(placed: &[Option<Placement>], index: usize) -> bool {
+    matches!(placed.get(index), Some(Some(Placement::Folded)))
+}
+
+/// The element the export writes for the entity at `index`: the entity itself,
+/// or, for a piece folded into the body of another element, the element that
+/// owns it (`IfcModel::body_pieces`). A folded piece whose owner is not found
+/// stays itself.
+fn written_element(model: &IfcModel, placed: &[Option<Placement>], index: usize) -> usize {
+    if !is_folded(placed, index) {
+        return index;
+    }
+    model
+        .body_pieces
+        .iter()
+        .find(|(_, pieces)| pieces.contains(&index))
+        .map_or(index, |(owner, _)| *owner)
 }
 
 /// The walls a wall's `JoinStartWallElementId` / `JoinEndWallElementId`
@@ -717,10 +758,11 @@ fn property_value_is_numeric(v: &super::entities::PropertyValue) -> bool {
     }
 }
 
-/// Row of a schedule table — one per `BuildingElement`
-/// in an IfcModel. Fields are pre-formatted strings so the
-/// viewer can render the table without additional
-/// unit-conversion logic.
+/// Row of a schedule table — one per `BuildingElement` the IFC export
+/// writes. `storey` is the storey it puts the element in, empty where it
+/// contains it in the building only. Fields are pre-formatted strings so
+/// the viewer can render the table without additional unit-conversion
+/// logic.
 // Tracker: VW1-15.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScheduleRow {
@@ -750,7 +792,8 @@ pub struct ScheduleTypeGroup {
     pub storeys: Vec<String>,
 }
 
-/// Schedule-view payload. Pre-ordered by (storey
+/// Schedule-view payload: the elements the IFC export writes, each on the
+/// storey it puts it in. Pre-ordered by (storey
 /// elevation, name) for stable output — viewers that want a
 /// different sort should resort the returned vec.
 // Tracker: VW1-15.
@@ -784,24 +827,32 @@ impl Schedule {
     }
 }
 
-/// Build a tabular schedule of every `BuildingElement` in `model`
-///. Non-BuildingElement entities are skipped. Rows are
-/// ordered by `(storey_elevation_feet, name)` so the output is
-/// stable across runs.
+/// Build a tabular schedule of every `BuildingElement` in `model` that the
+/// IFC export writes, each on the storey it puts it in. Non-BuildingElement
+/// entities are skipped, and so is a piece the export folds into the body of
+/// another element ([`Placement::Folded`]). A row's storey is [`storey_of`]
+/// over [`placements`]: the storey the element is contained in, that of its
+/// space or its whole, or that of the host an opening cuts; empty where the
+/// export contains it in the building only. Rows are ordered by
+/// `(storey_elevation_feet, name)` so the output is stable across runs.
 // Tracker: VW1-15.
 pub fn build_schedule(model: &IfcModel) -> Schedule {
     let mut rows: Vec<(f64, ScheduleRow)> = Vec::new();
+    let placed = placements(model);
     for (idx, ent) in model.entities.iter().enumerate() {
         if let IfcEntity::BuildingElement {
             ifc_type,
             name,
             type_guid,
-            storey_index,
+            storey_index: _,
             material_index,
             ..
         } = ent
         {
-            let (storey, elev) = storey_index
+            if is_folded(&placed, idx) {
+                continue;
+            }
+            let (storey, elev) = storey_of(&placed, idx)
                 .and_then(|i| model.building_storeys.get(i))
                 .map(|s| (s.name.clone(), s.elevation_feet))
                 .unwrap_or_else(|| ("".into(), f64::INFINITY));
@@ -889,12 +940,18 @@ fn collect_types(node: &SceneNode, out: &mut std::collections::BTreeSet<String>)
 ///
 /// 1. Root `IFCPROJECT` (project name from model)
 /// 2. One `IFCBUILDINGSTOREY` per `model.building_storeys` entry,
-///    plus a synthetic `"Unassigned"` storey for entities whose
-///    `storey_index` is `None` (rare — occurs when elements haven't
-///    been resolved to a level yet).
+///    plus a synthetic `"Unassigned"` storey for the elements the export
+///    contains in the building only, with no storey (rare — occurs when
+///    elements haven't been resolved to a level yet).
 /// 3. `BuildingElement` leaves, grouped by storey and further
 ///    nested by `host_element_index` (so doors/windows land under
-///    their wall).
+///    their wall, where it is on the same storey).
+///
+/// An element is under the storey the IFC export puts it in
+/// ([`storey_of`] over [`placements`]): the one it is contained in, that of
+/// its space or its whole, or that of the host an opening cuts. A piece the
+/// export folds into the body of another element ([`Placement::Folded`]) is
+/// not an element there and has no node.
 ///
 /// Non-BuildingElement entities (Project / BuildingElementType /
 /// TypeObject) are skipped — they're metadata, not render-surface.
@@ -914,25 +971,36 @@ pub fn build_scene_graph(model: &IfcModel) -> SceneNode {
     // host_element_index relationships.
     let mut hosted_children: std::collections::BTreeMap<usize, Vec<usize>> =
         std::collections::BTreeMap::new();
-    // Which entities are already hosted (so we don't emit them as
-    // top-level storey children).
-    let mut hosted_set: std::collections::BTreeSet<usize> = std::collections::BTreeSet::new();
+    let placed = placements(model);
 
     for (idx, ent) in model.entities.iter().enumerate() {
         if let IfcEntity::BuildingElement {
-            storey_index,
-            host_element_index,
-            ..
+            host_element_index, ..
         } = ent
         {
-            if let Some(host) = host_element_index {
-                hosted_children.entry(*host).or_default().push(idx);
-                hosted_set.insert(idx);
+            if is_folded(&placed, idx) {
                 continue;
             }
-            match storey_index {
-                Some(si) if *si < per_storey.len() => per_storey[*si].push(idx),
-                _ => unassigned.push(idx),
+            let storey = storey_of(&placed, idx);
+            // Nested under a host written on the same storey; otherwise a
+            // node of its own storey, so no element is lost to a host that
+            // is not a node there.
+            if let Some(host) = *host_element_index {
+                let host_here = host != idx
+                    && matches!(
+                        model.entities.get(host),
+                        Some(IfcEntity::BuildingElement { .. })
+                    )
+                    && !is_folded(&placed, host)
+                    && storey_of(&placed, host) == storey;
+                if host_here {
+                    hosted_children.entry(host).or_default().push(idx);
+                    continue;
+                }
+            }
+            match storey.and_then(|si| per_storey.get_mut(si)) {
+                Some(bucket) => bucket.push(idx),
+                None => unassigned.push(idx),
             }
         }
     }

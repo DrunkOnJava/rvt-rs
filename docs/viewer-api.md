@@ -61,7 +61,16 @@ use rvt::ifc::scene_graph::{
 
 - `build_scene_graph(&IfcModel) -> SceneNode` — project → storey
   → element tree with hosted doors/windows nested under their
-  wall.
+  wall where it is on the same storey. An element is under the storey
+  the IFC export puts it in (`step_writer::storey_of` over
+  `step_writer::placements`, the writer's own decision, which the MCP
+  server and the elements CSV read as well): the storey it is contained
+  in, that of its room, that of its whole (a part of a stair, a railing
+  or a curtain wall) or that of the host an opening cuts. An element the
+  export contains in the building only, with no storey, is under the
+  synthetic `Unassigned` storey. A piece the export folds into the body of
+  another element (a further piece of an element of separate loops) is not
+  an element there and has no node.
 - `distinct_ifc_types(&SceneNode) -> Vec<String>` — populate the
   layer-toggle UI.
 - `element_info_panel(&IfcModel, entity_index) -> Option<ElementInfoPanel>` —
@@ -80,8 +89,15 @@ use rvt::ifc::scene_graph::{
     stops at its near face, and `wall` is the other wall as a
     `RelatedElement`. The viewer lists them under the host rows.
   - `storey: Option<PanelStorey { index, name, elevation_feet, elevation_label }>`
-    resolves `storey_index`; `index` addresses the same
-    `IFCBUILDINGSTOREY` scene node, so the viewer can jump to it.
+    is the storey the IFC export puts the element in (`storey_of`: its own,
+    or that of its room, its whole or, for an opening, its host), the one
+    its row has in the schedule and the tree; `index` addresses the same
+    `IFCBUILDINGSTOREY` scene node, so the viewer can jump to it. It is
+    `None` where the export contains the element in the building only.
+    `storey_name` and `storey_elevation_feet` are the same storey. A piece
+    the export folds into the body of another element is still drawn, so a
+    click can pick it, and its panel is that of the element whose body it is
+    part of.
   - `material: Option<PanelMaterial { index, name, element_count }>`
     resolves `material_index` and counts the elements using it, directly
     or as one of their layers.
@@ -108,7 +124,10 @@ use rvt::ifc::scene_graph::{
     The viewer reports one as "not recovered" only where the
     export diagnostics agree it is a known decode gap.
 - `build_schedule(&IfcModel) -> Schedule` — tabular element export
-  (the CSV writer is `schedule_csv`, above). `Schedule::groups` is the
+  (the CSV writer is `schedule_csv`, above): one row for each element the
+  IFC export writes, each on the storey it puts it in (`ScheduleRow::storey`,
+  empty where the export contains it in the building only), so a piece the
+  export folds into another element's body has no row. `Schedule::groups` is the
   per-IFC-type breakdown (`ScheduleTypeGroup { ifc_type, count, entity_indices,
   storeys }`, biggest first) that drives the viewer's schedule
   panel and its per-type scene highlight. Rebuild it with
@@ -499,8 +518,8 @@ describing the error.
 | `scheduleCsv` | `model`, `kind: string`, `metric: boolean`, `excel: boolean` | `string` | The element (`kind` `"elements"`) or room (`"rooms"`) schedule as CSV, the columns of the [user guide](user-guide.md#get-a-schedule-into-excel) |
 | `buildSceneGraph` | `model` | scene tree | The model's scene graph |
 | `distinctIfcTypes` | `scene` | `string[]` | The IFC types in a scene, for the layer toggles |
-| `elementInfoPanel` | `model`, `entity_index: number` | info panel | What the info panel shows for one element |
-| `buildSchedule` | `model` | schedule table | A flat table of every building element |
+| `elementInfoPanel` | `model`, `entity_index: number` | info panel | What the info panel shows for one element, on the storey the IFC export puts it in |
+| `buildSchedule` | `model` | schedule table | A flat table of the building elements the IFC export writes, each on the storey it puts it in |
 | `modelToGlb` | `model` | `Uint8Array` | The model as a glTF 2.0 binary |
 | `modelToIfcStep` | `model` | `string` | The model as an IFC4 STEP document |
 | `renderPlanSvg` | `model`, `options: SheetOptions` or `null` | `string` | A plan view as SVG |
