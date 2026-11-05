@@ -965,8 +965,11 @@ pub(super) fn attach_slab_uncut(rf: &mut RevitFile, lists: &mut [&mut Vec<Decode
     if ids.is_empty() {
         return;
     }
+    // #1368: the current native record of each plate is noted as the source
+    // of its shape-edited top; it is listed only for a floor drawn along it.
     let options = crate::native_document::Options {
         selected_ids: ids,
+        value_source: Some(SLAB_SHAPE_READER),
         ..crate::native_document::Options::default()
     };
     let mut cut: BTreeMap<u64, bool> = BTreeMap::new();
