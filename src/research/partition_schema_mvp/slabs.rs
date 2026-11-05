@@ -563,8 +563,9 @@ pub(super) fn current_sketch_records(
 }
 
 /// A sketch read from its lines' exact ends: the chords, whether any is an
-/// arc's, and each line's ElementId with a point on its edge (RE-151).
-pub(super) type ExactSketch = (Vec<[f64; 4]>, bool, Vec<(u32, (f64, f64))>);
+/// arc's, and each line's ElementId with a point on its edge and whether it
+/// is straight (RE-151, RE-339).
+pub(super) type ExactSketch = (Vec<[f64; 4]>, bool, Vec<(u32, (f64, f64), bool)>);
 
 /// One curve of a shaft's sketch as chords, and whether it is a straight
 /// line (RE-100).
