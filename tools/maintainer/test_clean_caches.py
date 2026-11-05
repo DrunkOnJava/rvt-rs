@@ -57,6 +57,29 @@ class Generations(unittest.TestCase):
         self.assertEqual(why, "superseded generation of v0-rust-a-Linux-x64-cdee7d24")
 
 
+HEX40 = "9e8b37175a0fba1397f7011aeee917fe52de7623"
+HEX64 = HEX40 + "0123456789abcdef01234567"
+
+
+class Re1(unittest.TestCase):
+    def test_every_shape_of_the_key_is_one_family(self):
+        caches = [cache(f"re1-{HEX40}", 1), cache(f"re1-oracle-{HEX40}", 2), cache(f"re1-{HEX64}", 3)]
+        self.assertEqual(doomed_keys(caches, keep=2), [f"re1-{HEX40}"])
+
+    def test_the_newest_generation_stays(self):
+        caches = [cache(f"re1-{HEX64[:-1]}{c}", n) for n, c in enumerate("abc", 1)]
+        self.assertEqual(doomed_keys(caches, keep=1), [caches[0]["key"], caches[1]["key"]])
+
+    def test_a_key_that_only_looks_like_it_is_left_alone(self):
+        keys = ["re1-", "re1-x", f"re1-{HEX40[:-1]}", f"re1-{HEX64}f", f"xre1-{HEX40}", f"re1-models-{HEX40}"]
+        caches = [cache(k, n) for n, k in enumerate(keys, 1)]
+        self.assertEqual(doomed_keys(caches, keep=0), [])
+
+    def test_a_pull_requests_key_is_judged_by_its_pull_request_not_as_a_generation(self):
+        caches = [cache(f"re1-{HEX40}", 1, "refs/pull/10/merge"), cache(f"re1-{HEX64}", 2, "refs/pull/10/merge")]
+        self.assertEqual(doomed_keys(caches, keep=0, prs=[10]), [])
+
+
 class Refusal(unittest.TestCase):
     def test_an_empty_open_pull_request_list_refuses(self):
         self.assertIsNotNone(cc.refusal(set(), {"main", "x"}))
