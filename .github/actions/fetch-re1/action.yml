@@ -3,16 +3,18 @@ description: >-
   Place the RE1 projects of Drshelden/IFC-ECS and Revit's IFC exports of them,
   as research/re1-models.tsv pins them, in a directory: restored from one
   Actions cache entry, downloaded only where a file is missing or fails its
-  pin, and checked against its sha256 and byte count either way.
+  pin, and checked against its sha256 and byte count either way. Linux runners
+  only: the steps use sha256sum and timeout from GNU coreutils.
 # #1457: Corpus health, IfcOpenShell validates exports, the Python wheel job and
-# the viewer's browser tests each fetched these files their own way. The cache
-# holds all eight files whichever of them the caller asks for, because the first
-# job to save it on main would otherwise fix its own subset for everyone. Its key
-# is the hash of the pin list, so moving a pin starts a new entry. Only main
-# saves: an entry saved by a pull request is reachable from that pull request
-# alone, so every pull request would put a copy of its own in the repository's
-# cache. The download took 3 s on most runs and 6.9 min on one (#1380), hence
-# the cache and the bounds in fetch.sh; a file that fails its pin fails the job.
+# the viewer's browser tests each fetched these files their own way. The entry
+# main saves holds all eight files, whichever of them the job that saves it
+# asked for, because otherwise that job would fix its own subset for everyone;
+# every other job makes good only the files it asked for. Its key is the hash of
+# the pin list, so moving a pin starts a new entry. Only main saves: an entry
+# saved by a pull request is reachable from that pull request alone, so every
+# pull request would put a copy of its own in the repository's cache. The
+# download took 3 s on most runs and 6.9 min on one (#1380), hence the cache and
+# the bounds in fetch.sh; a file that fails its pin fails the job.
 inputs:
   files:
     description: Space-separated names from research/re1-models.tsv to place in `path`; empty places all of them
@@ -31,6 +33,7 @@ runs:
         set -euo pipefail
         echo "key=re1-$(sha256sum research/re1-models.tsv | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
         echo "store=${RUNNER_TEMP}/re1-models" >> "$GITHUB_OUTPUT"
+        if [ "${GITHUB_REF}" = refs/heads/main ]; then echo "save=true" >> "$GITHUB_OUTPUT"; fi
     - name: Restore the RE1 models from the cache
       id: cache
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -44,9 +47,10 @@ runs:
         STORE: ${{ steps.pins.outputs.store }}
         FILES: ${{ inputs.files }}
         DEST: ${{ inputs.path }}
+        FILL_ALL: ${{ steps.pins.outputs.save }}
       run: timeout 900 bash "${GITHUB_ACTION_PATH}/fetch.sh"
     - name: Save the RE1 models in the cache (main only)
-      if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/ci/speed-wheels-codeql-re1-sarif') && steps.cache.outputs.cache-hit != 'true'
+      if: steps.pins.outputs.save == 'true' && steps.cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.pins.outputs.store }}

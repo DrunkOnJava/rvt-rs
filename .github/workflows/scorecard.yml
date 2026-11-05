@@ -23,6 +23,8 @@ jobs:
     permissions:
       security-events: write
       id-token: write
+    outputs:
+      upload: ${{ steps.sarif.outcome }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -39,19 +41,48 @@ jobs:
           retention-days: 14
       # The upload to code scanning failed once with no finding (2026-11-05,
       # run 42062175110, attempt 1) and passed when the job was rerun with the
-      # same file. So a failed upload is tried once more, right after, with
-      # the identical inputs; an upload that really fails (a rejected file, no
-      # permission) fails both times and fails the job. There is no wait step
-      # between the two: while publishing results, scorecard-action's API
-      # accepts only its approved actions in this job, and `run` is not one.
+      # same file. codeql-action's upload records the category it uploads in
+      # the job's environment before it sends anything, and refuses a second
+      # upload of that category in the same job ("only one run of the
+      # codeql/analyze or codeql/upload-sarif actions is allowed per job per
+      # tool/category"), so a second step here would fail at once whatever the
+      # first one died of. The retry is a job of its own, `upload-retry`, that
+      # runs when this step failed. It takes the results from the artifact above.
       - name: Upload the results to code scanning
         id: sarif
         continue-on-error: true
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
           sarif_file: results.sarif
+
+  # Not the scorecard job, so scorecard-action's restrictions on its steps (it
+  # accepts only its approved actions while publishing results, `run` not among
+  # them) do not apply here. The results are the three runs of one SARIF file,
+  # each with its own category, which the upload keeps. The analysis key is
+  # held at the one `analysis` has, so that a retried upload stays the same
+  # configuration in code scanning and does not leave a second one holding
+  # alerts the next push closes. A real failure (a rejected file, no
+  # permission) fails here too and fails the run.
+  upload-retry:
+    name: Scorecard upload retry
+    needs: analysis
+    if: needs.analysis.outputs.upload == 'failure'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Say that the first upload failed
+        run: echo "::warning::the upload of the Scorecard results to code scanning failed; trying once more"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: scorecard-results
       - name: Upload the results to code scanning (retry)
-        if: steps.sarif.outcome == 'failure'
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        env:
+          CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/scorecard.yml:analysis
         with:
           sarif_file: results.sarif

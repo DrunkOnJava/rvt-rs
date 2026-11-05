@@ -34,6 +34,8 @@ jobs:
       contents: read
       actions: read
       security-events: write
+    outputs:
+      attempt: ${{ steps.zizmor.outcome }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -41,20 +43,44 @@ jobs:
       # The action uploads its SARIF to code scanning itself, as its last
       # step, and that upload failed once with zizmor having exited 0 and no
       # finding (2026-11-05, run 42061129888, attempt 1); the job passed when
-      # rerun. The upload cannot be retried apart from the action, and with
+      # rerun. codeql-action's upload records the category it uploads in the
+      # job's environment before it sends anything, and refuses a second
+      # upload of that category in the same job, so the action cannot be run a
+      # second time here: it would fail at once whatever the first one died
+      # of. The retry is a job of its own, `zizmor-retry`, that runs when this
+      # step failed. The upload is inside the action, and with
       # `advanced-security: false` the action writes no SARIF at all, so the
-      # whole action is run once more after a failure: zizmor takes about 6
-      # seconds, and a zizmor error or a rejected upload fails both times and
-      # fails the job. (Findings alone do not fail it: in SARIF mode zizmor
-      # exits 0 and they become code scanning alerts.)
+      # whole action is what runs again; zizmor takes about 6 seconds.
       - name: zizmor
         id: zizmor
         continue-on-error: true
         uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
         with:
           version: "1.30.1"
+
+  # Findings alone do not fail either run: in SARIF mode zizmor exits 0 and they
+  # become code scanning alerts. A zizmor error or a rejected upload fails here
+  # too and fails the run. The analysis key is held at the one `zizmor` has, so
+  # that a retried upload stays the same configuration in code scanning and does
+  # not leave a second one holding alerts the next run closes.
+  zizmor-retry:
+    name: zizmor retry
+    needs: zizmor
+    if: needs.zizmor.outputs.attempt == 'failure'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - name: Say that the first run failed
+        run: echo "::warning::zizmor or its upload to code scanning failed; running it once more"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: zizmor (retry)
-        if: steps.zizmor.outcome == 'failure'
         uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
+        env:
+          CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/zizmor.yml:zizmor
         with:
           version: "1.30.1"

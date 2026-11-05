@@ -3,19 +3,21 @@
 # against its sha256 and byte count, downloading only what $STORE (the restored
 # cache) lacks or holds wrongly.
 #
-# PINS   the pin list (research/re1-models.tsv)
-# STORE  the directory the cache holds; every file of the list ends up here
-# DEST   the directory the caller wants the files in
-# FILES  space-separated names to place in DEST; empty places every file
-#
-# Every file of the list is made good in STORE, not only the ones asked for,
-# so the one cache entry is always the whole set whichever job saves it.
+# PINS      the pin list (research/re1-models.tsv)
+# STORE     the directory the cache holds
+# DEST      the directory the caller wants the files in
+# FILES     space-separated names to place in DEST; empty places every file
+# FILL_ALL  "true" makes every file of the list good in STORE, not only the ones
+#           asked for, so that the cache entry the job then saves is the whole
+#           set whichever job saves it; otherwise only the files asked for are
+#           made good, since a job that saves nothing has no use for the rest
 set -euo pipefail
 
 pins=${PINS:?PINS is not set}
 store=${STORE:?STORE is not set}
 dest=${DEST:?DEST is not set}
 wanted=${FILES:-}
+fill_all=${FILL_ALL:-}
 
 sha() {
   if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1
@@ -27,7 +29,8 @@ dir=
 names=()
 sums=()
 sizes=()
-while IFS=$'\t' read -r kind a b c; do
+# `|| [ -n "$kind" ]`: a last row with no newline after it is still a row.
+while IFS=$'\t' read -r kind a b c || [ -n "$kind" ]; do
   case "$kind" in
     source) repo=$a commit=$b dir=$c ;;
     file) names+=("$a"); sums+=("$b"); sizes+=("$c") ;;
@@ -54,13 +57,15 @@ good() {
   [ -f "$1" ] && [ "$(wc -c <"$1" | tr -d ' ')" = "${sizes[$2]}" ] && [ "$(sha "$1")" = "${sums[$2]}" ]
 }
 
-# A 404 is final for a host; anything else is tried three times. A transfer
-# under 100 kB/s for 20 s is abandoned: the download that took 6.9 minutes on
-# one run (#1380) was one that crawled.
+# A 404 is final for a host; anything else is tried three times. Only a transfer
+# that has stopped (under 1 kB/s for 60 s) is abandoned: a slow one that keeps
+# moving is left to finish, and a crawl is ended by the step's own bound. The
+# download that took 6.9 minutes on one run (#1380) moved its first file at about
+# 25 kB/s, which no rate floor above that could have let through.
 download() {
   local code attempt
   for attempt in 1 2 3; do
-    code=$(curl -sSL --connect-timeout 20 --max-time 180 --speed-limit 102400 --speed-time 20 -o "$2" -w '%{http_code}' "$1") || code=000
+    code=$(curl -sSL --connect-timeout 20 --max-time 600 --speed-limit 1024 --speed-time 60 -o "$2" -w '%{http_code}' "$1") || code=000
     [ "$code" = 200 ] && return 0
     [ "$code" = 404 ] && return 1
     sleep $((attempt * 5))
@@ -71,19 +76,27 @@ download() {
 if [ -z "$wanted" ]; then
   wanted=${names[*]}
 fi
+order=()
+queued=" "
 for name in $wanted; do
   known=
   for i in "${!names[@]}"; do
-    if [ "${names[$i]}" = "$name" ]; then known=1; fi
+    if [ "${names[$i]}" = "$name" ]; then known=$i; fi
   done
   if [ -z "$known" ]; then
     echo "::error::$name is not in $pins"
     exit 1
   fi
+  case "$queued" in *" $known "*) ;; *) order+=("$known"); queued="$queued$known " ;; esac
 done
+if [ "$fill_all" = true ]; then
+  for i in "${!names[@]}"; do
+    case "$queued" in *" $i "*) ;; *) order+=("$i"); queued="$queued$i " ;; esac
+  done
+fi
 
 mkdir -p "$store" "$dest"
-for i in "${!names[@]}"; do
+for i in "${order[@]}"; do
   name=${names[$i]}
   file=$store/$name
   if good "$file" "$i"; then
