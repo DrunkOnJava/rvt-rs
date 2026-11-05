@@ -1595,7 +1595,7 @@ fn holds(a: f64, b: f64, at: f64) -> bool {
 /// The walls of `near` (see [`beneath`]) that hold the end of a record box at
 /// `box_end` and stand beyond the body's end at `end` by no more than their
 /// own thickness, with how far.
-fn reach<'a>(
+fn end_reach<'a>(
     near: &[(&'a AxisWall, f64, f64)],
     at_low: bool,
     end: f64,
@@ -1787,13 +1787,13 @@ fn decide_ends(
             if touches(&near) || touches(&unread) {
                 continue;
             }
-            if !reach(&unread, at_low, end, box_end).is_empty() {
+            if !end_reach(&unread, at_low, end, box_end).is_empty() {
                 refused
                     .entry(wall.index)
                     .or_insert(WALL_END_REFUSAL_NOT_ONE_RECTANGLE);
                 continue;
             }
-            let reached = reach(&near, at_low, end, box_end);
+            let reached = end_reach(&near, at_low, end, box_end);
             let Some(&(_, gap)) = reached.first() else {
                 continue;
             };
