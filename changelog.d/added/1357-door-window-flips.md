@@ -21,5 +21,9 @@
   161 of 162 pairs as built, 161 of 161 at permit and 108 of 108 on Snowdon
   Towers. The 160 doors with no host wall record read follow the placement
   rule on 111 and not on 49, and are not claimed. Revit's IFC is not
-  changed. Not yet measured on this head: the fields on the decoded records
-  (runs named in the pull request).
+  changed. The fields are carried, equal to the booleans, by 1,820 of the
+  1,820 doors and windows of the Autodesk samples of 2024 to 2027 and by none
+  of 2015 to 2023, whose doors and windows are not decoded as Door and
+  Window records (run 42021284465 at 7d346f1f). Not yet measured on this
+  head: the fields, and the time and memory of reading them in the pass that
+  reads the doors' and windows' symbols (runs named in the pull request).
