@@ -52,7 +52,7 @@ for name in "${expected[@]}"; do
   fi
   if grep -qx 'bodies across saves: PASS' "$file" && grep -qx 'exit 0' "$file"; then
     echo "$name: PASS"
-    grep -E '^(beams and landings|stair runs|sketch outlines): ' "$file"
+    grep -E '^(beams and landings|stair runs|sketch outlines|named elements|named [0-9]+, [0-9]+ save): ' "$file"
   else
     echo "::error::$name: its bodies are not its earlier save's"
     grep -v '^exit' "$file"

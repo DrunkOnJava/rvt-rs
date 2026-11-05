@@ -22,16 +22,21 @@ lists change:
   sketch outlines      a floor, ceiling, slab or roof (IfcSlab, IfcCovering,
                        IfcRoof) whose plan outline was recovered
                        (`ProfileResolved`); held to the 2024 save
+  named elements       the elements NAMED_TAGS lists, whatever their source,
+                       held to the 2024 save; their sources and volumes in
+                       every save are printed
 
 Each is paired by `Tag` (the ElementId, which a project keeps across saves)
 with the earlier save's element, and fails on any difference in: its IFC
-class, GlobalId, storey, BodySource, representation types and solid kinds,
+class, GlobalId, storey, BodySource, ProfileResolved, representation types
+and solid kinds,
 placement (0.001 ft), body volume (1e-6 relative) and vertices (each within
 0.001 ft of one of the other's, both ways). It also fails on an element the
 earlier save has no counterpart for, one the earlier save draws otherwise, one
 of the earlier save's that this save lacks altogether, a missing file, fewer
-elements than the sample is known to hold (MINIMUMS), a required element not
-compared (REQUIRED), and a check that compared nothing. An element the earlier
+elements than the sample is known to hold (MINIMUMS, OUTLINE_LEAST), a
+required element not compared equal (REQUIRED), and a check that compared
+nothing. An element the earlier
 save draws and this one leaves as a record box is counted, not scored: a body
 left out is fail closed.
 
@@ -66,6 +71,7 @@ SHOW = 40
 BEAMS_AND_LANDINGS = "beams and landings"
 STAIR_RUNS = "stair runs"
 SKETCH_OUTLINES = "sketch outlines"
+NAMED_ELEMENTS = "named elements"
 
 SOURCE_GROUP = {
     "partition_beam_axis": BEAMS_AND_LANDINGS,
@@ -75,7 +81,7 @@ SOURCE_GROUP = {
     "partition_stair_run_sketch": STAIR_RUNS,
 }
 OUTLINE_CLASSES = {"IfcSlab", "IfcCovering", "IfcRoof"}
-REFERENCE_YEAR = {BEAMS_AND_LANDINGS: 2024, STAIR_RUNS: 2025, SKETCH_OUTLINES: 2024}
+REFERENCE_YEAR = {BEAMS_AND_LANDINGS: 2024, STAIR_RUNS: 2025, SKETCH_OUTLINES: 2024, NAMED_ELEMENTS: 2024}
 
 # Bodies the sample is known to draw by BodySource (Measure run 41988011289,
 # head 1d5bbf03, exported diagnostics), and outlines by group.
@@ -94,9 +100,17 @@ MINIMUMS = {
     },
     "racbasicsampleproject": {STAIR_RUNS: {"partition_stair_run_sketch": 2}},
 }
-# Outlines that must be among those compared: rac_advanced's ceiling and floor
-# the sketch lines draw as the 2024 save's.
-REQUIRED = {"racadvancedsampleproject": {SKETCH_OUTLINES: {"147534", "139803"}}}
+# At least this many sketch outlines compared (Measure run 42010304828, head
+# e56d31b5: rac_advanced 82, rac_basic 12, rst_basic 5).
+OUTLINE_LEAST = {"racadvancedsampleproject": 82, "racbasicsampleproject": 12, "rstbasicsampleproject": 5}
+# rac_advanced's ceiling 147534, which the 2024 save draws as its record box
+# and the 2026 save drew as an outline before a Sketch's curve list was read
+# there (run 42010304828, base side): compared under whatever source each save
+# gives it, with its source and volume printed.
+NAMED_TAGS = {"racadvancedsampleproject": {"147534"}}
+# Elements that must be among those compared equal, by group: rac_advanced's
+# floor the sketch lines draw as the 2024 save's, and the ceiling above.
+REQUIRED = {"racadvancedsampleproject": {SKETCH_OUTLINES: {"139803"}, NAMED_ELEMENTS: {"147534"}}}
 
 
 def properties(element):
@@ -115,7 +129,9 @@ def properties(element):
     return source, resolved
 
 
-def group_of(element, source, resolved):
+def group_of(element, source, resolved, named=False):
+    if named:
+        return NAMED_ELEMENTS
     if source in SOURCE_GROUP:
         return SOURCE_GROUP[source]
     if element.is_a() in OUTLINE_CLASSES and resolved:
@@ -123,7 +139,7 @@ def group_of(element, source, resolved):
     return None
 
 
-def products(path):
+def products(path, named=frozenset()):
     """Tag -> [(element, BodySource, group)] for every product with a body."""
     model = ifcopenshell.open(path)
     out = collections.defaultdict(list)
@@ -134,7 +150,7 @@ def products(path):
         if not tag:
             continue
         source, resolved = properties(element)
-        out[tag].append((element, source, group_of(element, source, resolved)))
+        out[tag].append((element, source, group_of(element, source, resolved, tag in named)))
     for tag in out:
         out[tag].sort(key=lambda item: item[0].GlobalId or "")
     return model, out
@@ -203,6 +219,7 @@ def differences(settings, scale, left, right):
         ("GlobalId", a.GlobalId, b.GlobalId),
         ("storey", storey(a), storey(b)),
         ("BodySource", a_source, b_source),
+        ("ProfileResolved", properties(a)[1], properties(b)[1]),
         ("representation", signature(a), signature(b)),
     ):
         if x != y:
@@ -227,6 +244,19 @@ def differences(settings, scale, left, right):
     return found
 
 
+def describe(settings, items):
+    """What a save holds under a Tag: class, BodySource, ProfileResolved and volume."""
+    if not items:
+        return "no product with a body"
+    parts = []
+    for element, source, _ in items:
+        resolved = properties(element)[1]
+        shape = mesh(settings, element)
+        volume = shape if isinstance(shape, str) else f"{shape[0]:.9g} m3"
+        parts.append(f"{element.is_a()} BodySource={source} ProfileResolved={resolved} volume={volume}")
+    return "; ".join(parts)
+
+
 def main():
     args = sys.argv[1:]
     if len(args) < 2:
@@ -238,8 +268,10 @@ def main():
         year, _, path = arg.partition("=")
         earlier_paths[int(year)] = path
     parent = os.path.basename(os.path.dirname(os.path.abspath(candidate_path)))
-    named = re.fullmatch(r"sample-(\d{4})-(.+)", parent)
-    project = named.group(2) if named else None
+    match = re.fullmatch(r"sample-(\d{4})-(.+)", parent)
+    project = match.group(2) if match else None
+    own_year = match.group(1) if match else "this"
+    named_tags = NAMED_TAGS.get(project, frozenset())
     failures = []
 
     def fail(text):
@@ -249,7 +281,7 @@ def main():
     if not os.path.isfile(candidate_path):
         fail(f"this save's export is missing: {candidate_path}")
         report_and_exit(failures)
-    model, candidate = products(candidate_path)
+    model, candidate = products(candidate_path, named_tags)
     scale_candidate = ifcopenshell.util.unit.calculate_unit_scale(model)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
@@ -258,11 +290,15 @@ def main():
         if not os.path.isfile(path):
             fail(f"the {year} save's export is missing: {path}")
             continue
-        earlier[year] = products(path)
+        earlier[year] = products(path, named_tags)
     total = 0
     minimums = MINIMUMS.get(project, {})
     required = REQUIRED.get(project, {})
-    for group in (BEAMS_AND_LANDINGS, STAIR_RUNS, SKETCH_OUTLINES):
+    for tag in sorted(named_tags):
+        print(f"named {tag}, {own_year} save: {describe(settings, candidate.get(tag))}")
+        for year, (_, reference) in sorted(earlier.items()):
+            print(f"named {tag}, {year} save: {describe(settings, reference.get(tag))}")
+    for group in (BEAMS_AND_LANDINGS, STAIR_RUNS, SKETCH_OUTLINES, NAMED_ELEMENTS):
         year = REFERENCE_YEAR[group]
         chosen = {
             tag: [item for item in items if item[2] == group]
@@ -313,6 +349,8 @@ def main():
         for tag in sorted(required.get(group, ())):
             if tag not in compared_tags:
                 fail(f"{group}: {tag} was not compared equal, and is required")
+        if group == SKETCH_OUTLINES and sum(compared.values()) < OUTLINE_LEAST.get(project, 0):
+            fail(f"{group}: {sum(compared.values())} compared, fewer than the {OUTLINE_LEAST[project]} it holds")
         print(
             f"{group}: compared {sum(compared.values())} against the {year} save ({', '.join(f'{c} {n}' for c, n in sorted(compared.items())) or 'none'}); "
             f"left as boxes here, drawn in the {year} save, not scored: {sum(left_out.values())}"
