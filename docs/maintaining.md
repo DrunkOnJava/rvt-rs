@@ -765,6 +765,24 @@ PartAtom reader, dispatch `fuzz.yml` on the branch as well
 (`-f target=fuzz_part_atom -f duration_seconds=300`), and cite both runs in the
 pull request.
 
+## The workflows' Rust setup
+
+Every job that needs Rust installs it with `.github/actions/setup-rust`
+(`toolchain`, one `component`, one `target`, and `make-default: "false"` for a
+toolchain a job only names with `cargo +<toolchain>`), and the three jobs that
+build the viewer's WASM install wasm-pack and the wasm-bindgen CLI `Cargo.lock`
+pins with `.github/actions/wasm-tools`. The release workflows use them too, so
+a change there is a change to the release path. A dated nightly stays in the job
+that uses it, not in the action.
+
+The action sets `CARGO_INCREMENTAL=0` and `CARGO_TERM_COLOR=always` and makes the
+toolchain rustup's default, exactly as the copies it replaced did, and that is
+not tidying: Swatinem/rust-cache hashes the default toolchain's `rustc -vV` and
+every `CARGO*`, `RUST*`, `CC*`, `CXX*`, `CFLAGS` and `CMAKE*` environment variable
+into its key. A different default toolchain or a different variable in a job
+that restores a cache starts that job from an empty cache. A change to either
+action is judged by the key the job's rust-cache step logs before and after.
+
 ## Releases
 
 Tags `v*` are protected by the `release-tags` ruleset: only a maintainer can

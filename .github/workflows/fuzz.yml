@@ -110,15 +110,9 @@ jobs:
           persist-credentials: false
 
       - name: Install nightly Rust
-        shell: bash
-        env:
-          TOOLCHAIN: ${{ env.NIGHTLY }}
-        run: |
-          rustup toolchain install "$TOOLCHAIN" --profile minimal --no-self-update
-          rustup default "$TOOLCHAIN"
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          toolchain: ${{ env.NIGHTLY }}
 
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
