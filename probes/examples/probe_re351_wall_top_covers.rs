@@ -40,7 +40,9 @@
 //!                         solid shape) with a hash of the extrusion, and its
 //!                         `RvtElementRecordGeometry` properties, among them
 //!                         `BodySource`, `BodyHeightSource` and
-//!                         `TopCoverElementId`; "listed" says it is one of the 16
+//!                         `TopCoverElementId`, and its further property sets
+//!                         (the `Qto_` quantities) as `sets`; "listed" says it
+//!                         is one of the 16
 //!   kind "roof"           every roof and every element a wall names as its top
 //!                         cover, as written
 //!
@@ -388,8 +390,26 @@ fn main() -> Result<()> {
 
     let model =
         run_export_with_limits(&mut rf, &ExportOptions::default(), WalkerLimits::default())?.model;
-    let mut covers: BTreeSet<u32> = BTreeSet::new();
+    let mut sets: BTreeMap<usize, Vec<Value>> = BTreeMap::new();
     for entity in &model.entities {
+        if let IfcEntity::ElementPropertySet { element, set } = entity {
+            let properties: Map<String, Value> = set
+                .properties
+                .iter()
+                .map(|property| {
+                    (
+                        property.name.clone(),
+                        serde_json::to_value(&property.value).unwrap_or_default(),
+                    )
+                })
+                .collect();
+            sets.entry(*element)
+                .or_default()
+                .push(json!({ "set": set.name, "properties": properties }));
+        }
+    }
+    let mut covers: BTreeSet<u32> = BTreeSet::new();
+    for (index, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
             property_set,
@@ -419,6 +439,7 @@ fn main() -> Result<()> {
             "extrusion_fnv": format!("{:016x}", fnv(&value["extrusion"].to_string())),
             "solid_shape": compact(value["solid_shape"].clone()),
             "props": props,
+            "sets": sets.get(&index),
         });
         if listed {
             line["entity"] = compact(value);
@@ -437,7 +458,8 @@ fn main() -> Result<()> {
         let Some(id) = tag_of(entity) else {
             continue;
         };
-        if !(ifc_type.to_ascii_uppercase() == "IFCROOF" || id == ROOF || covers.contains(&id)) {
+        let roof = ifc_type.eq_ignore_ascii_case("IFCROOF");
+        if !roof && id != ROOF && !covers.contains(&id) {
             continue;
         }
         let value = serde_json::to_value(entity).unwrap_or_default();
