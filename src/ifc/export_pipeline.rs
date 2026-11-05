@@ -314,7 +314,7 @@ pub enum ExportNote {
         error: String,
     },
     /// Walls that embed a curtain wall, drawn from their saved graphics where
-    /// Revit raised their base (#1385, RE-340).
+    /// Revit raised their base, on Revit 2024 to 2027 (#1385, RE-340).
     #[non_exhaustive]
     EmbedHostBodies {
         /// Walls that embed a curtain wall, drawn as plain or stepped extrusions with
