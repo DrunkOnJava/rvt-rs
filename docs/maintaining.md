@@ -207,7 +207,24 @@ the same project's earlier saves, matched by `Tag`: beams, landings and sketch
 outlines to the 2024 save, the 2026 and 2027 stair runs to the 2025 save. A 2025
 save is held to the 2024 save alone: its stair runs are the 2026 and 2027
 reference, so they are not compared, though the number it draws is still
-checked. Since RE-346 it also holds the 2026 and 2027 saves of those and
+checked. A further group (RE-347) holds each door and window placed on Revit's
+axes by the placement rule, whose axes nothing but the 2024 save can check on
+these releases, to the 2024 save's: class, GlobalId, placement axes and body.
+It prints how many it compared and how many are off the default axes, fails
+below `OPENINGS_LEAST` per class and above `OPENINGS_LEFT_OUT_MOST`, the doors
+and windows the 2024 save places by the rule that a later save leaves on the
+default axes, which can only shrink: a count that drops moves the ceiling down in
+the change that drops it. #1456 set 28 on the 2026 and 42 on the 2027 save of
+`rac_advanced`: the pass that takes a door's host from its native record (RE-245)
+and reads its flips ran on `CUT_LOOP_REVIT_VERSIONS`, 2024 and 2025, so on 2026
+and 2027 a nearest wall that is not the door's own failed the along-the-wall
+test; and on 2027, 14 more, set in 8 host walls with no native straight-line row
+(#1475). That list now runs to 2027, so the ceilings are 0 and 14 and each of
+`rme_advanced` and `rme_basic` (107 placed doors per file, 59 with unequal flips)
+is held with a floor of 107 doors and a ceiling of 0 left out, for each year; the
+Measure run of the merged head prints what each really is. It exercises four
+buildings, each saved by each release; `rst_basic` holds none. Since RE-346 the
+gate also holds the 2026 and 2027 saves of those and
 `rme_advanced` and `rme_basic` to the 2025 save for each pipe drawn from its axis
 (as a cylinder, below),
 each door and window cut in its host (the opening, and the volume the openings take

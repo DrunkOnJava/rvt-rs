@@ -842,6 +842,14 @@ pub fn recover_partition_schema_mvp(
         &walls,
         &plain_walls,
     );
+    // --- The X axis of the placement Revit gives a door or window set in a
+    // plain wall (RE-347), after the flips and the host are final ---
+    attach_opening_placement_axes(
+        rf,
+        revit_version,
+        &out.walls,
+        [&mut out.doors, &mut out.windows],
+    );
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
     // --- Hollow structural sections from their type's family parameters (W6) ---

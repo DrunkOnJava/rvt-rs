@@ -130,6 +130,13 @@ def main():
             if name == "CYLINDER_LEAST" and not held <= expected:
                 problems.append(f"tools/re/bodies_across_saves.py, {name}[{project}]: years {sorted(held)} are not later saves")
     found["tools/re/bodies_across_saves.py, OUTLINE_LEAST"] = constant_keys(bodies["OUTLINE_LEAST"], bodies)
+    for name in ("OPENINGS_LEAST", "OPENINGS_LEFT_OUT_MOST"):
+        for project, value in dict_items(bodies[name], bodies):
+            held = {int(k.value) for k in resolve(value, bodies).keys}
+            if project not in projects or held != years:
+                problems.append(f"tools/re/bodies_across_saves.py, {name}[{project}]: years {sorted(held)}, not {sorted(years)}")
+    if constant_keys(bodies["OPENINGS_LEAST"], bodies) != constant_keys(bodies["OPENINGS_LEFT_OUT_MOST"], bodies):
+        problems.append("tools/re/bodies_across_saves.py: OPENINGS_LEAST and OPENINGS_LEFT_OUT_MOST name different projects")
     for project, value in dict_items(bodies["REQUIRED"], bodies):
         held = {int(k.value) for k in resolve(value, bodies).keys}
         if project not in projects or not held <= years:

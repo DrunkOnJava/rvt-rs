@@ -148,8 +148,11 @@ jobs:
           docs-only-skips: "false"
 
   # Build release wheels on every target OS. Mirrors the python-wheel
-  # matrix in ci.yml so any regression that would fail a push-CI run
-  # also fails here, before we publish.
+  # platforms in ci.yml, so a regression that would fail a push-CI run
+  # on any of them also fails here, before we publish. ci.yml builds a
+  # smoke wheel without LTO; these are the wheels users get, at the
+  # release profile (fat LTO, one codegen unit), so a failure that only
+  # that profile shows is found here.
   #
   # One abi3 wheel per platform, the same platforms the CLI archives
   # cover plus musllinux. Linux wheels build inside the manylinux2014 /
@@ -161,6 +164,9 @@ jobs:
     name: Build wheel / ${{ matrix.name }}
     needs: [preflight]
     runs-on: ${{ matrix.os }}
+    # A release job must not die on its limit: each is 5 or more times the longest of its last 9 runs.
+    # Windows leg longest 8.8 minutes.
+    timeout-minutes: 60
     strategy:
       fail-fast: true
       matrix:
@@ -169,9 +175,9 @@ jobs:
           - { name: linux-aarch64, os: ubuntu-24.04-arm, target: aarch64, manylinux: "2014" }
           - { name: musllinux-x86_64, os: ubuntu-24.04, target: x86_64, manylinux: musllinux_1_2 }
           - { name: musllinux-aarch64, os: ubuntu-24.04-arm, target: aarch64, manylinux: musllinux_1_2 }
-          - { name: macos-arm64, os: macos-latest, target: aarch64-apple-darwin }
-          - { name: macos-x86_64, os: macos-latest, target: x86_64-apple-darwin }
-          - { name: windows-x64, os: windows-latest, target: x64 }
+          - { name: macos-arm64, os: macos-26, target: aarch64-apple-darwin }
+          - { name: macos-x86_64, os: macos-26, target: x86_64-apple-darwin }
+          - { name: windows-x64, os: windows-2025-vs2026, target: x64 }
     steps:
       - name: Disable autocrlf on Windows
         if: runner.os == 'Windows'
@@ -223,6 +229,7 @@ jobs:
     name: Build sdist
     needs: [preflight]
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -252,6 +259,7 @@ jobs:
   validate-wheel-install:
     name: Install + open a model / ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     needs: [preflight, build-wheels]
     strategy:
       fail-fast: true
@@ -264,14 +272,14 @@ jobs:
           - { name: linux-aarch64, os: ubuntu-24.04-arm, image: "quay.io/pypa/manylinux2014_aarch64", python: oldest }
           - { name: musllinux-x86_64, os: ubuntu-24.04, image: "python:3.12-alpine", python: python3 }
           - { name: musllinux-aarch64, os: ubuntu-24.04-arm, image: "python:3.12-alpine", python: python3 }
-          - { name: macos-arm64, os: macos-latest }
+          - { name: macos-arm64, os: macos-26 }
           # The x86_64 macOS wheel is cross-built on arm64; this is the
           # Intel runner that proves it loads.
           # macos-15-intel is GitHub's last Intel macOS image (C5). When it
           # retires, this wheel is cross-built on arm64 macOS
           # (--target x86_64-apple-darwin) and checked under Rosetta.
           - { name: macos-x86_64, os: macos-15-intel }
-          - { name: windows-x64, os: windows-latest }
+          - { name: windows-x64, os: windows-2025-vs2026 }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -320,6 +328,8 @@ jobs:
     name: Cargo install + CLI sample smoke
     needs: [preflight]
     runs-on: ubuntu-24.04
+    # Longest 12.2 minutes (cargo install from crates.io).
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -379,6 +389,7 @@ jobs:
     name: docs.rs build preview
     needs: [preflight]
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     env:
       RUSTDOCFLAGS: "--cfg docsrs -D warnings"
     steps:
@@ -403,6 +414,8 @@ jobs:
     name: Viewer artifact load smoke
     needs: [preflight]
     runs-on: ubuntu-24.04
+    # Longest 14.7 minutes.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -521,6 +534,7 @@ jobs:
   publish-crate:
     name: Publish to crates.io
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     needs:
       - preflight
       - build-wheels
@@ -601,6 +615,7 @@ jobs:
   publish-testpypi:
     name: Publish to TestPyPI
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.test-pypi }}
     needs:
       - preflight
@@ -650,6 +665,7 @@ jobs:
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     needs:
       - preflight

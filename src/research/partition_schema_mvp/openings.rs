@@ -48,6 +48,149 @@ pub fn opening_facing_from_fields(fields: &[(String, InstanceField)]) -> Option<
     Some([x?, y?])
 }
 
+/// The hand flip and facing flip [`OPENING_FLIP_FIELDS`] record.
+pub fn opening_flips_from_fields(fields: &[(String, InstanceField)]) -> Option<[bool; 2]> {
+    let flag = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Bool(flag) if name == wanted => Some(*flag),
+            _ => None,
+        })
+    };
+    let [hand, facing] = OPENING_FLIP_FIELDS.map(flag);
+    Some([hand?, facing?])
+}
+
+/// The plan direction of a straight wall's level line
+/// [`WALL_NATIVE_DIRECTION_FIELDS`] record.
+pub fn wall_native_direction_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 2]> {
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let [x, y] = WALL_NATIVE_DIRECTION_FIELDS.map(float);
+    Some([x?, y?])
+}
+
+/// The plan direction of the X axis of a door's or window's Revit placement
+/// [`OPENING_PLACEMENT_X_AXIS_FIELDS`] record.
+pub fn opening_placement_x_axis_from_fields(
+    fields: &[(String, InstanceField)],
+) -> Option<[f64; 2]> {
+    let float = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let [x, y] = OPENING_PLACEMENT_X_AXIS_FIELDS.map(float);
+    Some([x?, y?])
+}
+
+/// The least the dot product of a stored X axis and the straight wall's
+/// direction (two unit vectors) may be, in absolute value, for the door or
+/// window to be one RE-343's Rule 1 measures: its X runs along the wall
+/// (RE-343 Rule 2). A door whose X is across the wall, or oblique to it, so
+/// that its host is not its own wall, is left as it is. Every one of the 1,061
+/// placed in the open models has 0.999999 or more (the rejects are about 1e-15).
+const OPENING_ALONG_WALL_MIN: f64 = 0.999;
+
+/// A host wall's plan direction and whether the flips of a door or window set
+/// in it differ.
+type WallAndFlip = ([f64; 2], bool);
+
+/// Give each door and window set in a plain wall the plan direction of the X
+/// axis of its Revit placement ([`OPENING_PLACEMENT_X_AXIS_FIELDS`], RE-347):
+/// its stored X axis (RE-87), reversed where `m_hand_flipped` differs from
+/// `m_facing_flipped` (RE-343 Rule 1). Only for an element
+///
+/// - whose host (`OPENING_HOST_FIELD`) is a wall that is not a curtain wall
+///   and whose native record gives a straight level line
+///   ([`WALL_NATIVE_DIRECTION_FIELDS`]),
+/// - whose two flips are read,
+/// - whose stored transform is upright and whose X runs along that line
+///   ([`OPENING_ALONG_WALL_MIN`]), and
+/// - whose X is within [`INSTANCE_TURN_MIN_RADIANS`] of one of the model's
+///   axes (one turned further keeps its turned box, RE-87).
+///
+/// Run after `attach_cut_loop_sizes`, which gives the flips on Revit 2024 to
+/// 2027 (`CUT_LOOP_REVIT_VERSIONS`) and may rebind the host (RE-245).
+pub(super) fn attach_opening_placement_axes(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: &[DecodedElement],
+    groups: [&mut Vec<DecodedElement>; 2],
+) {
+    let directions: BTreeMap<u32, [f64; 2]> = walls
+        .iter()
+        .filter(|wall| wall.class != CURTAIN_WALL_CLASS)
+        .filter_map(|wall| Some((wall.id?, wall_native_direction_from_fields(&wall.fields)?)))
+        .collect();
+    if directions.is_empty() {
+        return;
+    }
+    let host_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == OPENING_HOST_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    // Each door and window set in such a wall: the wall's direction and
+    // whether its two flips differ.
+    let mut wanted: BTreeMap<u32, WallAndFlip> = BTreeMap::new();
+    for element in groups.iter().flat_map(|elements| elements.iter()) {
+        let (Some(id), Some(wall), Some([hand, facing])) = (
+            element.id,
+            host_of(element).and_then(|host| directions.get(&host)),
+            opening_flips_from_fields(&element.fields),
+        ) else {
+            continue;
+        };
+        wanted.insert(id, (*wall, hand != facing));
+    }
+    if wanted.is_empty() {
+        return;
+    }
+    let ids: BTreeSet<u32> = wanted.keys().copied().collect();
+    let Ok(transforms) =
+        crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &ids)
+    else {
+        return;
+    };
+    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
+        let Some(id) = element.id else {
+            continue;
+        };
+        let (Some(&(wall, differ)), Some(transform)) = (wanted.get(&id), transforms.get(&id))
+        else {
+            continue;
+        };
+        if !transform.is_upright() {
+            continue;
+        }
+        let [x, y, _] = transform.axes[0];
+        if !(x.is_finite() && y.is_finite())
+            || (x * wall[0] + y * wall[1]).abs() < OPENING_ALONG_WALL_MIN
+        {
+            continue;
+        }
+        let turn = y.abs().atan2(x.abs());
+        if turn.min(std::f64::consts::FRAC_PI_2 - turn) >= INSTANCE_TURN_MIN_RADIANS {
+            continue;
+        }
+        let sign = if differ { -1.0 } else { 1.0 };
+        for (name, value) in OPENING_PLACEMENT_X_AXIS_FIELDS
+            .iter()
+            .zip([sign * x, sign * y])
+        {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+    }
+}
+
 /// Give each family instance ([`REVIT_CLASS_FIELD`] `FamilyInstance`, and
 /// each curtain mullion and panel) its original symbol ([`ORIGINAL_SYMBOL_FIELD`], RE-167): the ElementId its
 /// `GElement` data object holds [`ORIGINAL_SYMBOL_FROM_END`] bytes before its

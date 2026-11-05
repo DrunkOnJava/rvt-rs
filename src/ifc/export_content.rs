@@ -4955,6 +4955,37 @@ fn turned_box(x_axis: [f64; 2], width: f64, depth: f64) -> Option<(f64, f64, f64
     (along > 1e-6 && across > 1e-6).then(|| (x_axis[1].atan2(x_axis[0]), along, across))
 }
 
+/// The turn about the vertical, radians, of a plan X axis that lies along one
+/// of the model's four axes: 0, a quarter turn, a half turn or minus a quarter
+/// turn (RE-347). `None` for an axis off them by more than a thousandth.
+fn axis_aligned_turn(axis: [f64; 2]) -> Option<f64> {
+    let length = axis[0].hypot(axis[1]);
+    if !(length.is_finite() && length > 0.5) {
+        return None;
+    }
+    let (x, y) = (axis[0] / length, axis[1] / length);
+    if x.abs() >= y.abs() {
+        (y.abs() < 1e-3).then_some(if x > 0.0 { 0.0 } else { std::f64::consts::PI })
+    } else {
+        (x.abs() < 1e-3).then_some(if y > 0.0 {
+            std::f64::consts::FRAC_PI_2
+        } else {
+            -std::f64::consts::FRAC_PI_2
+        })
+    }
+}
+
+/// Property of a door's or window's [`ELEMENT_RECORD_PROPERTY_SET`] that says
+/// where the axes of its placement come from, written only for one that is
+/// placed as Revit's export places it (RE-347). The others have the default
+/// axes, which say nothing of the direction they face.
+pub const PLACEMENT_AXES_SOURCE_PROPERTY: &str = "PlacementAxesSource";
+
+/// [`PLACEMENT_AXES_SOURCE_PROPERTY`] of a door or window set in a plain wall
+/// whose X axis is its stored one, reversed where its hand flip and facing
+/// flip differ (RE-343 Rule 1, RE-347).
+pub const OPENING_PLACEMENT_AXES_SOURCE: &str = "stored_axes_reversed_by_flips";
+
 /// `BodySource` of a beam whose body runs along its location line (RE-49).
 pub const BEAM_AXIS_BODY_SOURCE: &str = "partition_beam_axis";
 
@@ -6802,6 +6833,17 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
         crate::partition_schema_mvp::instance_x_axis_from_fields(&decoded.fields)
             .and_then(|axis| turned_box(axis, width, depth))
     };
+    // RE-347: a door or window set in a plain wall is placed as Revit's export
+    // places it, its X axis along the stored one and reversed where its two
+    // flips differ (RE-343 Rule 1). Its box keeps its extents in the world:
+    // a quarter turn swaps the profile's two sides. One turned off the
+    // model's axes keeps its turned box.
+    let placed_turn = if matches!(class, "Door" | "Window") && turned.is_none() {
+        crate::partition_schema_mvp::opening_placement_x_axis_from_fields(&decoded.fields)
+            .and_then(axis_aligned_turn)
+    } else {
+        None
+    };
     // RE-56: a shed roof whose slope reproduces its record box rises along
     // it. RE-199: a gable or hip roof, its planes' lowest envelope, and
     // either cut level at its base when that is what its box records.
@@ -7642,6 +7684,30 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                         (None, record_body, solid)
                     }
                 },
+            };
+            // RE-347: the placement Revit gives a door or window set in a
+            // plain wall, the box with it.
+            let (rotation, body) = match placed_turn {
+                Some(angle)
+                    if rotation.is_none() && solid.is_none() && body.profile_override.is_none() =>
+                {
+                    let quarter = (angle.abs() - std::f64::consts::FRAC_PI_2).abs() < 1e-9;
+                    let body = if quarter {
+                        Extrusion {
+                            width_feet: body.depth_feet,
+                            depth_feet: body.width_feet,
+                            ..body
+                        }
+                    } else {
+                        body
+                    };
+                    properties.push(Property {
+                        name: PLACEMENT_AXES_SOURCE_PROPERTY.into(),
+                        value: PropertyValue::Text(OPENING_PLACEMENT_AXES_SOURCE.into()),
+                    });
+                    ((angle != 0.0).then_some(angle), body)
+                }
+                _ => (rotation, body),
             };
             ([x, y, z], rotation, body, solid)
         }

@@ -19,7 +19,7 @@
       "IFCCOLOURRGB": 86,
       "IFCCOLUMN": 256,
       "IFCCOLUMNTYPE": 175,
-      "IFCDIRECTION": 1037,
+      "IFCDIRECTION": 1135,
       "IFCDOOR": 132,
       "IFCDOORTYPE": 10,
       "IFCELEMENTQUANTITY": 932,
@@ -42,7 +42,7 @@
       "IFCPRODUCTDEFINITIONSHAPE": 1171,
       "IFCPROJECT": 1,
       "IFCPROPERTYSET": 6510,
-      "IFCPROPERTYSINGLEVALUE": 27824,
+      "IFCPROPERTYSINGLEVALUE": 27962,
       "IFCQUANTITYAREA": 642,
       "IFCQUANTITYLENGTH": 1346,
       "IFCQUANTITYVOLUME": 565,
@@ -705,7 +705,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "d689cbb994395b86162986b88bf2f350adc82b11b9e053251d91c07dea9e1f62",
+  "observation_hash_sha256": "c2b549f4b6b36216e0de00378c0b226fb703e9c35e751be31f91b3d8f2b8628c",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",

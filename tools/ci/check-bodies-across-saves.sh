@@ -8,9 +8,12 @@
 # tools/re/bodies_across_saves.py holds the beams, tread landings, stair runs
 # and sketch outlines of each 2025, 2026 and 2027 save of rac_advanced,
 # rac_basic and rst_basic to the same project's earlier 2024 and 2025 saves
-# (the 2025 save to the 2024 save alone), and the pipes, door and window cuts,
-# ports and properties of the 2026 and 2027 saves of those and rme_advanced and
-# rme_basic to the 2025 save, and Measure's script
+# (the 2025 save to the 2024 save alone), and the doors and windows placed on
+# Revit's axes by the placement rule (RE-347, a group held to the 2024 save per
+# element, with a floor per class and a ceiling on those the later save leaves on
+# the default axes, set per project and year; rme_advanced and rme_basic too), and
+# the pipes, door and window cuts, ports and properties of the 2026 and 2027 saves
+# of those and rme_advanced and rme_basic to the 2025 save, and Measure's script
 # writes its output beside each sample as bodies_across_saves.txt. This reads
 # those files from RESULTS_DIR (the head side's results, merged or one directory
 # for each shard) and fails on any
@@ -83,7 +86,7 @@ for name in "${expected[@]}"; do
     passed=$((passed + 1))
     echo "$name: PASS"
     # What each check compared, in the log and under the sample in the run summary.
-    counts=$(grep -E '^(beams and landings|stair runs|sketch outlines|named elements|pipes|cut openings|ports|properties|door and window sizes|census|named [0-9]+, [0-9]+ save): ' "$file" || true)
+    counts=$(grep -E '^(beams and landings|stair runs|sketch outlines|named elements|pipes|doors and windows|cut openings|ports|properties|door and window sizes|census|named [0-9]+, [0-9]+ save): ' "$file" || true)
     echo "$counts"
     printf -- '- %s: PASS\n' "$name" >> "$summary"
     while IFS= read -r line; do
