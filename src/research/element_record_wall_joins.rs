@@ -39,15 +39,7 @@
 //!    walls on the line being resolved, which are the joins this very
 //!    end makes and cannot pre-empt itself (RE-29 §3).
 //!
-//! 5. **An end whose candidates stand above the wall's base is cut at the
-//!    face of the wall that holds it** (#1396, RE-337). A wall whose line
-//!    ends on the centreline of walls that overlap it in elevation only above
-//!    its base, and inside the thickness of exactly one other named wall that
-//!    holds its base, ends at that wall's face, not at the candidates': the
-//!    candidates cut its top, and Revit's body at the base follows the wall
-//!    beneath (the BIM4LCA office's Basement walls on the footings of RE-336).
-//!
-//! [`join_trims`] applies (2)–(5) to the wall set recovered from the
+//! [`join_trims`] applies (2)–(4) to the wall set recovered from the
 //! records. It is a solver over recorded boxes, not a fit: a
 //! candidate must be perpendicular, must be named in this record's
 //! reference list, must have its centreline exactly on the end being
@@ -104,14 +96,6 @@ pub const WALL_THICKNESS_SOURCE: &str = "partition_element_record_bbox_thin_axis
 /// carries the same bits, so the tolerance only absorbs the last
 /// bits of a subtraction.
 pub const JOIN_EPS_FEET: f64 = 1e-6;
-
-/// How far a wall's base may lie outside another's elevation range and still
-/// be held by it, feet (#1396).
-const BASE_WALL_ELEVATION_FEET: f64 = 1e-3;
-
-/// How much further than the candidates' half thickness the face of the wall
-/// that holds the base must be to replace it, feet (#1396).
-const BASE_WALL_FACE_MINIMUM_FEET: f64 = 1e-3;
 
 /// One wall reduced to the run / thickness / elevation the solver needs.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -267,9 +251,9 @@ impl<'a> Solver<'a> {
         (candidate.start_feet + start, candidate.end_feet - end)
     }
 
-    /// The trim `wall` takes at `coord` (its `low` end or its high one), or
-    /// `None` when the candidates there disagree about their thickness.
-    fn trim_at(&self, wall: &WallRun, coord: f64, low: bool) -> Option<f64> {
+    /// The trim `wall` takes at `coord`, or `None` when the candidates
+    /// there disagree about their thickness.
+    fn trim_at(&self, wall: &WallRun, coord: f64) -> Option<f64> {
         let reaching: Vec<&WallRun> = self
             .candidates(wall, coord, None)
             .into_iter()
@@ -278,64 +262,7 @@ impl<'a> Solver<'a> {
                 wall.centre_feet >= start - JOIN_EPS_FEET && wall.centre_feet <= end + JOIN_EPS_FEET
             })
             .collect();
-        if let Some(trim) = self.trim_at_base_wall(wall, coord, low, &reaching) {
-            return Some(trim);
-        }
         Self::half_thickness(&reaching)
-    }
-
-    /// The trim `wall` takes at `coord` where it is the face of the one wall
-    /// that holds its base, in place of the half thickness of the `reaching`
-    /// candidates, none of which holds it (#1396, RE-337): the other named
-    /// wall, perpendicular to `wall` and spanning its centreline, whose
-    /// thickness `coord` lies inside without being on its centreline, and
-    /// whose elevation range contains the wall's base. The wall's body begins
-    /// at that wall's face on the wall's side. `None` unless there are
-    /// candidates, none holds the base, exactly one such wall does, and its
-    /// face is further than the candidates' by more than
-    /// [`BASE_WALL_FACE_MINIMUM_FEET`].
-    fn trim_at_base_wall(
-        &self,
-        wall: &WallRun,
-        coord: f64,
-        low: bool,
-        reaching: &[&WallRun],
-    ) -> Option<f64> {
-        let holds = |other: &WallRun| {
-            other.base_feet - BASE_WALL_ELEVATION_FEET <= wall.base_feet
-                && wall.base_feet <= other.top_feet + BASE_WALL_ELEVATION_FEET
-        };
-        if reaching.is_empty() || reaching.iter().any(|candidate| holds(candidate)) {
-            return None;
-        }
-        let mut through = self
-            .runs
-            .iter()
-            .filter(|other| other.element_id != wall.element_id && other.axis != wall.axis)
-            .filter(|other| self.names(wall, other))
-            .filter(|other| {
-                let gap = (other.centre_feet - coord).abs();
-                gap > JOIN_EPS_FEET && gap <= other.thickness_feet / 2.0 + JOIN_EPS_FEET
-            })
-            .filter(|other| {
-                wall.centre_feet >= other.start_feet - JOIN_EPS_FEET
-                    && wall.centre_feet <= other.end_feet + JOIN_EPS_FEET
-            })
-            .filter(|other| holds(other));
-        let (Some(other), None) = (through.next(), through.next()) else {
-            return None;
-        };
-        let half = other.thickness_feet / 2.0;
-        let trim = if low {
-            other.centre_feet + half - coord
-        } else {
-            coord - (other.centre_feet - half)
-        };
-        let by_candidates = Self::half_thickness(reaching)?;
-        (trim.is_finite()
-            && trim > 0.0
-            && (trim - by_candidates).abs() > BASE_WALL_FACE_MINIMUM_FEET)
-            .then_some(trim)
     }
 }
 
@@ -358,8 +285,8 @@ pub fn join_trims(records: &[PartitionElementRecord]) -> BTreeMap<u32, WallJoinT
     let mut out = BTreeMap::new();
     for wall in &runs {
         let (Some(start), Some(end)) = (
-            solver.trim_at(wall, wall.start_feet, true),
-            solver.trim_at(wall, wall.end_feet, false),
+            solver.trim_at(wall, wall.start_feet),
+            solver.trim_at(wall, wall.end_feet),
         ) else {
             continue;
         };
