@@ -1327,6 +1327,9 @@ fn axis_wall(index: usize, entity: &IfcEntity) -> Option<AxisWall> {
 /// wall's top are not drawn. Every other wall is left as it was.
 pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
     let Gathered { profiled, .. } = gather(entities);
+    if profiled.is_empty() {
+        return;
+    }
     let walls: Vec<AxisWall> = entities
         .iter()
         .enumerate()
@@ -1343,31 +1346,6 @@ pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
     };
     // (wall index, long axis, grows at its low end, gap, the wall reached)
     let mut extensions: Vec<(usize, usize, bool, f64, Option<u32>)> = Vec::new();
-    let mut notes: Vec<(usize, String)> = Vec::new();
-    for wall in &walls {
-        notes.push((
-            wall.index,
-            format!(
-                "axis nprofiled {} profiled {} plain {} bounds {:.4} {:.4} {:.4} {:.4} base {:.4} top {:.4}",
-                profiled.len(),
-                profiled.contains(&wall.index),
-                plain(wall.index),
-                wall.bounds[0],
-                wall.bounds[1],
-                wall.bounds[2],
-                wall.bounds[3],
-                wall.base,
-                wall.top
-            ),
-        ));
-    }
-    for index in &profiled {
-        if !walls.iter().any(|wall| wall.index == *index) {
-            notes.push((*index, "not_axis_rectangle".into()));
-        } else if !plain(*index) {
-            notes.push((*index, "not_plain".into()));
-        }
-    }
     for wall in walls
         .iter()
         .filter(|wall| profiled.contains(&wall.index) && plain(wall.index))
@@ -1403,17 +1381,6 @@ pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
             .collect();
         for at_low in [true, false] {
             let end = if at_low { low } else { high };
-            notes.push((
-                wall.index,
-                format!(
-                    "end {} beneath {} low {} base {:.4} end {:.4} ",
-                    if at_low { "low" } else { "high" },
-                    beneath.len(),
-                    wall.index,
-                    wall.base,
-                    end
-                ),
-            ));
             if beneath
                 .iter()
                 .any(|&(_, a, b)| a - END_TOLERANCE_FEET <= end && end <= b + END_TOLERANCE_FEET)
@@ -1429,16 +1396,6 @@ pub(super) fn extend_wall_ends(entities: &mut [IfcEntity]) {
                 .collect();
             if let [(other, gap)] = reached.as_slice() {
                 extensions.push((wall.index, long, at_low, *gap, other.id));
-            }
-        }
-    }
-    for (index, note) in &notes {
-        if let Some(IfcEntity::BuildingElement { property_set, .. }) = entities.get_mut(*index) {
-            if let Some(set) = property_set.as_mut() {
-                set.properties.push(Property {
-                    name: "EndPassNote".into(),
-                    value: PropertyValue::Text(note.clone()),
-                });
             }
         }
     }
