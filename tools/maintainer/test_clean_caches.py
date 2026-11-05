@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Failure-first tests of clean_caches.unusable for Fuzz's corpus family (#1457).
+"""Failure-first tests of clean_caches.py (#1457): what must never be deleted, and when to stop.
 
-What must never be deleted: the newest generation of a target (the next night restores it),
-another target's caches, a branch's own caches, and a key that only looks like a corpus cache.
-What must be: the older generations of a target on `main`, however many targets there are.
+Never deleted: the newest generation of a family (the next build restores it), another family's
+caches, a live branch's own caches. Never gone on with: an empty open-pull-request list or a branch
+list without `main` (GitHub answers an empty body now and then, and every live cache would read as
+dead), a permission 403 read as a rate limit.
 """
 import unittest
 
@@ -16,45 +17,69 @@ def cache(key, n, ref=MAIN):
     return {"id": n, "key": key, "ref": ref, "last_accessed_at": f"2026-11-{n:02d}T07:00:00Z", "size_in_bytes": 1000}
 
 
+def rust(job, n, ref=MAIN):
+    return cache(f"v0-rust-{job}-Linux-x64-cdee7d24-{n:08x}", n, ref)
+
+
 def doomed_keys(caches, keep=2, live=(), prs=()):
     return sorted(c["key"] for c, _ in cc.unusable(caches, set(prs), set(live), keep))
 
 
-class FuzzCorpus(unittest.TestCase):
+class Generations(unittest.TestCase):
     def test_only_the_generations_past_the_newest_are_deleted(self):
-        caches = [cache(f"fuzz-corpus-fuzz_open_bytes-{100 + n}", n) for n in range(1, 5)]
-        self.assertEqual(doomed_keys(caches, keep=2), ["fuzz-corpus-fuzz_open_bytes-101", "fuzz-corpus-fuzz_open_bytes-102"])
+        caches = [rust("ci-release", n) for n in range(1, 5)]
+        self.assertEqual(len(doomed_keys(caches, keep=2)), 2)
         self.assertEqual(len(doomed_keys(caches, keep=1)), 3)
 
-    def test_the_newest_is_found_by_when_it_was_used_not_by_its_run_id(self):
-        caches = [cache("fuzz-corpus-fuzz_a-900", 1), cache("fuzz-corpus-fuzz_a-100", 2)]
-        self.assertEqual(doomed_keys(caches, keep=1), ["fuzz-corpus-fuzz_a-900"])
+    def test_the_newest_is_found_by_when_it_was_used_not_by_its_hash(self):
+        caches = [cache("v0-rust-x-Linux-x64-cdee7d24-ffffffff", 1), cache("v0-rust-x-Linux-x64-cdee7d24-00000001", 2)]
+        self.assertEqual(doomed_keys(caches, keep=1), ["v0-rust-x-Linux-x64-cdee7d24-ffffffff"])
 
-    def test_each_target_keeps_its_own_newest(self):
-        caches = [cache("fuzz-corpus-fuzz_a-1", 1), cache("fuzz-corpus-fuzz_b-2", 2), cache("fuzz-corpus-fuzz_a-3", 3)]
-        self.assertEqual(doomed_keys(caches, keep=1), ["fuzz-corpus-fuzz_a-1"])
+    def test_each_family_keeps_its_own_newest(self):
+        caches = [rust("a", 1), rust("b", 2), rust("a", 3)]
+        self.assertEqual(doomed_keys(caches, keep=1), [rust("a", 1)["key"]])
 
-    def test_a_target_whose_name_starts_another_is_its_own_family(self):
-        caches = [cache("fuzz-corpus-fuzz_open-1", 1), cache("fuzz-corpus-fuzz_open_bytes-2", 2)]
+    def test_a_key_of_no_family_is_left_alone(self):
+        caches = [cache(k, n) for n, k in enumerate(["playwright-Linux-1.64.1", "re1-oracle-9e8b37", "fuzz-corpus-fuzz_a-1", "sccache/a/b/c/abc"], 1)]
         self.assertEqual(doomed_keys(caches, keep=1), [])
 
-    def test_a_key_that_only_looks_like_a_corpus_is_left_alone(self):
-        keys = ["fuzz-corpus-fuzz_a", "fuzz-corpus-fuzz_a-", "fuzz-corpus-fuzz_a-x1", "fuzz-corpus-Fuzz_A-1", "fuzz-corpus--1"]
-        caches = [cache(k, n) for n, k in enumerate(keys, 1)] + [cache("fuzz-corpus-fuzz_a-1", 9)]
-        self.assertEqual(doomed_keys(caches, keep=1), [])
+    def test_a_live_branchs_caches_are_kept_and_a_deleted_branchs_are_not(self):
+        caches = [rust("a", 1, "refs/heads/live"), rust("a", 2, "refs/heads/gone")]
+        self.assertEqual(doomed_keys(caches, keep=1, live=["live"]), [rust("a", 2)["key"]])
 
-    def test_a_live_branchs_corpus_is_kept_and_a_deleted_branchs_is_not(self):
-        caches = [cache("fuzz-corpus-fuzz_a-1", 1, "refs/heads/live"), cache("fuzz-corpus-fuzz_a-2", 2, "refs/heads/gone")]
-        self.assertEqual(doomed_keys(caches, keep=1, live=["live"]), ["fuzz-corpus-fuzz_a-2"])
+    def test_an_open_pull_requests_caches_are_kept_and_a_closed_ones_are_not(self):
+        caches = [rust("a", 1, "refs/pull/10/merge"), rust("a", 2, "refs/pull/11/merge")]
+        self.assertEqual(doomed_keys(caches, prs=[10]), [rust("a", 2)["key"]])
 
     def test_the_reason_names_the_family(self):
-        caches = [cache(f"fuzz-corpus-fuzz_a-{n}", n) for n in (1, 2, 3)]
-        (_, why), = cc.unusable(caches, set(), set(), 2)
-        self.assertEqual(why, "superseded generation of fuzz-corpus-fuzz_a")
+        caches = [rust("a", n) for n in (1, 2, 3)]
+        ((_, why),) = cc.unusable(caches, set(), set(), 2)
+        self.assertEqual(why, "superseded generation of v0-rust-a-Linux-x64-cdee7d24")
 
-    def test_the_other_families_are_still_judged(self):
-        caches = [cache(f"v0-rust-ci-release-Linux-x64-cdee7d24-{h}", n) for n, h in enumerate(("11111111", "22222222", "33333333"), 1)]
-        self.assertEqual(len(doomed_keys(caches, keep=2)), 1)
+
+class Refusal(unittest.TestCase):
+    def test_an_empty_open_pull_request_list_refuses(self):
+        self.assertIsNotNone(cc.refusal(set(), {"main", "x"}))
+
+    def test_a_branch_list_without_main_refuses(self):
+        self.assertIsNotNone(cc.refusal({1}, {"x"}))
+        self.assertIsNotNone(cc.refusal({1}, set()))
+
+    def test_both_lists_as_the_repository_has_them_do_not(self):
+        self.assertIsNone(cc.refusal({1459}, {"main", "lane/1457-ci-gates"}))
+
+
+class RateLimit(unittest.TestCase):
+    def test_a_permission_403_is_not_a_rate_limit(self):
+        self.assertFalse(cc.is_rate_limited("gh: Resource not accessible by integration (HTTP 403)"))
+
+    def test_the_rate_limits_are(self):
+        for text in ("gh: API rate limit exceeded for installation ID 1 (HTTP 403)", "HTTP 429",
+                     "You have exceeded a secondary rate limit (HTTP 403)", "abuse detection mechanism (HTTP 403)"):
+            self.assertTrue(cc.is_rate_limited(text), text)
+
+    def test_a_server_error_is_neither(self):
+        self.assertFalse(cc.is_rate_limited("gh: Server Error (HTTP 502)"))
 
 
 if __name__ == "__main__":

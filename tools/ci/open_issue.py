@@ -8,9 +8,12 @@ An issue already open under the first label is left alone: it gets no comment, n
 label. A check that keeps failing therefore leaves one open issue, and the next failure after
 it is closed opens a new one. A dry run reads what is open and prints what would be opened.
 
-`failed-jobs` opens one issue for each job of the current run (GITHUB_RUN_ID) that failed,
-labelled `scheduled:` and the job's name in lower case. The reporting job itself is still
-running when it looks, so it is never in the list.
+`failed-jobs` opens one issue for each job of the current run (GITHUB_RUN_ID) that failed or
+was cancelled, labelled `scheduled:` and the job's name in lower case. A job that exceeds its
+`timeout-minutes` ends as cancelled, not as failed, so a cancelled job in a run nobody
+cancelled is a timeout. The calling workflow runs this only `if: !cancelled()`, which is false
+when the run itself was cancelled (by a person or a newer run), so such a run reports nothing.
+The reporting job itself is still running when it looks, so it is never in the list.
 
 Needs the GitHub CLI with GH_TOKEN (or a login), GH_REPO or GITHUB_REPOSITORY, and `issues: write`
 (`actions: read` for failed-jobs).
@@ -24,7 +27,9 @@ import sys
 import time
 
 LABEL_COLOUR = "1d76db"
-FAILED = ("failure", "timed_out")
+# "cancelled" is how a job that exceeded timeout-minutes ends (see the module docstring).
+FAILED = ("failure", "timed_out", "cancelled")
+TIMED_OUT = ("cancelled", "timed_out")
 LABEL_LIMIT = 50
 PREFIX = "scheduled:"
 
@@ -35,20 +40,28 @@ def slug(text, limit=LABEL_LIMIT - len(PREFIX)):
     return words[:limit].strip("-") or "check"
 
 
+def reportable(jobs, exclude=()):
+    """The jobs that failed, timed out or were cancelled, but for those named in `exclude`."""
+    return [j for j in jobs if j.get("conclusion") in FAILED and j["name"] not in exclude]
+
+
 def job_issue(job, workflow, repo, run_id, server="https://github.com"):
     """The issue to open for a failed job: its labels, title and body."""
     label = PREFIX + slug(job["name"])
     steps = ", ".join(job.get("steps") or []) or "none recorded"
+    timed_out = job.get("conclusion") in TIMED_OUT
+    how = "ended cancelled, which is how a job that exceeded its timeout-minutes ends (the run was not cancelled)" if timed_out else "failed"
     body = (
-        f'The scheduled check "{job["name"]}" of the workflow "{workflow}" failed.\n\n'
+        f'The scheduled check "{job["name"]}" of the workflow "{workflow}" {how}.\n\n'
         f"- Run: {server}/{repo}/actions/runs/{run_id}\n"
         f"- Job: {job.get('html_url') or 'not recorded'}\n"
-        f"- Failed step: {steps}\n\n"
+        f"- Step that failed or was running: {steps}\n\n"
         f"Opened by tools/ci/open_issue.py because no issue labelled `{label}` was open. While this "
         "issue stays open a later failure of the same check posts nothing here; close it once the "
         "check passes again."
     )
-    return {"labels": [label, "type:ci"], "title": f"Scheduled check failed: {job['name']}", "body": body}
+    title = f"Scheduled check {'did not finish' if timed_out else 'failed'}: {job['name']}"
+    return {"labels": [label, "type:ci"], "title": title, "body": body}
 
 
 class GhError(Exception):
@@ -102,9 +115,8 @@ def open_issue(repo, labels, title, body, description="", dry_run=False):
 
 def failed_jobs(repo, run_id, exclude):
     out = gh("api", "--paginate", f"repos/{repo}/actions/runs/{run_id}/jobs?per_page=100&filter=latest", "--jq",
-             '.jobs[] | {name, conclusion, html_url, steps: [.steps[] | select(.conclusion == "failure") | .name]}')
-    jobs = [json.loads(line) for line in out.splitlines() if line.strip()]
-    return [j for j in jobs if j["conclusion"] in FAILED and j["name"] not in exclude]
+             '.jobs[] | {name, conclusion, html_url, steps: [.steps[] | select(.conclusion == "failure" or .conclusion == "cancelled") | .name]}')
+    return reportable([json.loads(line) for line in out.splitlines() if line.strip()], exclude)
 
 
 def main():

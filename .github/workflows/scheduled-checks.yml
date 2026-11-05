@@ -9,10 +9,12 @@ name: Scheduled checks
 #   which nothing else audits. The two get advisories only: the witness is MPL on
 #   purpose and has its own licence story, and the full `cargo deny check` stays
 #   a pull-request gate for the root.
-# - NOT MEASURED, daily: BIM4LCA, R2025 and `pnpm audit` pass with a warning when
-#   their host is down. A warning on every run of `main` for a day is a host that
-#   stays down, with nothing measured (tools/ci/not_measured.py says why a day).
-#   It never fails CI.
+# - NOT MEASURED, daily: BIM4LCA, R2025, `pnpm audit`, the cited-commits lookup,
+#   the viewer test that reads the BIM4LCA office and the advisory database above
+#   pass with a warning when their host is down. A warning on every run of its
+#   job for a day is a host that stays down, with nothing measured
+#   (tools/ci/not_measured.py reads the runs of `main` in ci.yml and these daily
+#   runs, and says why a day). It never fails CI.
 # - The Actions cache, daily: tools/maintainer/clean_caches.py --delete, because a
 #   cache at its 10 GB limit evicts the caches still in use.
 # - docs.rs on a floating nightly, Mondays: publish.yml builds the docs on a dated
@@ -80,10 +82,16 @@ jobs:
         uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
           tool: cargo-audit@0.22.2,cargo-deny@0.20.2
+      # Through tools/ci/advisory_check.py: an advisory (or any other failure)
+      # fails the step at once, but a database or index that cannot be fetched is
+      # tried three times and then reported as a NOT MEASURED warning, not as a
+      # finding, so a host that is down opens no `scheduled:audit-*` issue.
+      # tools/ci/not_measured.py follows that warning from one day to the next.
       - name: cargo audit
         env:
+          NAME: Audit ${{ matrix.name }}
           LOCK: ${{ matrix.lock }}
-        run: cargo audit --file "$LOCK"
+        run: python3 tools/ci/advisory_check.py "$NAME" cargo audit --file "$LOCK"
       # Also when the audit found something: the two read the same database,
       # but the issue should name every check that failed. deny.toml is the
       # root's for all three (its ignore list and its yanked and unmaintained
@@ -92,8 +100,9 @@ jobs:
       - name: cargo deny check advisories
         if: ${{ !cancelled() }}
         env:
+          NAME: Audit ${{ matrix.name }}
           MANIFEST: ${{ matrix.manifest }}
-        run: cargo deny --locked --manifest-path "$MANIFEST" --config deny.toml check advisories
+        run: python3 tools/ci/advisory_check.py "$NAME" cargo deny --locked --manifest-path "$MANIFEST" --config deny.toml check advisories
 
   not-measured:
     name: NOT MEASURED streaks
@@ -186,10 +195,14 @@ jobs:
       - name: Research modules carry the unstable-research banner
         run: grep -q 'unstable-research</code>' target/doc/rvt/research/index.html
 
+  # GitHub ends a job that exceeds its `timeout-minutes` as cancelled, not as
+  # failed, so `failure()` alone would never see a timeout. This runs when a
+  # needed job failed or was cancelled, unless the run itself was cancelled (a
+  # person, or a newer run), which `!cancelled()` is false for.
   report:
     name: Report failed checks
     needs: [audit, not-measured, clean-caches, docs-rs-nightly]
-    if: failure()
+    if: ${{ !cancelled() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
     permissions:
       actions: read
       contents: read

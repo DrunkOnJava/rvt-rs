@@ -70,7 +70,7 @@ jobs:
   report:
     name: Report a failed night
     needs: tier2-wide
-    if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    if: ${{ !cancelled() && (needs.tier2-wide.result == 'failure' || needs.tier2-wide.result == 'cancelled') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
     permissions:
       actions: read
       contents: read

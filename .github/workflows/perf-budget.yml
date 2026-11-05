@@ -81,7 +81,7 @@ jobs:
   report:
     name: Report a failed week
     needs: perf-budget
-    if: failure() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    if: ${{ !cancelled() && (needs.perf-budget.result == 'failure' || needs.perf-budget.result == 'cancelled') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
     permissions:
       actions: read
       contents: read

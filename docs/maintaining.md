@@ -682,19 +682,20 @@ line names what to fix (its rulesets check needs an admin token). The list:
    tools/maintainer/clean_caches.py` (a dry run; `--delete` acts, and
    `scheduled-checks.yml` runs it with `--delete` every day) removes the
    caches of closed pull requests and deleted branches, and `main`'s superseded
-   rust-cache generations, CodeQL overlay base databases (per CodeQL version)
-   and Fuzz corpus generations (per target): a new lockfile
-   saves a new cache under a new key, and each CodeQL analysis of `main` saves
-   a new base database and each nightly Fuzz run a new corpus, and the old ones
-   are never read again. `main`'s newest
-   two generations of each family, live branches' and open pull requests'
-   caches are kept.
+   rust-cache generations and CodeQL overlay base databases (per CodeQL version):
+   a new lockfile saves a new cache under a new key, and each CodeQL analysis of
+   `main` saves a new base database, and the old ones are never read again.
+   `main`'s newest two generations of each family, live branches' and open pull
+   requests' caches are kept. The cache is evicted least recently used first at
+   its limit, so a key read only once a night does not last: Fuzz's corpus is an
+   artifact for that reason (`fuzz.yml`).
 4. Workflow runs on `main` are green. A red check is a defect to fix, or an
    issue to file with its cause, and a check that fails only because a service
    is down reports "not measured" rather than failing. A "not measured"
-   warning that is on every run of `main` for a day (three runs or more) opens
+   warning that is on every run of a job for a day (three runs or more) opens
    an issue under `scheduled:not-measured-<what>`
-   (`tools/ci/not_measured.py`, in `scheduled-checks.yml`). That workflow also
+   (`tools/ci/not_measured.py`, in `scheduled-checks.yml`, reading `main`'s runs
+   of `ci.yml` and the daily runs of `scheduled-checks.yml`). That workflow also
    audits the three lockfiles (the root's, the fuzz workspace's and the
    witness's) for advisories every day and builds the docs on a floating
    nightly every Monday, and Corpus nightly and Performance Budgets report
