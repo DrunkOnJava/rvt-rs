@@ -497,15 +497,50 @@ fn diagnostic_kind(diagnostic: &str) -> String {
     norm_msg(kind)
 }
 
-fn scene(rf: &mut RevitFile, tally: &mut Tally) -> BTreeMap<u64, Mesh> {
+/// The ElementIds of the elements of `SCENE_CLASSES`. A channel-103 record's
+/// body opens with its graphics class, not the element's, so the class is
+/// read from the channel-102 record, without decoding its graph.
+fn scene_ids(rf: &mut RevitFile, tally: &mut Tally) -> BTreeSet<u64> {
     let options = Options {
-        selected_classes: SCENE_CLASSES.iter().map(|c| (*c).to_string()).collect(),
+        releases: NATIVE_RELEASES,
+        graph_classes: Some(BTreeSet::new()),
+        ..Options::default()
+    };
+    let mut ids = BTreeSet::new();
+    let result = extract_graphs(rf, &options, |record| {
+        if let Some(class) = record
+            .class_name
+            .as_deref()
+            .filter(|c| SCENE_CLASSES.contains(c))
+        {
+            tally.add(format!("scene elements of class {class}"), 1);
+            ids.insert(record.identity.element_id);
+        }
+        Ok(())
+    });
+    if let Err(error) = result {
+        tally.add(
+            format!("scene classes refused {}", norm_msg(&format!("{error:#}"))),
+            1,
+        );
+    }
+    ids
+}
+
+fn scene(rf: &mut RevitFile, tally: &mut Tally) -> BTreeMap<u64, Mesh> {
+    let ids = scene_ids(rf, tally);
+    let mut meshes = BTreeMap::new();
+    if ids.is_empty() {
+        tally.add("scene has no element of the classes", 1);
+        return meshes;
+    }
+    let options = Options {
+        selected_ids: ids,
         releases: NATIVE_RELEASES,
         max_graph_values: 1_000_000,
         max_graph_objects: 1_000_000,
         ..Options::default()
     };
-    let mut meshes = BTreeMap::new();
     let result =
         extract_in_batches_with_control(rf, &options, 3, &WalkerControl::default(), |element| {
             tally.add("scene owners", 1);
