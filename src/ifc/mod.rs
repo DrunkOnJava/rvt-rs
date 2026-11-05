@@ -751,6 +751,18 @@ pub struct ExportedModelDiagnostics {
     /// `boundary_lines_not_readable` or `point_in_no_single_region`.
     #[serde(default)]
     pub area_body_refusals: std::collections::BTreeMap<String, usize>,
+    /// Of the exported floors, roofs and ceilings whose corner vertices are
+    /// shape-edited and that keep their record's box, why, by reason: the
+    /// `SlabShapeRefusal` property of each (#1384, RE-336), such as
+    /// `interior_edge_vertices_or_creases` or `corners_not_in_one_plane`.
+    #[serde(default)]
+    pub slab_shape_refusals: std::collections::BTreeMap<String, usize>,
+    /// Of the exported walls whose base join names a floor, roof or ceiling
+    /// with shape-edited corners and that keep their base, why, by reason: the
+    /// `BaseCoverRefusal` property of each (#1384, RE-336), such as
+    /// `slab_shape_not_read` or `no_element_covers_the_wall_plan`.
+    #[serde(default)]
+    pub wall_base_refusals: std::collections::BTreeMap<String, usize>,
     /// Of the exported `IfcSpace`s, the rooms whose outline was read from the
     /// faces their stored solid lists, up to the solid's own end, where the
     /// walk of RE-101 did not close them (`SpaceOutlineSource` is
@@ -4577,6 +4589,8 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut bounding_box_bodies = 0usize;
     let mut bounding_box_spaces = 0usize;
     let mut area_body_refusals = std::collections::BTreeMap::<String, usize>::new();
+    let mut slab_shape_refusals = std::collections::BTreeMap::<String, usize>::new();
+    let mut wall_base_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut resolved_outline_spaces = 0usize;
     let mut approximate_outline_spaces = 0usize;
     for (index, entity) in model.entities.iter().enumerate() {
@@ -4607,6 +4621,14 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                         export_content::AREA_BODY_REFUSAL_PROPERTY,
                         entities::PropertyValue::Text(text),
                     ) => *area_body_refusals.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::SLAB_SHAPE_REFUSAL_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *slab_shape_refusals.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_BASE_REFUSAL_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *wall_base_refusals.entry(text.clone()).or_insert(0) += 1,
                     ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
                     (
                         export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
@@ -4696,6 +4718,8 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         bounding_box_bodies,
         bounding_box_spaces,
         area_body_refusals,
+        slab_shape_refusals,
+        wall_base_refusals,
         resolved_outline_spaces,
         approximate_outline_spaces,
     }
@@ -4867,10 +4891,12 @@ fn geometry_gap_skipped_items(
 }
 
 /// The decisions behind `exported.bounding_box_bodies`,
-/// `exported.bounding_box_spaces` and `exported.area_body_refusals` (#1326),
-/// read from `model` as [`exported_model_diagnostics`] counts them: a body
-/// that is only its record's box, a room or space whose outline is its
-/// record's box, and an Area with no body, each with its ElementId.
+/// `exported.bounding_box_spaces`, `exported.area_body_refusals`,
+/// `exported.slab_shape_refusals` and `exported.wall_base_refusals` (#1326,
+/// #1384), read from `model` as [`exported_model_diagnostics`] counts them: a
+/// body that is only its record's box, a room or space whose outline is its
+/// record's box, an Area with no body, a shape-edited floor kept as its box
+/// and a wall that keeps its base, each with its ElementId.
 pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportDecision> {
     use export_decisions::{DecisionStage, ExportDecision};
     let mut decisions = Vec::new();
@@ -4891,6 +4917,8 @@ pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportD
         let mut source = None;
         let mut space_outline = None;
         let mut refusals: Vec<&String> = Vec::new();
+        let mut slab_refusals: Vec<&String> = Vec::new();
+        let mut base_refusals: Vec<&String> = Vec::new();
         let mut profile_resolved = false;
         for property in property_set.iter().flat_map(|set| &set.properties) {
             match (property.name.as_str(), &property.value) {
@@ -4898,6 +4926,14 @@ pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportD
                     export_content::AREA_BODY_REFUSAL_PROPERTY,
                     entities::PropertyValue::Text(text),
                 ) => refusals.push(text),
+                (
+                    export_content::SLAB_SHAPE_REFUSAL_PROPERTY,
+                    entities::PropertyValue::Text(text),
+                ) => slab_refusals.push(text),
+                (
+                    export_content::WALL_BASE_REFUSAL_PROPERTY,
+                    entities::PropertyValue::Text(text),
+                ) => base_refusals.push(text),
                 ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
                 (
                     export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
@@ -4920,6 +4956,20 @@ pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportD
             push(
                 DecisionStage::OutlineNotRead,
                 "area_body_refused",
+                Some(text),
+            );
+        }
+        for text in slab_refusals {
+            push(
+                DecisionStage::BodyLeftAsBox,
+                "slab_shape_refused",
+                Some(text),
+            );
+        }
+        for text in base_refusals {
+            push(
+                DecisionStage::BodyLeftAsBox,
+                "wall_base_cut_refused",
                 Some(text),
             );
         }
