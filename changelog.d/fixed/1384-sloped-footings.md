@@ -23,7 +23,8 @@
   permit) have Revit's lowest point (598 of 607 walls with
   Revit's base and top, from 586; 577 of 589 at permit, from 565); the other
   2 (4) are 0.123 ft (0.044 ft) off, from 0.656 ft, because their plans end
-  short of Revit's. No wall's top moved, and no other model's export moves
+  short of Revit's (RE-337 then brings 2057668 and 2057670 to Revit's lowest
+  point on both files). No wall's top moved, and no other model's export moves
   but for the refusal markers on Autodesk's Snowdon Towers (18) and `rac_advanced`
   (1 a save), which have no redistributable Revit IFC4 export to score them against. Details:
   `reports/element-framing/RE-336-sloped-footings.md`.
