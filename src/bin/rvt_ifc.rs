@@ -257,6 +257,7 @@ fn main() -> std::process::ExitCode {
 }
 
 fn run(args: Args) -> anyhow::Result<()> {
+    rvt::prof::start();
     let timestamp = source_date_epoch()?;
     let mut rf = RevitFile::open_with_limits(
         &args.input,
@@ -266,12 +267,14 @@ fn run(args: Args) -> anyhow::Result<()> {
             args.large_model,
         ),
     )?;
+    rvt::prof::lap("opened");
     let quality_mode = ExportQualityMode::from(args.mode);
     let run = run_export_with_limits(
         &mut rf,
         &export_options(&args),
         walker_limits_from_args(&args),
     )?;
+    rvt::prof::lap("exported");
     let model = run.model;
     let diagnostics = run.diagnostics;
     for note in &run.notes {
@@ -354,6 +357,7 @@ fn run(args: Args) -> anyhow::Result<()> {
             }
         }
     };
+    rvt::prof::lap("written");
     eprintln!("rvt-ifc: wrote {written} bytes to {}", out_path.display());
     for line in export_summary(
         &diagnostics,

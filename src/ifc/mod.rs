@@ -1234,12 +1234,14 @@ impl RvtDocExporter {
         control: &crate::control::WalkerControl,
     ) -> Result<ExportResult> {
         let model = self.export_with_mode_limits_and_control(rf, quality_mode, limits, control)?;
+        crate::prof::lap("export-model-done");
         let (diagnostics, decisions) = build_export_diagnostics_and_decisions(
             rf,
             &model,
             ExportDiagnosticsMode::Default,
             limits,
         );
+        crate::prof::lap("export-diagnostics-done");
         Ok(ExportResult {
             model,
             diagnostics,
@@ -1441,6 +1443,7 @@ fn export_rvt_doc_reporting(
         walker_limits,
         control,
     )?;
+    crate::prof::lap("append_production_walker_elements");
     if mode == RvtDocExportMode::DiagnosticProxies {
         append_diagnostic_walker_proxy_candidates(rf, &mut entities, walker_limits);
     }
@@ -4084,9 +4087,11 @@ pub(crate) fn build_export_diagnostics_and_decisions(
     // last, or the one `--phase` names) are left out as Revit's own export
     // leaves them out (RE-184). A room is left out by its own phase, and
     // counted by the phase it sits in (RE-326).
+    crate::prof::lap("diag-before-phase");
     let phase_excluded = layout
         .and_then(|version| crate::native_phases::scan_phase_excluded_instances(rf, version).ok())
         .unwrap_or_default();
+    crate::prof::lap("diag-phase-excluded");
     record_left_out(
         &mut skipped,
         &mut decisions,
