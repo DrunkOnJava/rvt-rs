@@ -1267,8 +1267,15 @@ jobs:
           rows = []
           runners = []
           missing = []
-          for shard in json.loads(e["PLAN"])["include"]:
+          plan = json.loads(e["PLAN"])["include"]
+          for shard in plan:
               directory = f"shards/measure-timing-shard-{shard['shard']}"
+              # download-artifact puts the one artifact a pattern matches
+              # straight into `path`, with no directory of its name, so a plan
+              # of a single shard (a run with `models`, or neither `nordic`
+              # nor `samples`) would leave no table.
+              if len(plan) == 1 and not os.path.isdir(directory):
+                  directory = "shards"
               try:
                   lines = open(f"{directory}/timing.md").read().splitlines()
                   cpu = open(f"{directory}/runner.txt").read().strip()
