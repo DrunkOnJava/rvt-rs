@@ -107,10 +107,11 @@ save shares; it compares bodies, not quantities or property sets. No 2026 or
 2027 held-out model holds a beam, so the beam reader has run only on two
 Autodesk samples saved from earlier releases, never on a natively authored
 2026 beam. **On 2025 no Revit export checks a beam, tread landing or arc
-either** (RE-345): the 25 models with Revit's own 2025 exports (puzzbobb's
-24 and RE1 Architecture) hold 0 beams, 0 tread landings, 0 shaft openings and 0
-floors, ceilings or roofs whose sketch holds an arc, and their
-exports are byte for byte `main`'s. The 2025 saves of `rac_advanced` and
+either** (RE-345): the 28 Revit 2025 models read (puzzbobb's 24 and RE1's four)
+hold 0 beams and 0 tread landings, and the 25 with Revit's own 2025 exports
+(puzzbobb's 24 and RE1 Architecture) hold 0 shaft openings and 0 floors,
+ceilings or roofs whose sketch holds an arc, and their exports are byte for
+byte `main`'s. The 2025 saves of `rac_advanced` and
 `rst_basic` are held to their 2024 saves: 391 beams and 5 tread landings equal,
 and of the 7 elements whose sketch holds an arc, 2 (a floor and a roof of
 rac_advanced) are compared as drawn outlines and equal, the ceiling and a
@@ -359,8 +360,37 @@ exact on 653 of 653 doors and 626 of 626 windows of the open models and
 Snowdon Towers (the two office files are one building, and the case where
 the booleans differ is measured on three 2024 buildings, one 2025 door and
 one 2026 house), and not on 49 of the 160 doors rvt-rs binds to no plain
-wall, which disagree. Revit's IFC is unchanged
+wall, which disagree
 (`reports/element-framing/RE-343-door-window-flips.md`).
+**A door or window set in a plain wall is placed on Revit's axes** (#1447,
+RE-347): its `IfcLocalPlacement` X is the stored X, reversed (with Y) where
+the two flips differ, Z up, the origin unchanged; the box keeps its place in
+the world (a quarter turn swaps its two sides) and the element says so in
+`RvtElementRecordGeometry.PlacementAxesSource`. Before, rvt-rs wrote the
+default axes on every door and window, which were Revit's on 115 of the 521
+doors and 226 of the 540 windows it binds to a plain wall in the open models
+(Measure run 42066757105). Now the rule is written for all 521 and 540, and
+Revit's axes are the same on all of them, and on the 24 doors and windows of
+the R2025 models (Measure run 42106711251, head `c1a2a739`; the BIM4LCA office
+files are one building). In the held-out models of 2024 to 2027 it is written
+for 41 of 41 doors and 104 of 105 windows (the one other already had a
+rotation of its own, which is Revit's) and none differs. Every door's and
+window's body, and the opening it fills, is where it was in world
+coordinates, as a saved mesh and as a record box, and its GlobalId, type
+GlobalId and host wall are unchanged, on Core Interior, RE1 Architecture and
+the two office files (`tools/re/placed_bodies_vs_base.py`, runs 42092391898
+and 42106731054). A door bound to none, an element with no stored transform
+(Revit 2023 and older) and a turned instance keep the default axes, which say
+nothing of the direction they face; the origin is still the record box's
+centre, more than 0.5 ft from Revit's on almost all (#1465). On Revit 2025,
+2026 and 2027 the same elements are held to the 2024 save by the same-project
+check (`tools/re/bodies_across_saves.py`, run 42106711251): it compares 107,
+79 and 65 doors and windows of `rac_advanced` and 17 each of `rac_basic` (of
+them 66, 44, 31 and 14, 14, 14 not on the default axes), so two buildings,
+each saved by three releases, exercise it; 28 and 42 the 2024 save places by
+the rule are left on the default axes in the 2026 and 2027 saves of
+`rac_advanced`, not scored
+(`reports/element-framing/RE-347-door-window-placement-axes.md`).
 **Storeys on Revit 2024 are the Revit `Level` elements themselves, names
 and elevations together** (#218, RE-24). A `Level` record carries the
 same 88-byte element-record prologue with `OST_Levels` (−2000240) at

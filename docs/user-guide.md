@@ -257,7 +257,7 @@ calling it a breaking change.
 | `x_ft` | Placement, x |
 | `y_ft` | Placement, y |
 | `z_ft` | Placement, z |
-| `rotation_deg` | Its rotation in plan, in degrees |
+| `rotation_deg` | Its rotation in plan, in degrees. A door or window set in a plain wall carries the turn of Revit's own placement (0, 90, 180 or -90; empty at 0), so its `width_ft` is along its own X, the door's width (RE-347) |
 | `width_ft` | Width of a body written as a plain extrusion of a rectangle; empty for every other body, placed extrusions such as stair runs, sloped beams and turned boxes included, and for an element whose body holds several items (an element of separate loops, with the pieces the export folds into it) |
 | `depth_ft` | Depth of the same rectangle |
 | `height_ft` | Height of a body written as a plain extrusion; empty otherwise |
