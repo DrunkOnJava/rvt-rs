@@ -74,6 +74,8 @@ pub(super) mod reason {
     pub const DOOR_NOT_IN_WALL: &str = "door_opening_not_in_second_wall";
     pub const DEGENERATE: &str = "opening_extent_not_positive";
     pub const WALL_NOT_FRAMED: &str = "wall_body_not_an_axis_aligned_prism";
+    pub const SHADOW_CUTOUT: &str = "shadow_cutout_step_not_read";
+    pub const DOOR_CUT_ELSEWHERE: &str = "door_cuts_a_wall_it_is_not_hosted_in_as_its_own";
 }
 
 /// A wall the openings are cut in: its entity, name and frame, as the
@@ -596,7 +598,18 @@ pub(super) fn attach_wall_cut_openings(
                         }
                     } else if let Some(door) = doors.get(&step.cutter) {
                         match step.cuts_something {
-                            Some(true) => continue,
+                            Some(true) => {
+                                let own = match &entities[*door] {
+                                    IfcEntity::BuildingElement {
+                                        host_element_index, ..
+                                    } => *host_element_index,
+                                    _ => None,
+                                };
+                                if own == Some(host.index) {
+                                    continue;
+                                }
+                                Err(reason::DOOR_CUT_ELSEWHERE)
+                            }
                             None => Err(reason::DOOR_FLAG_NOT_READ),
                             Some(false) => {
                                 let world = door_cuts
@@ -616,7 +629,16 @@ pub(super) fn attach_wall_cut_openings(
                     Some(rectangle) => rect_cut(host, rectangle),
                     None => Err(reason::RECTANGLE_NOT_READ),
                 },
-                WallCutKind::ShadowCutout => continue,
+                WallCutKind::ShadowCutout => {
+                    if curtains.contains_key(&step.cutter)
+                        || cabinets.contains_key(&step.cutter)
+                        || doors.contains_key(&step.cutter)
+                    {
+                        Err(reason::SHADOW_CUTOUT)
+                    } else {
+                        continue;
+                    }
+                }
             };
             let cut = match cut {
                 Ok(cut) => cut,
