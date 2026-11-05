@@ -115,9 +115,15 @@ MINIMUMS = {
     },
     "racbasicsampleproject": {STAIR_RUNS: {"partition_stair_run_sketch": 2}},
 }
-# At least this many doors and windows placed by the rule compared with the 2024
-# save, by project and class (RE-347).
-OPENINGS_LEAST = {}
+# At least this many doors and windows placed by the rule (RE-347) compared with
+# the 2024 save, by project and class: the fewest of the 2026 and 2027 saves
+# (Measure run 42092410697, head b452f967: rac_advanced 61 doors and 18 windows
+# in 2026, 47 and 18 in 2027; rac_basic 10 and 7 in both; rst_basic holds none,
+# so it is not listed).
+OPENINGS_LEAST = {
+    "racadvancedsampleproject": {"IfcDoor": 47, "IfcWindow": 18},
+    "racbasicsampleproject": {"IfcDoor": 10, "IfcWindow": 7},
+}
 # At least this many sketch outlines compared (Measure run 42010304828, head
 # e56d31b5: rac_advanced 82, rac_basic 12, rst_basic 5).
 OUTLINE_LEAST = {"racadvancedsampleproject": 82, "racbasicsampleproject": 12, "rstbasicsampleproject": 5}
