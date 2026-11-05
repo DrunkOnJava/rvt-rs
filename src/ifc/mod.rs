@@ -804,6 +804,19 @@ pub struct ExportedModelDiagnostics {
     /// export has no geometry.
     #[serde(default)]
     pub wall_cut_openings_left_out: std::collections::BTreeMap<String, usize>,
+    /// The further pieces of an element of separate loops that the STEP
+    /// writer folds into the body of the element that owns them instead of
+    /// writing each as an element (#823, #1424), by IFC entity. They are the
+    /// entities [`step_writer::placements`] marks
+    /// [`step_writer::Placement::Folded`], and are in none of
+    /// [`Self::building_elements`], [`Self::by_ifc_type`] and the other
+    /// counts of the elements the IFC writes. Before #1424 `building_elements`
+    /// and `by_ifc_type` counted them, so their figure from before is the
+    /// written count plus these (per entity, for `by_ifc_type`); the other
+    /// counts took a piece's properties, which clone its owner's, and are not
+    /// recoverable from this. Empty where the export folds none.
+    #[serde(default)]
+    pub body_pieces_folded: std::collections::BTreeMap<String, usize>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -4625,6 +4638,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut wall_end_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut resolved_outline_spaces = 0usize;
     let mut approximate_outline_spaces = 0usize;
+    let mut body_pieces_folded = std::collections::BTreeMap::<String, usize>::new();
     // Where the writer puts each element: an element is bound to a storey when
     // the export contains it in one, through its space, its whole or its host
     // as well as directly.
@@ -4640,6 +4654,14 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
             ..
         } = entity
         {
+            // #1424: a piece the writer folds into another element's body is
+            // not written as an element. It clones its owner's properties,
+            // so it is counted apart and in none of the counts of the
+            // elements the IFC holds.
+            if matches!(placements[index], Some(step_writer::Placement::Folded)) {
+                *body_pieces_folded.entry(ifc_type.clone()).or_insert(0) += 1;
+                continue;
+            }
             // An opening (RE-84) is listed by type but is not a building
             // element: it has no body of its own, only the void it cuts.
             if ifc_type == "IFCOPENINGELEMENT" {
@@ -4763,6 +4785,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         resolved_outline_spaces,
         approximate_outline_spaces,
         wall_cut_openings_left_out: model.wall_cut_openings_left_out.clone(),
+        body_pieces_folded,
     }
 }
 
@@ -4824,7 +4847,8 @@ fn element_tag(type_guid: &Option<String>) -> Option<u32> {
 }
 
 /// The geometry gaps of `model` as `skipped` items, and the decision behind
-/// each element counted in them (#1326).
+/// each element counted in them (#1326). A piece the writer folds into another
+/// element's body is none of the elements counted (#1424).
 fn geometry_gap_skipped_items(
     model: &IfcModel,
 ) -> (
@@ -4857,7 +4881,8 @@ fn geometry_gap_skipped_items(
         DecisionStage::OpeningNotCut,
     );
 
-    for entity in &model.entities {
+    let placements = step_writer::placements(model);
+    for (index, entity) in model.entities.iter().enumerate() {
         let entities::IfcEntity::BuildingElement {
             ifc_type,
             name,
@@ -4874,6 +4899,12 @@ fn geometry_gap_skipped_items(
         else {
             continue;
         };
+        // #1424: a piece folded into another element's body is no element of
+        // the IFC and clones its owner's properties and storey: a gap it
+        // shares with its owner is one gap.
+        if matches!(placements[index], Some(step_writer::Placement::Folded)) {
+            continue;
+        }
         let id = element_tag(type_guid);
 
         let has_body_shape =
@@ -4938,11 +4969,14 @@ fn geometry_gap_skipped_items(
 /// [`exported_model_diagnostics`] counts them: a body that is only its
 /// record's box, a room or space whose outline is its record's box, an Area
 /// with no body, a shape-edited floor kept as its box, a wall that keeps its
-/// base and a wall that keeps its end, each with its ElementId.
+/// base and a wall that keeps its end, each with its ElementId. A piece the
+/// writer folds into another element's body (#1424) has none: it clones its
+/// owner's properties and is not an element the IFC holds.
 pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportDecision> {
     use export_decisions::{DecisionStage, ExportDecision};
     let mut decisions = Vec::new();
-    for entity in &model.entities {
+    let placements = step_writer::placements(model);
+    for (index, entity) in model.entities.iter().enumerate() {
         let entities::IfcEntity::BuildingElement {
             ifc_type,
             type_guid,
@@ -4952,6 +4986,9 @@ pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportD
         else {
             continue;
         };
+        if matches!(placements[index], Some(step_writer::Placement::Folded)) {
+            continue;
+        }
         if ifc_type == "IFCOPENINGELEMENT" {
             continue;
         }
@@ -5332,7 +5369,9 @@ pub(crate) fn host_references(model: &IfcModel) -> std::collections::HashMap<usi
 /// The property values `write_step` writes in `Pset_` sets, counted as it
 /// emits them: every building element's own set and further sets, then each
 /// storey's sets and the building's when the model has a storey, and an
-/// opening of its host's own geometry's `Reference` (RE-237).
+/// opening of its host's own geometry's `Reference` (RE-237). A piece the
+/// writer folds into another element's body writes none (#1424): it is no
+/// element of the IFC, though it holds the sets of its owner.
 fn pset_property_value_count(model: &IfcModel) -> usize {
     let values = |set: &entities::PropertySet| {
         if set.name.starts_with("Pset_") {
@@ -5341,22 +5380,27 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             0
         }
     };
-    let is_building_element = |index: usize| {
+    let placements = step_writer::placements(model);
+    let is_written_element = |index: usize| {
         matches!(
             model.entities.get(index),
             Some(entities::IfcEntity::BuildingElement { .. })
+        ) && !matches!(
+            placements.get(index),
+            Some(Some(step_writer::Placement::Folded))
         )
     };
     let elements: usize = model
         .entities
         .iter()
-        .map(|entity| match entity {
+        .enumerate()
+        .map(|(index, entity)| match entity {
             entities::IfcEntity::BuildingElement {
                 property_set: Some(set),
                 ..
-            } => values(set),
+            } if is_written_element(index) => values(set),
             entities::IfcEntity::ElementPropertySet { element, set }
-                if is_building_element(*element) =>
+                if is_written_element(*element) =>
             {
                 values(set)
             }

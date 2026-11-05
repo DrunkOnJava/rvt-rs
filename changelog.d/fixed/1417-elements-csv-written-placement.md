@@ -44,6 +44,5 @@
   space or an opening on these models, so those two paths are not exercised
   by this measurement. The held-out models and Autodesk's samples were not
   run, and `rvt-ifc --saved-meshes`, `--family-extrusions` and the viewer's
-  saved-mesh path were not measured for folding. Follow-ups: the viewer's
-  Schedule panel and its info panel, which still read the element's own
-  storey (#1422), and the diagnostics' count of folded pieces (#1424).
+  saved-mesh path were not measured for folding. The
+  diagnostics' count of folded pieces followed in #1424.
