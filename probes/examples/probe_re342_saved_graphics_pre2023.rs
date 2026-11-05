@@ -10,17 +10,18 @@
 //! `native_index::creation_episodes` refuses a `Global/History` whose
 //! `m_episodeList.m_oEpisodes` is not empty. Whether any of the four is met
 //! in a file CI can fetch, and whether reading it changes a mesh, is what
-//! this probe counts. Since RE-342 the readers read an `InstanceInfo` of
-//! exactly `m_Trf`, `m_symbolId` and `m_cda`, a set `m_bHasScale` on such an
-//! `InstanceInfo` with a rotation matrix, and, on this probe's research route
-//! only, deferred history episodes (`Options::deferred_history_episodes`, set
-//! below) and, in the graphics of a file of Revit 2015 to 2022, a
+//! this probe counts. Since RE-342 the readers take these only on research
+//! routes that no export reader takes. On the pre-2023 route
+//! (`native_saved_mesh::graphics_pre2023`, chosen by the file's release, so
+//! only in the graphics of a file of Revit 2015 to 2022): an `InstanceInfo` of
+//! exactly `m_Trf`, `m_symbolId` and `m_cda` with no `m_GRepId`, a set
+//! `m_bHasScale` on such an `InstanceInfo` with a rotation matrix, and a
 //! `FacetedTopology9` under binding 2 whose stored normals all follow the
-//! winding (`native_saved_mesh::graphics_pre2023`, chosen by the file's
-//! release). No export reader takes that route. The census says how many
-//! objects each rule meets and, for the normals, how many it refuses; the
-//! `history default reading` line says what every other reader answers the
-//! same history.
+//! winding. On the history route (`Options::deferred_history_episodes`, set
+//! below): deferred history episodes. Every other reader refuses all four. The
+//! census says how many objects each rule meets and, for the normals, how many
+//! it refuses; the `history default reading` line says what every other
+//! reader answers the same history.
 //!
 //! One file, or two (`OLDER.rvt NEWER.rvt`, the sample first and the same
 //! project saved by a newer release second, as the Measure harness calls a

@@ -1359,6 +1359,12 @@ pub struct GraphicsMeshes {
 }
 /// Decode selected saved graphics. Positions and normals are in the owning
 /// document frame; length units remain Revit internal feet.
+///
+/// This and the other entry points but [`graphics_pre2023`] refuse an
+/// `InstanceInfo` with no `m_GRepId`, as they did before RE-342 (#1436 let
+/// every route read it as the default representation; RE-342 section 9.8
+/// narrowed that to [`graphics_pre2023`]). This is research API, outside the
+/// semver promise.
 pub fn graphics(g: &ObjectGraph) -> GraphicsMeshes {
     graphics_with_resolver(g, &|_| None)
 }
@@ -1379,10 +1385,12 @@ pub fn graphics_with_resolver_at_detail<'a>(
 /// [`graphics_with_resolver_at_detail`] for the graphics of a file of Revit
 /// 2015 to 2022, the releases no export reads saved graphics of: a
 /// `FacetedTopology9` under normal binding 2 is read there where its stored
-/// normals follow the winding ([`normals_follow_winding`], RE-342), and a set
+/// normals follow the winding ([`normals_follow_winding`], RE-342), a set
 /// `m_bHasScale` on an `InstanceInfo` of the older schema with a rotation
-/// matrix is walked through (`native_graphics_traversal`). Every other reader
-/// of this module refuses both, and so does this one on any other release's
+/// matrix is walked through, and so is an `InstanceInfo` with no `m_GRepId`
+/// (exactly `m_Trf`, `m_symbolId` and `m_cda`), which is the default
+/// representation there (`native_graphics_traversal`). Every other reader of
+/// this module refuses all three, and so does this one on any other release's
 /// graphics, which the caller decides by the file's release. A research
 /// route: `include_hidden` and `include_filtered` are as in
 /// [`graphics_including_hidden`] and [`graphics_including_filtered`].

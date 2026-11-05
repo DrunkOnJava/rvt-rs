@@ -48,6 +48,13 @@ pub struct GraphicsSelection {
 /// Select reachable Geometry/GPolyMesh carriers from object zero. Pointer edges
 /// are validated against their serialized source offset and token; token-only
 /// lookup is insufficient for deferred anonymous objects and backreferences.
+///
+/// This and the other `select_graphics*` entry points but
+/// [`select_graphics_pre2023_at_detail`] refuse an `InstanceInfo` with no
+/// `m_GRepId`, as they did before RE-342 (#1436 let every route read it as the
+/// default representation; RE-342 section 9.8 narrowed that to the pre-2023
+/// entry point), and a set `m_bHasScale`. This is research API, outside the
+/// semver promise.
 pub fn select_graphics(graph: &ObjectGraph) -> GraphicsSelection {
     select_graphics_with_resolver(graph, &|_| None)
 }
@@ -68,11 +75,13 @@ pub fn select_graphics_with_resolver_at_detail<'a>(
     select_graphics_impl(graph, resolver, detail_level, false, false, false)
 }
 /// [`select_graphics_with_resolver_at_detail`] for the graphics of a file of
-/// Revit 2015 to 2022, which no export reads: a set `m_bHasScale` is read there
-/// on an `InstanceInfo` of the older schema with a rotation matrix (RE-342).
-/// Every other entry point refuses the flag, whatever the schema of the
-/// `InstanceInfo`, and the caller decides by the file's release which one to
-/// call. `include_hidden` and `include_filtered` are as in
+/// Revit 2015 to 2022, which no export reads: an `InstanceInfo` with no
+/// `m_GRepId` (exactly `m_Trf`, `m_symbolId` and `m_cda`) is read there as the
+/// default representation, and a set `m_bHasScale` on such an `InstanceInfo`
+/// with a rotation matrix is walked through (RE-342). Every other entry point
+/// refuses both, whatever the schema of the `InstanceInfo`, and the caller
+/// decides by the file's release which one to call. `include_hidden` and
+/// `include_filtered` are as in
 /// [`select_graphics_including_hidden_at_detail`] and
 /// [`select_graphics_including_filtered_at_detail`].
 pub fn select_graphics_pre2023_at_detail<'a>(
