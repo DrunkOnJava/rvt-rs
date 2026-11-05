@@ -39,12 +39,16 @@ pub const TYPE_TEXT_PARAMETERS: &[(i64, &str)] = &[
 ];
 
 /// The type parameters read in the form of a family type table's entries,
-/// `u32 n · UTF-16 × n · u32 0 · f64 · i64 -1 · i64 BuiltInParameter`, with
-/// the text before the parameter it belongs to (RE-185 section 3.3, RE-354).
-/// The BIM4LCA office's door types hold their Fire Rating this way and in no
-/// other: `EI30`, `EI60` and `-` on the six door types Revit's export gives a
-/// `FireRating`.
-pub const TABLE_TEXT_PARAMETERS: &[(i64, &str)] = &[(-1001206, "Fire Rating")];
+/// `u32 n · UTF-16 × n · (u32 0 | ff ff ff ff · u16) · f64 · i64 -1 · i64
+/// BuiltInParameter`, with the text before the parameter it belongs to
+/// (RE-185 section 3.3, RE-354). The BIM4LCA office's door types hold their
+/// Fire Rating this way and in no other: `EI30`, `EI60` and `-` on the six
+/// door types Revit's export gives a `FireRating`, and its family types hold
+/// their Manufacturer so: the six texts of the six family types Revit's
+/// export gives a `Manufacturer`, which RE-289 looked for in RE-77's form
+/// alone.
+pub const TABLE_TEXT_PARAMETERS: &[(i64, &str)] =
+    &[(-1001206, "Fire Rating"), (-1010108, "Manufacturer")];
 
 /// A door type's Heat Transfer Coefficient (U), by BuiltInParameter: the
 /// `f64 · ff × 8 · i64 parameter` entry of its value block (RE-93), in W/(m²·K)
@@ -139,15 +143,19 @@ pub fn type_text_parameters(
 }
 
 /// The text of the table entry whose element id (`-1`) is at `at`: the
-/// `u32`-counted UTF-16 string that ends 12 bytes before it, with a zero `u32`
-/// and the `f64` between.
+/// `u32`-counted UTF-16 string before the entry's flag and `f64`, the flag
+/// being a zero `u32` or `ff ff ff ff` and a `u16`.
 fn table_text_before(buf: &[u8], at: usize) -> Option<String> {
-    let flag_at = at.checked_sub(12)?;
-    if le_bytes::u32_at(buf, flag_at)? != 0 {
+    let flag_ends = at.checked_sub(8)?;
+    let text_ends = if le_bytes::u32_at(buf, flag_ends.checked_sub(4)?)? == 0 {
+        flag_ends - 4
+    } else if buf.get(flag_ends.checked_sub(6)?..flag_ends.checked_sub(2)?)? == [0xff; 4] {
+        flag_ends - 6
+    } else {
         return None;
-    }
+    };
     (1..=MAX_TABLE_TEXT_UNITS).find_map(|units| {
-        let start = flag_at.checked_sub(4 + 2 * units)?;
+        let start = text_ends.checked_sub(4 + 2 * units)?;
         if le_bytes::u32_at(buf, start)? as usize != units {
             return None;
         }
