@@ -213,15 +213,46 @@ fn probe(path: &str) -> Result<()> {
         selected_ids: lines,
         ..Options::default()
     };
+    let mut groups: BTreeSet<u64> = BTreeSet::new();
     extract_graphs(&mut rf, &options, |record: Record| {
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
         };
         let id = record.identity.element_id;
         for object in &graph.objects {
+            if object.class_name == "SketchMembership" {
+                if let Some(group) = object
+                    .fields
+                    .pointer("/m_groupId/m_id/m_id64")
+                    .and_then(Value::as_u64)
+                {
+                    groups.insert(group);
+                }
+            }
             if !object.class_name.ends_with("GStep") {
                 println!(
                     "rec {id} obj {} {}",
+                    object.class_name,
+                    trimmed(&object.fields)
+                );
+            }
+        }
+        Ok(())
+    })?;
+    let options = Options {
+        selected_ids: groups,
+        ..Options::default()
+    };
+    extract_graphs(&mut rf, &options, |record: Record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        let class = record.class_name.as_deref().unwrap_or("-");
+        for object in &graph.objects {
+            if !object.class_name.ends_with("GStep") {
+                println!(
+                    "group {id} {class} obj {} {}",
                     object.class_name,
                     trimmed(&object.fields)
                 );
