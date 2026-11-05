@@ -1,0 +1,51 @@
+# Claude Code on a thread of this repository, when the maintainer asks for it by
+# starting a comment with /ask-claude (Griffin, 2026-11-05). Only his account can
+# start it, so nobody else's comment reaches the token or spends a run.
+#
+# Agents post as that account too, and this workflow cannot tell them from him.
+# So the trigger is a phrase no agent writes (CLAUDE.md says so) at the very start
+# of a comment, rather than @claude anywhere: a comment that discusses or quotes the
+# phrase starts nothing, and neither does an issue, whatever its text says or
+# whoever assigns it. What it can read on a thread can still be written by anyone;
+# its token here reads the repository and CI, and posts only its reply.
+#
+# CLAUDE_CODE_OAUTH_TOKEN is a repository secret, and this is the one workflow that
+# reads it. A pull request from a fork gets no secrets. An issue_comment run always
+# takes this file from main, so a branch cannot change it for a comment.
+
+name: Claude Code
+
+on:
+  issue_comment: # zizmor: ignore[dangerous-triggers] only the maintainer's account gets past the job's `if`, and it checks out main, not a pull request's head
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  claude:
+    if: github.actor == 'DrunkOnJava' && startsWith(github.event.comment.body, '/ask-claude')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write # the action exchanges it for its app token
+      actions: read # CI results on a pull request
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: anthropics/claude-code-action@c0949c50a78c1ec8ce2647db36629b870e715d0c # v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          trigger_phrase: /ask-claude
+          additional_permissions: |
+            actions: read
