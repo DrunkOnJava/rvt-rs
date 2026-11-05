@@ -58,7 +58,7 @@ pub const BEAM_AXIS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027]
 /// the same Autodesk samples saved by an earlier release (RE-341). Its own
 /// list, so that a release can draw beams without changing the outlines of
 /// its floors, ceilings, roofs and shaft voids (RE-345).
-pub const SKETCH_CURVE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2026, 2027];
+pub const SKETCH_CURVE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// The bytes a bounded line starts with.
 pub const BOUNDED_LINE_TAG: [u8; 4] = [0x04, 0x00, 0x08, 0x01];
