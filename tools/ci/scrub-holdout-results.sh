@@ -54,7 +54,9 @@
 # family, type or element), with the `fine` rows the two body scorers print under
 # RVT_SCORER_FINE_MESH (RE-331: the same), the last column those two print when the
 # fine tessellation decides some bodies and the line that counts them (RE-331
-# section 8, #1365: the same), and
+# section 8, #1365: the same), the counts of the IFC4 schema's findings on
+# the export (`schema validate:` and `schema rules:` lines, #1430: a number, and
+# for a rule finding the entity and rule that name it, never its message), and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
@@ -157,6 +159,31 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     for f in "$dir"storeys_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E "^([0-9]+ elements, [0-9]+ not on a storey|against Revit's export:| +[0-9]+  Ifc[A-Za-z0-9]+| +[0-9]+  (same storey as Revit's|on no storey; Revit's is (a storey|another container)|on a storey; Revit contains it in <Ifc[A-Za-z0-9]+>|a different storey from Revit's)|  different, by type: Ifc[A-Za-z0-9]+ [0-9]+(, Ifc[A-Za-z0-9]+ [0-9]+)*)$" "$f" | sed 's/^/storeys: /' || true
+    done
+    # The IFC4 schema's findings on the export (#1430), as counts: the number
+    # of findings of the default validation and of the EXPRESS rules check,
+    # and for each kind of rule finding its count beside the entity and rule
+    # that name it (`IfcShapeRepresentation.CorrectItemsForType`), never the
+    # message, which holds the instances. Only the lines of the validation and
+    # rules sections are read, up to the property sets. A check skipped for
+    # the file's size keeps its line, and a rules check that left no count (it
+    # timed out, or did not read the file) says `not read`, so a model it did
+    # not cover is told from one it passed.
+    for f in "$dir"schema.txt; do
+      [ -f "$f" ] || continue
+      awk '/^validate: skipped, over [0-9]+ MB$/ { print "schema: " $0; section = ""; next }
+           $0 == "validate:" { section = "validate"; next }
+           $0 == "rules:" { section = "rules"; rules_seen = 1; next }
+           $0 == "arity:" { section = ""; next }
+           $0 == "property sets:" { exit }
+           section == "validate" && /^findings [0-9]+$/ { print "schema validate: " $0; next }
+           section == "rules" && /^findings [0-9]+$/ { print "schema rules: " $0; rules_counted = 1; next }
+           section == "rules" && /^[0-9]+ Ifc[A-Za-z0-9]+ Ifc[A-Za-z0-9]+\.[A-Za-z0-9]+:/ {
+             split($0, parts, ":"); print "schema rules: " parts[1]; next }
+           section != "" && /^unreadable:/ {
+             if (section == "rules") rules_counted = 1
+             print "schema " section ": not read" }
+           END { if (rules_seen && !rules_counted) print "schema rules: not read" }' "$f"
     done
   } > "$RUNNER_TEMP/counts.txt"
   find "$dir" -mindepth 1 ! -name ifc.sha256 -delete

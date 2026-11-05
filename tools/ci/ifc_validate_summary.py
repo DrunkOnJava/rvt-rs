@@ -27,8 +27,13 @@ of the file: the default validation's summary on stdout and its findings in
 STATEMENTS.jsonl, and what --rules prints in RULES.txt, each exactly as its own
 run writes it.
 
+With --gate MODEL.ifc... it runs the rules check on each file, prints the file's
+name and what --rules prints, and exits 1 when any file has a finding or does not
+open (#1430): CI's IfcOpenShell job holds every export it writes to it.
+
 Usage: ifc_validate_summary.py [--rules] MODEL.ifc [STATEMENTS.jsonl]
        ifc_validate_summary.py --both MODEL.ifc STATEMENTS.jsonl RULES.txt
+       ifc_validate_summary.py --gate MODEL.ifc...
 """
 
 import collections
@@ -43,6 +48,17 @@ import ifcopenshell.express.rule_executor
 import ifcopenshell.validate
 
 
+class literal_logger(ifcopenshell.validate.json_logger):
+    """json_logger whose message is taken as written when it has no arguments.
+    Its `log` does `message % args`, so the rules check's message for an instance
+    whose string holds a `%` (an `IfcSpaceType` named `50 % Space`) raised a
+    TypeError or ValueError there, which ended the run: the finding and every
+    one after it were lost, and the file read as unreadable (#1430)."""
+
+    def log(self, level, message, *args):
+        self.statements.append({"level": level, "message": message % args if args else message, **self.state})
+
+
 def describe(statement):
     instance = statement.get("instance")
     entity = instance.is_a() if hasattr(instance, "is_a") else str(instance or "")
@@ -52,7 +68,7 @@ def describe(statement):
 
 
 def rules(path, model=None):
-    logger = ifcopenshell.validate.json_logger()
+    logger = literal_logger()
     ifcopenshell.express.rule_executor.run(model if model is not None else ifcopenshell.open(path), logger)
     kinds = collections.Counter(re.sub(r"#\d+", "#", describe(s)) for s in logger.statements)
     print(f"findings {len(logger.statements)}")
@@ -96,8 +112,30 @@ def both(path, statements, rules_out):
     return 1 if failed or failure else 0
 
 
+def gate(paths):
+    """The rules check of each of PATHS, each file's name and findings printed;
+    1 when any has a finding or fails, else 0."""
+    failed = 0
+    for path in paths:
+        print(path)
+        sys.stdout.flush()
+        captured = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(captured):
+                rules(path)
+        except Exception as error:
+            print(unreadable(error))
+            failed = 1
+            continue
+        text = captured.getvalue()
+        print(text, end="")
+        if text.splitlines()[:1] != ["findings 0"]:
+            failed = 1
+    return failed
+
+
 def main(path, statements=None, model=None):
-    logger = ifcopenshell.validate.json_logger()
+    logger = literal_logger()
     ifcopenshell.validate.validate(model if model is not None else ifcopenshell.open(path), logger)
     if statements:
         with open(statements, "w", encoding="utf-8") as out:
@@ -115,6 +153,10 @@ if __name__ == "__main__":
         if len(args) != 4:
             sys.exit(__doc__)
         sys.exit(both(args[1], args[2], args[3]))
+    if args[:1] == ["--gate"]:
+        if len(args) < 2:
+            sys.exit(__doc__)
+        sys.exit(gate(args[1:]))
     with_rules = args[:1] == ["--rules"]
     if with_rules:
         args = args[1:]

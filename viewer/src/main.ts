@@ -370,6 +370,9 @@ function entityIndicesWithMaterial(materialIndex: number): Set<number> {
   const entities = model?.entities ?? [];
   for (let i = 0; i < entities.length; i += 1) {
     const entity = entities[i];
+    // The export associates an IfcSpace with no material (#1430), so a space
+    // is not among the elements the panel counts and this lights up.
+    if (entity?.ifc_type?.toUpperCase() === 'IFCSPACE') continue;
     if (entity?.material_index === materialIndex) out.add(i);
     const set = entity?.material_layer_set_index;
     if (set !== undefined && set !== null && setsWithMaterial.has(set)) out.add(i);

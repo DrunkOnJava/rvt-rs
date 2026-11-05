@@ -107,7 +107,10 @@ writes the named ones in Revit's own property sets (RE-210). With
 `--revit-set-placement` it also writes properties where Revit's own exporter
 does and IFC4's definitions do not, such as a room's
 `Pset_SpaceCommon.FloorCovering`; by default every property is in the set
-IFC4 gives (RE-235). It writes IFC4's base quantities by default, as Revit's
+IFC4 gives (RE-235). The flag also keeps the material Revit associates with
+an `IfcSpace`, which IFC4's `IfcRelAssociatesMaterial.AllowedElements` does
+not allow, so that output breaks the rule as Revit's own export does; the
+default has no material on a space (#1430). It writes IFC4's base quantities by default, as Revit's
 built-in IFC4 export setups do, and `--no-base-quantities` leaves them out,
 as Revit's exporter does with "Export base quantities" off (RE-242).
 
