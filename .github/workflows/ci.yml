@@ -1387,7 +1387,11 @@ jobs:
       # cache is never used. Run 42067754303 restored 246 MB on Linux and 203 MB
       # on macOS and still compiled every crate on both (Windows found no cache
       # at all). On Linux the build also runs in a container whose cargo home is
-      # its own, so it fetched every crate again.
+      # its own, so it fetched every crate again. A cache of its own for the
+      # macOS and Windows legs, saved on main, was measured with the flags
+      # above (#1461): a warm one took 45 s off the Windows build (155 s against
+      # 200 s) and none off macOS's (113 s against 99 s), for an entry of about
+      # 85 MB each, so there is none.
       #
       # Build the abi3 wheel. SEC-12/13: wheel sources live in the
       # `rvt-py/` workspace member crate; maturin follows the
