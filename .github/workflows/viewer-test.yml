@@ -64,7 +64,7 @@ on:
       # Not a dispatch input: a dispatched run has no artifact to name, so it
       # builds its own.
       wasm_artifact:
-        description: Name of an artifact of this run that holds a build of the WASM, laid out as the `build` job writes it (pkg/ from wasm-pack, bin/gen-fixture, wasm.sha256), for a caller that built it already; `build` is then skipped and `release_wasm` is ignored
+        description: Name of an artifact of this run that holds a build of the WASM, laid out as the `build` job writes it (pkg/ from wasm-pack, bin/gen-fixture, bin/rvt-elements, wasm.sha256), for a caller that built it already; `build` is then skipped and `release_wasm` is ignored
         type: string
         default: ''
   workflow_dispatch:

@@ -827,35 +827,30 @@ which name no type this way)
 
 **The viewer's saved parameters (#35, 2026-11-05)**: selecting an element
 lists the same saved parameters in the info panel, instance and type apart,
-named ones first and the nameless built-ins behind a fold that says why they
-have no name (#255). The `savedParameters` binding reads them for the
-selected element only, in a worker of its own that ends with the answer, so
-the open is not changed and nothing of the file stays resident. The Parameters
-row of File Status no longer says the rest are still to be decoded: it counts
-the values written to the IFC property sets and points to the panel. The panel
-says so when a file is of a release outside Revit 2015 to 2027, when an
-element has no saved parameters and when a read failed. A read has taken about
-what the open's worker held, so the page reads on selection only while twice
-the open's wasm memory fits the ceiling it judges an open by (4 GiB) and asks
-first above that. It keeps each element's answer, up to 64 and the least
-recently selected going first, until a file is opened again.
-`viewer/tests/parameters-row.spec.ts` holds the panel's entries for an element
-to the entries `rvt-elements` prints for the same ElementId, whole, on
-Einhoven and on Core Interior. Viewer tests run 42109657349 (head d1de8adf, CI runner, WASM without LTO): all 37 of Einhoven's tree
-elements were selected, 28 with parameters (369 entries, 332 instance, 37 type,
-8 named) equal to `rvt-elements`' and 7 with none showing the empty state; a
-read took a median of 535 ms (most 706 ms) in 17 MiB of wasm memory, the open's
-worker 23 MiB. On Core Interior four elements match, each read 3.0 to 3.3 s in
-275 MiB (the open: 326 MiB, 29.8 s). On the BIM4LCA office (62 MiB), not
-compared with `rvt-elements`, a selection read on its own: 8 entries in 7.4 s in
-943 MiB, the open's worker 910 MiB (128.3 s), and the page then kept 3 answers,
-4,731 characters of JSON. A read takes 0.74 to 1.04 times the open's wasm
-memory, only while it runs (the ten-times-size estimate, 616 MiB for the
-office, was short of it, which is why the page now judges by the open's memory).
-Held at its edge with the ceiling 8 MiB either side of twice Einhoven's open
-memory: read on selection above, asked below. The viewer's open, and so every
-export, is unchanged. The release-outside-the-range state is measured with the
-worker's answer replaced, as no such file is in the viewer's job.
+named ones first and the nameless ones behind a fold that groups them by why
+they have no name (#255), each row saying in words where its parameter is
+defined. The `savedParameters` binding reads them for the selected element
+only, in a worker of its own that ends with the answer, so the open is not
+changed and nothing of the file stays resident. Selecting an element makes no
+request: the worker is bundled into the page and starts from a blob URL (the
+page's `worker-src` gained `blob:`, `docs/viewer-privacy-posture.md`), from the
+compiled wasm the open's worker hands over, and a page taken offline after the
+load still reads. The Parameters row of File Status no longer says the rest are
+still to be decoded: it counts the values written to the IFC property sets and
+points to the panel. The panel says so when a file is of a release outside
+Revit 2015 to 2027, when one of 2015 to 2022 is read only experimentally
+(RE-281), when an element has no saved parameters and when a read failed. A
+read has taken 0.74 to 1.04 times the open's wasm memory, rising with the file,
+so a selection is read on its own only while the wasm memory the page holds is
+at most 1 GiB (nothing above the office's 910 MiB is measured) and asks first
+above that, saying that clicking may close the tab; after a read has run out of
+memory the file is read only when asked. The page keeps each element's answer,
+up to 64 and the least recently selected going first, until a file is opened
+again. `viewer/tests/parameters-row.spec.ts` holds the panel's entries for an
+element to the entries `rvt-elements` prints for the same ElementId, whole, on
+Einhoven and on Core Interior. Not yet measured on this head: the figures.
+The release-outside-the-range and experimental-release states are measured with
+the worker's answer replaced, as no such file is in the viewer's job.
 
 **RE-210 (2026-10-22)** adds `rvt-ifc --revit-property-sets` (#35). It
 writes each element's named saved parameters (RE-207) as Revit's exporter

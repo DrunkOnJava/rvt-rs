@@ -11,9 +11,22 @@
  * already holds, so nothing of it stays resident beyond what the page held
  * before this existed.
  *
+ * Selecting an element makes no request. This script is bundled into the
+ * page's own (`?worker&inline`: the worker starts from a blob URL the page
+ * makes, which the Content-Security-Policy's `worker-src` allows with `blob:`),
+ * so there is no chunk to fetch; and the decoder's wasm arrives already
+ * compiled, the module worker.ts compiled at the open, so `initSync` starts it
+ * from memory and nothing is fetched. A page taken offline after it has loaded
+ * still reads parameters.
+ *
  * Protocol:
- *   main → worker: { type: 'read', file: File, ids: number[], limits?: OpenLimitsOptions }
- *                  `limits` are the ones the file was opened under.
+ *   main → worker: { type: 'read', file: File, ids: number[], module: WebAssembly.Module,
+ *                    lock: string | null, limits?: OpenLimitsOptions }
+ *                  `limits` are the ones the file was opened under; `lock` names a
+ *                  Web Lock the worker holds for as long as it lives, so that the
+ *                  page learns the worker has gone without answering (a worker
+ *                  the browser ended raises no event).
+ *   worker → main: { type: 'started' } once the lock is held
  *   worker → main: { type: 'result', result, readMs, wasmMemoryBytes }
  *                  `result` is what the `savedParameters` binding returns,
  *                  parsed (rvt-wasm/src/lib.rs); `readMs` the milliseconds from
@@ -23,7 +36,8 @@
  *   worker → main: { type: 'error', message, outOfMemory }
  */
 
-import init, { savedParameters } from '../pkg/rvt.js';
+import { initSync, savedParameters } from '../pkg/rvt.js';
+import { PANIC_PREFIX, outOfMemory } from './wasm-failure';
 
 interface OpenLimitsOptions {
   largeModel?: boolean;
@@ -35,6 +49,8 @@ interface ReadMsg {
   type: 'read';
   file: File;
   ids: number[];
+  module: WebAssembly.Module;
+  lock: string | null;
   limits?: OpenLimitsOptions;
 }
 
@@ -44,7 +60,6 @@ const send = (msg: unknown): void => {
 
 // The panic hook the bindings install writes `rvt-rs wasm panic: <info>` to
 // `console.error` before the trap, as worker.ts reads it.
-const PANIC_PREFIX = 'rvt-rs wasm panic:';
 let lastPanic: string | null = null;
 const nativeConsoleError = console.error.bind(console);
 console.error = (...args: unknown[]): void => {
@@ -53,17 +68,14 @@ console.error = (...args: unknown[]): void => {
   nativeConsoleError(...args);
 };
 
-/** Messages that mean an allocation could not be made (worker.ts, `outOfMemory`). */
-const OUT_OF_MEMORY_MESSAGE =
-  /capacity overflow|memory allocation of \d+ bytes failed|out of memory|cannot allocate|array buffer allocation failed|invalid (typed )?array length|maximum memory size exceeded|invalid string length/i;
-
-function outOfMemory(err: unknown, panic: string | null): boolean {
-  const message = err instanceof Error ? err.message : String(err);
-  if (panic !== null) return OUT_OF_MEMORY_MESSAGE.test(panic);
-  if (err instanceof WebAssembly.RuntimeError) {
-    return /unreach/i.test(message) || OUT_OF_MEMORY_MESSAGE.test(message);
-  }
-  return OUT_OF_MEMORY_MESSAGE.test(message) && !(err instanceof TypeError);
+/** Takes the lock and never lets go: the browser releases it when this worker ends, for any reason. */
+function holdLock(name: string): Promise<void> {
+  return new Promise<void>((held) => {
+    void navigator.locks.request(name, () => {
+      held();
+      return new Promise<never>(() => {});
+    });
+  });
 }
 
 self.addEventListener('message', async (ev: MessageEvent<ReadMsg>) => {
@@ -71,7 +83,11 @@ self.addEventListener('message', async (ev: MessageEvent<ReadMsg>) => {
   if (msg.type !== 'read') return;
   const startedAt = performance.now();
   try {
-    const wasm = await init();
+    if (msg.lock !== null && typeof navigator !== 'undefined' && navigator.locks) {
+      await holdLock(msg.lock);
+    }
+    send({ type: 'started' });
+    const wasm = initSync({ module: msg.module });
     const bytes = new Uint8Array(await msg.file.arrayBuffer());
     lastPanic = null;
     const json = savedParameters(bytes, new Float64Array(msg.ids), msg.limits ?? null);

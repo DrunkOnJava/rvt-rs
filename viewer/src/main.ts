@@ -16,11 +16,14 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import supportMatrix from '../../docs/support-matrix.json';
+import ParametersWorker from './parameters-worker.ts?worker&inline';
 import {
   elementIdOf,
   parameterIsNumeric,
+  parameterKindText,
   parameterLabel,
   parameterValueText,
+  releasesText,
   type SavedParameter,
   type SavedParametersReading,
   type SavedParametersResult,
@@ -873,6 +876,8 @@ interface IfcModel {
     name: string;
     ifc_type: string;
     guid?: string;
+    /** The Revit ElementId, which the IFC export writes as the element's Tag. */
+    type_guid?: string | null;
     material_index?: number | null;
     material_layer_set_index?: number | null;
     /** `Aggregate` entities: the whole and its parts (RE-39, RE-46). */
@@ -1305,7 +1310,14 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
           phases?: ProjectPhase[];
         }
       | { type: 'info'; index: number; panel: ElementInfoPanel | null }
+      | { type: 'wasm'; module: WebAssembly.Module }
       | { type: 'error'; message: string; tooLarge?: TooLarge };
+    if (msg.type === 'wasm') {
+      // Kept for the workers that read saved parameters, which start from it
+      // and so fetch nothing when an element is selected.
+      parametersWasm = msg.module;
+      return;
+    }
     if (msg.type === 'info') {
       // Stale reply for an element the user already clicked past.
       if (msg.index !== pendingInfoIndex) return;
@@ -2657,8 +2669,25 @@ function revitGlobalId(idx: number): string | undefined {
  * resident beyond what was held before; a read costs memory only while it runs.
  * The answers are kept per element in a small map until the file is opened
  * again, so selecting an element a second time reads nothing.
+ *
+ * Selecting an element makes no request: the worker is bundled into this page
+ * and starts from a blob URL, and it starts from the compiled wasm module the
+ * worker that opened the file handed over (`parametersWasm`), so nothing is
+ * fetched, and a page taken offline after it loaded still reads.
  */
 const PARAMETERS_READ_DELAY_MS = 150;
+/** How long a worker may take to say it has started before it is taken to have died. */
+const PARAMETERS_STARTUP_MS = 20_000;
+/**
+ * The wasm memory a page may hold, the open's and any the main thread's exports
+ * made, for a selection to be read on its own. A read has taken 0.74 to 1.04
+ * times the open's wasm memory (rising with the file: Einhoven 23 MiB, Core
+ * Interior 326 MiB, the BIM4LCA office 910 MiB), and nothing above the office's
+ * has been measured, so above 1 GiB a read is only made when asked: a renderer
+ * that runs out of memory takes the tab and the open model with it, without an
+ * error to show.
+ */
+const PARAMETERS_MEASURED_WASM_BYTES = 2 ** 30;
 /**
  * The most elements whose answers are kept; the least recently selected goes
  * first. `?parametersRemembered=` lowers it, for the browser test.
@@ -2676,15 +2705,39 @@ const savedParametersCache = new Map<number, RememberedParameters>();
 let savedParametersCacheCharacters = 0;
 let parametersWorker: Worker | null = null;
 let parametersTimer: number | undefined;
+let parametersStartup: number | undefined;
+/** The ElementId a read is running or waiting for, when one is. */
+let parametersTarget: number | null = null;
+/** Ends the lock request that tells the page its worker has gone. */
+let parametersWatch: AbortController | null = null;
+let parametersReads = 0;
+/** The decoder's compiled wasm, which the worker that opened the file handed over. */
+let parametersWasm: WebAssembly.Module | null = null;
+/** Whether a read of this file has run out of memory: it is read only when asked from then on. */
+let parametersRanOutOfMemory = false;
 /** The wasm linear memory the open left (worker.ts `stats`), which a read in a second instance comes on top of. */
 let loadedWasmMemoryBytes = 0;
+const infoLiveEl = $('info-live');
+
+/** Says something to a screen reader, without moving what it is reading. */
+function announceParameters(text: string): void {
+  infoLiveEl.textContent = '';
+  window.requestAnimationFrame(() => {
+    infoLiveEl.textContent = text;
+  });
+}
 
 /** Ends a read in progress, or one waiting to start. */
 function stopParametersRead(): void {
   window.clearTimeout(parametersTimer);
+  window.clearTimeout(parametersStartup);
   parametersTimer = undefined;
+  parametersStartup = undefined;
+  parametersWatch?.abort();
+  parametersWatch = null;
   parametersWorker?.terminate();
   parametersWorker = null;
+  parametersTarget = null;
 }
 
 /** What a new file starts from. */
@@ -2693,6 +2746,8 @@ function resetSavedParameters(): void {
   savedParametersCache.clear();
   savedParametersCacheCharacters = 0;
   loadedWasmMemoryBytes = 0;
+  parametersWasm = null;
+  parametersRanOutOfMemory = false;
 }
 
 /** The answer kept for an element, which counts as its most recent use. */
@@ -2719,16 +2774,23 @@ function rememberParameters(id: number, reading: SavedParametersReading): void {
   }
 }
 
+/** The wasm memory this page holds: the open's, and the main thread's where its exports made an instance. */
+function residentWasmBytes(): number {
+  return loadedWasmMemoryBytes + (mainThreadWasmMemory?.buffer.byteLength ?? 0);
+}
+
 /**
- * Whether a selection reads on its own. A read is another instance of the
- * decoder beside the first, and it has taken about what the open's worker held
- * (0.74 to 1.04 times it, on Einhoven, Core Interior and the BIM4LCA office,
- * where the ten-times-size estimate was short), so the open's own wasm memory
- * is what it is judged by: a second instance of that size must still fit the
- * ceiling the page judges an open by. Above that it reads only when asked.
+ * The most wasm memory the page may hold for a selection to be read on its own:
+ * what a read has been measured beside (1 GiB), and a quarter of the ceiling the
+ * page judges an open by where `?memoryCeilingBytes=` lowers that.
  */
+function parametersAutoReadLimit(): number {
+  return Math.min(PARAMETERS_MEASURED_WASM_BYTES, memoryCeilingBytes / 4);
+}
+
+/** Whether a selection reads on its own: not past what has been measured, and not after a read ran out of memory. */
 function parametersReadAutomatically(): boolean {
-  return loadedWasmMemoryBytes * 2 <= memoryCeilingBytes;
+  return !parametersRanOutOfMemory && residentWasmBytes() <= parametersAutoReadLimit();
 }
 
 type ParametersState =
@@ -2748,6 +2810,8 @@ function parametersBody(box: HTMLElement, state: ParametersState): HTMLElement {
   box.querySelector('.info-parameters-body')?.remove();
   const body = document.createElement('div');
   body.className = 'info-parameters-body';
+  // Focus can be put here when a button that was in the group is gone.
+  body.tabIndex = -1;
   box.appendChild(body);
   return body;
 }
@@ -2771,27 +2835,52 @@ function parametersButton(id: string, label: string, onActivate: () => void): HT
   return btn;
 }
 
-const PARAMETER_KIND_LABEL: Record<string, string> = {
-  built_in: 'Built-in parameter',
-  family: 'Family parameter',
-  shared: 'Shared parameter',
-  global: 'Global parameter',
-  project: 'Project parameter',
-  undefined: 'No definition in the file',
-};
+/**
+ * A button of the group was pressed and is gone: focus goes to the group's
+ * message, which says the read has begun, and from there to its result.
+ */
+function readFromButton(box: HTMLElement, id: number): void {
+  box.dataset.focusResult = '1';
+  const body = parametersMessage(box, 'loading', 'Reading the saved parameters…');
+  announceParameters('Reading the saved parameters…');
+  body.focus();
+  readSavedParameters(id);
+}
 
-/** One parameter: its name, or its id where it has none, and its value as saved. */
+/** Puts focus on the result of a read the user asked for with a button. */
+function focusParametersResult(box: HTMLElement): void {
+  if (box.dataset.focusResult === undefined) return;
+  delete box.dataset.focusResult;
+  box.querySelector<HTMLElement>('.info-parameters-body')?.focus();
+}
+
+/** One parameter: its name, or its id where it has none, where it is defined, and its value as saved. */
 function parameterRow(p: SavedParameter): HTMLElement {
   const { label, why } = parameterLabel(p);
-  const row = infoRow(label, parameterValueText(p), parameterIsNumeric(p));
+  const row = document.createElement('div');
+  row.className = 'info-row';
+  const k = document.createElement('div');
+  k.className = 'k';
+  const name = document.createElement('span');
+  name.className = 'info-parameter-name';
+  name.textContent = label;
+  const kind = document.createElement('span');
+  kind.className = 'info-parameter-kind';
+  kind.textContent = parameterKindText(p);
+  k.append(name, kind);
+  const v = document.createElement('div');
+  v.className = parameterIsNumeric(p) ? 'v num' : 'v';
+  v.textContent = parameterValueText(p);
+  row.append(k, v);
   // The entry as the reader gave it, for tests/parameters-row.spec.ts, which
   // holds it to what rvt-elements prints for the same element.
   row.dataset.parameter = JSON.stringify(p);
   row.dataset.parameterId = String(p.parameter_id);
   row.dataset.level = p.level;
   row.dataset.kind = p.kind;
+  // Everything the tooltip says is also in the text: it is only a nearer reading.
   row.title = [
-    why ?? PARAMETER_KIND_LABEL[p.kind] ?? p.kind,
+    why ?? parameterKindText(p),
     p.level === 'type' ? `read from type record ${p.source_element_id} (${p.source_class})` : null,
   ]
     .filter((part): part is string => part !== null)
@@ -2799,7 +2888,7 @@ function parameterRow(p: SavedParameter): HTMLElement {
   return row;
 }
 
-/** The parameters of one level, the named first and the nameless behind a fold. */
+/** The parameters of one level: the named first, then the nameless in a fold, each reason for having no name together. */
 function parameterSection(
   level: 'instance' | 'type',
   entries: SavedParameter[],
@@ -2825,11 +2914,18 @@ function parameterSection(
     summary.className = 'info-parameters-summary';
     summary.textContent = `${unnamed.length} without a name`;
     details.appendChild(summary);
-    const why = document.createElement('div');
-    why.className = 'info-parameters-state';
-    why.textContent = parameterLabel(unnamed[0]!).why;
-    details.appendChild(why);
-    for (const p of unnamed) details.appendChild(parameterRow(p));
+    const byReason = new Map<string, SavedParameter[]>();
+    for (const p of unnamed) {
+      const why = parameterLabel(p).why!;
+      byReason.set(why, [...(byReason.get(why) ?? []), p]);
+    }
+    for (const [why, group] of byReason) {
+      const reason = document.createElement('div');
+      reason.className = 'info-parameters-state info-parameters-reason';
+      reason.textContent = `${group.length}: ${why}`;
+      details.appendChild(reason);
+      for (const p of group) details.appendChild(parameterRow(p));
+    }
     section.appendChild(details);
   }
   return section;
@@ -2851,6 +2947,21 @@ function parametersNotListed(reading: SavedParametersResult): string | null {
   return notes.length > 0 ? `Not listed: ${notes.join('; ')}.` : null;
 }
 
+/** A line under the group's body, in the body's own voice. */
+function parametersNote(body: HTMLElement, text: string): void {
+  const line = document.createElement('div');
+  line.className = 'info-parameters-state';
+  line.textContent = text;
+  body.appendChild(line);
+}
+
+/** The note a release read only experimentally carries (RE-281), which the support matrix states. */
+function releaseNote(reading: SavedParametersResult): string | null {
+  if (!reading.release_experimental) return null;
+  const [measuredFirst] = reading.releases_measured;
+  return `This is a Revit ${reading.release} file. Saved parameters are read from files of Revit ${reading.releases_read[0]} to ${measuredFirst - 1} experimentally: no Revit export of those releases saves a parameter to check them against.`;
+}
+
 /** An element's saved parameters in the group, or why there are none. */
 function showSavedParameters(box: HTMLElement, id: number, reading: SavedParametersReading): void {
   box.dataset.readMs = String(Math.round(reading.readMs));
@@ -2858,26 +2969,22 @@ function showSavedParameters(box: HTMLElement, id: number, reading: SavedParamet
   // What the page keeps, for tests/parameters-row.spec.ts and the office's report.
   box.dataset.cacheElements = String(savedParametersCache.size);
   box.dataset.cacheCharacters = String(savedParametersCacheCharacters);
-  if (!reading.native) {
-    const [first, last] = reading.native_releases;
-    parametersMessage(
-      box,
-      'unsupported',
-      `This is a Revit ${reading.release} file. rvt-rs reads saved parameters from Revit ${first} to ${last} files, so none are listed.`,
-    );
+  if (!reading.release_read) {
+    const text = `This is a Revit ${reading.release} file. rvt-rs reads saved parameters from files of ${releasesText(reading)}, so none are listed.`;
+    parametersMessage(box, 'unsupported', text);
+    announceParameters(text);
     return;
   }
   const entries = reading.elements[String(id)];
-  if (entries === undefined) {
-    parametersMessage(
-      box,
-      'empty',
-      'The file holds no record of this element that rvt-rs reads, so it has no saved parameters to list.',
-    );
-    return;
-  }
-  if (entries.length === 0) {
-    parametersMessage(box, 'empty', "This element's record holds no saved parameters.");
+  const note = releaseNote(reading);
+  if (entries === undefined || entries.length === 0) {
+    const text =
+      entries === undefined
+        ? 'The file holds no record of this element that rvt-rs reads, so it has no saved parameters to list.'
+        : "This element's record holds no saved parameters.";
+    const body = parametersMessage(box, 'empty', text);
+    if (note) parametersNote(body, note);
+    announceParameters(text);
     return;
   }
   const body = parametersBody(box, 'ready');
@@ -2885,49 +2992,77 @@ function showSavedParameters(box: HTMLElement, id: number, reading: SavedParamet
     const section = parameterSection(level, entries);
     if (section) body.appendChild(section);
   }
-  const note = parametersNotListed(reading);
-  if (note) {
-    const line = document.createElement('div');
-    line.className = 'info-parameters-state';
-    line.textContent = note;
-    body.appendChild(line);
-  }
+  const notListed = parametersNotListed(reading);
+  if (notListed) parametersNote(body, notListed);
+  if (note) parametersNote(body, note);
+  announceParameters(
+    `${entries.length} saved parameter${entries.length === 1 ? '' : 's'} read for this element.`,
+  );
 }
+
+/** What a read's end was: its answer, the engine's own failure, or a worker that ended with no word. */
+type ParametersOutcome =
+  | { type: 'result'; result: SavedParametersResult; readMs: number; wasmMemoryBytes: number }
+  | { type: 'error'; message: string; outOfMemory: boolean; stopped?: boolean };
 
 /** A read that did not finish, in words, with a way to try it again. */
 function showParametersError(
   box: HTMLElement,
   id: number,
-  message: string,
-  outOfMemory: boolean,
+  outcome: Extract<ParametersOutcome, { type: 'error' }>,
 ): void {
-  const body = parametersMessage(
-    box,
-    'error',
-    outOfMemory
-      ? `The tab ran out of memory reading the file a second time: ${message}`
-      : `The saved parameters could not be read: ${message}`,
-  );
+  const text = outcome.stopped
+    ? 'The worker that reads them stopped without answering. A browser ends a worker that runs out of memory this way, so this file is read only when asked from now on, and a read may close this tab.'
+    : outcome.outOfMemory
+      ? `The tab ran out of memory reading the file a second time (${outcome.message}). This file is read only when asked from now on, and a read may close this tab.`
+      : `The saved parameters could not be read: ${outcome.message}`;
+  const body = parametersMessage(box, 'error', text);
   body.appendChild(
-    parametersButton('retry-saved-parameters', 'Try again', () => {
-      parametersMessage(box, 'loading', 'Reading the saved parameters…');
-      readSavedParameters(id);
-    }),
+    parametersButton('retry-saved-parameters', 'Try again', () => readFromButton(box, id)),
   );
+  announceParameters(text);
 }
 
-type ParametersMessage =
-  | { type: 'result'; result: SavedParametersResult; readMs: number; wasmMemoryBytes: number }
-  | { type: 'error'; message: string; outOfMemory: boolean };
+/** A read's end: its answer kept, and shown if the panel is still the element's. */
+function finishRead(id: number, outcome: ParametersOutcome): void {
+  parametersTarget = null;
+  if (outcome.type === 'result') {
+    rememberParameters(id, {
+      ...outcome.result,
+      readMs: outcome.readMs,
+      wasmMemoryBytes: outcome.wasmMemoryBytes,
+    });
+  } else if (outcome.outOfMemory) {
+    parametersRanOutOfMemory = true;
+  }
+  // The panel may have moved on while the worker read.
+  const box = infoEl.querySelector<HTMLElement>('#info-parameters');
+  if (!box || box.dataset.elementId !== String(id)) return;
+  const reading = outcome.type === 'result' ? recallParameters(id) : undefined;
+  if (outcome.type === 'result' && reading) showSavedParameters(box, id, reading);
+  else if (outcome.type === 'error') showParametersError(box, id, outcome);
+  focusParametersResult(box);
+}
 
 /**
  * Reads the saved parameters of the element `id` of the open file in a new
  * worker, which ends with its answer. Another read, or a new file, ends this one.
+ * A worker the browser ends without a word is found by the lock it held, or by
+ * not having started.
  */
 function readSavedParameters(id: number): void {
   stopParametersRead();
+  parametersTarget = id;
   const file = currentFile;
-  if (!file) return;
+  const module = parametersWasm;
+  if (!file || !module) {
+    finishRead(id, {
+      type: 'error',
+      message: file ? 'the open did not hand over the decoder' : 'the file is no longer open',
+      outOfMemory: false,
+    });
+    return;
+  }
   const limits: OpenLimitsOptions = {};
   if (currentOpenLimits?.largeModel !== undefined) limits.largeModel = currentOpenLimits.largeModel;
   if (currentOpenLimits?.maxStreamBytes !== undefined) {
@@ -2936,29 +3071,40 @@ function readSavedParameters(id: number): void {
   if (currentOpenLimits?.maxInflateBytes !== undefined) {
     limits.maxInflateBytes = currentOpenLimits.maxInflateBytes;
   }
-  const w = new Worker(new URL('./parameters-worker.ts', import.meta.url), { type: 'module' });
+  const lock =
+    typeof navigator !== 'undefined' && navigator.locks
+      ? `rvt-parameters-${++parametersReads}-${Math.random().toString(36).slice(2)}`
+      : null;
+  const w = new ParametersWorker({ name: 'saved-parameters' });
   parametersWorker = w;
-  const settle = (outcome: ParametersMessage): void => {
+  const settle = (outcome: ParametersOutcome): void => {
     if (parametersWorker !== w) return;
-    w.terminate();
-    parametersWorker = null;
-    if (outcome.type === 'result') {
-      rememberParameters(id, {
-        ...outcome.result,
-        readMs: outcome.readMs,
-        wasmMemoryBytes: outcome.wasmMemoryBytes,
-      });
-    }
-    // The panel may have moved on while the worker read.
-    const box = infoEl.querySelector<HTMLElement>('#info-parameters');
-    if (!box || box.dataset.elementId !== String(id)) return;
-    const reading = recallParameters(id);
-    if (outcome.type === 'result' && reading) showSavedParameters(box, id, reading);
-    else if (outcome.type === 'error') {
-      showParametersError(box, id, outcome.message, outcome.outOfMemory);
-    }
+    stopParametersRead();
+    finishRead(id, outcome);
   };
-  w.addEventListener('message', (ev: MessageEvent<ParametersMessage>) => settle(ev.data));
+  const stopped = (): void =>
+    settle({
+      type: 'error',
+      message: 'the worker stopped without answering',
+      outOfMemory: true,
+      stopped: true,
+    });
+  parametersStartup = window.setTimeout(stopped, PARAMETERS_STARTUP_MS);
+  w.addEventListener('message', (ev: MessageEvent<ParametersOutcome | { type: 'started' }>) => {
+    const msg = ev.data;
+    if (msg.type !== 'started') {
+      settle(msg);
+      return;
+    }
+    window.clearTimeout(parametersStartup);
+    parametersStartup = undefined;
+    if (lock === null) return;
+    // The worker holds the lock until it ends, for whatever reason: being given
+    // it is the worker having gone, and ending the read first cancels the wait.
+    const watch = new AbortController();
+    parametersWatch = watch;
+    navigator.locks.request(lock, { signal: watch.signal }, stopped).catch(() => undefined);
+  });
   w.addEventListener('error', (ev: ErrorEvent) =>
     settle({
       type: 'error',
@@ -2969,52 +3115,59 @@ function readSavedParameters(id: number): void {
   w.addEventListener('messageerror', () =>
     settle({ type: 'error', message: 'the answer could not be received', outOfMemory: false }),
   );
-  w.postMessage({ type: 'read', file, ids: [id], limits });
+  w.postMessage({ type: 'read', file, ids: [id], module, lock, limits });
 }
 
 /** The group of a selected element: its saved parameters, or the state they are in. */
 function savedParametersGroup(panel: ElementInfoPanel): HTMLElement {
   const box = infoGroup('parameters', 'Saved parameters');
   box.id = 'info-parameters';
-  // A read for the element selected before is for one nobody is looking at.
-  stopParametersRead();
   const id = elementIdOf(panel.type_guid);
   if (id === null) {
-    parametersMessage(
-      box,
-      'no-id',
-      'This element has no ElementId in the export, so its saved parameters cannot be looked up.',
-    );
+    stopParametersRead();
+    const text =
+      'This element has no ElementId in the export, so its saved parameters cannot be looked up.';
+    parametersMessage(box, 'no-id', text);
+    announceParameters(text);
     return box;
   }
   box.dataset.elementId = String(id);
   const cached = recallParameters(id);
   if (cached) {
+    // What an earlier selection read; a read for another element is for one nobody is looking at.
+    stopParametersRead();
     showSavedParameters(box, id, cached);
     return box;
   }
-  const file = currentFile;
-  if (!file) {
+  if (parametersTarget === id) {
+    // This element's read is already running (or waiting out the delay): it fills this group when it ends.
+    parametersMessage(box, 'loading', 'Reading the saved parameters…');
+    announceParameters('Reading the saved parameters…');
+    return box;
+  }
+  stopParametersRead();
+  if (!currentFile) {
     parametersMessage(box, 'error', 'The file is no longer open.');
     return box;
   }
   if (!parametersReadAutomatically()) {
-    const body = parametersMessage(
-      box,
-      'on-request',
-      `Reading them opens the file a second time, in a worker of its own. That has taken about as much memory as opening it did, ${formatMemory(loadedWasmMemoryBytes)} here, which a second time would bring past the ${formatMemory(memoryCeilingBytes)} the page allows, so it is done when asked.`,
-    );
+    const text = parametersRanOutOfMemory
+      ? 'The last read of this file ran out of memory, so saved parameters are read only when asked. A read may close this tab.'
+      : `Reading them opens the file a second time, in a worker of its own. That has taken about as much memory as opening it did, and this page already holds ${formatMemory(residentWasmBytes())} of wasm memory, past the ${formatMemory(parametersAutoReadLimit())} a read has been measured beside. Past that a read can run the tab out of memory, which closes the tab and the open model with it, so clicking may close this tab.`;
+    const body = parametersMessage(box, 'on-request', text);
     body.appendChild(
-      parametersButton('read-saved-parameters', 'Read saved parameters', () => {
-        parametersMessage(box, 'loading', 'Reading the saved parameters…');
-        readSavedParameters(id);
-      }),
+      parametersButton('read-saved-parameters', 'Read saved parameters', () =>
+        readFromButton(box, id),
+      ),
     );
+    announceParameters(text);
     return box;
   }
   parametersMessage(box, 'loading', 'Reading the saved parameters…');
+  announceParameters('Reading the saved parameters…');
   // A run through the tree selects element after element: only the one the
   // selection stops on is read.
+  parametersTarget = id;
   parametersTimer = window.setTimeout(() => readSavedParameters(id), PARAMETERS_READ_DELAY_MS);
   return box;
 }
@@ -3088,6 +3241,7 @@ function renderElementPanel(panel: ElementInfoPanel): void {
  */
 function renderScaffoldPanel(idx: number): void {
   const node = findSceneNodeByIndex(sceneGraph, idx);
+  stopParametersRead();
   infoEl.innerHTML = '';
   infoEl.removeAttribute('aria-busy');
   if (!node) {
@@ -3115,6 +3269,11 @@ function renderScaffoldPanel(idx: number): void {
 function showElementInfo(idx: number): void {
   requestElementPanel(idx);
   const e = model?.entities?.[idx];
+  // The panel is replaced by the identity alone until the worker answers, so a
+  // read running for another element is for one nobody is looking at. The
+  // element a read is running for keeps it: selecting it again must not
+  // start it over.
+  if (elementIdOf(e?.type_guid) !== parametersTarget) stopParametersRead();
   const node = e ? null : findSceneNodeByIndex(sceneGraph, idx);
   const name = e?.name ?? node?.name;
   const ifcType = e?.ifc_type ?? node?.ifc_type;
@@ -3980,11 +4139,13 @@ document.body.addEventListener('drop', (ev) => {
  */
 type WasmModule = typeof import('../pkg/rvt.js');
 let mainThreadWasmReady: Promise<WasmModule> | null = null;
+/** The main thread's instance's memory once an export has made one: it counts toward what a read may be made beside. */
+let mainThreadWasmMemory: WebAssembly.Memory | null = null;
 function mainThreadWasm(): Promise<WasmModule> {
   if (!mainThreadWasmReady) {
     mainThreadWasmReady = import('../pkg/rvt.js')
       .then(async (mod) => {
-        await mod.default();
+        mainThreadWasmMemory = (await mod.default()).memory;
         return mod;
       })
       .catch((err: unknown) => {

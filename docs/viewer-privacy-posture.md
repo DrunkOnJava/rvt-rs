@@ -83,17 +83,29 @@ rules:
   static `rvt_bg.wasm` bundle from the viewer origin; `blob:` is
   needed for Three.js to read the in-memory GLB object URL generated
   from local WASM output. Application data requests are not allowed.
+- The same policy's `worker-src` is `'self' blob:`. `blob:` was added on
+  2026-11-05 (Griffin: "Keep the claim, no request") so that the worker that
+  reads an element's saved parameters can be bundled into the page's own script
+  and started from a blob URL, which names bytes the page made itself and is no
+  request. The alternative, a worker script of its own, would have been
+  fetched when the first element was selected, and the claim that nothing is
+  requested once the file is open would no longer have been true. `script-src`,
+  `connect-src` and every other directive are unchanged, and a worker started
+  from a blob URL takes the policy of the page that made it.
 
 Allowed browser requests are limited to initial same-origin static
 assets needed to boot the viewer:
 
 - the HTML document;
-- Vite-generated JavaScript chunks, including the worker scripts (the one
-  that opens the file and the one that reads an element's saved parameters,
-  which starts when an element is selected and loads its own script and the
-  wasm binary, from the same origin, and reads the file from the tab's own
-  `File`);
-- the generated `rvt_bg.wasm` WebAssembly binary;
+- Vite-generated JavaScript chunks, including the script of the worker that
+  opens the file (the worker that reads an element's saved parameters is
+  inside the page's own bundle and starts from a blob URL, so it is not a
+  request);
+- the generated `rvt_bg.wasm` WebAssembly binary, fetched once, by the worker
+  that opens the file, which compiles it and hands the compiled module to the
+  page: a worker that reads an element's saved parameters starts from that
+  module and fetches nothing, so selecting an element makes no request and a
+  page taken offline after it has loaded still reads them;
 - optional same-origin source maps or favicon requests from the
   browser tooling/runtime;
 - optional same-origin `/demos/` catalog JSON, thumbnails, and
@@ -123,7 +135,11 @@ Three checks make the posture verifiable post-facto:
    open a sample (`RVT_VIEWER_SAMPLE`; in the deploy job, the
    MIT-licensed `Revit_IFC5_Einhoven.rvt` project), allow only
    same-origin static boot assets, then assert zero HTTP/WebSocket
-   requests after the model is loaded.
+   requests after the model is loaded and after an element is selected (the
+   selection step fails the test when the sample has no element to select).
+   `viewer/tests/parameters-row.spec.ts` adds that a page taken offline after
+   the load still reads the saved parameters of three elements, and that no
+   request of any kind, a worker's included, is made while it does.
 
 The CI viewer deploy job runs checks #2 and #3. Browser-network
 failures print the request URL, method, phase, resource type, and

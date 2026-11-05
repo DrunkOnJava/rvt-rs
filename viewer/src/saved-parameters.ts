@@ -41,13 +41,17 @@ export interface SavedParameter {
   source_class: string;
 }
 
-/** What the `savedParameters` binding returns. */
+/** What the `savedParameters` binding returns (rvt-wasm/src/lib.rs, docs/viewer-api.md). */
 export interface SavedParametersResult {
   release: number;
   /** False for a release whose saved parameters are not read. */
-  native: boolean;
-  /** The first and last release that are. */
-  native_releases: [number, number];
+  release_read: boolean;
+  /** True for a release read only experimentally: read, but outside `releases_measured`. */
+  release_experimental: boolean;
+  /** The first and last release whose saved parameters are read. */
+  releases_read: [number, number];
+  /** The first and last release the reader is measured on; those read before it are experimental. */
+  releases_measured: [number, number];
   /** By ElementId; an element with no native record is not listed. */
   elements: Record<string, SavedParameter[] | undefined>;
   unresolved_family_slots: number;
@@ -64,6 +68,30 @@ export interface SavedParametersReading extends SavedParametersResult {
 const INTERNAL_UNIT: Record<string, string> = { m: 'ft', m2: 'ft²', m3: 'ft³', rad: 'rad' };
 /** How the SI unit is written. */
 const SI_UNIT_LABEL: Record<string, string> = { m: 'm', m2: 'm²', m3: 'm³', rad: 'rad' };
+
+/** How a definition's owner reads, for the row. */
+const KIND_TEXT: Record<string, string> = {
+  built_in: 'Built-in parameter',
+  family: 'Family parameter',
+  shared: 'Shared parameter',
+  global: 'Global parameter',
+  project: 'Project parameter',
+  undefined: 'No definition in the file',
+};
+
+/** The row's second line: where the parameter is defined. */
+export function parameterKindText(p: SavedParameter): string {
+  return KIND_TEXT[p.kind] ?? p.kind;
+}
+
+/** What the releases a file may be of are called, in words: "2015 to 2027 (2015 to 2022 experimentally)". */
+export function releasesText(reading: SavedParametersResult): string {
+  const [first, last] = reading.releases_read;
+  const [measuredFirst] = reading.releases_measured;
+  return measuredFirst > first
+    ? `Revit ${first} to ${last} (${first} to ${measuredFirst - 1} experimentally)`
+    : `Revit ${first} to ${last}`;
+}
 
 export const BUILT_IN_WHY =
   "A Revit built-in parameter. The file stores its id and value but no name, and rvt-rs does not ship Revit's catalog of built-in names (#255).";

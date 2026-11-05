@@ -76,24 +76,36 @@ test('opens a sample without external or post-open network requests', async ({ p
   await page.waitForTimeout(observationMs);
 
   // Selecting an element reads its saved parameters in a worker of its own
-  // (#35), which loads its script and the wasm binary from the same origin and
-  // reads the file from the tab's own File: it may fetch those two assets, and
-  // nothing else.
+  // (#35). It makes no request: the worker is in the page's bundle and starts
+  // from a blob URL, and the wasm it runs is the module the open compiled. The
+  // step is not optional: a sample with no element to select would let it pass
+  // by skipping it.
   phase = 'selecting';
   const elements = page.locator('.tree-node.tree-element[data-entity-index]');
-  if ((await elements.count()) > 0) {
-    await elements.first().evaluate((row) => (row as HTMLElement).click());
-    await expect(page.locator('#info-parameters')).toHaveAttribute(
-      'data-state',
-      /^(ready|empty|unsupported|error|on-request|no-id)$/,
-      { timeout: 120_000 },
-    );
-  }
+  expect(await elements.count(), 'the sample has elements to select').toBeGreaterThan(0);
+  await elements.first().evaluate((row) => (row as HTMLElement).click());
+  await expect(page.locator('#info-parameters')).toHaveAttribute(
+    'data-state',
+    /^(ready|empty|unsupported|error|on-request|no-id)$/,
+    { timeout: 120_000 },
+  );
   await page.waitForTimeout(observationMs);
 
   const base = new URL(baseURL ?? 'http://127.0.0.1:4173');
   const disallowed = records.filter((record) => isDisallowed(record, base));
   expect(disallowed, formatFailure(disallowed, records)).toEqual([]);
+
+  // The decoder's wasm is fetched once, by the open, and not before it (nothing
+  // is fetched to boot the page) and not again for an element: a read starts
+  // from the module the open compiled. The CDP session sees the page's own
+  // requests; the offline and request-recording test of parameters-row.spec.ts
+  // is what sees the workers'.
+  const wasm = records.filter((record) => new URL(record.url).pathname.endsWith('.wasm'));
+  expect(
+    wasm.filter((record) => record.phase === 'initial-static'),
+    'the wasm was fetched to boot the page',
+  ).toEqual([]);
+  expect(wasm.length, 'the wasm was fetched more than once').toBeLessThanOrEqual(1);
 });
 
 function resolveSamplePath(): string | null {
@@ -115,11 +127,10 @@ function isNetworkUrl(url: string): boolean {
 }
 
 function isDisallowed(record: NetworkRecord, base: URL): boolean {
-  if (record.phase === 'post-open') return true;
+  if (record.phase === 'post-open' || record.phase === 'selecting') return true;
 
   const url = new URL(record.url);
   if (url.origin !== base.origin) return true;
-  if (record.phase === 'selecting') return !/\/assets\/[^/]+\.(js|wasm|map)$/i.test(url.pathname);
 
   return !isAllowedStaticRequest(url);
 }

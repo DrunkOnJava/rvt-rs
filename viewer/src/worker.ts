@@ -13,6 +13,9 @@
  *                  project's last.
  *   main → worker: { type: 'info', index: number }
  *   worker → main: { type: 'progress', step: string }
+ *   worker → main: { type: 'wasm', module } the decoder's compiled wasm, which
+ *                  the page hands to the workers that read saved parameters,
+ *                  so that selecting an element fetches nothing
  *   worker → main: { type: 'stage', stage, done, total, wasmMemoryBytes } (#1195)
  *                  the decoder's own progress, as `rvt-gltf --progress` prints
  *                  it: `stage` is schema-parse, candidate-scan, element-decode,
@@ -52,6 +55,7 @@ import init, {
   fileMetadata,
   quickSummary,
 } from '../pkg/rvt.js';
+import { PANIC_PREFIX, outOfMemory } from './wasm-failure';
 
 interface OpenLimitsOptions {
   largeModel?: boolean;
@@ -91,12 +95,8 @@ type ParseMsg =
 let parsedModel: unknown = null;
 
 // The panic hook the bindings install writes `rvt-rs wasm panic: <info>` to
-// `console.error` before the trap. A trap with none of those first is not a
-// panic: an allocation the wasm memory could not grow to hold aborts the
-// instance without running the hook, and reaches here as a bare
-// `RuntimeError: unreachable` (V8), `unreachable executed` (Firefox) or
-// `Unreachable code should not be executed` (Safari).
-const PANIC_PREFIX = 'rvt-rs wasm panic:';
+// `console.error` before the trap; wasm-failure.ts says how a stop without one
+// reads, and what counts as running out of memory.
 let lastPanic: string | null = null;
 const nativeConsoleError = console.error.bind(console);
 console.error = (...args: unknown[]): void => {
@@ -105,24 +105,21 @@ console.error = (...args: unknown[]): void => {
   nativeConsoleError(...args);
 };
 
-/** Panic messages and engine errors that mean an allocation could not be made. */
-const OUT_OF_MEMORY_MESSAGE =
-  /capacity overflow|memory allocation of \d+ bytes failed|out of memory|cannot allocate|array buffer allocation failed|invalid (typed )?array length|maximum memory size exceeded|invalid string length/i;
-
 /**
- * True when `err` is the wasm instance, or the engine around it, running out
- * of memory. wasm32 holds at most 4 GiB, a `Vec` at most 2 GiB, and a failed
- * allocation aborts without a message, so the evidence is: a bare
- * `unreachable` trap with no panic message before it, or a message that names
- * an allocation. Any other panic is a bug and keeps its message.
+ * The decoder's wasm, fetched once and compiled once. The page keeps the
+ * compiled module and hands it to each worker that reads an element's saved
+ * parameters (parameters-worker.ts), so that selecting an element makes no
+ * request: those workers start from this module and fetch nothing.
  */
-function outOfMemory(err: unknown, panic: string | null): boolean {
-  const message = err instanceof Error ? err.message : String(err);
-  if (panic !== null) return OUT_OF_MEMORY_MESSAGE.test(panic);
-  if (err instanceof WebAssembly.RuntimeError) {
-    return /unreach/i.test(message) || OUT_OF_MEMORY_MESSAGE.test(message);
+async function compileWasm(): Promise<WebAssembly.Module> {
+  const response = await fetch(new URL('../pkg/rvt_bg.wasm', import.meta.url));
+  if (!response.ok) throw new Error(`could not load the decoder: ${response.status}`);
+  try {
+    return await WebAssembly.compileStreaming(response.clone());
+  } catch {
+    // A server that does not say `application/wasm` refuses to stream it.
+    return WebAssembly.compile(await response.arrayBuffer());
   }
-  return OUT_OF_MEMORY_MESSAGE.test(message) && !(err instanceof TypeError);
 }
 
 // DedicatedWorkerGlobalScope.postMessage has a slightly shifty
@@ -164,8 +161,10 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
   try {
     step('Initializing wasm');
     const startedAt = performance.now();
-    const wasm = await init();
+    const wasmModule = await compileWasm();
+    const wasm = await init({ module_or_path: wasmModule });
     wasmMemory = wasm.memory;
+    send({ type: 'wasm', module: wasmModule });
 
     // VW1-20 — progressive streaming. Emit the cheap metadata
     // first (sub-second even on hundreds-of-MB files) so the UI

@@ -1,5 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import { execFileSync } from 'node:child_process';
+import { chromium, expect, test, type Page } from '@playwright/test';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,7 +41,10 @@ coreInteriorTest(
 
 const sample = resolveSamplePath();
 const required = process.env.RVT_VIEWER_REQUIRE_JOURNEYS === '1';
-const sampleTest = required || sample !== null ? test : test.skip;
+// The oracle is the command line: viewer-test.yml builds rvt-elements and puts it on PATH. A
+// local run without it skips these (a local run builds nothing, see viewer/README.md); CI fails.
+const cliOnPath = spawnSync('rvt-elements', ['--help']).error === undefined;
+const sampleTest = required || (sample !== null && cliOnPath) ? test : test.skip;
 
 /** One saved parameter, as rvt-elements prints it. */
 interface Parameter {
@@ -168,7 +171,7 @@ async function settled(page: Page): Promise<Shown> {
       cacheCharacters: number(group.dataset.cacheCharacters),
       rows: [...group.querySelectorAll<HTMLElement>('[data-parameter]')].map((row) => ({
         parameter: JSON.parse(row.dataset.parameter ?? 'null') as Parameter,
-        key: row.querySelector('.k')?.textContent ?? '',
+        key: row.querySelector('.k .info-parameter-name')?.textContent ?? '',
         text: row.querySelector('.v')?.textContent ?? '',
         inFold: row.closest('.info-parameters-unnamed') !== null,
       })),
@@ -374,13 +377,13 @@ async function openedWasmBytes(page: Page): Promise<number> {
   return stats.wasmMemoryBytes;
 }
 
-// The page reads on selection while a second instance of the size the open's
-// worker held (a read has taken 0.74 to 1.04 times that) still fits the
-// ceiling it judges an open by, and asks first above that. The open's memory
-// is measured here and the ceiling set a little either side of twice it, so
-// the rule is held at its edge, not at the extremes of the default 4 GiB.
+// The page reads on selection while the wasm memory it holds is within what a read
+// has been measured beside (1 GiB, a quarter of the 4 GiB ceiling the page judges an
+// open by), and asks first above that. The open's memory is measured here and the
+// ceiling set so that the limit is a little either side of it, so the rule is held at
+// its edge, not at the extremes of the default.
 sampleTest(
-  'a read is made on selection while a second instance of the open fits the ceiling, and asked about when it does not',
+  'a read is made on selection within what has been measured, and asked about above it',
   async ({ page }) => {
     test.setTimeout(300_000);
     const expected = oracle();
@@ -394,26 +397,29 @@ sampleTest(
     expect(onTheDefault.state).toBe('ready');
     await expect(page.locator('#read-saved-parameters')).toHaveCount(0);
 
-    // A ceiling a little over twice the open's memory: still read on selection.
-    await open(page, sample!, `?memoryCeilingBytes=${2 * opened + 8 * MiB}`);
+    // A limit (a quarter of the ceiling) 8 MiB over the open's memory: still read on selection.
+    await open(page, sample!, `?memoryCeilingBytes=${4 * opened + 32 * MiB}`);
     expect(Math.abs((await openedWasmBytes(page)) - opened), 'the open held what it held').toBeLessThanOrEqual(2 * MiB);
     await select(page, pick!.index);
     const over = await settled(page);
     expect(over.state).toBe('ready');
     await expect(page.locator('#read-saved-parameters')).toHaveCount(0);
 
-    // A little under twice it: asked first, and then read as the command line has it.
-    await open(page, sample!, `?memoryCeilingBytes=${2 * opened - 8 * MiB}`);
+    // A limit 8 MiB under it: asked first, and then read as the command line has it.
+    await open(page, sample!, `?memoryCeilingBytes=${4 * opened - 32 * MiB}`);
     expect(Math.abs((await openedWasmBytes(page)) - opened), 'the open held what it held').toBeLessThanOrEqual(2 * MiB);
     await select(page, pick!.index);
     const asked = await settled(page);
     expect(asked.state).toBe('on-request');
     expect(asked.rows).toHaveLength(0);
     await expect(page.locator('#info-parameters')).toContainText('as much memory as opening it did');
+    await expect(page.locator('#info-parameters')).toContainText('clicking may close this tab');
     await page.locator('#read-saved-parameters').click();
     const read = await settled(page);
     expect(read.state).toBe('ready');
     expect(differences(read.elementId!, read, expected.get(read.elementId!) ?? [])).toEqual([]);
+    // The button was removed by the click: focus is where the result is.
+    await expect(page.locator('#info-parameters .info-parameters-body')).toBeFocused();
   },
 );
 
@@ -424,36 +430,24 @@ sampleTest(
   async ({ page }, testInfo) => {
     test.setTimeout(300_000);
     const expected = oracle();
-    await page.addInitScript(() => {
-      const reads = window as unknown as { __parameterReads: number };
-      reads.__parameterReads = 0;
-      const RealWorker = window.Worker;
-      window.Worker = class extends RealWorker {
-        constructor(url: string | URL, options?: WorkerOptions) {
-          super(url, options);
-          if (String(url).includes('parameters-worker')) reads.__parameterReads += 1;
-        }
-      } as typeof Worker;
-    });
-    const reads = () =>
-      page.evaluate(() => (window as unknown as { __parameterReads: number }).__parameterReads);
+    await watchReadWorkers(page);
 
     await open(page, sample!);
     const [a, b] = await withParameters(page, expected, 2);
     await select(page, a!.index);
     const firstA = await settled(page);
     expect(firstA.elementId).toBe(a!.id);
-    expect(await reads()).toBe(1);
+    expect(await reads(page)).toBe(1);
     await select(page, b!.index);
     await settled(page);
-    expect(await reads()).toBe(2);
+    expect(await reads(page)).toBe(2);
 
     // Both again: from the map, with the answer they had.
     await select(page, a!.index);
     const againA = await settled(page);
     await select(page, b!.index);
     const againB = await settled(page);
-    expect(await reads(), 'selecting two elements again read the file').toBe(2);
+    expect(await reads(page), 'selecting two elements again read the file').toBe(2);
     expect(againA.readMs, 'the answer kept is the one read').toBe(firstA.readMs);
     expect(againA.rows.map((row) => row.parameter)).toEqual(firstA.rows.map((row) => row.parameter));
     expect(differences(a!.id, againA, expected.get(a!.id)!)).toEqual([]);
@@ -481,7 +475,7 @@ sampleTest(
     await expect(page.locator('#status')).toHaveText(/Loaded/);
     await select(page, a!.index);
     const afresh = await settled(page);
-    expect(await reads(), 'another file opened kept an answer').toBe(3);
+    expect(await reads(page), 'another file opened kept an answer').toBe(3);
     expect(afresh.cacheElements).toBe(1);
     expect(differences(a!.id, afresh, expected.get(a!.id)!)).toEqual([]);
     fs.rmSync(copy, { force: true });
@@ -493,125 +487,291 @@ sampleTest(
 sampleTest('the answers kept are bounded, the least recently selected going first', async ({ page }) => {
   test.setTimeout(300_000);
   const expected = oracle();
-  await page.addInitScript(() => {
-    const reads = window as unknown as { __parameterReads: number };
-    reads.__parameterReads = 0;
-    const RealWorker = window.Worker;
-    window.Worker = class extends RealWorker {
-      constructor(url: string | URL, options?: WorkerOptions) {
-        super(url, options);
-        if (String(url).includes('parameters-worker')) reads.__parameterReads += 1;
-      }
-    } as typeof Worker;
-  });
-  const reads = () =>
-    page.evaluate(() => (window as unknown as { __parameterReads: number }).__parameterReads);
+  await watchReadWorkers(page);
   await open(page, sample!, '?parametersRemembered=2');
   const [a, b, c] = await withParameters(page, expected, 3);
   for (const element of [a!, b!, c!]) {
     await select(page, element.index);
     await settled(page);
   }
-  expect(await reads()).toBe(3);
+  expect(await reads(page)).toBe(3);
   await select(page, c!.index);
   const keptC = await settled(page);
-  expect(await reads(), 'the newest answer was kept').toBe(3);
+  expect(await reads(page), 'the newest answer was kept').toBe(3);
   expect(keptC.cacheElements, 'room for two').toBe(2);
   await select(page, a!.index);
   const evictedA = await settled(page);
-  expect(await reads(), 'the oldest answer was pushed out and read again').toBe(4);
+  expect(await reads(page), 'the oldest answer was pushed out and read again').toBe(4);
   expect(differences(a!.id, evictedA, expected.get(a!.id)!)).toEqual([]);
 });
 
-/** Serves the parameters worker's script with a fault in front of it, for its first request only. */
-async function failFirstRead(page: Page, panic: string): Promise<() => number> {
-  const prelude = `(() => {
-    const panic = ${JSON.stringify(panic)};
-    const failing = () => {
-      console.error(panic);
-      throw new WebAssembly.RuntimeError('unreachable');
+/**
+ * Shapes the first `times` workers that read saved parameters. `fail` makes `savedParameters`
+ * fail the way worker-failures.spec.ts fails the open's: a panic message on console.error before
+ * the trap, or (`panic` null) a bare `unreachable` with none, which is how V8 words a failed
+ * allocation. `delayMs` holds the file back that long, so that a read is still running when the
+ * test acts. The worker is bundled into the page and starts from a blob URL, so the shaping is
+ * put in front of that blob's script as the page makes its URL.
+ */
+async function shapeReads(
+  page: Page,
+  shape: { fail?: { panic: string | null }; delayMs?: number; times: number },
+): Promise<void> {
+  await page.addInitScript((shape) => {
+    const prelude = `(() => {
+      const fail = ${JSON.stringify(shape.fail ?? null)};
+      const delayMs = ${JSON.stringify(shape.delayMs ?? 0)};
+      if (delayMs > 0) {
+        const real = Blob.prototype.arrayBuffer;
+        Blob.prototype.arrayBuffer = async function () {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          return real.call(this);
+        };
+      }
+      if (fail !== null) {
+        const failing = () => {
+          if (fail.panic !== null) console.error(fail.panic);
+          throw new WebAssembly.RuntimeError('unreachable');
+        };
+        const exportsOf = Object.getOwnPropertyDescriptor(WebAssembly.Instance.prototype, 'exports').get;
+        const Real = WebAssembly.Instance;
+        WebAssembly.Instance = class extends Real {
+          constructor(module, imports) {
+            super(module, imports);
+            Object.defineProperty(this, 'exports', {
+              value: { ...exportsOf.call(this), savedParameters: failing },
+            });
+          }
+        };
+      }
+    })();\n`;
+    let used = 0;
+    const real = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (object: Blob | MediaSource) => {
+      if (object instanceof Blob && /javascript/.test(object.type) && used < shape.times) {
+        used += 1;
+        return real(new Blob([prelude, object], { type: object.type }));
+      }
+      return real(object);
     };
-    const wrapInstance = (instance) => {
-      const exports = { ...instance.exports, savedParameters: failing };
-      return new Proxy(instance, {
-        get(target, key) {
-          if (key === 'exports') return exports;
-          const value = Reflect.get(target, key, target);
-          return typeof value === 'function' ? value.bind(target) : value;
-        },
-      });
-    };
-    const wrap = (result) =>
-      result instanceof WebAssembly.Instance
-        ? wrapInstance(result)
-        : { ...result, instance: wrapInstance(result.instance) };
-    for (const name of ['instantiateStreaming', 'instantiate']) {
-      const real = WebAssembly[name];
-      WebAssembly[name] = async (...args) => wrap(await real.apply(WebAssembly, args));
-    }
-  })();`;
-  let requests = 0;
-  let served = 0;
-  await page.context().route(/\/assets\/parameters-worker-[^/?]+\.js(\?.*)?$/, async (route) => {
-    requests += 1;
-    if (requests > 1) {
-      await route.continue();
-      return;
-    }
-    const response = await route.fetch();
-    served += 1;
-    await route.fulfill({ response, body: `${prelude}\n${await response.text()}` });
-  });
-  return () => served;
+  }, shape);
 }
 
+/** Counts the workers the page starts to read saved parameters, and keeps them, and notes when each has started. */
+async function watchReadWorkers(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const seen = window as unknown as {
+      __parameterReads: number;
+      __parameterStarted: number;
+      __parameterWorkers: Worker[];
+    };
+    seen.__parameterReads = 0;
+    seen.__parameterStarted = 0;
+    seen.__parameterWorkers = [];
+    const RealWorker = window.Worker;
+    window.Worker = class extends RealWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        if (options?.name !== 'saved-parameters') return;
+        seen.__parameterReads += 1;
+        seen.__parameterWorkers.push(this);
+        this.addEventListener('message', (ev: MessageEvent) => {
+          if ((ev.data as { type?: string } | null)?.type === 'started') seen.__parameterStarted += 1;
+        });
+      }
+    } as typeof Worker;
+  });
+}
+
+const reads = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __parameterReads: number }).__parameterReads);
+
+sampleTest('a read that fails says so, and Try again reads the element', async ({ page }) => {
+  test.setTimeout(300_000);
+  const expected = oracle();
+  await shapeReads(page, {
+    fail: {
+      panic:
+        'rvt-rs wasm panic: panicked at rvt-wasm/src/lib.rs:1:1:\nindex out of bounds: the len is 3 but the index is 7',
+    },
+    times: 1,
+  });
+  await open(page, sample!);
+  const [pick] = await withParameters(page, expected, 1);
+
+  await select(page, pick!.index);
+  const failed = await settled(page);
+  expect(failed.state).toBe('error');
+  // The panic's own words, and not a claim about memory.
+  expect(failed.text).toContain('index out of bounds: the len is 3');
+  expect(failed.text).not.toMatch(/ran out of memory/i);
+  expect(failed.rows).toHaveLength(0);
+  // The rest of the panel is where it was.
+  await expect(page.locator('#info .info-group-identity')).toContainText('ElementId');
+
+  // Try again: the button is gone when it is pressed, and focus is where the result is.
+  await page.locator('#retry-saved-parameters').click();
+  const retried = await settled(page);
+  expect(retried.state).toBe('ready');
+  expect(differences(retried.elementId!, retried, expected.get(retried.elementId!) ?? [])).toEqual([]);
+  await expect(page.locator('#info-parameters .info-parameters-body')).toBeFocused();
+  // A failure that is not memory does not stop the file being read on selection.
+  await expect(page.locator('#read-saved-parameters')).toHaveCount(0);
+});
+
+// A bare unreachable is how V8 words a failed allocation: the page says the tab ran out of
+// memory reading the file a second time, and from then on reads that file only when asked, so
+// that it does not fail on every selection.
 sampleTest(
-  'a read that fails says so, and Try again reads the element',
+  'a read that runs out of memory says so, and the file is then read only when asked',
   async ({ page }) => {
     test.setTimeout(300_000);
     const expected = oracle();
-    const served = await failFirstRead(
-      page,
-      'rvt-rs wasm panic: panicked at rvt-wasm/src/lib.rs:1:1:\nindex out of bounds: the len is 3 but the index is 7',
-    );
+    await shapeReads(page, { fail: { panic: null }, times: 1 });
     await open(page, sample!);
-    const withParameters = (await treeElements(page)).find(
-      ({ id }) => id !== null && (expected.get(id)?.length ?? 0) > 0,
-    );
-    expect(withParameters, 'an element rvt-elements lists parameters for').toBeDefined();
+    const [a, b] = await withParameters(page, expected, 2);
 
-    await select(page, withParameters!.index);
+    await select(page, a!.index);
     const failed = await settled(page);
-    await expect.poll(served, 'the patched worker script was served').toBeGreaterThan(0);
     expect(failed.state).toBe('error');
-    // The panic's own words, and not a claim about memory.
-    expect(failed.text).toContain('index out of bounds: the len is 3');
-    expect(failed.text).not.toMatch(/ran out of memory/i);
-    expect(failed.rows).toHaveLength(0);
-    // The rest of the panel is where it was.
-    await expect(page.locator('#info .info-group-identity')).toContainText('ElementId');
+    expect(failed.text).toContain('ran out of memory reading the file a second time');
+    expect(failed.text).toContain('read only when asked from now on');
+    expect(failed.text).toContain('may close this tab');
+    expect(failed.text).not.toMatch(/unreachable executed|Unreachable code/);
 
-    await page.locator('#retry-saved-parameters').click();
-    const retried = await settled(page);
-    expect(retried.state).toBe('ready');
-    expect(differences(retried.elementId!, retried, expected.get(retried.elementId!) ?? [])).toEqual([]);
+    // Another element: asked about, not read and failed again.
+    await select(page, b!.index);
+    const asked = await settled(page);
+    expect(asked.state).toBe('on-request');
+    expect(asked.text).toContain('The last read of this file ran out of memory');
+    await page.locator('#read-saved-parameters').click();
+    const read = await settled(page);
+    expect(read.state).toBe('ready');
+    expect(differences(read.elementId!, read, expected.get(read.elementId!) ?? [])).toEqual([]);
+    await expect(page.locator('#info-parameters .info-parameters-body')).toBeFocused();
   },
 );
 
+// A browser ends a worker that runs out of memory with no event and no message. The page
+// finds out from the lock the worker held, so "Reading" cannot show for ever.
+sampleTest('a worker that ends without a word is found, and loading does not show for ever', async ({ page }) => {
+  test.setTimeout(300_000);
+  const expected = oracle();
+  await watchReadWorkers(page);
+  await open(page, sample!);
+  const [a, b] = await withParameters(page, expected, 2);
+
+  await select(page, a!.index);
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __parameterStarted: number }).__parameterStarted), {
+      message: 'the worker started',
+    })
+    .toBe(1);
+  await page.evaluate(() => (window as unknown as { __parameterWorkers: Worker[] }).__parameterWorkers[0]!.terminate());
+  const stopped = await settled(page);
+  expect(stopped.state).toBe('error');
+  expect(stopped.text).toContain('stopped without answering');
+  expect(stopped.text).toContain('read only when asked from now on');
+
+  await select(page, b!.index);
+  expect((await settled(page)).state).toBe('on-request');
+});
+
+// Selecting an element makes no request, and a page taken offline after it loaded still reads:
+// the worker is in the page's own bundle and starts from the module the open compiled.
+sampleTest('selecting an element makes no request, and an offline page reads', async ({ page }) => {
+  test.setTimeout(300_000);
+  const expected = oracle();
+  await open(page, sample!);
+  const requests: string[] = [];
+  await page.context().route('**/*', async (route) => {
+    requests.push(route.request().url());
+    await route.abort('internetdisconnected');
+  });
+  page.on('request', (request) => requests.push(request.url()));
+  await page.context().setOffline(true);
+
+  const picks = await withParameters(page, expected, 3);
+  for (const pick of picks) {
+    await select(page, pick.index);
+    const shown = await settled(page);
+    expect(shown.state, `element ${pick.id}: ${shown.text.slice(0, 200)}`).toBe('ready');
+    expect(differences(pick.id, shown, expected.get(pick.id)!)).toEqual([]);
+  }
+  // A blob: URL is the page's own memory, not the network.
+  expect(
+    requests.filter((url) => /^https?:/.test(url)),
+    'requests made by selecting elements',
+  ).toEqual([]);
+});
+
+// A read for an element nobody is looking at is ended, and the element whose read is running
+// keeps it when selected again. The reads are held back four seconds, so that one is still
+// running when the test acts.
+sampleTest('a read for an element no longer shown is ended, and the shown one is not started over', async ({ page }) => {
+  test.setTimeout(300_000);
+  const expected = oracle();
+  await shapeReads(page, { delayMs: 4_000, times: 99 });
+  await watchReadWorkers(page);
+  await open(page, sample!);
+  const [a, b, c] = await withParameters(page, expected, 3);
+
+  // The same element twice at once: one read.
+  await select(page, a!.index);
+  await select(page, a!.index);
+  await settled(page);
+  expect(await reads(page), 'selecting an element again restarted its read').toBe(1);
+
+  // Another element selected while a read runs ends it: its answer is never kept.
+  await select(page, c!.index);
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __parameterStarted: number }).__parameterStarted), {
+      message: 'the second worker started',
+    })
+    .toBe(2);
+  await select(page, b!.index);
+  await settled(page);
+  const afterB = await reads(page);
+  await select(page, c!.index);
+  const again = await settled(page);
+  expect(await reads(page), 'the ended read was kept, or not ended').toBe(afterB + 1);
+  expect(differences(c!.id, again, expected.get(c!.id)!)).toEqual([]);
+});
+
+// A container (a storey, a category) shows no parameters, so a read still running is ended.
+sampleTest('a read is ended when a storey is selected instead', async ({ page }) => {
+  test.setTimeout(300_000);
+  const expected = oracle();
+  await shapeReads(page, { delayMs: 4_000, times: 99 });
+  await watchReadWorkers(page);
+  await open(page, sample!);
+  const [a] = await withParameters(page, expected, 1);
+  await select(page, a!.index);
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __parameterStarted: number }).__parameterStarted), {
+      message: 'the worker started',
+    })
+    .toBe(1);
+  await page.locator('.tree-node.tree-storey').first().evaluate((row) => (row as HTMLElement).click());
+  await expect(page.locator('#info-parameters')).toHaveCount(0);
+  await select(page, a!.index);
+  await settled(page);
+  expect(await reads(page), 'the read of an element no longer shown was kept').toBe(2);
+});
+
+// A file of a release whose parameters are not read: no such file is in the viewer's job, so the
+// worker's answer to the page is replaced with the binding's shape for one. The range in the
+// message is the real binding's.
 sampleTest(
   'a file of a release whose parameters are not read says so (the answer replaced)',
   async ({ page }) => {
-    // No file of a release outside the range the reader covers is in the
-    // viewer's job, so the worker's answer to the page is replaced with the
-    // binding's own shape for one: `native` false, the release, no elements.
-    // The range in the message is the real binding's.
     test.setTimeout(300_000);
     await page.addInitScript(() => {
       const RealWorker = window.Worker;
       window.Worker = class extends RealWorker {
         constructor(url: string | URL, options?: WorkerOptions) {
           super(url, options);
-          if (!String(url).includes('parameters-worker')) return;
+          if (options?.name !== 'saved-parameters') return;
           const add = this.addEventListener.bind(this) as (...args: unknown[]) => void;
           (this as unknown as { addEventListener: unknown }).addEventListener = (
             type: string,
@@ -624,7 +784,13 @@ sampleTest(
               (ev: Event) => {
                 const data = (ev as MessageEvent).data as { type: string; result: object };
                 if (data.type !== 'result') return listener(ev);
-                const result = { ...data.result, release: 2013, native: false, elements: {} };
+                const result = {
+                  ...data.result,
+                  release: 2013,
+                  release_read: false,
+                  release_experimental: false,
+                  elements: {},
+                };
                 return listener(new MessageEvent('message', { data: { ...data, result } }));
               },
               options,
@@ -641,7 +807,88 @@ sampleTest(
     expect(shown.state).toBe('unsupported');
     expect(shown.rows).toHaveLength(0);
     expect(shown.text).toMatch(/This is a Revit 2013 file/);
-    expect(shown.text).toMatch(/from Revit 2015 to 2027 files/);
+    expect(shown.text).toContain('Revit 2015 to 2027 (2015 to 2022 experimentally)');
+  },
+);
+
+// Revit 2015 to 2022 are read experimentally (RE-281), and the panel says so from the
+// release: the answer is replaced with one for a release of that range.
+sampleTest(
+  'a release read only experimentally says so beside its parameters (the answer replaced)',
+  async ({ page }) => {
+    test.setTimeout(300_000);
+    const expected = oracle();
+    await page.addInitScript(() => {
+      const RealWorker = window.Worker;
+      window.Worker = class extends RealWorker {
+        constructor(url: string | URL, options?: WorkerOptions) {
+          super(url, options);
+          if (options?.name !== 'saved-parameters') return;
+          const add = this.addEventListener.bind(this) as (...args: unknown[]) => void;
+          (this as unknown as { addEventListener: unknown }).addEventListener = (
+            type: string,
+            listener: (ev: Event) => void,
+            options?: unknown,
+          ) => {
+            if (type !== 'message') return add(type, listener, options);
+            return add(
+              type,
+              (ev: Event) => {
+                const data = (ev as MessageEvent).data as { type: string; result: object };
+                if (data.type !== 'result') return listener(ev);
+                const result = { ...data.result, release: 2019, release_experimental: true };
+                return listener(new MessageEvent('message', { data: { ...data, result } }));
+              },
+              options,
+            );
+          };
+        }
+      } as typeof Worker;
+    });
+    await open(page, sample!);
+    const [pick] = await withParameters(page, expected, 1);
+    await select(page, pick!.index);
+    const shown = await settled(page);
+    expect(shown.state).toBe('ready');
+    expect(shown.text).toContain('This is a Revit 2019 file. Saved parameters are read from files of Revit 2015 to 2022 experimentally');
+  },
+);
+
+// A read that really runs the tab out of memory. A Chromium whose V8 caps wasm memory
+// (memory-ceiling-capped.spec.ts) cannot fail a read of Einhoven that its open survived: a read
+// takes less than the open there (17 MiB against 23). On the BIM4LCA office it takes more (943
+// MiB against 910), so a cap between the two opens it and stops the read: the real failure of
+// "a second instance beside the open". The page says so, and reads that file only when asked.
+const office = process.env.RVT_VIEWER_OFFICE;
+const officeTest = office ? test : test.skip;
+officeTest(
+  'a read that really runs the tab out of memory is reported, and the file is then read only when asked',
+  async ({ baseURL }) => {
+    test.setTimeout(1_200_000);
+    const capPages = Math.round((927 * MiB) / (64 * 1024));
+    const browser = await chromium.launch({ args: [`--js-flags=--wasm-max-mem-pages=${capPages}`] });
+    try {
+      const context = await browser.newContext({ baseURL });
+      const page = await context.newPage();
+      await page.goto('/');
+      await expect(page.locator('#status')).toHaveText(/Ready/);
+      await page.locator('#file-input').setInputFiles(office!);
+      await expect(page.locator('#status')).toHaveText(/Loaded/, { timeout: 900_000 });
+      const [a, b] = (await treeElements(page)).filter(({ id }) => id !== null).slice(0, 2);
+      expect(a && b, 'two elements with an ElementId').toBeTruthy();
+
+      await select(page, a!.index);
+      const failed = await settled(page);
+      report([`A read under a ${Math.round((capPages * 64 * 1024) / MiB)} MiB wasm cap on the office: ${failed.state}: ${failed.text}`]);
+      expect(failed.state).toBe('error');
+      expect(failed.text).toMatch(/ran out of memory reading the file a second time|stopped without answering/);
+
+      await select(page, b!.index);
+      const asked = await settled(page);
+      expect(asked.state).toBe('on-request');
+    } finally {
+      await browser.close();
+    }
   },
 );
 

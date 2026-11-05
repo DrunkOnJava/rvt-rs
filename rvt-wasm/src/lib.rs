@@ -39,7 +39,7 @@ use rvt::ifc::{
     step_writer::write_step,
 };
 use rvt::reader::{OpenLimits, ProjectPhase};
-use rvt::research::native_document::NATIVE_RELEASES;
+use rvt::research::native_document::{NATIVE_RELEASES, Options};
 use rvt::research::native_element_parameters;
 
 fn err_str<E: std::fmt::Display>(e: E) -> JsValue {
@@ -479,18 +479,24 @@ pub fn js_element_info_panel(model: JsValue, entity_index: usize) -> Result<JsVa
     serde_wasm_bindgen::to_value(&panel).map_err(err_str)
 }
 
-/// What [`saved_parameters`] returns, as JSON: the file's release, whether the
-/// saved parameters of that release are read, and each requested element that
-/// has a native record with its parameters.
+/// What [`saved_parameters`] returns, as JSON: the file's release, whether
+/// the saved parameters of that release are read and how far they are
+/// measured, and each requested element that has a record, with its
+/// parameters. The keys are the binding's contract.
 #[derive(serde::Serialize)]
 struct SavedParametersJson {
     release: u32,
-    native: bool,
-    /// The first and last release whose native records are read.
-    native_releases: [u32; 2],
-    /// By ElementId. An element with no native record is not listed. Each
-    /// entry is `serde_json::to_value` of the parameter, as `rvt-elements`
-    /// prints it.
+    /// Whether the saved parameters of `release` are read at all.
+    release_read: bool,
+    /// Read, but only experimentally: outside `releases_measured`.
+    release_experimental: bool,
+    /// The first and last release whose saved parameters are read.
+    releases_read: [u32; 2],
+    /// The first and last release the reader is measured on; the releases read
+    /// before it are read experimentally (RE-281).
+    releases_measured: [u32; 2],
+    /// By ElementId. An element with no record is not listed. Each entry is
+    /// `serde_json::to_value` of the parameter, as `rvt-elements` prints it.
     elements: BTreeMap<String, Vec<serde_json::Value>>,
     unresolved_family_slots: usize,
     instance_parameters_without_value: usize,
@@ -509,7 +515,8 @@ fn element_id(id: f64) -> Result<u64, JsValue> {
 }
 
 /// The saved parameters of the elements `ids` (ElementIds), as JSON text:
-/// `{ release, native, native_releases, elements, unresolved_family_slots,
+/// `{ release, release_read, release_experimental, releases_read,
+/// releases_measured, elements, unresolved_family_slots,
 /// instance_parameters_without_value }`.
 ///
 /// It is the read `rvt-elements` and Python's `decoded_elements()` list as an
@@ -518,10 +525,11 @@ fn element_id(id: f64) -> Result<u64, JsValue> {
 /// name (null for a built-in), `parameter_id`, `kind`, `storage_type`,
 /// `value` in internal units with `si_value` and `si_unit` where the unit is
 /// known, `level` (`instance` or `type`) and the record it was read from.
-/// `native` is false, and `elements` empty, for a file of a release outside
-/// `native_releases` (first and last, both read); an element whose id has no
-/// native record is left out of `elements`. The two counts are what the read
-/// could not list for these elements.
+/// `release_read` is false, and `elements` empty, for a file of a release
+/// outside `releases_read`; `release_experimental` is true for one of
+/// `releases_read` that `releases_measured` leaves out. An element whose id has
+/// no record is left out of `elements`. The two counts are what the read could
+/// not list for these elements.
 ///
 /// `bytes` is the whole file and is opened here for this call alone, with
 /// `limits` as `openRvtBytesWithDiagnosticsModeAndOpenLimits` takes them
@@ -541,8 +549,9 @@ pub fn saved_parameters(bytes: Vec<u8>, ids: Vec<f64>, limits: JsValue) -> Resul
         .collect::<Result<BTreeSet<u64>, JsValue>>()?;
     let mut rf = RevitFile::open_bytes_with_limits(bytes, request.open_limits).map_err(err_str)?;
     let release = rf.layout_release().map_err(err_str)?;
-    let native = NATIVE_RELEASES.contains(&release);
-    let read = if native {
+    let release_read = NATIVE_RELEASES.contains(&release);
+    let measured = Options::default().releases;
+    let read = if release_read {
         native_element_parameters::read(&mut rf, &ids)
             .map_err(|error| JsValue::from_str(&format!("{error:#}")))?
     } else {
@@ -550,8 +559,10 @@ pub fn saved_parameters(bytes: Vec<u8>, ids: Vec<f64>, limits: JsValue) -> Resul
     };
     let json = SavedParametersJson {
         release,
-        native,
-        native_releases: [*NATIVE_RELEASES.start(), *NATIVE_RELEASES.end()],
+        release_read,
+        release_experimental: release_read && !measured.contains(&release),
+        releases_read: [*NATIVE_RELEASES.start(), *NATIVE_RELEASES.end()],
+        releases_measured: [*measured.start(), *measured.end()],
         elements: read
             .elements
             .iter()
