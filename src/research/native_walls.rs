@@ -365,6 +365,18 @@ fn is_top_joined(graph: &crate::native_parameters::ObjectGraph) -> bool {
     })
 }
 
+/// The fields of an `SWall` and an `ArcWall` record that [`WallReads::read`]
+/// takes: the type the record names ([`wall_type_id`]), whether a
+/// `JoinToRoofGStep` joins its top ([`is_top_joined`]), and `m_id`, which the
+/// record's identity is checked against. The rest of a wall's graph, most of
+/// the read, is read and checked but not built (#1335).
+fn wall_read_fields(class: &str) -> Option<&'static [&'static str]> {
+    match class {
+        "SWall" | "ArcWall" => Some(&["m_id", "m_WallAttributesId", "m_baseOrTop"]),
+        _ => None,
+    }
+}
+
 /// What reads of walls' native records have found, kept so that the reader
 /// of the same walls that follows finds it rather than reading the records
 /// again (#1237: each read is a pass over the file, and on a Revit 2015 to
@@ -407,6 +419,7 @@ impl WallReads {
         let options = Options {
             selected_ids: selected,
             releases: crate::native_document::NATIVE_RELEASES,
+            graph_fields: Some(wall_read_fields),
             ..Options::default()
         };
         let mut type_ids: BTreeMap<u64, u64> = BTreeMap::new();
