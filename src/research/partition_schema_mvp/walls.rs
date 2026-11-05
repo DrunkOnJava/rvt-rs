@@ -403,12 +403,8 @@ fn profile_extent(segments: &[SketchSegment]) -> Option<([f64; 3], [f64; 3])> {
     ];
     let along =
         |point: &[f64; 3]| (point[0] - origin[0]) * axis[0] + (point[1] - origin[1]) * axis[1];
-    let low = points
-        .iter()
-        .min_by(|a, b| along(*a).total_cmp(&along(*b)))?;
-    let high = points
-        .iter()
-        .max_by(|a, b| along(*a).total_cmp(&along(*b)))?;
+    let low = points.iter().min_by(|a, b| along(a).total_cmp(&along(b)))?;
+    let high = points.iter().max_by(|a, b| along(a).total_cmp(&along(b)))?;
     Some((*low, *high))
 }
 
