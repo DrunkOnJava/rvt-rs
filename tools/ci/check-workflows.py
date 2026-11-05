@@ -279,10 +279,12 @@ def docs_problems(paths_ignore, viewer_run, deploy_run, expected_built_from):
             problems.append(f"{where}: {error}")
             continue
         if reference is not None and rules != reference:
-            problems.append(
-                f"{where} counts as documentation: missing {show(reference - rules)}; extra {show(rules - reference)}"
-                " (compared with ci.yml's push paths-ignore)"
-            )
+            parts = []
+            if rules - reference:
+                parts.append(f"counts {show(rules - reference)} as documentation, which ci.yml's push paths-ignore does not")
+            if reference - rules:
+                parts.append(f"does not count {show(reference - rules)} as documentation, which ci.yml's push paths-ignore does")
+            problems.append(f"{where} {' and '.join(parts)}")
     if len(set(groups.values())) > 1:
         problems.append("ci.yml viewer-paths and deploy-viewer.yml's wait step must carry the same documentation regex")
     built = BUILT_FROM.findall(viewer_run or "")
@@ -363,10 +365,10 @@ def main():
     )
     print("documentation paths: ci.yml paths-ignore, viewer-paths and Deploy viewer's wait step")
 
-    for note in notes:
-        print(annotation("warning", note))
     for error in errors:
         print(annotation("error", error))
+    for note in notes:
+        print(annotation("warning", note))
     print(f"{len(errors)} errors, {len(notes)} warnings")
     return 1 if errors else 0
 
