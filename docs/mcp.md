@@ -351,4 +351,10 @@ Einhoven the cancellation always lands during the decode), that stdout carries
 nothing but JSON, and that the server exits cleanly when stdin closes (after a
 session, after only `server/discover` or `initialize`, and at once). Another test holds
 `mcp-tools.json` to what the server reports for `tools/list`. CI runs it in the
-test matrix and again in Corpus health, where Einhoven runs in both lifecycles.
+test matrix and again in its "MCP server on Einhoven" job, where Einhoven runs
+in both lifecycles. That job also keeps every tool's `outputSchema` and every
+structured answer the test was given (`RVT_MCP_ANSWERS_DIR`), and
+`tools/ci/validate-mcp-answers.py` checks each answer against its tool's schema:
+a field the schema requires and an answer leaves out fails CI, as it would fail
+a client that validates `structuredContent` (#1415). The answers and schemas are
+the job's `mcp-answers` artifact.

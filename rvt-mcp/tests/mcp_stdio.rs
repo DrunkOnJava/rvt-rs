@@ -16,6 +16,7 @@ use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, ExitStatus, Stdio};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, channel};
 use std::time::{Duration, Instant};
 
@@ -105,11 +106,44 @@ fn object(value: Value) -> serde_json::Map<String, Value> {
     }
 }
 
+/// Where the test keeps each tool's `outputSchema` and every structured
+/// answer it is given, for `tools/ci/validate-mcp-answers.py` to check each
+/// answer against its tool's schema (#1415): `RVT_MCP_ANSWERS_DIR`. Unset,
+/// nothing is kept.
+fn answers_dir() -> Option<PathBuf> {
+    std::env::var_os("RVT_MCP_ANSWERS_DIR").map(PathBuf::from)
+}
+
+/// The number of the next file [`keep`] writes, so that tests running at
+/// once never write the same name.
+static KEPT: AtomicUsize = AtomicUsize::new(0);
+
+/// Write `value` as `<RVT_MCP_ANSWERS_DIR>/<kind>/<tool>/<pid>-<n>.json`.
+fn keep(kind: &str, tool: &str, value: &Value) {
+    let Some(root) = answers_dir() else {
+        return;
+    };
+    let dir = root.join(kind).join(tool);
+    std::fs::create_dir_all(&dir)
+        .unwrap_or_else(|error| panic!("create {}: {error}", dir.display()));
+    let n = KEPT.fetch_add(1, Ordering::Relaxed);
+    let path = dir.join(format!("{}-{n}.json", std::process::id()));
+    let bytes = serde_json::to_vec_pretty(value).expect("a JSON value serialises");
+    std::fs::write(&path, bytes)
+        .unwrap_or_else(|error| panic!("write {}: {error}", path.display()));
+}
+
 async fn call(client: &Client, name: &'static str, arguments: Value) -> CallToolResult {
-    client
+    let result = client
         .call_tool(CallToolRequestParams::new(name).with_arguments(object(arguments)))
         .await
-        .unwrap_or_else(|error| panic!("tools/call {name}: {error}"))
+        .unwrap_or_else(|error| panic!("tools/call {name}: {error}"));
+    if result.is_error != Some(true) {
+        if let Some(structured) = &result.structured_content {
+            keep("answers", name, structured);
+        }
+    }
+    result
 }
 
 fn error_text(result: &CallToolResult) -> String {
@@ -198,11 +232,11 @@ async fn drive(client: &Client, modern: bool, model: &Path, out: &Path, real_pro
         .collect();
     assert_eq!(names, TOOLS, "tools/list is sorted by name");
     for tool in &list.tools {
-        assert!(
-            tool.output_schema.is_some(),
-            "{} declares no outputSchema",
-            tool.name
-        );
+        let schema = tool
+            .output_schema
+            .as_ref()
+            .unwrap_or_else(|| panic!("{} declares no outputSchema", tool.name));
+        keep("schemas", &tool.name, &Value::Object((**schema).clone()));
     }
     for tool in &list.tools {
         assert!(
