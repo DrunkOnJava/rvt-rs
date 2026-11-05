@@ -711,8 +711,11 @@ pub fn append_typed_production_elements(
     // top of each floor, roof and ceiling: flat, a plane, or not known.
     let mut pending_bases: Vec<wall_tops::PendingBase> = Vec::new();
     let mut slab_shapes: HashMap<u32, wall_tops::SlabTop> = HashMap::new();
-    // RE-351: the roofs whose record box is exactly their type's layers, the
-    // only roofs whose underside a wall's top may be cut at.
+    // RE-351: the roofs whose record box is exactly their type's layers and
+    // whose plan outline is read, the only roofs whose underside a wall's top
+    // may be cut at: the layers prove the underside level, and a roof without
+    // its outline is drawn over its box's rectangle, which an L-shaped roof
+    // does not fill.
     let mut plate_roofs: HashSet<u32> = HashSet::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
@@ -1430,6 +1433,10 @@ pub fn append_typed_production_elements(
                 };
                 slab_shapes.insert(id, top);
                 if decoded.class == "Roof"
+                    && crate::element_record_plan_profiles::plan_profile_from_fields(
+                        &decoded.fields,
+                    )
+                    .is_some()
                     && crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
                         .is_some_and(|layers| layers.stacked)
                 {

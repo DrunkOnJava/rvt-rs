@@ -12,9 +12,11 @@
 //!   the wall. A roof drawn from its slopes is a solid and is left out, which
 //!   keeps the R2025 roofs off the walls that sit under them. A roof drawn as
 //!   a plain extrusion counts only where its record box is exactly its
-//!   type's layers: a roof by extrusion that the release's readers do not read
-//!   is its record box, deeper than its layers, whose underside is its lowest
-//!   point and not a level the walls stop at (RE-351);
+//!   type's layers and its plan outline is read: a roof by extrusion that the
+//!   release's readers do not read is its record box, deeper than its layers,
+//!   whose underside is its lowest point and not a level the walls stop at,
+//!   and a roof whose outline is not read is drawn over its box's rectangle,
+//!   which an L-shaped roof does not fill (RE-351);
 //! - the underside lies between the wall's base and top;
 //! - the element's plan covers the whole of the wall's plan and none of the
 //!   wall's plan lies in an opening of the element: the wall's plan outside
@@ -709,11 +711,12 @@ enum Cut {
 
 /// Whether the slab, roof or footing made of `pieces` (ElementId `id`) has an
 /// underside a wall's top may be cut at: any slab or footing, and a roof only
-/// where it is one of `plates`, its record box exactly its type's layers
-/// (RE-351). A roof whose box is deeper than its layers is not a level plate
-/// (a roof by extrusion, a slope its reader does not read): its box is drawn
-/// as a plain extrusion, but the box's underside is its lowest point, not a
-/// level the walls under it stop at.
+/// where it is one of `plates`, its record box exactly its type's layers and
+/// its plan outline read (RE-351). A roof whose box is deeper than its layers
+/// is not a level plate (a roof by extrusion, a slope its reader does not
+/// read): its box is drawn as a plain extrusion, but the box's underside is
+/// its lowest point, not a level the walls under it stop at. The layers are
+/// the proof that the underside is level; the outline is what the roof covers.
 fn level_underside(
     entities: &[IfcEntity],
     pieces: &[usize],

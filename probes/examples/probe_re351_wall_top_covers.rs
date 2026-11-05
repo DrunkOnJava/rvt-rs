@@ -28,10 +28,14 @@
 //!                         writer: the box, the centreline, the type thickness
 //!                         and every `m_wall_*` field (the join partners and
 //!                         reaches, the top join's elements), in order
-//!   kind "native_wall"    each wall's native `SWall` record as
-//!                         `native_walls_and_top_joins` reads it: curve,
-//!                         joins, join types, top-join and cut-pair elements,
-//!                         base join elements; or "native_walls_error"
+//!   kind "native_wall"    one for each of the 16 walls, its native `SWall`
+//!                         record as `native_walls_and_top_joins` reads it:
+//!                         curve, joins, join types, top-join and cut-pair
+//!                         elements, base join elements; `read` is false (and
+//!                         the curve null) where the reader leaves the wall
+//!                         out, as it does a wall whose record does not hold
+//!                         exactly one level curve, though the top-join maps
+//!                         still print; or "native_walls_error"
 //!   kind "native_record"  each native record of the 16 walls and the roof:
 //!                         the root object's fields (base and top constraints,
 //!                         offsets) and the join and cut steps
@@ -308,31 +312,34 @@ fn main() -> Result<()> {
     let ids: BTreeSet<u64> = WALLS.iter().map(|&id| u64::from(id)).collect();
     match native_walls_and_top_joins(&mut rf, &ids) {
         Ok(reads) => {
-            for (id, wall) in &reads.walls {
+            for wall_id in WALLS {
+                let id = u64::from(wall_id);
+                let wall = reads.walls.get(&id);
                 println!(
                     "{}",
                     json!({
                         "kind": "native_wall",
                         "id": id,
-                        "start": wall.start,
-                        "end": wall.end,
-                        "flipped": wall.flipped,
-                        "cross_section": wall.cross_section,
-                        "joins": wall.joins,
-                        "join_types": wall.join_types,
-                        "shells": wall.shells,
-                        "faces": wall.faces,
-                        "exposed": wall.exposed,
-                        "side_joins": wall.side_joins,
-                        "partners": wall.partners,
-                        "type_id": wall.type_id,
-                        "top_joined": reads.top_joined.get(id),
-                        "uncut": reads.uncut.contains(id),
-                        "top_cutters": reads.top_cutters.get(id),
-                        "base_cutters": reads.base_cutters.get(id),
-                        "pair_only": reads.pair_only.get(id),
-                        "whole": reads.whole.contains(id),
-                        "bounded": reads.bounded.get(id),
+                        "read": wall.is_some(),
+                        "start": wall.map(|wall| wall.start),
+                        "end": wall.map(|wall| wall.end),
+                        "flipped": wall.and_then(|wall| wall.flipped),
+                        "cross_section": wall.and_then(|wall| wall.cross_section),
+                        "joins": wall.map(|wall| &wall.joins),
+                        "join_types": wall.map(|wall| wall.join_types),
+                        "shells": wall.and_then(|wall| wall.shells),
+                        "faces": wall.and_then(|wall| wall.faces),
+                        "exposed": wall.map(|wall| &wall.exposed),
+                        "side_joins": wall.map(|wall| &wall.side_joins),
+                        "partners": wall.map(|wall| &wall.partners),
+                        "type_id": wall.and_then(|wall| wall.type_id),
+                        "top_joined": reads.top_joined.get(&id),
+                        "uncut": reads.uncut.contains(&id),
+                        "top_cutters": reads.top_cutters.get(&id),
+                        "base_cutters": reads.base_cutters.get(&id),
+                        "pair_only": reads.pair_only.get(&id),
+                        "whole": reads.whole.contains(&id),
+                        "bounded": reads.bounded.get(&id),
                     })
                 );
             }
