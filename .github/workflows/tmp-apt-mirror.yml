@@ -5,7 +5,7 @@ on:
 permissions: {}
 jobs:
   proof:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
@@ -22,7 +22,6 @@ jobs:
               && timeout 120 "${apt[@]}" update \
               && timeout 180 "${apt[@]}" install -y --no-install-recommends gcc-multilib; then
               cat /etc/apt/apt-mirrors.txt
-              grep -c "${mirrors[attempt - 2]%/}" <(apt-cache policy gcc-multilib)
               echo 'int main(void){return 0;}' > t.c && gcc -m32 t.c -o t && ./t && echo "m32 links on attempt $attempt"
               exit 0
             fi
