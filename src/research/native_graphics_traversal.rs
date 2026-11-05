@@ -401,7 +401,10 @@ impl Walker<'_, '_> {
                 }
             }
             "GInstance" => {
-                if obj.fields["m_bHasScale"].as_bool() != Some(false) {
+                let has_scale = obj.fields["m_bHasScale"].as_bool();
+                if has_scale != Some(false)
+                    && !(has_scale == Some(true) && self.unscaled_legacy_instance(index, obj))
+                {
                     return Err("scaled instance mode is not qualified".into());
                 }
                 if obj.fields["m_resolveSymInView"].as_bool() != Some(false) {
@@ -462,6 +465,27 @@ impl Walker<'_, '_> {
         }
         Ok(())
     }
+    /// Whether a `GInstance` whose `m_bHasScale` is set names an
+    /// `InstanceInfo` of the older schema (no `m_GRepId`, the three fields
+    /// `default_representation` accepts) whose 3x3 matrix is a rotation, the
+    /// identity included (RE-342). What the flag means on that schema is not
+    /// read, so only a matrix that scales, shears and mirrors nothing passes:
+    /// the flag with a mirror or a scale, and the flag with the later
+    /// `InstanceInfo`, whose `m_GRepId` is present, stay refused.
+    fn unscaled_legacy_instance(
+        &self,
+        index: usize,
+        obj: &crate::native_parameters::GraphObject,
+    ) -> bool {
+        let Ok(info) = self.target(index, &obj.fields["m_instanceInfo"]) else {
+            return false;
+        };
+        let info = &self.graph.objects[info];
+        info.class_name == "InstanceInfo"
+            && info.fields.get("m_GRepId").is_none()
+            && default_representation(&info.fields)
+            && read_transform(&info.fields["m_Trf"]).is_ok_and(|t| rotation(&t))
+    }
     fn only_curves(&self, index: usize, seen: &mut HashSet<usize>) -> bool {
         if seen.len() >= 128 || !seen.insert(index) {
             return false;
@@ -507,6 +531,20 @@ fn default_representation(info: &Value) -> bool {
                 && fields.contains_key("m_cda")
         }),
     }
+}
+/// Whether the 3x3 part of `m` is a rotation: orthonormal rows and a positive
+/// determinant, no scale, shear or mirror.
+fn rotation(m: &GraphicsTransform) -> bool {
+    let orthonormal = (0..3).all(|a| {
+        (0..3).all(|b| {
+            let dot: f64 = (0..3).map(|k| m[a][k] * m[b][k]).sum();
+            (dot - f64::from(u8::from(a == b))).abs() <= 1e-6
+        })
+    });
+    let determinant = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    orthonormal && determinant > 0.0
 }
 fn graphics_visibility(flags: u64) -> u8 {
     let bits = flags & 0x1e0;
@@ -662,5 +700,101 @@ fn condition_at_detail(class: &str, v: &Value, detail_level: i64) -> Result<bool
         Some(4) => Ok(saved <= actual),
         Some(5) => Ok(saved < actual),
         _ => Err("unsupported integer condition comparison".into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GraphicsTransform, default_representation, rotation};
+    use serde_json::json;
+
+    fn matrix(m: [[f64; 3]; 3]) -> GraphicsTransform {
+        std::array::from_fn(|i| {
+            std::array::from_fn(|j| {
+                if i < 3 && j < 3 {
+                    m[i][j]
+                } else {
+                    f64::from(u8::from(i == j))
+                }
+            })
+        })
+    }
+
+    #[test]
+    fn a_mirror_is_not_a_rotation() {
+        assert!(!rotation(&matrix([
+            [1., 0., 0.],
+            [0., 1., 0.],
+            [0., 0., -1.]
+        ])));
+        assert!(!rotation(&matrix([
+            [0., 1., 0.],
+            [1., 0., 0.],
+            [0., 0., 1.]
+        ])));
+    }
+
+    #[test]
+    fn a_scale_or_a_shear_is_not_a_rotation() {
+        assert!(!rotation(&matrix([
+            [2., 0., 0.],
+            [0., 2., 0.],
+            [0., 0., 2.]
+        ])));
+        assert!(!rotation(&matrix([
+            [1., 1., 0.],
+            [0., 1., 0.],
+            [0., 0., 1.]
+        ])));
+    }
+
+    #[test]
+    fn a_matrix_with_a_value_that_is_not_a_number_is_not_a_rotation() {
+        assert!(!rotation(&matrix([
+            [f64::NAN, 0., 0.],
+            [0., 1., 0.],
+            [0., 0., 1.]
+        ])));
+    }
+
+    #[test]
+    fn the_identity_and_a_turn_are_rotations() {
+        assert!(rotation(&matrix([
+            [1., 0., 0.],
+            [0., 1., 0.],
+            [0., 0., 1.]
+        ])));
+        assert!(rotation(&matrix([
+            [0., -1., 0.],
+            [1., 0., 0.],
+            [0., 0., 1.]
+        ])));
+        assert!(rotation(&matrix([
+            [0., 1., 0.],
+            [0., 0., 1.],
+            [1., 0., 0.]
+        ])));
+    }
+
+    #[test]
+    fn a_missing_representation_id_is_the_default_only_with_exactly_the_three_fields() {
+        let with = |extra: &[&str]| {
+            let mut info = json!({"m_Trf": {}, "m_symbolId": {}, "m_cda": {}});
+            for key in extra {
+                info[*key] = json!(0);
+            }
+            info
+        };
+        assert!(default_representation(&with(&[])));
+        assert!(!default_representation(&with(&["m_other"])));
+        assert!(!default_representation(&json!({"m_Trf": {}, "m_cda": {}})));
+        assert!(!default_representation(&json!(null)));
+    }
+
+    #[test]
+    fn a_representation_id_other_than_zero_is_not_the_default() {
+        assert!(default_representation(&json!({"m_GRepId": 0})));
+        assert!(!default_representation(&json!({"m_GRepId": 1})));
+        assert!(!default_representation(&json!({"m_GRepId": null})));
     }
 }

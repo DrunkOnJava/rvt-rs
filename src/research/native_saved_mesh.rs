@@ -107,6 +107,41 @@ fn point<const N: usize>(v: &Value) -> Result<[f64; N]> {
     }
     Ok(p)
 }
+/// The angle, in degrees, within which a stored facet normal must lie of its
+/// facet's winding normal for [`normals_follow_winding`] (RE-342).
+pub const NORMAL_WINDING_TOLERANCE_DEGREES: f64 = 0.1;
+/// Whether `normals` holds one stored normal per facet of `facets` and every
+/// one lies within [`NORMAL_WINDING_TOLERANCE_DEGREES`] of the winding normal
+/// of its facet over `points`. A facet whose corners are collinear or out of
+/// range, a stored normal of no length and one that is not a number make it
+/// false. A mesh that binds its normals per facet (`m_normalsFlag` 2) is read
+/// only where this holds (RE-342): the stored normal is never taken on trust.
+pub fn normals_follow_winding(
+    points: &[[f64; 3]],
+    facets: &[[u32; 3]],
+    normals: &[[f64; 3]],
+) -> bool {
+    let limit = NORMAL_WINDING_TOLERANCE_DEGREES.to_radians().cos();
+    facets.len() == normals.len()
+        && facets.iter().zip(normals).all(|(facet, stored)| {
+            let corner = |i: u32| points.get(i as usize).copied();
+            let (Some(a), Some(b), Some(c)) =
+                (corner(facet[0]), corner(facet[1]), corner(facet[2]))
+            else {
+                return false;
+            };
+            let winding = crate::vector_math::cross(
+                crate::vector_math::sub(b, a),
+                crate::vector_math::sub(c, a),
+            );
+            let winding_length = crate::vector_math::dot(winding, winding).sqrt();
+            let stored_length = crate::vector_math::dot(*stored, *stored).sqrt();
+            winding_length > 1e-12
+                && stored_length > 1e-9
+                && crate::vector_math::dot(winding, *stored) / (winding_length * stored_length)
+                    >= limit
+        })
+}
 fn close(a: [f64; 2], b: [f64; 2]) -> bool {
     (a[0] - b[0]).hypot(a[1] - b[1]) < 1e-7
 }
@@ -1456,8 +1491,14 @@ fn graphics_impl<'a>(
                     .resolve(oi, &obj.fields["m_pFacetedTopology"])?
                     .context("faceted topology")?;
                 let topology = &g.objects[ti];
+                // FacetedTopology9 has FacetedTopology0's points, normals and
+                // facets and one more array, `m_edgeVisFlagsArr`, which is not
+                // read (RE-342). It is read under normal binding 2 only, and
+                // only where every stored normal follows the winding; every
+                // other class and binding stays refused.
+                let topology_class = topology.class_name.as_str();
                 ensure!(
-                    topology.class_name == "FacetedTopology0",
+                    matches!(topology_class, "FacetedTopology0" | "FacetedTopology9"),
                     "unsupported faceted topology"
                 );
                 let f = &topology.fields;
@@ -1474,7 +1515,10 @@ fn graphics_impl<'a>(
                     .map(point::<3>)
                     .collect::<Result<Vec<_>>>()?;
                 ensure!(
-                    f["m_normalsFlag"].as_u64() == Some(0),
+                    matches!(
+                        (topology_class, f["m_normalsFlag"].as_u64()),
+                        ("FacetedTopology0", Some(0)) | ("FacetedTopology9", Some(2))
+                    ),
                     "unsupported normal binding"
                 );
                 let triangles = f["m_facetsArr"]
@@ -1492,10 +1536,17 @@ fn graphics_impl<'a>(
                         Ok(t)
                     })
                     .collect::<Result<Vec<_>>>()?;
-                ensure!(
-                    normals.is_empty() || normals.len() == triangles.len(),
-                    "unsupported normal cardinality"
-                );
+                if topology_class == "FacetedTopology9" {
+                    ensure!(
+                        normals_follow_winding(&vertices, &triangles, &normals),
+                        "stored normals do not follow the winding"
+                    );
+                } else {
+                    ensure!(
+                        normals.is_empty() || normals.len() == triangles.len(),
+                        "unsupported normal cardinality"
+                    );
+                }
                 let facet_normals = !normals.is_empty();
 
                 let mut expanded_vertices = Vec::new();
@@ -1603,9 +1654,87 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::regions_tile;
+    use super::{normals_follow_winding, regions_tile};
 
     const TOLERANCE: f64 = 1e-7;
+
+    // One facet whose winding normal is +z.
+    fn follows(normal: [f64; 3]) -> bool {
+        let points = [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]];
+        normals_follow_winding(&points, &[[0, 1, 2]], &[normal])
+    }
+
+    fn tilted(degrees: f64) -> [f64; 3] {
+        let radians = degrees.to_radians();
+        [radians.sin(), 0., radians.cos()]
+    }
+
+    #[test]
+    fn a_stored_normal_opposite_to_the_winding_is_refused() {
+        assert!(!follows([0., 0., -1.]));
+    }
+
+    #[test]
+    fn a_stored_normal_tilted_past_the_tolerance_is_refused() {
+        assert!(!follows(tilted(0.2)));
+        assert!(!follows(tilted(-0.2)));
+    }
+
+    #[test]
+    fn a_stored_normal_inside_the_tolerance_is_kept_whatever_its_length() {
+        assert!(follows([0., 0., 1.]));
+        assert!(follows([0., 0., 2.]));
+        assert!(follows(tilted(0.05)));
+    }
+
+    #[test]
+    fn a_stored_normal_of_no_length_or_not_a_number_is_refused() {
+        assert!(!follows([0., 0., 0.]));
+        assert!(!follows([f64::NAN, 0., 1.]));
+        assert!(!follows([f64::INFINITY, 0., 1.]));
+    }
+
+    #[test]
+    fn a_facet_with_collinear_corners_has_no_winding_to_follow() {
+        let points = [[0., 0., 0.], [1., 0., 0.], [2., 0., 0.]];
+        assert!(!normals_follow_winding(
+            &points,
+            &[[0, 1, 2]],
+            &[[0., 0., 1.]]
+        ));
+    }
+
+    #[test]
+    fn a_facet_with_a_corner_out_of_range_is_refused() {
+        let points = [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]];
+        assert!(!normals_follow_winding(
+            &points,
+            &[[0, 1, 3]],
+            &[[0., 0., 1.]]
+        ));
+    }
+
+    #[test]
+    fn fewer_normals_than_facets_are_refused() {
+        let points = [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.]];
+        assert!(!normals_follow_winding(&points, &[[0, 1, 2]], &[]));
+    }
+
+    #[test]
+    fn one_bad_facet_among_good_ones_refuses_the_mesh() {
+        let points = [[0., 0., 0.], [1., 0., 0.], [0., 1., 0.], [1., 1., 0.]];
+        let facets = [[0, 1, 2], [1, 3, 2]];
+        assert!(normals_follow_winding(
+            &points,
+            &facets,
+            &[[0., 0., 1.], [0., 0., 1.]]
+        ));
+        assert!(!normals_follow_winding(
+            &points,
+            &facets,
+            &[[0., 0., 1.], [0., 0., -1.]]
+        ));
+    }
 
     fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> Vec<[f64; 2]> {
         vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1]]

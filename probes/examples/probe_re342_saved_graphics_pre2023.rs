@@ -9,8 +9,13 @@
 //! field), and a `GInstance` whose `m_bHasScale` is set; and
 //! `native_index::creation_episodes` refuses a `Global/History` whose
 //! `m_episodeList.m_oEpisodes` is not empty. Whether any of the four is met
-//! in a file CI can fetch, and whether reading it changes a mesh, is
-//! unmeasured.
+//! in a file CI can fetch, and whether reading it changes a mesh, is what
+//! this probe counts. Since RE-342 the readers read an `InstanceInfo` of
+//! exactly `m_Trf`, `m_symbolId` and `m_cda`, a `FacetedTopology9` under
+//! binding 2 whose stored normals all follow the winding, a set
+//! `m_bHasScale` on such an `InstanceInfo` with a rotation matrix, and
+//! deferred history episodes; the census says how many objects each rule meets
+//! and, for the normals, how many it refuses.
 //!
 //! One file, or two (`OLDER.rvt NEWER.rvt`, the sample first and the same
 //! project saved by a newer release second, as the Measure harness calls a
@@ -30,7 +35,8 @@
 //!   `FacetedTopology*` objects by class and `m_normalsFlag` (objects, points,
 //!   facets, those with one normal per facet, those in a graph that also holds
 //!   a `GImposter`, RE-300), for those with one normal per facet how many lie
-//!   within 0.1 degree and 1 degree of the facet's winding normal, the
+//!   within 0.1 degree and 1 degree of the facet's winding normal and whether
+//!   `native_saved_mesh::normals_follow_winding` keeps or refuses the object, the
 //!   `InstanceInfo` objects by `m_GRepId` (absent, zero, nonzero) and by the
 //!   class of their `m_Trf` (identity, rotation, mirror, uniform scale,
 //!   orthogonal, general), and the `GInstance` objects by `m_bHasScale`, the
@@ -62,7 +68,7 @@ use rvt::control::WalkerControl;
 use rvt::research::native_document::{self, NATIVE_RELEASES, Options, extract_graphs};
 use rvt::research::native_index;
 use rvt::research::native_parameters::{self, GraphObject, ObjectGraph};
-use rvt::research::native_saved_mesh::pointer;
+use rvt::research::native_saved_mesh::{normals_follow_winding, pointer};
 use rvt::research::native_saved_scene::extract_in_batches_with_control;
 use rvt::research::schema_registry::{self, Class, Field, Registry};
 use serde_json::Value;
@@ -322,6 +328,16 @@ fn topology(object: &GraphObject, imposter: bool, tally: &mut Tally) {
         return;
     }
     tally.add(format!("{key} objects with one normal per facet"), 1);
+    let facet_indices: Vec<[u32; 3]> = facets
+        .iter()
+        .map(|t| t.map(|i| u32::try_from(i).unwrap_or(u32::MAX)))
+        .collect();
+    let rule = if normals_follow_winding(&points, &facet_indices, &normals) {
+        "keeps"
+    } else {
+        "refuses"
+    };
+    tally.add(format!("{key} objects the winding rule {rule}"), 1);
     let (mut fine, mut coarse, mut opposite, mut degenerate, mut stored_zero) =
         (0u64, 0u64, 0u64, 0u64, 0u64);
     for (tri, stored) in facets.iter().zip(&normals) {
