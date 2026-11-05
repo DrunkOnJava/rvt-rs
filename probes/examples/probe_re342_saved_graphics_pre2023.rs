@@ -15,7 +15,8 @@
 //! One file, or two (`OLDER.rvt NEWER.rvt`, the sample first and the same
 //! project saved by a newer release second, as the Measure harness calls a
 //! probe with `probe_pair_release`). A trailing `--records`, which the harness
-//! adds for a sample, is ignored.
+//! adds for a sample, leaves the scene out of a one-file run: the pair run
+//! reads it.
 //!
 //! One file:
 //! - `release`, `kind` (project or family);
@@ -655,7 +656,7 @@ fn header(rf: &mut RevitFile, path: &str) -> Result<(u32, bool)> {
     Ok((layout, family))
 }
 
-fn single(path: &str) -> Result<()> {
+fn single(path: &str, census_only: bool) -> Result<()> {
     let mut rf = open(path)?;
     let (release, family) = header(&mut rf, path)?;
     let mut tally = Tally::default();
@@ -674,7 +675,9 @@ fn single(path: &str) -> Result<()> {
     census(&mut rf, &mut tally);
     tally.print();
     let mut scene_tally = Tally::default();
-    if release <= 2023 {
+    if census_only {
+        scene_tally.add("scene not run: --records", 1);
+    } else if release <= 2023 {
         scene(&mut rf, family, &mut scene_tally);
     } else {
         scene_tally.add(
@@ -705,13 +708,14 @@ fn pair(older_path: &str, newer_path: &str) -> Result<()> {
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    let census_only = args.iter().any(|a| a == "--records");
     let files: Vec<&str> = args
         .iter()
         .map(String::as_str)
         .filter(|a| !a.starts_with("--"))
         .collect();
     match files.as_slice() {
-        [one] => single(one),
+        [one] => single(one, census_only),
         [older, newer] => pair(older, newer),
         _ => bail!("usage: probe_re342_saved_graphics_pre2023 FILE.rvt | OLDER.rvt NEWER.rvt"),
     }
