@@ -22,6 +22,10 @@
     phase, and a project whose rooms are all in it, are unchanged, byte for
     byte. A room whose phase is unset, unread or not one of the project's is
     written as before and does not count towards the last phase holding a room.
-  - Not yet measured on this head: the effect on the 2016 to 2027 saves of
-    `rac_basic_sample_project` (expected: 14 `IfcSpace` each) and that no other
-    model moves (RE-326 §9).
+  - Measured (Measure run 42011174043 at `992196c6`, 111 exports): the 2016
+    to 2027 saves of `rac_basic_sample_project` each write 14 `IfcSpace` (0
+    before), and the other 99 exports, held-out ones included, are byte for
+    byte as before. The default is byte for byte the `--phase "Working
+    Drawings"` export and pairs 14 of the Revit 2018 export's 17 spaces by
+    GlobalId; `--phase` with the last phase writes what 0.14.0 wrote on all ten
+    saves of 2018 to 2027 (RE-326 §9.4).

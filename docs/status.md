@@ -1045,8 +1045,12 @@ named (`--phase`, `phase=`), the last included, is exact, and a project with a
 room in its last phase is unchanged. It is a choice and not a measurement of
 Revit's default: no Revit export made at the last phase of such a project
 exists, and a project with no room in its last phase gets earlier rooms that
-Revit's default might leave out. Measured on this change's head: not yet
-(`reports/element-framing/RE-326-room-phases.md` §9 records the run).
+Revit's default might leave out. Measured (Measure run 42011174043 at `992196c6`): the 12
+saves of 2016 to 2027 each write 14 `IfcSpace` (0 before) and the other 99 of 111
+exports, held-out ones included, are byte for byte as before; the default is byte
+for byte the `--phase "Working Drawings"` export and pairs 14 of the Revit 2018
+export's 17 spaces by GlobalId, and naming the last phase writes what 0.14.0
+wrote (`reports/element-framing/RE-326-room-phases.md` §9.4).
 
 **RE-328 (2026-11-04)** finds which test of `beam_body` keeps a beam as its
 record box when its element data holds one location line (#1247), and draws

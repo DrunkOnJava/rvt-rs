@@ -568,10 +568,10 @@ whose phase is unset or unread is written and not counted, and so is an Area or
 an MEP space, which Revit's exporter does not check against a phase. Autodesk's
 `rac_basic_sample_project` has 14 rooms in Working Drawings, the second of
 three phases, and none in its last, Learning Content: its default export is
-expected to hold `room_phase_fallback` and count none, and
-`--phase "Learning Content"` to count the 14 (not yet measured on this head;
-Measure runs 41784415396 and 41784419457 measured `--phase "Working Drawings"`
-and the rule before the fallback). Revit 2016 to 2023 apply it as they apply the
+`room_phase_fallback` (`Working Drawings`, 14) with none counted, and
+`--phase "Learning Content"` counts the 14 and holds no `room_phase_fallback`
+(Measure runs 42011174043 and 42011213987 at `992196c6`, each save of 2018 to
+2027; RE-326 §9.4). Revit 2016 to 2023 apply it as they apply the
 element filter; Revit 2015 and earlier write every room, as every element
 (#1332).
 

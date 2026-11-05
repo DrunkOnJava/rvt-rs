@@ -101,11 +101,22 @@ gh workflow run measure.yml --ref main -f ref=4532731d535663010438c2b5c00ace97da
 python3 tools/re/spaces_by_globalid_vs_ifc.py sample-2018-rac_basic_sample_project/model.ifc rac_basic_sample_project.ifc
 ```
 
+§9.4, with `<sha>` the commit named there:
+
+```text
+gh workflow run measure.yml --ref main -f ref=<sha> -f base=main -f nordic=true -f r2025=true -f holdout=true -f samples=true
+gh workflow run measure.yml --ref main -f ref=<sha> -f base=none -f samples=true -f sample_years="2018 2027" -f scorers=none -f ifc_flags="--phase 961604"
+gh workflow run measure.yml --ref main -f ref=<sha> -f base=none -f samples=true -f sample_years="2018 2027" -f scorers=none -f ifc_flags="--phase 86961"
+gh workflow run measure.yml --ref main -f ref=<sha> -f base=none -f samples=true -f sample_years="2018 2018" -f scorers=none -f keep_ifc=true
+```
+
+The last run's `sample-2018-rac_basic_sample_project/model.ifc` and the export of §5 are the inputs of the GlobalId pairing.
+
 The second run's `probe.txt` of `sample-2018-rac_basic_sample_project`, and the public export above, are the inputs of the last command. The GlobalIds of the 14 rooms are the `global_id` of that probe's room lines in the first run.
 
 ## 9. Fallback to the rooms' phase where the last phase holds none (2026-11-05, #1359)
 
-**Status:** a choice by Griffin (2026-11-05, "Fall back to rooms' phase"), not a measurement. No Revit export made at the last phase of a project whose last phase holds no room exists, so what Revit's default writes for such a project is unmeasured. What is measured is the cause, below, and (once the run named in §9.4 finishes) what the change does to the corpus.
+**Status:** a choice by Griffin (2026-11-05, "Fall back to rooms' phase"), not a measurement. No Revit export made at the last phase of a project whose last phase holds no room exists, so what Revit's default writes for such a project is unmeasured. What is measured is the cause (§9.1) and what the change does to the corpus (§9.4).
 
 ### 9.1 The cause
 
@@ -135,9 +146,15 @@ All of them take one memoised `PhaseFilter` (`RevitFile::phase_filter`), so the 
 | Viewer | The wasm export runs the same pipeline; the phase select shows the last phase as the default, labelled with the fallback phase, and cannot name the last phase exactly: its last entry is the default. The downloaded diagnostics replace the phase under `--anonymize`'s rule. |
 | `rvt-gltf`, `rvt-elements`, `rvt-info` and other CLIs | They read the same walk; `rvt-gltf` has no `--phase` and prints nothing about the fallback. |
 
-### 9.4 Measured on this head
+### 9.4 Measured
 
-Not yet. The unfiltered Measure (`-f base=main -f nordic=true -f r2025=true -f holdout=true -f samples=true`) of this change is dispatched and its figures, the models that move and the `rules:` and `mcp answers` lines of `rac_basic_sample_project`, are added here when it finishes. Expected, and to be checked: the 2016 to 2027 saves of `rac_basic_sample_project` each move to 14 `IfcSpace` and 0 `room_not_in_export_phase`, and every other model keeps its `ifc.sha256`.
+Four Measure runs at ref `992196c6f4ae6d8e6e16ccbf4300ab5e7d02ca00`, whose code is this change's apart from one `py` handle in `rvt-py/src/lib.rs` (none of the runs builds that crate) and documentation:
+
+- **Unfiltered**, run 42011174043 (`-f base=main -f nordic=true -f r2025=true -f holdout=true -f samples=true`, `main` at `b31345c3`): 111 exports compared. 12 moved, the 2016 to 2027 saves of `rac_basic_sample_project`; the other 99 are byte for byte as before by `ifc.sha256`, the 2015 save and 18 held-out exports among them (counts only: none of the held-out exports moved). The scorer diff names those 12 models and no other. Each moved save now holds `IFCSPACE` 14 (0 before), no `room_not_in_export_phase` item (14 in Working Drawings before), `room_phase_fallback` `{"phase": "Working Drawings", "rooms": 14}` and 464 entities (450 before), and its `rvt-ifc.log` holds the line of `ExportNote::RoomPhaseFallback`. The schema scorer's `rules:` section (IfcOpenShell's EXPRESS WHERE rules) reads findings 0 on all 13 saves, 2015 included, and its property sets grow by 14 sets on 14 objects on each of the 12 (the 2018 save: `sets 476 on 239 objects and types`, 462 on 225 before; the totals differ by release). The element-record stages that the 2016 to 2023 saves report read `not_in_export_phase` 0 (14 before) and `handed_to_export` 465 (451 before) on each of those 8. The Revit 2015 save is unchanged (14 `IfcSpace` before and after).
+- **`mcp answers`.** None for rac_basic: the MCP scorer (`mcp_answers_vs_ifc`) and the MCP dump run on the models that have a Revit export, and no sample project's folder holds either, so the MCP path on `rac_basic_sample_project` is not measured by Measure. The semantic check of the MCP dumps of the 34 models that have one reports 0 elements added, changed or removed and 0 findings; none of them is a model whose last phase holds no room. The MCP paths of §9.3 go through the same handle and `run_export_with_limits` as `rvt-ifc`, which is a reading of the code and not a measurement.
+- **The last phase named**, run 42011213987 (`-f samples=true -f sample_years="2018 2027" -f scorers=none -f ifc_flags="--phase 961604"`, base none): each of the ten saves holds `IFCSPACE` 0, `room_not_in_export_phase` 14 in Working Drawings, no `room_phase_fallback` and 450 entities, and its `ifc.sha256` equals the one `main` writes by default in run 42011174043: 10 of 10. Naming the last phase is exact, and writes what 0.14.0 wrote.
+- **Working Drawings named**, run 42011221136 (the same with `--phase 86961`): each of the ten saves holds `IFCSPACE` 14, no `room_not_in_export_phase`, no `room_phase_fallback` and 464 entities, and its `ifc.sha256` equals this change's default in run 42011174043: 10 of 10. The default export of these saves is byte for byte the Working Drawings export, so §6's comparison with Revit's export transfers to the default up to what changed in the writer since `4532731d`, which the next item checks directly.
+- **GlobalId.** Run 42011228125 (`-f samples=true -f sample_years="2018 2018" -f scorers=none -f keep_ifc=true`) kept the 2018 save's default export, whose `ifc.sha256` equals the one of run 42011174043. The public Revit 2018 export of §5 was fetched again from its SourceForge attachment into an empty scratch folder, its sha256 checked against §5's (`1114ce91…`, 9,129,271 bytes, 17 `IfcSpace`), and the two files' `IfcSpace` GlobalIds paired: rvt-rs 14, Revit 17, in both 14, only rvt-rs 0, only Revit 3 (the MEP Spaces). That is §6's result for `--phase 86961`, now for the default. The pairing was done with a regular expression over the `IFCSPACE` entities' GlobalId, not `tools/re/spaces_by_globalid_vs_ifc.py`, because IfcOpenShell was not installed where it ran; both count the same GlobalIds. The scratch copy was deleted and the export is not committed.
 
 ### 9.5 What the fallback can get wrong
 
