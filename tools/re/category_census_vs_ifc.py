@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Score the placed instances of every BuiltInCategory against a Revit IFC export's Tags (RE-319, RE-348).
+"""Score the placed instances of every BuiltInCategory against a Revit IFC export's Tags (RE-319, RE-350).
 
 Reads the `any`, `rule` and `category` lines that
 `probes/examples/probe_re319_category_census.rs` prints, one `<kind> <id> <name> <count> <ids>`
@@ -11,7 +11,7 @@ option), how many of each the export holds, and the IFC classes they land on. Th
 export's elements that no written instance covers, by class and by the category whose
 frames hold their id.
 
-The `unplaced` and `refused` lines of `probes/examples/probe_re348_category_stages.rs`
+The `unplaced` and `refused` lines of `probes/examples/probe_re350_category_stages.rs`
 (`<kind> <id> <name> <reason> <count> <ids>`), when the probe prints them, say why the
 ids of a category are not written: for each reason, how many ids the export holds as a
 `Tag` and the classes they land on.
@@ -25,7 +25,7 @@ category that the export lacks.
 
 The lines that start `category census` are counts, IFC class names and built-in category names
 only: they are what a model with no licence to redistribute it keeps
-(tools/ci/scrub-holdout-results.sh, RE-348). `category census export` counts the export's
+(tools/ci/scrub-holdout-results.sh, RE-350). `category census export` counts the export's
 elements by class, whether their `Tag` is a number or not; `category census` has a category's
 counts; `category census missed` has an export class's elements that no written instance covers.
 """

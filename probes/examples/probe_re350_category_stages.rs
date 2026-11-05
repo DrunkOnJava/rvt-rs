@@ -1,4 +1,4 @@
-//! RE-348 probe: where the frames of each `BuiltInCategory` stop on the way to
+//! RE-350 probe: where the frames of each `BuiltInCategory` stop on the way to
 //! being written, on every release the exporter reads (#1444, #1445).
 //!
 //! FACT (to be measured): a frame the sweep decodes is written only when it is
@@ -41,7 +41,7 @@
 //! and the three extents, so an id can be looked up.
 //!
 //! ```bash
-//! cargo run --profile ci -p rvt-probes --example probe_re348_category_stages -- model.rvt [--records]
+//! cargo run --profile ci -p rvt-probes --example probe_re350_category_stages -- model.rvt [--records]
 //! ```
 
 use rvt::RevitFile;
@@ -208,7 +208,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = args
         .iter()
         .find(|arg| !arg.starts_with("--"))
-        .ok_or("usage: probe_re348_category_stages <file.rvt> [--records]")?;
+        .ok_or("usage: probe_re350_category_stages <file.rvt> [--records]")?;
     let mut rf = RevitFile::open(path)?;
     let saved = rf.basic_file_info()?.version;
     let release = rf.layout_release()?;

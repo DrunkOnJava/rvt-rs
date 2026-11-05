@@ -27,8 +27,8 @@
 # alphabet; it prints no ElementId), the `native readers:`
 # count lines of the RE-283 to RE-285 probes and scorers (the same alphabet;
 # their `native readers example:` lines name ElementIds and are dropped), the
-# `census stages:` count lines of probe_re348_category_stages and the
-# `category census` lines of tools/re/category_census_vs_ifc.py (RE-348: for
+# `census stages:` count lines of probe_re350_category_stages and the
+# `category census` lines of tools/re/category_census_vs_ifc.py (RE-350: for
 # each built-in category the counts of ids by stage and reason, the export
 # classes they land on and the export's counts by class, beside the category's
 # built-in name and id and an IFC class name, never an ElementId or a name
