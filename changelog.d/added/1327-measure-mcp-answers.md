@@ -21,8 +21,8 @@
   Interior, RE1), 41949018446 (the BIM4LCA office as built and at permit),
   41949021964 (the 24 Revit 2025 models) and 41949025326 (the held-out, spent,
   BIMcollab and rac_advanced models), all of head 1895e771 with `base=none`,
-  found the head server equal to the export in the protocol, the counts, the
-  rooms' areas, the sampled elements' property and quantity sets, trust
+  found the head server equal to the export in the protocol, the counts (but
+  the office's), the rooms' areas, the sampled elements' property and quantity sets, trust
   markers, bodies, placements and hosts, the diagnostics and the export hash
   (the office's 13,021 rows took 44 s), and not equal in four things; 57 of
   the 58 models fail, and only a blank Revit 2025 project passes. A space's
