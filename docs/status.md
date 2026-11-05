@@ -100,7 +100,9 @@ which Measure runs and fails on), and that cannot catch an error the earlier
 save shares; it compares bodies, not quantities or property sets. No 2026 or
 2027 held-out model holds a beam, so the beam reader has run only on two
 Autodesk samples saved from earlier releases, never on a natively authored
-2026 beam. One stair flight is scored against Revit's own 2026 and 2027
+2026 beam. The 2025 save draws a sketch's arcs as chords (its arc readers are not
+enabled, #1440), so a floor of rac_advanced has 24 vertices there against 170
+on the 2024, 2026 and 2027 saves. One stair flight is scored against Revit's own 2026 and 2027
 exports. Sloped roofs, spiral runs, stair names,
 railing heights and lengths, a wall's profile openings, IFC export overrides
 and the opening index stay unread there.

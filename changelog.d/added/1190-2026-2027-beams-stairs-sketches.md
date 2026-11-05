@@ -18,6 +18,9 @@
   own export only one stair flight is scored, on a held-out 2026 model and a
   held-out 2027 one (property values equal 209 to 224 of 352 and of 354,
   quantities 21 to 23 of 322 and 17 to 19 of 367; Measure run 41988011289,
-  head 1d5bbf03). In run 42016210686 (head fec48333) 103 of 111 exports are
+  head 1d5bbf03). In run 42023546789 (head d3635bbb) 103 of 111 exports are
   unchanged and 8 change, all 2026 or 2027; the check reads PASS on all six
-  samples, and the exports' `rules:` findings are 0.
+  samples, and the exports' `rules:` findings are 0. The one outline the 2024
+  and 2025 saves disagree on, a floor, is the 2025 save drawing its arcs as
+  chords (24 vertices against 170): the arc readers are not enabled on 2025
+  (#1440).

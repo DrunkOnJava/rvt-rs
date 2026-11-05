@@ -164,9 +164,12 @@ each 2026 and 2027 save of `rac_advanced`, `rac_basic` and `rst_basic` to the
 same project's earlier saves, matched by `Tag`: beams, landings and sketch
 outlines to the 2024 save, stair runs to the 2025 save (the 2025 save draws no
 beam or landing). Measure's script runs it beside each such sample, and the job
-`bodies-across-saves` turns the run red on a difference, a missing file, an
+`same-project-gates` turns the run red on a difference, a missing file, an
 unknown project, fewer bodies than the sample holds, or a check that compared
-nothing. It is a job of its own, so a failure does not remove Compare's report.
+nothing. That job also holds #1428's Areas gate (rac_advanced's Areas across its
+2024 to 2027 saves, `tools/ci/check-areas-across-saves.sh`), each as a step that
+runs whatever the other did. It is a job of its own, so a failure of either does
+not remove Compare's report.
 
 - **A change to a reader of Revit 2024 to 2027 is measured with
   `samples=true`** (every year, or `sample_years="2024 2027"`). Without it no

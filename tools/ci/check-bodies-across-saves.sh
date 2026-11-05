@@ -8,7 +8,8 @@
 # and sketch outlines of each 2026 and 2027 save of rac_advanced, rac_basic and
 # rst_basic to the same project's 2024 and 2025 saves, and Measure's script
 # writes its output beside each sample as bodies_across_saves.txt. This reads
-# those files from RESULTS_DIR (the head side's merged results) and fails on any
+# those files from RESULTS_DIR (the head side's results, merged or one directory
+# for each shard) and fails on any
 # that reads FAIL or does not end in exit status 0, and on a sample whose file
 # was not written, so a check that did not run for want of a file is a failure.
 #
@@ -65,8 +66,9 @@ passed=0
 partial=0
 skipped=0
 for name in "${expected[@]}"; do
-  file="$results/$name/bodies_across_saves.txt"
-  if [ ! -f "$file" ]; then
+  # RESULTS_DIR holds the shards' artifacts merged or one directory each.
+  file=$(find "$results" -maxdepth 3 -type f -path "*/$name/bodies_across_saves.txt" | sort | sed -n '1p')
+  if [ -z "$file" ] || [ ! -f "$file" ]; then
     echo "::error::$name: bodies_across_saves.txt was not written"
     printf -- '- %s: FAIL, no bodies_across_saves.txt was written\n' "$name" >> "$summary"
     failed=1
