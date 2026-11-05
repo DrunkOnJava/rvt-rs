@@ -18,10 +18,10 @@
   with and without `--saved-meshes`, at `ab9503b1`), and saved graphics stay a
   research reading on 2015 to 2022. STE1200's patch also read deferred history
   episodes, `FacetedTopology9` under normal binding 2 and a set `m_bHasScale`;
-  no sample, reference, office or Revit 2025 file Measure fetches has the first
-  two (0 of 92 files, 0 of 18 held-out models, 0 of 13 families) or draws a
-  body from the third. Held-out models with the flag set (1,592 instances in 3
-  pre-2023 models) are not yet measured, so none of the three is in this
-  change. The probe `probe_re342_saved_graphics_pre2023` counts what each
+  no file Measure fetches has the first two (0 of 92 files, 0 of 18 held-out
+  models, 0 of 13 families) or draws a body from the third (on the 8 held-out
+  scenes, 1,592 flagged instances in 3 pre-2023 models, the owners drawn whole
+  and their triangles are the same with the flag read), so none of the three
+  is in this change. The probe `probe_re342_saved_graphics_pre2023` counts what each
   meets in a file, and runs on your own: Measure runs 42015502520,
   42015507053, 42015511974 and 42015516241.
