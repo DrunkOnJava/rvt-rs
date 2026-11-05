@@ -52,13 +52,13 @@ def main(argv):
     for attempt in range(1, TRIES + 1):
         done = subprocess.run(command, capture_output=True, text=True)
         output = done.stdout + done.stderr
-        print(output, end="")
+        print(output, end="", flush=True)
         verdict = classify(done.returncode, output)
         if verdict == "pass":
             return 0
         if verdict == "fail":
             return done.returncode or 1
-        print(f"::notice::{name}: the advisory database could not be fetched (try {attempt} of {TRIES})")
+        print(f"::notice::{name}: the advisory database could not be fetched (try {attempt} of {TRIES})", flush=True)
         if attempt < TRIES:
             time.sleep(PAUSE * attempt)
     print(f"::warning::{SUBJECT} NOT MEASURED: {name} could not fetch it in {TRIES} tries, so nothing was audited")
