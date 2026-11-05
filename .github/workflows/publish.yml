@@ -148,8 +148,11 @@ jobs:
           docs-only-skips: "false"
 
   # Build release wheels on every target OS. Mirrors the python-wheel
-  # matrix in ci.yml so any regression that would fail a push-CI run
-  # also fails here, before we publish.
+  # platforms in ci.yml, so a regression that would fail a push-CI run
+  # on any of them also fails here, before we publish. ci.yml builds a
+  # smoke wheel without LTO; these are the wheels users get, at the
+  # release profile (fat LTO, one codegen unit), so a failure that only
+  # that profile shows is found here.
   #
   # One abi3 wheel per platform, the same platforms the CLI archives
   # cover plus musllinux. Linux wheels build inside the manylinux2014 /
