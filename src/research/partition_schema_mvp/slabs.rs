@@ -445,12 +445,8 @@ fn solve_sketch_plan_profiles(
     ) else {
         return profiles;
     };
-    // RE-345: where arcs are not drawn, a sketch with an arc has none of its
-    // arcs here, so it does not close and its element keeps its record box.
-    let draws_arcs = crate::partition_beam_axes::supports_sketch_curves(revit_version);
     let arcs: BTreeMap<u32, crate::partition_beam_axes::BoundedArc> = curves
         .iter()
-        .filter(|_| draws_arcs)
         .filter_map(|(&id, curve)| Some((id, curve.arc?)))
         .collect();
     // RE-95: a sketch line whose box is a single point is a zero-length
