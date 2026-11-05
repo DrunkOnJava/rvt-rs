@@ -797,11 +797,11 @@ pub struct ExportedModelDiagnostics {
     #[serde(default)]
     pub wall_base_refusals: std::collections::BTreeMap<String, usize>,
     /// Of the exported walls with an edited elevation profile that stop short
-    /// of the wall beneath them and keep the end their record gives, why, by
-    /// reason: the `BodyEndRefusal` property of each (#1396, RE-337), such as
-    /// `walls_beneath_reach_the_end_at_different_faces`,
-    /// `base_cut_lost_on_extended_plan`, `base_not_cut_over_the_extended_plan`,
-    /// `wall_beneath_not_one_rectangle` or `wall_stands_in_the_added_end`.
+    /// of the walls their record joins at an end and keep the end their record
+    /// gives, why, by reason: the `BodyEndRefusal` property of each (#1396,
+    /// RE-337; #1410, RE-348), such as `joined_wall_not_read`,
+    /// `joined_wall_face_inside_the_wall`, `base_cut_lost_on_extended_plan`,
+    /// `base_not_cut_over_the_extended_plan` or `wall_stands_in_the_added_end`.
     #[serde(default)]
     pub wall_end_refusals: std::collections::BTreeMap<String, usize>,
     /// Of the exported `IfcSpace`s, the rooms whose outline was read from the

@@ -1,0 +1,77 @@
+# RE-348: a profile-edited wall's end follows, at each height, the first wall its record joins there that stands
+
+**Date:** 2026-11-05
+**Issues:** #1409 (walls 2058499 and 2058501 at permit: the end face of a wall drawn with a stepped profile), #1410 (the second step of the wall ends Revit steps up the height); follows RE-337 (#1396, #1398), RE-336 and RE-349 (#1411)
+**Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, `research/bim4lca-measure.tsv`), as Measure fetches them
+**Probe, tools:** `probes/examples/probe_1410_wall_end_steps.rs` (its `end`, `ctl` and `full` lines), `tools/re/wall_heights_vs_ifc.py`, `tools/re/wall_quantities_vs_ifc.py`, `tools/re/wall_top_cover_vs_ifc.py`, `tools/re/wall_layers_vs_ifc.py`
+**Runs:** probe run Measure [42096049754](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42096049754) (both offices) at `a24305af`; Measure [42101944733](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42101944733) (both offices, filtered to the four wall scorers, `keep_ifc`) at `006f5f98` against `main` at `44c055db`. The commits after `006f5f98` on this branch are documents, this report and the changelog; none changes `src/`. No model but the office has been measured on this head.
+**Status:** positive for walls 2057668, 2057670, 2058499 and 2058501 on both office files: the end is Revit's at every height. **The order rule rests on 4 walls in one project** (8 ends). It is kept fail-closed: a wall whose join list does not fit keeps the end its record gives, with a counted `BodyEndRefusal`. #1410's volume done-when is not met and is not loosened: the four walls are 0.209 ft3 over Revit's as built (0.207 at permit), all of it the far end's sloped top (section 5, #1473). The labelled approximation of RE-337 is retired; no wall falls back to an approximate end.
+
+## 1. What the bytes say
+
+RE-337 drew the end of these Basement walls to the face of the one wall beneath, up to that wall's top, and left out the steps Revit goes on to above, "by a join order that is not read". The order is in the record. Each end of a wall's location curve has one `JoinEndGStep`, and its `m_realJoined` lists the walls Revit joins there, in an order the record keeps; the location curve is the `GLine` that `VWallDriver.m_pCrv` names (a profile-edited wall holds five or six). The probe's `end` lines for the four walls, the low end of each (the other end lists nothing), with the walls themselves left out:
+
+| wall | file | `m_realJoined`, in order |
+|---|---|---|
+| 2057668 | as built | 1493966, 3490093, 1344124, 1347199 |
+| 2057670 | as built | 1344124, 3490093, 1493966 |
+| 2058499 | as built | 1344124, 3490093, 1347201 |
+| 2058501 | as built | 1344124, 3490093, 1347201, 1767978 |
+| 2057668, 2057670 | permit | 1344124, 1493966 |
+| 2058499, 2058501 | permit | 1344124, 1347201 |
+
+The walls these name stand at: 1493966 (Basement, 169.62 to 182.087 ft, its face y 75.4183 ft as built, 75.9678 at permit), 3490093 (179.298 to 183.071 ft, face 75.6135, as built only), 1344124 (Level_01, from 183.071 ft as built and 182.087 at permit, face 75.7285 as built and 76.0663 at permit), 1347201 (Basement, 169.62 to 179.79 ft as built and to 182.087 at permit, face 75.4183 as built and 75.9678 at permit). Revit's export of each of the four walls steps its end up the height (the vertices of Revit's body in rvt-rs's frame, which Revit's export is turned 40.33 degrees from; the two footings' vertices fit to 1e-3 ft):
+
+| wall | file | Revit's end by height (ft) |
+|---|---|---|
+| 2057668 | as built | 174.869 to 182.087 at y 75.4183; 182.087 to 183.071 at 75.6135; 183.071 to the top at 75.7285 |
+| 2057670, 2058499, 2058501 | as built | 174.869 (2058499, 2058501: 174.213) to 179.298 at 75.4183; 179.298 to 183.071 at 75.6135; 183.071 to the top at 75.7285 |
+| all four | permit | 174.869 to 182.087 at y 75.9678; 182.087 to the top at 76.0663 |
+
+At each height the end is the face of the **first wall of the list that stands there**: on 2057668 as built 1493966 is first, so it holds to its top (182.087) although 3490093 stands from 179.298; on 2057670, 2058499 and 2058501 3490093 comes before the wall beneath, so the end leaves the wall beneath at 179.298, 3490093's base, although the wall beneath goes on to 182.087. All 8 ends (4 walls, 2 files) and all their steps fit; the rule asks only for the list, the walls' heights and their faces.
+
+## 2. What was tried and dropped
+
+- `m_geomJoined`'s order. 1493966 comes before 3490093 on both 2057668 and 2057670, yet Revit's two ends differ over 179.298 to 182.087 ft (on 2058499 and 2058501 it lists 1347201 before 3490093, and Revit follows 3490093). Only `m_realJoined` differs between them.
+- The last wall of the list that stands at a height: it gives 3490093 on 2057668 (Revit: 1493966), 1493966 on 2057670 (Revit: 3490093) and 1347201 on 2058499 and 2058501 over 179.298 to 179.790 ft (Revit: 3490093). The least ElementId: 1493966 on 2057670 (Revit: 3490093) and 1347201 on 2058499 and 2058501 (Revit: 3490093); it fits 2057668 only.
+- RE-337's bound by the wall beneath's lowest underside. 1493966 (180.610 ft) and 1347201 (179.790 ft) have their tops cut in steps by floors, and Revit steps all four walls at their own top, 182.087 ft. The pieces of the stepped top (RE-320) that stand over the end below the wall's own top are what make the wall stand there; a wall of which that is not known is refused.
+- Whether Revit's 3490093 yields where 2057668's end enters it (y 75.418 to 75.613, 179.298 to 182.087 ft). It does not: Revit's body of 3490093 has no notch there, the two bodies overlap. The strips of an end may therefore enter a wall the record joins; a wall the record does not join that stands in one refuses the end.
+
+## 3. The rule
+
+For a wall with an edited elevation profile (a `WallProfileOpening` voids it) that is a plain rectangle along a model axis, has `JoinTrimStart` and `JoinTrimEnd`, and whose record lists walls at an end (`m_wall_end_joins_start`, `m_wall_end_joins_end` and the curve `m_wall_curve`, from `native_walls::EndJoins`): the end of the wall's body is the end whose box end (the body's end moved out by the trim) lies at the curve's start or end. `read_end` walks the list in order over the heights from the wall's base to its top. For each wall of the list that stands over a height not yet taken (a wall drawn as its plan's prism, or as RE-320's stepped body, up to its own top), the wall must be perpendicular, must span the end's width at its face and must hold the end's line inside its thickness; the end over those heights is its face, measured over its pieces. The end is then drawn as the wall's own plan to its top and one strip, from the base, for each distance the end reaches beyond the next lower one, each to the height the walls it follows stand to (`strips_of`): the body of a wall with an end that is longer below than above, as all four are, is these columns. A wall whose cut base (RE-336, RE-349) does not resolve over the longer plan keeps its end, as before.
+
+The end is kept, with one `BodyEndRefusal`, where: a wall of the list that may stand over a remaining height is not read (`joined_wall_not_read`), where its top is not known there (`joined_wall_top_not_read`: a floor cut it whole and its own top is not recorded, or no piece of its stepped top stands over the end below its own top), where it is not a perpendicular wall the end meets (`joined_wall_does_not_meet_the_end`), where the walls of the list do not stand over the whole of the wall's height (`joined_walls_do_not_reach_the_wall_height`), where a joined wall's face is inside the end the box gives (`joined_wall_face_inside_the_wall`: strips only add), where the end would reach further at a greater height than below (`joined_wall_faces_overhang_the_lower_end`), or where a wall the record does not join stands in a strip (`wall_stands_in_the_added_end`). `BodyEndSource` is `wall_end_stepped_to_joined_walls` and `EndCoverElementId` the least id of the walls followed where the end moves. The two RE-337 values (`wall_end_to_base_wall_upper_step_omitted`, `wall_end_extended_to_base_wall`), and its reasons `wall_beneath_not_one_rectangle` and `walls_beneath_reach_the_end_at_different_faces`, are gone.
+
+## 4. Reproduce
+
+```bash
+gh workflow run measure.yml --ref main -f ref=a24305af5fc240ed44c85360b946b87fde10b8d7 -f base=none -f nordic=true \
+  -f models="nordic-office-as-built nordic-office-permit" -f scorers=none -f probe=probe_1410_wall_end_steps -f probe_scorer=-
+gh workflow run measure.yml --ref main -f ref=006f5f981727a2baf23330c35d6ee06aed6e43e7 -f base=main -f nordic=true \
+  -f models="nordic-office-as-built nordic-office-permit" \
+  -f scorers="wall_heights_vs_ifc wall_top_cover_vs_ifc wall_quantities_vs_ifc wall_layers_vs_ifc" -f keep_ifc=true
+```
+
+`BodyEndSource` and `BodyEndRefusal` in a kept IFC name the walls the rule reached and the walls it kept; `exported.wall_end_refusals` of `diagnostics.json` counts the second.
+
+## 5. Measured
+
+Run 42101944733, head `006f5f98` against `main` at `44c055db` (which has neither RE-348 nor RE-349, so the effect on the two walls as built includes RE-349's).
+
+- **Walls changed.** Comparing every wall's body (volume, bounds and the end, base and cover markers) between the two exports: as built 4 of 607 differ (2057668, 2057670, 2058499, 2058501); at permit 6 of 589: those four, and 2056705 and 2056770, whose bodies are the same and which now carry a `BodyEndRefusal` (below). No other wall's body changes on either file. `wall_layers_vs_ifc` is identical on both.
+- **Lowest point and end** (`wall_heights_vs_ifc`). All four walls have Revit's lowest point on both files: 2058499 and 2058501 at permit go from 0.0439 ft above Revit's (174.9127 against 174.8688) to Revit's, and their end y from 76.0663 to 75.9678 (#1409's done-when). Walls with Revit's base and top at permit: 587 to 589 of 589; as built unchanged at 606 of 607 (the stub 3004978 stays). Their plan ends are Revit's at every height.
+- **No top above Revit's** (`wall_top_cover_vs_ifc` plan rows). Each of the four walls is `equal 90 taller 10 lower 0` of 100 points as built (2057668 was `equal 85 taller 10 lower 5`, 2058499 and 2058501 `equal 85 taller 10 lower 0` of 95) and `equal 80 taller 10 lower 0` of 90 at permit, as before. The ten `taller` points are the far end of each wall, below.
+- **Volume** (`wall_quantities_vs_ifc`). As built: 2057668 from 0.593 ft3 under Revit's to 0.209 over (30.721 against 30.512), 2057670 from 0.147 under to 0.209 over (30.275 against 30.066), 2058499 and 2058501 from 4.497 over (0.147 under with RE-349) to 0.209 over (31.014 against 30.805). At permit: 2057668 and 2057670 from 0.088 over to 0.207 over (27.430 against 27.223), 2058499 and 2058501 from 0.374 under to 0.207 over. **Not met: #1410 asks for Revit's volume to 0.01 ft3.** The 0.209 (0.207) is the same on all four walls, and it is the far end. A wall's profile has a sloped top line that ends at the profile's end, y 79.9705 ft, while the wall's body goes on to the face of the wall at its far end (80.3806 ft) and Revit's top goes on sloping to it (183.085 ft there; rvt-rs's is flat at 183.734). The wedge left over is 0.8202 ft thick, 0.4101 ft long and 0.592 ft deep at its near end and 0.650 ft at the far, which is 0.2088 ft3 from the record's `GLine` (origin y 75.0149, z 183.8339, slope -0.13960 ft/ft) and the box's top (183.7343 ft); 0.2088 is what the scorer measures on each of the four. That is #1473, a different finding, which this PR does not touch. It is also why the ten `taller` points do not move.
+- **Walls that keep an end.** At permit 2056705 and 2056770 (the Basement walls on the sloped footing 2057322, not touched by RE-337) carry `BodyEndRefusal` `joined_wall_face_inside_the_wall` (`exported.wall_end_refusals` `{joined_wall_face_inside_the_wall: 2}`; as built empty). Their record lists the same two walls as 2057668's (1493966 first), and their body's end is 1493966's face (y 75.9678 ft) over their whole height, which is 0.0985 ft inside 1344124's face (76.0663) above 182.087 ft where Revit's body steps back (Revit's `levels` row has the 0.0807 ft2 step at 182.087 ft; their volume is 0.339 ft3 over Revit's, 0.207 of it the far end). The rule only adds, so the end is kept and says why; the error is `main`'s, not new. As built `exported.wall_end_refusals` goes from `{base_not_cut_over_the_extended_plan: 2}` to empty, and `exported.wall_base_refusals` from `{no_element_covers_the_wall_plan: 2}` to empty (RE-349).
+- **The approximation.** All four walls carry `BodyEndSource` `wall_end_stepped_to_joined_walls`. No wall of the office carries RE-337's `wall_end_to_base_wall_upper_step_omitted`, and no wall falls back to an approximate end: it is the exact end or the record's, with a reason.
+
+## 6. Not measured
+
+Nothing but the office has been measured on this head. Core Interior, RE1 Architecture, the Revit 2025 models, Autodesk's sample projects and the held-out files have not been compared with `main` on it: the per-model count of walls that take the rule comes with the unfiltered run. These are exercised by no measured wall, so no Revit export has checked them:
+
+- every refusal reason but `joined_wall_face_inside_the_wall`;
+- the high end of a wall (all eight measured ends are at the low coordinate) and walls along x (the four walls run along y);
+- a followed wall whose top a floor cut whole (`own_top` false), and a joined wall of which only part of the strip's width stands (partial);
+- an end reached by a list of one wall, and a list in which the first wall to stand is not the nearest one;
+- a joined wall whose face is inside the box's end: refused, never cut back (2056705 and 2056770 at permit are the measured instance, and Revit cuts them back).
