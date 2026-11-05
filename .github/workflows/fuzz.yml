@@ -9,11 +9,23 @@ name: Fuzz
 # fails the target's job, uploads the crashing input and the corpus, and on
 # a nightly run opens (or comments on) a `fuzz-crash` issue.
 #
-# Each target's corpus is restored from the previous run's cache, seeded
+# Each target's corpus is restored from the previous night's artifact, seeded
 # with the tier-1 Revit files and the IFC fixtures, minimised with
 # `cargo fuzz cmin` after the run and saved again (C4). Before, every night
 # started from an empty corpus, so `fuzz_open_bytes` spent its five minutes
 # getting past the compound file header.
+#
+# The corpus is an artifact, not an Actions cache entry. It was a cache entry
+# (`fuzz-corpus-<target>-<run id>`), and the nights of 2026-11-04 and 05 found
+# none ("No cache found") although the saves before them reported success. The
+# cache is evicted least recently used first at its 10 GB limit, and a key read
+# once a night is the oldest by the next night once the repository's other runs
+# have saved a day's worth of caches. GitHub does not log an eviction, but no
+# cache last accessed before 09:36 UTC on 2026-11-05 was left in the repository,
+# the cutoff such an eviction leaves. The corpora saved on 2026-11-03 (the night
+# before had restored 321 inputs for fuzz_open_bytes) and after it were lost, and
+# the nights of 11-04 and 11-05 started from the five seed files. An artifact
+# lasts its retention-days whatever else the repository saves.
 #
 # SEC-24: minimum 5-minute (300s) per-target run per the security task
 # board. Increase via `workflow_dispatch` → `duration_seconds` when doing a
@@ -84,6 +96,10 @@ jobs:
     # investigation and keeps the default limit, since the budget is added to
     # the build and the minimisation and an expression cannot add.
     timeout-minutes: ${{ (inputs.duration_seconds || '300') == '300' && 40 || 360 }}
+    # `actions: read` lists and downloads the previous night's corpus artifact.
+    permissions:
+      actions: read
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -117,12 +133,61 @@ jobs:
         with:
           tool: cargo-fuzz@0.13.2
 
+      # The newest corpus artifact of this target that a run on `main` saved and
+      # that has not expired (a run on another branch never saves one).
+      #
+      # A corpus that cannot be read is not the target's failure: the listing and
+      # the download are tried three times, and a corpus still unread (or a zip that
+      # does not test clean) is a warning, and the night starts from the seeds as it
+      # does when there is none. The zip is unpacked beside the corpus and copied in
+      # only whole, so a bad one leaves no partial corpus. That night does not save
+      # its corpus either (`state=failed`): a seeds-only corpus saved as the newest
+      # artifact would be the one the next night restores, in place of the one that
+      # could not be read.
       - name: Restore the corpus
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: fuzz/corpus/${{ matrix.target }}
-          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
-          restore-keys: fuzz-corpus-${{ matrix.target }}-
+        id: restore
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          mkdir -p "fuzz/corpus/${TARGET}"
+          zip="${RUNNER_TEMP}/corpus.zip"
+          unpacked="${RUNNER_TEMP}/corpus-restored"
+          retry() {
+            local attempt
+            for attempt in 1 2 3; do
+              if "$@"; then
+                return 0
+              fi
+              sleep $((attempt * 10))
+            done
+            return 1
+          }
+          newest() {
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=fuzz-corpus-${TARGET}&per_page=50" \
+              --jq '[.artifacts[] | select(.expired == false and .workflow_run.head_branch == "main")] | sort_by(.created_at) | last | .id // empty'
+          }
+          fetch() {
+            rm -rf "$unpacked"
+            mkdir -p "$unpacked"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "$zip" \
+              && unzip -tq "$zip" > /dev/null \
+              && unzip -q -o "$zip" -d "$unpacked"
+          }
+          unread() {
+            echo "::warning::the corpus artifact of ${TARGET} could not be read ($1): this night starts from the seeds and does not save its corpus over the one it could not read"
+            echo "state=failed" >> "$GITHUB_OUTPUT"
+          }
+          if ! id=$(retry newest); then
+            unread "listing the artifacts failed three times"
+          elif [ -z "$id" ]; then
+            echo "::warning::no corpus artifact of ${TARGET} to restore: this night starts from the seeds"
+          elif ! retry fetch; then
+            unread "downloading or unzipping artifact ${id} failed three times"
+          else
+            cp -R "$unpacked"/. "fuzz/corpus/${TARGET}/"
+            echo "restored artifact ${id}: $(find "$unpacked" -type f | wc -l) inputs"
+          fi
 
       - name: Seed the corpus
         env:
@@ -162,12 +227,16 @@ jobs:
           cargo +"$NIGHTLY" fuzz cmin --target "$FUZZ_TARGET_TRIPLE" "$TARGET"
           echo "corpus after cmin: $(find "corpus/${TARGET}" -type f | wc -l) inputs"
 
+      # Thirty days: the next night reads the newest, and a run that fails to save
+      # leaves the one before it. A night whose corpus could not be read saves none.
       - name: Save the corpus
-        if: ${{ !cancelled() && github.ref == 'refs/heads/main' }}
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && steps.restore.outputs.state != 'failed' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
+          name: fuzz-corpus-${{ matrix.target }}
           path: fuzz/corpus/${{ matrix.target }}
-          key: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Upload crash corpus on failure
         if: failure() && steps.run.outcome == 'failure'

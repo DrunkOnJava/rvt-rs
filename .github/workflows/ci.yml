@@ -1857,6 +1857,14 @@ jobs:
         run: python3 tools/ci/test_same_project_verdict.py
       - name: The semantic check's verdict failure modes
         run: python3 tools/ci/test_jev_check.py
+      # The scheduled checks' pure parts (#1457): which NOT MEASURED streaks
+      # persist (a measured run ends one, a run whose job failed neither adds
+      # to it nor ends it), the label and body of the issue a failed job gets,
+      # and which Actions caches the cleaner treats as one family.
+      - name: The scheduled checks' failure modes
+        run: |
+          python3 tools/ci/test_not_measured.py
+          python3 tools/maintainer/test_clean_caches.py
       # publish.yml's preflight (#1457) refuses a tag that is lightweight or
       # unverified, on no release branch, or that disagrees with a version
       # file; these are its pure judgements, and what must never publish.
