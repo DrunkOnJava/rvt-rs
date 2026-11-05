@@ -65,7 +65,8 @@ The stair types' zeros are measured on the 24.0.5 and 25.0.2 exports only: no he
 
 - **Every type object's `IsExternal`** (§3).
 - **A curtain panel's door type** (12611, written as an `IfcPlateType`): a curtain member's type (RE-269).
-- **Doors' and door types' `FireRating`, `Pset_DoorCommon.ThermalTransmittance` on one door type, and `Pset_ManufacturerTypeInformation.Manufacturer` on 6 family types**: written since [RE-354](RE-354-door-type-values-and-family-type-manufacturer.md), which found them in the family type table's form of RE-185 section 3.3, under the built-in ids -1001206 and -1010108, and the transmittance as the `f64 · ff × 8 · i64 -1005430` entry. RE-77's reader of the id-first form missed the first two, and RE-289's probe, which looked for RE-77's form alone, the third.
+- **Doors' and door types' `FireRating` and `Pset_ManufacturerTypeInformation.Manufacturer` on 6 family types**: written since [RE-354](RE-354-door-type-values-and-family-type-manufacturer.md), which found them in the family type table's form of RE-185 section 3.3, under the built-in ids -1001206 and -1010108. RE-77's reader of the id-first form missed the first, and RE-289's probe, which looked for RE-77's form alone, the second.
+- **`Pset_DoorCommon.ThermalTransmittance` on one door type**: found by RE-354 as the `f64 · ff × 8 · i64 -1005430` entry of its block and left out, because Revit's exporters disagree on it (RE-354 section 6).
 - **`Pset_BuildingElementProxyCommon.IsExternal` on the `IfcBuilding`** (false, in Revit's office export and its R2025 ones): revit-ifc matches the set to the building by the start of the entity's name, and it is another exporter-dependent type of value; not written.
 - **A ramp's, railing's and curtain member's type** (§4).
 - **A column's `LoadBearing`** on the one office column whose parameter is absent (3515145): an occurrence's value, #1184.
