@@ -354,6 +354,93 @@ pub struct WallRecords {
     /// order; none where they hold none). A wall whose join names its
     /// elements in a shape that is not read is left out (RE-270).
     pub bounded: BTreeMap<u64, Vec<u64>>,
+    /// The walls joined at each end of a wall's location curve, in the order
+    /// its record lists them (#1410, RE-348). A wall whose location curve is
+    /// not read, or none of whose ends has exactly one `JoinEndGStep` with a
+    /// list, is left out.
+    pub end_joins: BTreeMap<u64, EndJoins>,
+}
+
+/// The walls a wall's record joins at each end of its location curve (#1410).
+#[derive(Debug, Clone, PartialEq)]
+pub struct EndJoins {
+    /// The location curve's start and its end, plan model feet.
+    pub curve: [[f64; 2]; 2],
+    /// `JoinEndGStep.m_realJoined` of the step of the curve's start and of its
+    /// end, in the record's order, the wall itself and a repeat left out: the
+    /// walls Revit joins there. `None` where no step names that end, several
+    /// do, or an entry is not an ElementId.
+    pub real: [Option<Vec<u64>>; 2],
+}
+
+/// The curve `VWallDriver.m_pCrv` of the record names, where it is one level
+/// `GLine`: a wall with an edited elevation profile holds more than one, and
+/// the pointer says which is its location curve (#1410).
+fn location_curve(graph: &crate::native_parameters::ObjectGraph) -> Option<([f64; 2], [f64; 2])> {
+    let token = graph
+        .objects
+        .iter()
+        .find(|object| object.class_name == "VWallDriver")?
+        .fields
+        .pointer("/m_pCrv/pointer_token")?
+        .as_u64()?;
+    let mut named = graph
+        .objects
+        .iter()
+        .filter(|object| u64::from(object.token) == token);
+    let curve = named.next()?;
+    if named.next().is_some() || curve.class_name != "GLine" {
+        return None;
+    }
+    line_ends(&curve.fields)
+}
+
+/// `m_realJoined` of the one `JoinEndGStep` of the curve's start and of its end
+/// in the record of wall `id`, as ElementIds in order (#1410).
+fn real_joined(graph: &crate::native_parameters::ObjectGraph, id: u64) -> [Option<Vec<u64>>; 2] {
+    let mut out: [Option<Vec<u64>>; 2] = [None, None];
+    let mut steps = [0usize; 2];
+    for step in graph
+        .objects
+        .iter()
+        .filter(|object| object.class_name == "JoinEndGStep")
+    {
+        let Some(slot) = step
+            .fields
+            .get("m_end")
+            .and_then(Value::as_u64)
+            .and_then(|end| usize::try_from(end).ok())
+            .filter(|end| *end < 2)
+        else {
+            continue;
+        };
+        steps[slot] += 1;
+        let listed: Option<Vec<u64>> = step
+            .fields
+            .get("m_realJoined")
+            .and_then(Value::as_array)
+            .and_then(|items| {
+                items
+                    .iter()
+                    .map(|item| element_id(item.get("m_elemId")?))
+                    .collect()
+            });
+        out[slot] = listed.map(|ids| {
+            let mut kept: Vec<u64> = Vec::with_capacity(ids.len());
+            for other in ids {
+                if other != id && !kept.contains(&other) {
+                    kept.push(other);
+                }
+            }
+            kept
+        });
+    }
+    for (slot, count) in steps.iter().enumerate() {
+        if *count != 1 {
+            out[slot] = None;
+        }
+    }
+    out
 }
 
 /// Whether a wall's top is joined to a roof or floor: one of the
@@ -579,6 +666,7 @@ pub fn native_walls_and_top_joins_into(
     let mut pair_only: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut whole: BTreeSet<u64> = BTreeSet::new();
     let mut bounded: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
+    let mut end_joins: BTreeMap<u64, EndJoins> = BTreeMap::new();
     let options = Options {
         selected_ids: walls.clone(),
         selected_classes: BTreeSet::from(["BasicWallType".to_string()]),
@@ -680,6 +768,18 @@ pub fn native_walls_and_top_joins_into(
         }
         if class != "SWall" {
             return Ok(());
+        }
+        if let Some((start, end)) = location_curve(graph) {
+            let real = real_joined(graph, id);
+            if real.iter().any(Option::is_some) {
+                end_joins.insert(
+                    id,
+                    EndJoins {
+                        curve: [start, end],
+                        real,
+                    },
+                );
+            }
         }
         let curves: Vec<_> = graph
             .objects
@@ -807,6 +907,7 @@ pub fn native_walls_and_top_joins_into(
         pair_only,
         whole,
         bounded,
+        end_joins,
     })
 }
 
