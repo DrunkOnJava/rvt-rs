@@ -51,9 +51,9 @@ still off Revit's lowest point (2 as built, 4 at permit); and a family whose
 extrusions include a void, an ellipse or an unclosed sketch, which keeps its
 mesh.
 
-Measured against 0.14.0 on every reference model, Autodesk's sample
-projects, the held-out models and the families (Measure run 41944962415,
-`main` at 77d71cbb, with timing):
+Measured against 0.14.0 on every reference model, the Revit 2025 models,
+Autodesk's sample projects, the held-out models and the families (Measure run
+41954445310, this release's head at ce0b2d8a):
 
 - On the BIM4LCA office the walls with Revit's base and top go from 586 to
   598 of 607 as built and from 565 to 577 of 589 at permit; no wall's top
@@ -64,11 +64,14 @@ projects, the held-out models and the families (Measure run 41944962415,
   element record stages, every count adding up: 192,811 of 197,463 markers
   give a record, 87,366 elements are handed to the export and the models
   hold 87,315 of them.
-- Nothing moves from equal to different, and the values Revit's export does
-  not write are unchanged; the other models' scorer outputs are line for
-  line 0.14.0's.
+- Nothing moves from equal to different, the values Revit's export does not
+  write are unchanged, and no value goes from equal to missing; every other
+  scorer output, on every other model, is line for line 0.14.0's but for
+  the witness files' version.
 - Export time is 0.98 to 1.03 times 0.14.0's on all 68 timed files, and
-  peak memory 0.92 to 1.04 times (Core Interior 309 to 323 MiB).
+  peak memory 0.92 to 1.04 times (Core Interior 309 to 323 MiB; run
+  41944962415, `main` at 77d71cbb, before #1403 and #1405, neither of which
+  adds work to a default export).
 
 ### Upgrading from 0.14
 
