@@ -20,9 +20,11 @@
   scale the matrix does not carry, a mesh drawn through it is wrong and nothing
   in the file says so. In one held-out model 57 owners pass the scale check and
   end with no primitive, and what they hold is not known. Saved graphics stay a
-  research reading on Revit 2015 to 2022 and no export reads them. Measure runs
-  show what the changes leave unchanged on the files CI fetches (42039865764,
-  42039870114, 42039874650, 42039879159, 42039914315, and the same five on the
-  head with the gating: 42054602432, 42054606416, 42054610905, 42054615619,
-  42054620459); nothing in CI reaches the three paths, so nothing in CI will
-  catch a regression in them.
+  research reading on Revit 2015 to 2022 and no export reads them. On the
+  files CI fetches the changes alter nothing: 92 of 92 export hashes are
+  identical to `main`'s, with and without `--saved-meshes` (Measure runs
+  42054602432 and 42054606416), and the pair tables and the 8 held-out scenes
+  are unchanged (42054610905, 42054620459). No file CI fetches holds a deferred
+  pointer or a `FacetedTopology9` object (0 of 92 open files and 18 held-out
+  models), and a set flag draws no body in any, so nothing in CI reaches the
+  three paths and nothing in CI will catch a regression in them.
