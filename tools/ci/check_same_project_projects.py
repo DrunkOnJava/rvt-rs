@@ -77,7 +77,7 @@ def constant_keys(node, names):
 
 def dict_items(node, names):
     node = resolve(node, names)
-    return [(key.value, value) for key, value in zip(node.keys, node.values) if isinstance(key, ast.Constant)]
+    return [(resolve(key, names).value, value) for key, value in zip(node.keys, node.values) if isinstance(resolve(key, names), ast.Constant)]
 
 
 def glob_years(text):
