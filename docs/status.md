@@ -103,8 +103,14 @@ Autodesk samples saved from earlier releases, never on a natively authored
 2026 beam. The 2025 save draws a sketch's arcs as chords (its arc readers are not
 enabled, #1440), so a floor of rac_advanced has 24 vertices there against 170
 on the 2024, 2026 and 2027 saves. One stair flight is scored against Revit's own 2026 and 2027
-exports. Sloped roofs, spiral runs, stair names,
-railing heights and lengths, a wall's profile openings, IFC export overrides
+exports. Since RE-343 pipes are drawn as their cylinders there, family
+instances' ports are placed, walls are cut to their doors' and windows'
+outlines, and `IsExternal`, railing heights and lengths, stair names, rooms'
+height and net volume and the pipe and duct quantities are written, as on 2025,
+each held to the same Autodesk project's 2025 save (pipes, walls and ports
+equal on Autodesk's MEP samples, 0 of 6,605 and of 6,650 bodies differing) and
+not to a Revit export. Sloped roofs, spiral runs, a wall's profile openings,
+`IsExternal` on walls, curtain walls, members and plates, IFC export overrides
 and the opening index stay unread there.
 Conduits, conduit fittings and gutters export on every release the exporter
 reads and are measured against Revit's own export on `ALD26 Before` only (all

@@ -821,8 +821,9 @@ pub fn native_landings_and_type_names(
     Ok((found, names))
 }
 
-/// Releases a railing type's top rail height is read on (RE-231).
-pub const RAILING_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// Releases a railing type's top rail height is read on (RE-231). 2026 and
+/// 2027 (RE-343) as Autodesk's samples saved by 2025 read them.
+pub const RAILING_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// Each railing type in `types` whose native record's `StairsRailingAttr`
 /// gives its top rail height (`m_topRailHeight`), feet: Revit's
@@ -868,8 +869,9 @@ fn sketch_line(fields: &Value) -> Option<([f64; 2], f64)> {
     (span.is_finite() && dir.iter().all(|c| c.is_finite())).then_some((dir, span))
 }
 
-/// Releases a stair railing's `Length` is read on (RE-254).
-pub const RAILING_LENGTH_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// Releases a stair railing's `Length` is read on (RE-254). 2026 and 2027
+/// (RE-343) as Autodesk's samples saved by 2025 read them.
+pub const RAILING_LENGTH_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// The `Length` Revit's export writes on each railing in `railings` that
 /// belongs to a stair (`BaseRailing.m_stairsId`) and whose path, the sketch
@@ -1039,8 +1041,9 @@ pub fn railing_lengths(
 }
 
 /// Releases a stair's and its parts' names are read from their native
-/// records on: the R2025 stair models (#323).
-pub const NATIVE_STAIR_NAME_REVIT_VERSIONS: &[u32] = &[2025];
+/// records on: the R2025 stair models (#323), and 2026 and 2027 (RE-343),
+/// as Autodesk's samples saved by 2025 read them.
+pub const NATIVE_STAIR_NAME_REVIT_VERSIONS: &[u32] = &[2025, 2026, 2027];
 
 /// A stair's or a stair part's type, and the stair and family Revit's export
 /// names it after (#323).
