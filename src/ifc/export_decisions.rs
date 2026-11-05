@@ -14,9 +14,10 @@
 //! count, and, for a reason that dropped none, whose entries by class are its
 //! classes. The decisions behind `exported.bounding_box_bodies`,
 //! `exported.bounding_box_spaces`, `exported.area_body_refusals`,
-//! `exported.slab_shape_refusals` and `exported.wall_base_refusals` are here
-//! too (`body_is_record_box`, `space_outline_is_record_box`,
-//! `area_body_refused`).
+//! `exported.slab_shape_refusals`, `exported.wall_base_refusals` and
+//! `exported.wall_end_refusals` are here too (`body_is_record_box`,
+//! `space_outline_is_record_box`, `area_body_refused`, `slab_shape_refused`,
+//! `wall_base_cut_refused`, `wall_end_extension_refused`).
 //!
 //! The log is off unless asked for (`ExportOptions::with_export_decisions`,
 //! `rvt-ifc --export-decisions`) and bounded: it keeps at most
@@ -77,12 +78,13 @@ pub const MAX_DECISIONS_PER_REASON: usize = 5_000;
 
 /// The reasons whose `detail` is a code rvt-rs writes, not text from the
 /// project, so [`ExportDecisionLog::anonymize`] keeps it.
-const CODE_DETAIL_REASONS: [&str; 5] = [
+const CODE_DETAIL_REASONS: [&str; 6] = [
     "area_without_proven_body",
     "area_body_refused",
     "body_is_record_box",
     "slab_shape_refused",
     "wall_base_cut_refused",
+    "wall_end_extension_refused",
 ];
 
 /// Which fail-closed step made a decision.
@@ -97,8 +99,9 @@ pub enum DecisionStage {
     BodyNotDrawn,
     /// The element's body is only its record's bounding box, or keeps its
     /// record's extent where a shape or a cut Revit applies is not read: a
-    /// shape-edited floor (`slab_shape_refused`) or the base of a wall
-    /// (`wall_base_cut_refused`, #1384).
+    /// shape-edited floor (`slab_shape_refused`), the base of a wall
+    /// (`wall_base_cut_refused`, #1384) or the end of a wall
+    /// (`wall_end_extension_refused`, #1396).
     BodyLeftAsBox,
     /// A door or window has no host to cut, or an opening index row has no
     /// host geometry: no opening is cut.
@@ -136,8 +139,9 @@ pub struct ExportDecision {
     pub stage: DecisionStage,
     /// The reason code: the `reason` of the `skipped` item it is counted in,
     /// or `body_is_record_box`, `space_outline_is_record_box`,
-    /// `area_body_refused`, `slab_shape_refused` or `wall_base_cut_refused`
-    /// for the decisions behind the `exported` counts.
+    /// `area_body_refused`, `slab_shape_refused`, `wall_base_cut_refused` or
+    /// `wall_end_extension_refused` for the decisions behind the `exported`
+    /// counts.
     pub reason: String,
     /// The element's Revit ElementId. Absent for a frame that carries none
     /// (`element_record_without_element_id`).

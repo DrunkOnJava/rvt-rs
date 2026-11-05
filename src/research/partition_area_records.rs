@@ -178,6 +178,14 @@ pub const AREA_POINT_OFFSET: usize = 107;
 /// The source of an Area's plan profile and of its body (RE-317).
 pub const AREA_BOUNDARY_SOURCE: &str = "partition_area_boundary_lines";
 
+/// The value-source reader of the area boundary lines an Area's region was
+/// drawn from (#1368).
+pub const AREA_LINES_READER: &str = "area_boundary_lines";
+
+/// The value-source reader of the element data that gave an Area's point
+/// (#1368).
+pub const AREA_POINT_READER: &str = "area_point";
+
 /// The field of an Area that holds the elevation of its body's base, feet.
 pub const AREA_BODY_BASE_FIELD: &str = "m_area_body_base";
 
@@ -527,6 +535,9 @@ struct BoundaryLines {
     /// office or of Autodesk's 2024 samples has a design option), so the group
     /// is not read.
     option_groups: BTreeSet<(u32, u32)>,
+    /// The frame of each line's first copy, by frame order (its stream and
+    /// offset), kept only while the handle records value sources (#1368).
+    frames: BTreeMap<u32, (String, usize)>,
 }
 
 /// What an Area's body is: its region, the base and the height.
@@ -596,6 +607,7 @@ fn boundary_lines(
     options: &DesignOptions,
 ) -> BoundaryLines {
     let mut out = BoundaryLines::default();
+    let record_frames = rf.recording_value_sources();
     let Some(records) = scan_line_records(rf, revit_version, surroundings.declared) else {
         return out;
     };
@@ -648,6 +660,10 @@ fn boundary_lines(
             None => {
                 out.by_id.insert(record.element_id, line);
                 out.groups.entry(key).or_default().push(record.element_id);
+                if record_frames {
+                    out.frames
+                        .insert(record.element_id, (record.stream, record.offset));
+                }
             }
             Some(held) if *held == line => {}
             Some(held) => {
@@ -660,13 +676,18 @@ fn boundary_lines(
     out
 }
 
-/// The point of each Area (RE-317, RE-324).
+/// An Area's point, feet, and where in its record's partition the first copy
+/// that gave it starts.
+type PlacedPoint = ((f64, f64), usize);
+
+/// The point of each Area (RE-317, RE-324), and where in its record's partition
+/// the first copy that gave it starts.
 fn area_points(
     rf: &mut RevitFile,
     revit_version: u32,
     placed: &BTreeMap<u32, AreaRecord>,
     level_ids: &BTreeSet<u32>,
-) -> BTreeMap<u32, (f64, f64)> {
+) -> BTreeMap<u32, PlacedPoint> {
     if per32::is_32bit_release(revit_version) {
         area_points_narrow(rf, placed, level_ids)
     } else {
@@ -683,7 +704,7 @@ fn area_points_narrow(
     rf: &mut RevitFile,
     placed: &BTreeMap<u32, AreaRecord>,
     level_ids: &BTreeSet<u32>,
-) -> BTreeMap<u32, (f64, f64)> {
+) -> BTreeMap<u32, PlacedPoint> {
     let mut by_stream: BTreeMap<&str, BTreeSet<u32>> = BTreeMap::new();
     for (&id, record) in placed {
         by_stream
@@ -691,7 +712,7 @@ fn area_points_narrow(
             .or_default()
             .insert(id);
     }
-    let mut found: BTreeMap<u32, Option<(f64, f64)>> = BTreeMap::new();
+    let mut found: BTreeMap<u32, Option<PlacedPoint>> = BTreeMap::new();
     for (stream, ids) in by_stream {
         let Ok(inflated) = rf.inflated_partition(stream) else {
             continue;
@@ -716,14 +737,14 @@ fn area_points_narrow(
             if record.named_one(level_ids) != Some(level) || !x.is_finite() || !y.is_finite() {
                 continue;
             }
-            let point = Some((x, y));
+            let point = (x, y);
             match found.get(&id) {
-                Some(held) if *held != point => {
+                Some(held) if held.map(|(held, _)| held) != Some(point) => {
                     found.insert(id, None);
                 }
                 Some(_) => {}
                 None => {
-                    found.insert(id, point);
+                    found.insert(id, Some((point, hit)));
                 }
             }
         }
@@ -740,7 +761,7 @@ fn area_points_narrow(
 fn area_points_wide(
     rf: &mut RevitFile,
     placed: &BTreeMap<u32, AreaRecord>,
-) -> BTreeMap<u32, (f64, f64)> {
+) -> BTreeMap<u32, PlacedPoint> {
     let mut by_stream: BTreeMap<&str, BTreeSet<u32>> = BTreeMap::new();
     for (&id, record) in placed {
         by_stream
@@ -748,7 +769,7 @@ fn area_points_wide(
             .or_default()
             .insert(id);
     }
-    let mut found: BTreeMap<u32, Option<(f64, f64)>> = BTreeMap::new();
+    let mut found: BTreeMap<u32, Option<PlacedPoint>> = BTreeMap::new();
     for (stream, ids) in by_stream {
         let Ok(inflated) = rf.inflated_partition(stream) else {
             continue;
@@ -776,12 +797,12 @@ fn area_points_wide(
                 _ => None,
             };
             match found.get(&object.element_id) {
-                Some(held) if *held != point => {
+                Some(held) if held.map(|(held, _)| held) != point => {
                     found.insert(object.element_id, None);
                 }
                 Some(_) => {}
                 None => {
-                    found.insert(object.element_id, point);
+                    found.insert(object.element_id, point.map(|point| (point, at)));
                 }
             }
         }
@@ -1042,6 +1063,57 @@ fn draw_area(
     })
 }
 
+/// Note, under a drawn Area, the records its body was drawn from (#1368): the
+/// frame of the first copy, by frame order, of each area boundary line that
+/// bounds its region (`area_boundary_lines`; every copy of a line that is placed
+/// gives the same line, or its group is not read), and the element data in its
+/// record's partition that gave its point, which picks the region among the
+/// lines (`area_point`; every copy in that partition gives the same point, and
+/// copies in other partitions are not compared). Nothing is noted for the lines
+/// where one of them has no frame kept: a list that left a line out would not
+/// be the lines the region was drawn from.
+fn note_area_sources(
+    rf: &mut RevitFile,
+    id: u32,
+    record: &AreaRecord,
+    face: &AreaFace,
+    lines: &BoundaryLines,
+    point_at: Option<usize>,
+) {
+    use crate::ifc::element_provenance::{CopyRule, SourcePart, ValueSource};
+    let parts: Option<Vec<SourcePart>> = face
+        .line_ids
+        .iter()
+        .map(|line| {
+            let (stream, offset) = lines.frames.get(line)?;
+            Some(SourcePart {
+                element_id: *line,
+                stream: stream.clone(),
+                offset: *offset,
+            })
+        })
+        .collect();
+    if let Some(parts) = parts.filter(|parts| !parts.is_empty()) {
+        let copies = parts.len();
+        rf.note_value_source(
+            id,
+            ValueSource::from_parts(AREA_LINES_READER, CopyRule::Agreeing, copies, parts),
+        );
+    }
+    if let Some(at) = point_at {
+        rf.note_value_source(
+            id,
+            ValueSource::new(
+                AREA_POINT_READER,
+                CopyRule::Frame,
+                1,
+                Some(record.stream.clone()),
+                Some(at),
+            ),
+        );
+    }
+}
+
 /// The body of each of `placed` that has one, and the reason for each that has
 /// none (RE-317). An Area of a file with a declared area boundary line that
 /// was not read, or cannot be placed on a Level, has none, since that line may
@@ -1079,10 +1151,11 @@ fn area_bodies(
         return out;
     }
     let points = area_points(rf, revit_version, placed, surroundings.level_ids);
+    let record_sources = rf.recording_value_sources();
     let mut arrangements: BTreeMap<GroupKey, Option<GroupArrangement>> = BTreeMap::new();
     let mut located: BTreeMap<u32, Result<Located, &'static str>> = BTreeMap::new();
     for (&id, record) in placed {
-        let point = points.get(&id).copied();
+        let point = points.get(&id).map(|(point, _)| *point);
         located.insert(
             id,
             locate(record, point, &lines, surroundings, &mut arrangements),
@@ -1130,6 +1203,16 @@ fn area_bodies(
                 out.refused.insert(id, REFUSED_REDUNDANT);
             }
             Ok(body) => {
+                if record_sources {
+                    note_area_sources(
+                        rf,
+                        id,
+                        record,
+                        &body.face,
+                        &lines,
+                        points.get(&id).map(|(_, at)| *at),
+                    );
+                }
                 out.drawn.insert(id, body);
             }
             Err(reason) => {

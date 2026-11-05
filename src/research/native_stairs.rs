@@ -53,7 +53,7 @@ use crate::partition_stairs::{RunSketch, RunType};
 
 /// Releases these records are measured on: the R2025 stair models (#357);
 /// Revit 2026 and 2027 against the same Autodesk samples saved by an earlier
-/// release (RE-340): `rac_basic`'s and `rac_advanced`'s runs are their
+/// release (RE-341): `rac_basic`'s and `rac_advanced`'s runs are their
 /// 2025 saves', element for element.
 pub const NATIVE_RUN_REVIT_VERSIONS: &[u32] = &[2025, 2026, 2027];
 
@@ -223,7 +223,7 @@ fn sketch(run: &Value, treads: &[Value]) -> Option<(RunSketch, f64)> {
 
 /// Releases a run's shape is measured on: the BIM4LCA office (2024) and
 /// the R2025 stair models (#323); Revit 2026 and 2027 against the same
-/// Autodesk samples saved by an earlier release (RE-340).
+/// Autodesk samples saved by an earlier release (RE-341).
 pub const NATIVE_RUN_SHAPE_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// The `IfcStairFlightTypeEnum` value Revit's export writes for a run whose
@@ -713,7 +713,7 @@ pub fn native_spiral_runs(
 
 /// Releases a landing's top and thickness are measured on: the BIM4LCA
 /// office (2024, #824); Revit 2026 and 2027 against the same Autodesk
-/// samples saved by an earlier release (RE-340): `rac_advanced`'s 5 landings
+/// samples saved by an earlier release (RE-341): `rac_advanced`'s 5 landings
 /// are its 2024 save's. 2025 is not measured.
 pub const NATIVE_LANDING_REVIT_VERSIONS: &[u32] = &[2024, 2026, 2027];
 

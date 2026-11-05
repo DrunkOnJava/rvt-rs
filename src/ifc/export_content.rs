@@ -1101,12 +1101,22 @@ pub fn append_typed_production_elements(
         add_beam_span(&mut reference_sets, &ifc_type);
         add_beam_slope(&mut reference_sets, &ifc_type, &decoded);
         add_beam_roll(&mut reference_sets, &ifc_type, &decoded);
+        // #1384: a floor drawn along the plane of its shape-edited corners
+        // keeps the extrusion of its plan profile beside its solid.
+        let shaped_floor = ifc_type == "IFCSLAB"
+            && property_set.as_ref().is_some_and(|set| {
+                set.properties.iter().any(|property| {
+                    property.name == "BodySource"
+                        && matches!(&property.value, PropertyValue::Text(source)
+                        if source == FLOOR_SHAPE_BODY_SOURCE)
+                })
+            });
         add_slab_gross_area(
             &mut reference_sets,
             &ifc_type,
             &decoded,
             extrusion.as_ref(),
-            solid_shape.is_none() && piece_bodies.is_empty(),
+            (solid_shape.is_none() || shaped_floor) && piece_bodies.is_empty(),
         );
         add_ceiling_quantities(
             &mut reference_sets,
@@ -1512,9 +1522,15 @@ pub fn append_typed_production_elements(
     // RE-267: a wall's top is cut at the underside of the floor that covers it.
     wall_tops::cut_wall_tops(entities, &pending_tops);
 
+    // #1396: a wall with an edited elevation profile that stops short of the
+    // wall beneath it is drawn to that wall's face, where its base is still cut.
+    // After the tops, so that the walls beneath it have their final tops.
+    let end_steps = wall_tops::extend_wall_ends(entities, &pending_bases, &slab_shapes);
+
     // #1384: a wall's base is cut at the top of the floor or footing it stands
     // on, level or following that element's shape-edited top.
-    wall_tops::cut_wall_bases(entities, &pending_bases, &slab_shapes);
+    wall_tops::cut_wall_bases(entities, &pending_bases, &slab_shapes, &end_steps);
+    wall_tops::finish_wall_ends(entities, &end_steps);
 
     // RE-270: the side areas and volumes of a wall joined to floors that
     // leave it as its record's box. It runs after the pass above, on purpose:
@@ -2983,9 +2999,11 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 
 /// Add a floor's `Qto_SlabBaseQuantities.GrossArea` to `sets` (#1016,
 /// RE-249): the area of the profile its body extrudes, its outline less its
-/// holes, as Revit's export writes it. Only on a floor drawn as one extrusion
-/// (`single`): a sketch of separate loops is several elements sharing its
-/// `Tag`, and a stair landing's slab gets none from Revit's export. Where the
+/// holes, as Revit's export writes it. Only on a floor drawn as one extrusion,
+/// or along the plane of its shape-edited corners over the plan profile its
+/// extrusion still holds (#1384) (`single`): a sketch of separate loops is
+/// several elements sharing its `Tag`, and a stair landing's slab gets none
+/// from Revit's export. Where the
 /// floor's type's layers add up to the extrusion's depth (RE-238), also, as
 /// revit-ifc's `DepthCalculator` and `GrossVolumeCalculator` take them from
 /// the extrusion Revit's export builds last (CLEANROOM.md source 5), its
@@ -4396,6 +4414,34 @@ pub const WALL_TOP_COVER_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_at_covering_fl
 /// the rest: drawn as one prism of its plan to the underside and the pieces
 /// of the plan outside the element from there to the top (#1067, RE-320).
 pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_covering_floor";
+
+/// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how an end
+/// of it was drawn where it is not the end its record's joins give (#1396,
+/// RE-337). The wall's `EndCoverElementId` is the wall it reaches.
+pub const WALL_END_SOURCE_PROPERTY: &str = "BodyEndSource";
+
+/// `BodyEndSource` of a wall with an edited elevation profile whose end is
+/// drawn to the face of the perpendicular wall beneath it that holds its base,
+/// the block added at the end reaching the wall's full height (#1396, RE-337).
+pub const WALL_END_AT_BASE_WALL_BODY_END_SOURCE: &str = "wall_end_extended_to_base_wall";
+
+/// `BodyEndSource` of such a wall where the block added at an end stops below
+/// the wall's own top: at the top of the wall beneath it, or the base of a wall
+/// it would lie inside. Revit steps the end up further, to the faces of the
+/// walls above, and those steps are not drawn: a labelled approximation
+/// (#1396, RE-337; Griffin, 2026-11-05: ship it, labelled).
+pub const WALL_END_UPPER_STEP_OMITTED_BODY_END_SOURCE: &str =
+    "wall_end_to_base_wall_upper_step_omitted";
+
+/// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says why a wall
+/// with an edited elevation profile, whose end stops short of walls beneath it,
+/// keeps the end its record gives: the walls that hold its base lie at
+/// different faces, the cut of its base would not resolve over the longer
+/// plan, a wall beneath it that would reach the end is not one rectangle, or
+/// another wall stands in the stretch the end would be drawn over (#1396,
+/// RE-337). A wall with one end drawn and the other kept carries this
+/// and `BodyEndSource` both.
+pub const WALL_END_REFUSAL_PROPERTY: &str = "BodyEndRefusal";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how its base
 /// was cut (#1384, RE-336). It is not `BodyHeightSource`, which says how the

@@ -150,14 +150,43 @@ that says to call `open_model` again. The tool descriptions say the same.
 |---|---|
 | `open_model` | Decodes the file and returns the `model_id` with the summary: file kind, Revit release and build, element counts by IFC entity and Revit class, levels, room count, what the export left out and the file-level provenance. |
 | `get_summary` | The same summary for a `model_id` or a path. |
-| `list_elements` | Building elements, filtered by `category` (IFC entity: `IFCWALL`, `IfcWall` and `wall` are the same), `class` (Revit class: `Wall`, `Room`) and `level` (storey name), paged by `limit` (100 by default, at most 1000) and `offset`. Each row has the ElementId, name, level, `predefined_type` and its provenance. |
-| `get_element` | One element by Revit ElementId or IFC GlobalId: its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units, each property with its IfcValue type), its trust markers, its provenance, the file's, its type object's sets and any other entity with the same ElementId. |
-| `explain_element` | Why one element is in the export as it is, or is not in it (#1326). `element` is a Revit ElementId, whether or not the export holds the element, or the GlobalId of an exported one. Returns the element's provenance and trust markers where it is exported, and every fail-closed decision recorded for it: a `stage` (`element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read`, `storey_not_bound`), a `reason` (the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box`, `area_body_refused`, `slab_shape_refused`, `wall_base_cut_refused`), the `stream` and byte `offset` its record was read from where known, and a `detail`. |
+| `list_elements` | Building elements, filtered by `category` (IFC entity: `IFCWALL`, `IfcWall` and `wall` are the same), `class` (Revit class: `Wall`, `Room`) and `level` (storey name), paged by `limit` (100 by default, at most 1000) and `offset`. Each row has the ElementId, `name` and `long_name` (the IFC `Name` and `LongName`: an IfcSpace's are its room number, or `<room name>:<ElementId>` for a room with a name and no number, and its room name; `name` is absent only for a room with neither whose name is exactly the exporter's `<Revit class>-<ElementId>` placeholder, and the placeholder names of other elements are still served as `name`), level, `predefined_type` and its provenance. |
+| `get_element` | One element by Revit ElementId or IFC GlobalId: its `name` and `long_name` as `list_elements` gives them, its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units, each property with its IfcValue type), its trust markers, its provenance, the file's, its type object as the export writes it (`element_type`: the IFC entity as `ifc_type`, the `name` and the `element_id`, the type object's `Tag`, and the sets it holds, `Other` and `Identity Data` among them, or the `IfcSpaceType` made for a room; absent where the export writes none) and any other entity with the same ElementId. |
+| `explain_element` | Why one element is in the export as it is, or is not in it (#1326). `element` is a Revit ElementId, whether or not the export holds the element, or the GlobalId of an exported one. Returns the element's provenance and trust markers where it is exported, and every fail-closed decision recorded for it: a `stage` (`element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read`, `storey_not_bound`), a `reason` (the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box`, `area_body_refused`, `slab_shape_refused`, `wall_base_cut_refused`, `wall_end_extension_refused`), the `stream` and byte `offset` its record was read from where known, and a `detail`. |
 | `list_rooms` | Rooms and spaces: ElementId, number, name, level, area and provenance. The area is present only where the outline was read exactly. |
 | `list_levels` | Storeys with elevation (feet and metres) and element count. |
 | `get_diagnostics` | The export diagnostics, as `rvt-ifc --diagnostics` writes them ([`export-diagnostics.schema.json`](schemas/export-diagnostics.schema.json)): what was decoded, exported, skipped, approximated and left unread, and why. |
 | `export_ifc` | Writes IFC4 to `out_path` and returns a summary and a `resource_link` to the file. `options` takes `rvt-ifc`'s switches: `mode`, `saved_meshes` (`doors_and_windows`, `all`, `off`), `revit_property_sets`, `revit_set_placement`, `no_base_quantities`, `allow_partial`. |
 | `export_gltf` | Writes binary glTF to `out_path` and returns the same kind of summary and link. |
+
+### Elements and levels as the export writes them
+
+The lists, counts and levels are the elements the IFC export writes, in the
+storey it puts them on (`rvt::ifc::step_writer::placements`, which the writer
+writes with). A part of a stair (a run, landing or stringer) or of a curtain
+wall has the level of its whole, an element in a room the level of the room,
+and an opening the level of its host, as the IFC's containment and
+aggregation say. A further piece of an element of separate loops, which the
+export writes as an item of the owner's body and not as an element, is not a
+row and not in `total` or `by_ifc_type`; the summary counts it by IFC entity
+in `folded_into_bodies` (always present, empty where none is folded), and the
+diagnostics' `exported` counts include it. A part of several wholes takes the storey of the first,
+which is not measured. The diagnostics' `storey_bound_elements` and the rooms
+schedule (`room_rows`) read the same placement, so a part counts as bound to
+its whole's storey in both.
+
+### Names
+
+A row's `name` is the `Name` the export writes (its `long_name` the `LongName`
+of a space). The exporter names an element nothing named
+`<Revit class>-<ElementId>`: a room with neither a number nor a name has that
+as its `Name`, and the server leaves it out (`name` is absent), but the same
+placeholder on any other element is still served as its `name` (a wall nothing
+named is `Wall-<ElementId>`). On the models Measure runs, 23 of Einhoven's 37
+rows, 3 of RE1 Electrical's 49 and 52 of the BIM4LCA office's 13,021 as built
+carry one. The path where a row has no `name` is not measured: no row of the
+32 models' dumps lacks one. `explain_element`'s `name` follows the same rule
+(it was the model's name, placeholder included, before).
 
 ### Exports
 
@@ -351,4 +380,11 @@ Einhoven the cancellation always lands during the decode), that stdout carries
 nothing but JSON, and that the server exits cleanly when stdin closes (after a
 session, after only `server/discover` or `initialize`, and at once). Another test holds
 `mcp-tools.json` to what the server reports for `tools/list`. CI runs it in the
-test matrix and again in Corpus health, where Einhoven runs in both lifecycles.
+test matrix and again in its "MCP server on Einhoven" job, where Einhoven runs
+in both lifecycles. That job also keeps every tool's `outputSchema` and every
+structured answer the test is given, through rmcp's client or a raw JSON-RPC
+request (`RVT_MCP_ANSWERS_DIR`), and `tools/ci/validate-mcp-answers.py --require-all` checks each
+answer against its tool's schema, failing too when a tool gave no answer:
+a field the schema requires and an answer leaves out fails CI, as it would fail
+a client that validates `structuredContent` (#1415). The answers and schemas are
+the job's `mcp-answers` artifact.

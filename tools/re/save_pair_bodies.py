@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Each element's body in two rvt-rs exports of the same project saved by
-two Revit releases, element for element (RE-340).
+two Revit releases, element for element (RE-341).
 
 Elements are paired by `Tag` (their ElementId, which a project keeps
 across saves) and meshed in world coordinates. A pair is the same where

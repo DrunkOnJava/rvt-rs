@@ -15,8 +15,8 @@
 //!   none, the entries by class (by detail for an Area, whose items count
 //!   reasons; by phase for a room) are the items' `classes`;
 //! - the decisions behind `exported.bounding_box_bodies`,
-//!   `bounding_box_spaces`, `area_body_refusals`, `slab_shape_refusals` and
-//!   `wall_base_refusals` equal those counts;
+//!   `bounding_box_spaces`, `area_body_refusals`, `slab_shape_refusals`,
+//!   `wall_base_refusals` and `wall_end_refusals` equal those counts;
 //! - the log has no reason that is in neither;
 //! - on Revit 2024 and later, the bytes at an entry's stream and offset are
 //!   the record it says: a frame with no ElementId carries none, and an
@@ -129,6 +129,7 @@ const CASES: [Case; 5] = [
             "space_outline_is_record_box",
             "unsupported_geometry_unresolved_host",
             "wall_base_cut_refused",
+            "wall_end_extension_refused",
         ],
         frames: true,
     },
@@ -136,7 +137,7 @@ const CASES: [Case; 5] = [
 
 /// The reasons made from the model, whose evidence the log reads from the
 /// provenance table.
-const MODEL_REASONS: [&str; 12] = [
+const MODEL_REASONS: [&str; 13] = [
     "unsupported_geometry_curve",
     "unsupported_geometry_profile",
     "unsupported_geometry_unresolved_host",
@@ -149,6 +150,7 @@ const MODEL_REASONS: [&str; 12] = [
     "area_body_refused",
     "slab_shape_refused",
     "wall_base_cut_refused",
+    "wall_end_extension_refused",
 ];
 
 fn project_models() -> Vec<(String, PathBuf)> {
@@ -276,6 +278,7 @@ fn check_model(model: &str, path: &Path, case: Option<&Case>) {
     for (reason, refusals) in [
         ("slab_shape_refused", &exported.slab_shape_refusals),
         ("wall_base_cut_refused", &exported.wall_base_refusals),
+        ("wall_end_extension_refused", &exported.wall_end_refusals),
     ] {
         aggregate.insert(reason.to_string(), refusals.values().sum());
         classes.insert(reason.to_string(), refusals.clone());
@@ -321,7 +324,10 @@ fn check_model(model: &str, path: &Path, case: Option<&Case>) {
             }
         } else if matches!(
             reason.as_str(),
-            "area_body_refused" | "slab_shape_refused" | "wall_base_cut_refused"
+            "area_body_refused"
+                | "slab_shape_refused"
+                | "wall_base_cut_refused"
+                | "wall_end_extension_refused"
         ) {
             let found = counted(&entries, |entry| entry.detail.as_ref());
             assert_eq!(&found, &classes[reason], "{name}: {reason} by detail");

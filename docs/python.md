@@ -1,4 +1,4 @@
-# rvt-rs — Python bindings (v0.14.0)
+# rvt-rs — Python bindings (v0.15.0)
 
 `rvt` is a Python package built on top of the Rust `rvt` crate. It
 exposes the file reader, metadata, schema introspection, the
@@ -25,12 +25,12 @@ For all installation paths, including release smoke tests, see
 pip install rvt
 ```
 
-**PyPI `rvt` 0.14.0 is the current release.** Wheels target Python ≥ 3.8
+**PyPI `rvt` 0.15.0 is the current release.** Wheels target Python ≥ 3.8
 via pyo3's `abi3-py38` feature, so one wheel per OS/architecture covers
 every supported Python minor. The matching Rust crate is on crates.io
 (`cargo add rvt`); platforms and the other install channels are in
 [`install.md`](install.md). This page describes `main`, which can be ahead
-of the latest release: what has landed since 0.14.0 is in the fragments
+of the latest release: what has landed since 0.15.0 is in the fragments
 under [`changelog.d/`](../changelog.d/README.md).
 
 ### From source
@@ -96,7 +96,7 @@ with open("my-family.ifc", "w") as out:
 ## API reference
 
 Every signature below is verified against
-[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.14.0).
+[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.15.0).
 
 ### Module-level
 
@@ -275,8 +275,10 @@ contract: [`file-metadata.schema.json`](schemas/file-metadata.schema.json).
 schedule_csv(self, kind: str = "elements", metric: bool = False, excel: bool = False, phase: str | int | None = None) -> str
 ```
 The element (`kind="elements"`) or room (`kind="rooms"`) schedule as CSV
-text, with the columns of `rvt-schedule`. `metric=True` writes lengths in
-metres, `excel=True` prefixes a UTF-8 byte-order mark for Excel on Windows.
+text, with the columns of `rvt-schedule`: the elements the IFC export writes,
+each on the storey it puts it on (see the [user
+guide](user-guide.md#get-a-schedule-into-excel)). `metric=True` writes lengths
+in metres, `excel=True` prefixes a UTF-8 byte-order mark for Excel on Windows.
 Only decoded values are written; unknowns are empty cells. `phase` is
 `write_ifc`'s, and `rvt-schedule --phase <name|id>` is its command-line twin:
 the schedule is of the model the document exporter builds at that phase. Any
@@ -425,7 +427,7 @@ can't be parsed far enough to build a model.
 Doors and windows of Revit 2023 to 2027 files are drawn from the meshes
 Revit saved for them where all of a mesh decodes, as `rvt-ifc` draws them
 by default; `saved_meshes=False` keeps their bounding boxes, as
-`rvt-ifc --no-saved-meshes` does. When the saved graphics cannot be read,
+`rvt-ifc --no-saved-meshes` does; on Revit 2024 to 2027 files a wall that embeds a curtain wall is drawn from its saved mesh the same way where Revit has raised its base (RE-340), and `saved_meshes=False` keeps its record's body. When the saved graphics cannot be read,
 the export keeps the bounding boxes and a `RuntimeWarning` says so.
 `export_diagnostics()`, `export_diagnostics_json()` and
 `rvt_to_ifc_diagnostics()` take the same `saved_meshes` and describe the

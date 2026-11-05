@@ -87,7 +87,7 @@ structural example (RE-198) and Vitoria's 2018 `ALD26 Before` (RE-315, RE-319);
 On 2026 and 2027 beams are drawn along their axes, stair runs and landings
 as their steps and treads, and sloped roofs as their planes, as on 2024 and
 2025, measured against the same Autodesk samples saved by Revit 2024 and 2025
-(RE-340).
+(RE-341).
 Conduits, conduit fittings and gutters export on every release the exporter
 reads and are measured against Revit's own export on `ALD26 Before` only (all
 178 it holds are Revit's elements, RE-319); Autodesk's MEP samples and Snowdon
@@ -117,8 +117,9 @@ as Revit's exporter does with "Export base quantities" off (RE-242).
 
 It is not a converter for arbitrary models: most parameters, family
 geometry (doors and windows are drawn from the mesh Revit saved for their
-display by default, and any other family instance with the experimental
-`--saved-meshes` option, RE-78), hip roofs over a T or U footprint, roofs sloped by several slope arrows of the configuration of puzzbobb's U, where Revit slopes the two long outer walls along the arms only (RE-307; no other roof of the configuration is measured), and roofs by extrusion outside Revit 2025, the top of
+display by default, and so, on Revit 2024 to 2027, are the walls that embed a
+curtain wall where Revit raised their base, RE-340; any other family instance
+with the experimental `--saved-meshes` option, RE-78), hip roofs over a T or U footprint, roofs sloped by several slope arrows of the configuration of puzzbobb's U, where Revit slopes the two long outer walls along the arms only (RE-307; no other roof of the configuration is measured), and roofs by extrusion outside Revit 2025, the top of
 walls whose layers Revit ends at different heights or cuts at a height no join names (#1067), the boundaries of
 the rooms whose stored solid still does not close (RE-316 §4) and opening
 profiles are not decoded, and rvt-rs does not edit Revit model data.
@@ -1214,11 +1215,31 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.14.0** (2026-11-04) is the latest release: crates.io (`rvt` and,
-  new, `rvt-rs-mcp`), the `rvt` wheels on PyPI, GitHub Release archives for
-  Linux, macOS and Windows, and the container image, each checked from its
-  published artifacts ([`install.md`](install.md)); docs.rs had queued its
-  build when they were checked. It adds `rvt-rs-mcp`, a local, read-only MCP
+- **v0.15.0** (2026-11-05) is the latest release: crates.io (`rvt` and
+  `rvt-rs-mcp`, both published from the tag), the `rvt` wheels on PyPI,
+  GitHub Release archives for Linux, macOS and Windows, and the container
+  image, each checked from its published artifacts
+  ([`install.md`](install.md)); docs.rs had queued its builds when they were
+  checked. It says, on request, where each decoded element and the values
+  its body took were read from, down to the byte, and why each element,
+  body, opening or outline was left out (`rvt-ifc --element-provenance`,
+  `--export-decisions`): the offsets are confirmed on the Revit 2023 to 2025
+  models CI holds and the decisions on 2024 and 2025, not on earlier
+  releases. The MCP server asks for both, gains `explain_element` and names
+  elements and type objects as the IFC export does. Revit 2008 to 2023
+  exports count where their element records stopped (not measured on 2008
+  to 2014). Floors whose shape-edited corners lie in one plane are drawn
+  along their sloped tops, and the walls on them start from that top (the
+  refusals this adds on Snowdon Towers and `rac_advanced` have no Revit IFC4
+  export to score them); more Areas are drawn to their boundary lines'
+  joins, a rule read off the one IFC2X3 export it is scored against, so
+  in-sample; rooms take off the round columns their solids hold; floor voids
+  drawn clockwise take Revit's tag; and the opt-in `rvt-ifc
+  --family-extrusions` draws family instances from their families' own
+  extrusions (Revit 2024 to 2027, measured on 2024 and 2025). `[0.15.0]` in
+  [`CHANGELOG.md`](../CHANGELOG.md) gives what each change measures and what
+  it does not.
+- **v0.14.0** (2026-11-04): it adds `rvt-rs-mcp`, a local, read-only MCP
   server, and one export function every surface builds from; rooms follow the
   export phase, which `rvt-ifc`, Python, the viewer and `rvt-schedule` can
   name; Revit 2024 Areas get a body and proven Revit 2015 to 2023 Areas are
@@ -1282,7 +1303,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.14.0 has, and is ahead of it by the fragments
+- `main` has everything v0.15.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is

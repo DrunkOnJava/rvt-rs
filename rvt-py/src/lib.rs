@@ -823,7 +823,9 @@ impl PyRevitFile {
     /// Doors and windows of Revit 2023 to 2027 files are drawn from the
     /// meshes Revit saved for them where all of a mesh decodes, as `rvt-ifc`
     /// draws them; `saved_meshes=False` keeps their bounding boxes
-    /// (`rvt-ifc --no-saved-meshes`).
+    /// (`rvt-ifc --no-saved-meshes`). On Revit 2024 to 2027 files a wall that
+    /// embeds a curtain wall is drawn from its saved mesh too where Revit
+    /// raised its base, and `saved_meshes=False` keeps its record's body.
     ///
     /// `phase` (a phase's name or its ElementId, default the project's last)
     /// exports that phase, as `rvt-ifc --phase` does: an element that does not
@@ -853,7 +855,8 @@ impl PyRevitFile {
 
     /// Spreadsheet schedule of the decoded model as CSV text
     /// (`rvt::ifc::schedule_csv`): `kind="elements"` (every building
-    /// element: type, level, material, placement, size, host) or
+    /// element the IFC export writes, on the storey it puts it on: type,
+    /// level, material, placement, size, host) or
     /// `kind="rooms"` (number, name, level). `metric=True` writes lengths in
     /// metres; `excel=True` prefixes a UTF-8 byte-order mark for Excel on
     /// Windows. Only decoded values are written; unknowns are empty cells.

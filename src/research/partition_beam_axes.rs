@@ -48,7 +48,7 @@ use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Releases where this layout is measured: 2024, and Revit 2026 and 2027
-/// against the same Autodesk samples saved by an earlier release (RE-340):
+/// against the same Autodesk samples saved by an earlier release (RE-341):
 /// the beams of `rst_basic` 2027 and of `rac_advanced` 2026 and 2027 are
 /// their 2024 saves'. 2025 is not measured here.
 pub const BEAM_AXIS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2026, 2027];
@@ -387,7 +387,7 @@ pub fn scan_bounded_lines(
 /// as a bounded line: 2024 (RE-50) and 2025 (RE-199, the roof sketches of
 /// #356's `R2025_Models.zip`, each line's ends on Revit's exported outline);
 /// Revit 2026 and 2027 against the same Autodesk samples saved by an earlier
-/// release (RE-340).
+/// release (RE-341).
 pub const SKETCH_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// Each sketch line's segment, read as [`scan_bounded_lines`] reads a beam's

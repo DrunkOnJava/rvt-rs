@@ -435,6 +435,10 @@ pub const SLAB_SHAPE_CORNERS_FIELD: &str = "m_slab_shape_corners";
 /// of its corners alone, or its corners do not lie in one plane (#1384).
 pub const SLAB_SHAPE_UNREAD_FIELD: &str = "m_slab_shape_unread";
 
+/// The value-source reader of the native record whose `SlabShapeEditGStep`
+/// gave a floor the plane of its top ([`SLAB_TOP_PLANE_FIELD`], #1368).
+pub const SLAB_SHAPE_READER: &str = "native_slab_shape";
+
 /// Field holding, as a vector of ElementIds, the elements a wall's base join
 /// (`JoinToRoofGStep` with `m_baseOrTop` 0) names
 /// ([`crate::native_walls::WallRecords::base_cutters`], #1384): the floors and

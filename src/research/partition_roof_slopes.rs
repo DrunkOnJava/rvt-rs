@@ -41,7 +41,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// Releases this layout is measured on: 2024 and 2025, and Revit 2026 and
 /// 2027 against the same Autodesk samples saved by an earlier release
-/// (RE-340): `rac_advanced`'s sloped roof is its 2025 save's.
+/// (RE-341): `rac_advanced`'s sloped roof is its 2025 save's.
 pub const ROOF_SLOPE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// How far into a sketch line's data its slope block is looked for.

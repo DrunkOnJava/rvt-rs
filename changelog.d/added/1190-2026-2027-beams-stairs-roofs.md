@@ -1,6 +1,6 @@
 - **Revit 2026 and 2027 projects draw beams along their axes, stair runs
   and landings as their steps and treads, and sloped roofs as their planes,
-  as 2024 and 2025 projects do (#1190, RE-340).** The six readers read the
+  as 2024 and 2025 projects do (#1190, RE-341).** The six readers read the
   2025 records these releases write; only their release lists change.
   Measured against the same Autodesk samples saved by an earlier release
   (no Revit 2026 or 2027 export is available): `rst_basic` 2026's and

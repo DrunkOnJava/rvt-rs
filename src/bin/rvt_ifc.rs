@@ -86,11 +86,14 @@ struct Args {
     /// Draw every element whose body would be its record's bounding box
     /// (furniture, fixtures, equipment and the rest) from the mesh Revit
     /// saved for display (#255). Doors and windows are drawn so by default
-    /// on Revit 2023 to 2027. Slower on large files.
+    /// on Revit 2023 to 2027, and so are the walls that embed a curtain wall
+    /// where Revit raised their base, on Revit 2024 to 2027 (RE-340). Slower
+    /// on large files.
     #[arg(long, conflicts_with_all = ["placeholder", "no_saved_meshes"])]
     saved_meshes: bool,
-    /// Keep doors and windows as their record's bounding box instead of the
-    /// mesh Revit saved for them.
+    /// Keep doors and windows as their record's bounding box, and the walls
+    /// that embed a curtain wall as their record's body, instead of the mesh
+    /// Revit saved for them.
     #[arg(long, conflicts_with = "placeholder")]
     no_saved_meshes: bool,
     /// Draw a family instance from its family's own extrusions (the sketch
@@ -143,9 +146,9 @@ struct Args {
     /// read from (#1325): the kind of record, its stream and byte offset in
     /// the inflated stream (what rvt-dump writes as Partitions_NN.decomp),
     /// where its ElementId is stored, its class and its native record. Off by
-    /// default: the list is about 140 times the rest of the pretty-printed
-    /// sidecar on a large model (7.4 MB against 53 KB on the BIM4LCA office
-    /// as built). Never written into the IFC.
+    /// default: on a large model the list is hundreds of times the rest of
+    /// the sidecar (docs/export-diagnostics.md, "Provenance table size", gives
+    /// the measured sizes). Never written into the IFC.
     #[arg(long, requires = "diagnostics", conflicts_with = "placeholder")]
     element_provenance: bool,
     /// Also list, in the diagnostics sidecar, each fail-closed decision per
@@ -359,7 +362,9 @@ fn run(args: Args) -> anyhow::Result<()> {
 /// The switches that change the model: the document exporter by default,
 /// `--placeholder` or `--diagnostic-proxies` for the others; the saved-graphics
 /// bodies are every boxed one with `--saved-meshes`, none with
-/// `--no-saved-meshes`, and otherwise doors and windows on Revit 2023 to 2027.
+/// `--no-saved-meshes`, and otherwise doors and windows on Revit 2023 to 2027
+/// and the walls that embed a curtain wall where Revit raised their base on
+/// Revit 2024 to 2027 (RE-340).
 fn export_options(args: &Args) -> ExportOptions {
     let kind = if args.placeholder {
         ExportKind::Placeholder
