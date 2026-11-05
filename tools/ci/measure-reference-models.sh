@@ -45,7 +45,21 @@
 #     lines starting `mcp answers:` leave the runner. With
 #     MCP_REQUIRE_FOLDED_FIELD set (the workflow sets it on the head side), the
 #     scorer is run with --require-folded-field: diagnostics without
-#     `exported.body_pieces_folded` (#1424) are a difference;
+#     `exported.body_pieces_folded` (#1424) are a difference. With
+#     MCP_REQUIRE_SPACE_KIND set (the same side) it is run with
+#     --require-space-kind: a room with no `space_kind` in the answer or the IFC,
+#     and a summary with no `space_kinds` (#1437), are a difference;
+#   - space_kinds_vs_ifc.txt, on every model and every sample whose export is not
+#     empty (#1437): the check (tools/re/space_kinds_vs_ifc.py) that each
+#     `IfcSpace` carries `RvtElementRecordGeometry.SpaceKind`, that `area` holds
+#     exactly where `SpaceOutlineSource` is an Area value, and how many spaces
+#     hold each kind, ending with its exit status, 1 on any space without a
+#     kind or any disagreement. Needs no Revit export. The workflow's compare
+#     job sums these over the run (`--total`) and fails on a model with no
+#     result, with a failure count, or whose spaces are not the number its own
+#     export counted, and on a geometry export that lost its outline source; of
+#     a model kept as counts only, the lines starting `space kinds:` leave the
+#     runner;
 #   - probe.txt, when PROBE names a probe (the rvt-probes crate's
 #     examples) already built in BIN_DIR/examples: its output on the model, ending with its exit status;
 #   - probe_score.txt, when PROBE_SCORER also names a scorer in
@@ -75,7 +89,9 @@
 # exit status, which the workflow turns into a failed job. It runs once every
 # export is done and before any sample's IFC is deleted. When a run holds fewer
 # than the four saves (a narrower sample_years) the file says `skipped:`, names
-# the years missing, and the workflow prints a notice: nothing was checked.
+# the years missing, and the workflow prints a notice: nothing was checked. A
+# run with ifc_flags is skipped the same way, since the gate is about the
+# default export.
 # SAMPLE_DIR does the same for Autodesk's sample projects (.rvt), adding the
 # export's diagnostics.json, rvt-ifc.log and ifc.sha256 (hashed as a model's
 # is) under OUT_DIR/sample-<file>/, and element_stage_counts.txt, the check
@@ -213,7 +229,7 @@ wanted() { # step
 # Whether a step is in a scorer list or is one of the steps run by name.
 listed() { # step
   local s
-  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc mcp_answers_vs_ifc bodies_across_saves none; do
+  for s in $IFC_SCORERS $GLB_SCORERS info gltf schema witness revit_property_sets_vs_ifc mcp_answers_vs_ifc space_kinds_vs_ifc bodies_across_saves none; do
     [ "$s" = "$1" ] && return 0
   done
   return 1
@@ -381,6 +397,9 @@ model_tasks() { # name rvt ref
       echo "$name: no rvt-rs-mcp in $BIN (a ref older than the crate), mcp_answers_vs_ifc not measured" >&2
     fi
   fi
+  # #1437: each IfcSpace says what it is. Reads the export alone, so a model
+  # with no Revit export (Einhoven) is checked too.
+  wanted space_kinds_vs_ifc && echo "1 kinds"
   if [ "$ref" != "-" ]; then
     for s in $IFC_SCORERS; do
       wanted "$s" || continue
@@ -450,6 +469,9 @@ model_task() { # name rvt ref task
         score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.ifc" "$MODELS/$ref"
       fi
       ;;
+    kinds)
+      score "$dir/space_kinds_vs_ifc.txt" "$SCORERS/space_kinds_vs_ifc.py" "$dir/model.ifc"
+      ;;
     mcp)
       # The server decodes the model again and answers the fixed query set from
       # it (tools/re/mcp_client.py): a program run, so never from the score cache.
@@ -467,6 +489,7 @@ model_task() { # name rvt ref task
       esac
       require=()
       [ -n "${MCP_REQUIRE_FOLDED_FIELD:-}" ] && require=(--require-folded-field)
+      [ -n "${MCP_REQUIRE_SPACE_KIND:-}" ] && require+=(--require-space-kind)
       score "$dir/mcp_answers_vs_ifc.txt" "$SCORERS/mcp_answers_vs_ifc.py" \
         --server "$BIN/rvt-rs-mcp" --rvt "$MODELS/$rvt" \
         --diagnostics "$dir/diagnostics.json" ${dump[@]+"${dump[@]}"} \
@@ -540,8 +563,14 @@ pair_key() {
 # RE-341: bodies_across_saves.py holds the 2026 and 2027 saves of the three
 # projects below to their 2024 and 2025 saves, so those saves keep their
 # exports until it has run, after every sample item.
+# Whether this run's exports take a flag. A value of only spaces is no flag:
+# export_ifc passes it unquoted, so rvt-ifc gets none.
+flagged_export() {
+  [[ ${RVT_IFC_FLAGS:-} == *[![:space:]]* ]]
+}
 saves_gate_keeps() { # sample
   wanted bodies_across_saves || return 1
+  flagged_export && return 1
   case "$(basename "$1" | cut -c1-4)" in 2024 | 2025 | 2026 | 2027) ;; *) return 1 ;; esac
   case "$(pair_key "$1")" in racadvanced | racbasic | rstbasic) return 0 ;; esac
   return 1
@@ -565,6 +594,8 @@ measure_sample() { # sample
   if [ -s "$dir/model.ifc" ]; then
     schema "$dir" 31457280
     grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
+    # #1437: every space of the sample's export says what it is.
+    wanted space_kinds_vs_ifc && score "$dir/space_kinds_vs_ifc.txt" "$SCORERS/space_kinds_vs_ifc.py" "$dir/model.ifc"
   fi
   if [ -z "${KEEP_IFC:-}" ] && ! saves_gate_keeps "$sample"; then rm -f "$dir/model.ifc"; fi
   rm -f "$dir/validation.jsonl"
@@ -591,6 +622,13 @@ bodies_across_saves() {
       references+=("$(basename "$earlier" | cut -c1-4)=$(sample_dir "$earlier")/model.ifc")
     done
     dir=$(sample_dir "$candidate")
+    # The check is about the default export: a flag such as --phase changes
+    # what a save writes, or refuses a save that has no such phase.
+    if flagged_export; then
+      echo "::notice::$(basename "$dir"): this run's exports used ifc_flags ($RVT_IFC_FLAGS), so bodies_across_saves compared nothing"
+      printf 'bodies across saves: SKIPPED (the exports of this run used ifc_flags: %s)\nexit 0\n' "$RVT_IFC_FLAGS" > "$dir/bodies_across_saves.txt"
+      continue
+    fi
     if [ "${#references[@]}" -eq 0 ]; then
       echo "::notice::$(basename "$dir"): no 2024 or 2025 save of its project is in this run, so bodies_across_saves compared nothing"
       printf 'bodies across saves: SKIPPED (no 2024 or 2025 save of the project is in this run)\nexit 0\n' > "$dir/bodies_across_saves.txt"
@@ -611,6 +649,12 @@ bodies_across_saves() {
 # than that the check is skipped, and says so.
 areas_across_saves() {
   local year file missing="" args=()
+  # The gate is about the default export: a flag such as --phase changes what a
+  # save writes, or refuses a save that has no such phase.
+  if flagged_export; then
+    echo "areas across saves: skipped: the exports of this run used ifc_flags ($RVT_IFC_FLAGS), so nothing was compared" > "$OUT/areas_across_saves.txt"
+    return 0
+  fi
   for year in 2024 2025 2026 2027; do
     file="$SAMPLE_DIR/$year-racadvancedsampleproject.rvt"
     [ -f "$file" ] || missing="$missing $year"

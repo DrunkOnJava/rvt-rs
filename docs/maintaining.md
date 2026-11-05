@@ -156,6 +156,37 @@ for the five lowest ElementIds of each IFC entity, the diagnostics and an
   whose server does not build, leaves the step NOT MEASURED with a warning and
   fails no other scorer. Autodesk's sample projects are not asked.
 
+## Measure and the kinds of IfcSpace
+
+Every model and every Autodesk sample whose export is not empty is checked by
+`tools/re/space_kinds_vs_ifc.py` (#1437), which reads the export alone: each
+`IfcSpace` carries `RvtElementRecordGeometry.SpaceKind`, `area` holds exactly
+where `SpaceOutlineSource` is an Area value, and no other kind holds one (the
+values are `AREA_SOURCES` and `ROOM_SOURCES` in the scorer, the one place they
+are listed, and a value in neither fails). It writes `space_kinds_vs_ifc.txt`
+(fixed words and integers, so the held-out models keep it as counts;
+`tools/ci/scrub-holdout-results.sh`) and exits 1 on any space without a kind,
+with another value, with an outline source it does not know, or in
+disagreement. The compare job sums the head side's results
+(`space_kinds_vs_ifc.py --total`), prints how many `IfcSpace`s of each kind the
+run saw, and fails the job when a model has no result, when any model's counts
+show a failure (whatever its verdict word says), when a model's spaces are not
+the number its own export counted (`diagnostics.json`, or for a model kept as
+counts only the MCP server's `rooms` count), so that a check that saw none of
+a model's spaces cannot pass, and when a geometry export's spaces have no
+`SpaceOutlineSource` to check (an export whose diagnostics say
+`typed_no_geometry` has none by design). A run of models with no spaces, such
+as a filtered one, passes when every export agrees that it has none. The step
+runs in a run that names no `scorers` or names this one, and a run that names
+others has not asked for it. The `IfcOpenShell validates exports` job of CI
+runs it on Core Interior and RE1 Architecture, shows it failing on copies of
+Core Interior's export with the property renamed, every room called an area,
+and every room's outline source made an Area's, runs it on a
+`typed-no-geometry` export, and shows `--total` failing on a result that says
+PASS over a failure count, on spaces that have lost their `SpaceOutlineSource`
+in an export with geometry, and on a result that saw none of the export's
+spaces.
+
 ## Bodies across saves (RE-341)
 
 No Revit export of a 2026 or 2027 beam, tread landing, stair run or sketch
@@ -177,6 +208,10 @@ not remove Compare's report.
   compares what it can and reads `PARTIAL`, never `PASS`. Every such skip prints
   a notice and a line in the run summary, so a green run that did not run the
   check says so.
+- **A run with `ifc_flags` checks neither same-project gate.** The gates are about
+  the default export, and a flag such as `--phase` makes a save refuse. Each gate
+  says in a notice that it compared nothing, so the run a gate judges has no
+  `ifc_flags`. A whitespace-only value is no flag.
 - **What it cannot catch**: an error the earlier save shares with the 2026 or
   2027 read. Nothing in it is a Revit export. It compares bodies, not
   quantities or property sets. No 2026 or 2027 held-out model holds an
