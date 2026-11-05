@@ -32,8 +32,9 @@
   writes no check. Only
   a run of every open model writes a check, and a pass needs all 34 compared
   in full: a model whose dump is missing, a diff that failed, a dropped group,
-  property sets only one dump holds or an unscored chunk makes it NOT MEASURED
-  at best, and a run with a
+  sampled property sets that one dump alone holds too often (none held by
+  both while either holds any, or more than a tenth of them) or an unscored
+  chunk makes it NOT MEASURED at best, and a run with a
   `models` filter writes none, so a narrower run's pass cannot stand beside a
   fuller run's fail. It is not a required check and posts no pull request
   comment. A pass means the dumps agree, not that the exports are identical:

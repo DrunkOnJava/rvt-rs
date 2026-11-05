@@ -191,8 +191,9 @@ either (`-f base=<the pull request's own head>` scores an empty diff, and its
 pass would supersede an earlier fail on the same commit); the check's step summary
 names the base. A run that was asked for everything and compared less (a model
 whose dump is missing on one side because the server crashed on it, a diff that
-failed, a group of changes dropped for size, property sets that only one of the
-two dumps holds, a count a diff does not give, a model not fetched) writes a
+failed, a group of changes dropped for size, sampled property sets that one dump
+alone holds too often (see below), a count a diff does not give, a model not
+fetched) writes a
 check that is **NOT MEASURED at best**, naming each model and its own reason; a
 warn or a fail found in what was compared stays. The check lands on the commit
 Measure measured, which the compare job takes from the plan job's resolved refs
@@ -324,9 +325,12 @@ Measure's `ifc.sha256` is what says that an export is identical.
   its type, never a message), a measured commit that is not a 40-character SHA, a
   diff with no model compared, any open model that is not compared in full (see
   above), a group of changes dropped from a diff for its size (over 20,000 groups
-  in one model), property sets that only one of a model's two dumps holds (the
-  dump samples five elements per entity; one that lost them compares nothing
-  there), a measured commit that is not the commit the check is written on (the
+  in one model), sampled property sets that one of a model's two dumps alone
+  holds too often (none held by both while either holds any, or more than a tenth
+  of all of them held by one: the dump samples five elements per entity, the five
+  lowest ElementIds, so a change that adds or removes elements of an entity moves
+  the sample and a few held by one dump only are no gap, and the check's summary
+  says how many there are), a measured commit that is not the commit the check is written on (the
   keyless run of a pull request that changes the check writes on the pull
   request's head, whatever commit Measure measured), a base that is missing or could
   not be checked against main, and any chunk not scored (more than 150 chunks, a run past 7

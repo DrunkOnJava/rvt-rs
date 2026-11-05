@@ -34,8 +34,8 @@ def manifest(models=None, skipped=(), requested_all=True):
     }
 
 
-def diff_of(dropped=0, one_side=0):
-    return {"dropped_groups": dropped, "coverage": {"details_one_side": one_side, "details_compared": 5}}
+def diff_of(dropped=0, one_side=0, compared=5):
+    return {"dropped_groups": dropped, "coverage": {"details_one_side": one_side, "details_compared": compared}}
 
 
 def diffs_for(names, dropped=0):
@@ -95,10 +95,33 @@ class Coverage(unittest.TestCase):
         self.assertEqual(len(others), 1)
         self.assertIn("einhoven", others[0])
 
-    def test_property_sets_that_only_one_dump_holds_are_a_gap(self):
-        _, others = jc.coverage_gaps(manifest(), {**diffs_for(NAMES), "core-interior": diff_of(one_side=35)})
+    def test_a_head_that_lost_every_sampled_property_set_is_a_gap(self):
+        _, others = jc.coverage_gaps(manifest(), {**diffs_for(NAMES), "core-interior": diff_of(one_side=35, compared=0)})
         self.assertEqual(len(others), 1)
-        self.assertIn("35 elements", others[0])
+        self.assertIn("35 of 35", others[0])
+        self.assertIn("none by both", others[0])
+
+    def test_one_in_a_hundred_and_fifteen_held_by_one_dump_is_no_gap(self):
+        self.assertEqual(jc.coverage_gaps(manifest(), {**diffs_for(NAMES), "nordic-office-as-built": diff_of(one_side=1, compared=115)}), ([], []))
+
+    def test_exactly_a_tenth_held_by_one_dump_is_no_gap_and_a_little_more_is(self):
+        self.assertEqual(jc.coverage_gaps(manifest(), {**diffs_for(NAMES), "einhoven": diff_of(one_side=10, compared=90)}), ([], []))
+        _, others = jc.coverage_gaps(manifest(), {**diffs_for(NAMES), "einhoven": diff_of(one_side=11, compared=89)})
+        self.assertEqual(len(others), 1)
+        self.assertIn("einhoven", others[0])
+
+    def test_a_dump_that_lost_most_of_its_property_sets_is_a_gap_whatever_it_kept(self):
+        _, others = jc.coverage_gaps(manifest(), {**diffs_for(NAMES), "einhoven": diff_of(one_side=60, compared=40)})
+        self.assertEqual(len(others), 1)
+
+    def test_no_property_sets_on_either_side_is_no_gap(self):
+        self.assertEqual(jc.coverage_gaps(manifest(), {**diffs_for(NAMES), "r2025-00_Blank": diff_of(one_side=0, compared=0)}), ([], []))
+
+    def test_the_property_sets_held_by_one_dump_are_counted_for_the_summary_gap_or_not(self):
+        total, models = jc.details_held_by_one({**diffs_for(NAMES), "nordic-office-as-built": diff_of(one_side=1, compared=115), "einhoven": diff_of(one_side=2, compared=30)})
+        self.assertEqual(total, 3)
+        self.assertEqual(models, [("einhoven", 2), ("nordic-office-as-built", 1)])
+        self.assertEqual(jc.details_held_by_one(diffs_for(NAMES)), (0, []))
 
     def test_a_diff_without_its_coverage_block_is_a_gap(self):
         diff = diff_of()

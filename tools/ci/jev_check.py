@@ -49,9 +49,11 @@ How a diff is scored:
 
 Coverage. A pass needs every open model to be compared (semantic_diff.OPEN_MODEL_NAMES, from this
 checkout and not from the artifact), no model skipped (a dump missing on a side, a dump that did not
-read, a diff that failed), no group of changes dropped from a diff for its size, no element whose
-property sets only one dump holds, every count a diff gives present (a missing one is a gap, not a
-zero), every chunk scored and every chunk sent within the 16,000-character cap. Anything less is at
+read, a diff that failed), no group of changes dropped from a diff for its size, no model whose
+sampled property sets are too often held by one dump only (none held by both while either holds any,
+or more than a tenth of them held by one: the dump samples five elements per entity, so a change that
+adds or removes elements moves the sample and a few are no gap, and the summary says how many),
+every count a diff gives present (a missing one is a gap, not a zero), every chunk scored and every chunk sent within the 16,000-character cap. Anything less is at
 best NOT MEASURED (a warn or a fail found in what was scored stays). A pass also needs a
 same-repository pull request whose head is the measured commit, whatever the diff holds (an empty
 diff included), and a check written on that commit and no other: --head-sha, which the pull
@@ -371,9 +373,8 @@ def coverage_gaps(manifest, diffs):
     """(uncovered, others): why the diffs do not cover every open model completely, as lines. `uncovered` names the
     open models no diff covers (from OPEN_MODEL_NAMES, with the reason the manifest gives for a skipped one),
     `others` a model skipped that is not on that list, a diff that dropped groups of changes for its size and a diff
-    whose two dumps do not both hold the property sets of the same elements (the dump samples five elements per
-    entity; one that lost them on a side compares nothing there). A count a diff does not give is a gap, never a zero.
-    Both are empty only when every open model is compared in full."""
+    whose two dumps do not both hold the property sets of the same elements (see `details_gap`). A count a diff
+    does not give is a gap, never a zero. Both are empty only when every open model is compared in full."""
     reasons = {item["model"]: item["reason"] for item in manifest["skipped"]}
     uncovered = [f"{name}: {reasons.get(name, 'no result folder on either side')}" for name in sd.OPEN_MODEL_NAMES if name not in diffs]
     others = [f"{name}: {reason}" for name, reason in reasons.items() if name not in sd.OPEN_MODEL_NAMES]
@@ -392,12 +393,45 @@ def coverage_gaps(manifest, diffs):
         elif dropped:
             others.append(f"{name}: {dropped} smaller groups of changes are left out of its diff for their number")
         coverage = diff.get("coverage")
+        compared = coverage.get("details_compared") if isinstance(coverage, dict) else None
         one_side = coverage.get("details_one_side") if isinstance(coverage, dict) else None
-        if not count(one_side):
-            others.append(f"{name}: its diff does not say how many elements' property sets only one dump holds")
-        elif one_side:
-            others.append(f"{name}: {one_side} elements' property sets are held by one dump only, so they are not compared")
+        if not (count(compared) and count(one_side)):
+            others.append(f"{name}: its diff does not say how many elements' property sets both dumps hold, or only one")
+        elif details_gap(compared, one_side):
+            others.append(
+                f"{name}: {one_side} of {compared + one_side} sampled elements' property sets are held by one dump only"
+                + (", and none by both" if compared == 0 else f", over {DETAILS_ONE_SIDE_SHARE:.0%} of them")
+            )
     return uncovered, others
+
+
+# The dump samples five elements per entity, the five lowest ElementIds, so a change that adds or removes
+# elements of an entity moves the sample and a few property sets are held by one dump only: that is not a
+# defect. A dump that lost its sampled property sets is: none held by both while either holds any, or more
+# than a tenth of all of them held by one only.
+DETAILS_ONE_SIDE_SHARE = 0.10
+
+
+def details_gap(compared, one_side):
+    """Whether a model's property sets, compared on `compared` elements and held by one dump only on `one_side`,
+    are too far from the same on both sides to be a verdict: none held by both while either holds any, or more
+    than DETAILS_ONE_SIDE_SHARE of the property sets of both held by one only (exactly a tenth is not a gap)."""
+    if compared == 0 and one_side > 0:
+        return True
+    return one_side * 10 > (compared + one_side)
+
+
+def details_held_by_one(diffs):
+    """(total, [(model, count)]): the sampled property sets held by one dump only, over the models, for the summary
+    to show whether or not they are a gap."""
+    held = []
+    for name in sorted(diffs):
+        diff = diffs[name]
+        coverage = diff.get("coverage") if isinstance(diff, dict) else None
+        count = coverage.get("details_one_side") if isinstance(coverage, dict) else None
+        if isinstance(count, int) and not isinstance(count, bool) and count > 0:
+            held.append((name, count))
+    return sum(count for _, count in held), held
 
 
 def merged_findings(diffs):
@@ -809,9 +843,16 @@ def summarize(manifest, diffs, findings, chunks, verdict, reasons, context):
             lines.append(f"- and {len(gaps) - 12} more")
         lines.append("")
     lines.append(f"{changed} elements were added, removed or changed.")
+    held_total, held_models = details_held_by_one(diffs)
+    held_note = (
+        f"; {held_total} more are held by one dump only and not compared"
+        + (f" ({', '.join(f'{name} {count}' for name, count in held_models[:6])}{', and more' if len(held_models) > 6 else ''})" if held_models else "")
+        if held_total
+        else "; none is held by one dump only"
+    )
     lines.append(
         f"**A pass means the dumps agree, not that the exports are identical.** The dump samples five elements per entity (the five lowest ElementIds): "
-        f"property sets are compared on the {detail} sampled elements both dumps hold, and another element's property set, or a mesh vertex, is not in the dump."
+        f"property sets are compared on the {detail} sampled elements both dumps hold{held_note}, and another element's property set, or a mesh vertex, is not in the dump."
     )
     lines.append("Autodesk's samples, the held-out, spent and BIMcollab models and rac_advanced contribute nothing and are never sent.")
     lines.append("")
