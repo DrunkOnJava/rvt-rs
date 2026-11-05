@@ -81,6 +81,8 @@ import semantic_diff as sd  # noqa: E402
 ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 MODEL = "jev-1.13.0"
 CHECK_NAME = "semantic diff (advisory)"
+SHA = re.compile(r"[0-9a-f]{40}")
+REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 GITHUB_API = "https://api.github.com"
 MAX_REQUEST_CHARS = 16000
 MAX_FINDINGS_PER_CHUNK = 8
@@ -708,18 +710,29 @@ def resolve_description(args, head_sha):
     return description, summary_section(body, "testing"), number, None
 
 
+def sha_or_none(value):
+    """The value when it is a full lowercase commit SHA, else None. The head commit comes from the artifact's
+    manifest, which the measure.yml of the dispatched ref wrote, so nothing but a SHA goes into a URL or a check run."""
+    return value if isinstance(value, str) and SHA.fullmatch(value) else None
+
+
 def run(args):
     manifest, diffs = load_diffs(args.directory)
-    head_sha = args.head_sha or manifest.get("head_sha")
+    if args.repo and not REPO.fullmatch(args.repo):
+        raise SystemExit("--repo is not owner/name")
+    head_sha = sha_or_none(args.head_sha or manifest.get("head_sha"))
+    manifest = dict(manifest, base_sha=sha_or_none(manifest.get("base_sha")), head_sha=head_sha)
     seed = f"{args.run_id or 'local'}:{head_sha}"
     findings = merged_findings(diffs)
     description, testing, number, why = None, None, None, None
-    if diffs and findings and not args.fork:
+    if head_sha and diffs and findings and not args.fork:
         description, testing, number, why = resolve_description(args, head_sha)
     chunks = build_chunks(findings, seed, description or "", testing or "") if findings else []
     context = {"run_id": args.run_id, "description": description, "testing": testing, "pull_request": number}
     verdict, reasons = None, []
-    if not diffs:
+    if not head_sha:
+        verdict, reasons = "NOT MEASURED", ["the measured commit is missing or is not a 40-character SHA (--head-sha or the artifact's manifest): no request is made"]
+    elif not diffs:
         verdict, reasons = "NOT MEASURED", ["no openly licensed model has a dump on both sides of this run"]
     elif not findings:
         verdict = "pass"
@@ -774,9 +787,11 @@ def run(args):
     if args.dry_run:
         for chunk in chunks:
             print(f"  {chunk['id']} {chunk['part']}: {len(chunk['findings'])} findings, {chunk['elements']} elements, {chunk['chars']} characters, head is {chunk['head_label']}")
-    if args.post:
-        if not head_sha or not args.repo or not os.environ.get("GITHUB_TOKEN"):
-            raise SystemExit("--post needs a head commit, --repo and GITHUB_TOKEN")
+    if args.post and not head_sha:
+        print("no check run written: there is no valid commit to write it on")
+    elif args.post:
+        if not args.repo or not os.environ.get("GITHUB_TOKEN"):
+            raise SystemExit("--post needs --repo and GITHUB_TOKEN")
         number, url = post_check(args.repo, os.environ["GITHUB_TOKEN"], head_sha, verdict, title, summary, args.run_url, f"measure-{args.run_id}")
         print(f"check run {number} written on {head_sha[:10]}: {url}")
     return 0
