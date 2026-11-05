@@ -691,9 +691,11 @@ line names what to fix (its rulesets check needs an admin token). The list:
    tools/maintainer/clean_caches.py` (a dry run; `--delete` acts, and
    `scheduled-checks.yml` runs it with `--delete` every day) removes the
    caches of closed pull requests and deleted branches, and `main`'s superseded
-   rust-cache generations and CodeQL overlay base databases (per CodeQL version):
-   a new lockfile saves a new cache under a new key, and each CodeQL analysis of
-   `main` saves a new base database, and the old ones are never read again.
+   rust-cache generations, CodeQL overlay base databases (per CodeQL version) and
+   the RE1 models' cache (keyed by the sha256 of `research/re1-models.tsv`):
+   a new lockfile saves a new cache under a new key, each CodeQL analysis of
+   `main` saves a new base database, and a changed pin list saves a new RE1 key,
+   and the old ones are never read again.
    `main`'s newest two generations of each family, live branches' and open pull
    requests' caches are kept. The cache is evicted least recently used first at
    its limit, so a key read only once a night does not last: Fuzz's corpus is an
