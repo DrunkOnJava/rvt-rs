@@ -127,8 +127,8 @@ pub fn instance_cut_loops_and_uncut(
     rf: &mut RevitFile,
     instances: &BTreeSet<u64>,
 ) -> anyhow::Result<(BTreeMap<u64, CutLoop>, BTreeSet<u64>)> {
-    let (loops, uncut, _, _, _) = instance_cuts_and_symbols(rf, instances)?;
-    Ok((loops, uncut))
+    let cuts = instance_cuts_and_symbols(rf, instances)?;
+    Ok((cuts.loops, cuts.uncut))
 }
 
 /// The extents of the solid a family symbol cuts where it cuts no loop
@@ -165,37 +165,40 @@ fn cut_solid_size(vertices: &[[f64; 3]]) -> Option<CutSolidSize> {
         })
 }
 
-/// An instance's cut loop, the instances whose symbol cuts none, the
-/// symbol that draws each instance, the element hosting it, and the extents
-/// of the solid an instance's symbol cuts where it cuts no loop, as
-/// [`instance_cuts_and_symbols`] reads them.
-pub type InstanceCuts = (
-    BTreeMap<u64, CutLoop>,
-    BTreeSet<u64>,
-    BTreeMap<u64, u64>,
-    BTreeMap<u64, u64>,
-    BTreeMap<u64, CutSolidSize>,
-);
+/// What [`instance_cuts_and_symbols`] reads of each instance, by ElementId.
+#[derive(Debug, Default)]
+pub struct InstanceCuts {
+    /// The cut loop of the symbol that draws the instance.
+    pub loops: BTreeMap<u64, CutLoop>,
+    /// The instances whose symbol cuts no loop at all.
+    pub uncut: BTreeSet<u64>,
+    /// The symbol that draws each instance.
+    pub drawn_by: BTreeMap<u64, u64>,
+    /// The element hosting each instance.
+    pub hosts: BTreeMap<u64, u64>,
+    /// The extents of the solid an instance's symbol cuts where it cuts no
+    /// loop.
+    pub solids: BTreeMap<u64, CutSolidSize>,
+    /// `m_flippedX` and `m_flippedY` of the instance's current record: its
+    /// hand flip and facing flip (RE-343).
+    pub flips: BTreeMap<u64, [bool; 2]>,
+}
 
 /// [`instance_cut_loops_and_uncut`], and the symbol that draws each of
 /// `instances` (its `InstanceInfo.m_symbolId`), read in the same pass:
 /// the type where the instance's own parameters change nothing, else the
 /// symbol its parameters make; the element hosting it, the `m_hostId`
 /// its current record names (RE-245); and, where the symbol cuts no loop,
-/// the extents of the solid it cuts (RE-225).
+/// the extents of the solid it cuts (RE-225); and the hand flip and facing
+/// flip its current record holds (`m_flippedX` and `m_flippedY`, RE-343).
 pub fn instance_cuts_and_symbols(
     rf: &mut RevitFile,
     instances: &BTreeSet<u64>,
 ) -> anyhow::Result<InstanceCuts> {
     if instances.is_empty() {
-        return Ok((
-            BTreeMap::new(),
-            BTreeSet::new(),
-            BTreeMap::new(),
-            BTreeMap::new(),
-            BTreeMap::new(),
-        ));
+        return Ok(InstanceCuts::default());
     }
+    let mut flips: BTreeMap<u64, [bool; 2]> = BTreeMap::new();
     let mut solids: BTreeMap<u64, CutSolidSize> = BTreeMap::new();
     let mut drawn_by: BTreeMap<u64, u64> = BTreeMap::new();
     let mut hosts: BTreeMap<u64, u64> = BTreeMap::new();
@@ -243,6 +246,16 @@ pub fn instance_cuts_and_symbols(
             {
                 hosts.insert(id, host);
             }
+            if let Some(root) = graph
+                .objects
+                .first()
+                .filter(|_| record.class_name.as_deref() == Some("FamilyInstance"))
+            {
+                let flag = |name: &str| root.fields.get(name).and_then(serde_json::Value::as_bool);
+                if let Some((x, y)) = flag("m_flippedX").zip(flag("m_flippedY")) {
+                    flips.insert(id, [x, y]);
+                }
+            }
         }
         Ok(())
     })?;
@@ -259,7 +272,14 @@ pub fn instance_cuts_and_symbols(
         .iter()
         .filter_map(|(instance, symbol)| Some((*instance, *solids.get(symbol)?)))
         .collect();
-    Ok((loops, uncut, drawn_by, hosts, solids))
+    Ok(InstanceCuts {
+        loops,
+        uncut,
+        drawn_by,
+        hosts,
+        solids,
+        flips,
+    })
 }
 
 /// The category of the lines in a symbol's saved graphics that belong to no

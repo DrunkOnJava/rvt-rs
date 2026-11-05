@@ -336,6 +336,21 @@ door or window — and the resulting `(host wall, filling element)` pair
 set equals Revit's export exactly: **138 of 138**, no wrong host, no
 missing pair, no extra pair, gated as `relations.IFCRELFILLSELEMENT`
 inside the OctetProof claimed surface.
+**A door's and a window's hand flip and facing flip are decoded** (#1357,
+RE-343): the decoded Door and Window records carry `m_hand_flipped` and
+`m_facing_flipped`, the `m_flippedX` and `m_flippedY` booleans of their
+native record, on Revit 2024 to 2027 (1,820 of 1,820 doors and windows of
+Autodesk's samples; the booleans are read on 2015 to 2023 too, but those
+releases decode no Door or Window records). No door or window is stored as
+a reflection, so `m_opening_facing`, the stored transform's Y axis, holds
+the hand flip only. For an element set in a plain wall rvt-rs binds, Revit's
+own placement is the stored axes reversed where the two booleans differ:
+exact on 653 of 653 doors and 626 of 626 windows of the open models and
+Snowdon Towers (the two office files are one building, and the case where
+the booleans differ is measured on three 2024 buildings, one 2025 door and
+one 2026 house), and not on 49 of the 160 doors rvt-rs binds to no plain
+wall, which disagree. Revit's IFC is unchanged
+(`reports/element-framing/RE-343-door-window-flips.md`).
 **Storeys on Revit 2024 are the Revit `Level` elements themselves, names
 and elevations together** (#218, RE-24). A `Level` record carries the
 same 88-byte element-record prologue with `OST_Levels` (−2000240) at
