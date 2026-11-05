@@ -339,21 +339,17 @@ pub(super) fn attach_wall_profile_openings(
         let Some(segments) = segments else {
             continue;
         };
-        for (k, (tag, outline)) in elevation_profile_cuts(&segments).into_iter().enumerate() {
-            let points = outline
-                .iter()
-                .map(|point| {
-                    InstanceField::Vector(
-                        point
-                            .iter()
-                            .map(|value| InstanceField::Float {
-                                value: *value,
-                                size: 8,
-                            })
-                            .collect(),
-                    )
-                })
-                .collect();
+        let cuts = elevation_profile_cuts(&segments);
+        if !cuts.is_empty() {
+            if let Some((low, high)) = profile_extent(&segments) {
+                wall.fields.push((
+                    PROFILE_EXTENT_FIELD.into(),
+                    InstanceField::Vector(vec![point_field(&low), point_field(&high)]),
+                ));
+            }
+        }
+        for (k, (tag, outline)) in cuts.into_iter().enumerate() {
+            let points = outline.iter().map(point_field).collect();
             wall.fields.push((
                 format!("{PROFILE_OPENING_FIELD}_{k}"),
                 InstanceField::Vector(points),
@@ -363,6 +359,83 @@ pub(super) fn attach_wall_profile_openings(
                 InstanceField::ElementId { tag: 0, id: tag },
             ));
         }
+    }
+}
+
+/// A model-feet point as a vector of three floats, as the openings' outlines
+/// and [`PROFILE_EXTENT_FIELD`] hold them.
+fn point_field(point: &[f64; 3]) -> InstanceField {
+    InstanceField::Vector(
+        point
+            .iter()
+            .map(|value| InstanceField::Float {
+                value: *value,
+                size: 8,
+            })
+            .collect(),
+    )
+}
+
+/// The lowest and highest points of an elevation profile's sketch lines along
+/// the profile's axis (the direction of the two points furthest apart in
+/// plan, as [`elevation_profile_cuts`] takes it), model feet. `None` where
+/// there are no lines or they never leave one point in plan.
+// Tracker: B55.
+fn profile_extent(segments: &[SketchSegment]) -> Option<([f64; 3], [f64; 3])> {
+    let points: Vec<[f64; 3]> = segments.iter().flat_map(|(_, a, b)| [*a, *b]).collect();
+    let first = *points.first()?;
+    let mut far = (0.0_f64, first, first);
+    for a in &points {
+        for b in &points {
+            let distance = ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt();
+            if distance > far.0 {
+                far = (distance, *a, *b);
+            }
+        }
+    }
+    let (length, origin, toward) = far;
+    if length <= PROFILE_EPS_FEET {
+        return None;
+    }
+    let axis = [
+        (toward[0] - origin[0]) / length,
+        (toward[1] - origin[1]) / length,
+    ];
+    let along =
+        |point: &[f64; 3]| (point[0] - origin[0]) * axis[0] + (point[1] - origin[1]) * axis[1];
+    let low = points
+        .iter()
+        .min_by(|a, b| along(*a).total_cmp(&along(*b)))?;
+    let high = points
+        .iter()
+        .max_by(|a, b| along(*a).total_cmp(&along(*b)))?;
+    Some((*low, *high))
+}
+
+/// The two ends of the elevation profile a wall's openings are cut from
+/// ([`PROFILE_EXTENT_FIELD`]), model feet: the lowest and highest along the
+/// profile's axis. `None` for a wall that has none.
+// Tracker: B55.
+pub fn profile_extent_from_fields(
+    fields: &[(String, InstanceField)],
+) -> Option<([f64; 3], [f64; 3])> {
+    let points = fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Vector(points) if name == PROFILE_EXTENT_FIELD => Some(points),
+        _ => None,
+    })?;
+    let point = |field: &InstanceField| -> Option<[f64; 3]> {
+        let InstanceField::Vector(values) = field else {
+            return None;
+        };
+        let mut xyz = values.iter().map(|value| match value {
+            InstanceField::Float { value, .. } => Some(*value),
+            _ => None,
+        });
+        Some([xyz.next()??, xyz.next()??, xyz.next()??])
+    };
+    match points.as_slice() {
+        [low, high] => Some((point(low)?, point(high)?)),
+        _ => None,
     }
 }
 

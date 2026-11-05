@@ -519,6 +519,13 @@ pub const SYSTEM_FAMILY_SOURCE: &str = "system_family_by_category";
 // Tracker: B55.
 pub const PROFILE_OPENING_FIELD: &str = "m_profile_opening";
 
+/// The field holding the two ends of the elevation profile the openings of
+/// [`PROFILE_OPENING_FIELD`] are cut from, as model-feet points: the profile's
+/// lowest and highest along its own axis, which are where its edge runs and a
+/// wall that goes on past them can be told apart (#1473, RE-358).
+// Tracker: B55.
+pub const PROFILE_EXTENT_FIELD: &str = "m_profile_extent";
+
 /// How far apart two sketch points may lie and still meet, and how far off a
 /// plane or a side a point may lie and still be on it, feet.
 // Tracker: B55.

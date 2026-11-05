@@ -648,6 +648,22 @@
           "minimum": 0,
           "description": "The ends of wall_end_sources that depend on the order of the walls the record lists (RvtElementRecordGeometry.EndOrderDependent, RE-348): at some height two of them stand with faces that differ, so another order would draw another end. The rest would be the same in any order."
         },
+        "wall_profile_sources": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Of the exported walls with an edited elevation profile that go on past it, how many have the profile's sloped line carried on, along its own slope, to the wall's end, by the RvtElementRecordGeometry.ProfileStubSource of each (RE-358): wall_profile_sloped_past_the_low_end, wall_profile_sloped_past_the_high_end and wall_profile_sloped_past_both_ends. Empty when no wall does."
+        },
+        "wall_profile_refusals": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Of the exported walls with an edited elevation profile that go on past it and keep, past it, the top the profile's opening gives them, why, by the RvtElementRecordGeometry.ProfileStubRefusal of each (RE-358): profile_cut_not_read_at_the_wall_end, profile_stub_longer_than_the_wall_is_thick and profile_slope_leaves_the_cut. Empty when no wall keeps its top so."
+        },
         "resolved_outline_spaces": {
           "type": "integer",
           "minimum": 0,
@@ -926,7 +942,7 @@
     },
     "export_decisions": {
       "type": "object",
-      "description": "Each fail-closed decision behind skipped and the exported body and outline counts, one entry per element (#1326): why an element was left out, a body is only its record's box, an opening was not cut, an outline was not read. Present only when asked for (rvt-ifc --export-decisions); without it the diagnostics are the bytes they were. Bounded: at most cap_per_reason entries a reason, the rest counted as dropped. Not written in the IFC file. The skipped items are counted from the same decisions: for every reason of skipped (the stream_not_read_resource_limit item apart, which counts streams) reasons[reason].total is the sum of the items' counts; body_is_record_box, space_outline_is_record_box, area_body_refused, slab_shape_refused, wall_base_cut_refused and wall_end_extension_refused total exported.bounding_box_bodies, bounding_box_spaces, area_body_refusals, slab_shape_refusals, wall_base_refusals and wall_end_refusals.",
+      "description": "Each fail-closed decision behind skipped and the exported body and outline counts, one entry per element (#1326): why an element was left out, a body is only its record's box, an opening was not cut, an outline was not read. Present only when asked for (rvt-ifc --export-decisions); without it the diagnostics are the bytes they were. Bounded: at most cap_per_reason entries a reason, the rest counted as dropped. Not written in the IFC file. The skipped items are counted from the same decisions: for every reason of skipped (the stream_not_read_resource_limit item apart, which counts streams) reasons[reason].total is the sum of the items' counts; body_is_record_box, space_outline_is_record_box, area_body_refused, slab_shape_refused, wall_base_cut_refused, wall_end_extension_refused and wall_profile_extension_refused total exported.bounding_box_bodies, bounding_box_spaces, area_body_refusals, slab_shape_refusals, wall_base_refusals, wall_end_refusals and wall_profile_refusals.",
       "required": ["cap_per_reason", "dropped", "reasons", "entries"],
       "properties": {
         "cap_per_reason": {
@@ -999,7 +1015,7 @@
               },
               "reason": {
                 "type": "string",
-                "description": "The reason of the skipped item the decision is counted in, or body_is_record_box, space_outline_is_record_box, area_body_refused, slab_shape_refused, wall_base_cut_refused or wall_end_extension_refused."
+                "description": "The reason of the skipped item the decision is counted in, or body_is_record_box, space_outline_is_record_box, area_body_refused, slab_shape_refused, wall_base_cut_refused, wall_end_extension_refused or wall_profile_extension_refused."
               },
               "element_id": {
                 "type": "integer",

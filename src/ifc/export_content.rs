@@ -34,6 +34,7 @@ use std::collections::{BTreeMap, HashMap};
 
 mod column_quantities;
 mod wall_areas;
+mod wall_profile;
 mod wall_tops;
 
 /// Result of folding production walker hits into an IFC draft.
@@ -714,6 +715,9 @@ pub fn append_typed_production_elements(
     // #1410: each wall's location curve and the walls its record joins at each
     // end, in its order, for the ends drawn to the walls they meet.
     let mut pending_ends: Vec<wall_tops::PendingEnds> = Vec::new();
+    // #1473: each profile-edited wall's entity index and the two ends of its
+    // profile, for the sloped line carried on to the wall's end.
+    let mut pending_profiles: Vec<wall_profile::Pending> = Vec::new();
     let mut slab_shapes: HashMap<u32, wall_tops::SlabTop> = HashMap::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
@@ -1420,6 +1424,17 @@ pub fn append_typed_production_elements(
                 });
             }
         }
+        if policy.include_geometry && decoded.class == "Wall" {
+            if let Some((low, high)) =
+                crate::partition_schema_mvp::profile_extent_from_fields(&decoded.fields)
+            {
+                pending_profiles.push(wall_profile::Pending {
+                    index: entity_index,
+                    low: [low[0], low[1]],
+                    high: [high[0], high[1]],
+                });
+            }
+        }
         // The wall pass knows the top of every floor, roof and ceiling: flat
         // where its record was read and holds no edit, the plane of a floor's
         // edited corners, and otherwise not known (a record that was not read,
@@ -1711,6 +1726,11 @@ pub fn append_typed_production_elements(
     // on, level or following that element's shape-edited top.
     wall_tops::cut_wall_bases(entities, &pending_bases, &slab_shapes, &end_steps);
     wall_tops::finish_wall_ends(entities, &end_steps);
+
+    // #1473: the sloped line of an edited elevation profile goes on, along its
+    // slope, to the end of a wall that goes on past the profile. After the
+    // ends, so that the wall has its final extent.
+    wall_profile::extend_profile_stubs(entities, &pending_profiles);
 
     // RE-270: the side areas and volumes of a wall joined to floors that
     // leave it as its record's box. It runs after the pass above, on purpose:
@@ -4641,6 +4661,31 @@ pub const WALL_END_ORDER_DEPENDENT_PROPERTY: &str = "EndOrderDependent";
 /// past those walls, so that the wall carries no `BodyEndRefusal`: counted in
 /// `exported.wall_end_reads_unmarked` (#1410, RE-348).
 pub const WALL_END_NOT_MARKED_PROPERTY: &str = "EndNotMarked";
+
+/// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how the
+/// sloped top of its edited elevation profile was carried on where the wall
+/// goes on past the profile (#1473, RE-358).
+pub const WALL_PROFILE_SOURCE_PROPERTY: &str = "ProfileStubSource";
+
+/// `ProfileStubSource` of a wall whose profile's sloped line is carried on
+/// along its own slope to the wall's end at the lower end of the profile's
+/// axis.
+pub const WALL_PROFILE_PAST_LOW_END_SOURCE: &str = "wall_profile_sloped_past_the_low_end";
+
+/// `ProfileStubSource` of a wall whose profile's sloped line is carried on
+/// along its own slope to the wall's end at the higher end of the profile's
+/// axis.
+pub const WALL_PROFILE_PAST_HIGH_END_SOURCE: &str = "wall_profile_sloped_past_the_high_end";
+
+/// `ProfileStubSource` of a wall whose profile's sloped line is carried on at
+/// both ends.
+pub const WALL_PROFILE_PAST_BOTH_ENDS_SOURCE: &str = "wall_profile_sloped_past_both_ends";
+
+/// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says why the
+/// stretch of a wall that goes on past its edited elevation profile keeps the
+/// top the profile's cut gives it there, which Revit slopes on (#1473,
+/// RE-358).
+pub const WALL_PROFILE_REFUSAL_PROPERTY: &str = "ProfileStubRefusal";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how its base
 /// was cut (#1384, RE-336). It is not `BodyHeightSource`, which says how the
