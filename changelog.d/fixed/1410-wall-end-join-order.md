@@ -16,18 +16,24 @@
   `wall_end_to_base_wall_upper_step_omitted`, which omitted the steps above the
   wall beneath) is retired; a wall carries `BodyEndSource`
   `wall_end_stepped_to_joined_walls` or keeps the end its record gives with a
-  counted reason (`BodyEndRefusal`: `joined_wall_not_read`,
+  counted reason. A kept end carries `BodyEndRefusal` (`joined_wall_not_read`,
   `joined_wall_top_not_read`, `joined_wall_does_not_meet_the_end`,
   `joined_walls_do_not_reach_the_wall_height`,
   `joined_wall_face_inside_the_wall`, `joined_wall_faces_overhang_the_lower_end`,
-  `end_join_curve_not_at_the_box_end`, `end_join_list_not_read`,
   `base_cut_lost_on_extended_plan`, `base_not_cut_over_the_extended_plan`,
-  `base_solid_not_made_over_the_extended_plan`, `wall_stands_in_the_added_end`).
-  The diagnostics count the walls that take the rule and the ends that depend
-  on the order (`exported.wall_end_sources`, `wall_base_sources`,
+  `base_solid_not_made_over_the_extended_plan`, `wall_stands_in_the_added_end`)
+  only where the faces of the joined walls read before the refusal show it
+  short of or past them: a wall that already has Revit's end carries nothing,
+  and the reason is counted in `exported.wall_end_reads_unmarked`, which also
+  holds `end_join_curve_not_at_the_box_end` and `end_join_list_not_read`. The
+  diagnostics count the walls that take the rule and the ends that depend on the
+  order (`exported.wall_end_sources`, `wall_base_sources`,
   `wall_ends_order_dependent`); only those ends test the order, and on the office
   they are the 4 as-built ends, 3 orderings chosen after about four alternatives
-  had been tried. The rule is on its own release list (Revit 2024). On the office (Measure 42101944733 at
+  had been tried. The rule is on its own release list (Revit 2024). Only the two
+  BIM4LCA office files take it (4 walls each); no wall of the other 109 exports
+  of the unfiltered run does.
+  On the office (Measure 42101944733 at
   `006f5f98`) the four walls have Revit's end at every height and no point of
   their plan above Revit's top; 2058499 and 2058501 at building permit go from
   0.044 ft above Revit's lowest point to Revit's, and the wall beneath them
@@ -37,6 +43,8 @@
   not reach (#1473), not the ends. Walls 2056705 and 2056770 at permit keep
   their ends with `joined_wall_face_inside_the_wall`: Revit cuts them back
   above 182.087 ft and the rule only adds. No other wall's body in either
-  office file changes; every other model is not yet measured on this head. Only
-  that reason has a measured instance. The measured effect is in
+  office file changes, and every other export of the unfiltered run (Measure
+  42111477633 at `e5ff94f4`) is byte for byte `main`'s but Autodesk's Snowdon
+  Towers Architectural, whose two refusal markers the policy above removes where
+  the wall already has Revit's end. The measured effect is in
   `reports/element-framing/RE-348-wall-end-join-order.md`.

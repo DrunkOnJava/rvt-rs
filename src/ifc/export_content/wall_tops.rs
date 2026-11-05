@@ -108,8 +108,9 @@ use super::{
     WALL_BASE_COVER_IN_PART_BODY_BASE_SOURCE, WALL_BASE_REFUSAL_PROPERTY,
     WALL_BASE_SLOPED_BODY_BASE_SOURCE, WALL_BASE_SLOPED_IN_PART_BODY_BASE_SOURCE,
     WALL_BASE_SOURCE_PROPERTY, WALL_END_AT_JOINED_WALLS_BODY_END_SOURCE,
-    WALL_END_ORDER_DEPENDENT_PROPERTY, WALL_END_REFUSAL_PROPERTY, WALL_END_SOURCE_PROPERTY,
-    WALL_TOP_COVER_BODY_HEIGHT_SOURCE, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    WALL_END_NOT_MARKED_PROPERTY, WALL_END_ORDER_DEPENDENT_PROPERTY, WALL_END_REFUSAL_PROPERTY,
+    WALL_END_SOURCE_PROPERTY, WALL_TOP_COVER_BODY_HEIGHT_SOURCE,
+    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use crate::ifc::body_geometry::{
     Body, Placement, PlanPlane, Point2, Ring, between_surfaces_mesh, extrusion_rings, plan_outline,
@@ -2002,6 +2003,23 @@ struct Band {
     reached: u32,
 }
 
+/// Why an end cannot be read, and whether the faces of the walls the record
+/// joins that were read before it was refused show the end short of or past
+/// them: only then does the record show the wall's end is not the one Revit
+/// draws, and only then does a wall carry the reason (#1410, RE-348).
+struct Refusal {
+    reason: &'static str,
+    off: bool,
+}
+
+/// The refusal for `reason` after the `bands` read so far.
+fn refusal(reason: &'static str, bands: &[Band]) -> Refusal {
+    Refusal {
+        reason,
+        off: bands.iter().any(|band| band.gap > 0.0),
+    }
+}
+
 /// What the plan of a wall is over the strip an end spans.
 enum Standing {
     /// Nothing of it lies in the strip.
@@ -2120,7 +2138,7 @@ fn read_end(
     site: &EndSite<'_>,
     list: &[u32],
     followed: &HashMap<u32, Followed>,
-) -> Result<ReadEnd, &'static str> {
+) -> Result<ReadEnd, Refusal> {
     let mut remaining: Vec<(f64, f64)> = vec![(site.wall.base, site.wall.top)];
     let mut bands: Vec<Band> = Vec::new();
     let mut order_dependent = false;
@@ -2130,7 +2148,7 @@ fn read_end(
             if remaining.is_empty() {
                 continue;
             }
-            return Err(WALL_END_REFUSAL_WALL_NOT_READ);
+            return Err(refusal(WALL_END_REFUSAL_WALL_NOT_READ, &bands));
         };
         if other.index == site.wall.index {
             continue;
@@ -2142,7 +2160,7 @@ fn read_end(
                 .iter()
                 .any(|&(_, b)| b > other.top + END_TOLERANCE_FEET)
         {
-            return Err(WALL_END_REFUSAL_TOP_NOT_READ);
+            return Err(refusal(WALL_END_REFUSAL_TOP_NOT_READ, &bands));
         }
         let (lo, hi) = (site.wall.base.max(other.base), site.wall.top.min(other.top));
         if hi - lo <= END_TOLERANCE_FEET {
@@ -2153,7 +2171,7 @@ fn read_end(
             .any(|&(a, b)| b.min(hi) - a.max(lo) > END_TOLERANCE_FEET);
         let Some(first) = other.slabs.first() else {
             if over_remaining {
-                return Err(WALL_END_REFUSAL_WALL_NOT_READ);
+                return Err(refusal(WALL_END_REFUSAL_WALL_NOT_READ, &bands));
             }
             continue;
         };
@@ -2161,7 +2179,7 @@ fn read_end(
             Standing::Face { least, most, .. } if holds(least, most, site.box_end) => (least, most),
             _ => {
                 if over_remaining {
-                    return Err(WALL_END_REFUSAL_NOT_AT_THE_END);
+                    return Err(refusal(WALL_END_REFUSAL_NOT_AT_THE_END, &bands));
                 }
                 continue;
             }
@@ -2213,10 +2231,13 @@ fn read_end(
                         continue;
                     }
                     if gap < 0.0 {
-                        return Err(WALL_END_REFUSAL_FACE_INSIDE);
+                        return Err(Refusal {
+                            reason: WALL_END_REFUSAL_FACE_INSIDE,
+                            off: true,
+                        });
                     }
                     if gap > most - least + END_TOLERANCE_FEET {
-                        return Err(WALL_END_REFUSAL_NOT_AT_THE_END);
+                        return Err(refusal(WALL_END_REFUSAL_NOT_AT_THE_END, &bands));
                     }
                     bands.push(Band {
                         from: z0,
@@ -2225,15 +2246,19 @@ fn read_end(
                         reached: id,
                     });
                 }
-                Standing::Absent if !decided => return Err(WALL_END_REFUSAL_TOP_NOT_READ),
-                Standing::Partial if !decided => return Err(WALL_END_REFUSAL_NOT_AT_THE_END),
+                Standing::Absent if !decided => {
+                    return Err(refusal(WALL_END_REFUSAL_TOP_NOT_READ, &bands));
+                }
+                Standing::Partial if !decided => {
+                    return Err(refusal(WALL_END_REFUSAL_NOT_AT_THE_END, &bands));
+                }
                 Standing::Absent | Standing::Partial => {}
             }
         }
         remaining = without_heights(&remaining, other.base, other.top);
     }
     if !remaining.is_empty() {
-        return Err(WALL_END_REFUSAL_HEIGHT_NOT_COVERED);
+        return Err(refusal(WALL_END_REFUSAL_HEIGHT_NOT_COVERED, &bands));
     }
     bands.sort_by(|a, b| a.from.total_cmp(&b.from));
     Ok(ReadEnd {
@@ -2440,6 +2465,7 @@ fn decide_ends(
     joined: &[PendingEnds],
     shapes: &HashMap<u32, SlabTop>,
     refused: &mut BTreeMap<usize, &'static str>,
+    unmarked: &mut BTreeMap<usize, &'static str>,
 ) -> Vec<WallEnds> {
     let profiled: HashSet<usize> = entities
         .iter()
@@ -2496,7 +2522,7 @@ fn decide_ends(
                 // end the record trimmed has joined walls that cannot be placed;
                 // an untrimmed one has none to follow.
                 if trim > END_TOLERANCE_FEET {
-                    refused
+                    unmarked
                         .entry(wall.index)
                         .or_insert(WALL_END_REFUSAL_CURVE_NOT_AT_BOX_END);
                 }
@@ -2512,7 +2538,7 @@ fn decide_ends(
                 Some(list) => list,
                 None => {
                     if trim > END_TOLERANCE_FEET {
-                        refused
+                        unmarked
                             .entry(wall.index)
                             .or_insert(WALL_END_REFUSAL_LIST_NOT_READ);
                     }
@@ -2528,20 +2554,29 @@ fn decide_ends(
                 strip: (side_low, side_high),
             };
             let strips = read_end(&site, list, &followed).and_then(|read| {
-                strips_of(&read.bands).map(|strips| {
-                    let reached = read
-                        .bands
-                        .iter()
-                        .filter(|band| band.gap > END_TOLERANCE_FEET)
-                        .map(|band| band.reached)
-                        .min();
-                    (strips, reached, read.order_dependent)
-                })
+                strips_of(&read.bands)
+                    .map_err(|reason| Refusal { reason, off: true })
+                    .map(|strips| {
+                        let reached = read
+                            .bands
+                            .iter()
+                            .filter(|band| band.gap > END_TOLERANCE_FEET)
+                            .map(|band| band.reached)
+                            .min();
+                        (strips, reached, read.order_dependent)
+                    })
             });
             let (strips, reached, order_dependent) = match strips {
                 Ok(read) => read,
-                Err(reason) => {
-                    refused.entry(wall.index).or_insert(reason);
+                Err(refused_read) => {
+                    // An end the faces read show short or past is marked on the
+                    // wall; one they do not is only counted.
+                    let notes = if refused_read.off {
+                        &mut *refused
+                    } else {
+                        &mut *unmarked
+                    };
+                    notes.entry(wall.index).or_insert(refused_read.reason);
                     continue;
                 }
             };
@@ -2585,7 +2620,7 @@ fn decide_ends(
         // A curve end that lists walls and lies at neither end of the box.
         for (slot, lists) in record.lists.iter().enumerate() {
             if !at_an_end[slot] && lists.as_deref().is_some_and(|list| !list.is_empty()) {
-                refused
+                unmarked
                     .entry(wall.index)
                     .or_insert(WALL_END_REFUSAL_CURVE_NOT_AT_BOX_END);
             }
@@ -2745,6 +2780,7 @@ pub(super) fn extend_wall_ends(
     pending: &[PendingBase],
     joined: &[PendingEnds],
     shapes: &HashMap<u32, SlabTop>,
+    handoffs: &mut BTreeMap<usize, Vec<Property>>,
 ) -> HashMap<usize, SteppedPlan> {
     let mut stepped = HashMap::new();
     if joined.is_empty()
@@ -2756,7 +2792,15 @@ pub(super) fn extend_wall_ends(
     }
     // One reason for each wall: a property set holds one property of a name.
     let mut refused: BTreeMap<usize, &'static str> = BTreeMap::new();
-    let accepted = decide_ends(entities, pending, joined, shapes, &mut refused);
+    let mut unmarked: BTreeMap<usize, &'static str> = BTreeMap::new();
+    let accepted = decide_ends(
+        entities,
+        pending,
+        joined,
+        shapes,
+        &mut refused,
+        &mut unmarked,
+    );
     for WallEnds {
         index,
         turned,
@@ -2780,6 +2824,19 @@ pub(super) fn extend_wall_ends(
             &ends,
             WALL_END_AT_JOINED_WALLS_BODY_END_SOURCE,
         );
+    }
+    // A wall carries a refusal only where the faces read show its end short of or
+    // past the walls the record joins; an end the rule could not read and has no
+    // such evidence for is Revit's end for all the record shows, so the wall
+    // carries nothing and the reason is counted from the hand-off instead
+    // (`exported.wall_end_reads_unmarked`).
+    for (index, reason) in unmarked {
+        if !refused.contains_key(&index) {
+            handoffs.entry(index).or_default().push(Property {
+                name: WALL_END_NOT_MARKED_PROPERTY.into(),
+                value: PropertyValue::Text(reason.into()),
+            });
+        }
     }
     for (index, reason) in refused {
         mark_end_refusal(entities, index, reason);

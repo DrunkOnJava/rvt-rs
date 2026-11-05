@@ -617,7 +617,7 @@
             "type": "integer",
             "minimum": 0
           },
-          "description": "Of the exported walls with an edited elevation profile that stop short of the walls their record joins at an end and keep the end their record gives, why, by reason (RvtElementRecordGeometry.BodyEndRefusal, RE-337, RE-348): joined_wall_not_read, joined_wall_top_not_read, joined_wall_does_not_meet_the_end, joined_walls_do_not_reach_the_wall_height, joined_wall_face_inside_the_wall, joined_wall_faces_overhang_the_lower_end, end_join_curve_not_at_the_box_end, end_join_list_not_read, base_cut_lost_on_extended_plan, base_not_cut_over_the_extended_plan, base_solid_not_made_over_the_extended_plan, wall_stands_in_the_added_end. Empty when no such wall keeps its end."
+          "description": "Of the exported walls with an edited elevation profile that stop short of the walls their record joins at an end and keep the end their record gives, why, by reason (RvtElementRecordGeometry.BodyEndRefusal, RE-337, RE-348): joined_wall_not_read, joined_wall_top_not_read, joined_wall_does_not_meet_the_end, joined_walls_do_not_reach_the_wall_height, joined_wall_face_inside_the_wall, joined_wall_faces_overhang_the_lower_end, base_cut_lost_on_extended_plan, base_not_cut_over_the_extended_plan, base_solid_not_made_over_the_extended_plan, wall_stands_in_the_added_end. A wall carries one only where the faces of the joined walls read before the refusal show its end short of or past them; any other end that could not be read is counted in wall_end_reads_unmarked. Empty when no such wall keeps its end."
         },
         "wall_end_sources": {
           "type": "object",
@@ -634,6 +634,14 @@
             "minimum": 0
           },
           "description": "Of the exported walls, how many have their base cut at an element their base join names, by the RvtElementRecordGeometry.BodyBaseSource of each (RE-336, RE-349): wall_base_sloped_at_covering_floor, wall_base_cut_at_covering_floor, wall_base_sloped_at_floor_covering_in_part and wall_base_cut_at_floor_covering_in_part. Empty when no wall does."
+        },
+        "wall_end_reads_unmarked": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "The ends of exported walls with an edited elevation profile whose record joins walls there and that the end rule did not read, by why, where the faces of the joined walls read do not show the end short of or past them (RE-348): the wall carries no marker, so the reason is counted here alone. The reasons are those of wall_end_refusals that no face evidence backs, and end_join_curve_not_at_the_box_end and end_join_list_not_read, which are never marked. Empty when no end is skipped so."
         },
         "wall_ends_order_dependent": {
           "type": "integer",

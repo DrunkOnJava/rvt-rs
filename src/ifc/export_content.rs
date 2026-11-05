@@ -1698,8 +1698,13 @@ pub fn append_typed_production_elements(
     // #1396: a wall with an edited elevation profile that stops short of the
     // wall beneath it is drawn to that wall's face, where its base is still cut.
     // After the tops, so that the walls beneath it have their final tops.
-    let end_steps =
-        wall_tops::extend_wall_ends(entities, &pending_bases, &pending_ends, &slab_shapes);
+    let end_steps = wall_tops::extend_wall_ends(
+        entities,
+        &pending_bases,
+        &pending_ends,
+        &slab_shapes,
+        &mut out.record_handoffs,
+    );
 
     // #1384: a wall's base is cut at the top of the floor or footing it stands
     // on, level or following that element's shape-edited top.
@@ -4628,6 +4633,13 @@ pub const WALL_END_REFUSAL_PROPERTY: &str = "BodyEndRefusal";
 /// at some height two of those walls stand with faces that differ, so that
 /// another order would draw another end (#1410, RE-348).
 pub const WALL_END_ORDER_DEPENDENT_PROPERTY: &str = "EndOrderDependent";
+
+/// Hand-off property of a wall (see [`TypedProductionAppend::record_handoffs`],
+/// not written in the file) that gives why an end of it that its record joins
+/// walls at was not read, where the faces read do not show the end short of or
+/// past those walls, so that the wall carries no `BodyEndRefusal`: counted in
+/// `exported.wall_end_reads_unmarked` (#1410, RE-348).
+pub const WALL_END_NOT_MARKED_PROPERTY: &str = "EndNotMarked";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how its base
 /// was cut (#1384, RE-336). It is not `BodyHeightSource`, which says how the

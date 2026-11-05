@@ -4,7 +4,7 @@ RE-349 and RE-348, from the export's `diagnostics.json` (`rvt-ifc --diagnostics`
 
 Reads `exported.wall_base_sources`, `exported.wall_end_sources`,
 `exported.wall_ends_order_dependent`, `exported.wall_base_refusals` and
-`exported.wall_end_refusals`, and prints one line each, in the restricted
+`exported.wall_end_refusals` and `exported.wall_end_reads_unmarked`, and prints one line each, in the restricted
 alphabet that tools/ci/scrub-holdout-results.sh keeps for a model without a
 licence to redistribute it (counts beside fixed words, never an ElementId):
 
@@ -13,6 +13,7 @@ licence to redistribute it (counts beside fixed words, never an ElementId):
     wall rules: ends order dependent 2
     wall rules: base refusals D=1
     wall rules: end refusals E=2
+    wall rules: end reads unmarked F=1
 
 A row with no count prints `none`. A diagnostics file without the counters (an
 older rvt-ifc) prints `wall rules: not measured`.
@@ -51,6 +52,7 @@ def main(path):
     print(f"wall rules: ends order dependent {int(exported.get('wall_ends_order_dependent', 0))}")
     print(counts("base refusals", exported.get("wall_base_refusals", {})))
     print(counts("end refusals", exported.get("wall_end_refusals", {})))
+    print(counts("end reads unmarked", exported.get("wall_end_reads_unmarked", {})))
 
 
 if __name__ == "__main__":
