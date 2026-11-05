@@ -84,6 +84,10 @@ Revit 2019 (for 2015 to 2018, RE-181), 2023 (for 2019 to 2022, RE-180) and
 projects against Revit's own export of their release: BIMcollab's 2015
 structural example (RE-198) and Vitoria's 2018 `ALD26 Before` (RE-315, RE-319);
 2015's `rst_basic` is another model than its 2019 copy, so it is not measured.
+On 2026 and 2027 beams are drawn along their axes, stair runs and landings
+as their steps and treads, and sloped roofs as their planes, as on 2024 and
+2025, measured against the same Autodesk samples saved by Revit 2024 and 2025
+(RE-340).
 Conduits, conduit fittings and gutters export on every release the exporter
 reads and are measured against Revit's own export on `ALD26 Before` only (all
 178 it holds are Revit's elements, RE-319); Autodesk's MEP samples and Snowdon

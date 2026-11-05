@@ -47,8 +47,11 @@ use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Releases where this layout is measured.
-pub const BEAM_AXIS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024];
+/// Releases where this layout is measured: 2024, and Revit 2026 and 2027
+/// against the same Autodesk samples saved by an earlier release (RE-340):
+/// the beams of `rst_basic` 2027 and of `rac_advanced` 2026 and 2027 are
+/// their 2024 saves'. 2025 is not measured here.
+pub const BEAM_AXIS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2026, 2027];
 
 /// The bytes a bounded line starts with.
 pub const BOUNDED_LINE_TAG: [u8; 4] = [0x04, 0x00, 0x08, 0x01];
@@ -382,8 +385,10 @@ pub fn scan_bounded_lines(
 
 /// Releases where a sketch line's own data is measured to hold its segment
 /// as a bounded line: 2024 (RE-50) and 2025 (RE-199, the roof sketches of
-/// #356's `R2025_Models.zip`, each line's ends on Revit's exported outline).
-pub const SKETCH_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// #356's `R2025_Models.zip`, each line's ends on Revit's exported outline);
+/// Revit 2026 and 2027 against the same Autodesk samples saved by an earlier
+/// release (RE-340).
+pub const SKETCH_LINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// Each sketch line's segment, read as [`scan_bounded_lines`] reads a beam's
 /// line except that a line whose copies disagree takes its current
