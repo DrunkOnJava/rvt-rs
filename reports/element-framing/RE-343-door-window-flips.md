@@ -93,13 +93,13 @@ Two fields on the decoded Door and Window records, present only where the native
 
 They are booleans and carry no claim the rules above do not measure. The IFC rvt-rs writes does not read them and is not changed. rvt-rs's own placement of a mixed-state door is a half turn from Revit's (the "reversed" doors of RE-87, which the flags now explain: 379 of the 813 doors here); changing that would change the export and is not done here.
 
-Measured on the final head: **not yet measured.** The probe prints each element's decoded fields (`decoded`) and the scorer counts those equal to the native booleans (`door flips: decoded records:`); runs D and E below are for that and have not been read.
+Measured on the final head: **not yet measured.** The probe prints each element's decoded fields (`decoded`) and the scorer counts those equal to the native booleans (`door flips: decoded records:`); runs D and F (section 7) are for that and have not been read.
 
 ## 6. Not claimed, not measured
 
 - The hand/facing naming beyond section 4; the hinge side (the family's native hinge side is not read: only its parity with the flags is shown); the swing side of a door whose type names an Operation or whose export gives `NOTDEFINED`.
 - The 160 doors without a host wall record; any wall that is not straight; a wall record that is not read.
-- Revit 2026 and 2027 against an export: the open models are 2024 and 2025. The held-out models (run B) produced no count lines: the scrub of the workflow's own ref, `main`, did not know them. Run E repeats them from this branch.
+- Revit 2026 and 2027 against an export: the open models are 2024 and 2025. The held-out models (run B) produced no count lines: the scrub of the workflow's own ref, `main`, did not know them. Run E repeats them from this branch and has not been read.
 - Snowdon Towers is local only; its figures are the run C probe output scored on the Mac against Revit's IFC4 export (sha256 `ecfcb04e3e818090cf818873fe76fba8b447742bbf4d19dad6d590f09cbb985a`), counts only.
 - `InstanceInfo.m_Trf.m_3x3` has determinant 1 on the first 40 doors and windows by ElementId of Core Interior and of the office as built, whose objects the probe printed (all four states in each); the other doors' were not printed in run A.
 
@@ -120,7 +120,7 @@ Runs, with the commit of the code each built and the workflow's own ref (`main` 
 - **A:** Measure [42014420180](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42014420180), `f65fc702c03798f838619ee20cb060ed71b1899b`, probe `probe_re342_door_flips`: Core Interior, Einhoven, RE1 Architecture, the four office files and R2025 models 10 to 18.
 - **C:** Measure [42015182768](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42015182768), `d8b2d2b54c54335a956a64c49f4cd3a02470b874`, the same probe on the 58 Autodesk sample files (no export: states and determinants only).
 - **B:** Measure 42014433323, `f65fc702`, held-out models: no count lines (section 6), not used.
-- **D, E:** the final head, below.
+- **D, E, F:** the final code, `7d346f1f0b3eff6a9a1d4fb5daa75d70c53f19f4`, dispatched with `--ref research/1357-door-window-flips` so the scorer and the held-out scrub are the branch's, and the probe is `probe_re343_door_flips`: D [42021277032](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42021277032) (Core Interior, Einhoven, RE1 Architecture, the two office files and R2025 model 12), E [42021280392](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42021280392) (the held-out models, counts only) and F [42021284465](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42021284465) (Snowdon Towers and `rac_basic` of 2024 and 2027, for the fields on the decoded records). **Not read when this report was written.**
 
 ```bash
 gh workflow run measure.yml --ref main -f ref=f65fc702c03798f838619ee20cb060ed71b1899b -f base=none -f scorers=none \
@@ -136,4 +136,4 @@ Snowdon Towers, on a Mac with its files: download run C's `sample-2024-snowdon_t
 python3 tools/re/door_flips_vs_ifc.py probe.txt "Snowdon Towers Sample Architectural_IFC4.ifc"
 ```
 
-Runs D and E (the final head, with the probe's name `probe_re343_door_flips`; the held-out run from this branch so its count lines survive the scrub) are named in the pull request when dispatched.
+Runs D, E and F use the probe's final name, `probe_re343_door_flips`.
