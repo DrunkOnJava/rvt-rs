@@ -859,7 +859,7 @@ jobs:
       # GlobalId from pairing by position instead. A model's
       # rooms are scored here, not by `Corpus health`, because only this
       # job has IfcOpenShell, NumPy and Shapely.
-      - name: Fetch RE1 Architecture and Revit's export of it (Drshelden/IFC-ECS, MIT)
+      - name: Fetch the RE1 projects and Revit's export of RE1 Architecture (Drshelden/IFC-ECS, MIT)
         run: |
           set -euo pipefail
           base=https://raw.githubusercontent.com/Drshelden/IFC-ECS/9e8b37175a0fba1397f7011aeee917fe52de7623/data/RE1
@@ -870,6 +870,9 @@ jobs:
           done <<'LIST'
           RE1-Architecture.rvt 4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4
           RE1-Architecture.ifc a9b5d36677aa6a8bb91b77d8bc354ed9028a7ca3e9e2491a47ba14cfd8e26200
+          RE1-Mechanical.rvt d559720177aa0ec435133f804e7c45d60da2deb9d5585bb3d55f4830139c014b
+          RE1-Plumbing.rvt 03689df2aa426031a216e65051b9f19d3265d6fe96884dd47373b17435f9e54c
+          RE1-Electrical.rvt 9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b
           LIST
       - name: Room areas and outlines against Revit's exports
         env:
@@ -1010,6 +1013,46 @@ jobs:
             --out /tmp/witness-slim/verdict.json \
             --registry research/witness-registry.json \
             --compare-committed research/witness/magnetar-2024-core-interior-slim/observations
+      # #1430: IfcOpenShell's check of the schema's EXPRESS rules (the WHERE
+      # rules and global rules), which `ifcopenshell.validate` leaves out and
+      # Measure reports in the `rules:` section of each model's schema.txt,
+      # on every export this job writes: the tier-1 projects, the synthetic
+      # pair, Einhoven and Core Interior (also with their saved meshes and as
+      # the two witness steps write it) and the four RE1 projects. Any
+      # finding, or a file that does not open, fails the job. It reads the
+      # default output: `rvt-ifc --revit-set-placement` keeps the material
+      # Revit associates with an `IfcSpace`, which breaks
+      # IfcRelAssociatesMaterial.AllowedElements as Revit's export does, and
+      # no export here is written with it. It runs after the witness steps,
+      # whatever they did, so that a failing gate never drops the fresh
+      # observations a REPLAY_DRIFT fix needs; a file an earlier failed step
+      # did not write is a finding of its own. Measure alone reports the
+      # models this job does not hold (the BIM4LCA office, the Revit 2025
+      # models, Autodesk's samples, the held-out and the IFC2X3 ones). The
+      # step is bounded by its timeout; Measure's validation and rules
+      # together took 228 s on the BIM4LCA office export, the largest it
+      # checks (run 41988011289).
+      - name: EXPRESS rules hold on every export
+        if: ${{ !cancelled() }}
+        timeout-minutes: 25
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: |
+          set -euo pipefail
+          for m in Electrical Mechanical Plumbing; do
+            ./target/ci/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/RE1-$m.rvt" -o "/tmp/re1-$m.ifc"
+          done
+          python tools/ci/ifc_validate_summary.py --gate \
+            /tmp/tier1-*.ifc \
+            target/tmp/synthetic-fixtures/synthetic-project.ifc \
+            target/tmp/synthetic-fixtures/synthetic-structural.ifc \
+            /tmp/walker-real-project.ifc \
+            /tmp/core-interior.ifc \
+            /tmp/re1-architecture.ifc \
+            /tmp/re1-Electrical.ifc /tmp/re1-Mechanical.ifc /tmp/re1-Plumbing.ifc \
+            /tmp/Revit_IFC5_Einhoven-saved.ifc /tmp/2024_Core_Interior-saved.ifc \
+            /tmp/witness/core-interior.rvt-rs.ifc \
+            /tmp/witness-slim/core-interior-slim.rvt-rs.ifc
       # §10.6: publish observations + verdict for human review of any
       # disagreement without re-running the gate.
       - name: Publish witness observations and verdict
@@ -1617,6 +1660,19 @@ jobs:
       # docs/support-matrix.json, so it cannot claim more than the matrix.
       - name: The README support table matches the support matrix
         run: python3 tools/ci/readme-matrix.py --check
+      # The semantic merge check's diff (#1334) is a pure function of two JSON
+      # documents; its three failure modes (a change hidden as cosmetic, a
+      # reorder reported as a change, a bulk collapse that hides a different
+      # value) are tested with no file, network or clock.
+      - name: The semantic diff's failure modes
+        run: python3 tools/re/test_semantic_diff.py
+      # The check's verdict logic (#1334) is pure too: a model with no dump, a
+      # diff that failed or a dropped group never reads as a pass; an answer that
+      # does not add up never reads as "stated"; a chunk is never sent over the
+      # cap once its text is not ASCII; a commit, a manifest or a pull request
+      # text that is not what it should be never reaches a URL, a crash or Jev.
+      - name: The semantic check's verdict failure modes
+        run: python3 tools/ci/test_jev_check.py
 
   # Guards the development environments' config: shellcheck the Cursor
   # install script and the devcontainer's scripts, install the
