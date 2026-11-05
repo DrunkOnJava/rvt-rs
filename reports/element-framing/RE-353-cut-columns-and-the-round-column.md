@@ -3,7 +3,7 @@
 **Date:** 2026-11-05
 **Issues:** [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-247 and RE-291 (the columns Revit draws as a cut mesh and the box-drawn columns' quantities)
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, `research/bim4lca-measure.tsv`), as Measure fetches them
-**Probe:** `probes/examples/probe_re353_column_cut_footprints.rs`, Measure runs [42112543949](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42112543949) and [42115439931](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42115439931) (commit 38d9e426)
+**Probe:** `probes/examples/probe_re353_column_cut_footprints.rs`, Measure runs [42112543949](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42112543949) and [42115439931](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42115439931) (commit 38d9e426, a scratch branch; the same file is at e5247625)
 **Status:** positive on one building, the office. The meshed columns: reproduced offline from the probe's output to Revit's own mesh for all 18 columns, and the rule written from it gives Revit's `CrossSectionArea` and `NetVolume` on 17 of the 18 at permit (the office as built, the R2025 models and the held-out models hold none). The round column: `OuterSurfaceArea` is a formula that is Revit's exactly on one column on each of the two office files, the same column; its other three quantities are measured negatives (section 4). Neither rule is exercised by any model but the office: the held-out, R2025 and RE1 models' counts, and Core Interior's, Einhoven's and RE1 Architecture's IFC, are unchanged (section 5).
 
 ## 1. What Revit writes where there is no extrusion
@@ -86,7 +86,7 @@ The gains are the 17 columns' two quantities at permit (34) and the round column
 ## 7. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref main -f ref=38d9e426 -f base=none -f nordic=true \
+gh workflow run measure.yml --ref main -f ref=e5247625 -f base=none -f nordic=true \
   -f models="nordic-office-as-built nordic-office-permit" -f scorers=none \
   -f probe=probe_re353_column_cut_footprints -f probe_scorer=-
 ```
