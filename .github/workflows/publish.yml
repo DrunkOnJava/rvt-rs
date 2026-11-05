@@ -338,8 +338,8 @@ jobs:
           rustc --version
       - name: Locked wasm-bindgen version
         # wasm-pack fetches the wasm-bindgen CLI that Cargo.lock pins at build
-        # time, from GitHub and then by `cargo install`, with no retry: a 40 s DNS
-        # outage failed both and turned main red (CI run 41954251714). The
+        # time, from GitHub and then by `cargo install`, which retries for
+        # seconds: a 40 s DNS outage failed both and turned main red (CI run 41954251714). The
         # prebuilt binary of the locked version is installed below by
         # install-action, which retries each download for about a minute, and
         # wasm-pack uses the one it finds on PATH.
