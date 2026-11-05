@@ -1456,8 +1456,14 @@ fn graphics_impl<'a>(
                     .resolve(oi, &obj.fields["m_pFacetedTopology"])?
                     .context("faceted topology")?;
                 let topology = &g.objects[ti];
+                // FacetedTopology9 has FacetedTopology0's points, normals and
+                // facets and one more array, `m_edgeVisFlagsArr`, which is not
+                // read (RE-342). The other classes stay refused.
                 ensure!(
-                    topology.class_name == "FacetedTopology0",
+                    matches!(
+                        topology.class_name.as_str(),
+                        "FacetedTopology0" | "FacetedTopology9"
+                    ),
                     "unsupported faceted topology"
                 );
                 let f = &topology.fields;
@@ -1473,8 +1479,11 @@ fn graphics_impl<'a>(
                     .iter()
                     .map(point::<3>)
                     .collect::<Result<Vec<_>>>()?;
+                // Binding 0 holds no normal or one per facet; binding 2 holds
+                // one per facet (RE-342).
+                let normal_binding = f["m_normalsFlag"].as_u64();
                 ensure!(
-                    f["m_normalsFlag"].as_u64() == Some(0),
+                    matches!(normal_binding, Some(0 | 2)),
                     "unsupported normal binding"
                 );
                 let triangles = f["m_facetsArr"]
@@ -1493,7 +1502,8 @@ fn graphics_impl<'a>(
                     })
                     .collect::<Result<Vec<_>>>()?;
                 ensure!(
-                    normals.is_empty() || normals.len() == triangles.len(),
+                    (normals.is_empty() && normal_binding == Some(0))
+                        || normals.len() == triangles.len(),
                     "unsupported normal cardinality"
                 );
                 let facet_normals = !normals.is_empty();
