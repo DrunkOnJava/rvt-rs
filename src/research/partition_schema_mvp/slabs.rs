@@ -474,9 +474,9 @@ fn solve_sketch_plan_profiles(
                 // RE-151: each line's first chord is an edge of its loop.
                 let points = curves
                     .iter()
-                    .filter_map(|(id, chords, _)| {
+                    .filter_map(|(id, chords, arc)| {
                         let c = chords.first()?;
-                        Some((*id, ((c[0] + c[2]) / 2.0, (c[1] + c[3]) / 2.0)))
+                        Some((*id, ((c[0] + c[2]) / 2.0, (c[1] + c[3]) / 2.0), !*arc))
                     })
                     .collect();
                 let chords: Vec<[f64; 4]> = curves
