@@ -41,11 +41,8 @@
   source are the maintainer's. No Revit IFC4 export of these Areas exists: the
   IFC2X3 export is the only external check, and it is out of sample for this
   rule because the topology's loops and the figures they are checked against
-  were not read off it, and only its counts are kept (its terms were never
-  checked). Where the plan topology and the lines' arrangement both give a
+  were not read off it, and only its counts are kept (its terms were never checked); on `bcb02107` (Measure run 42003913780) the 2020 save's pairs have 116 spaces in both files, none only in Revit's and none only in rvt-rs's. Where the plan topology and the lines' arrangement both give a
   region they must be the same one, else the Area has no body and says
   `area_regions_disagree`; an Area drawn from the topology has `BodySource`
   `native_area_plan_topology` and a value source `area_plan_topology` that
-  names the records it was read from. The figures above were measured on the
-  archived head `e9124b3a` of #1371 and are not yet measured on the head that
-  lands; pull request #1428 names the run that is.
+  names the records it was read from. The counts of what is written are from Measure run 42003913780 on `bcb02107`; the vertex-level and equality figures above are from the archived head `e9124b3a` of #1371 (runs 41894715743 and 41894722135) and were not re-read on `bcb02107`.
