@@ -426,8 +426,20 @@ def check_counts(report, answers, written, diagnostics):
         exported = diagnostics["exported"]
         # The diagnostics list an opening element by type but do not count it as a building element (RE-84).
         openings = elements["by_ifc_type"].get("IFCOPENINGELEMENT", 0)
-        same("diagnostics exported building_elements", elements["total"] - openings, exported["building_elements"])
-        same("diagnostics exported by_ifc_type", elements["by_ifc_type"], exported["by_ifc_type"])
+        # The diagnostics also count the pieces the export folds into another element's body, which
+        # the summary lists apart (`folded_into_bodies`) and are not rows.
+        folded = elements.get("folded_into_bodies", {})
+        folded_elements = sum(count for entity, count in folded.items() if entity != "IFCOPENINGELEMENT")
+        same(
+            "diagnostics exported building_elements",
+            elements["total"] - openings + folded_elements,
+            exported["building_elements"],
+        )
+        counted = {
+            entity: elements["by_ifc_type"].get(entity, 0) + folded.get(entity, 0)
+            for entity in set(elements["by_ifc_type"]) | set(folded)
+        }
+        same("diagnostics exported by_ifc_type", counted, exported["by_ifc_type"])
         digest = summary["diagnostics"]
         same("summary bounding_box_bodies", digest["bounding_box_bodies"], exported["bounding_box_bodies"])
         same("summary bounding_box_spaces", digest["bounding_box_spaces"], exported["bounding_box_spaces"])
@@ -435,6 +447,10 @@ def check_counts(report, answers, written, diagnostics):
         same("summary confidence_level", digest["confidence_level"], diagnostics["confidence"]["level"])
     report.check(W("counts"), compared, differences)
     openings = by_category["IFCOPENINGELEMENT"]
+    report.line(
+        W("elements the export folds into the body of another element, not rows: {}"),
+        sum(summary["elements"].get("folded_into_bodies", {}).values()),
+    )
     report.line(W("rows that are opening elements, which the diagnostics do not count as building elements: {}"), openings)
     for name in sorted(by_category):
         report.line(W("{}: {} rows"), key_of_category(name), by_category[name])
