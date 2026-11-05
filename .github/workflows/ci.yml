@@ -910,35 +910,6 @@ jobs:
             python -m ifcopenshell.validate "/tmp/$m-saved.ifc"
           done
           python tools/ci/ifc_schema_arity.py /tmp/Revit_IFC5_Einhoven-saved.ifc /tmp/2024_Core_Interior-saved.ifc
-      # #1430: IfcOpenShell's check of the schema's EXPRESS rules (the WHERE
-      # rules and global rules), which `ifcopenshell.validate` leaves out and
-      # Measure reports in the `rules:` section of each model's schema.txt,
-      # on every export this job writes: the tier-1 projects, the synthetic
-      # pair, Einhoven and Core Interior (also with their saved meshes) and the
-      # four RE1 projects. Any finding, or a file that does not open, fails the
-      # job. Measure alone reports the models this job does not hold (the
-      # BIM4LCA office, the Revit 2025 models, Autodesk's samples, the
-      # held-out and the IFC2X3 ones). The step is bounded by its timeout;
-      # Measure's validation and rules together took 228 s on the BIM4LCA
-      # office export, the largest it checks (run 41988011289).
-      - name: EXPRESS rules hold on every export
-        timeout-minutes: 25
-        env:
-          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
-        run: |
-          set -euo pipefail
-          for m in Electrical Mechanical Plumbing; do
-            ./target/ci/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/RE1-$m.rvt" -o "/tmp/re1-$m.ifc"
-          done
-          python tools/ci/ifc_validate_summary.py --gate \
-            /tmp/tier1-*.ifc \
-            target/tmp/synthetic-fixtures/synthetic-project.ifc \
-            target/tmp/synthetic-fixtures/synthetic-structural.ifc \
-            /tmp/walker-real-project.ifc \
-            /tmp/core-interior.ifc \
-            /tmp/re1-architecture.ifc \
-            /tmp/re1-Electrical.ifc /tmp/re1-Mechanical.ifc /tmp/re1-Plumbing.ifc \
-            /tmp/Revit_IFC5_Einhoven-saved.ifc /tmp/2024_Core_Interior-saved.ifc
       # Cross-witness gate (docs/verification-protocol.md): an independent
       # IFC reader parses the Revit-authored reference export and must agree
       # with the same manifest counts the rvt-rs decoder is gated against.
@@ -1042,6 +1013,46 @@ jobs:
             --out /tmp/witness-slim/verdict.json \
             --registry research/witness-registry.json \
             --compare-committed research/witness/magnetar-2024-core-interior-slim/observations
+      # #1430: IfcOpenShell's check of the schema's EXPRESS rules (the WHERE
+      # rules and global rules), which `ifcopenshell.validate` leaves out and
+      # Measure reports in the `rules:` section of each model's schema.txt,
+      # on every export this job writes: the tier-1 projects, the synthetic
+      # pair, Einhoven and Core Interior (also with their saved meshes and as
+      # the two witness steps write it) and the four RE1 projects. Any
+      # finding, or a file that does not open, fails the job. It reads the
+      # default output: `rvt-ifc --revit-set-placement` keeps the material
+      # Revit associates with an `IfcSpace`, which breaks
+      # IfcRelAssociatesMaterial.AllowedElements as Revit's export does, and
+      # no export here is written with it. It runs after the witness steps,
+      # whatever they did, so that a failing gate never drops the fresh
+      # observations a REPLAY_DRIFT fix needs; a file an earlier failed step
+      # did not write is a finding of its own. Measure alone reports the
+      # models this job does not hold (the BIM4LCA office, the Revit 2025
+      # models, Autodesk's samples, the held-out and the IFC2X3 ones). The
+      # step is bounded by its timeout; Measure's validation and rules
+      # together took 228 s on the BIM4LCA office export, the largest it
+      # checks (run 41988011289).
+      - name: EXPRESS rules hold on every export
+        if: ${{ !cancelled() }}
+        timeout-minutes: 25
+        env:
+          RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
+        run: |
+          set -euo pipefail
+          for m in Electrical Mechanical Plumbing; do
+            ./target/ci/rvt-ifc "${RVT_PROJECT_CORPUS_DIR}/RE1-$m.rvt" -o "/tmp/re1-$m.ifc"
+          done
+          python tools/ci/ifc_validate_summary.py --gate \
+            /tmp/tier1-*.ifc \
+            target/tmp/synthetic-fixtures/synthetic-project.ifc \
+            target/tmp/synthetic-fixtures/synthetic-structural.ifc \
+            /tmp/walker-real-project.ifc \
+            /tmp/core-interior.ifc \
+            /tmp/re1-architecture.ifc \
+            /tmp/re1-Electrical.ifc /tmp/re1-Mechanical.ifc /tmp/re1-Plumbing.ifc \
+            /tmp/Revit_IFC5_Einhoven-saved.ifc /tmp/2024_Core_Interior-saved.ifc \
+            /tmp/witness/core-interior.rvt-rs.ifc \
+            /tmp/witness-slim/core-interior-slim.rvt-rs.ifc
       # §10.6: publish observations + verdict for human review of any
       # disagreement without re-running the gate.
       - name: Publish witness observations and verdict

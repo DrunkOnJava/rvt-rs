@@ -160,19 +160,26 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     # of findings of the default validation and of the EXPRESS rules check,
     # and for each kind of rule finding its count beside the entity and rule
     # that name it (`IfcShapeRepresentation.CorrectItemsForType`), never the
-    # message, which holds the instances. A check skipped for the file's size
-    # keeps its line, so a model it did not cover is told from one it passed.
+    # message, which holds the instances. Only the lines of the validation and
+    # rules sections are read, up to the property sets. A check skipped for
+    # the file's size keeps its line, and a rules check that left no count (it
+    # timed out, or did not read the file) says `not read`, so a model it did
+    # not cover is told from one it passed.
     for f in "$dir"schema.txt; do
       [ -f "$f" ] || continue
       awk '/^validate: skipped, over [0-9]+ MB$/ { print "schema: " $0; section = ""; next }
-           /^validate:$/ { section = "validate"; next }
-           /^rules:$/ { section = "rules"; next }
-           $0 == "arity:" || $0 == "property sets:" { section = ""; next }
+           $0 == "validate:" { section = "validate"; next }
+           $0 == "rules:" { section = "rules"; rules_seen = 1; next }
+           $0 == "arity:" { section = ""; next }
+           $0 == "property sets:" { exit }
            section == "validate" && /^findings [0-9]+$/ { print "schema validate: " $0; next }
-           section == "rules" && /^findings [0-9]+$/ { print "schema rules: " $0; next }
+           section == "rules" && /^findings [0-9]+$/ { print "schema rules: " $0; rules_counted = 1; next }
            section == "rules" && /^[0-9]+ Ifc[A-Za-z0-9]+ Ifc[A-Za-z0-9]+\.[A-Za-z0-9]+:/ {
              split($0, parts, ":"); print "schema rules: " parts[1]; next }
-           section != "" && /^unreadable:/ { print "schema " section ": not read" }' "$f"
+           section != "" && /^unreadable:/ {
+             if (section == "rules") rules_counted = 1
+             print "schema " section ": not read" }
+           END { if (rules_seen && !rules_counted) print "schema rules: not read" }' "$f"
     done
   } > "$RUNNER_TEMP/counts.txt"
   find "$dir" -mindepth 1 ! -name ifc.sha256 -delete

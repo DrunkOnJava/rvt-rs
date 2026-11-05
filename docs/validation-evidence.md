@@ -69,8 +69,9 @@ write:
    runs IfcOpenShell's check of the IFC4 schema's WHERE rules and global
    rules, which `ifcopenshell.validate` leaves out, on the tier-1 exports,
    the synthetic pair, the Einhoven and Core Interior exports (with and
-   without saved meshes) and the four RE1 projects, and fails on any
-   finding (#1430). Measure reports the same check in the `rules:` section of
+   without saved meshes, and as the two witness steps write it) and the four
+   RE1 projects, and fails on any finding (#1430). It runs after the witness
+   steps, so a failing gate never drops the observations a replay fix needs. Measure reports the same check in the `rules:` section of
    each model's `schema.txt` on the models CI does not hold (the BIM4LCA
    office, the Revit 2025 models, Autodesk's samples), and as counts for the
    held-out ones. Revit's own exports break some of these rules (the check

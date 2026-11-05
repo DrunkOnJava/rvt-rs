@@ -48,6 +48,17 @@ import ifcopenshell.express.rule_executor
 import ifcopenshell.validate
 
 
+class literal_logger(ifcopenshell.validate.json_logger):
+    """json_logger whose message is taken as written when it has no arguments.
+    Its `log` does `message % args`, so the rules check's message for an instance
+    whose string holds a `%` (an `IfcSpaceType` named `50 % Space`) raised a
+    TypeError or ValueError there, which ended the run: the finding and every
+    one after it were lost, and the file read as unreadable (#1430)."""
+
+    def log(self, level, message, *args):
+        self.statements.append({"level": level, "message": message % args if args else message, **self.state})
+
+
 def describe(statement):
     instance = statement.get("instance")
     entity = instance.is_a() if hasattr(instance, "is_a") else str(instance or "")
@@ -57,7 +68,7 @@ def describe(statement):
 
 
 def rules(path, model=None):
-    logger = ifcopenshell.validate.json_logger()
+    logger = literal_logger()
     ifcopenshell.express.rule_executor.run(model if model is not None else ifcopenshell.open(path), logger)
     kinds = collections.Counter(re.sub(r"#\d+", "#", describe(s)) for s in logger.statements)
     print(f"findings {len(logger.statements)}")
@@ -124,7 +135,7 @@ def gate(paths):
 
 
 def main(path, statements=None, model=None):
-    logger = ifcopenshell.validate.json_logger()
+    logger = literal_logger()
     ifcopenshell.validate.validate(model if model is not None else ifcopenshell.open(path), logger)
     if statements:
         with open(statements, "w", encoding="utf-8") as out:

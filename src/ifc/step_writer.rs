@@ -813,7 +813,9 @@ const SPILL_BYTES: usize = 1 << 20;
 ///   revolved ones too;
 /// - `SolidModel` takes those and `IfcFacetedBrep`;
 /// - `SurfaceOrSolidModel` takes those and `IfcTriangulatedFaceSet`;
-/// - `CSG` takes `IfcBooleanResult` alone, and no other type takes one.
+/// - `CSG` takes `IfcBooleanResult` alone, and no other type takes one; a mix
+///   with a boolean result is written as the union of its items, a
+///   triangulated one as a faceted brep.
 fn shared_representation_type(
     kinds: &std::collections::BTreeSet<&'static str>,
 ) -> Option<&'static str> {
@@ -828,6 +830,38 @@ fn shared_representation_type(
         Some("SurfaceOrSolidModel")
     } else {
         None
+    }
+}
+
+/// Whether the default export associates a material with an element of IFC
+/// type `ifc_type`. An `IfcSpace` is none of the entities IFC4's
+/// `IfcRelAssociatesMaterial.AllowedElements` takes (elements, element types,
+/// door and window styles, structural members and ports), so it has none
+/// (#1430), though Revit's own export associates one, which
+/// [`write_step_with_space_materials`] also does. The consumers that list an
+/// element's material (the elements CSV, the viewer's panels) follow this, as
+/// they follow `placements`.
+pub(super) fn associates_material(ifc_type: &str) -> bool {
+    !ifc_type.eq_ignore_ascii_case("IFCSPACE")
+}
+
+/// The token `emit_solid_shape` returns for `shape`, worked out before it is
+/// written, so that a compound whose items have no shared type is written
+/// with its items as union operands.
+fn solid_kind(shape: &SolidShape) -> &'static str {
+    match shape {
+        SolidShape::ExtrudedArea(_)
+        | SolidShape::RevolvedArea { .. }
+        | SolidShape::PlacedExtrusion { .. } => "SweptSolid",
+        SolidShape::SweptPath { .. } => "AdvancedSweptSolid",
+        SolidShape::FacetedBrep { .. } => "Brep",
+        SolidShape::TriangulatedFaceSet { .. } => "Tessellation",
+        SolidShape::BooleanResult { .. } => "CSG",
+        SolidShape::Compound(items) => match items.as_slice() {
+            [] => "Tessellation",
+            [one] => solid_kind(one),
+            _ => "CSG",
+        },
     }
 }
 
@@ -1417,6 +1451,11 @@ impl StepWriter<'_> {
     /// The representation items of `shape`: each of a
     /// [`SolidShape::Compound`]'s solids, else the one solid
     /// [`Self::emit_solid_shape`] writes, with the representation type.
+    ///
+    /// Where no one type takes all the items of a compound
+    /// ([`shared_representation_type`]: a boolean result beside another kind)
+    /// they are written as their union, whose operands are solids
+    /// (`emit_solid_shape`'s `operand`), under `CSG`.
     fn emit_solid_items(
         &mut self,
         shape: &SolidShape,
@@ -1425,25 +1464,30 @@ impl StepWriter<'_> {
     ) -> (Vec<usize>, &'static str) {
         match shape {
             SolidShape::Compound(items) if !items.is_empty() => {
-                let mut ids = Vec::with_capacity(items.len());
-                let mut kinds = std::collections::BTreeSet::new();
-                for item in items {
-                    let (id, kind) = self.emit_solid_shape(item, solid_position, z_axis);
-                    ids.push(id);
-                    kinds.insert(kind);
+                let kinds: std::collections::BTreeSet<&'static str> =
+                    items.iter().map(solid_kind).collect();
+                let shared = shared_representation_type(&kinds);
+                // `CSG` takes boolean results alone, and no other type takes
+                // one: without a shared type the items are written as their
+                // union, so as operands.
+                let operand = shared.is_none();
+                let ids: Vec<usize> = items
+                    .iter()
+                    .map(|item| {
+                        self.emit_solid_shape(item, solid_position, z_axis, operand)
+                            .0
+                    })
+                    .collect();
+                if let Some(kind) = shared {
+                    return (ids, kind);
                 }
-                match shared_representation_type(&kinds) {
-                    Some(kind) => (ids, kind),
-                    // `CSG` takes boolean results alone, and no other type
-                    // takes one: the items are written as their union.
-                    None => match ids.split_first() {
-                        Some((first, rest)) => (vec![self.emit_union(*first, rest)], "CSG"),
-                        None => (Vec::new(), "CSG"),
-                    },
+                match ids.split_first() {
+                    Some((first, rest)) => (vec![self.emit_union(*first, rest)], "CSG"),
+                    None => (Vec::new(), "CSG"),
                 }
             }
             _ => {
-                let (id, kind) = self.emit_solid_shape(shape, solid_position, z_axis);
+                let (id, kind) = self.emit_solid_shape(shape, solid_position, z_axis, false);
                 (vec![id], kind)
             }
         }
@@ -1463,11 +1507,19 @@ impl StepWriter<'_> {
         solid_id
     }
 
+    /// One solid of a body. `operand` says it is an operand of an
+    /// `IfcBooleanResult` (a union of a compound's items, or an operand of a
+    /// [`SolidShape::BooleanResult`]): IFC4 takes a tessellated operand only
+    /// where it is closed (`IfcBooleanResult.FirstOperandClosed` and
+    /// `SecondOperandClosed`), and the face set records `Closed` as `$`, so a
+    /// triangulated operand is written as the faceted brep of the same
+    /// triangles, a solid with no such rule (#1430).
     fn emit_solid_shape(
         &mut self,
         shape: &SolidShape,
         solid_position: usize,
         z_axis: usize,
+        operand: bool,
     ) -> (usize, &'static str) {
         match shape {
             SolidShape::ExtrudedArea(ex) => {
@@ -1558,9 +1610,12 @@ impl StepWriter<'_> {
             }
             SolidShape::Compound(items) => {
                 // Nested in another solid, the items are one: their union.
+                let union = items.len() > 1;
                 let parts: Vec<(usize, &'static str)> = items
                     .iter()
-                    .map(|item| self.emit_solid_shape(item, solid_position, z_axis))
+                    .map(|item| {
+                        self.emit_solid_shape(item, solid_position, z_axis, operand || union)
+                    })
                     .collect();
                 let Some(((first, kind), rest)) = parts.split_first() else {
                     return self.emit_solid_shape(
@@ -1570,6 +1625,7 @@ impl StepWriter<'_> {
                         },
                         solid_position,
                         z_axis,
+                        operand,
                     );
                 };
                 if rest.is_empty() {
@@ -1586,8 +1642,8 @@ impl StepWriter<'_> {
                 // Recursively emit operands, then wrap in
                 // IFCBOOLEANRESULT(op, first, second). Nested
                 // booleans compose naturally.
-                let (a_id, _rep_a) = self.emit_solid_shape(operand_a, solid_position, z_axis);
-                let (b_id, _rep_b) = self.emit_solid_shape(operand_b, solid_position, z_axis);
+                let (a_id, _rep_a) = self.emit_solid_shape(operand_a, solid_position, z_axis, true);
+                let (b_id, _rep_b) = self.emit_solid_shape(operand_b, solid_position, z_axis, true);
                 let solid_id = self.id();
                 self.emit_entity(
                     solid_id,
@@ -1655,6 +1711,21 @@ impl StepWriter<'_> {
                     ),
                 );
                 (brep_id, "Brep")
+            }
+            SolidShape::TriangulatedFaceSet {
+                vertices_feet,
+                triangles,
+            } if operand => {
+                let count = vertices_feet.len();
+                let brep = SolidShape::FacetedBrep {
+                    vertices_feet: vertices_feet.clone(),
+                    triangles: triangles
+                        .iter()
+                        .filter(|t| [t.0, t.1, t.2].iter().all(|&i| (i as usize) < count))
+                        .cloned()
+                        .collect(),
+                };
+                self.emit_solid_shape(&brep, solid_position, z_axis, false)
             }
             SolidShape::TriangulatedFaceSet {
                 vertices_feet,
@@ -2635,10 +2706,11 @@ impl StepWriter<'_> {
                 map_placement,
                 format!("IFCAXIS2PLACEMENT3D(#{map_origin_pt},#{z_axis},#{x_axis})"),
             );
-            // Emit the shared shape body. The emission helper returns
-            // (solid_entity_id, rep_type_token). For the map's own
-            // IfcShapeRepresentation we use the returned rep_type
-            // (SweptSolid / CSG / Brep).
+            // Emit the shared shape body. The emission helper returns the
+            // solids' entity ids and the one RepresentationType IFC4 takes
+            // for them (SweptSolid, AdvancedSweptSolid, SolidModel,
+            // SurfaceOrSolidModel, CSG, Brep or Tessellation), which is the
+            // map's own IfcShapeRepresentation's.
             //
             // Passing `map_placement` as the solid `Position` here is
             // not the #232 double-translation: a mapped item resolves
@@ -3073,6 +3145,13 @@ impl StepWriter<'_> {
                 // the type, so a reader can index PredefinedType
                 // instead of hitting "index out of range".
                 let ifc_upper = ifc_type.to_ascii_uppercase();
+                // IFC4's CorrectPredefinedType: a `USERDEFINED` occurrence
+                // states its user-defined type in `ObjectType`. With none
+                // read the element cannot say which, and the writer invents
+                // no value, so its `PredefinedType` is left unset (#1430).
+                let predefined = predefined_type.as_deref().filter(|token| {
+                    !(token.eq_ignore_ascii_case("USERDEFINED") && object_type_quoted == "$")
+                });
                 // RE-93, RE-94: a window's or door's OverallHeight and
                 // OverallWidth are its opening's, which Revit's export writes
                 // there; `IfcModel::filler_sizes` has what they are worked out
@@ -3082,7 +3161,7 @@ impl StepWriter<'_> {
                 let tail = element_attribute_tail(
                     &ifc_upper,
                     &tag_quoted,
-                    predefined_type.as_deref(),
+                    predefined,
                     &long_name_quoted,
                     overall,
                 );
@@ -3132,7 +3211,7 @@ impl StepWriter<'_> {
                 // and ports), so a space is associated with no material
                 // (#1430), though Revit's own export associates one, which
                 // `write_step_with_space_materials` also does.
-                let holds_material = !is_space || self.space_materials;
+                let holds_material = associates_material(ifc_type) || self.space_materials;
                 let material_index = material_index.as_ref().filter(|_| holds_material);
                 let material_profile_set_index = material_profile_set_index
                     .as_ref()
@@ -4343,8 +4422,11 @@ impl StepWriter<'_> {
             // rule on the same objects), so rvt-rs names the type by its own
             // Name and leaves PredefinedType, which the type GlobalIds hash,
             // as Revit has it (#1430).
+            // An unnamed type (an `IfcSpaceType` whose type name is empty)
+            // still states it, as an empty label, since the rule asks that
+            // the attribute exist.
             let element_type = if predefined == "USERDEFINED" {
-                quoted_or_dollar(&escape(name))
+                format!("'{}'", escape(name))
             } else {
                 "$".into()
             };
