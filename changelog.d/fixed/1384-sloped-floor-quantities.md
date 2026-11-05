@@ -7,7 +7,7 @@
   file (Measure run 41944962415, main at 77d71cbb against v0.14.0). They are
   written again from the plan profile the floor's extrusion still holds. The
   14 one-layer Basement walls as built (16 at permit) whose base is cut at
-  such a floor were drawn in the GLB in the category colour instead of their
+  a shape-edited or level floor were drawn in the GLB in the category colour instead of their
   layer's, since their solid is not one the layer splitters take apart; a
   one-layer element's solid is now drawn as that layer where its thickness
   across the wall is the layer's within 0.02 ft.

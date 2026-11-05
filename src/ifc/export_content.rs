@@ -1103,13 +1103,14 @@ pub fn append_typed_production_elements(
         add_beam_roll(&mut reference_sets, &ifc_type, &decoded);
         // #1384: a floor drawn along the plane of its shape-edited corners
         // keeps the extrusion of its plan profile beside its solid.
-        let shaped_floor = property_set.as_ref().is_some_and(|set| {
-            set.properties.iter().any(|property| {
-                property.name == "BodySource"
-                    && matches!(&property.value, PropertyValue::Text(source)
+        let shaped_floor = ifc_type == "IFCSLAB"
+            && property_set.as_ref().is_some_and(|set| {
+                set.properties.iter().any(|property| {
+                    property.name == "BodySource"
+                        && matches!(&property.value, PropertyValue::Text(source)
                         if source == FLOOR_SHAPE_BODY_SOURCE)
-            })
-        });
+                })
+            });
         add_slab_gross_area(
             &mut reference_sets,
             &ifc_type,

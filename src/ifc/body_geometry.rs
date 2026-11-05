@@ -1279,7 +1279,7 @@ fn revolved_mesh(
 
 /// The one layer of an element whose type has a single layer and whose body
 /// is a solid the layered splitters do not take apart (a wall whose base is cut
-/// at a sloped footing, #1384): the whole solid, where its extent along the
+/// at a shape-edited or level floor, #1384): the whole solid, where its extent along the
 /// exterior normal `exterior`, in the body's frame, is the layer's width within
 /// [`LAYER_THICKNESS_TOLERANCE_FEET`]. `None` for several layers, a solid that
 /// does not mesh, or a thickness that is not the layer's.
