@@ -1244,6 +1244,34 @@ profile (27 chords) and of two half arcs of it (28) (run 41805333248, RE-327
 reads, so nothing is replaced (`reports/element-framing/RE-327-family-extrusions.md`
 §9).
 
+**RE-350 (2026-11-05)** measures why three categories stay unread, on 59
+models with a Revit export and Autodesk's samples (Measure runs 42097940515,
+42108271073; `probe_re350_category_stages`, under its earlier name
+`probe_re348_category_stages` at `32586847`; #1444, #1445, Discussion #1241).
+The files hold them as frames, the same on every save of 2020 to 2027: 346
+`Rebar` on `rst_basic` (14 on Snowdon Towers Structural), 16 Structural Beam
+Systems on `rst_basic` (15 with a body) and 1 on `rac_advanced`, 3 placed
+Furniture Systems on `rac_basic`. No Revit export measured holds a reinforcing
+bar (0 of 60), and the only export of a project with a beam system, the
+three.js IFC2X3 export of `rac_advanced`, holds neither it nor any of the
+project's 38 framing members (23 of them the system's), so neither is added.
+Furniture Systems are `IfcSystemFurnitureElement` in the public IFC4 export of
+the 2018 `rac_basic` (RE-326 section 5, read locally): the 3 placed Furniture
+Systems of that save are all in it (3 of 3), none written that it lacks;
+the category qualifies and is not yet added, since a new category is a pull
+request of its own, and `category_map`'s `IfcFurniture` mapping for it is not
+what that export writes. Revit's exporter has code for rebar and beam systems
+(revit-ifc, CLEANROOM source 5), so the absence of an export is not evidence
+that Revit never writes them. On `rac_advanced` and `rac_basic` the sweep reads
+1,349 panels, 3,276 mullions and 100 doors, and 44 panels, 144 mullions and 16
+doors, on all eight saves of 2020 to 2027, every placed frame written. The 192
+panels, 1 door, 4 mullions and 2 panels that RvtIO counts beyond them on its
+2023 files are `FamilyInstance` records in the main model that every save
+2018 to 2027 holds with no frame, so no stored bounding box; the public IFC4
+export of the 2018 `rac_basic` holds none of the 6, and the IFC2X3 export of
+`rac_advanced` none of the 193. Their family types are not read from the file
+(`reports/element-framing/RE-350-unread-categories-and-rvtio-extras.md`).
+
 ## Performance
 
 Opening a large project is no longer a minutes-long wait. Every partition
