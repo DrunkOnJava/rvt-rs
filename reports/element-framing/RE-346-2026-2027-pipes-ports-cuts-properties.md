@@ -134,7 +134,9 @@ Contributor's local run, `SOURCE_DATE_EPOCH=1700000000`, 120 files exported with
 - Revit 2026 and 2027 Autodesk samples against Revit's own export: none is available.
 - Pipes, ducts and ports against any Revit export of a 2026 or 2027 file: no held-out model holds one.
 - The 2027 saves with this gate as it ships: run 42107917715's IFC files were scored with it, but the Measure run of this head, which writes the verdict, is not made.
-- The stairs' type-derived property sets against Revit's 2026 and 2027 exports (flowbim's and hemanth1986's pairs), which `holdout=true` on this head decides.
+- The stairs' type objects (`IfcStairType`, `IfcStairFlightType` and a stringer's `IfcMemberType`, which `main` wrote on no 2026 or 2027 save) and their type-derived property sets against Revit's 2026 and 2027 exports (flowbim's and hemanth1986's pairs), which `holdout=true` on this head decides.
+- A stringer's type-derived values (`Pset_MemberCommon.Reference` and the like) on 2026 and 2027: the gate scores a stair's and a flight's, and a stringer's `Name`, not these, since `IfcMember` also holds 144 non-stair members on `rac_basic`.
+- #1476 draws `rac_basic`'s roof 243274: when it lands, it removes `rac_basic` from `ROOFS_LEFT_AS_BOXES` as well as emptying `PINNED_WALLS` and the exception in `docs/maintaining.md`.
 - Why two doors of `rac_basic`'s 2027 save write no Width and Height (#1489).
 - The sketch outlines, beams and landings of `rme_advanced` and `rme_basic` 2025 to 2027 against their 2024 saves, which the gate holds for the first time here.
 - #1438's hand and facing flips on 2026 and 2027, now read by the cut pass instead of a pass of their own: they are not in the IFC, so nothing here compares them, and RE-343 measured that pass on 2024 and 2025.
