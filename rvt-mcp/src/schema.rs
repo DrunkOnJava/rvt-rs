@@ -438,7 +438,7 @@ pub struct ElementDetail {
 pub struct DecisionOut {
     /// The step that made it: `element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read` or `storey_not_bound`.
     pub stage: String,
-    /// The reason code: the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box`, `area_body_refused`, `slab_shape_refused` or `wall_base_cut_refused`.
+    /// The reason code: the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box`, `area_body_refused`, `slab_shape_refused`, `wall_base_cut_refused` or `wall_end_extension_refused`.
     pub reason: String,
     /// The class the diagnostics count it under: a Revit class, or an IFC entity such as `IFCDOOR`.
     #[serde(skip_serializing_if = "Option::is_none")]

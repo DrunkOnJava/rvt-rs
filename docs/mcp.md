@@ -152,7 +152,7 @@ that says to call `open_model` again. The tool descriptions say the same.
 | `get_summary` | The same summary for a `model_id` or a path. |
 | `list_elements` | Building elements, filtered by `category` (IFC entity: `IFCWALL`, `IfcWall` and `wall` are the same), `class` (Revit class: `Wall`, `Room`) and `level` (storey name), paged by `limit` (100 by default, at most 1000) and `offset`. Each row has the ElementId, `name` and `long_name` (the IFC `Name` and `LongName`: an IfcSpace's are its room number, or `<room name>:<ElementId>` for a room with a name and no number, and its room name; `name` is absent only for a room with neither whose name is exactly the exporter's `<Revit class>-<ElementId>` placeholder, and the placeholder names of other elements are still served as `name`), level, `predefined_type` and its provenance. |
 | `get_element` | One element by Revit ElementId or IFC GlobalId: its `name` and `long_name` as `list_elements` gives them, its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units, each property with its IfcValue type), its trust markers, its provenance, the file's, its type object as the export writes it (`element_type`: the IFC entity as `ifc_type`, the `name` and the `element_id`, the type object's `Tag`, and the sets it holds, `Other` and `Identity Data` among them, or the `IfcSpaceType` made for a room; absent where the export writes none) and any other entity with the same ElementId. |
-| `explain_element` | Why one element is in the export as it is, or is not in it (#1326). `element` is a Revit ElementId, whether or not the export holds the element, or the GlobalId of an exported one. Returns the element's provenance and trust markers where it is exported, and every fail-closed decision recorded for it: a `stage` (`element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read`, `storey_not_bound`), a `reason` (the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box`, `area_body_refused`, `slab_shape_refused`, `wall_base_cut_refused`), the `stream` and byte `offset` its record was read from where known, and a `detail`. |
+| `explain_element` | Why one element is in the export as it is, or is not in it (#1326). `element` is a Revit ElementId, whether or not the export holds the element, or the GlobalId of an exported one. Returns the element's provenance and trust markers where it is exported, and every fail-closed decision recorded for it: a `stage` (`element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read`, `storey_not_bound`), a `reason` (the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box`, `area_body_refused`, `slab_shape_refused`, `wall_base_cut_refused`, `wall_end_extension_refused`), the `stream` and byte `offset` its record was read from where known, and a `detail`. |
 | `list_rooms` | Rooms and spaces: ElementId, number, name, level, area and provenance. The area is present only where the outline was read exactly. |
 | `list_levels` | Storeys with elevation (feet and metres) and element count. |
 | `get_diagnostics` | The export diagnostics, as `rvt-ifc --diagnostics` writes them ([`export-diagnostics.schema.json`](schemas/export-diagnostics.schema.json)): what was decoded, exported, skipped, approximated and left unread, and why. |
@@ -162,15 +162,15 @@ that says to call `open_model` again. The tool descriptions say the same.
 ### Elements and levels as the export writes them
 
 The lists, counts and levels are the elements the IFC export writes, in the
-storey it puts them in (`rvt::ifc::step_writer::placements`, which the writer
-writes with). A part of a stair, a railing or a curtain wall has the level of
-its whole, an element in a room the level of the room, and an opening the
-level of its host, as the IFC's containment and aggregation say. A further
-piece of an element of separate loops, which the export writes as an item of
-the owner's body and not as an element, is not a row and not in `total` or
-`by_ifc_type`; the summary counts it by IFC entity in `folded_into_bodies`
-(always present, empty where none is folded), and the diagnostics' `exported`
-counts include it. A part of several wholes takes the storey of the first,
+storey it puts them on (`rvt::ifc::step_writer::placements`, which the writer
+writes with). A part of a stair (a run, landing or stringer) or of a curtain
+wall has the level of its whole, an element in a room the level of the room,
+and an opening the level of its host, as the IFC's containment and
+aggregation say. A further piece of an element of separate loops, which the
+export writes as an item of the owner's body and not as an element, is not a
+row and not in `total` or `by_ifc_type`; the summary counts it by IFC entity
+in `folded_into_bodies` (always present, empty where none is folded), and the
+diagnostics' `exported` counts include it. A part of several wholes takes the storey of the first,
 which is not measured. The diagnostics' `storey_bound_elements` and the rooms
 schedule (`room_rows`) read the same placement, so a part counts as bound to
 its whole's storey in both.

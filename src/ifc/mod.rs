@@ -769,6 +769,14 @@ pub struct ExportedModelDiagnostics {
     /// `slab_shape_not_read` or `no_element_covers_the_wall_plan`.
     #[serde(default)]
     pub wall_base_refusals: std::collections::BTreeMap<String, usize>,
+    /// Of the exported walls with an edited elevation profile that stop short
+    /// of the wall beneath them and keep the end their record gives, why, by
+    /// reason: the `BodyEndRefusal` property of each (#1396, RE-337), such as
+    /// `walls_beneath_reach_the_end_at_different_faces`,
+    /// `base_cut_lost_on_extended_plan`, `base_not_cut_over_the_extended_plan`,
+    /// `wall_beneath_not_one_rectangle` or `wall_stands_in_the_added_end`.
+    #[serde(default)]
+    pub wall_end_refusals: std::collections::BTreeMap<String, usize>,
     /// Of the exported `IfcSpace`s, the rooms whose outline was read from the
     /// faces their stored solid lists, up to the solid's own end, where the
     /// walk of RE-101 did not close them (`SpaceOutlineSource` is
@@ -4614,6 +4622,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut area_body_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut slab_shape_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_base_refusals = std::collections::BTreeMap::<String, usize>::new();
+    let mut wall_end_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut resolved_outline_spaces = 0usize;
     let mut approximate_outline_spaces = 0usize;
     // Where the writer puts each element: an element is bound to a storey when
@@ -4655,6 +4664,10 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                         export_content::WALL_BASE_REFUSAL_PROPERTY,
                         entities::PropertyValue::Text(text),
                     ) => *wall_base_refusals.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_END_REFUSAL_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *wall_end_refusals.entry(text.clone()).or_insert(0) += 1,
                     ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
                     (
                         export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
@@ -4746,6 +4759,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         area_body_refusals,
         slab_shape_refusals,
         wall_base_refusals,
+        wall_end_refusals,
         resolved_outline_spaces,
         approximate_outline_spaces,
         wall_cut_openings_left_out: model.wall_cut_openings_left_out.clone(),
@@ -4919,11 +4933,12 @@ fn geometry_gap_skipped_items(
 
 /// The decisions behind `exported.bounding_box_bodies`,
 /// `exported.bounding_box_spaces`, `exported.area_body_refusals`,
-/// `exported.slab_shape_refusals` and `exported.wall_base_refusals` (#1326,
-/// #1384), read from `model` as [`exported_model_diagnostics`] counts them: a
-/// body that is only its record's box, a room or space whose outline is its
-/// record's box, an Area with no body, a shape-edited floor kept as its box
-/// and a wall that keeps its base, each with its ElementId.
+/// `exported.slab_shape_refusals`, `exported.wall_base_refusals` and
+/// `exported.wall_end_refusals` (#1326, #1384, #1396), read from `model` as
+/// [`exported_model_diagnostics`] counts them: a body that is only its
+/// record's box, a room or space whose outline is its record's box, an Area
+/// with no body, a shape-edited floor kept as its box, a wall that keeps its
+/// base and a wall that keeps its end, each with its ElementId.
 pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportDecision> {
     use export_decisions::{DecisionStage, ExportDecision};
     let mut decisions = Vec::new();
@@ -4946,6 +4961,7 @@ pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportD
         let mut refusals: Vec<&String> = Vec::new();
         let mut slab_refusals: Vec<&String> = Vec::new();
         let mut base_refusals: Vec<&String> = Vec::new();
+        let mut end_refusals: Vec<&String> = Vec::new();
         let mut profile_resolved = false;
         for property in property_set.iter().flat_map(|set| &set.properties) {
             match (property.name.as_str(), &property.value) {
@@ -4961,6 +4977,10 @@ pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportD
                     export_content::WALL_BASE_REFUSAL_PROPERTY,
                     entities::PropertyValue::Text(text),
                 ) => base_refusals.push(text),
+                (
+                    export_content::WALL_END_REFUSAL_PROPERTY,
+                    entities::PropertyValue::Text(text),
+                ) => end_refusals.push(text),
                 ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
                 (
                     export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
@@ -4997,6 +5017,13 @@ pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportD
             push(
                 DecisionStage::BodyLeftAsBox,
                 "wall_base_cut_refused",
+                Some(text),
+            );
+        }
+        for text in end_refusals {
+            push(
+                DecisionStage::BodyLeftAsBox,
+                "wall_end_extension_refused",
                 Some(text),
             );
         }
