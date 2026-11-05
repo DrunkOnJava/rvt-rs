@@ -184,8 +184,8 @@ pub fn recover_partition_schema_mvp(
     }
 
     // --- Revit 2015 to 2023 element records (RE-81, RE-180, RE-181, #421):
-    // identity, category and box only; nothing else 2024 decodes on top of
-    // records is read. ---
+    // identity, category, box and the readers called here; nothing else 2024
+    // decodes on top of records is read. ---
     if crate::partition_element_records_2023::is_32bit_release(revit_version) {
         recover_2023_records(rf, revit_version, &mut out);
         attach_room_outlines(rf, revit_version, &mut out.rooms);
@@ -219,6 +219,13 @@ pub fn recover_partition_schema_mvp(
         resolve_base_constraint_levels(&level_elevations, &mut record_backed);
         resolve_base_at_level(&level_elevations, &mut record_backed);
         resolve_remaining_levels(&level_elevations, &mut record_backed);
+        // --- Beams along their location lines, the rotation first (RE-276, RE-49,
+        // RE-348). A beam a named column trims keeps its cut box (RE-122): its
+        // line leaves that box, so none is attached. ---
+        if crate::partition_beam_axes::beam_axis_read_on(revit_version) {
+            attach_beam_rotations(rf, &mut out.products);
+            attach_beam_axes(rf, revit_version, &mut out.products);
+        }
         // --- System families' names (RE-63); a wall's, roof's or
         // ceiling's needs its type's layers, not read on 2023 ---
         attach_system_family_names(

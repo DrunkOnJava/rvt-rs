@@ -267,7 +267,7 @@ pub(super) fn attach_beam_axes(
     products: &mut [DecodedElement],
 ) {
     use crate::partition_beam_axes as pba;
-    if !pba::supports_revit_version(revit_version) {
+    if !pba::beam_axis_read_on(revit_version) {
         return;
     }
     let beams: BTreeSet<u32> = products
@@ -278,7 +278,7 @@ pub(super) fn attach_beam_axes(
     if beams.is_empty() {
         return;
     }
-    let Ok(lines) = pba::scan_bounded_lines(rf, revit_version, &beams) else {
+    let Ok(lines) = pba::scan_first_bounded_lines(rf, revit_version, &beams) else {
         return;
     };
     for element in products
@@ -325,6 +325,7 @@ pub(super) fn attach_beam_rotations(rf: &mut RevitFile, products: &mut [DecodedE
     }
     let options = crate::native_document::Options {
         selected_ids: beams,
+        releases: crate::native_document::NATIVE_RELEASES,
         ..Default::default()
     };
     let mut rotations: BTreeMap<u64, Option<f64>> = BTreeMap::new();

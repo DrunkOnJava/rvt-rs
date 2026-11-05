@@ -82,6 +82,18 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
     BEAM_AXIS_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
 }
 
+/// Releases where a beam's location line and rotation are read from the 32-bit
+/// records, apart from [`BEAM_AXIS_SUPPORTED_REVIT_VERSIONS`], which also gates
+/// a sketch line's arcs, circles and shaft lines, not measured there. The line
+/// is the record a wall's is on these releases (RE-114, RE-180, RE-181); the
+/// beams are held to the same Autodesk samples saved by Revit 2024 (RE-348).
+pub const BEAM_AXIS_32BIT_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2023;
+
+/// Whether a beam's location line is read on `revit_version`.
+pub fn beam_axis_read_on(revit_version: u32) -> bool {
+    supports_revit_version(revit_version) || BEAM_AXIS_32BIT_REVIT_VERSIONS.contains(&revit_version)
+}
+
 /// A bounded line record.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BoundedLine {
