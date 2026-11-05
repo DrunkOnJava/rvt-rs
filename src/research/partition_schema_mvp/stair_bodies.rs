@@ -321,8 +321,10 @@ pub(super) fn push_stair_run_body(
     }
 }
 
-/// Give each Revit 2025 stair run the treads and risers its native records
-/// describe (#357, RE-217): its own run type, the one `OST_StairsRuns` type
+/// Give each stair run of Revit 2025, 2026 or 2027
+/// ([`crate::native_stairs::NATIVE_RUN_REVIT_VERSIONS`]) the treads and risers
+/// its native records describe (#357, RE-217; 2026 and 2027 RE-341, against the
+/// same samples saved by 2025): its own run type, the one `OST_StairsRuns` type
 /// definition its element record's reference list names (RE-28), as
 /// [`attach_stair_run_bodies`] reads it on Revit 2024; its sketch and that
 /// type's construction from [`crate::native_stairs::native_runs`]; drawn as

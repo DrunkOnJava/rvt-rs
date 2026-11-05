@@ -39,7 +39,12 @@ use crate::native_json::element_id_i64;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Releases this layout is measured on.
+/// Releases this layout is measured on. Revit 2026 and 2027 are left out
+/// (RE-341): they would take the 2024 reading of the slope (the fascia, rafter
+/// cut and plate offset of 2025 are not read there), `rac_advanced`'s sloped
+/// roof drawn so is its 2024 save's body (532 triangles) and not its 2025
+/// save's (12 triangles), and no Revit export of a 2026 or 2027 roof scores
+/// either.
 pub const ROOF_SLOPE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025];
 
 /// How far into a sketch line's data its slope block is looked for.
