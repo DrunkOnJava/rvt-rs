@@ -16,8 +16,13 @@
 //!   wall <wall> <body length> <digest of the body>
 //!   cutter <cutter> <class> <body length> <digest of the body>
 //!   stepjson <wall> <cutter> <step class> <the step's fields>
-//!   wobj <wall> <index> <class> <digest of the object's fields>
-//!   cobj <cutter> <index> <class> <digest of the object's fields>
+//!   wobj <wall> <index> <class> <digest of the object's fields without their stream offsets>
+//!   cobj <cutter> <index> <class> <digest of the object's fields without their stream offsets>
+//!   case <id> <index> <class> <the object's fields>
+//!
+//! `case` lines are printed for the walls and cutters of the six openings
+//! RE-338 section 6 compares (one office file's export omits each and the
+//! other's holds it), whose ElementIds are `CASES`.
 //!   prec <id> <stream> <length> <digest of the record's bytes>
 //!
 //! Usage:
@@ -38,6 +43,32 @@ const STEPS: [&str; 4] = [
     "WallRectOpeningGStep",
     "WallShadowCutoutGStep",
 ];
+
+/// The ElementIds of the walls and cutters of the six openings.
+const CASES: [u64; 11] = [
+    1815838, 1815871, 1892039, 1892067, 1494012, 3388647, 3363820, 3387194, 1728013, 3390319,
+    1728679,
+];
+
+/// `fields` without the stream offsets of its pointers, which say where in a
+/// stream an object was saved and not what it holds.
+fn without_offsets(fields: &Value) -> Value {
+    match fields {
+        Value::Object(members) => Value::Object(
+            members
+                .iter()
+                .filter(|(name, _)| name.as_str() != "offset")
+                .map(|(name, member)| (name.clone(), without_offsets(member)))
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(items.iter().map(without_offsets).collect()),
+        other => other.clone(),
+    }
+}
+
+fn object_digest(fields: &Value) -> String {
+    digest(without_offsets(fields).to_string().as_bytes())
+}
 
 fn digest(bytes: &[u8]) -> String {
     let digits: Vec<String> = Sha256::digest(bytes)
@@ -92,8 +123,14 @@ fn probe(path: &str) -> Result<()> {
                 println!(
                     "wobj {wall} {index} {} {}",
                     object.class_name,
-                    digest(object.fields.to_string().as_bytes())
+                    object_digest(&object.fields)
                 );
+                if CASES.contains(&wall) {
+                    println!(
+                        "case {wall} {index} {} {}",
+                        object.class_name, object.fields
+                    );
+                }
             }
             let body = record.body.as_deref().unwrap_or_default();
             println!("wall {wall} {} {}", body.len(), digest(body));
@@ -112,8 +149,14 @@ fn probe(path: &str) -> Result<()> {
                     "cobj {} {index} {} {}",
                     record.identity.element_id,
                     object.class_name,
-                    digest(object.fields.to_string().as_bytes())
+                    object_digest(&object.fields)
                 );
+                if CASES.contains(&record.identity.element_id) {
+                    println!(
+                        "case {} {index} {} {}",
+                        record.identity.element_id, object.class_name, object.fields
+                    );
+                }
             }
         }
         let body = record.body.as_deref().unwrap_or_default();
