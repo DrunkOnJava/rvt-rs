@@ -1456,13 +1456,13 @@ fn graphics_impl<'a>(
                     .resolve(oi, &obj.fields["m_pFacetedTopology"])?
                     .context("faceted topology")?;
                 let topology = &g.objects[ti];
-                // FacetedTopology8 and 9 have FacetedTopology0's points, normals
-                // and facets and one more array, `m_edgeVisFlagsArr`, which is
-                // not read (RE-342). The other classes stay refused.
+                // FacetedTopology9 has FacetedTopology0's points, normals and
+                // facets and one more array, `m_edgeVisFlagsArr`, which is not
+                // read (RE-342). The other classes stay refused.
                 ensure!(
                     matches!(
                         topology.class_name.as_str(),
-                        "FacetedTopology0" | "FacetedTopology8" | "FacetedTopology9"
+                        "FacetedTopology0" | "FacetedTopology9"
                     ),
                     "unsupported faceted topology"
                 );
