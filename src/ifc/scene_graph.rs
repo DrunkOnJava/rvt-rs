@@ -223,6 +223,12 @@ pub struct PanelLayers {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct ElementInfoPanel {
+    /// Index into `model.entities` of the element this panel describes: the
+    /// index the panel was asked for or, for a piece the export folds into the
+    /// body of another element, the element that owns it. A viewer that lets a
+    /// click pick a drawn piece selects this one.
+    #[serde(default)]
+    pub entity_index: usize,
     pub name: String,
     pub ifc_type: String,
     pub type_guid: Option<String>,
@@ -250,7 +256,10 @@ pub struct ElementInfoPanel {
     #[serde(default)]
     pub placement_rows: Vec<PanelRow>,
     /// Extrusion extents as labelled rows in feet. Empty
-    /// when the element carries no extrusion.
+    /// when the element carries no extrusion, and for an element with folded
+    /// pieces: the export writes its body as several items, which one width,
+    /// depth and height cannot state, and its extrusion is the first loop
+    /// alone.
     #[serde(default)]
     pub extent_rows: Vec<PanelRow>,
     /// Material display name resolved through the model's
@@ -308,7 +317,8 @@ pub struct ElementInfoPanel {
 /// ([`storey_of`] over [`placements`]). A piece the export folds into the body
 /// of another element ([`Placement::Folded`]), which the 3-D view still draws
 /// and a click can pick, has no element of its own there: its panel is that of
-/// the element whose body it is part of.
+/// the element whose body it is part of, and [`ElementInfoPanel::entity_index`]
+/// names that element. An element with folded pieces has no extent rows.
 // Tracker: VW1-08.
 pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<ElementInfoPanel> {
     let placed = placements(model);
@@ -421,7 +431,15 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         })
         .collect();
     let placement_rows = placement_rows(location_feet.as_ref(), rotation_radians.as_ref());
-    let extent_rows = extent_rows(extrusion.as_ref());
+    // An element with folded pieces is written with a body of several items,
+    // and its extrusion is the first loop alone: no size is stated for it, and
+    // none is missing (the elements CSV leaves the same cells empty).
+    let folded_body = has_folded_pieces(model, &placed, entity_index);
+    let extent_rows = if folded_body {
+        Vec::new()
+    } else {
+        extent_rows(extrusion.as_ref())
+    };
     let missing = missing_fields(
         storey.is_some(),
         material.is_some(),
@@ -430,7 +448,7 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
             .chain(&further_property_groups)
             .any(|g| !g.properties.is_empty()),
         !placement_rows.is_empty(),
-        !extent_rows.is_empty(),
+        !extent_rows.is_empty() || folded_body,
     );
     let host = host_element_index.and_then(|i| related_element(model, i));
     let hosted: Vec<RelatedElement> = model
@@ -450,6 +468,7 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         .collect();
     let joins = wall_joins(model, property_set.as_ref());
     Some(ElementInfoPanel {
+        entity_index,
         name: name.clone(),
         ifc_type: ifc_type.clone(),
         type_guid: type_guid.clone(),
@@ -478,6 +497,15 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
 /// element ([`Placement::Folded`]), by the `placements` of its model.
 fn is_folded(placed: &[Option<Placement>], index: usize) -> bool {
     matches!(placed.get(index), Some(Some(Placement::Folded)))
+}
+
+/// Whether the export folds a further piece into the body of the element at
+/// `index`, so its body is several items.
+fn has_folded_pieces(model: &IfcModel, placed: &[Option<Placement>], index: usize) -> bool {
+    model
+        .body_pieces
+        .get(&index)
+        .is_some_and(|pieces| pieces.iter().any(|piece| is_folded(placed, *piece)))
 }
 
 /// The element the export writes for the entity at `index`: the entity itself,
@@ -967,41 +995,68 @@ pub fn build_scene_graph(model: &IfcModel) -> SceneNode {
     // "unassigned" entities.
     let mut per_storey: Vec<Vec<usize>> = vec![Vec::new(); model.building_storeys.len()];
     let mut unassigned: Vec<usize> = Vec::new();
+    let placed = placements(model);
+
+    // The elements the export writes, and for each one hosted by an element
+    // written on the same storey, that host.
+    let mut written: Vec<usize> = Vec::new();
+    let mut host_of: std::collections::BTreeMap<usize, usize> = std::collections::BTreeMap::new();
+    for (idx, ent) in model.entities.iter().enumerate() {
+        let IfcEntity::BuildingElement {
+            host_element_index, ..
+        } = ent
+        else {
+            continue;
+        };
+        if is_folded(&placed, idx) {
+            continue;
+        }
+        written.push(idx);
+        if let Some(host) = *host_element_index {
+            let host_here = host != idx
+                && matches!(
+                    model.entities.get(host),
+                    Some(IfcEntity::BuildingElement { .. })
+                )
+                && !is_folded(&placed, host)
+                && storey_of(&placed, host) == storey_of(&placed, idx);
+            if host_here {
+                host_of.insert(idx, host);
+            }
+        }
+    }
+    // Two elements that host each other (or a longer ring) have no top to
+    // hang from: the lowest index of each ring becomes a node of its own
+    // storey instead.
+    for &idx in &written {
+        let mut seen = vec![idx];
+        let mut at = idx;
+        while let Some(&host) = host_of.get(&at) {
+            if seen.contains(&host) {
+                let ring_top = seen.iter().skip_while(|s| **s != host).min().copied();
+                if let Some(top) = ring_top {
+                    host_of.remove(&top);
+                }
+                break;
+            }
+            seen.push(host);
+            at = host;
+        }
+    }
     // Map from entity_index -> Vec<child entity_index> for
     // host_element_index relationships.
     let mut hosted_children: std::collections::BTreeMap<usize, Vec<usize>> =
         std::collections::BTreeMap::new();
-    let placed = placements(model);
-
-    for (idx, ent) in model.entities.iter().enumerate() {
-        if let IfcEntity::BuildingElement {
-            host_element_index, ..
-        } = ent
-        {
-            if is_folded(&placed, idx) {
-                continue;
-            }
-            let storey = storey_of(&placed, idx);
-            // Nested under a host written on the same storey; otherwise a
-            // node of its own storey, so no element is lost to a host that
-            // is not a node there.
-            if let Some(host) = *host_element_index {
-                let host_here = host != idx
-                    && matches!(
-                        model.entities.get(host),
-                        Some(IfcEntity::BuildingElement { .. })
-                    )
-                    && !is_folded(&placed, host)
-                    && storey_of(&placed, host) == storey;
-                if host_here {
-                    hosted_children.entry(host).or_default().push(idx);
-                    continue;
-                }
-            }
-            match storey.and_then(|si| per_storey.get_mut(si)) {
-                Some(bucket) => bucket.push(idx),
-                None => unassigned.push(idx),
-            }
+    for (&child, &host) in &host_of {
+        hosted_children.entry(host).or_default().push(child);
+    }
+    for &idx in &written {
+        if host_of.contains_key(&idx) {
+            continue;
+        }
+        match storey_of(&placed, idx).and_then(|si| per_storey.get_mut(si)) {
+            Some(bucket) => bucket.push(idx),
+            None => unassigned.push(idx),
         }
     }
 

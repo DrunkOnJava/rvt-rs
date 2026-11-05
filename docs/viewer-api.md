@@ -65,8 +65,9 @@ use rvt::ifc::scene_graph::{
   the IFC export puts it in (`step_writer::storey_of` over
   `step_writer::placements`, the writer's own decision, which the MCP
   server and the elements CSV read as well): the storey it is contained
-  in, that of its room, that of its whole (a part of a stair, a railing
-  or a curtain wall) or that of the host an opening cuts. An element the
+  in, that of its room, that of its whole (a stair's run, landing or
+  stringer, or a curtain wall's member) or that of the host an opening
+  cuts. An element the
   export contains in the building only, with no storey, is under the
   synthetic `Unassigned` storey. A piece the export folds into the body of
   another element (a further piece of an element of separate loops) is not
@@ -98,6 +99,16 @@ use rvt::ifc::scene_graph::{
     the export folds into the body of another element is still drawn, so a
     click can pick it, and its panel is that of the element whose body it is
     part of.
+  - `entity_index` is the index of the element the panel describes: the one
+    asked for or, for a folded piece, the element that owns it. The viewer
+    selects that element (its tree row, its GlobalId, and a highlight and a
+    zoom over the element and all its pieces, `IfcModel::body_pieces`), so a
+    click on any loop of a ceiling of separate loops selects the ceiling.
+    Serialised models from before it carry none: it reads as 0.
+  - `extent_rows` is empty for an element with folded pieces: the export
+    writes its body as several items, which one width, depth and height
+    cannot state, and the elements CSV leaves the same size cells empty. Its
+    `missing` does not list `extents`.
   - `material: Option<PanelMaterial { index, name, element_count }>`
     resolves `material_index` and counts the elements using it, directly
     or as one of their layers.

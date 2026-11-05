@@ -17,8 +17,16 @@
 //! top of its chain of hosts) and compares them with what the three functions
 //! return now: the schedule's rows, the tree's nodes and a sample of panels
 //! (every element whose storey moves up to a cap, every folded piece up to a
-//! cap, and an even spread of the rest). Counts and IFC types only: no name, id
-//! or coordinate is printed.
+//! cap, every element with folded pieces up to a cap, and an even spread of the
+//! rest). Counts and IFC types only: no name, id or coordinate is printed.
+//!
+//! The checks derive from `step_writer::placements`, which the three functions
+//! also read, so they prove the plumbing (that the viewer's three views follow
+//! the writer's decision, and what moves against main's rule), not that the
+//! decision is right. The independent evidence for the decision is the MCP
+//! scorer reading the written IFC (`consistency element storeys`, 0 differ on
+//! 53 models, Measure run 41977947391). Nothing here exercises a click: no
+//! browser test reaches a folded piece (Einhoven has none).
 //!
 //! Output, one line per item:
 //!   elements <n> folded <n> written <n>
@@ -29,7 +37,8 @@
 //!   tree nodes before <n> after <n> removed <n> added <n>
 //!   tree unassigned before <n> after <n>
 //!   tree moved ...                                   as for the schedule
-//!   panel checked <n> moved <n> (of <n> that move) folded <n>
+//!   panel checked <n> moved <n> (of <n> that move) folded <n> owners <n>
+//!   panel size-rows-left-out <n> of <n> elements with folded pieces
 //!   panel moved ...                                  as for the schedule
 //!   check <name> ok | FAIL <detail>
 //!
@@ -47,6 +56,7 @@ use rvt::ifc::{ExportOptions, IfcModel, run_export};
 
 const PANEL_MOVED_CAP: usize = 2000;
 const PANEL_FOLDED_CAP: usize = 300;
+const PANEL_OWNER_CAP: usize = 300;
 const PANEL_SPREAD: usize = 300;
 
 type Buckets = BTreeMap<usize, Option<usize>>;
@@ -247,6 +257,19 @@ fn main() -> Result<()> {
 
     let mut sample: Vec<usize> = moved.iter().copied().take(PANEL_MOVED_CAP).collect();
     sample.extend(folded_pieces.iter().copied().take(PANEL_FOLDED_CAP));
+    let written_set: BTreeSet<usize> = written.iter().copied().collect();
+    let with_folded_pieces: Vec<usize> = model
+        .body_pieces
+        .iter()
+        .filter(|(owner, pieces)| {
+            written_set.contains(*owner)
+                && pieces
+                    .iter()
+                    .any(|piece| matches!(placed.get(*piece), Some(Some(Placement::Folded))))
+        })
+        .map(|(owner, _)| *owner)
+        .collect();
+    sample.extend(with_folded_pieces.iter().copied().take(PANEL_OWNER_CAP));
     let stride = (written.len() / PANEL_SPREAD).max(1);
     sample.extend(written.iter().copied().step_by(stride).take(PANEL_SPREAD));
     sample.sort_unstable();
@@ -263,6 +286,10 @@ fn main() -> Result<()> {
     let mut panel_missing = 0usize;
     let mut folded_checked = 0usize;
     let mut folded_wrong = 0usize;
+    let mut owners_checked = 0usize;
+    let mut size_rows_left_out = 0usize;
+    let mut extents_wrong = 0usize;
+    let mut index_wrong = 0usize;
     for &index in &sample {
         let Some(IfcEntity::BuildingElement {
             ifc_type,
@@ -279,6 +306,27 @@ fn main() -> Result<()> {
         let is_folded = matches!(placed.get(index), Some(Some(Placement::Folded)));
         let target = if is_folded { owner_of(index) } else { index };
         let expected = storey_of(&placed, target);
+        if panel.entity_index != target {
+            index_wrong += 1;
+        }
+        let owner_with_folded = with_folded_pieces.contains(&target);
+        if owner_with_folded && !is_folded {
+            owners_checked += 1;
+            if panel.extent_rows.is_empty() {
+                size_rows_left_out += 1;
+            }
+        }
+        let size_stated = !panel.extent_rows.is_empty();
+        let says_extents_missing = panel.missing.iter().any(|m| m == "extents");
+        let extrusion_of_target = match model.entities.get(target) {
+            Some(IfcEntity::BuildingElement { extrusion, .. }) => extrusion.is_some(),
+            _ => false,
+        };
+        if size_stated != (extrusion_of_target && !owner_with_folded)
+            || (owner_with_folded && says_extents_missing)
+        {
+            extents_wrong += 1;
+        }
         let got = panel.storey.as_ref().map(|s| s.index);
         panel_moves.record(
             own(storey_index),
@@ -309,10 +357,14 @@ fn main() -> Result<()> {
         }
     }
     println!(
-        "panel checked {} moved {} (of {} that move) folded {folded_checked}",
+        "panel checked {} moved {} (of {} that move) folded {folded_checked} owners {owners_checked}",
         sample.len() - panel_missing,
         panel_moves.total(),
         moved.len()
+    );
+    println!(
+        "panel size-rows-left-out {size_rows_left_out} of {} elements with folded pieces",
+        with_folded_pieces.len()
     );
     panel_moves.print("panel");
 
@@ -324,7 +376,6 @@ fn main() -> Result<()> {
             println!("check {name} FAIL {detail}");
         }
     };
-    let written_set: BTreeSet<usize> = written.iter().copied().collect();
     let row_set: BTreeSet<usize> = schedule.rows.iter().map(|r| r.entity_index).collect();
     check(
         "schedule-rows",
@@ -401,6 +452,18 @@ fn main() -> Result<()> {
         (panel_wrong > 0 || panel_missing > 0).then(|| {
             format!("{panel_wrong} panels off the placements' storey, {panel_missing} missing")
         }),
+    );
+    check(
+        "panel-extents",
+        (extents_wrong > 0 || size_rows_left_out != owners_checked).then(|| {
+            format!(
+                "{extents_wrong} panels state a size of a body of several items or leave out one of a plain extrusion, {size_rows_left_out} of {owners_checked} elements with folded pieces without size rows"
+            )
+        }),
+    );
+    check(
+        "panel-entity-index",
+        (index_wrong > 0).then(|| format!("{index_wrong} panels not naming the written element")),
     );
     check(
         "panel-folded",

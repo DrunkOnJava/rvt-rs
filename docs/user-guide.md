@@ -109,7 +109,9 @@ second line, so "Basic Wall:8" Interior Partition 3 Hour:20796" reads as
 opens to its panels and mullions, and a stair to its flights. Doors and
 windows are listed in their own category; the info panel names the wall
 that hosts them. Selecting a category lights up its elements. Picking an
-element in the 3-D view opens its category and scrolls to it. The arrow
+element in the 3-D view opens its category and scrolls to it. An element of
+separate loops, such as a ceiling, is one row: picking any of its loops
+selects it, and its highlight and its zoom cover all of them. The arrow
 keys move through the tree: Right opens a row, Left closes it or moves to
 its parent, and Home and End go to the first and last rows.
 
@@ -121,9 +123,10 @@ Escape clears the filter.
 
 Selecting an element fills the info panel with typed rows rather than raw
 record fields: name, IFC type and predefined type, ElementId, Revit's own
-GlobalId where the file yields it (RE-48), the storey it sits
+GlobalId where the file yields it (RE-48), the storey the IFC export puts it
 on (clickable — it selects that storey in the tree), placement and extents
-in feet, and each property set as labelled rows carrying their units. Host
+in feet (none for an element of separate loops, whose body is several items),
+and each property set as labelled rows carrying their units. Host
 and hosted rows let you jump from a door or window to its wall and back.
 The schedule groups the elements by IFC type with a count per type, and each
 row toggles a tint over every mesh of that type in the 3-D scene. Where a

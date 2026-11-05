@@ -191,7 +191,10 @@ tick();
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
-/** The entity drawn under a pointer position, if any. */
+/**
+ * The entity drawn under a pointer position, if any: for a piece folded into
+ * another element's body, the element that owns it.
+ */
 function pickEntity(ev: MouseEvent): number | null {
   if (!currentModel) return null;
   const rect = renderer.domElement.getBoundingClientRect();
@@ -201,7 +204,8 @@ function pickEntity(ev: MouseEvent): number | null {
   const hits = raycaster.intersectObject(currentModel, true);
   if (hits.length === 0) return null;
   const userData = hits[0]!.object.userData as { entityIndex?: number };
-  return userData.entityIndex ?? null;
+  // A click on any loop of an element of separate loops picks the element.
+  return userData.entityIndex === undefined ? null : writtenElementOf(userData.entityIndex);
 }
 
 // A click selects; a drag orbits without changing the selection.
@@ -269,9 +273,49 @@ let activeTypeHighlight: string | null = null;
 /** Which material index the info panel is currently lighting up. */
 let activeMaterialHighlight: number | null = null;
 
-/** Tint every mesh carrying `entityIndex` so the scene agrees with the tree. */
+/**
+ * Tint every mesh of element `idx` and of the pieces folded into its body, so
+ * the scene agrees with the tree.
+ */
 function highlightEntity(idx: number): void {
-  highlightWhere((data) => data.entityIndex === idx);
+  const indices = withBodyPieces([idx]);
+  highlightWhere((data) => data.entityIndex !== undefined && indices.has(data.entityIndex));
+}
+
+/** The pieces the IFC export folds into the body of element `owner` (#823). */
+function bodyPiecesOf(owner: number): number[] {
+  const pieces = model?.body_pieces;
+  if (pieces instanceof Map) return pieces.get(owner) ?? [];
+  return pieces?.[String(owner)] ?? [];
+}
+
+/**
+ * The element the IFC export writes for the drawn entity `idx`: the element
+ * that owns it where it is a piece folded into that element's body, else
+ * `idx` itself. The info panel says the same in `entity_index`.
+ */
+function writtenElementOf(idx: number): number {
+  const pieces = model?.body_pieces;
+  const owners: Array<[number | string, number[]]> =
+    pieces instanceof Map ? [...pieces] : Object.entries(pieces ?? {});
+  for (const [owner, list] of owners) {
+    if (list.includes(idx)) return Number(owner);
+  }
+  return idx;
+}
+
+/**
+ * `indices` and the pieces folded into the body of any owner among them. The
+ * 3-D view draws each piece as a mesh of its own, but the tree, the panel and
+ * the schedule know the owner only, so a selection, a highlight or a zoom of
+ * the owner has to cover them.
+ */
+function withBodyPieces(indices: Iterable<number>): Set<number> {
+  const out = new Set<number>(indices);
+  for (const idx of [...out]) {
+    for (const piece of bodyPiecesOf(idx)) out.add(piece);
+  }
+  return out;
 }
 
 /** Tint every mesh of one IFC type — the schedule's "show in view". */
@@ -357,7 +401,7 @@ function entityIndicesUnder(item: TreeItem): Set<number> {
     n.children.forEach(walk);
   };
   walk(item);
-  return out;
+  return withBodyPieces(out);
 }
 
 /**
@@ -367,10 +411,11 @@ function entityIndicesUnder(item: TreeItem): Set<number> {
  */
 function frameEntities(indices: Set<number>, label: string): boolean {
   if (!currentModel) return false;
+  const wanted = withBodyPieces(indices);
   const box = new THREE.Box3();
   currentModel.traverse((obj) => {
     const idx = (obj.userData as { entityIndex?: number }).entityIndex;
-    if ((obj as THREE.Mesh).isMesh && idx !== undefined && indices.has(idx)) {
+    if ((obj as THREE.Mesh).isMesh && idx !== undefined && wanted.has(idx)) {
       box.expandByObject(obj);
     }
   });
@@ -784,6 +829,13 @@ interface IfcModel {
    * a Rust map over as a `Map`; JSON gives an object keyed by string.
    */
   global_ids?: { elements?: Map<number, string> | Record<string, string> };
+  /**
+   * The further pieces of an element of separate loops that the IFC export
+   * writes as items of the owner's body, by the owner's entity index (#823).
+   * The pieces stay in `entities` and are drawn, as a `Map` from
+   * serde-wasm-bindgen and an object keyed by string in JSON.
+   */
+  body_pieces?: Map<number, number[]> | Record<string, number[]>;
   entities?: Array<{
     kind?: string;
     name: string;
@@ -844,6 +896,11 @@ interface PanelLayers {
   total: string;
 }
 interface ElementInfoPanel {
+  /**
+   * The element the panel describes: the one asked for or, for a piece the
+   * export folds into another element's body, the element that owns it.
+   */
+  entity_index?: number;
   name: string;
   ifc_type: string;
   type_guid?: string | null;
@@ -1208,8 +1265,19 @@ async function loadBytes(file: File, limits?: OpenLimitsOptions): Promise<void> 
     if (msg.type === 'info') {
       // Stale reply for an element the user already clicked past.
       if (msg.index !== pendingInfoIndex) return;
-      if (msg.panel) renderElementPanel(msg.panel);
-      else renderScaffoldPanel(msg.index);
+      if (msg.panel) {
+        // A drawn piece the export folds into another element's body is that
+        // element: select it, as a click on the element itself would.
+        const written = msg.panel.entity_index;
+        if (written !== undefined && written !== msg.index) {
+          selectedIndex = written;
+          selectTreeRow(written);
+          highlightEntity(written);
+        }
+        renderElementPanel(msg.panel);
+      } else {
+        renderScaffoldPanel(msg.index);
+      }
       return;
     }
     if (msg.type === 'stage') {
@@ -1702,7 +1770,10 @@ function buildTreeItems(root: SceneNode): TreeItem {
   for (const e of model?.entities ?? []) {
     if (e.kind !== 'Aggregate' || e.whole === undefined) continue;
     for (const part of e.parts ?? []) {
-      if (part !== e.whole && inTree.has(e.whole)) wholeOf.set(part, e.whole);
+      // A part of several wholes takes the first, as the export does.
+      if (part !== e.whole && inTree.has(e.whole) && !wholeOf.has(part)) {
+        wholeOf.set(part, e.whole);
+      }
     }
   }
   // A part whose chain of wholes loops back to it stays a row of its own.
@@ -2156,10 +2227,16 @@ function buildTreeRow(item: TreeItem, level: number): HTMLElement {
 function renderCategories(): void {
   categoriesEl.innerHTML = '';
   // The project and its storeys draw nothing, so they have no toggle.
+  // The elements the tree lists, which are the ones the IFC export writes: a
+  // piece folded into another element's body is drawn but not counted.
   const counts = new Map<string, number>();
-  for (const e of model?.entities ?? []) {
-    if (e.kind === 'BuildingElement') counts.set(e.ifc_type, (counts.get(e.ifc_type) ?? 0) + 1);
-  }
+  const countListed = (node: SceneNode) => {
+    if (node.entity_index !== null) {
+      counts.set(node.ifc_type, (counts.get(node.ifc_type) ?? 0) + 1);
+    }
+    node.children.forEach(countListed);
+  };
+  if (sceneGraph) countListed(sceneGraph);
   for (const t of distinctTypes) {
     if (t === 'IFCPROJECT' || t === 'IFCBUILDINGSTOREY') continue;
     const row = document.createElement('label');
