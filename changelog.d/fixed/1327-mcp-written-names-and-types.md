@@ -25,18 +25,21 @@
   absent where the writer makes no type object, which it used to be served
   for. The tool output schemas change, and so does the contract in
   `docs/mcp-tools.json`.
-  Measured with the scorer of #1404 (its branch head 9fbb594c), all on head
-  6c994f30 with `base=none`: run 41951524664 passes every consistency check
-  on Einhoven, Core Interior and the four RE1 models, 6 of 6, where run
-  41949014871 (the scorer of 1895e771, main's server) failed all 6; run
-  41951554180 passes 19 of the 24 Revit 2025 models (1 before, run
-  41949021964), the 5 that fail being the stair models, on the level of a
-  stair's parts; run 41951550715 passes the office's names, long names, type
-  objects and their sets and fails four checks still. As built it lists 158
-  `IfcCovering` rows against the export's 111, and 599 of 12,974 rows and 8
-  of 10 levels' counts differ; at permit, 122 coverings against 75, 599 of
-  13,020 rows and 7 of 10 levels. The IFC text `rvt-ifc` writes is unchanged
-  by the move: in run 41951527615 (`base=main` at 77d71cbb, `scorers=none`)
-  the `ifc.sha256` of 34 of 34 models, the reference models, the four office
-  files and the 24 Revit 2025 models, is identical. The held-out models and
-  Autodesk's samples were not run.
+  Measured with the scorer of #1404 (30480145), on head 34ace109 with
+  `base=none`: run 41954686452 passes 25 of 32 models. The 6 reference
+  models (Einhoven, Core Interior, RE1) pass, where run 41949014871 (the
+  1895e771 scorer, main's server) failed all 6, and 19 of the 24 Revit 2025
+  models pass (1 before, run 41949021964); the 5 that fail are the stair
+  models, on the level of a stair's parts and the levels' counts. The
+  BIM4LCA office as built and at permit fails counts, element membership,
+  element storeys and levels: as built 158 `IfcCovering` rows against the
+  export's 111, 599 of 12,974 rows and 8 of 10 levels' counts; at permit 122
+  against 75, 599 of 13,020 rows and 7 of 10 levels. It also failed the
+  rooms check, which that scorer got wrong for the 44 family instances
+  written as spaces (9b51c1a8 corrects it; run 41957587403 on this branch's
+  tip re-measures it). Its names, long names, type objects and their sets
+  are equal. The IFC text `rvt-ifc` writes is unchanged by the move: in run
+  41954681945 (`base=main` at 07caf059, `scorers=none`) the `ifc.sha256` of
+  34 of 34 models, the reference models, the four office files and the 24
+  Revit 2025 models, is identical. The held-out models and Autodesk's
+  samples were not run.
