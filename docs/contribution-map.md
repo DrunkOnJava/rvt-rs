@@ -62,7 +62,7 @@ The requirements these serve, each with its bar, status and evidence, are in
 | [#1209](https://github.com/DrunkOnJava/rvt-rs/issues/1209) | W7: coverings' `GrossArea` on ceilings in pieces and cut ceilings, and the roofing coverings (RE-297) |
 | [#1208](https://github.com/DrunkOnJava/rvt-rs/issues/1208) | W7: single-layer slabs' `Width` and `Length`, sloped floors' `Depth` and the stair landings' volume (RE-295) |
 | [#1207](https://github.com/DrunkOnJava/rvt-rs/issues/1207) | W7: spaces' `GrossVolume`, stepped rooms' `NetVolume` and Revit 25's area quantities |
-| [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203) | W7: the round column and the 18 meshed columns' values; a joined column's `Length` is written where RE-291's rule takes it |
+| [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203) | W7: the round column's `CrossSectionArea`, `GrossVolume` and `NetVolume` (not the circle's), the one meshed column a cut wall touches and the cut columns on releases other than Revit 2024; its `OuterSurfaceArea`, the meshed columns' two quantities and a joined column's `Length` are written (RE-353, RE-291) |
 | [#1193](https://github.com/DrunkOnJava/rvt-rs/issues/1193) | W7: the BIM4LCA office's remaining property values without a rule (column Slope, opening Reference, mullion Span, sloped slab PitchAngle) |
 | [#1192](https://github.com/DrunkOnJava/rvt-rs/issues/1192) | W10: check that every number in the README and the supported profile names its model |
 | [#1191](https://github.com/DrunkOnJava/rvt-rs/issues/1191) | W6: draw family instances from their saved meshes by default (decode the remaining saved-graphics faces) |

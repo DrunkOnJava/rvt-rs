@@ -107,10 +107,11 @@ save shares; it compares bodies, not quantities or property sets. No 2026 or
 2027 held-out model holds a beam, so the beam reader has run only on two
 Autodesk samples saved from earlier releases, never on a natively authored
 2026 beam. **On 2025 no Revit export checks a beam, tread landing or arc
-either** (RE-345): the 25 models with Revit's own 2025 exports (puzzbobb's
-24 and RE1 Architecture) hold 0 beams, 0 tread landings, 0 shaft openings and 0
-floors, ceilings or roofs whose sketch holds an arc, and their
-exports are byte for byte `main`'s. The 2025 saves of `rac_advanced` and
+either** (RE-345): the 28 Revit 2025 models read (puzzbobb's 24 and RE1's four)
+hold 0 beams and 0 tread landings, and the 25 with Revit's own 2025 exports
+(puzzbobb's 24 and RE1 Architecture) hold 0 shaft openings and 0 floors,
+ceilings or roofs whose sketch holds an arc, and their exports are byte for
+byte `main`'s. The 2025 saves of `rac_advanced` and
 `rst_basic` are held to their 2024 saves: 391 beams and 5 tread landings equal,
 and of the 7 elements whose sketch holds an arc, 2 (a floor and a roof of
 rac_advanced) are compared as drawn outlines and equal, the ceiling and a
@@ -140,7 +141,7 @@ own IFC export of the same file wherever one exists; the measured tables are in 
 levels a file can reach (opened, elements identified, geometry, properties)
 are in the [supported profile](supported-profile.md). On Revit 2023 to 2027
 files, and experimentally on 2015 to 2022 ones (RE-281), `rvt-elements` and Python also list each element's saved parameters,
-named where the file defines them (RE-207), and `rvt-ifc --revit-property-sets`
+named where the file defines them (RE-207), the browser viewer's info panel lists them for a selected element, and `rvt-ifc --revit-property-sets`
 writes the named ones in Revit's own property sets (RE-210). With
 `--revit-set-placement` it also writes properties where Revit's own exporter
 does and IFC4's definitions do not, such as a room's
@@ -861,6 +862,47 @@ rating, 4,297 of the 4,314 Revit writes (the 17 left are stair landings,
 which name no type this way)
 (`reports/element-framing/RE-256-system-family-type-parameters.md`).
 
+**The viewer's saved parameters (#35, 2026-11-05)**: selecting an element
+lists the same saved parameters in the info panel, instance and type apart,
+named ones first and the nameless ones behind a fold that groups them by why
+they have no name (#255), each row saying in words where its parameter is
+defined. The `savedParameters` binding reads them for the selected element
+only, in a worker of its own that ends with the answer, so the open is not
+changed and nothing of the file stays resident. Nothing is requested once the
+first file is open: both workers are bundled into the page and start from blob
+URLs (the page's `worker-src` gained `blob:`, `docs/viewer-privacy-posture.md`),
+the decoder's glue is a static import, and the compiled wasm the first open's
+worker hands over serves the next open, the reads and the main thread's IFC,
+plan and CSV exports, so a page taken offline after the load still reads,
+exports and opens the file again. The Parameters row of File Status no longer says the rest are
+still to be decoded: it counts the values written to the IFC property sets and
+points to the panel. The panel says so when a file is of a release outside
+Revit 2015 to 2027, when one of 2015 to 2022 is read only experimentally
+(RE-281), when an element has no saved parameters and when a read failed. A
+read has taken 0.74 to 1.04 times the open's wasm memory, rising with the file,
+so a selection is read on its own only while the wasm memory the page holds is
+at most 1 GiB (nothing above the office's 910 MiB is measured) and asks first
+above that, saying that clicking may close the tab; after a read has run out of
+memory the file is read only when asked. The page keeps each element's answer,
+up to 64 and the least recently selected going first, until a file is opened
+again. `viewer/tests/parameters-row.spec.ts` holds the panel's entries for an
+element to the entries `rvt-elements` prints for the same ElementId, whole, on
+Einhoven and on Core Interior. Viewer tests run 42125048710 on head 3146f14e (CI runner, WASM without LTO): all 37 of
+Einhoven's tree elements were selected, 28 with parameters (369 entries, 332
+instance, 37 type, 8 named) equal to `rvt-elements`' and 7 with none showing
+the empty state; a read took a median of 153 ms (most 210 ms) in 17 MiB of wasm
+memory, the open's worker 23 MiB. On Core Interior four elements match, each
+read 1.5 to 1.9 s in 275 MiB (the open: 326 MiB, 17.3 s). On the BIM4LCA office
+(62 MiB), not compared with `rvt-elements`, a selection read on its own: 8
+entries in 3.9 s in 943 MiB, the open's worker 910 MiB (66.6 s), and the page
+then kept 2 answers, 4,654 characters of JSON. Under a V8 cap of 927 MiB of wasm
+memory, between the office's open and its read, a read really runs out of
+memory and the file is read only when asked from then on. The page's one
+script is 40.27 kB larger (8.65 kB gzipped) than in the build of d1de8adf,
+mostly because the glue and the two workers it fetched later are inside it. The release-outside-the-range and
+experimental-release states are measured with the worker's answer replaced, as
+no such file is in the viewer's job.
+
 **RE-210 (2026-10-22)** adds `rvt-ifc --revit-property-sets` (#35). It
 writes each element's named saved parameters (RE-207) as Revit's exporter
 does with "Export Revit property sets", following revit-ifc's
@@ -1048,7 +1090,8 @@ checkout and pinned by sha256 (#257): `Revit_IFC5_Einhoven.rvt` (2023,
 whose bytes do not match the catalog hash, and both cards are gated by
 Playwright. Viewer File Status lists
 recovered storey names, material name samples, and a Parameters row that
-counts the Revit parameter values written into the export's property sets. The scene tree groups each
+counts the Revit parameter values written into the export's property sets
+(the info panel lists a selected element's saved parameters, below). The scene tree groups each
 storey's elements by category, type name first, with curtain-wall and
 stair parts under their whole. Elements reach their storey from the
 Level their record names (RE-59, RE-60): all 970 of Core Interior's
