@@ -1306,22 +1306,19 @@ export of the 2018 `rac_basic` holds none of the 6, and the IFC2X3 export of
 element records on every release the exporter reads, where `category_map` gave
 `FurnitureSystem` the class `IfcFurniture` and nothing produced it. It rests
 on one project and 3 elements: Revit's public IFC4 export of Autodesk's 2018
-`rac_basic` holds 3 `IfcSystemFurnitureElement`, all 3 placed Furniture
-Systems frames of that save are in it and none is written that it lacks
-(counts of ids; Measure runs 42097940515 and 42108271073), and no other model
-in Measure places one. That export writes no property set on its 3, so none
-is written (the `Reference` of `Pset_EnvironmentalImpactIndicators` is left
-out), and contains all 3 in a space, so an element of the class on a storey
-is contained in the room that holds it; one of the 3 has no Level and stays
-in the building. Type objects and Revit's property sets are not written.
-Measure run 42116433579 (`8bf4e3f2`, `-f
-base=main -f samples=true -f sample_years="2015 2027" -f scorers=none -f
-models="-"`) moves 13 of Autodesk's 58 samples' exports, every `rac_basic` save
-of 2015 to 2027, each by 3 `IfcSystemFurnitureElement` and nothing else, and
-the other 45 are byte for byte main's, on a head before the property-set
-exclusion and the containment. Not yet measured: those two, the models, the
-held-out files, the written ids, the bodies and the same-project check (that
-run's is NOT MEASURED, since `scorers=none` left it out)
+`rac_basic` holds 3 `IfcSystemFurnitureElement`, and the 3 the head writes for
+that save are its 3 by `Tag`, none extra and none missing, with record boxes
+equal to Revit's bodies to 0.0000 ft (counts and distances; the export has no
+licence and nothing is quoted from it; Measure run 42135914864 on `4ca938ad`).
+That export writes no property set on its 3, so no `Reference` is written. It
+contains all 3 in a space; rvt-rs contains 2 of the 3 in a space on Revit 2024
+and later only, as for every furniture class, and the third has no Level and
+stays in the building. Type objects are not written, though Revit's export
+types all 3. In that run 13 of 111 exports move, every `rac_basic` save of 2015
+to 2027, each by 3 `IfcSystemFurnitureElement` and nothing else, 98 are byte
+for byte main's, and the same-project gates pass (the three `rac_basic` saves
+among their 9 samples hold the category). No other model in Measure places a
+Furniture System
 (`reports/element-framing/RE-352-furniture-systems.md`).
 
 ## Performance
