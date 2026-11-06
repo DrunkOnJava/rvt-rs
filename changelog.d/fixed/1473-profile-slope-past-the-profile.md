@@ -3,8 +3,8 @@
   the wall's location curve, but the wall's body goes on past it where a join
   extends the wall, and the opening that voids the wall (RE-151) stopped at the
   profile's end: the stretch stayed as the wall's box had it while Revit's body
-  goes on along the profile. Where a wall goes on past an end of its profile at
-  a joined end and an opening reaches that end with one vertical edge, the
+  goes on along the profile. Where a wall goes on past an end of its profile
+  and an opening reaches that end with one vertical edge, the
   opening is carried on to the wall's end in two shapes: a sloped line along its
   own slope, and the cut-out of a notch (both neighbours level) straight out,
   told apart from the wall's own top or base by height and not by the order the

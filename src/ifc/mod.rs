@@ -845,7 +845,7 @@ pub struct ExportedModelDiagnostics {
     /// why, by reason: the `ProfileStubRefusal` property of each (#1473,
     /// RE-358): `profile_cut_not_read_at_the_wall_end`,
     /// `profile_level_cut_between_two_lines`,
-    /// `profile_level_cut_spans_the_wall`, `profile_end_has_no_join_partner`,
+    /// `profile_level_cut_spans_the_wall`,
     /// `profile_stub_longer_than_the_wall_is_thick` or
     /// `profile_slope_leaves_the_cut`. A wall holds its first reason only, and
     /// one carried at one end and refused at the other is counted here and in

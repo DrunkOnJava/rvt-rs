@@ -6,16 +6,18 @@
 //! run of those lines that leaves the profile's bounding rectangle and the
 //! rectangle's edge (RE-151, [`crate::partition_schema_mvp::elevation_profile_cuts`]).
 //! The sketch spans the wall's location curve, but a wall's body goes on past
-//! it where a join extends the wall, and there the opening does not reach: the
-//! stretch stays as the wall's box has it while Revit's body goes on along the
-//! profile's own line (RE-348 section 5: a 0.41 ft stretch of the BIM4LCA
-//! office's Basement walls, 0.65 ft too high at the wall's end).
+//! it at some ends, and there the opening does not reach: the stretch stays as
+//! the wall's box has it while Revit's body goes on along the profile's own line
+//! (RE-348 section 5: a 0.41 ft stretch of the BIM4LCA office's Basement walls,
+//! 0.65 ft too high at the wall's end). At all eight ends measured there the
+//! record's end step lists no joined wall (`m_realJoined` is empty) and names one
+//! exposed neighbour instead, so the join lists are not asked for.
 //!
 //! This pass carries the opening on. Where a wall's body goes on past an end of
-//! the profile by more than a thousandth of a foot, the record joins another
-//! wall at that end, and an opening reaches that end of the profile with one
-//! vertical edge whose two ends each have a neighbour, both ends of the edge
-//! move out to the wall's end. Two shapes are read:
+//! the profile by more than a thousandth of a foot, and an opening reaches that
+//! end of the profile with one vertical edge whose two ends each have a
+//! neighbour, both ends of the edge move out to the wall's end. Two shapes are
+//! read:
 //!
 //! - **sloped**: one end of the edge has a sloped neighbour (the profile's last
 //!   line arriving) and the other a level one (an edge of the profile's
@@ -31,11 +33,10 @@
 //! A wall of which this is not read keeps the top the opening gives it, with
 //! the reason as `ProfileStubRefusal`: the opening does not reach the end with
 //! one such edge, both neighbours of a level cut-out are interior or both on the
-//! wall's top or base, the record joins no wall at that end, the stretch is
-//! longer than the wall is thick (a heuristic: every stretch measured is half
-//! the wall's thickness, and nothing in the file says a join extends a wall by
-//! at most that), or the slope would carry the line to the wall's base or
-//! across the rectangle's edge. A wall's property keeps the first reason only,
+//! wall's top or base, the stretch is longer than the wall is thick (a
+//! heuristic: every stretch measured is half the wall's thickness, and nothing
+//! in the file says a wall goes on past its profile by at most that), or the
+//! slope would carry the line to the wall's base or across the rectangle's edge. A wall's property keeps the first reason only,
 //! and a wall carried at one end and refused at the other is counted in both
 //! `exported.wall_profile_sources` and `exported.wall_profile_refusals`. A wall
 //! whose body goes on past the profile where no opening reaches that end, or
@@ -45,7 +46,6 @@
 
 use std::f64::consts::FRAC_PI_4;
 
-use super::wall_tops::PendingEnds;
 use super::{
     ELEMENT_RECORD_PROPERTY_SET, WALL_PROFILE_REFUSAL_PROPERTY, WALL_PROFILE_SOURCE_PROPERTY,
 };
@@ -57,11 +57,6 @@ use std::collections::HashMap;
 /// must stay from an edge to be off it, feet.
 const TOLERANCE_FEET: f64 = 1e-3;
 
-/// How near the end of a wall's location curve must lie to the end of its
-/// profile for the walls the record joins there to be the ones at that end,
-/// feet.
-const CURVE_END_FEET: f64 = 1e-2;
-
 /// The opening does not reach the end of the profile with one vertical edge
 /// whose ends are a line's and a rectangle's, or a level cut-out's two lines.
 const CUT_NOT_READ: &str = "profile_cut_not_read_at_the_wall_end";
@@ -71,10 +66,6 @@ const LEVEL_CUT_BETWEEN_TWO_LINES: &str = "profile_level_cut_between_two_lines";
 
 /// A level cut-out whose two lines both lie on the wall's top or base.
 const LEVEL_CUT_SPANS_THE_WALL: &str = "profile_level_cut_spans_the_wall";
-
-/// The record joins no wall at that end of the wall's location curve, or the
-/// curve is not at that end of the profile.
-const END_NOT_JOINED: &str = "profile_end_has_no_join_partner";
 
 /// The wall goes on past its profile by more than it is thick.
 const STUB_LONGER_THAN_THE_WALL_IS_THICK: &str = "profile_stub_longer_than_the_wall_is_thick";
@@ -161,32 +152,6 @@ fn mark(entities: &mut [IfcEntity], index: usize, name: &str, value: &str) {
     }
 }
 
-/// Whether the record of a wall lists walls it joins at the end of its location
-/// curve that lies at `side` of the profile, whose end is `edge` along the
-/// outline's `u`. `along` gives the `u` of a plan point.
-fn joined_at(
-    ends: Option<&PendingEnds>,
-    side: Side,
-    edge: f64,
-    along: &dyn Fn([f64; 2]) -> f64,
-) -> bool {
-    let Some(ends) = ends else {
-        return false;
-    };
-    let at = [along(ends.curve[0]), along(ends.curve[1])];
-    if (at[0] - at[1]).abs() <= TOLERANCE_FEET {
-        return false;
-    }
-    let slot = match (side, at[0] < at[1]) {
-        (Side::Low, true) | (Side::High, false) => 0,
-        _ => 1,
-    };
-    (at[slot] - edge).abs() <= CURVE_END_FEET
-        && ends.lists[slot]
-            .as_ref()
-            .is_some_and(|listed| !listed.is_empty())
-}
-
 /// The `ProfileStubSource` of a wall carried on at `sides`, as `kinds`.
 fn source_value(sides: &[Side], kinds: &[Kind]) -> Option<String> {
     let low = sides.contains(&Side::Low);
@@ -209,11 +174,7 @@ fn source_value(sides: &[Side], kinds: &[Kind]) -> Option<String> {
 
 /// Carry the cut-out of each wall's profile on to the wall's end (see the
 /// module documentation).
-pub(super) fn extend_profile_stubs(
-    entities: &mut [IfcEntity],
-    pending: &[Pending],
-    joins: &[PendingEnds],
-) {
+pub(super) fn extend_profile_stubs(entities: &mut [IfcEntity], pending: &[Pending]) {
     if pending.is_empty() {
         return;
     }
@@ -223,8 +184,6 @@ pub(super) fn extend_profile_stubs(
             openings.entry(*host).or_default().push(index);
         }
     }
-    let ends_of: HashMap<usize, &PendingEnds> =
-        joins.iter().map(|ends| (ends.index, ends)).collect();
     for wall in pending {
         let Some(indices) = openings.get(&wall.index) else {
             continue;
@@ -232,7 +191,6 @@ pub(super) fn extend_profile_stubs(
         let Some(frame) = wall_frame(entities, wall.index) else {
             continue;
         };
-        let ends = ends_of.get(&wall.index).copied();
         let mut sides: Vec<Side> = Vec::new();
         let mut kinds: Vec<Kind> = Vec::new();
         let mut refusal: Option<&'static str> = None;
@@ -272,16 +230,12 @@ pub(super) fn extend_profile_stubs(
                     *thickness_feet,
                 ) {
                     Ok(Some((outline, kind))) => {
-                        if joined_at(ends, side, edge, &along) {
-                            *outline_feet = outline;
-                            if !sides.contains(&side) {
-                                sides.push(side);
-                            }
-                            if !kinds.contains(&kind) {
-                                kinds.push(kind);
-                            }
-                        } else {
-                            refusal.get_or_insert(END_NOT_JOINED);
+                        *outline_feet = outline;
+                        if !sides.contains(&side) {
+                            sides.push(side);
+                        }
+                        if !kinds.contains(&kind) {
+                            kinds.push(kind);
                         }
                     }
                     Ok(None) => {}

@@ -1729,9 +1729,8 @@ pub fn append_typed_production_elements(
 
     // #1473: the cut-out of an edited elevation profile goes on, a line along
     // its slope and a notch straight out, to the end of a wall that goes on past
-    // the profile at a joined end. After the ends, so that the wall has its
-    // final extent.
-    wall_profile::extend_profile_stubs(entities, &pending_profiles, &pending_ends);
+    // the profile. After the ends, so that the wall has its final extent.
+    wall_profile::extend_profile_stubs(entities, &pending_profiles);
 
     // RE-270: the side areas and volumes of a wall joined to floors that
     // leave it as its record's box. It runs after the pass above, on purpose:

@@ -662,7 +662,7 @@
             "type": "integer",
             "minimum": 0
           },
-          "description": "Of the exported walls with an edited elevation profile that go on past it and keep, past it, what the profile's opening gives them at an end, why, by the RvtElementRecordGeometry.ProfileStubRefusal of each (RE-358), the first reason of the wall only: profile_cut_not_read_at_the_wall_end, profile_level_cut_between_two_lines, profile_level_cut_spans_the_wall, profile_end_has_no_join_partner, profile_stub_longer_than_the_wall_is_thick and profile_slope_leaves_the_cut. Empty when no wall keeps an end so."
+          "description": "Of the exported walls with an edited elevation profile that go on past it and keep, past it, what the profile's opening gives them at an end, why, by the RvtElementRecordGeometry.ProfileStubRefusal of each (RE-358), the first reason of the wall only: profile_cut_not_read_at_the_wall_end, profile_level_cut_between_two_lines, profile_level_cut_spans_the_wall, profile_stub_longer_than_the_wall_is_thick and profile_slope_leaves_the_cut. Empty when no wall keeps an end so."
         },
         "resolved_outline_spaces": {
           "type": "integer",
