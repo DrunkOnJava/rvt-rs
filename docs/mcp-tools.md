@@ -379,7 +379,7 @@ Where one element's answer comes from. Every element in an answer carries one. F
 | `record_offset` | integer \| null | no | Where the ElementId is stored: the partition record header it is the first bytes of. |
 | `space_outline_source` | string \| null | no | For a room or space, where its outline came from: `record_box` (the area of its box, not of the room), `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`, `family_body`, and for an Area `area_plan_topology`, `area_plan_topology_unchecked` (which nothing outside the file checks: Revit 2025 to 2027, and an Area drawn from lines whose partition copies disagree), `area_boundary`, `area_boundary_joined` or `none`. |
 | `stream` | string \| null | no | The stream the record is in: `Partitions/NN` or `Global/Latest`. |
-| `value_sources` | array of [ValueSourceOut](#valuesourceout) | no | The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet. |
+| `value_sources` | array of [ValueSourceOut](#valuesourceout) | no | The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for an element with no body of its own, and for one whose body is none of the kinds `docs/export-diagnostics.md` lists readers for. |
 
 ### ElementRow
 
