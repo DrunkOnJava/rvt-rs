@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import fs from 'node:fs';
 
 // #1422: a piece the IFC export folds into another element's body is drawn but
 // is no element of its own, so a click on it selects the element that owns it:
@@ -292,6 +293,53 @@ test('a click on a folded piece selects the element that owns it', async ({ page
   await (await openTreeRow(facts.flight!.index)).click();
   await expect(row('ElementId').locator('.v')).toHaveText(facts.flight!.id, { timeout: 300_000 });
   await expect(info.locator('.info-group-storey')).toContainText(facts.flight!.storey);
+
+  // #35: the saved parameters of the first owner, selected again (an answer the
+  // page kept, so not read a second time), on the largest model the suite opens.
+  // Whether the page read them on its own or waited to be asked, what the open's
+  // worker and the read held and what the page keeps is printed; a read that
+  // fails is not a model that got worse, but it is not a pass either.
+  await (await openTreeRow(first.owner)).click();
+  await expect(row('ElementId').locator('.v')).toHaveText(first.id, { timeout: 300_000 });
+  const parameters = page.locator('#info-parameters');
+  const settledStates = /^(ready|empty|unsupported|error|on-request|no-id)$/;
+  await expect(parameters).toHaveAttribute('data-state', settledStates, { timeout: 300_000 });
+  const read = () =>
+    parameters.evaluate((el) => ({
+      state: (el as HTMLElement).dataset.state ?? '',
+      readMs: (el as HTMLElement).dataset.readMs ?? null,
+      wasmMemoryBytes: (el as HTMLElement).dataset.wasmMemoryBytes ?? null,
+      cacheElements: (el as HTMLElement).dataset.cacheElements ?? null,
+      cacheCharacters: (el as HTMLElement).dataset.cacheCharacters ?? null,
+      entries: el.querySelectorAll('[data-parameter]').length,
+    }));
+  let parameterRead = await read();
+  const askedFirst = parameterRead.state === 'on-request';
+  if (askedFirst) {
+    await page.locator('#read-saved-parameters').click();
+    await expect(parameters).toHaveAttribute(
+      'data-state',
+      /^(ready|empty|unsupported|error|no-id)$/,
+      { timeout: 300_000 },
+    );
+    parameterRead = await read();
+  }
+  const loadStats = JSON.parse(
+    (await page.locator('#status').getAttribute('data-load-stats')) ?? 'null',
+  ) as { openMs: number; loadMs: number; wasmMemoryBytes: number; estimatedPeakBytes: number };
+  const mib = (bytes: number | string | null) => Math.round(Number(bytes ?? 0) / 2 ** 20);
+  const parametersLine =
+    `saved parameters of ${first.ifcType} ${first.id} on the office (${mib(fs.statSync(office!).size)} MiB, ` +
+    `estimated open ${mib(loadStats.estimatedPeakBytes)} MiB): ${askedFirst ? 'the page asked first, then read' : 'read on selection'}: ` +
+    `${parameterRead.state}, ${parameterRead.entries} entries, ${parameterRead.readMs ?? 'no'} ms, ` +
+    `that read's wasm memory ${mib(parameterRead.wasmMemoryBytes)} MiB; the open's worker ${mib(loadStats.wasmMemoryBytes)} MiB, ` +
+    `${Math.round(loadStats.openMs)} ms in the open call; the page keeps ${parameterRead.cacheElements ?? 'no'} answers, ` +
+    `${parameterRead.cacheCharacters ?? 'no'} characters of JSON`;
+  console.log(parametersLine);
+  if (process.env.GITHUB_STEP_SUMMARY) {
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${parametersLine}\n\n`);
+  }
+  expect(parameterRead.state, parametersLine).not.toBe('error');
 
   console.log(
     `office: ${facts.owners.length} owners, ${facts.folded} folded pieces, ${facts.written} written; ` +

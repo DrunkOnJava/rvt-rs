@@ -3,7 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-type NetworkPhase = 'initial-static' | 'opening-sample' | 'post-open';
+type NetworkPhase =
+  | 'initial-static'
+  | 'opening-sample'
+  | 'post-open'
+  | 'selecting'
+  | 'exporting'
+  | 'reopening';
 
 interface NetworkRecord {
   url: string;
@@ -75,9 +81,66 @@ test('opens a sample without external or post-open network requests', async ({ p
   phase = 'post-open';
   await page.waitForTimeout(observationMs);
 
+  // Selecting an element reads its saved parameters in a worker of its own
+  // (#35). It makes no request: the worker is in the page's bundle and starts
+  // from a blob URL, and the wasm it runs is the module the open compiled. The
+  // step is not optional: a sample with no element to select would let it pass
+  // by skipping it.
+  phase = 'selecting';
+  const elements = page.locator('.tree-node.tree-element[data-entity-index]');
+  expect(await elements.count(), 'the sample has elements to select').toBeGreaterThan(0);
+  await elements.first().evaluate((row) => (row as HTMLElement).click());
+  await expect(page.locator('#info-parameters')).toHaveAttribute(
+    'data-state',
+    /^(ready|empty|unsupported|error|on-request|no-id)$/,
+    { timeout: 120_000 },
+  );
+  await page.waitForTimeout(observationMs);
+
+  // The exports run wasm on the main thread, which starts from the module the
+  // open compiled with the glue already in the page: an IFC, a plan and a glTF
+  // export fetch nothing, however late they are clicked.
+  phase = 'exporting';
+  for (const selector of ['#export-ifc', '#export-svg', '#export-glb']) {
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator(selector).click(),
+    ]);
+    expect((await download.path()) !== null, `${selector} made no file`).toBe(true);
+  }
+  await page.waitForTimeout(observationMs);
+
+  // Opening the file again (the saved-mesh toggle does) starts the worker from
+  // the page's bundle and from the module it already holds.
+  phase = 'reopening';
+  const before = await page.locator('#status').getAttribute('data-load-stats');
+  await page.locator('#saved-meshes').click();
+  await expect
+    .poll(
+      async () => {
+        const now = await page.locator('#status').getAttribute('data-load-stats');
+        return now !== null && now !== before;
+      },
+      { message: 'the file was opened again', timeout: 300_000 },
+    )
+    .toBe(true);
+  await page.waitForTimeout(observationMs);
+
   const base = new URL(baseURL ?? 'http://127.0.0.1:4173');
   const disallowed = records.filter((record) => isDisallowed(record, base));
   expect(disallowed, formatFailure(disallowed, records)).toEqual([]);
+
+  // The decoder's wasm is fetched once, by the open, and not before it (nothing
+  // is fetched to boot the page) and not again for an element: a read starts
+  // from the module the open compiled. The CDP session sees the page's own
+  // requests; the offline and request-recording test of parameters-row.spec.ts
+  // is what sees the workers'.
+  const wasm = records.filter((record) => new URL(record.url).pathname.endsWith('.wasm'));
+  expect(
+    wasm.filter((record) => record.phase === 'initial-static'),
+    'the wasm was fetched to boot the page',
+  ).toEqual([]);
+  expect(wasm.length, 'the wasm was fetched more than once').toBeLessThanOrEqual(1);
 });
 
 function resolveSamplePath(): string | null {
@@ -99,7 +162,7 @@ function isNetworkUrl(url: string): boolean {
 }
 
 function isDisallowed(record: NetworkRecord, base: URL): boolean {
-  if (record.phase === 'post-open') return true;
+  if (record.phase !== 'initial-static' && record.phase !== 'opening-sample') return true;
 
   const url = new URL(record.url);
   if (url.origin !== base.origin) return true;

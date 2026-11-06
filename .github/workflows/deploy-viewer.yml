@@ -99,9 +99,10 @@ jobs:
         # full LTO rebuilt the crate from scratch: 39 s) in a target directory
         # of its own, at the same time as the WASM and inside its build time,
         # as viewer-test.yml builds it. The stager finds the binary on PATH.
+        # rvt-elements is built with it, for tests/parameters-row.spec.ts (#35).
         run: |
           set -euo pipefail
-          CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target-native" cargo build --profile ci --bin gen-fixture &
+          CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target-native" cargo build --profile ci --bin gen-fixture --bin rvt-elements &
           fixture=$!
           wasm-pack build rvt-wasm --target web --out-dir ../viewer/pkg --out-name rvt
           wait "${fixture}"
@@ -138,6 +139,7 @@ jobs:
           mkdir -p "${dir}/bin"
           cp -R viewer/pkg "${dir}/pkg"
           cp target-native/ci/gen-fixture "${dir}/bin/gen-fixture"
+          cp target-native/ci/rvt-elements "${dir}/bin/rvt-elements"
           (cd "${dir}" && sha256sum pkg/rvt_bg.wasm > wasm.sha256)
           sha=$(cut -d' ' -f1 "${dir}/wasm.sha256")
           echo "WASM sha256 ${sha}"

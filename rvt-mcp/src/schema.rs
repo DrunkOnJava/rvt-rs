@@ -179,7 +179,7 @@ pub struct ElementProvenance {
     /// True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub provenance_omitted: Option<bool>,
-    /// The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.
+    /// The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for an element with no body of its own, and for one whose body is none of the kinds `docs/export-diagnostics.md` lists readers for.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     #[schemars(default)]
     pub value_sources: Vec<ValueSourceOut>,

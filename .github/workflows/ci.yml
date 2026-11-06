@@ -762,6 +762,8 @@ jobs:
           python-version: "3.12"
       - name: Install Rust stable
         uses: $/.github/actions/setup-rust
+        with:
+          component: rustfmt
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: false
@@ -779,7 +781,6 @@ jobs:
       # schema; the committed file must be the generator's output.
       - name: The IFC4 property set table is the generator's output
         run: |
-          rustup component add rustfmt
           python tools/ci/gen_standard_property_sets.py > /tmp/standard_property_sets_table.rs
           rustfmt --edition 2024 /tmp/standard_property_sets_table.rs
           diff -u src/ifc/standard_property_sets/table.rs /tmp/standard_property_sets_table.rs

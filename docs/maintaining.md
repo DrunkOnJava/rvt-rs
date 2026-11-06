@@ -65,7 +65,7 @@ when a release ships.
   it. The viewer's browser tests are: `ci.yml` calls `viewer-test.yml` as its
   `viewer` job in the full set (#1374), in three groups of spec files on a
   WASM built without LTO, and a change that touches only documentation skips
-  it. That WASM and `gen-fixture` are built once per run, by a `build` job of
+  it. That WASM, `gen-fixture` and `rvt-elements` (which `parameters-row.spec.ts` runs as its oracle, #35) are built once per run, by a `build` job of
   its own, and the three groups download them (#1457); a group fails, rather
   than skips, when the build did not succeed. Deploy viewer builds the release
   WASM once, uploads it, publishes the site built on it, and runs the suite and
@@ -737,6 +737,20 @@ save it (a pull request's run does not: its caches are its own). A ref that is
 not a full SHA is built each time, the probe examples always are, and
 `clean_caches.py` keeps the newest sixteen.
 
+## Projected graphs (#1335)
+
+A native pass that reads a few fields of a large graph can decode it projected
+(`native_parameters::decode_graph_projected`, `native_document::Options::graph_fields`):
+every byte is read and checked as in the full decode, so the record is refused for
+the same reasons, but only the listed fields are built. Each list is a `pub const`
+beside the one function that reads the projected graph
+(`Registry::ingest_binding_context`, `native_walls::wall_facts`,
+`native_es_catalog::from_graph`), and a field that function comes to read must be
+added to its list, because a field left out reads as absent without an error.
+`probes/examples/probe_1335_projected_graphs.rs` imports the constants, decodes every
+record both ways and runs those functions on both graphs; run it
+(`-f probe=probe_1335_projected_graphs`) after any change to a list or a reader.
+
 ## Dependencies and the MSRV
 
 `rust-version` in `Cargo.toml` is the oldest stable Rust the crate builds on, and
@@ -837,7 +851,15 @@ Configured on the repository, with the rulesets kept as code in
   on every push to main, weekly, and on every ready pull request that changes
   more than documentation (`**.md`, `docs/`, `reports/`, `changelog.d/`): a
   draft's jobs are skipped and its analysis starts when it is marked ready
-  (#1457). The default setup stays
+  (#1457). Each `Analyze (<language>)` job writes its SARIF and uploads it in a
+  step of its own that may fail without failing the job; a failed upload leaves
+  the SARIF as the artifact `codeql-sarif-<language>` (7 days), and the job
+  `Analyze upload retry` uploads what it finds once more, with the leg's
+  category, analysis key and matrix, in a job of its own because codeql-action
+  refuses a second upload of one category in a job (#1499). A file code
+  scanning rejects fails the retry and the run, and so does a kept SARIF whose
+  language the retry job has no step for: adding a language to the matrix means
+  adding its upload step there. The default setup stays
   off: it cannot scan Rust, and GitHub refuses an advanced setup's results
   while it is on.
 - Every action is pinned to a full commit SHA and the repository requires it.
