@@ -73,7 +73,13 @@
 //!   blocks and sketch lines again: each decodes to a slope, an arrow or a
 //!   curve;
 //! - requires each model's `MIN_READERS` to have sources, so a table with no
-//!   sources cannot pass.
+//!   sources cannot pass;
+//! - looks up every `*Source` text property the export writes on an element's
+//!   own property set (`BodyHeightSource`, `BodyBaseSource`, `BodyEndSource`,
+//!   `PlacementAxesSource`, `ThicknessSource` and the rest, #1498) in
+//!   `SOURCE_VALUES`: a value with neither a source nor a declared gap fails the
+//!   test, and a sourced one must have the sources its row names on every
+//!   element that carries it.
 //!
 //! What it does not do: say that the copy a reader took is the right one. For
 //! the `agreeing` rule every copy holds the same value, so any of them is; for

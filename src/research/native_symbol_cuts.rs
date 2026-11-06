@@ -260,19 +260,6 @@ pub fn instance_cuts_and_symbols(
         }
         Ok(())
     })?;
-    // #1498: the record of the symbol that draws an instance holds the outline
-    // or the solid its door or window cuts.
-    if rf.recording_value_sources() {
-        for (instance, symbol) in &drawn_by {
-            if let (true, Ok(instance), Ok(symbol)) = (
-                loops.contains_key(symbol) || solids.contains_key(symbol),
-                u32::try_from(*instance),
-                u32::try_from(*symbol),
-            ) {
-                rf.attribute_value_source(symbol, "native_opening", instance, "native_symbol_cut");
-            }
-        }
-    }
     let uncut = drawn_by
         .iter()
         .filter(|(_, symbol)| uncut_symbols.contains(symbol))

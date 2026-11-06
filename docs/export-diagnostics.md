@@ -109,7 +109,9 @@ compared: the last frame of a type symbol whose frames differ, a room's solids
 read in the room's own partition).
 A reader notes its choice where it makes it, only while the export builds this
 table, and the entry is listed only where the element's final `BodySource` is
-drawn from that reader.
+drawn from that reader, or one of its other `*Source` property values
+(`BodyHeightSource`, `BodyBaseSource`, `BodyEndSource`, `PlacementAxesSource`,
+`ThicknessSource`, `SpaceOutlineSource`) is (#1498).
 
 | `BodySource` | Reader | Rule | What `offset` is |
 |---|---|---|---|
@@ -133,7 +135,14 @@ drawn from that reader.
 | `family_extrusions` | `family_forms` | `frame` | Only with `--element-provenance` and `--family-extrusions` both on. `parts`: the records of the family's own embedded document that the instance's extrusions were rebuilt from: each visible extrusion (`ExtrusionElem`), its sketch plane (`SketchPlane`) and the curves of its sketch (`CurveElem`), at the place the document's group puts the record in its partition (the record's id, then its length and body). The ids are the family document's, not the model's, so a part's `element_id` can equal another element's. The document is read once, as it is embedded. A record the file holds in several partitions is named at its copy in the highest partition (partitions taken in number order), the copy the rebuild reads; the other copies are not compared. An instance one of whose records has no place (its group's bytes are not the partition's own consecutive members) gets no `family_forms` source, because a part list that left a record out would not be the records the body was rebuilt from; it keeps its other sources. The instance's own `selected_frame` and `instance_transform` are listed beside it: the transform places the extrusions, and the frame is the location and rotation they are drawn at. The saved mesh the extrusions are checked against is not a source of the body. |
 | `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_beam_axis`, `partition_beam_box_along_axis` | `bounded_line` | `agreeing` | The element-data header of the lowest-numbered partition's copy of its location line. Every copy holds the same line; a wall or beam whose copies differ is drawn as its box instead. |
 | `partition_wall_arc` | `bounded_arc` | `agreeing` | As `bounded_line`, for a curved wall's arc. |
-| `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_wall_arc` | `wall_type_layers` | `agreeing` | `parts`: the element-data header of the wall type's layers, which give the thickness the body is drawn at and the layers a layer-joined wall's staircase is drawn in; read once for the type and noted for each wall of it (as `roof_type_layers`). What the body also reads has no source: the wall's top, base and end rules, its orientation and flip, a tapered wall's face angle, the partner lists of its joins and the layers and frames of the walls it joins. |
+| `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_wall_arc` | `wall_type_layers` | `agreeing` | `parts`: the element-data header of the wall type's layers, which give the thickness the body is drawn at and the layers a layer-joined wall's staircase is drawn in; read once for the type and noted for each wall of it (as `roof_type_layers`). A wall's other inputs have the rows below (#1498). |
+| `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_wall_arc` | `wall_orientation` | `agreeing` | The element-data header of the lowest-numbered partition's copy of the wall's data that gave its location-line setting, its cross-section word and its flip (RE-54, RE-86); `partitions` lists the copies that did. A wall whose copies differ has none, and takes the word and the flip from its native record, which is `native_wall`. |
+| The same four bodies | `native_wall` | `native` | The header of the wall's current native record (`SWall` or `ArcWall`), read in the pass that gives the walls' joins, cut pairs, top joins, curve and flip: the joins and cut pairs that decide whether the wall is cut at its top, base or ends, `m_realJoined` (the walls Revit joins at each end), the straight level curve a door's placement is taken along, and the flip and cross-section word where the partition data has none. Listed for every wall whose body is one of these four and for every wall with a `BodyHeightSource`, `BodyBaseSource` or `BodyEndSource` below. The record is read for all of those values together; the row says which record, not which of its fields a given wall used. |
+| `partition_wall_tapered_section` | `wall_type_face_angle` | `agreeing` | The element-data header of the wall type's data that holds the face-angle frame (RE-86), the lowest-numbered partition's copy; every copy gives the same three angles or the type is left out. Revit 2024 and 2025 only. |
+| `BodyHeightSource` `wall_top_cut_at_covering_floor` or `wall_top_stepped_at_covering_floor` | `native_wall`, `wall_top_covers` | `native`, `frame` | `native_wall` as above: its top join and cut pairs name the covers (RE-267, RE-320). `wall_top_covers`: `parts`, the frame of each element the wall's `TopCoverElementId`(s) name, the frame the export selected for it (`frame`: its other frames are not compared, and the cover's outline and shape are its own rows, not repeated). Listed where every cover has a frame in the table. |
+| `BodyBaseSource` `wall_base_cut_at_covering_floor`, `wall_base_sloped_at_covering_floor` and the two `..._in_part` values | `native_wall`, `wall_base_cover` | `native`, `frame` | As the top: the base join names the cover (`BaseCoverElementId`, RE-336, RE-349); `parts` is that element's frame. |
+| `BodyEndSource` `wall_end_stepped_to_joined_walls` | `native_wall`, `native_wall_joined` | `native` | `native_wall` holds the `m_realJoined` lists (RE-337, RE-348). `native_wall_joined`: `parts`, the current native record of each wall the lists name, listed only where every one of them was read in the same pass. The layers and the frames of the joined walls are those walls' own `wall_type_layers` and `selected_frame` rows. |
+| `PlacementAxesSource` `stored_axes_reversed_by_flips` (a door or window set in a plain wall, RE-347) | `instance_transform`, `native_opening`, `opening_host_wall` | `agreeing` or `current`, `native` | `instance_transform`: the stored X axis, as for an oriented box (the door's `BodySource` is its saved mesh or its record box, so the transform is listed from this property). `native_opening`: the header of the door's or window's current native record (`FamilyInstance`), which gives the hand flip and the facing flip. `opening_host_wall`: `parts`, the host wall's current native record, whose curve the axis runs along (the record is the host's, so it is its `native_wall` copied to the door). |
 | `partition_family_instance_turned_box`, `partition_family_instance_oriented_box` | `instance_transform` | `agreeing` or `current` | The element-data header of the copy: the lowest-numbered partition's where the copies agree, the current partition's where they differ (RE-216). |
 | `saved_graphics_mesh` | `saved_graphics` | `native` | The header of the element's current graphics record. |
 | `native_spiral_run_treads` | `native_run` | `native` | The header of the run's current native record. |
@@ -164,6 +173,65 @@ joins it, RE-291); no number of the type's reaches the export, and the quantitie
 are of the box. The written entities carry no mark of which columns passed the
 check, so a source for the sides would be listed for columns that did not use
 them; marking them is a property the export does not write.
+#### Written `*Source` values
+
+Every `*Source` text property the export writes on an element's own property
+set has a row in `SOURCE_VALUES` of `tests/value_sources_offsets.rs`, and the
+test fails on a written value that has none (#1498): a reader cannot land a
+value with neither a source nor a stated gap. A row is one of
+
+- `Sourced`: every element that carries the value has a value source from each
+  reader of the row (and from one of its alternatives): `BodyHeightSource`,
+  `BodyBaseSource`, `BodyEndSource`, `PlacementAxesSource`, `ThicknessSource`
+  and `SpaceOutlineSource`, whose readers the table above names and which the
+  export lists from the property's value (`property_readers`), not only from
+  the body's;
+- `Checked`: another check covers it, `BodySource` by `COVERAGE` and
+  `ProfileSource` by the profile check;
+- `Unread`: the value says nothing was read (`SpaceOutlineSource` `none`);
+- `Gap`: the bytes the value was drawn from are not noted by any reader. The
+  reason is in the row.
+
+The declared gaps are 20 values in four kinds. Only one is a value of a body: a
+column's height. The elements are those of the 92 models of Measure run
+42136996423 (the probe at 92a7e926: Core Interior, Einhoven, the four RE1
+models, the four BIM4LCA office files, the 24 Revit 2025 models of puzzbobb's
+archives and Autodesk's 58 samples):
+
+| Kind | Values | Elements | Why there is no source |
+|---|---|---|---|
+| A binding to a Level or a storey | `LevelBindSource`: `partition_element_record_reference_list`, `..._base_constraint`, `..._host`, `..._level_object`, `..._plumbing_level_object`, `..._base_at_level`, `..._same_class_host`, `..._base_elevation` and `structural_framing_top_level` (9); `StoreyBindSource`: `record_base_elevation`, `record_top_elevation`, `record_level_reference` (3) | 211,687 and 207,049 | The Level is read from the reference list of the element's own record and the elevations it is compared with from the Levels' blocks, and no reader notes either for the element. A binding is not a value of the body or the placement, which `value_sources` is about. |
+| A name chosen by a table | `FamilyNameSource`: `system_family_by_category`, `system_family_by_type_kind` (2) | 19,449 | The family name is chosen from the element's category or the kind of its type record; no bytes of the file hold it. |
+| A column's height after its joins | `BodyHeightSource` `partition_geometry_node_after_joins` (1) | 85 | The height is the box at id-48 of the column's geometry node (RE-178), a record beside its frame that `element_record_column_cuts` reads and does not note. |
+| Schema-walker values | `Source` `partition_rect_opening_index`, `LocationCurveSource` `ArcWallPartition` and `SchemaEndpoints`, `BoundarySource` `SchemaSketch` and `PartitionPlanLoop` (5) | 0 | The schema-driven wall, floor and opening paths, which no element of those 92 models takes: the walker notes no value source. |
+
+The test reads the models of the CI gate (Core Interior, the RE1 models,
+Einhoven, the BIM4LCA office as built and at building permit, and puzzbobb's
+Revit 2025 models); a value that only another model writes is not caught until
+a model that writes it is in the gate. Every value the 92 models write has a
+row: three of them (`StoreyBindSource` `record_level_reference`,
+`LevelBindSource` `structural_framing_top_level` and `ProfileSource`
+`partition_element_record_join_cut`) had none until the probe found them.
+
+Three inputs the issue listed reach the export with no `*Source` property to
+key a row on, and a property is what the export would have to write to give
+them one, so each has a stated reason and no source:
+
+- A door's or window's cut-loop size sizes the opening its host is cut to, and,
+  where its symbol's size equals its type's, its `Qto_DoorBaseQuantities` or
+  `Qto_WindowBaseQuantities` Width and Height. Which of the readers (the
+  symbol's cut loop, its cut solid, the type's size, the instance's box) gave a
+  given door's size is not recorded on the element, so a source for the loop
+  would be listed for doors that did not use it, as for a rectangular column's
+  sides above.
+- A beam's rotation, as its body is drawn, is the direction of its location
+  line, the `bounded_line` row (`partition_beam_axis`,
+  `partition_beam_box_along_axis`). Its Cross-Section Rotation (`m_rotation` of
+  the beam's `FamilyInstance` record, W7) is a property no `*Source` marks.
+- The numbers of a section's dimensions (an Autodesk I section's among them, and
+  the hollow sections' `b`, `Ht`, `t` and `kr`, whose captions the test checks)
+  are not compared with the export, as below.
+
 An element whose box is the body but whose profile has no source has
 `selected_frame_box` and nothing for the profile. That is not a claim that it
 read the frame.
