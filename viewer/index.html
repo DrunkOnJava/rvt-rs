@@ -11,7 +11,7 @@
       closes. See docs/viewer-privacy-posture.md.
     -->
     <meta http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' blob:;" />
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' blob:;" />
     <title>rvt-rs · client-side Revit viewer</title>
     <link rel="stylesheet" href="/src/tokens.css" />
     <link rel="stylesheet" href="/src/styles.css" />
@@ -238,6 +238,7 @@
           </a>
         </div>
         <h2>Element info</h2>
+        <div id="info-live" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
         <div id="info">Select an element in the 3-D view or scene tree (Enter / Space on a tree row). Double-click it or press F to zoom to it.</div>
         <h2>Schedule</h2>
         <div id="schedule-summary">

@@ -65,7 +65,7 @@ when a release ships.
   it. The viewer's browser tests are: `ci.yml` calls `viewer-test.yml` as its
   `viewer` job in the full set (#1374), in three groups of spec files on a
   WASM built without LTO, and a change that touches only documentation skips
-  it. That WASM and `gen-fixture` are built once per run, by a `build` job of
+  it. That WASM, `gen-fixture` and `rvt-elements` (which `parameters-row.spec.ts` runs as its oracle, #35) are built once per run, by a `build` job of
   its own, and the three groups download them (#1457); a group fails, rather
   than skips, when the build did not succeed. Deploy viewer builds the release
   WASM once, uploads it, publishes the site built on it, and runs the suite and
@@ -736,6 +736,20 @@ toolchain, and only a run of that commit restores it, so a run of any ref may
 save it (a pull request's run does not: its caches are its own). A ref that is
 not a full SHA is built each time, the probe examples always are, and
 `clean_caches.py` keeps the newest sixteen.
+
+## Projected graphs (#1335)
+
+A native pass that reads a few fields of a large graph can decode it projected
+(`native_parameters::decode_graph_projected`, `native_document::Options::graph_fields`):
+every byte is read and checked as in the full decode, so the record is refused for
+the same reasons, but only the listed fields are built. Each list is a `pub const`
+beside the one function that reads the projected graph
+(`Registry::ingest_binding_context`, `native_walls::wall_facts`,
+`native_es_catalog::from_graph`), and a field that function comes to read must be
+added to its list, because a field left out reads as absent without an error.
+`probes/examples/probe_1335_projected_graphs.rs` imports the constants, decodes every
+record both ways and runs those functions on both graphs; run it
+(`-f probe=probe_1335_projected_graphs`) after any change to a list or a reader.
 
 ## Dependencies and the MSRV
 

@@ -16,7 +16,10 @@ use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The id of the type a wall's record names (`m_WallAttributesId`), in either
-/// shape of `Identifier` (RE-283).
+/// shape of `Identifier` (RE-283). Read through
+/// [`crate::native_walls::wall_facts`] from a graph of which only
+/// [`crate::native_walls::WALL_READ_FIELDS`] are built: the field it reads is
+/// in that list, and one it comes to read must be added.
 pub(crate) fn wall_type_id(graph: &ObjectGraph) -> Option<u64> {
     graph.objects.iter().find_map(|object| {
         let id = identifier_i64(object.fields.get("m_WallAttributesId")?)?;
