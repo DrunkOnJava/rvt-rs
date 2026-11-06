@@ -455,7 +455,7 @@ fn is_top_joined(graph: &crate::native_parameters::ObjectGraph) -> bool {
 }
 
 /// The fields of an `SWall` and an `ArcWall` graph that [`wall_facts`] reads
-/// ([`wall_type_id`]: `m_WallAttributesId`; [`is_top_joined`]: `m_baseOrTop`),
+/// (`wall_type_id`: `m_WallAttributesId`; `is_top_joined`: `m_baseOrTop`),
 /// and `m_id`, which the check of a record against its identity reads.
 /// [`WallReads::read`] builds no other field of those graphs (#1335), so a field
 /// either function comes to read must be added here.
@@ -464,9 +464,9 @@ pub const WALL_READ_FIELDS: &[&str] = &["m_id", "m_WallAttributesId", "m_baseOrT
 /// What [`WallReads::read`] takes from the graph of a wall's record.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WallFacts {
-    /// The type the record names ([`wall_type_id`]).
+    /// The type the record names (`wall_type_id`).
     pub type_id: Option<u64>,
-    /// Whether a roof or floor is joined to the wall's top ([`is_top_joined`]).
+    /// Whether a roof or floor is joined to the wall's top (`is_top_joined`).
     pub top_joined: bool,
 }
 
