@@ -4,7 +4,7 @@
 **Issues:** #1475; follows RE-347 (section 7, the same-project check of the door and window axes), RE-222 (the native wall reader), RE-348 (#1410, `location_curve` reads `VWallDriver.m_pCrv`)
 **Probe:** `probes/examples/probe_re360_wall_location_curve.rs`
 **Scorer:** none: no Revit export of the files measured here exists. The saves are held to each other (`tools/re/bodies_across_saves.py`) and the two builds to each other.
-**Status:** positive, and the rule is written. On Revit 2027's save of `rac_advanced`, 18 of 180 `SWall` records hold a second `GLine` besides their location curve, owned by `WallRunTimeData.m_prevLocLine`; `native_walls` left out any wall with a second curve, so the 8 host walls of 14 doors returned no native line and the doors kept the default axes (#1475). `native_walls` now reads a wall whose record holds exactly two curves, the level `GLine` `VWallDriver.m_pCrv` names and a `GLine` only `WallRunTimeData.m_prevLocLine` names, by the first. Every wall the old rule read is read as before. The 14 doors are placed by the axes rule and equal to the 2025 save's; no wall that was read moves; 26 walls are read that were not (18 of `rac_advanced` 2027, 6 of `rac_basic` 2027 and 5 of them on 2024 to 2026, 2 of Snowdon Architectural). What stays open is in section 5.
+**Status:** positive, and the rule is written. On Revit 2027's save of `rac_advanced`, 18 of 180 `SWall` records hold a second `GLine` besides their location curve, owned by `WallRunTimeData.m_prevLocLine`; `native_walls` left out any wall with a second curve, so the 8 host walls of 14 doors returned no native line and the doors kept the default axes (#1475). `native_walls` now reads a wall whose record holds exactly two curves, the level `GLine` `VWallDriver.m_pCrv` names and a `GLine` only `WallRunTimeData.m_prevLocLine` names, by the first. Every wall the old rule read is read as before. The 14 doors are placed by the axes rule and equal to the 2025 save's; no wall that was read moves; 26 walls are read that were not, counted over every `SWall` record of the 25 files (18 of `rac_advanced` 2027, 6 of `rac_basic` 2027 and 5 of them on 2024 to 2026, 2 of Snowdon Architectural), of which 20 can reach an export (the 18 of `rac_advanced` 2027, and `rac_basic`'s 709245 and 234869; none on Snowdon). What stays open is in section 5.
 
 ## 0. The question
 
@@ -21,10 +21,18 @@ Run V0: Measure [42129732742](https://github.com/DrunkOnJava/rvt-rs/actions/runs
 
 - In every save, 180 of 180 records have a `GLine` owned by `VWallDriver.m_pCrv` (the path from the root is `SWall.m_pCurveDriver`, then `VWallDriver.m_pCrv`), and `m_pCrv` names exactly one object, a `GLine`, in each.
 - In the 18 two-line records of the 2027 save the second `GLine` is owned by `WallRunTimeData.m_prevLocLine` (`SWall.m_wallRunTimeData`, then `WallRunTimeData.m_prevLocLine`). No other curve is in any of the 180 records of any save.
-- The 18 are the same walls in the 2024 save, and in all 180 the length of the line `m_pCrv` names in the 2027 save is its length in the 2024 save (1e-6 ft, length only).
-- The 8 host walls of the 14 doors are among the 18 (144837 holds 1 door, 149505 1, 149551 1, 150342 3, 157807 5, 159427 1, 164345 1, 164417 1). The other 10 host no door or window.
+- The 18 are the same walls in the 2024 save, and in all 180 the length of the line `m_pCrv` names in the 2027 save is its length in the 2024 save (1e-6 ft). That is a check of length alone, and the two lines of a 2027 record have equal lengths, so it does not say which of them is the location curve; what does is the next section.
+- The 8 host walls of the 14 doors are among the 18 (144837 holds 1 door, 149505 1, 149551 1, 150342 3, 157807 5, 159427 1, 164345 1, 164417 1). The other 10 host no door or window. The 2024 save's 8 host walls hold 15 doors and the 2027 save's hold 14: the 15th, door 164921, is hosted by 157807 in the 2024 save and by another wall (164144) in the 2027 save, where it is not placed. That is the host rebinding of #1454, not this cause.
 
-`m_prevLocLine` is a stored line, not a second location curve. The name reads as the previous location line, which the bytes neither confirm nor contradict. In all 14 records of the 2027 save the probe printed whole (the 8 hosts and 6 others) it has the location curve's direction vector and length (1e-6 ft); it lies on it exactly in 10, 5 of the 8 hosts among them, and in the other 4 it is the same line shifted along the plan by 0.497 ft (2 walls) or 0.227 ft (2). No property of the line separates one wall from another, so a rule that told walls apart by it would be fitted to the result.
+`m_prevLocLine` is a stored line, not a second location curve. The name reads as the previous location line, which the bytes neither confirm nor contradict. In all 14 records of the 2027 save the probe printed whole (the 8 hosts and 6 others) it has the location curve's direction vector and length (1e-6 ft); it lies on it exactly in 10, 5 of the 8 hosts among them, and in the other 4 it is offset across the wall, not along it (the component along the wall is 0.000000 ft), by half the wall type's thickness: 0.4970 ft of 0.9941 ft on 144837 and 148769, 0.2272 ft of 0.4544 ft on 150342 and 157807 (3 of the 4 are hosts). So it is a line parallel to the location curve at a face of the wall, and in the other 10 coincident with it.
+
+**What settles which line is the location curve.** Their lengths cannot, and a rule that told walls apart by the previous line's properties would be fitted to the result. Three things do, each measured on the head of run V1 (section 3):
+
+- `m_pCrv`'s line equals the independent partition axis (RE-53, read from the partition stream, not from the native record) to 0.0000 ft at both ends on all 13 of the 14 dumped walls that have an axis (all 8 hosts among them; the 14th is a curtain wall, which has none). The previous line equals that axis on 9 of the 13 and is 0.4970 (2 walls) or 0.2272 ft (2) off it on 4, 3 of them hosts.
+- `attach_wall_lengths` (`wall_joins.rs`, its `near` test) gives a plain wall `m_wall_curve_length` only where the native line's two ends are within 1e-4 ft of that axis. All 17 newly read plain walls of `rac_advanced` 2027 have it (and an axis), so the line read is the axis, within 1e-4 ft, on all 17; the previous line would have failed that test on the 4 whose offset is 0.4970 or 0.2272 ft.
+- `m_pCrv` names the location curve in all 180 records of every save, and `location_curve` has read it since RE-348 (#1410).
+
+What cannot be told apart is a record whose `m_pCrv` names the stale line: the rule trusts the pointer, and nothing in the record besides the pointer says which line is current. None exists in the 25 files (the axis check above, and `m_pCrv`'s length equal to the 2024 save's on all 180). A curtain wall has no axis and no such guard (the curtain wall branch of `attach_wall_lengths`), so only the rule protects its line: both curtain walls this change reads (`rac_basic` 709245 and `rac_advanced` 149877) have a previous line coincident with the location curve, so a misreading would give the same value.
 
 The same member is in other records of the 2024 to 2026 saves: `rac_basic` holds it in 5 (7 on 2027) and Snowdon Towers Architectural in 4 (2 of them also hold `CurveLoop.m_curves` lines, a profile). So a rule that reads these walls on the 2027 save reads walls on the earlier saves too.
 
@@ -99,14 +107,17 @@ The gate (`tools/re/bodies_across_saves.py`, the doors and windows group, held t
 
 ## 5. Not claimed, not measured
 
-- No Revit export of `rac_basic` or `rac_advanced` exists: the saves are held to each other, so the 18, 6 and 1 newly read walls' lengths and directions are not checked against Revit's. The curtain wall `Length` (709245, 149877) is the curve's length, as for every other curtain wall that was read.
+- No Revit export of `rac_basic` or `rac_advanced` exists: the saves are held to each other, so the newly read walls' lengths and directions are not checked against Revit's.
+- The two curtain walls' `Length` values (709245 on every save, 149877 on 2027) are held by no check on these two models. No gate compares a curtain wall's `Length`; 709245 gains it on all four saves at once, so no earlier save compares it, and only its record box's width of 9.8753 ft corroborates the value 9.8753 ft; 149877's equals the value its 2024 to 2026 saves write (a comparison of the exports made for this report, not a gate), and its join-trimmed box is 82.3848 ft deep against the 84.0253 ft written. The value is the curve's length, as for every other curtain wall that was read.
 - The 14 openings' size on 2027 (section 3.5).
 - What other files hold: a record with two curves where the second is not a `m_prevLocLine` line, or with several previous location lines, is not read; a held-out model was not read for this.
 - Doors and windows with no flips read, hosts with no `SWall` record, ArcWall records, Revit 2023 and older (the native read does not run there).
 
 ## 6. The gate
 
-The 2027 floor of `OPENINGS_LEAST` for `rac_advanced` goes from 47 doors to 61 and the ceiling `OPENINGS_LEFT_OUT_MOST` from 42 to 28 (`tools/re/bodies_across_saves.py`), as RE-347 requires of a count that moves. The gate file changes in this PR, so a samples run on the final head writes the verdict.
+The 2027 floor of `OPENINGS_LEAST` for `rac_advanced` goes from 47 doors to 61 and the ceiling `OPENINGS_LEFT_OUT_MOST` from 42 to 28 (`tools/re/bodies_across_saves.py`), as RE-347 requires of a count that moves. Neither measured run exercised that edit: V0 and V1 were dispatched from `main` and took `main`'s scorers, and the `same-project gates` check run on this PR's head (Measure run [42137808608](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42137808608), a pass on 9 samples) reads "Scored by workflow commit `c5bae9ed`", `main`'s gate, whose 2027 ceiling is 42. The run that scores 61, 18 and 28 is the unfiltered one dispatched from this branch (V2, below); its figures are not in this report yet.
+
+These are the numbers on `main` with this change. #1454's branch (`lane/1454-gates`) holds its own 2027 numbers, counted with this cause present: 68 doors, 24 windows and a ceiling of 15. This change's 61, 18 and 28 would loosen them, and #1454's own measured numbers once this has landed are 83, 24 and 0 (the 2026 save's). So whichever of the two lands second sets 2027's numbers from a samples run on the merged head, and neither takes the other's.
 
 ## 7. Reproduce
 
@@ -117,6 +128,11 @@ gh workflow run measure.yml --ref main -f ref=d741927988f73dc2f97a5ced7bd607696c
 gh workflow run measure.yml --ref main -f ref=0a0ba7ce498f188072ce6719c037f55e84edde5b \
   -f base=ce3a3c4731e46b847e7b3c16a1eea16a445e7405 -f samples=true -f sample_years="2024 2027" \
   -f models="-" -f probe=probe_re360_wall_location_curve -f keep_ifc=true     # V1, the rule
+gh workflow run measure.yml --ref <this branch> -f ref=<its head> -f base=main -f samples=true \
+  -f nordic=true -f r2025=true -f holdout=true -f keep_ifc=true \
+  -f probe=probe_re360_wall_location_curve                                    # V2, unfiltered
 ```
+
+V2 is the unfiltered run, dispatched from this branch so that its scorers include the edited gate; it is not yet read.
 
 The output of each file is `sample-<year>-<project>/probe.txt` in the artifacts `measure-head-all` and `measure-base-all`, one JSON object per line (`file`, `openings`, `unread`, `swall`, `wall`, `census`, `native`, `wallfields`, `opening`). With the kept IFCs of V1 downloaded, the products compared in section 3.2 are each export's `IfcProduct`s by GlobalId, and section 3.5's doors are `tools/re/bodies_across_saves.py`'s `differences` of the head's 2027 and 2025 exports by Tag.

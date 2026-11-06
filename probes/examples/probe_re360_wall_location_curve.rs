@@ -4,9 +4,9 @@
 //!
 //! FACT under test: `native_walls` reads a wall only where its `SWall` record
 //! holds exactly one `GLine` or `GArc` and that one is a level `GLine`. On
-//! Revit 2027's save of `rac_advanced` eight host walls of fifteen doors (14
-//! doors and windows by the issue's count) return no row, where the 2024
-//! save's do. Hypothesis (from #1471): the 2027 record holds a second `GLine`
+//! Revit 2027's save of `rac_advanced` eight host walls of 14 doors return no
+//! row, where the 2024 save's do (the 2024 save's 8 hosts hold 15 doors; the
+//! 15th's host is another wall on 2027, which is #1454's cause). Hypothesis (from #1471): the 2027 record holds a second `GLine`
 //! the 2024 record does not, and the curve the record names as the wall's
 //! location curve (`VWallDriver.m_pCrv`, as `location_curve` reads it, #1410)
 //! is identifiable among them by that pointer alone.

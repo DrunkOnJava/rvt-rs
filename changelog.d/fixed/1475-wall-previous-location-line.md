@@ -10,14 +10,17 @@
   `CurveLoop.m_curves` profile wall stays unread. Measured on Autodesk's
   sample projects of 2024 to 2027 (no Revit export), Measure run
   42134051521 at `0a0ba7ce` against the same code without it: 26 walls are
-  newly read (`rac_advanced` 2027 18, `rac_basic` 6 and 5 on the earlier
-  saves, Snowdon Towers Architectural 2), `rac_advanced` and `rac_basic` then
-  read the same walls on all four saves, the 14 doors are placed on Revit's
-  axes and equal the 2025 save's in axes, origin, vertices and volume, and
-  two curtain walls (`rac_basic` 709245 on every save, `rac_advanced` 149877
-  on 2027) gain `Qto_CurtainWallQuantities.Length`. No other wall, placement,
-  body or property of the five exports that move (`rac_basic` 2024 to 2027,
-  `rac_advanced` 2027) changes, and the other 20 exports are byte for byte
-  the same. The 14 openings those doors cut have their doors' axes; their
-  size is still a record box on 2027, as the cut loop of a door's symbol is
-  read on 2024 and 2025 only.
+  newly read over every `SWall` record (`rac_advanced` 2027 18, `rac_basic`
+  6, and 5 of those on the earlier saves, Snowdon Towers Architectural 2), of
+  which 20 can reach an export (the 18, and `rac_basic` 709245 and 234869;
+  none on Snowdon). `rac_advanced` and `rac_basic` then read the same walls
+  on all four saves, the 14 doors are placed by the RE-347 axes rule and
+  equal the 2025 save's in axes, origin, vertices and volume, and two
+  curtain walls (`rac_basic` 709245 on every save, `rac_advanced` 149877 on
+  2027) gain `Qto_CurtainWallQuantities.Length`, a value no Revit export or
+  gate checks on these files. No other wall, placement, body or property of
+  the five exports that move (`rac_basic` 2024 to 2027, `rac_advanced` 2027)
+  changes, and the other 20 exports are byte for byte the same. The 14
+  openings those doors cut have their doors' axes; their size is still a
+  record box on 2027, as the cut loop of a door's symbol is read on 2024 and
+  2025 only.
