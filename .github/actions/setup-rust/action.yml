@@ -14,6 +14,11 @@ description: >-
 # job that must keep another toolchain as the default says so (`make-default`).
 # Moving a toolchain or an environment variable here moves every key and
 # discards every cache.
+#
+# rustup retries a download within seconds, and a download that failed for longer
+# turned a job red with nothing wrong in the code (macos-26 on #1483). So the
+# install is tried three times, 20 s and 40 s apart. A toolchain that really
+# cannot be installed still fails the job, a minute later.
 inputs:
   toolchain:
     description: A rustup toolchain, such as stable, 1.87, nightly-2026-10-01 or nightly
@@ -49,7 +54,16 @@ runs:
         if [ -n "$TARGET" ]; then
           args+=(--target "$TARGET")
         fi
-        rustup toolchain install "$TOOLCHAIN" "${args[@]}"
+        attempt=1
+        until rustup toolchain install "$TOOLCHAIN" "${args[@]}"; do
+          if [ "$attempt" -ge 3 ]; then
+            echo "::error::rustup could not install $TOOLCHAIN in 3 attempts"
+            exit 1
+          fi
+          echo "::warning::rustup could not install $TOOLCHAIN (attempt $attempt of 3); trying again in $((attempt * 20)) s"
+          sleep "$((attempt * 20))"
+          attempt=$((attempt + 1))
+        done
         if [ "$MAKE_DEFAULT" = true ]; then
           rustup default "$TOOLCHAIN"
         fi
