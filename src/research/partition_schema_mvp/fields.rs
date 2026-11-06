@@ -270,6 +270,19 @@ pub const DOOR_TYPE_SIZE_FIELDS: [&str; 2] = ["m_door_type_width", "m_door_type_
 /// and `AreaCalculator` read for its base quantities (#1016), feet.
 pub const DRAWN_SIZE_FIELDS: [&str; 2] = ["m_drawn_symbol_width", "m_drawn_symbol_height"];
 
+/// Releases a door's or window's `Area` quantity is written on, its Width
+/// times its Height: measured against Revit's own exports of 2024 and 2025
+/// files and of the held-out 2026 ones (the flowbim house and hemanth1986's
+/// 2026 pair: none different). Revit 2027's export gives the same Width and
+/// Height and an Area that is not their product (hemanth1986's 2027 pair: every
+/// window's and door's differs, RE-346), so a 2027 door or window gets its
+/// Width and Height and no Area.
+pub const DOOR_WINDOW_AREA_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
+
+/// Field marking a door or window whose `Area` is left out
+/// ([`DOOR_WINDOW_AREA_REVIT_VERSIONS`]).
+pub const DRAWN_AREA_LEFT_OUT_FIELD: &str = "m_drawn_area_left_out";
+
 /// Fields carrying the extent along X and along Z of the outline a door's
 /// or window's symbol cuts in its host (RE-215), feet.
 pub const CUT_LOOP_SIZE_FIELDS: [&str; 2] = ["m_cut_loop_width", "m_cut_loop_height"];
@@ -292,8 +305,10 @@ pub const CUT_SOLID_SIZE_FIELDS: [&str; 3] = [
 ];
 
 /// Releases a door's or window's cut loop is measured on (RE-215): 2024
-/// (Core Interior) and 2025 (RE1 Architecture, the R2025 models).
-pub const CUT_LOOP_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// (Core Interior) and 2025 (RE1 Architecture, the R2025 models). 2026 and
+/// 2027 (RE-346): Autodesk's samples saved by them cut their walls as their
+/// 2025 saves do.
+pub const CUT_LOOP_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// How closely an instance's plan X axis must lie along a model axis for
 /// its record box to be along its own axes (#810).
@@ -792,8 +807,9 @@ pub(super) const LOAD_BEARING_CLASSES: &[&str] = &["StructuralColumn", "Structur
 
 /// Releases where the calculation's last step, not external, is measured
 /// (RE-193). The parameters and a type's Function are read on every release
-/// from 2024, as RE-158 read a door's and a floor's.
-pub const IS_EXTERNAL_LAST_STEP_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// from 2024, as RE-158 read a door's and a floor's. 2026 and 2027 (RE-346)
+/// as Autodesk's samples saved by 2025 read them.
+pub const IS_EXTERNAL_LAST_STEP_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// Give each element of `groups` the values of the project or shared
 /// parameters named `<property set>.<property>` for a property of a standard
@@ -917,8 +933,9 @@ pub(super) const CURTAIN_PART_BOX_TOLERANCE_FEET: f64 = 0.05;
 /// Field carrying a room's Floor Finish (RE-153).
 pub const ROOM_FLOOR_FINISH_FIELD: &str = "m_room_floor_finish";
 
-/// Releases a room's `Qto_SpaceBaseQuantities.Height` is read on (RE-255).
-pub const ROOM_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
+/// Releases a room's `Qto_SpaceBaseQuantities.Height` is read on (RE-255);
+/// 2027 as Autodesk's samples saved by 2025 read it (RE-346).
+pub const ROOM_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// Field holding a room's height, feet (RE-255).
 pub const ROOM_HEIGHT_FIELD: &str = "m_room_height";
@@ -931,8 +948,9 @@ pub const ROOM_PRISM_FIELD: &str = "m_room_prism";
 
 /// Releases a room is marked a prism on (RE-296), and so gets its `NetVolume`:
 /// the only exports it is measured against are the BIM4LCA office's (Revit
-/// 2024) and the R2025 models' (Revit 2025).
-pub const ROOM_PRISM_REVIT_VERSIONS: &[u32] = &[2024, 2025];
+/// 2024) and the R2025 models' (Revit 2025), and on 2026 and 2027 (RE-346),
+/// Autodesk's samples saved by 2025.
+pub const ROOM_PRISM_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// Field carrying a recovered room number.
 pub const ROOM_NUMBER_FIELD: &str = "m_number";
