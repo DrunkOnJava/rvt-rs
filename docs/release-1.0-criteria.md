@@ -208,9 +208,10 @@ The held-out and BIMcollab runs keep quantity counts only, so no property census
 Most instance and type parameters are not ([#35](https://github.com/DrunkOnJava/rvt-rs/issues/35),
 [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155),
 the 0.16.0 milestone)
-Open: type objects' `IsExternal`, left out by the maintainer's decision, a door type's `ThermalTransmittance`, left out as Revit's exporters disagree ([#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185), RE-354), windows' `Pset_WindowCommon.FireRating`, whose R2025 values sit under family-parameter ids ([#1507](https://github.com/DrunkOnJava/rvt-rs/issues/1507)), the RE1 Plumbing water closet tank and its type, written where Revit's export holds neither ([#1496](https://github.com/DrunkOnJava/rvt-rs/issues/1496)),
+Open: windows' `Pset_WindowCommon.FireRating`, whose R2025 values sit under family-parameter ids ([#1507](https://github.com/DrunkOnJava/rvt-rs/issues/1507)), the RE1 Plumbing water closet tank and its type, written where Revit's export holds neither ([#1496](https://github.com/DrunkOnJava/rvt-rs/issues/1496)), the office's one type-object value Revit's export omits, `Pset_SanitaryTerminalTypeCommon.Reference` ([#792](https://github.com/DrunkOnJava/rvt-rs/issues/792)),
 the round column and the meshed columns' values ([#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)),
 and the remaining values with no rule yet ([#1193](https://github.com/DrunkOnJava/rvt-rs/issues/1193)).
+Closed: [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185) (RE-354), with its two declared leave-outs: type objects' `IsExternal`, left out by the maintainer's decision, and a door type's `ThermalTransmittance`, left out as Revit's exporters disagree.
 
 ## Interfaces 1.0 stabilizes
 
