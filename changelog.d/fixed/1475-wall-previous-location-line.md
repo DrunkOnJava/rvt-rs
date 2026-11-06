@@ -20,7 +20,13 @@
   2027) gain `Qto_CurtainWallQuantities.Length`, a value no Revit export or
   gate checks on these files. No other wall, placement, body or property of
   the five exports that move (`rac_basic` 2024 to 2027, `rac_advanced` 2027)
-  changes, and the other 20 exports are byte for byte the same. The 14
-  openings those doors cut have their doors' axes; their size is still a
-  record box on 2027, as the cut loop of a door's symbol is read on 2024 and
-  2025 only.
+  changes. The unfiltered run (Measure 42141380072 at `5754c7f3`, 111 models
+  and samples) moves six exports: those five and the BIM4LCA office as built,
+  where one door gains the rule's axes and they are Revit's (doors placed by
+  the rule 193 to 194, none differing from Revit's; its two newly read plain
+  walls' lengths are Revit's, and no body, class or quantity of it changes).
+  The other 105, Core Interior and the office at permit among them (281 and
+  76 walls newly read), are byte for byte main's. No held-out model holds a
+  previous location line. The 14 openings the doors cut have their doors'
+  axes; their size is still a record box on 2027, as the cut loop of a door's
+  symbol is read on 2024 and 2025 only.
