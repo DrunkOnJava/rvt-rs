@@ -33,7 +33,11 @@
 # classes they land on and the export's counts by class, beside the category's
 # built-in name and id and an IFC class name, never an ElementId or a name
 # from the model; the scorer's table rows, which carry the export's category
-# name, and its `not in the export` lines are dropped), the
+# name, and its `not in the export` lines are dropped), the `re363` count
+# lines of tools/re/tank_rules_vs_ifc.py (RE-363: for each candidate rule the
+# counts of plumbing fixtures it would drop, in and not in Revit's export,
+# beside the rule's name and the export's schema, never an ElementId or a name
+# from the model; its listing lines are dropped), the
 # `door flips:` count lines of tools/re/door_flips_vs_ifc.py (RE-343: counts of
 # doors and windows by flag state and by how their placements compare; its
 # `field ... values` lines only with values true, false, null or under 100; its
@@ -96,6 +100,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^native levels: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^category census[A-Za-z ]*: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      grep -E '^re363 [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^door flips: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" | grep -v -E '^door flips: field ' || true
       grep -E '^door flips: field [A-Za-z0-9_]+ values ((true|false|null|[0-9]{1,2})=[0-9]+(, )?)+$' "$f" || true
     done
