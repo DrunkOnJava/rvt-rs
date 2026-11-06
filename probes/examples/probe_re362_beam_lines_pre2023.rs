@@ -12,7 +12,12 @@
 //! `accepted` or declined by its first failing test, with the same detail), and
 //! prints counts only, each line as `native readers: beam lines: ...` in the
 //! restricted alphabet `tools/ci/scrub-holdout-results.sh` keeps for a model
-//! fetched without a licence. No element id, name or coordinate is printed.
+//! fetched without a licence. A beam a column cuts (RE-122) keeps its cut box and
+//! is counted apart (`column_cut`). For a line the reader accepts it also counts
+//! the lines the beam's data holds (`accepted lines_in_data`) and whether another
+//! one also makes a beam solid (`accepted other_line_fits`): where another does,
+//! the body could be along the wrong line, which no scorer here would see. No
+//! element id, name or coordinate is printed.
 //!
 //! ```text
 //! cargo run --profile ci -p rvt-probes --example probe_re362_beam_lines_pre2023 -- model.rvt
@@ -21,6 +26,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
+use rvt::research::element_record_beam_cuts::BEAM_BODY_SOURCE_FIELD;
 use rvt::research::partition_beam_axes::{
     BeamReject, BoundedLine, END_TOLERANCE_FEET, MIN_PLAN_CONDITION, all_line_copies,
     beam_axis_read_on, beam_body_in_box, beam_check, beam_section_fit, box_along, box_overshoot,
@@ -142,6 +148,16 @@ fn main() -> anyhow::Result<()> {
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for beam in &beams {
         let Some(id) = beam.id else { continue };
+        // A beam a column cuts (RE-122) keeps its cut box: its record box is the
+        // cut box, so no line is read for it.
+        if beam
+            .fields
+            .iter()
+            .any(|(name, _)| name == BEAM_BODY_SOURCE_FIELD)
+        {
+            bump(&mut counts, "column_cut");
+            continue;
+        }
         let attached = beam_axis_from_fields(&beam.fields).is_some();
         let Some(bbox) = element_record_bbox(beam) else {
             bump(&mut counts, "no_bbox");
@@ -171,7 +187,29 @@ fn main() -> anyhow::Result<()> {
         let orient = orientation(line.direction);
         bump(&mut counts, format!("one_line {why}"));
         bump(&mut counts, format!("one_line {why} {orient}"));
+        let held = all_lines
+            .get(&id)
+            .and_then(|found| found.first())
+            .map_or(0, |(_, lines)| lines.len());
+        let other_fits = all_lines.get(&id).is_some_and(|found| {
+            found
+                .iter()
+                .flat_map(|(_, lines)| lines.iter())
+                .filter(|other| **other != line)
+                .any(|other| beam_check(bbox, other.start(), other.end()).is_ok())
+        });
         if verdict.is_ok() {
+            // Whether the first line, the one the reader takes, is the only line
+            // in the data that makes a beam solid: where another does too, the
+            // body could be along the wrong one.
+            bump(
+                &mut counts,
+                format!("one_line accepted lines_in_data {}", held.min(4)),
+            );
+            bump(
+                &mut counts,
+                format!("one_line accepted other_line_fits {other_fits}"),
+            );
             if !attached {
                 bump(&mut counts, "MISMATCH accepted_but_not_attached");
             }
@@ -189,21 +227,10 @@ fn main() -> anyhow::Result<()> {
             "unknown"
         };
         bump(&mut counts, format!("one_line {why} i_section {section}"));
-        let held = all_lines
-            .get(&id)
-            .and_then(|found| found.first())
-            .map_or(0, |(_, lines)| lines.len());
         bump(
             &mut counts,
             format!("one_line {why} lines_in_data {}", held.min(4)),
         );
-        let other_fits = all_lines.get(&id).is_some_and(|found| {
-            found
-                .iter()
-                .flat_map(|(_, lines)| lines.iter())
-                .filter(|other| **other != line)
-                .any(|other| beam_check(bbox, other.start(), other.end()).is_ok())
-        });
         bump(
             &mut counts,
             format!("one_line {why} other_line_fits {other_fits}"),

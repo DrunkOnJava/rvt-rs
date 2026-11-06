@@ -253,6 +253,16 @@ pub fn beam_unrotated(fields: &[(String, InstanceField)]) -> bool {
     })
 }
 
+/// Whether a column cut a beam's body (RE-122): its record box fields are then
+/// the cut box's, which `apply_beam_column_trim` wrote over the record's, so the
+/// beam keeps that body and neither a location line nor a rotation is read for it.
+fn beam_column_cut(element: &DecodedElement) -> bool {
+    element
+        .fields
+        .iter()
+        .any(|(name, _)| name == crate::element_record_beam_cuts::BEAM_BODY_SOURCE_FIELD)
+}
+
 /// Give each structural-framing element the location line its data carries,
 /// when the line and the element's record box make a beam solid
 /// ([`crate::partition_beam_axes::beam_body`], RE-49), or, for an unrotated
@@ -260,7 +270,8 @@ pub fn beam_unrotated(fields: &[(String, InstanceField)]) -> bool {
 /// beam whose box is longer than its line
 /// ([`crate::partition_beam_axes::beam_body_in_box`], RE-328). A line that
 /// leaves the box, or a box no solid along the line reproduces, is not
-/// attached.
+/// attached. A beam a column cuts (RE-122) is skipped: its record box fields are
+/// the cut box's, a line is tested against them, and its body is the cut box's.
 pub(super) fn attach_beam_axes(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -272,7 +283,7 @@ pub(super) fn attach_beam_axes(
     }
     let beams: BTreeSet<u32> = products
         .iter()
-        .filter(|element| element.class == "StructuralFraming")
+        .filter(|element| element.class == "StructuralFraming" && !beam_column_cut(element))
         .filter_map(|element| element.id)
         .collect();
     if beams.is_empty() {
@@ -283,7 +294,7 @@ pub(super) fn attach_beam_axes(
     };
     for element in products
         .iter_mut()
-        .filter(|element| element.class == "StructuralFraming")
+        .filter(|element| element.class == "StructuralFraming" && !beam_column_cut(element))
     {
         let Some(line) = element.id.and_then(|id| lines.get(&id)) else {
             continue;
@@ -312,11 +323,12 @@ pub(super) fn attach_beam_axes(
 /// `m_rotation`, radians, of its `FamInstCurveDriver`, which revit-ifc's
 /// `RollCalculator` reads from the element's `STRUCTURAL_BEND_DIR_ANGLE`
 /// parameter (CLEANROOM.md source 5). A beam whose copies disagree, or whose
-/// record is not read, gets none.
+/// record is not read, gets none, nor does one a column cuts (RE-122), which
+/// is not drawn along a line.
 pub(super) fn attach_beam_rotations(rf: &mut RevitFile, products: &mut [DecodedElement]) {
     let beams: BTreeSet<u64> = products
         .iter()
-        .filter(|element| element.class == "StructuralFraming")
+        .filter(|element| element.class == "StructuralFraming" && !beam_column_cut(element))
         .filter_map(|element| element.id)
         .map(u64::from)
         .collect();

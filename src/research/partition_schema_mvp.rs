@@ -220,8 +220,9 @@ pub fn recover_partition_schema_mvp(
         resolve_base_at_level(&level_elevations, &mut record_backed);
         resolve_remaining_levels(&level_elevations, &mut record_backed);
         // --- Beams along their location lines, the rotation first (RE-276, RE-49,
-        // RE-362). A beam a named column trims keeps its cut box (RE-122): its
-        // line leaves that box, so none is attached. ---
+        // RE-362). A beam a named column trims keeps its cut box (RE-122): both
+        // readers skip it, since the trim rewrote the record box they would test
+        // a line against. ---
         if crate::partition_beam_axes::beam_axis_read_on(revit_version) {
             attach_beam_rotations(rf, &mut out.products);
             attach_beam_axes(rf, revit_version, &mut out.products);

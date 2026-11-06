@@ -115,17 +115,22 @@ pub fn supports_shaft_outlines(revit_version: u32) -> bool {
     SHAFT_OUTLINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
 }
 
-/// Releases where a beam's location line and rotation are read from the 32-bit
-/// records, apart from [`BEAM_AXIS_SUPPORTED_REVIT_VERSIONS`] (2024 to 2027),
-/// which also gates [`scan_bounded_lines`] and the probes that list a line's
-/// copies, none measured on these releases. The line is the record a wall's is
-/// on these releases (RE-114, RE-180, RE-181); the beams are held to the same
-/// Autodesk samples saved by Revit 2024 (RE-362).
-pub const BEAM_AXIS_32BIT_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2023;
+/// Releases 2015 to 2023, where a beam's location line and rotation are read
+/// from the 32-bit records, apart from [`BEAM_AXIS_SUPPORTED_REVIT_VERSIONS`]
+/// (2024 to 2027), which also gates [`scan_bounded_lines`], not measured on these
+/// releases. The line is the record a wall's is on them (RE-114, RE-180,
+/// RE-181). It is measured on Autodesk's sample projects only, against the same
+/// samples' later saves (the 2024 saves, `rst_advanced` 2015's 2019 save,
+/// `rst_basic` 2015 none), and on no model from elsewhere: none of BIMcollab's
+/// 91 Revit 2015 beams holds a line in the window (RE-362, #1514). A
+/// range of its own, not the whole 32-bit set (`REVIT_32BIT_RELEASES`, 2008 to
+/// 2023): 2008 to 2014 are not read.
+pub const BEAM_AXIS_2015_TO_2023_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2023;
 
 /// Whether a beam's location line is read on `revit_version`.
 pub fn beam_axis_read_on(revit_version: u32) -> bool {
-    supports_revit_version(revit_version) || BEAM_AXIS_32BIT_REVIT_VERSIONS.contains(&revit_version)
+    supports_revit_version(revit_version)
+        || BEAM_AXIS_2015_TO_2023_REVIT_VERSIONS.contains(&revit_version)
 }
 
 /// A bounded line record.
