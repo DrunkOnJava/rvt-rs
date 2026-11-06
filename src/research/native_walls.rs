@@ -670,6 +670,7 @@ pub fn native_walls_and_top_joins_into(
     let options = Options {
         selected_ids: walls.clone(),
         selected_classes: BTreeSet::from(["BasicWallType".to_string()]),
+        releases: crate::native_document::NATIVE_RELEASES,
         ..Options::default()
     };
     let mut found: BTreeMap<u64, (NativeWall, Option<u64>)> = BTreeMap::new();
