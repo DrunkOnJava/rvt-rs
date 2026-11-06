@@ -15,7 +15,7 @@ pub(super) fn recover_2023_records(
     rf: &mut RevitFile,
     revit_version: u32,
     out: &mut PartitionSchemaMvp,
-) {
+) -> BTreeMap<u32, Vec<u64>> {
     use crate::partition_element_records as per;
     // The frames that stop are listed only for the log of decisions.
     let want_frames = rf.recording_frame_decisions();
@@ -169,8 +169,11 @@ pub(super) fn recover_2023_records(
             attach_host_candidates(record, &wall_ids, element);
         }
     }
-    bind_opening_hosts(&out.walls, &mut out.doors);
-    bind_opening_hosts(&out.walls, &mut out.windows);
+    // Each record's reference list, as read, for the readers it names (RE-366).
+    selected
+        .into_iter()
+        .map(|(id, record)| (id, record.references))
+        .collect()
 }
 
 /// Each exported 2023 wall's, floor's, roof's and ceiling's type and its

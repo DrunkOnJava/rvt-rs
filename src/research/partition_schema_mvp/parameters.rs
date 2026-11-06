@@ -328,7 +328,8 @@ pub(super) fn attach_record_is_external<'a>(
                 .is_some_and(|rest| rest == IS_EXTERNAL_PARAMETER_NAME || rest.ends_with(&suffix))
         });
         let last_step = IS_EXTERNAL_LAST_STEP_RECORD_CLASSES.contains(&element.class.as_str());
-        if !(named || last_step || element.class == "Wall") {
+        let wall = element.class == "Wall" || element.class == CURTAIN_WALL_CLASS;
+        if !(named || last_step || wall) {
             continue;
         }
         if let Some(external) = calculated_is_external(element, last_step) {

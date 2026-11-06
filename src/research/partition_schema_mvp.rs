@@ -189,7 +189,7 @@ pub fn recover_partition_schema_mvp(
     // identity, category, box and the readers called here; nothing else 2024
     // decodes on top of records is read. ---
     if crate::partition_element_records_2023::is_32bit_release(revit_version) {
-        recover_2023_records(rf, revit_version, &mut out);
+        let references = recover_2023_records(rf, revit_version, &mut out);
         attach_room_outlines(rf, revit_version, &mut out.rooms);
         // --- Pipes' types and centrelines, from their own native record
         // (RE-370) ---
@@ -224,6 +224,22 @@ pub fn recover_partition_schema_mvp(
         resolve_base_constraint_levels(&level_elevations, &mut record_backed);
         resolve_base_at_level(&level_elevations, &mut record_backed);
         resolve_remaining_levels(&level_elevations, &mut record_backed);
+        // --- Curtain walls, their parts and those parts' axes (RE-46, RE-106,
+        // RE-366), then doors and windows in the nearest wall that is not a
+        // curtain wall (#439) ---
+        if CURTAIN_32BIT_REVIT_VERSIONS.contains(&revit_version) {
+            attach_curtain_walls(
+                rf,
+                revit_version,
+                &mut out.walls,
+                &mut out.products,
+                [&mut out.doors, &mut out.windows],
+                Some(&references),
+            );
+            attach_curtain_axes(rf, revit_version, &mut out.products);
+        }
+        bind_opening_hosts(&out.walls, &mut out.doors);
+        bind_opening_hosts(&out.walls, &mut out.windows);
         // --- The Level parameters each element's own native record names
         // (RE-369) ---
         attach_levels_32(
@@ -320,6 +336,8 @@ pub fn recover_partition_schema_mvp(
                 .chain(out.rooms.iter_mut())
                 .chain(out.products.iter_mut()),
         );
+        // --- A curtain mullion's or panel's IsExternal: its curtain wall's (RE-193, RE-269) ---
+        attach_curtain_member_is_external(&out.walls, &mut out.products);
         // --- Whether a wall's top is joined to a roof or floor, from its
         // native record (RE-228, RE-284) ---
         attach_wall_top_joins(rf, revit_version, &mut out.walls, &mut wall_reads);
@@ -451,6 +469,7 @@ pub fn recover_partition_schema_mvp(
         &mut out.walls,
         &mut out.products,
         [&mut out.doors, &mut out.windows],
+        None,
     );
     // --- Doors and windows in the nearest listed wall that is not a curtain wall (#439) ---
     bind_opening_hosts(&out.walls, &mut out.doors);
