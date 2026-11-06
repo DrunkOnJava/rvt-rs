@@ -382,7 +382,14 @@ the two office files (`tools/re/placed_bodies_vs_base.py`, runs 42092391898
 and 42106731054). A door bound to none, an element with no stored transform
 (Revit 2023 and older) and a turned instance keep the default axes, which say
 nothing of the direction they face; the origin is still the record box's
-centre, more than 0.5 ft from Revit's on almost all (#1465). On Revit 2025,
+centre, more than 0.5 ft from Revit's on all 1,061 walled doors and windows
+scored (#1465, RE-357): Revit's is the stored origin plus an offset that is
+one value for every element of an `IfcDoorType` or `IfcWindowType` entity
+(160 of 160), which revit-ifc keeps in the type's `StyleTransform` from the
+instance that created the type and the file does not record; two of its axes
+follow the element's own opening and the third does not, so no rule with 0
+wrong exists (Measure run 42127619521,
+`reports/element-framing/RE-357-door-window-origin.md`). On Revit 2025,
 2026 and 2027 the same elements are held to the 2024 save by the same-project
 check (`tools/re/bodies_across_saves.py`, run 42106711251): it compares 107,
 79 and 65 doors and windows of `rac_advanced` and 17 each of `rac_basic` (of

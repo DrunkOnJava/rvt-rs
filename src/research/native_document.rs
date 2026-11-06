@@ -25,6 +25,10 @@ pub struct ResourceBudget {
     pub max_graph_objects: usize,
 }
 
+/// The fields to keep of a record's graph, by its root class
+/// ([`Options::graph_fields`]).
+pub type GraphFields = fn(&str) -> Option<&'static [&'static str]>;
+
 #[derive(Debug, Clone)]
 pub struct Options {
     pub selected_ids: BTreeSet<u64>,
@@ -95,6 +99,23 @@ pub struct Options {
     /// RE-342, which reads saved graphics on a file of Revit 2015 to 2022 with
     /// [`Self::releases`] widened, turns it on.
     pub deferred_history_episodes: bool,
+    /// For a record whose root class this names, the fields of its graph's
+    /// objects that are kept: those whose key (a bare field name, or
+    /// `Declaring::name` where the class chain declares it more than once) is
+    /// in the list, and no other ([`native_parameters::decode_graph_projected`]).
+    /// The record is read and checked as a full one is, so it is refused for
+    /// the same reasons, but the values of the fields left out are never built.
+    /// The list names `m_id` as well, which the check of a record against its
+    /// identity reads. A projected record has no [`Record::saved_metadata`],
+    /// which is made from the whole graph. A class the function gives `None`
+    /// for, and any record with no function here, keeps every field. For a
+    /// reader that takes only those fields from the records of those classes
+    /// (#1335): the list is a `pub const` beside the one function that reads
+    /// the projected graph (`wall_facts`, `Registry::ingest_binding_context`),
+    /// so that a field read is added to the list where it is read. The
+    /// definitions pass, which [`extract`] makes first, sets its own function
+    /// whatever this is.
+    pub graph_fields: Option<GraphFields>,
 }
 /// The default [`Options::max_group_bytes`]: one reassembled continuation
 /// group's bytes.
@@ -146,6 +167,7 @@ impl Default for Options {
             keep_body: false,
             value_source: None,
             deferred_history_episodes: false,
+            graph_fields: None,
         }
     }
 }
@@ -285,7 +307,7 @@ pub struct StreamEnvelope {
 }
 /// `bytes` as lowercase hex, two digits a byte: `format!("{byte:02x}")` for
 /// each, without a `String` for every one (#1237).
-fn lower_hex(bytes: &[u8]) -> String {
+pub(crate) fn lower_hex(bytes: &[u8]) -> String {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
     let mut hex = String::with_capacity(bytes.len() * 2);
     for &byte in bytes {
@@ -594,6 +616,7 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
         keep_body: _,
         value_source: _,
         deferred_history_episodes,
+        graph_fields: _,
     } = options;
     let key: DefinitionKey = (
         *max_group_bytes,
@@ -617,6 +640,11 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
     definition_options.record_extras = false;
     definition_options.keep_body = false;
     definition_options.value_source = None;
+    // Whatever the caller's `graph_fields` was: the pass reads a `Family` and
+    // a `FamilySymbol` only through `ingest_binding_context`, and builds the
+    // fields it lists (#1335).
+    definition_options.graph_fields =
+        Some(crate::native_parameter_definitions::binding_context_fields);
     let definition_summary =
         extract_records(
             file,
@@ -1118,16 +1146,29 @@ fn extract_records(
                     if needles.is_some_and(|needles| !needles.occur_in(body)) {
                         continue;
                     }
-                    let decoded = native_parameters::decode_graph_with_catalog_usage(
-                        body,
-                        registry,
-                        &native_parameters::GraphLimits {
-                            max_values: options.max_graph_values,
-                            max_objects: options.max_graph_objects,
-                            ..Default::default()
-                        },
-                        summary.extensible_storage_catalog.as_ref(),
-                    );
+                    let limits = native_parameters::GraphLimits {
+                        max_values: options.max_graph_values,
+                        max_objects: options.max_graph_objects,
+                        ..Default::default()
+                    };
+                    let projected = options
+                        .graph_fields
+                        .and_then(|fields| fields(class_name.as_deref()?));
+                    let decoded = match projected {
+                        Some(keep) => native_parameters::decode_graph_projected(
+                            body,
+                            registry,
+                            &limits,
+                            summary.extensible_storage_catalog.as_ref(),
+                            keep,
+                        ),
+                        None => native_parameters::decode_graph_with_catalog_usage(
+                            body,
+                            registry,
+                            &limits,
+                            summary.extensible_storage_catalog.as_ref(),
+                        ),
+                    };
                     let decoded = decoded.and_then(|(graph, usage)| {
                         if source.channel == 102 {
                             let root = graph
@@ -1184,13 +1225,14 @@ fn extract_records(
                             .entry(diagnostic.clone().unwrap_or_default())
                             .or_default() += 1;
                     }
-                    let (saved_metadata, metadata_diagnostic) = match graph.as_ref().map(|graph| {
-                        crate::native_metadata::project_with_definitions(graph, definitions)
-                    }) {
-                        Some(Ok(value)) => (Some(value), None),
-                        Some(Err(error)) => (None, Some(error.to_string())),
-                        None => (None, None),
-                    };
+                    let (saved_metadata, metadata_diagnostic) =
+                        match graph.as_ref().filter(|_| projected.is_none()).map(|graph| {
+                            crate::native_metadata::project_with_definitions(graph, definitions)
+                        }) {
+                            Some(Ok(value)) => (Some(value), None),
+                            Some(Err(error)) => (None, Some(error.to_string())),
+                            None => (None, None),
+                        };
                     summary.projected_metadata_records += usize::from(saved_metadata.is_some());
                     summary.unsupported_metadata_records +=
                         usize::from(metadata_diagnostic.is_some());

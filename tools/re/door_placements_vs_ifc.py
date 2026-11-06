@@ -30,6 +30,17 @@ carries `RvtElementRecordGeometry.PlacementAxesSource`, the ones placed as
 Revit's export places them (the rule of RE-347), and how they compare with
 Revit's: all of them should be `same`.
 
+RE-357 (#1465) adds the origin. For every element whose stored transform the
+probe read, `d` is Revit's placement origin less the stored origin
+(`InstanceTransform.origin`), taken in the stored axes and in Revit's own. The
+`origin` lines say how many elements have the stored origin as Revit's; how
+many `IfcDoorType` or `IfcWindowType` entities, symbols, and symbols with a flip
+state hold one `d`; the signs of `d` by state; and, per axis, how many `d` equal
+the corner of the opening each export gives the element (the lowest corner in
+Revit's axes about the stored origin where the flips are equal, the negated
+highest x and y with the lowest z where they differ). An open model also
+prints the offsets by type and the largest distances.
+
 It prints count lines beginning `door flips:` (counts only, never an id or a
 name, in a restricted alphabet, so a held-out model's lines can leave the
 runner through tools/ci/scrub-holdout-results.sh), then, unless the model is
@@ -51,13 +62,14 @@ import os
 import sys
 
 import ifcopenshell
+import ifcopenshell.geom
 import ifcopenshell.util.element
 import ifcopenshell.util.placement
 import ifcopenshell.util.unit
 import numpy as np
 
 import door_flips_vs_ifc as flips
-from ifc_common import site_frame
+from ifc_common import FEET, mesh_parts, site_frame
 
 STATES = ("00", "01", "10", "11", "unread")
 BINDINGS = ("bound to a plain wall", "bound to none", "no stored transform")
@@ -66,6 +78,10 @@ VERDICTS = ("same", "half turn", "quarter turn", "other")
 UP = np.array([0.0, 0.0, 1.0])
 RECORD_SET = "RvtElementRecordGeometry"
 ORIGIN_BANDS = ((0.01, "within 0.01 ft"), (0.5, "within 0.5 ft"), (3.0, "within 3 ft"))
+STORED_BANDS = (0.001, 0.01, 0.5)
+CORNER_BANDS = (0.001, 0.01, 0.05)
+ZERO = 0.001
+TYPE_OFFSETS_SHOWN = 6
 
 
 def tagged(f):
@@ -158,6 +174,235 @@ def tally(cell):
     return "; ".join(f"{v} {counts[v]}" for v in VERDICTS)
 
 
+def opening_of(element):
+    for rel in getattr(element, "FillsVoids", None) or ():
+        return rel.RelatingOpeningElement
+    return None
+
+
+def opening_vertices(f, elements):
+    """Tag -> the vertices of the opening each element fills, in internal feet
+    (world axes of the file's own frame), for the openings IfcOpenShell meshes."""
+    settings = ifcopenshell.geom.settings()
+    settings.set("use-world-coords", True)
+    openings = {tag: opening_of(element) for tag, element in elements.items()}
+    meshes = mesh_parts(f, settings, [o for o in openings.values() if o is not None and o.Representation is not None])
+    frame = site_frame(f)
+    return {tag: frame(meshes[o.id()][0]) for tag, o in openings.items() if o is not None and o.id() in meshes}
+
+
+def box_in(vertices, origin, axes):
+    """(lowest, highest) corner of `vertices` in the frame of `axes` about `origin`."""
+    if vertices is None or len(vertices) == 0:
+        return None
+    local = (vertices - origin) @ np.array(axes).T
+    return local.min(axis=0), local.max(axis=0)
+
+
+def sign(v):
+    return "+" if v > ZERO else "-" if v < -ZERO else "0"
+
+
+def signs(vector):
+    return "(" + ",".join(sign(v) for v in vector) + ")"
+
+
+def feet(vector):
+    return "(" + ", ".join(f"{v:+.3f}" for v in vector) + ")"
+
+
+def plain(value):
+    """`value` as JSON: arrays and tuples of arrays as rounded lists."""
+    if isinstance(value, np.ndarray):
+        return [round(float(v), 6) for v in value]
+    if isinstance(value, (tuple, list)):
+        return [plain(v) for v in value]
+    if isinstance(value, float):
+        return round(value, 6)
+    return value
+
+
+def within(values, tolerance):
+    return sum(1 for v in values if v <= tolerance)
+
+
+def unequal_flips(r):
+    """True where the element's two flips differ (its placement is the stored
+    axes reversed, RE-343), False where they are equal, None where unread."""
+    return None if r["st"] == "unread" else r["st"] in ("01", "10")
+
+
+def lowest_corner(box, unequal):
+    """Where the origin sits if it is the opening's corner in the stored
+    frame, as coordinates in Revit's placement frame: the box's lowest corner
+    where the flips are equal, and the negated highest x and y with the
+    lowest z where they differ (RE-357)."""
+    if box is None or unequal is None:
+        return None
+    lo, hi = box
+    return np.array([-hi[0], -hi[1], lo[2]]) if unequal else np.array(lo)
+
+
+def origin_fields(r, element, stored, theirs_origin, ours_origin, theirs_axes, theirs_box, ours_box, to_feet):
+    """The offset of Revit's origin from the stored origin, in the stored
+    axes and in Revit's own, and how far each axis of it is from the corner of
+    each export's opening (the corner in the stored frame, about the stored
+    origin, as coordinates in Revit's frame)."""
+    stored_axes, stored_origin = stored
+    d = theirs_origin - stored_origin
+    d_revit = np.array([d @ a for a in theirs_axes])
+    own = ours_origin - stored_origin
+    unequal = unequal_flips(r)
+
+    def gaps(box):
+        corner = lowest_corner(box, unequal)
+        return np.abs(d_revit - corner) if corner is not None else None
+
+    r.update(
+        {
+            "d_stored": np.array([d @ a for a in stored_axes]),
+            "d_revit": d_revit,
+            "d_dist": float(np.linalg.norm(d)),
+            "own_revit": np.array([own @ a for a in theirs_axes]),
+            "theirs_box": theirs_box,
+            "ours_box": ours_box,
+            "gaps_theirs": gaps(theirs_box),
+            "gaps_ours": gaps(ours_box),
+            "type_name": getattr(ifcopenshell.util.element.get_type(element), "Name", None),
+            "theirs_width": round(element.OverallWidth * to_feet, 6) if getattr(element, "OverallWidth", None) else None,
+            "theirs_height": round(element.OverallHeight * to_feet, 6) if getattr(element, "OverallHeight", None) else None,
+        }
+    )
+
+
+def one_offset(group, field):
+    return len({tuple(np.round(r[field], 2)) for r in group}) == 1
+
+
+def constancy(read, label, held_out):
+    """How many groups of elements (an IfcDoorType or IfcWindowType entity, a
+    symbol, a symbol and its flip state) hold one offset of Revit's origin
+    from the stored origin, in the stored axes and in Revit's own (RE-357)."""
+    keys = {
+        "type entity": lambda r: r["ftype"],
+        "symbol": lambda r: r["symbol"],
+        "symbol and state": lambda r: (r["symbol"], r["st"]),
+    }
+    for name, key in keys.items():
+        groups = collections.defaultdict(list)
+        for r in read:
+            groups[key(r)].append(r)
+        many = [g for g in groups.values() if len(g) > 1]
+        parts = []
+        for axes_name, field in (("stored", "d_stored"), ("Revit", "d_revit")):
+            parts.append(
+                f"one offset in the {axes_name} axes {sum(one_offset(g, field) for g in groups.values())} of {len(groups)}, "
+                f"of those with more than one element {sum(one_offset(g, field) for g in many)} of {len(many)}"
+            )
+        print(f"{label}: by {name}: groups {len(groups)}; " + "; ".join(parts))
+    bottoms = collections.defaultdict(set)
+    for r in read:
+        if r["theirs_box"] is not None:
+            bottoms[r["ftype"]].add(round(float(r["theirs_box"][0][2]), 2))
+    print(f"{label}: type entities with an opening {len(bottoms)}; holding more than one opening bottom height {sum(1 for v in bottoms.values() if len(v) > 1)}")
+
+
+def axis_lines(label, name, subset, key):
+    """Per axis, how many of `subset` have Revit origin within each band of
+    the corner (the gaps are None where the flips are unread)."""
+    have = [r for r in subset if r[key] is not None]
+    if not subset:
+        print(f"{label}: with {name} 0")
+        return
+    if not have:
+        print(f"{label}: with {name} {len(subset)}: flips unread on all")
+        return
+    for axis, letter in enumerate("xyz"):
+        values = [float(r[key][axis]) for r in have]
+        print(
+            f"{label}: with {name} {len(have)} of {len(subset)}: {letter} of Revit origin is the {letter} of its corner within "
+            + ", ".join(f"{t} ft {within(values, t)}" for t in CORNER_BANDS)
+        )
+    worst = [float(r[key].max()) for r in have]
+    print(f"{label}: with {name} {len(have)}: all three axes within " + ", ".join(f"{t} ft {within(worst, t)}" for t in CORNER_BANDS))
+
+
+def origin_lines(compared, held_out):
+    """Counts (and, for an open model, the offsets) of Revit's placement origin
+    against the stored origin and against the corner of the opening (RE-357,
+    #1465). A held-out model prints counts and signs only."""
+    read = [r for r in compared if "d_revit" in r]
+    print(
+        f"door flips: origin: stored transform read {len(read)} of {len(compared)} compared; d is Revit origin less the stored origin; "
+        "the corner of an opening is its lowest corner in Revit axes about the stored origin where the flips are equal, "
+        "and the negated highest x and y with the lowest z where they differ"
+    )
+    for kind in KINDS:
+        for binding in BINDINGS[:2]:
+            mine = [r for r in read if r["kind"] == kind and r["binding"] == binding]
+            if not mine:
+                continue
+            label = f"door flips: origin {kind}s {binding}"
+            dist = [r["d_dist"] for r in mine]
+            print(
+                f"{label}: checked {len(mine)}; Revit origin is the stored origin within "
+                + ", ".join(f"{t} ft {within(dist, t)}" for t in STORED_BANDS)
+                + f"; farther than {STORED_BANDS[-1]} ft {len(mine) - within(dist, STORED_BANDS[-1])}"
+            )
+            theirs = [r for r in mine if r["theirs_box"] is not None]
+            ours = [r for r in mine if r["ours_box"] is not None]
+            print(f"{label}: Revit export has a meshed opening for {len(theirs)}; rvt-rs export for {len(ours)}")
+            constancy(mine, label, held_out)
+            axis_lines(label, "Revit opening", theirs, "gaps_theirs")
+            axis_lines(label, "rvt-rs opening", ours, "gaps_ours")
+            bare = [r for r in mine if r["theirs_box"] is None]
+            print(
+                f"{label}: with no Revit opening {len(bare)}: Revit origin is the stored origin within "
+                + ", ".join(f"{t} ft {within([r['d_dist'] for r in bare], t)}" for t in STORED_BANDS)
+            )
+            for st in STATES:
+                cell = [r for r in mine if r["st"] == st]
+                if not cell:
+                    continue
+                in_stored = collections.Counter(signs(r["d_stored"]) for r in cell)
+                in_revit = collections.Counter(signs(r["d_revit"]) for r in cell)
+                print(
+                    f"{label} state {st}: n={len(cell)}; signs of d in the stored axes "
+                    + ", ".join(f"{k} {v}" for k, v in sorted(in_stored.items()))
+                    + "; in Revit axes "
+                    + ", ".join(f"{k} {v}" for k, v in sorted(in_revit.items()))
+                )
+            if held_out:
+                continue
+            for name, key, subset in (("Revit opening", "gaps_theirs", theirs), ("rvt-rs opening", "gaps_ours", ours)):
+                have = [r[key] for r in subset if r[key] is not None]
+                if have:
+                    worst = np.max(np.array(have), axis=0)
+                    print(f"{label}: largest distance of Revit origin from the corner of the {name}, per axis x y z: {feet(worst)[1:-1]} ft over {len(have)}")
+    if held_out:
+        return
+    types = collections.defaultdict(list)
+    for r in read:
+        types[(r["kind"], r["symbol"], r["type_name"], r["binding"])].append(r)
+    for (kind, symbol, name, binding), mine in sorted(types.items(), key=lambda kv: (kv[0][0], -len(kv[1]), str(kv[0][2]))):
+        offsets = collections.Counter(tuple(np.round(r["d_revit"], 2)) for r in mine)
+        shown = sorted(offsets.items(), key=lambda kv: -kv[1])[:TYPE_OFFSETS_SHOWN]
+        print(
+            f"door flips: origin by type: {kind} {name} (type {symbol}) {binding}: n={len(mine)}, type entities {len({r['ftype'] for r in mine})}; "
+            "offset of Revit origin in Revit axes "
+            + "; ".join(f"{feet(v)} x {k}" for v, k in shown)
+            + (f"; {len(offsets) - len(shown)} more offsets" if len(offsets) > len(shown) else "")
+        )
+        for st in STATES:
+            cell = [r for r in mine if r["st"] == st]
+            stored = collections.Counter(tuple(np.round(r["d_stored"], 2)) for r in cell)
+            if stored:
+                print(
+                    f"door flips: origin by type and state: {kind} {name} (type {symbol}) {binding} state {st}: n={len(cell)}; offset in the stored axes "
+                    + "; ".join(f"{feet(v)} x {k}" for v, k in sorted(stored.items(), key=lambda kv: -kv[1])[:TYPE_OFFSETS_SHOWN])
+                )
+
+
 def main(argv):
     probe, theirs_path, ours_path = arguments(argv)
     probe_path = os.path.abspath(probe)
@@ -215,9 +460,33 @@ def main(argv):
                 "theirs_class": theirs_element.is_a(),
                 "ours_axes": [[round(float(v), 6) for v in a] for a in ours_axes],
                 "theirs_axes": [[round(float(v), 6) for v in a] for a in theirs_axes],
+                "ours_origin": ours_origin,
+                "theirs_origin": theirs_origin,
+                "theirs_axes_vectors": theirs_axes,
             }
         )
         compared.append(r)
+    theirs_to_feet = ifcopenshell.util.unit.calculate_unit_scale(theirs) / FEET
+    stored_tags = [str(r["id"]) for r in compared if items[str(r["id"])].get("read")]
+    theirs_openings = opening_vertices(theirs, {t: theirs_by_tag[t] for t in stored_tags})
+    ours_openings = opening_vertices(ours, {t: ours_by_tag[t] for t in stored_tags})
+    for r in compared:
+        tag = str(r["id"])
+        read = items[tag].get("read")
+        if not read:
+            continue
+        stored_axes, stored_origin = [np.array(a) for a in read["axes"]], np.array(read["origin"])
+        origin_fields(
+            r,
+            theirs_by_tag[tag],
+            (stored_axes, stored_origin),
+            r["theirs_origin"],
+            r["ours_origin"],
+            r["theirs_axes_vectors"],
+            box_in(theirs_openings.get(tag), stored_origin, r["theirs_axes_vectors"]),
+            box_in(ours_openings.get(tag), stored_origin, r["theirs_axes_vectors"]),
+            theirs_to_feet,
+        )
     print(
         f"door flips: placements: probe elements {len(items)}; in the Revit export {len(rows)}; "
         f"not in the Revit export {unmatched}; not in the rvt-rs export {no_ours}; compared {len(compared)}"
@@ -264,11 +533,24 @@ def main(argv):
     ruled = [r for r in compared if r["rule"]]
     wrong = [r for r in ruled if r["verdict"] != "same"]
     print(f"door flips: placements rule: written for {len(ruled)}; differ from Revit {len(wrong)}")
+    origin_lines(compared, held_out)
 
     if not held_out:
-        keys = ("id", "kind", "binding", "st", "verdict", "rule", "ours_x", "theirs_x", "ours_vs_stored", "origin", "voids", "theirs_voids", "ours_axes", "theirs_axes")
+        keys = ("id", "kind", "ftype", "binding", "st", "verdict", "rule", "ours_x", "theirs_x", "ours_vs_stored", "origin", "voids", "theirs_voids", "ours_axes", "theirs_axes")
         for r in compared:
-            print("row " + json.dumps({k: r[k] for k in keys}, sort_keys=True))
+            row = {k: r[k] for k in keys}
+            for k in ("d_stored", "d_revit", "own_revit", "type_name"):
+                if k in r:
+                    row[k] = plain(r[k])
+            for k in ("theirs_box", "ours_box", "gaps_theirs", "gaps_ours"):
+                if r.get(k) is not None:
+                    row[k] = plain(r[k])
+            if "d_revit" in r:
+                row["symbol"] = r["symbol"]
+                row["host"] = r["host"]
+                row["theirs_width"] = r["theirs_width"]
+                row["theirs_height"] = r["theirs_height"]
+            print("row " + json.dumps(row, sort_keys=True))
 
 
 if __name__ == "__main__":
