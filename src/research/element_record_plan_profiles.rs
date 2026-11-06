@@ -1481,6 +1481,43 @@ mod first_line_tag_tests {
         assert_eq!(first_line_tag(&ring, &shared, &ends), None);
     }
 
+    // The lines are taken by ElementId, whatever order they are listed in.
+    #[test]
+    fn lines_listed_highest_first_are_read_by_id() {
+        let ring = counter_clockwise_square();
+        let mut reversed = lines();
+        reversed.reverse();
+        let against = stored((0.0, 0.0), (0.0, 4.0));
+        assert_eq!(first_line_tag(&ring, &reversed, &against), Some(10));
+        let along = stored((0.0, 4.0), (0.0, 0.0));
+        assert_eq!(first_line_tag(&ring, &reversed, &along), Some(13));
+    }
+
+    // Ends held for another line say nothing of the first one.
+    #[test]
+    fn ends_held_for_another_line_are_not_the_first_lines() {
+        let ring = counter_clockwise_square();
+        let ends: StoredEnds = [(11, ((0.0, 4.0), (0.0, 0.0)))].into_iter().collect();
+        assert_eq!(first_line_tag(&ring, &lines(), &ends), None);
+    }
+
+    // An edge shorter than the tolerance fits the ends in either order.
+    #[test]
+    fn ends_that_fit_either_order_are_not_read() {
+        let ring = vec![(0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.001, 4.0), (0.0, 4.0)];
+        let five = vec![
+            (10, (0.0005, 4.0), true),
+            (11, (2.0, 0.0), true),
+            (12, (4.0, 2.0), true),
+            (13, (2.0005, 4.0), true),
+            (14, (0.0, 2.0), true),
+        ];
+        let forward = stored((0.001, 4.0), (0.0, 4.0));
+        assert_eq!(first_line_tag(&ring, &five, &forward), None);
+        let backward = stored((0.0, 4.0), (0.001, 4.0));
+        assert_eq!(first_line_tag(&ring, &five, &backward), None);
+    }
+
     #[test]
     fn an_edge_with_no_line_is_not_read() {
         let ring = counter_clockwise_square();

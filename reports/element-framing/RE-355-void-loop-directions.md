@@ -12,6 +12,9 @@
 | its Revit IFC4 export, `..._BuildingPermit_Revit.ifc` | `bc3bd3366a3c413ce74840300a590f59102b740118ef37898e906253b6b7c08d` |
 | `2024_Core_Interior.rvt` (magnetar-io/revit-test-datasets, MIT) | `c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014` |
 | its Revit export as Measure's scorers read it, `2024_Core_Interior_slim.ifc` | `bfdf36ffb0bb768f3409d818403990e64d4c262c6780603be87f8077387ad86d` |
+| `Snowdon Towers Sample Architectural.rvt` (Autodesk's sample, Revit 2024) | `33271010919acb2a0d0d040851393a511d86ea7fd9a1f4c054797ae03e5e44a1` |
+| Revit's IFC4 export of it, `Snowdon Towers Sample Architectural_IFC4.ifc` (bldrs-ai/test-models, no licence: read locally, never committed) | `ecfcb04e3e818090cf818873fe76fba8b447742bbf4d19dad6d590f09cbb985a` |
+| `Snowdon Towers Sample Structural.rvt` (Autodesk's sample, Revit 2024; no Revit export of it is held) | `6dc833f9fe9fa702607265f2e3d581a6d2a928ea56133db8225c9b5e0f79a44f` |
 
 **Probe:** `probes/examples/probe_re355_void_loop_directions.rs`
 **Status:** positive, and written. One reading of one bit, the direction a void's first line is stored in, gives Revit's tag on 133 of 133 voids on three files, 3147725 included, and on the one Snowdon file that has a Revit export to check against it; `void_tag` gives way to it where the direction is read and keeps its own tag everywhere else.
@@ -28,9 +31,9 @@ For a void whose loop is straight sketch lines that each meet two others in one 
 
 Of the 9 and 8 on the office, the next line is the highest ElementId on 8 and 7 (the clockwise loops of RE-339 §1, four lines each and two notch loops of six whose notch was drawn at the closing corner) and is the fourth lowest on 1 and 1: 3147725, the loop of six with its notch drawn in the middle. Its lines 3147722 to 3147725 are the rectangle, stored one after another along the walk, and the notch lines 3147758 and 3147788 are stored against it. Revit's tag, 3147725, is the line after 3147722 on the counter-clockwise walk.
 
-RE-339's rule gives Revit's tag on 70 of the office's 71 floor voids (35 of 36 and 34 of 35): all but 3147725 in both files. This one gives it on all 71, and on all 62 of Core Interior.
+RE-339's rule gives Revit's tag on 69 of the office's 71 floor voids (35 of 36 and 34 of 35): all but 3147725 in both files. This one gives it on all 71, and on all 62 of Core Interior.
 
-Against another file with a Revit export, Autodesk's Snowdon Towers architectural sample (Revit's IFC4 export of it, read locally, no licence, nothing of it committed): rvt-rs writes 12 floor voids whose host is in that export, 11 of them with a tag Revit's export has on that host before this change and 12 of 12 after it; one tag moved and it now equals Revit's, none left Revit's (Measure run 42125396606, 6d3f6c73 against `main`). On Snowdon Towers structural, 3 moved, with no export to check them.
+Against another file with a Revit export, Autodesk's Snowdon Towers architectural sample (Revit's IFC4 export of it, read locally, no licence, nothing of it committed): rvt-rs writes 12 floor voids whose host is in that export, 11 of them with a tag Revit's export has on that host before this change and 12 of 12 after it; one tag moved and it now equals Revit's, none left Revit's. The tag moved in Measure run 42122776008 (6d3f6c73 against a clean `main`); the 11 of 12 and 12 of 12 were scored locally, on the exports Measure run 42125396606 kept, against Revit's export. On Snowdon Towers structural, 3 moved, with no export to check them.
 
 ## 1. What was read
 
@@ -73,6 +76,10 @@ So the against branch is exercised on 3 models and the along branch on 2 (the of
 
 The held-out and spent models, as counts (Measure run 42129836920, db0bb07b, dispatched from the branch so that its scrub script keeps the probe's count line; 18 held-out models and 1 spent pair): 11 were read, and each holds 0 loops (no void off a wall in its Revit export whose sketch lines the probe read), so the rule is exercised on no held-out model, 0 right of 0 read where an export can say; 8 were not read, because the probe's native reader is not measured on Revit 2018 to 2022 (7 held-out models and the spent pair).
 
+Measured on 2024 only. Every export that moved is a Revit 2024 file (the two office files and the two Snowdon samples). No Revit 2025 export holds a floor void: the 23 puzzbobb models with a Revit export hold no unfilled opening in it, and RE1 Architecture's three are not floor voids. No export of 2025 to 2027 moved (the samples of those years are byte for byte `main`'s, Measure run 42131336084), so nothing here says what the rule does on those releases.
+
+What the exporter exercises. The table above is the probe's reading, from each line's `GLine` with a join tolerance of 0.002 ft. The exporter reads a subset of it: it takes the first line's ends from the line's own data (`scan_sketch_curves`), which declines a line whose start parameter is not below its end parameter or whose direction is not a unit vector (`bounded_line_at`) and gives no line where the first record is an arc (`first_sketch_curve`); it holds those ends against the ring to 0.005 ft; and a ring whose collinear lines were merged (an edge with two lines) does not read. Where it declines, `void_tag`'s tag stands. A read that agrees with `void_tag` leaves no trace in the export, so what the exporter visibly exercises is the 6 voids whose tag moved (3147725 on each office file, 1 on Snowdon architectural, 3 on Snowdon structural).
+
 ## 4. What is not shown
 
 - Why is unread: nothing here says why Revit begins the loop where it does. The finding restates RE-339 §1 with the direction taken from one line instead of from all of them.
@@ -86,11 +93,17 @@ The held-out and spent models, as counts (Measure run 42129836920, db0bb07b, dis
 
 `first_line_tag` ([`element_record_plan_profiles.rs`](../../src/research/element_record_plan_profiles.rs)) is the rule, and `tag_voids` uses it where it reads and `void_tag` (RE-339) everywhere else. It reads only where the loop's ring has one straight line on every edge (three or more) and the first line's stored ends lie at the two vertices of its edge, in one order only, to within 0.005 ft; a curve, two lines on one edge, an edge with none or no stored ends keep `void_tag`'s tag. The first line's ends are read from its own data (`scan_sketch_curves`, the same start and end the probe's `GLine` gives) once the floor profiles are solved, in `slabs.rs`, and only where the exact sketch reads are on.
 
-What moved (Measure run 42122776008, 6d3f6c73 against `main`, 54 exports): 3147725 on the office as built and at building permit, 1 void on Snowdon architectural, 3 on Snowdon structural; the other 50 exports are byte for byte `main`'s, Core Interior, the RE1 models, Einhoven, the other 23 samples of 2024 to 2027 and the 19 held-out and spent models among them.
+What moved: in Measure run 42122776008 (6d3f6c73 against a clean `main`, 54 exports) and again in run 42131336084 (e77ef0dd, which merges `main`, against `main`, every scorer, 111 exports: the 24 Revit 2025 models, the held-out and spent models and every sample among them), 4 exports moved and 107 are byte for byte `main`'s. The 4 are 3147725 on the office as built and at building permit, 1 void on Snowdon architectural and 3 on Snowdon structural. The scorer diff of the unfiltered run is in the two office files only: `none in IfcSlab` written with Revit's tag goes from 35 of 36 to 36 of 36 as built and from 34 of 35 to 35 of 35 at permit, with box, name, `PredefinedType` and `Reference` equal on all of them, the one `none in IfcSlab` extra (Tag 3147722 on 1457785) is gone and the openings written that Revit's export does not go from 9 to 8 in each file; the census gains the matched opening's quantity, which Revit's export writes and rvt-rs does not (one more missing `Qto_OpeningElementBaseQuantities.Area` in each file), as RE-339 §4 said of its matches.
+
+A moved tag moves GlobalIds. `step_writer.rs` keys the opening's id on the tag (`gid(["void-opening", host_gid, tag])`), and the ids of its `IfcRelVoidsElement`, its `Pset_OpeningElementCommon` and its defining relation follow it, so 4 ids move on each of the 6 moved voids; RE-339 said the same of its tags. The id is not redesigned here.
+
+The tagging also runs for the other elements whose sketches `sketch_plan_profiles` solves, roofs (`roofs.rs`), ceilings and pads (`slabs.rs`), where only the decoded field changes: only a `Floor` exports its voids' tags (`export_content.rs`, the `Floor` filter on `void_openings`), so no export of theirs moves.
 
 Counted: before this change 3147725 was the one floor void in each office file whose Tag is not Revit's (1 of 36 as built, 1 of 35 at permit; `extra: none in IfcSlab` in `unfilled_openings_vs_ifc`, RE-339 §4), and on Core Interior none of 62; after it, none of the 133 and Snowdon architectural 12 of 12.
 
 ## 6. Reproduce
+
+`<sha>` is a commit, never a branch.
 
 ```bash
 gh workflow run measure.yml --ref main -f ref=<sha> -f base=none -f nordic=true \
