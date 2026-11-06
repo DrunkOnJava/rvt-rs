@@ -68,6 +68,13 @@ by the `gen-fixture` binary, so build it from the repo root first:
 cargo build --release --bin gen-fixture
 ```
 
+`parameters-row.spec.ts` holds the info panel's saved parameters to what
+`rvt-elements` prints for the same file, so `pnpm run test:browser` needs
+`rvt-elements` on `PATH` beside the staged demos: build it as `gen-fixture` is
+(`cargo build --profile ci --bin rvt-elements`, then put `target/ci` on `PATH`).
+Without it that spec is skipped on a local run; the viewer's CI jobs build it
+beside `gen-fixture` (`.github/workflows/viewer-test.yml`) and fail without it.
+
 `pnpm run stage:demos` (also run by `predev` / `prebuild`) looks for the
 binary on `PATH`, in `target/release/`, and in `target/debug/`. If it finds
 none it runs that cargo build itself; when cargo is unavailable it warns

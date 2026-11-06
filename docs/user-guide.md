@@ -126,7 +126,11 @@ record fields: name, IFC type and predefined type, ElementId, Revit's own
 GlobalId where the file yields it (RE-48), the storey the IFC export puts it
 on (clickable — it selects that storey in the tree), placement and extents
 in feet (none for an element of separate loops, whose body is several items),
-and each property set as labelled rows carrying their units. Host
+and each property set as labelled rows carrying their units, then the element's
+saved parameters (instance, then type) as read from the file when you select it:
+named ones with their value and unit, built-in ones by their id, behind a fold,
+because the file stores no name for them. The panel says when a release's
+parameters are not read, when an element has none and when a read failed. Host
 and hosted rows let you jump from a door or window to its wall and back.
 The schedule groups the elements by IFC type with a count per type, and each
 row toggles a tint over every mesh of that type in the 3-D scene. Where a

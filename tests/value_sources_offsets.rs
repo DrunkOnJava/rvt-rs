@@ -37,8 +37,11 @@
 //!   entry is the keyed element's `u64`, an index of at most 255, the `u32` 1
 //!   and a point, the two parts' points making a cylinder (`pipe_body`) with
 //!   the pipe's record box (the frame decoded here); a run type is an id
-//!   object with the type's id; and a Sketch's curve list is an element-data
-//!   header followed, at a fixed place, by the sketched element's id. Frames of
+//!   object with the type's id; a native run type or landing type is a record
+//!   of the type's id, a length and a body of that length that opens with the
+//!   tag of a `StairsRunType` or a `StairsLandingType`; and a Sketch's curve
+//!   list is an element-data header followed, at a fixed place, by the
+//!   sketched element's id. Frames of
 //!   a 32-bit release that carry no id at their first bytes are counted as not
 //!   read;
 //! - for an Area drawn from the loop of Revit's plan topology
@@ -84,8 +87,13 @@
 //! which CI prints and uploads.
 //!
 //! Runs on every `.rvt` under `RVT_PROJECT_CORPUS_DIR` (Core Interior and the
-//! RE1 models in CI) and on the BIM4LCA as-built office under
-//! `RVT_NORDIC_LCA_DIR`; each is skipped when its variable is unset.
+//! RE1 models in CI) and on the BIM4LCA office as built and at building permit
+//! under `RVT_NORDIC_LCA_DIR`; each is skipped when its variable is unset. The
+//! permit file is the one model of the gate with the `current` copy rule in its
+//! table (`CURRENT_PINS`): a source chosen by it names the copy of the current
+//! partition among copies that disagree, and is read at its bytes like an
+//! `agreeing` one; that the partition is the current one is
+//! `native_document::current_partitions`, which this test does not measure.
 
 use crate::element_parameters::nordic_dir;
 use rvt::ifc::entities::{IfcEntity, ProfileDef, PropertyValue};
@@ -109,6 +117,9 @@ use rvt::research::partition_element_records::{
 };
 use rvt::research::partition_instance_transforms::{
     INSTANCE_TRANSFORM_WINDOW, InstanceTransform, instance_transform, scan_instance_transforms,
+};
+use rvt::research::partition_level_records::{
+    NameElevationBlock, elevation_marker, find_name_blocks_with, recover_partition_levels,
 };
 use rvt::research::partition_names::{ElementDataLayout, element_data_layout};
 use rvt::research::partition_pipe_axes::pipe_body;
@@ -145,8 +156,9 @@ use Coverage::Recorded;
 
 /// The record's box, or the box trimmed or cut by joins: read from the
 /// selected frame. `selected_frame_box` is the same where the profile is read
-/// from another record (sketch lines, the type's section), which no reader
-/// notes yet.
+/// from another record that none of `PROFILE_FRAME_READERS` notes: no element
+/// on any of the 92 models of Measure run 42111951132 has it, so every model of
+/// this gate reads `selected_frame` and `box_only` is 0.
 const FRAME: Coverage = Recorded {
     readers: &["selected_frame", "selected_frame_box"],
     rules: &["selected"],
@@ -201,14 +213,14 @@ const COVERAGE: &[(&str, Coverage)] = &[
     (
         "native_spiral_run_treads",
         Recorded {
-            readers: &["native_run"],
+            readers: &["native_run", "native_run_type"],
             rules: &["native"],
         },
     ),
     (
         "native_landing_tread",
         Recorded {
-            readers: &["native_landing"],
+            readers: &["native_landing", "native_landing_type", "native_run_type"],
             rules: &["native"],
         },
     ),
@@ -357,7 +369,12 @@ const MIN_READERS: &[(&str, &[&str])] = &[
     ),
     (
         "RE1-Architecture",
-        &["selected_frame", "bounded_line", "saved_graphics"],
+        &[
+            "selected_frame",
+            "bounded_line",
+            "saved_graphics",
+            "wall_type_layers",
+        ],
     ),
     // puzzbobb's Revit 2025 roofs: a shed by its edge, a shed by its slope
     // arrow and a roof by extrusion, each drawn from the sources pinned here
@@ -397,17 +414,36 @@ const MIN_READERS: &[(&str, &[&str])] = &[
         &[
             "selected_frame",
             "bounded_line",
+            "wall_type_layers",
             "saved_graphics",
             "instance_transform",
             "native_run",
+            "native_run_type",
             "native_landing",
+            "native_landing_type",
             "stair_run_lines",
             "landing_lines",
             "room_solid_faces",
             "type_hollow_section",
             "pipe_connectors",
             "area_plan_topology",
+            "area_levels",
             "native_slab_shape",
+        ],
+    ),
+    // Measure run 42111951132: 116 floors' sketch lines and Sketch curve lists
+    // here, of which 3 and 1 hold the `current` rule (`CURRENT_PINS`).
+    (
+        "nordic-office-permit",
+        &[
+            "selected_frame",
+            "bounded_line",
+            "wall_type_layers",
+            "saved_graphics",
+            "instance_transform",
+            "sketch_lines",
+            "sketch_list",
+            "area_levels",
         ],
     ),
     // `area_boundary_lines` and `area_point` (an Area drawn from the
@@ -418,6 +454,37 @@ const MIN_READERS: &[(&str, &[&str])] = &[
     // whose plan topology is not read or fails a check, such as a scheme whose
     // Areas are on two plans; a regression in `note_area_sources` would pass
     // this test until a model of that kind is in the gate.
+];
+
+/// The readers whose table must hold sources chosen by the `current` copy rule
+/// (the copies disagreed and the current partition's was taken), by model, and
+/// at least how many (Measure run 42118489328: 3 floors' sketch lines and 1
+/// Sketch curve list on the office at building permit): a model that has fewer,
+/// or a reader that no longer takes the rule, fails.
+const CURRENT_PINS: &[(&str, &[(&str, usize)])] = &[(
+    "nordic-office-permit",
+    &[("sketch_lines", 3), ("sketch_list", 1)],
+)];
+
+/// The readers every element with a `BodySource` must have a source from, beside
+/// `COVERAGE`'s any-of: the models of the gate hold none without them (Measure
+/// run 42118489328: 1,973 of 1,973 wall bodies of the four kinds, 483 of 483
+/// Areas, every tread landing and spiral run), so a body that loses one fails.
+const REQUIRED: &[(&str, &[&str])] = &[
+    ("partition_wall_centreline", &["wall_type_layers"]),
+    (
+        "partition_wall_centreline_layer_joins",
+        &["wall_type_layers"],
+    ),
+    ("partition_wall_tapered_section", &["wall_type_layers"]),
+    ("partition_wall_arc", &["wall_type_layers"]),
+    ("partition_area_boundary_lines", &["area_levels"]),
+    ("native_area_plan_topology", &["area_levels"]),
+    (
+        "native_landing_tread",
+        &["native_landing_type", "native_run_type"],
+    ),
+    ("native_spiral_run_treads", &["native_run_type"]),
 ];
 
 /// The ElementId an `Identifier` field holds: `m_id.m_id64` from Revit 2024,
@@ -574,6 +641,23 @@ fn office_model() -> Vec<(String, PathBuf)> {
         return Vec::new();
     }
     vec![("nordic-office-as-built".to_string(), path)]
+}
+
+/// The BIM4LCA office at building permit (`RVT_NORDIC_LCA_DIR`, #1368): the one
+/// model of the 92 that Measure's run 42111951132 read (Core Interior, the RE1
+/// models, Einhoven, the four BIM4LCA office files, the 24 Revit 2025 models of
+/// puzzbobb's archives and Autodesk's 58 samples) whose table has the `current` copy rule:
+/// the sketch lines of 3 of its floors, and the Sketch's curve list of one.
+fn office_permit_model() -> Vec<(String, PathBuf)> {
+    let Some(dir) = nordic_dir() else {
+        return Vec::new();
+    };
+    let path = dir.join("ARK_NordicLCA_Office_Concrete_BuildingPermit.rvt");
+    if !path.is_file() {
+        eprintln!("skipping the building permit office: the model is absent");
+        return Vec::new();
+    }
+    vec![("nordic-office-permit".to_string(), path)]
 }
 
 /// Each element's ElementId and `BodySource`, with whether its profile is read
@@ -1039,6 +1123,17 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
             stats.unlisted += 1;
             continue;
         };
+        if let Some((_, required)) = REQUIRED.iter().find(|(source, _)| *source == body.as_str()) {
+            for reader in *required {
+                if !entry
+                    .value_sources
+                    .iter()
+                    .any(|source| source.reader == *reader)
+                {
+                    problems.push(format!("{id}: {body} has no source from {reader}"));
+                }
+            }
+        }
         if let Some((_, Recorded { readers, rules })) = coverage {
             let found = entry.value_sources.iter().find(|source| {
                 readers.contains(&source.reader.as_str()) && rules.contains(&source.rule.as_str())
@@ -1140,15 +1235,42 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
     // layers reader needs to read a type's layers again.
     let mut rafter_roofs: BTreeSet<u32> = BTreeSet::new();
     let layer_materials: BTreeSet<u32> = if table.elements.values().any(|entry| {
-        entry
-            .value_sources
-            .iter()
-            .any(|source| source.reader == "roof_type_layers")
+        entry.value_sources.iter().any(|source| {
+            matches!(
+                source.reader.as_str(),
+                "roof_type_layers" | "wall_type_layers"
+            )
+        })
     }) {
         scan_type_records(&mut rf, version, OST_MATERIALS, &declared)
             .unwrap_or_default()
             .iter()
             .map(|record| record.element_id)
+            .collect()
+    } else {
+        BTreeSet::new()
+    };
+    // The thickness of each layer set the export writes, feet, for the walls'
+    // layers read again below, and the Level blocks decoded again by partition.
+    let written_layer_totals: Vec<f64> = run
+        .model
+        .material_layer_sets
+        .iter()
+        .map(|set| set.layers.iter().map(|layer| layer.thickness_feet).sum())
+        .collect();
+    let mut level_blocks: BTreeMap<String, Vec<NameElevationBlock>> = BTreeMap::new();
+    // The Levels the Areas' base and height compare (RE-317): an Area's
+    // `area_levels` source lists the block of each, all of them.
+    let level_ids: BTreeSet<u32> = if table.elements.values().any(|entry| {
+        entry
+            .value_sources
+            .iter()
+            .any(|source| source.reader == "area_levels")
+    }) {
+        recover_partition_levels(&mut rf, version)
+            .unwrap_or_default()
+            .iter()
+            .map(|level| level.element_id)
             .collect()
     } else {
         BTreeSet::new()
@@ -1276,6 +1398,14 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                     source.reader, source.differs_from_frame
                 ));
             }
+            // The current copy is chosen among copies that disagree: a copy of
+            // one partition has none to be chosen from.
+            if source.rule.as_str() == "current" && source.parts.is_empty() && source.copies < 2 {
+                problems.push(format!(
+                    "{id}: {} took the current copy of {} copies",
+                    source.reader, source.copies
+                ));
+            }
             checked += 1;
             let holds = if !source.parts.is_empty() {
                 let mut all = true;
@@ -1317,15 +1447,15 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                         // The line's element-data header, then the line's own
                         // id: the part's offset is a header, not a frame.
                         // A roof's slope block or sketch line is read again:
-                        // it decodes to a slope, an arrow or a curve. A roof
-                        // type's layers are an element-data header and the
-                        // type's id.
+                        // it decodes to a slope, an arrow or a curve. A roof's
+                        // or wall's type's layers are an element-data header and
+                        // the type's id.
                         "sketch_line_data" | "roof_slope_edges" | "roof_line_data"
-                        | "roof_type_layers" => match layout.as_ref() {
+                        | "roof_type_layers" | "wall_type_layers" => match layout.as_ref() {
                             Some(layout) => {
                                 let window = match source.reader.as_str() {
                                     "roof_slope_edges" => EDGE_SLOPE_WINDOW,
-                                    "roof_type_layers" => LAYER_WINDOW,
+                                    "roof_type_layers" | "wall_type_layers" => LAYER_WINDOW,
                                     _ => BEAM_DATA_WINDOW,
                                 };
                                 let read = element_data_at(
@@ -1351,16 +1481,32 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                                     }
                                     // The type's layers are read again by the layers
                                     // reader, with the reader's window and anchors.
-                                    ("roof_type_layers", Some(data)) => {
+                                    ("roof_type_layers" | "wall_type_layers", Some(data)) => {
                                         match (layer_frame_tag(version), layer_layout(version)) {
-                                            (Some(tag), Some(layers)) => find_layers(
+                                            (Some(tag), Some(layers)) => match find_layers(
                                                 data,
                                                 tag,
                                                 layers,
                                                 &layer_materials,
                                                 &declared,
-                                            )
-                                            .is_some(),
+                                            ) {
+                                                // The layers' widths, read again,
+                                                // add up to the thickness of a layer
+                                                // set the export writes.
+                                                Some(found)
+                                                    if source.reader == "wall_type_layers" =>
+                                                {
+                                                    let total: f64 = found
+                                                        .iter()
+                                                        .map(|layer| layer.width_feet)
+                                                        .sum();
+                                                    written_layer_totals.iter().any(|written| {
+                                                        (written - total).abs() <= 1e-6
+                                                    })
+                                                }
+                                                Some(_) => true,
+                                                None => false,
+                                            },
                                             _ => false,
                                         }
                                     }
@@ -1517,6 +1663,71 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                                 Part::Failed
                             }
                         }
+                        // The native record of a run type or a landing type:
+                        // the record's id, a length (after four bytes more on
+                        // the channels that carry them), a body that opens with
+                        // the class's tag and the same length again; the class
+                        // is the one the reader names.
+                        "native_run_type" | "native_landing_type" => {
+                            let first = if width == 8 {
+                                u64_at(bytes, part.offset)
+                            } else {
+                                u32_at(bytes, part.offset).map(u64::from)
+                            };
+                            let body = [width + 4, width + 8].into_iter().find_map(|header| {
+                                let length =
+                                    usize::try_from(u32_at(bytes, part.offset + header - 4)?)
+                                        .ok()?;
+                                let start = part.offset + header;
+                                let echo = u32_at(bytes, start.checked_add(length)?)?;
+                                (usize::try_from(echo).ok()? == length).then_some(start)
+                            });
+                            let kind = body
+                                .and_then(|start| u16_at(bytes, start))
+                                .and_then(|tag| classes.as_ref()?.by_tag(tag))
+                                .map(|class| class.name.as_str());
+                            let wanted_kind = if source.reader == "native_run_type" {
+                                "StairsRunType"
+                            } else {
+                                "StairsLandingType"
+                            };
+                            if first == Some(wanted) && kind == Some(wanted_kind) {
+                                Part::Confirmed
+                            } else {
+                                Part::Failed
+                            }
+                        }
+                        // A Level's block: its owner id at the offset, and the
+                        // block decoded again there gives the elevation of a
+                        // storey the export writes where it is a building story.
+                        "area_levels" => {
+                            let blocks =
+                                level_blocks.entry(part.stream.clone()).or_insert_with(|| {
+                                    match elevation_marker(version) {
+                                        Some(marker) => {
+                                            find_name_blocks_with(bytes, &declared, &marker)
+                                        }
+                                        None => Vec::new(),
+                                    }
+                                });
+                            let block = blocks.iter().find(|block| {
+                                block.offset == part.offset && u64::from(block.element_id) == wanted
+                            });
+                            match block {
+                                None => Part::Unverified,
+                                Some(block) if block.building_story != Some(true) => {
+                                    Part::Confirmed
+                                }
+                                Some(block)
+                                    if run.model.building_storeys.iter().any(|storey| {
+                                        (storey.elevation_feet - block.elevation_feet).abs() <= 1e-6
+                                    }) =>
+                                {
+                                    Part::Confirmed
+                                }
+                                Some(_) => Part::Failed,
+                            }
+                        }
                         // A run type's id object: its id is the u64 there.
                         "stair_run_type" => {
                             if u64_at(bytes, part.offset) == Some(wanted) {
@@ -1595,6 +1806,11 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                     "type_hollow_section" => {
                         sound &= parameters.len() == HOLLOW_SECTION_PARAMETER_NAMES.len();
                         hollow_checks.push((id, parameters.clone()));
+                    }
+                    "area_levels" => {
+                        let listed: BTreeSet<u32> =
+                            source.parts.iter().map(|part| part.element_id).collect();
+                        sound &= source.parts_left_out == 0 && listed == level_ids;
                     }
                     "pipe_connectors" => {
                         sound &= match (points.as_slice(), frame_box) {
@@ -1864,6 +2080,22 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
             }
         }
     }
+    for (model, readers) in CURRENT_PINS {
+        if *model != base {
+            continue;
+        }
+        for (reader, least) in *readers {
+            let held = by_rule
+                .get(&format!("{reader}:current"))
+                .copied()
+                .unwrap_or(0);
+            if held < *least {
+                problems.push(format!(
+                    "{name}: {held} elements have a source from {reader} chosen by the current copy rule, not {least}"
+                ));
+            }
+        }
+    }
 
     // The report.
     let mut line = format!(
@@ -1992,6 +2224,15 @@ fn nordic_office_value_sources_name_the_copy_the_reader_took() {
         "RVT_NORDIC_LCA_DIR",
         office_model(),
         &["nordic-office-as-built"],
+    );
+}
+
+#[test]
+fn nordic_office_permit_value_sources_exercise_the_current_copy_rule() {
+    check_all(
+        "RVT_NORDIC_LCA_DIR",
+        office_permit_model(),
+        &["nordic-office-permit"],
     );
 }
 

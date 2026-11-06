@@ -240,8 +240,8 @@ pub struct ValueSource {
     /// `sketch_circle`, `sketch_spline`, `instance_transform`, a native
     /// reader's name, `selected_frame` for a body read from the frame, or
     /// `selected_frame_box` for a body whose box and placement are read from
-    /// the frame and whose profile is read from another record, which no
-    /// reader notes yet (its `ProfileSource` names the reader).
+    /// the frame and whose profile is read from another record that no
+    /// profile reader notes (its `ProfileSource` names the reader).
     pub reader: String,
     /// How the copy was chosen.
     pub rule: CopyRule,
@@ -902,7 +902,10 @@ pub const SELECTED_FRAME_READER: &str = "selected_frame";
 /// The reader name of the value source of a body whose box and placement are
 /// read from the element's own frame and whose profile is read from another
 /// record (sketch lines, or the type's section): the frame is named for the
-/// box only, and the profile has no source yet.
+/// box only, and no profile reader (`sketch_lines`, `type_section`,
+/// `room_solid_faces` and the others listed in `docs/export-diagnostics.md`)
+/// noted the profile. No element has it on any of the 92 models of Measure run
+/// 42111951132.
 pub const SELECTED_FRAME_BOX_READER: &str = "selected_frame_box";
 
 /// The reader name of the value source of a Sketch's curve list (#1368).
@@ -940,10 +943,9 @@ fn body_readers(body: &str) -> &'static [&'static str] {
         | crate::element_record_beam_cuts::BEAM_BODY_COLUMN_CUT => &[SELECTED_FRAME_READER],
         ec::WALL_CENTRELINE_BODY_SOURCE
         | ec::WALL_TAPERED_BODY_SOURCE
-        | ec::WALL_LAYER_JOIN_BODY_SOURCE
-        | ec::BEAM_AXIS_BODY_SOURCE
-        | ec::BEAM_BOX_BODY_SOURCE => &["bounded_line"],
-        ec::WALL_ARC_BODY_SOURCE => &["bounded_arc"],
+        | ec::WALL_LAYER_JOIN_BODY_SOURCE => &["bounded_line", "wall_type_layers"],
+        ec::BEAM_AXIS_BODY_SOURCE | ec::BEAM_BOX_BODY_SOURCE => &["bounded_line"],
+        ec::WALL_ARC_BODY_SOURCE => &["bounded_arc", "wall_type_layers"],
         ec::INSTANCE_TURNED_BODY_SOURCE | ec::INSTANCE_ORIENTED_BODY_SOURCE => {
             &["instance_transform"]
         }
@@ -951,7 +953,7 @@ fn body_readers(body: &str) -> &'static [&'static str] {
             &[SELECTED_FRAME_READER, "instance_transform", "family_forms"]
         }
         super::saved_meshes::SAVED_MESH_BODY_SOURCE => &["saved_graphics"],
-        ec::SPIRAL_RUN_BODY_SOURCE => &["native_run"],
+        ec::SPIRAL_RUN_BODY_SOURCE => &["native_run", "native_run_type"],
         ec::STAIR_RUN_BODY_SOURCE => &[
             "stair_run_lines",
             "stair_run_ends",
@@ -985,15 +987,19 @@ fn body_readers(body: &str) -> &'static [&'static str] {
             "roof_line_data",
             "roof_type_layers",
         ],
-        ec::LANDING_TREAD_BODY_SOURCE => &["native_landing"],
+        ec::LANDING_TREAD_BODY_SOURCE => {
+            &["native_landing", "native_landing_type", "native_run_type"]
+        }
         ec::LANDING_SLAB_BODY_SOURCE => &["landing_lines", "native_landing", "native_landing_type"],
         crate::partition_area_records::AREA_BOUNDARY_SOURCE => &[
             crate::partition_area_records::AREA_LINES_READER,
             crate::partition_area_records::AREA_POINT_READER,
+            crate::partition_area_records::AREA_LEVELS_READER,
         ],
-        crate::partition_area_records::AREA_TOPOLOGY_SOURCE => {
-            &[crate::partition_area_records::AREA_TOPOLOGY_READER]
-        }
+        crate::partition_area_records::AREA_TOPOLOGY_SOURCE => &[
+            crate::partition_area_records::AREA_TOPOLOGY_READER,
+            crate::partition_area_records::AREA_LEVELS_READER,
+        ],
         ec::FLOOR_SHAPE_BODY_SOURCE => &[
             SELECTED_FRAME_READER,
             crate::partition_schema_mvp::SLAB_SHAPE_READER,
@@ -1046,9 +1052,11 @@ pub(crate) fn attach_value_sources(
         let mut body = None;
         let mut profile_source = None;
         let mut profile_resolved = false;
+        let mut i_section = false;
         for property in property_set.iter().flat_map(|set| &set.properties) {
             match (property.name.as_str(), &property.value) {
                 ("BodySource", PropertyValue::Text(text)) => body = Some(text.as_str()),
+                ("SectionShape", PropertyValue::Text(text)) if text == "I" => i_section = true,
                 ("ProfileSource", PropertyValue::Text(text)) => {
                     profile_source = Some(text.as_str())
                 }
@@ -1072,7 +1080,10 @@ pub(crate) fn attach_value_sources(
         };
         for source in noted.and_then(|noted| noted.get(&id)).into_iter().flatten() {
             let reader = source.reader.as_str();
-            if !(body_list.contains(&reader) || profile_list.contains(&reader))
+            // A beam or column whose body is its type's I section (`SectionShape`
+            // is written only then) is drawn from the type's parameters.
+            let drawn_i_section = i_section && reader == "type_i_section";
+            if !(body_list.contains(&reader) || profile_list.contains(&reader) || drawn_i_section)
                 || entry
                     .value_sources
                     .iter()
