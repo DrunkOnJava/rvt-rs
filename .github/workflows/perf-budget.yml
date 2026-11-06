@@ -42,13 +42,7 @@ jobs:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: false
