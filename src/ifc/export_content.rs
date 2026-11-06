@@ -716,7 +716,7 @@ pub fn append_typed_production_elements(
     // end, in its order, for the ends drawn to the walls they meet.
     let mut pending_ends: Vec<wall_tops::PendingEnds> = Vec::new();
     // #1473: each profile-edited wall's entity index and the two ends of its
-    // profile, for the sloped line carried on to the wall's end.
+    // profile, for the cut-out carried on to the wall's end.
     let mut pending_profiles: Vec<wall_profile::Pending> = Vec::new();
     let mut slab_shapes: HashMap<u32, wall_tops::SlabTop> = HashMap::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
@@ -1727,10 +1727,11 @@ pub fn append_typed_production_elements(
     wall_tops::cut_wall_bases(entities, &pending_bases, &slab_shapes, &end_steps);
     wall_tops::finish_wall_ends(entities, &end_steps);
 
-    // #1473: the sloped line of an edited elevation profile goes on, along its
-    // slope, to the end of a wall that goes on past the profile. After the
-    // ends, so that the wall has its final extent.
-    wall_profile::extend_profile_stubs(entities, &pending_profiles);
+    // #1473: the cut-out of an edited elevation profile goes on, a line along
+    // its slope and a notch straight out, to the end of a wall that goes on past
+    // the profile at a joined end. After the ends, so that the wall has its
+    // final extent.
+    wall_profile::extend_profile_stubs(entities, &pending_profiles, &pending_ends);
 
     // RE-270: the side areas and volumes of a wall joined to floors that
     // leave it as its record's box. It runs after the pass above, on purpose:
@@ -4663,28 +4664,19 @@ pub const WALL_END_ORDER_DEPENDENT_PROPERTY: &str = "EndOrderDependent";
 pub const WALL_END_NOT_MARKED_PROPERTY: &str = "EndNotMarked";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how the
-/// sloped top of its edited elevation profile was carried on where the wall
-/// goes on past the profile (#1473, RE-358).
+/// cut-out of its edited elevation profile was carried on where the wall goes
+/// on past the profile (#1473, RE-358): `wall_profile_<what>_past_<where>`,
+/// `<what>` being `sloped` (a line carried along its slope), `level` (the cut-out
+/// of a notch carried straight out) or `sloped_and_level`, and `<where>` being
+/// `the_low_end`, `the_high_end` or `both_ends` of the profile along its own
+/// axis.
 pub const WALL_PROFILE_SOURCE_PROPERTY: &str = "ProfileStubSource";
-
-/// `ProfileStubSource` of a wall whose profile's sloped line is carried on
-/// along its own slope to the wall's end at the lower end of the profile's
-/// axis.
-pub const WALL_PROFILE_PAST_LOW_END_SOURCE: &str = "wall_profile_sloped_past_the_low_end";
-
-/// `ProfileStubSource` of a wall whose profile's sloped line is carried on
-/// along its own slope to the wall's end at the higher end of the profile's
-/// axis.
-pub const WALL_PROFILE_PAST_HIGH_END_SOURCE: &str = "wall_profile_sloped_past_the_high_end";
-
-/// `ProfileStubSource` of a wall whose profile's sloped line is carried on at
-/// both ends.
-pub const WALL_PROFILE_PAST_BOTH_ENDS_SOURCE: &str = "wall_profile_sloped_past_both_ends";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says why the
 /// stretch of a wall that goes on past its edited elevation profile keeps the
-/// top the profile's cut gives it there, which Revit slopes on (#1473,
-/// RE-358).
+/// top the profile's cut gives it there (#1473, RE-358). It holds the first
+/// reason only, and a wall carried at one end and refused at the other has it
+/// and `ProfileStubSource` both.
 pub const WALL_PROFILE_REFUSAL_PROPERTY: &str = "ProfileStubRefusal";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how its base

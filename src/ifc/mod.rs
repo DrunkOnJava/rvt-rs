@@ -831,19 +831,25 @@ pub struct ExportedModelDiagnostics {
     #[serde(default)]
     pub wall_ends_order_dependent: usize,
     /// Of the exported walls with an edited elevation profile that go on past
-    /// it, how many have the sloped line of the profile carried on, along its
-    /// own slope, to the wall's end, by the `ProfileStubSource` property of
-    /// each (#1473, RE-358): `wall_profile_sloped_past_the_low_end`,
-    /// `wall_profile_sloped_past_the_high_end` or
-    /// `wall_profile_sloped_past_both_ends`. Empty when no wall does.
+    /// it, how many have the profile's cut-out carried on to the wall's end, by
+    /// the `ProfileStubSource` property of each (#1473, RE-358):
+    /// `wall_profile_<what>_past_<where>`, `<what>` being `sloped` (a line
+    /// carried along its slope), `level` (a notch's cut-out carried straight
+    /// out) or `sloped_and_level`, and `<where>` `the_low_end`, `the_high_end`
+    /// or `both_ends` of the profile along its own axis. Empty when no wall
+    /// does.
     #[serde(default)]
     pub wall_profile_sources: std::collections::BTreeMap<String, usize>,
     /// Of the exported walls with an edited elevation profile that go on past
-    /// it and keep, past it, the top the profile's opening gives them, why, by
-    /// reason: the `ProfileStubRefusal` property of each (#1473, RE-358):
-    /// `profile_cut_not_read_at_the_wall_end`,
+    /// it and keep, past it, what the profile's opening gives them at an end,
+    /// why, by reason: the `ProfileStubRefusal` property of each (#1473,
+    /// RE-358): `profile_cut_not_read_at_the_wall_end`,
+    /// `profile_level_cut_between_two_lines`,
+    /// `profile_level_cut_spans_the_wall`, `profile_end_has_no_join_partner`,
     /// `profile_stub_longer_than_the_wall_is_thick` or
-    /// `profile_slope_leaves_the_cut`.
+    /// `profile_slope_leaves_the_cut`. A wall holds its first reason only, and
+    /// one carried at one end and refused at the other is counted here and in
+    /// `wall_profile_sources`.
     #[serde(default)]
     pub wall_profile_refusals: std::collections::BTreeMap<String, usize>,
     /// Of the exported `IfcSpace`s, the rooms whose outline was read from the

@@ -265,6 +265,16 @@ const WALL_PROFILE_OPENING_REVIT_VERSIONS: &[u32] = &[2024];
 /// takes the rule only when it is added here.
 const WALL_END_JOIN_REVIT_VERSIONS: &[u32] = &[2024];
 
+/// Releases the cut-out of a wall's elevation profile is carried on to the
+/// wall's end on: the BIM4LCA office (Revit 2024), whose Basement walls
+/// 2057668, 2057670, 2058499, 2058501, 2056705, 2056770, 2070689 and 2070691
+/// are the walls it rests on (RE-358). Its own list, a decision of its own
+/// (#1473): the profile openings are read on
+/// [`WALL_PROFILE_OPENING_REVIT_VERSIONS`], and a release added to that list
+/// takes the rule only when it is added here. The walls the record joins at an
+/// end are read on [`WALL_END_JOIN_REVIT_VERSIONS`], which the rule asks for.
+const WALL_PROFILE_STUB_REVIT_VERSIONS: &[u32] = &[2024];
+
 /// Give each wall whose elevation profile was edited the openings that cuts
 /// (RE-151's 63rd opening).
 ///
@@ -340,7 +350,7 @@ pub(super) fn attach_wall_profile_openings(
             continue;
         };
         let cuts = elevation_profile_cuts(&segments);
-        if !cuts.is_empty() {
+        if !cuts.is_empty() && WALL_PROFILE_STUB_REVIT_VERSIONS.contains(&revit_version) {
             if let Some((low, high)) = profile_extent(&segments) {
                 wall.fields.push((
                     PROFILE_EXTENT_FIELD.into(),
