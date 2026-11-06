@@ -649,7 +649,7 @@ pub fn category_colour(ifc_type: &str) -> (u32, f32) {
         "IFCSTAIR" | "IFCSTAIRFLIGHT" | "IFCRAILING" | "IFCRAMP" | "IFCRAMPFLIGHT" => {
             (0x92400E, 1.0)
         }
-        "IFCFURNITURE" | "IFCFURNISHINGELEMENT" => (0x16A34A, 1.0),
+        "IFCFURNITURE" | "IFCFURNISHINGELEMENT" | "IFCSYSTEMFURNITUREELEMENT" => (0x16A34A, 1.0),
         "IFCSPACE" => (0x3D94FF, 0.12),
         _ => (0xB2B4B8, 1.0),
     }

@@ -1075,6 +1075,7 @@ fn ifc_type_display(upper: &str) -> String {
         "IfcSpace",
         "IfcStair",
         "IfcStairFlight",
+        "IfcSystemFurnitureElement",
         "IfcTransportElement",
         "IfcWall",
         "IfcWindow",

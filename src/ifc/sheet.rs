@@ -273,7 +273,9 @@ fn colors_for_ifc_type(ifc_type: &str) -> (&'static str, &'static str) {
         "IFCBEAM" | "IFCMEMBER" => ("#F87171", "#FEF2F2"),
         "IFCSLAB" | "IFCROOF" | "IFCCOVERING" => ("#909398", "#F5F5F7"),
         "IFCSTAIR" | "IFCRAILING" => ("#92400E", "#FEF3C7"),
-        "IFCFURNITURE" | "IFCFURNISHINGELEMENT" => ("#16A34A", "#F0FDF4"),
+        "IFCFURNITURE" | "IFCFURNISHINGELEMENT" | "IFCSYSTEMFURNITUREELEMENT" => {
+            ("#16A34A", "#F0FDF4")
+        }
         _ => ("#4C4E52", "#FAFAFA"),
     }
 }
