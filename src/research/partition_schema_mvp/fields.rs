@@ -241,6 +241,16 @@ pub const COLUMN_CLEAN_PARTNERS_FIELD: &str = "m_column_clean_partners";
 /// ([`crate::partition_type_parameters::rectangular_section`], RE-291).
 pub const COLUMN_RECTANGLE_FIELDS: [&str; 2] = ["m_column_rect_b", "m_column_rect_h"];
 
+/// Field holding the diameter, feet, of a column's round section, read from
+/// its type's length parameter `Diameter` (with at most the family's two zero offsets)
+/// ([`crate::partition_type_parameters::round_section`], RE-353).
+pub const COLUMN_DIAMETER_FIELD: &str = "m_column_round_diameter";
+
+/// Field holding the Revit release (its version, 2024) of the file a column
+/// was read from, beside the elements its pair steps name (RE-353): what the
+/// rules measured on one release only are gated on.
+pub const COLUMN_RELEASE_FIELD: &str = "m_column_release";
+
 /// Classes whose type's hollow section is read (W6).
 pub const HOLLOW_SECTION_CLASSES: [&str; 2] = ["StructuralColumn", "Column"];
 
@@ -477,6 +487,17 @@ pub const SLAB_SHAPE_READER: &str = "native_slab_shape";
 /// ([`crate::native_walls::WallRecords::base_cutters`], #1384): the floors and
 /// footings the export may cut its base at.
 pub const WALL_BASE_CUTTERS_FIELD: &str = "m_wall_base_cutters";
+
+/// Field holding, as a flat vector of floats `[x0, y0, x1, y1]`, the plan
+/// places of the start and the end of a wall's location curve
+/// ([`crate::native_walls::EndJoins::curve`], #1410).
+pub const WALL_CURVE_FIELD: &str = "m_wall_curve";
+
+/// Fields holding, each as a vector of ElementIds, the walls joined at the
+/// start and at the end of a wall's location curve, in the order the record
+/// lists them ([`crate::native_walls::EndJoins::real`], #1410). A field is
+/// absent where the record does not give that end's list.
+pub const WALL_END_JOINS_FIELDS: [&str; 2] = ["m_wall_end_joins_start", "m_wall_end_joins_end"];
 
 /// Field holding a railing's height, its type's top rail height, feet
 /// (RE-231).

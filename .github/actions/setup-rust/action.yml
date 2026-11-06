@@ -1,0 +1,58 @@
+name: Set up Rust
+description: >-
+  Install a Rust toolchain with rustup (minimal profile, no self-update), make
+  it rustup's default, and set the Cargo environment that every job of this
+  repository's workflows uses for the steps after it (CARGO_INCREMENTAL=0,
+  CARGO_TERM_COLOR=always). Needs bash and rustup: any hosted runner.
+# #1457: the install was thirty-odd copies of one script, which differed only in
+# the toolchain, one component, one target and whether the toolchain became the
+# default. The inputs are those four things.
+#
+# Swatinem/rust-cache hashes the default toolchain's `rustc -vV` and every
+# CARGO*, CC*, CFLAGS, CXX*, CMAKE* and RUST* environment variable into its key,
+# so this action sets exactly what the copies set, before any cache step, and a
+# job that must keep another toolchain as the default says so (`make-default`).
+# Moving a toolchain or an environment variable here moves every key and
+# discards every cache.
+inputs:
+  toolchain:
+    description: A rustup toolchain, such as stable, 1.87, nightly-2026-10-01 or nightly
+    required: false
+    default: stable
+  component:
+    description: One rustup component to install with it, such as rustfmt or clippy
+    required: false
+    default: ""
+  target:
+    description: One compilation target to install with it, such as wasm32-unknown-unknown; empty installs none
+    required: false
+    default: ""
+  make-default:
+    description: Make the toolchain rustup's default (a job that names it with `cargo +<toolchain>` and keeps another as the default passes "false")
+    required: false
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - name: Install the toolchain
+      shell: bash
+      env:
+        TOOLCHAIN: ${{ inputs.toolchain }}
+        COMPONENT: ${{ inputs.component }}
+        TARGET: ${{ inputs.target }}
+        MAKE_DEFAULT: ${{ inputs.make-default }}
+      run: |
+        args=(--profile minimal --no-self-update)
+        if [ -n "$COMPONENT" ]; then
+          args+=(--component "$COMPONENT")
+        fi
+        if [ -n "$TARGET" ]; then
+          args+=(--target "$TARGET")
+        fi
+        rustup toolchain install "$TOOLCHAIN" "${args[@]}"
+        if [ "$MAKE_DEFAULT" = true ]; then
+          rustup default "$TOOLCHAIN"
+        fi
+        echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
+        echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+        rustc "+${TOOLCHAIN}" --version
