@@ -96,6 +96,7 @@
 //! `native_document::current_partitions`, which this test does not measure.
 
 use crate::element_parameters::nordic_dir;
+use rvt::ifc::element_provenance::ElementProvenanceTable;
 use rvt::ifc::entities::{IfcEntity, ProfileDef, PropertyValue};
 use rvt::ifc::{ExportOptions, IfcModel, run_export};
 use rvt::research::element_record_plan_profiles::SKETCH_OWNER_OFFSET;
@@ -485,6 +486,362 @@ const REQUIRED: &[(&str, &[&str])] = &[
         &["native_landing_type", "native_run_type"],
     ),
     ("native_spiral_run_treads", &["native_run_type"]),
+];
+
+/// How a written value of a `*Source` property is covered (#1498).
+enum Row {
+    /// Every element that carries the value has a value source from each
+    /// reader of `all` and, where `any` is not empty, from one of `any`.
+    Sourced {
+        all: &'static [&'static str],
+        any: &'static [&'static str],
+    },
+    /// Covered by a check above, which `by` names.
+    Checked { by: &'static str },
+    /// The value says that nothing was read, so there are no bytes to name.
+    Unread { reason: &'static str },
+    /// A declared gap: a written value whose bytes no reader notes. `reason`
+    /// says why, and what would source it.
+    Gap { reason: &'static str },
+}
+
+use Row::{Checked, Gap, Sourced, Unread};
+
+/// A body source's own row: `COVERAGE` checks each value of `BodySource`.
+const BY_COVERAGE: Row = Checked {
+    by: "COVERAGE, by the element's BodySource",
+};
+
+/// What every `ProfileSource` that is a reader of a profile has: the profile
+/// check of `check_model_with` (an element whose profile is solved from sketch
+/// lines, a type's section or a room's solid has a source from that reader).
+const BY_PROFILE_CHECK: Row = Checked {
+    by: "the profile check, a source from the profile's reader",
+};
+
+const WALL_TOP: Row = Sourced {
+    all: &["native_wall", "wall_top_covers"],
+    any: &[],
+};
+
+const WALL_BASE: Row = Sourced {
+    all: &["native_wall", "wall_base_cover"],
+    any: &[],
+};
+
+const FRAME_OF_A_RECORD: Row = Sourced {
+    all: &[],
+    any: &["selected_frame", "selected_frame_box"],
+};
+
+/// A Level binding or a storey binding: not a value of the body.
+const BINDING: &str = "a binding of the element to a Level or a storey, not a value of its body or placement: the Level is read from the reference list of the element's own record, the elevations it is compared with from the Levels' blocks, and no reader notes either for the element";
+
+/// Every written value of a `*Source` property on an element's own property
+/// set, and how it is covered: a value that is on a model and not here fails
+/// the test, so that a reader cannot land a value with neither a source nor a
+/// stated gap. `"*"` stands for every value of the property.
+const SOURCE_VALUES: &[(&str, &str, Row)] = &[
+    ("BodySource", "*", BY_COVERAGE),
+    (
+        "ProfileSource",
+        "partition_element_record_sketch_lines",
+        BY_PROFILE_CHECK,
+    ),
+    (
+        "ProfileSource",
+        "family_type_symbol_envelope",
+        BY_PROFILE_CHECK,
+    ),
+    (
+        "ProfileSource",
+        "partition_room_solid_faces",
+        BY_PROFILE_CHECK,
+    ),
+    (
+        "ProfileSource",
+        "partition_room_solid_faces_resolved",
+        BY_PROFILE_CHECK,
+    ),
+    (
+        "ProfileSource",
+        "partition_room_solid_faces_approximate",
+        BY_PROFILE_CHECK,
+    ),
+    ("ProfileSource", "partition_landing_lines", BY_COVERAGE),
+    (
+        "ProfileSource",
+        "partition_area_boundary_lines",
+        BY_COVERAGE,
+    ),
+    ("ProfileSource", "native_area_plan_topology", BY_COVERAGE),
+    ("ProfileSource", "family_type_hollow_section", BY_COVERAGE),
+    ("ProfileSource", "family_type_i_section", BY_COVERAGE),
+    (
+        "BodyHeightSource",
+        "area_level_to_next_storey",
+        Sourced {
+            all: &["area_levels"],
+            any: &[],
+        },
+    ),
+    (
+        "BodyHeightSource",
+        "native_landing_top_and_type_thickness",
+        Sourced {
+            all: &["native_landing"],
+            any: &["native_landing_type"],
+        },
+    ),
+    (
+        "BodyHeightSource",
+        "partition_geometry_node_after_joins",
+        Gap {
+            reason: "a column's height after its geometry joins is the box at id-48 of its geometry node (RE-178), a record beside the column's frame that no reader notes: it needs the geometry node's offset noted by element_record_column_cuts",
+        },
+    ),
+    (
+        "BodyHeightSource",
+        "wall_top_cut_at_covering_floor",
+        WALL_TOP,
+    ),
+    (
+        "BodyHeightSource",
+        "wall_top_stepped_at_covering_floor",
+        WALL_TOP,
+    ),
+    (
+        "BodyBaseSource",
+        "wall_base_cut_at_covering_floor",
+        WALL_BASE,
+    ),
+    (
+        "BodyBaseSource",
+        "wall_base_sloped_at_covering_floor",
+        WALL_BASE,
+    ),
+    (
+        "BodyBaseSource",
+        "wall_base_cut_at_floor_covering_in_part",
+        WALL_BASE,
+    ),
+    (
+        "BodyBaseSource",
+        "wall_base_sloped_at_floor_covering_in_part",
+        WALL_BASE,
+    ),
+    (
+        "BodyEndSource",
+        "wall_end_stepped_to_joined_walls",
+        Sourced {
+            all: &["native_wall"],
+            any: &[],
+        },
+    ),
+    (
+        "PlacementAxesSource",
+        "stored_axes_reversed_by_flips",
+        Sourced {
+            all: &["instance_transform", "native_opening", "opening_host_wall"],
+            any: &[],
+        },
+    ),
+    (
+        "ThicknessSource",
+        "wall_type_compound_structure",
+        Sourced {
+            all: &["wall_type_layers"],
+            any: &[],
+        },
+    ),
+    (
+        "ThicknessSource",
+        "partition_element_record_bbox_thin_axis",
+        FRAME_OF_A_RECORD,
+    ),
+    (
+        "ThicknessSource",
+        "partition_element_record_bbox_z_extent",
+        FRAME_OF_A_RECORD,
+    ),
+    (
+        "SpaceOutlineSource",
+        "stored_solid",
+        Sourced {
+            all: &["room_solid_faces"],
+            any: &[],
+        },
+    ),
+    (
+        "SpaceOutlineSource",
+        "stored_solid_faces",
+        Sourced {
+            all: &["room_solid_faces"],
+            any: &[],
+        },
+    ),
+    (
+        "SpaceOutlineSource",
+        "stored_solid_approximate",
+        Sourced {
+            all: &["room_solid_faces"],
+            any: &[],
+        },
+    ),
+    ("SpaceOutlineSource", "record_box", FRAME_OF_A_RECORD),
+    (
+        "SpaceOutlineSource",
+        "saved_mesh",
+        Sourced {
+            all: &["saved_graphics"],
+            any: &[],
+        },
+    ),
+    (
+        "SpaceOutlineSource",
+        "area_boundary",
+        Sourced {
+            all: &["area_boundary_lines", "area_levels"],
+            any: &[],
+        },
+    ),
+    (
+        "SpaceOutlineSource",
+        "area_boundary_joined",
+        Sourced {
+            all: &["area_boundary_lines", "area_levels"],
+            any: &[],
+        },
+    ),
+    (
+        "SpaceOutlineSource",
+        "area_plan_topology",
+        Sourced {
+            all: &["area_plan_topology", "area_levels"],
+            any: &[],
+        },
+    ),
+    (
+        "SpaceOutlineSource",
+        "area_plan_topology_unchecked",
+        Sourced {
+            all: &["area_plan_topology", "area_levels"],
+            any: &[],
+        },
+    ),
+    (
+        "SpaceOutlineSource",
+        "family_body",
+        Checked {
+            by: "COVERAGE, by the space's BodySource, which says how it was drawn",
+        },
+    ),
+    (
+        "SpaceOutlineSource",
+        "none",
+        Unread {
+            reason: "an Area whose boundary was not read has no outline and no body",
+        },
+    ),
+    (
+        "LevelBindSource",
+        "partition_element_record_reference_list",
+        Gap { reason: BINDING },
+    ),
+    (
+        "LevelBindSource",
+        "partition_element_record_base_constraint",
+        Gap { reason: BINDING },
+    ),
+    (
+        "LevelBindSource",
+        "partition_element_record_host",
+        Gap { reason: BINDING },
+    ),
+    (
+        "LevelBindSource",
+        "partition_element_record_level_object",
+        Gap { reason: BINDING },
+    ),
+    (
+        "LevelBindSource",
+        "partition_element_record_plumbing_level_object",
+        Gap { reason: BINDING },
+    ),
+    (
+        "LevelBindSource",
+        "partition_element_record_base_at_level",
+        Gap { reason: BINDING },
+    ),
+    (
+        "LevelBindSource",
+        "partition_element_record_same_class_host",
+        Gap { reason: BINDING },
+    ),
+    (
+        "LevelBindSource",
+        "partition_element_record_base_elevation",
+        Gap { reason: BINDING },
+    ),
+    (
+        "StoreyBindSource",
+        "record_base_elevation",
+        Gap { reason: BINDING },
+    ),
+    (
+        "StoreyBindSource",
+        "record_top_elevation",
+        Gap { reason: BINDING },
+    ),
+    (
+        "FamilyNameSource",
+        "system_family_by_category",
+        Gap {
+            reason: "a family name chosen from the element's category by a table, not read from a name the file holds for it: the category is the element record's own, and no reader notes it as the source of the name",
+        },
+    ),
+    (
+        "FamilyNameSource",
+        "system_family_by_type_kind",
+        Gap {
+            reason: "a family name chosen from the kind of the element's type record by a table, not read from a name the file holds for it: no reader notes the type record as the source of the name",
+        },
+    ),
+    (
+        "Source",
+        "partition_rect_opening_index",
+        Gap {
+            reason: "the opening index of the schema-driven opening path, which no element of the gate models takes: its rows carry no ElementId in the table",
+        },
+    ),
+    (
+        "LocationCurveSource",
+        "ArcWallPartition",
+        Gap {
+            reason: "the schema-driven wall path (Global/Latest), which no element of the gate models takes: its location curve is read from a partition record by the schema walker, which notes no value source",
+        },
+    ),
+    (
+        "LocationCurveSource",
+        "SchemaEndpoints",
+        Gap {
+            reason: "the schema-driven wall path (Global/Latest), which no element of the gate models takes: its endpoints are fields of the schema walker's decode, which notes no value source",
+        },
+    ),
+    (
+        "BoundarySource",
+        "SchemaSketch",
+        Gap {
+            reason: "the schema-driven floor path (Global/Latest), which no element of the gate models takes: its boundary is a field of the schema walker's decode, which notes no value source",
+        },
+    ),
+    (
+        "BoundarySource",
+        "PartitionPlanLoop",
+        Gap {
+            reason: "the schema-driven floor path, which no element of the gate models takes: a closed loop found in partition bytes by RE-15, which notes no value source",
+        },
+    ),
 ];
 
 /// The ElementId an `Identifier` field holds: `m_id.m_id64` from Revit 2024,
@@ -1064,6 +1421,168 @@ fn check_topology_areas(rf: &mut RevitFile, areas: &BTreeMap<u32, TopologyParts>
     problems
 }
 
+/// The row of `SOURCE_VALUES` for a written value: its own, else its
+/// property's `"*"`.
+fn source_row(name: &str, value: &str) -> Option<&'static Row> {
+    let exact = SOURCE_VALUES
+        .iter()
+        .find(|(property, held, _)| *property == name && *held == value);
+    let any = SOURCE_VALUES
+        .iter()
+        .find(|(property, held, _)| *property == name && *held == "*");
+    exact.or(any).map(|(_, _, row)| row)
+}
+
+/// The elements that carry each written value of a `*Source` property on their
+/// own property set, and how many entities with no parsable ElementId do.
+type WrittenSources = BTreeMap<(String, String), (BTreeSet<u32>, usize)>;
+
+/// Every `(property, value)` of a `*Source` text property the model writes on
+/// a building element's own property set.
+fn written_sources(model: &IfcModel) -> WrittenSources {
+    let mut written = WrittenSources::new();
+    for entity in &model.entities {
+        let IfcEntity::BuildingElement {
+            type_guid,
+            property_set,
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let id = type_guid.as_deref().and_then(|tag| tag.parse::<u32>().ok());
+        for property in property_set.iter().flat_map(|set| &set.properties) {
+            let PropertyValue::Text(value) = &property.value else {
+                continue;
+            };
+            if !property.name.ends_with("Source") {
+                continue;
+            }
+            let held = written
+                .entry((property.name.clone(), value.clone()))
+                .or_default();
+            match id {
+                Some(id) => {
+                    held.0.insert(id);
+                }
+                None => held.1 += 1,
+            }
+        }
+    }
+    written
+}
+
+/// What `check_source_values` found, for the report.
+#[derive(Default)]
+struct SourceValues {
+    sourced: usize,
+    checked: usize,
+    unread: usize,
+    gap_values: usize,
+    gap_elements: usize,
+    rows: Vec<serde_json::Value>,
+}
+
+/// #1498: every written value of a `*Source` property has a row in
+/// `SOURCE_VALUES`, and a `Sourced` one has the sources it says on every
+/// element that carries it. The rows are checked against each other too: none
+/// is repeated, and a reason is not empty.
+fn check_source_values(
+    model: &IfcModel,
+    table: &ElementProvenanceTable,
+    problems: &mut Vec<String>,
+) -> SourceValues {
+    for (index, (name, value, row)) in SOURCE_VALUES.iter().enumerate() {
+        if SOURCE_VALUES[..index]
+            .iter()
+            .any(|(other, held, _)| other == name && held == value)
+        {
+            problems.push(format!("SOURCE_VALUES has {name}={value} twice"));
+        }
+        let text = match row {
+            Row::Unread { reason } | Row::Gap { reason } => reason,
+            Row::Checked { by } => by,
+            Row::Sourced { all, any } => {
+                if all.is_empty() && any.is_empty() {
+                    problems.push(format!("{name}={value} is sourced from no reader"));
+                }
+                continue;
+            }
+        };
+        if text.trim().is_empty() {
+            problems.push(format!("{name}={value} has an empty reason"));
+        }
+    }
+    let mut found = SourceValues::default();
+    for ((name, value), (ids, unkeyed)) in &written_sources(model) {
+        let elements = ids.len() + unkeyed;
+        let kind = match source_row(name, value) {
+            None => {
+                problems.push(format!(
+                    "{name}={value} is written on {elements} elements, such as {:?}, and has neither a row in SOURCE_VALUES nor a declared gap",
+                    ids.iter().take(5).collect::<Vec<_>>()
+                ));
+                "no row"
+            }
+            Some(Row::Sourced { all, any }) => {
+                let mut missing: Vec<u32> = Vec::new();
+                let mut short = 0usize;
+                for id in ids {
+                    let held = |reader: &str| {
+                        table.get(*id).is_some_and(|entry| {
+                            entry
+                                .value_sources
+                                .iter()
+                                .any(|source| source.reader == reader)
+                        })
+                    };
+                    if !(all.iter().all(|reader| held(reader))
+                        && (any.is_empty() || any.iter().any(|reader| held(reader))))
+                    {
+                        short += 1;
+                        if missing.len() < 10 {
+                            missing.push(*id);
+                        }
+                    }
+                }
+                if short > 0 {
+                    problems.push(format!(
+                        "{name}={value}: {short} of {} elements have no source from {all:?}{}, such as {missing:?}",
+                        ids.len(),
+                        if any.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" and one of {any:?}")
+                        }
+                    ));
+                }
+                found.sourced += 1;
+                "sourced"
+            }
+            Some(Row::Checked { .. }) => {
+                found.checked += 1;
+                "checked"
+            }
+            Some(Row::Unread { .. }) => {
+                found.unread += 1;
+                "unread"
+            }
+            Some(Row::Gap { .. }) => {
+                found.gap_values += 1;
+                found.gap_elements += elements;
+                "gap"
+            }
+        };
+        found.rows.push(json!({
+            "property": name,
+            "value": value,
+            "elements": elements,
+            "row": kind,
+        }));
+    }
+    found
+}
+
 fn check_model(name: &str, path: &Path) -> BTreeSet<String> {
     check_model_with(name, path, false)
 }
@@ -1217,6 +1736,9 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
             ));
         }
     }
+
+    // Every written `*Source` value has a row or a declared gap (#1498).
+    let source_values = check_source_values(&run.model, table, &mut problems);
 
     // The bytes at each copy a source names.
     let mut checked = 0usize;
@@ -2112,6 +2634,15 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
     line.push_str(&format!(
         "  source parts: {parts_confirmed} of {parts_checked} records re-read and confirmed ({parts_by_record} second-prologue frames, by the record that encloses them), {parts_unverified} not read\n"
     ));
+    line.push_str(&format!(
+        "  *Source values: {} written, {} sourced, {} checked by another table, {} unread, {} declared gaps on {} elements\n",
+        source_values.rows.len(),
+        source_values.sourced,
+        source_values.checked,
+        source_values.unread,
+        source_values.gap_values,
+        source_values.gap_elements
+    ));
     for (reader, (elements, differ)) in &counts {
         line.push_str(&format!(
             "  {reader}: {elements} elements, {differ} in another partition than their frame\n"
@@ -2163,6 +2694,7 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
             })
             .collect::<serde_json::Map<_, _>>(),
         "by_reader_and_rule": by_rule,
+        "source_values": source_values.rows,
         "by_body_source": bodies,
         "problems": problems,
     });

@@ -64,6 +64,7 @@ pub(super) fn attach_opening_flips(
     let options = crate::native_document::Options {
         selected_ids: ids,
         graph_classes: Some(BTreeSet::from(["FamilyInstance".to_string()])),
+        value_source: Some("native_opening"),
         ..crate::native_document::Options::default()
     };
     // Each element's flips, from its one current record.
@@ -251,6 +252,11 @@ pub(super) fn attach_opening_placement_axes(
             element
                 .fields
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+        // #1498: the host wall's native record holds the line the axis was
+        // taken along.
+        if let Some(host) = host_of(element) {
+            rf.attribute_value_source(host, "native_wall", id, "opening_host_wall");
         }
     }
 }
