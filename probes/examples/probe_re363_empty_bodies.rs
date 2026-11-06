@@ -30,9 +30,12 @@
 //!   truncated <analysed> of <total>   (only where the time budget ran out)
 //!   timing export_ms=<n> entities=<n>          the default export, on this handle
 //!   timing classes_ms=<n>                      the class of each written element
-//!   timing pass_ms=<n> read_ms=<n> analyse_ms=<n> instances=<n>
-//!                                              the saved-graphics pass, after the export
-//!   memory vmhwm_kb after_export=<n> after_pass=<n>   (Linux only)
+//!   timing scoped_pass_ms=<n> read_ms=<n> analyse_ms=<n> instances=<n> symbols=<n>
+//!                                              the pass over the plumbing fixtures and
+//!                                              structural columns alone, after the export
+//!   timing pass_ms=<n> read_ms=<n> analyse_ms=<n> instances=<n> symbols=<n>
+//!                                              the pass over every family instance
+//!   memory vmhwm_kb after_export=<n> after_scoped=<n> after_pass=<n>   (Linux only)
 //!   done
 //!
 //! ```bash
@@ -61,6 +64,10 @@ const CHUNK: usize = 1000;
 /// The time after which no further chunk is started, so the lines already
 /// printed stay a usable partial result under Measure's 20 minute limit.
 const BUDGET: Duration = Duration::from_secs(14 * 60);
+
+/// The categories of the scoped pass: where the two extras of #1496 sit (the
+/// water closet tank and the permit office's column 1927742).
+const SCOPED: [i64; 2] = [per::OST_PLUMBING_FIXTURES, per::OST_STRUCTURAL_COLUMNS];
 
 type Ids = BTreeMap<i64, BTreeSet<u32>>;
 type EmptyIds = BTreeMap<(i64, &'static str), BTreeSet<u32>>;
@@ -240,6 +247,78 @@ fn analyse(id: u64, records: &BTreeMap<u64, Record>) -> (&'static str, Option<St
     (outcome, Some(info))
 }
 
+/// What one pass over a set of instances found.
+#[derive(Debug, Default)]
+struct Pass {
+    analysed: Ids,
+    outcomes: BTreeMap<(i64, &'static str), usize>,
+    empty: EmptyIds,
+    read: Duration,
+    analyse: Duration,
+    done: usize,
+    symbols: usize,
+}
+
+/// Read the saved graphics of `ids` a chunk at a time and analyse each instance.
+/// `quiet` leaves out the per-instance and progress lines.
+fn run_pass(
+    rf: &mut RevitFile,
+    ids: &[u64],
+    category_of: &BTreeMap<u32, i64>,
+    started: Instant,
+    quiet: bool,
+) -> Pass {
+    let mut pass = Pass::default();
+    let mut graphics: BTreeMap<u64, Record> = BTreeMap::new();
+    let mut attempted: BTreeSet<u64> = BTreeSet::new();
+    for chunk in ids.chunks(CHUNK) {
+        if started.elapsed() > BUDGET {
+            println!("truncated {} of {}", pass.done, ids.len());
+            break;
+        }
+        let timed = Instant::now();
+        load(
+            rf,
+            &mut graphics,
+            &mut attempted,
+            chunk.iter().copied().collect(),
+        );
+        pass.read += timed.elapsed();
+        let timed = Instant::now();
+        for id in chunk {
+            let Ok(short) = u32::try_from(*id) else {
+                continue;
+            };
+            let Some(category) = category_of.get(&short).copied() else {
+                continue;
+            };
+            let (outcome, info) = analyse(*id, &graphics);
+            pass.analysed.entry(category).or_default().insert(short);
+            *pass.outcomes.entry((category, outcome)).or_default() += 1;
+            if let Some(info) = info {
+                pass.empty
+                    .entry((category, outcome))
+                    .or_default()
+                    .insert(short);
+                if !quiet {
+                    println!("emptyinfo id={id} category={category} {info}");
+                }
+            }
+        }
+        pass.analyse += timed.elapsed();
+        for id in chunk {
+            graphics.remove(id);
+        }
+        pass.done += chunk.len();
+        if !quiet {
+            println!("progress {} of {}", pass.done, ids.len());
+        }
+    }
+    let own: BTreeSet<u64> = ids.iter().copied().collect();
+    pass.symbols = attempted.difference(&own).count();
+    pass
+}
+
 fn main() -> anyhow::Result<()> {
     let started = Instant::now();
     let path = std::env::args()
@@ -327,61 +406,52 @@ fn main() -> anyhow::Result<()> {
     );
 
     let ordered: Vec<u64> = instances.iter().copied().collect();
-    let mut graphics: BTreeMap<u64, Record> = BTreeMap::new();
-    let mut attempted: BTreeSet<u64> = BTreeSet::new();
-    let mut analysed = Ids::new();
-    let mut outcomes: BTreeMap<(i64, &'static str), usize> = BTreeMap::new();
-    let mut empty = EmptyIds::new();
-    let mut done = 0usize;
-    let pass = Instant::now();
-    let (mut read_time, mut analyse_time) = (Duration::ZERO, Duration::ZERO);
-    for chunk in ordered.chunks(CHUNK) {
-        if started.elapsed() > BUDGET {
-            println!("truncated {done} of {}", ordered.len());
-            break;
-        }
-        let timed = Instant::now();
-        load(
-            &mut rf,
-            &mut graphics,
-            &mut attempted,
-            chunk.iter().copied().collect(),
-        );
-        read_time += timed.elapsed();
-        let timed = Instant::now();
-        for id in chunk {
-            let Ok(short) = u32::try_from(*id) else {
-                continue;
-            };
-            let Some(category) = category_of.get(&short).copied() else {
-                continue;
-            };
-            let (outcome, info) = analyse(*id, &graphics);
-            analysed.entry(category).or_default().insert(short);
-            *outcomes.entry((category, outcome)).or_default() += 1;
-            if let Some(info) = info {
-                empty.entry((category, outcome)).or_default().insert(short);
-                println!("emptyinfo id={id} category={category} {info}");
-            }
-        }
-        analyse_time += timed.elapsed();
-        for id in chunk {
-            graphics.remove(id);
-        }
-        done += chunk.len();
-        println!("progress {done} of {}", ordered.len());
-    }
+
+    // The scoped pass first, so its peak memory is not hidden by the full pass.
+    let scoped: Vec<u64> = ordered
+        .iter()
+        .copied()
+        .filter(|id| {
+            u32::try_from(*id)
+                .ok()
+                .and_then(|short| category_of.get(&short))
+                .is_some_and(|category| SCOPED.contains(category))
+        })
+        .collect();
+    let timed = Instant::now();
+    let narrow = run_pass(&mut rf, &scoped, &category_of, started, true);
     println!(
-        "timing pass_ms={} read_ms={} analyse_ms={} instances={done}",
-        pass.elapsed().as_millis(),
-        read_time.as_millis(),
-        analyse_time.as_millis()
+        "timing scoped_pass_ms={} read_ms={} analyse_ms={} instances={} symbols={}",
+        timed.elapsed().as_millis(),
+        narrow.read.as_millis(),
+        narrow.analyse.as_millis(),
+        narrow.done,
+        narrow.symbols
+    );
+    let after_scoped = peak_kb();
+    let scoped_empty: usize = narrow.empty.values().map(BTreeSet::len).sum();
+    println!(
+        "scoped empty_instances={scoped_empty} of {}",
+        narrow.analysed.values().map(BTreeSet::len).sum::<usize>()
+    );
+
+    let timed = Instant::now();
+    let full = run_pass(&mut rf, &ordered, &category_of, started, false);
+    println!(
+        "timing pass_ms={} read_ms={} analyse_ms={} instances={} symbols={}",
+        timed.elapsed().as_millis(),
+        full.read.as_millis(),
+        full.analyse.as_millis(),
+        full.done,
+        full.symbols
     );
     println!(
-        "memory vmhwm_kb after_export={} after_pass={}",
+        "memory vmhwm_kb after_export={} after_scoped={} after_pass={}",
         after_export.map_or_else(|| "-".to_string(), |kb| kb.to_string()),
+        after_scoped.map_or_else(|| "-".to_string(), |kb| kb.to_string()),
         peak_kb().map_or_else(|| "-".to_string(), |kb| kb.to_string())
     );
+    let (analysed, outcomes, empty) = (full.analysed, full.outcomes, full.empty);
     for (category, ids) in &analysed {
         println!(
             "analysed {category} {} {} {}",
