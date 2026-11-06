@@ -11,4 +11,6 @@
   exact was lost, and RE-78 now says so under its first table. The new
   `tools/re/shading_bodies_vs_ifc.py` scores the plates' bodies by shape
   against Revit's, which neither `mesh_bodies_vs_ifc` (saved meshes only) nor
-  `plan_profiles_vs_ifc` (plan outline only) did.
+  `plan_profiles_vs_ifc` (plan outline only) did: on Core Interior all 20
+  are within 0.01% of Revit's volume and every vertex within 0.001 ft of its
+  body's surface (the largest distance 1.5e-06 ft), Measure run 42133202790.
