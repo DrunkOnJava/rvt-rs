@@ -490,7 +490,7 @@ fn main() -> anyhow::Result<()> {
             .collect();
         let same: Vec<String> = parents
             .iter()
-            .filter(|p| category_of.get(p) == Some(&per::OST_PLUMBING_FIXTURES))
+            .filter(|p| category_of.get(*p) == Some(&per::OST_PLUMBING_FIXTURES))
             .map(u32::to_string)
             .collect();
         let any: Vec<String> = parents
