@@ -7,7 +7,6 @@ license = "Apache-2.0"
 description = "WebAssembly bindings for the `rvt` crate, behind the browser viewer. Kept in a separate crate so `rvt` builds as a plain `rlib`: a `cdylib` crate type on the core library linked a shared library on every native build, test run and `cargo install` (C6)."
 authors = ["Griffin Long <151978260+DrunkOnJava@users.noreply.github.com>"]
 repository = "https://github.com/DrunkOnJava/rvt-rs"
-homepage = "https://github.com/DrunkOnJava/rvt-rs"
 publish = false  # Built by wasm-pack into viewer/pkg, not published.
 
 [lib]
@@ -20,11 +19,15 @@ crate-type = ["cdylib"]
 workspace = true
 
 [dependencies]
-rvt = { path = ".." }
+# `unstable-research` only adds paths to the readers the stable API already
+# reads through (src/research.rs): `savedParameters` calls the saved-parameter
+# reader `rvt-elements` uses, and the release range it reads, directly.
+rvt = { path = "..", features = ["unstable-research"] }
 wasm-bindgen = "0.2"
 js-sys = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
+serde_json = "1"
 
 # wasm-pack configuration. The bundled `wasm-opt` in wasm-pack 0.14
 # doesn't accept rustc's bulk-memory output — it prints a wall of

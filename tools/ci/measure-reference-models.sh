@@ -434,6 +434,11 @@ model_task() { # name rvt ref task
     base)
       wanted info && timed "$dir" rvt-info info "$MODELS/$rvt" "$dir"
       grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
+      # RE-348, RE-349: how many walls take the wall base and end rules, and
+      # why the others do not, as counts (the diagnostics are not uploaded for
+      # a model without a licence to redistribute it; these lines are).
+      [ -s "$dir/diagnostics.json" ] \
+        && python "$SCORERS/wall_rule_counts.py" "$dir/diagnostics.json" > "$dir/wall_rules.txt" 2>&1 || true
       ;;
     schema)
       # A writer path only these models reach, such as the office files'
@@ -588,6 +593,8 @@ measure_sample() { # sample
   # alone, so it runs for every sample, whatever its release.
   if [ -s "$dir/diagnostics.json" ]; then
     score "$dir/element_stage_counts.txt" "$SCORERS/element_stage_counts.py" "$dir/diagnostics.json"
+    # RE-348, RE-349: how many walls take the wall base and end rules.
+    python "$SCORERS/wall_rule_counts.py" "$dir/diagnostics.json" > "$dir/wall_rules.txt" 2>&1 || true
   fi
   # C9: the IFC4 schema's view of the export, so a writer path only the
   # samples reach (I-shape profiles and profile set usages on the

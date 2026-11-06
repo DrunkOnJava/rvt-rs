@@ -452,14 +452,19 @@ pub fn native_runs(
             ))
         })
         .collect();
-    // The run type's construction is the type's record's: a source of the run
-    // as well as the run's own record (#1368).
-    for (id, run) in &drawn {
-        if let (Ok(run_id), Ok(type_id)) = (u32::try_from(*id), u32::try_from(run.type_id)) {
+    note_run_types(rf, drawn.iter().map(|(id, run)| (*id, run.type_id)));
+    Ok(drawn)
+}
+
+/// The run type's construction is the type's record's: a source of the run
+/// as well as the run's own record (#1368). `runs` are each drawn run's id
+/// and its run type's.
+fn note_run_types(rf: &mut RevitFile, runs: impl Iterator<Item = (u64, u64)>) {
+    for (id, type_id) in runs {
+        if let (Ok(run_id), Ok(type_id)) = (u32::try_from(id), u32::try_from(type_id)) {
             rf.attribute_value_source(type_id, "native_run", run_id, "native_run_type");
         }
     }
-    Ok(drawn)
 }
 
 /// A Revit 2025 stair's actual number of risers, riser height and tread
@@ -690,7 +695,7 @@ pub fn native_spiral_runs(
         return Ok(BTreeMap::new());
     }
     let (types, found) = run_graphs(rf, runs)?;
-    Ok(found
+    let drawn: BTreeMap<u64, NativeSpiralRun> = found
         .into_iter()
         .filter_map(|(id, (run, treads))| {
             let type_id = runs[&id];
@@ -708,7 +713,9 @@ pub fn native_spiral_runs(
                 },
             ))
         })
-        .collect())
+        .collect();
+    note_run_types(rf, drawn.iter().map(|(id, run)| (*id, run.type_id)));
+    Ok(drawn)
 }
 
 /// Releases a landing's top and thickness are measured on: the BIM4LCA
@@ -1451,7 +1458,15 @@ pub fn native_tread_landings(
         }
         Ok(())
     })?;
-    Ok(found
+    let stairs: BTreeMap<u64, u64> = if rf.recording_value_sources() {
+        found
+            .iter()
+            .map(|(id, (stair, _, _))| (*id, *stair))
+            .collect()
+    } else {
+        BTreeMap::new()
+    };
+    let drawn: BTreeMap<u64, NativeTreadLanding> = found
         .into_iter()
         .filter(|(id, _)| landings.get(id).is_some_and(|t| tread_types.contains(t)))
         .filter_map(|(id, (stair, top_feet, outline))| {
@@ -1473,5 +1488,34 @@ pub fn native_tread_landings(
                     },
                 ))
         })
-        .collect())
+        .collect();
+    // The landing type's record says the landing is drawn as a tread, and the
+    // run types of its stair's runs give the thickness: sources of the body
+    // beside the landing's own record (#1368).
+    for id in drawn.keys() {
+        let (Some(stair), Ok(landing)) = (stairs.get(id), u32::try_from(*id)) else {
+            continue;
+        };
+        if let Some(landing_type) = landings.get(id).and_then(|t| u32::try_from(*t).ok()) {
+            rf.attribute_value_source(
+                landing_type,
+                "native_landing",
+                landing,
+                "native_landing_type",
+            );
+        }
+        let run_types: BTreeSet<u32> = run_stairs
+            .iter()
+            .filter(|(_, run_stair)| *run_stair == stair)
+            .filter_map(|(run, _)| runs.get(run).and_then(|t| u32::try_from(*t).ok()))
+            .collect();
+        rf.attribute_value_sources(
+            run_types,
+            "native_landing",
+            landing,
+            "native_run_type",
+            crate::ifc::element_provenance::CopyRule::Native,
+        );
+    }
+    Ok(drawn)
 }

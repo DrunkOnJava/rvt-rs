@@ -136,7 +136,7 @@ fn same(a: Point2, b: Point2) -> bool {
     (a.0 - b.0).abs() <= 1e-9 && (a.1 - b.1).abs() <= 1e-9
 }
 
-fn signed_area(ring: &[Point2]) -> f64 {
+pub(crate) fn signed_area(ring: &[Point2]) -> f64 {
     let n = ring.len();
     (0..n)
         .map(|i| {

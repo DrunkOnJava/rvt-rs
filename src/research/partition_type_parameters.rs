@@ -742,6 +742,24 @@ pub fn rectangular_section(by_name: &BTreeMap<String, f64>) -> Option<[f64; 2]> 
         .then_some([b, h])
 }
 
+/// The diameter, feet, of the round section a column type holds as its length
+/// parameter captioned `Diameter`, from `by_name` (a type's
+/// [`type_named_lengths`]). `None` unless the type's named lengths are that,
+/// a positive number, and at most the round column family's `Offset Base` and
+/// `Offset Top`, each exactly 0 (RE-353: the BIM4LCA office has one such type,
+/// `Round Column:PI-6`, whose one column is on each file; its named lengths
+/// are `Diameter` 0.492126 ft and the two zero offsets, not `Diameter` alone as
+/// RE-291 took them to be). Any other named length, `b` or `h` among them,
+/// leaves it out.
+pub fn round_section(by_name: &BTreeMap<String, f64>) -> Option<f64> {
+    let diameter = *by_name.get("Diameter")?;
+    let only_offsets = by_name.iter().all(|(name, value)| {
+        name == "Diameter"
+            || (matches!(name.as_str(), "Offset Base" | "Offset Top") && *value == 0.0)
+    });
+    (only_offsets && diameter.is_finite() && diameter > 0.0).then_some(diameter)
+}
+
 /// The values of `parameters` held by each type in `types`, where every
 /// partition's value agrees.
 fn type_lengths(

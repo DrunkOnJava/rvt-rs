@@ -156,13 +156,42 @@ pub fn decode_graph_with_catalog_usage(
     limits: &GraphLimits,
     catalog: Option<&crate::native_extensible_storage::Catalog>,
 ) -> Result<(ObjectGraph, GraphUsage)> {
+    decode_graph_in(body, registry, limits, catalog, None)
+}
+/// [`decode_graph_with_catalog_usage`] keeping only the fields of every object
+/// whose key is in `keep` (a bare field name, or `Declaring::name` where the
+/// class chain declares the name more than once). Any other field is read and
+/// checked as the whole decode reads and checks it, and left out of the
+/// object's `fields`, which then hold exactly the entries of `keep` that the
+/// full decode's do, with the same values. The graph is otherwise the full
+/// decode's: it succeeds or fails with the same error, reads the same pointers
+/// and objects, and has the same object starts and ends, edges, consumed bytes
+/// and usage. A caller that reads only the fields in `keep` of a graph gets
+/// what it gets from the full decode, without the values it ignores being
+/// built and freed (#1335).
+pub fn decode_graph_projected(
+    body: &[u8],
+    registry: &Registry,
+    limits: &GraphLimits,
+    catalog: Option<&crate::native_extensible_storage::Catalog>,
+    keep: &[&str],
+) -> Result<(ObjectGraph, GraphUsage)> {
+    decode_graph_in(body, registry, limits, catalog, Some(keep))
+}
+fn decode_graph_in(
+    body: &[u8],
+    registry: &Registry,
+    limits: &GraphLimits,
+    catalog: Option<&crate::native_extensible_storage::Catalog>,
+    keep: Option<&[&str]>,
+) -> Result<(ObjectGraph, GraphUsage)> {
     ensure!(
         limits.max_values > 0 && limits.max_objects > 0 && limits.max_depth > 0,
         "native graph resource budgets must be positive"
     );
     let tag =
         le_bytes::u16_at(body, 0).ok_or_else(|| anyhow::anyhow!("truncated root object tag"))?;
-    let mut cursor = Cursor::new(body, registry, catalog, 2, *limits, Spans::None);
+    let mut cursor = Cursor::new(body, registry, catalog, 2, *limits, Spans::None).with_keep(keep);
     let mut objects = Vec::new();
     let mut edges = Vec::new();
     let mut shared = BTreeMap::<u32, (usize, u16)>::new();
@@ -186,7 +215,7 @@ pub fn decode_graph_with_catalog_usage(
                 .name
                 .clone();
             let fields = cursor
-                .class(tag, 0)
+                .class_in::<true>(tag, 0, true)
                 .map_err(|e| anyhow::anyhow!("graph {name} starts{start}: {e}"))?;
             (name, fields)
         };
@@ -310,7 +339,7 @@ pub fn decode_object_fields_spanning(
         .name
         .clone();
     let mut cursor = Cursor::new(body, registry, None, start, *limits, spans);
-    let fields = cursor.class(class_tag, 0)?;
+    let fields = cursor.class::<true>(class_tag, 0)?;
     Ok(ObjectFields {
         class_tag,
         class_name,
@@ -334,6 +363,15 @@ struct PendingPointer {
 struct ClassPlan<'a> {
     lineage: Vec<&'a Class>,
     keys: Vec<Vec<String>>,
+    /// Whether each field is one a projected decode keeps
+    /// ([`decode_graph_projected`]); empty for a decode that is not one.
+    kept: Vec<Vec<bool>>,
+    /// The position, as (index in `lineage`, index in the class's fields), of
+    /// the first field whose key an earlier one in decoding order has already
+    /// taken: where a decode that builds no object stops with the error a
+    /// built one meets there. Found only for a projected decode; `None`
+    /// otherwise.
+    duplicate: Option<(usize, usize)>,
 }
 struct Cursor<'a> {
     body: &'a [u8],
@@ -346,6 +384,8 @@ struct Cursor<'a> {
     keep_spans: Spans,
     plans: HashMap<u16, Rc<ClassPlan<'a>>>,
     limits: GraphLimits,
+    /// The fields a projected decode keeps ([`decode_graph_projected`]).
+    keep: Option<&'a [&'a str]>,
 }
 impl<'a> Cursor<'a> {
     fn new(
@@ -367,7 +407,12 @@ impl<'a> Cursor<'a> {
             keep_spans,
             plans: HashMap::new(),
             limits,
+            keep: None,
         }
+    }
+    fn with_keep(mut self, keep: Option<&'a [&'a str]>) -> Self {
+        self.keep = keep;
+        self
     }
     fn take(&mut self, n: usize) -> Result<&[u8]> {
         let end = self
@@ -384,7 +429,7 @@ impl<'a> Cursor<'a> {
     fn u32(&mut self) -> Result<u32> {
         Ok(u32::from_le_bytes(self.take(4)?.try_into()?))
     }
-    fn pointer(&mut self, external: bool) -> Result<Value> {
+    fn pointer<const BUILD: bool>(&mut self, external: bool) -> Result<Value> {
         let offset = self.pos;
         let token = self.u32()?;
         let tag = if token != 0 && !external {
@@ -403,9 +448,13 @@ impl<'a> Cursor<'a> {
         } else {
             None
         };
-        Ok(json!({"pointer_token":token,"class_tag":tag,"offset":offset}))
+        Ok(if BUILD {
+            json!({"pointer_token":token,"class_tag":tag,"offset":offset})
+        } else {
+            Value::Null
+        })
     }
-    fn entity_pointer(&mut self) -> Result<Value> {
+    fn entity_pointer<const BUILD: bool>(&mut self) -> Result<Value> {
         let offset = self.pos;
         let discriminator = i32::from_le_bytes(self.take(4)?.try_into()?);
         ensure!(
@@ -413,7 +462,11 @@ impl<'a> Cursor<'a> {
             "unqualified ES entity discriminator {discriminator}"
         );
         if discriminator == 0 {
-            return Ok(json!({"discriminator":0,"state":"serialized_absent","offset":offset}));
+            return Ok(if BUILD {
+                json!({"discriminator":0,"state":"serialized_absent","offset":offset})
+            } else {
+                Value::Null
+            });
         }
         let raw: [u8; 16] = self.take(16)?.try_into()?;
         let guid = crate::native_extensible_storage::guid_string(raw);
@@ -427,9 +480,11 @@ impl<'a> Cursor<'a> {
             offset,
             schema_guid: Some(guid.clone()),
         });
-        Ok(
-            json!({"discriminator":-1,"schema_guid":guid,"state":"serialized_present","offset":offset}),
-        )
+        Ok(if BUILD {
+            json!({"discriminator":-1,"schema_guid":guid,"state":"serialized_present","offset":offset})
+        } else {
+            Value::Null
+        })
     }
     fn entity_fields(&mut self, guid: &str) -> Result<Value> {
         let schema = self
@@ -503,7 +558,7 @@ impl<'a> Cursor<'a> {
             }
             modifier = 0x50;
         }
-        self.field(
+        self.field::<true>(
             &Field {
                 offset: 0,
                 name: name.into(),
@@ -520,12 +575,22 @@ impl<'a> Cursor<'a> {
             0,
         )
     }
-    fn class(&mut self, tag: u16, depth: usize) -> Result<Value> {
+    /// The object of class `tag` at the cursor. With `BUILD` unset nothing is
+    /// built: every byte is read, every check made and every pointer noted as
+    /// when it is set, and the value is `Null` (#1335).
+    fn class<const BUILD: bool>(&mut self, tag: u16, depth: usize) -> Result<Value> {
+        self.class_in::<BUILD>(tag, depth, false)
+    }
+    /// [`Self::class`], where `top` says the object is one the graph decode
+    /// itself starts on, not an inline one inside a field: only then are the
+    /// fields chosen by [`Self::keep`] the only ones built.
+    fn class_in<const BUILD: bool>(&mut self, tag: u16, depth: usize, top: bool) -> Result<Value> {
         ensure!(
             depth < self.limits.max_depth,
             "native class recursion budget exceeded"
         );
         let plan = self.plan(tag, depth)?;
+        let project = BUILD && top && self.keep.is_some();
         let mut values = Map::new();
         for (distance, c) in plan.lineage.iter().enumerate().rev() {
             for (field_index, f) in c.fields.iter().enumerate() {
@@ -546,33 +611,11 @@ impl<'a> Cursor<'a> {
                     f.uninterpreted_flags
                 );
                 let start = self.pos;
-                let value = if c.name == "ClassDefinitionRef"
-                    && f.name == "m_ref"
-                    && f.base == 10
-                    && f.modifier == 0
-                {
-                    // ClassDefinitionRef stores a 16-bit schema class tag. The
-                    // qualified external reader performs Int16Reader -> ClassesContainer.find.
-                    let class_tag = u16::from_le_bytes(self.take(2)?.try_into()?);
-                    json!({"class_tag":class_tag,"class_name":self.registry.class(class_tag).map(|class|class.name.as_str())})
-                } else if c.name == "ESEntity"
-                    && f.name == "m_blob"
-                    && f.base == 14
-                    && f.modifier == 1
-                {
-                    self.entity_pointer()?
-                } else if c.name == "VarSketchObj"
-                    && f.name == "m_params"
-                    && f.base == 14
-                    && f.modifier == 0x54
-                {
-                    // Qualified typeless owning-pointer vector: each entry still
-                    // carries its concrete VarParam class tag in the wire data.
-                    self.field_as(f, 0x51, f.array_count, depth + distance + 1)?
+                let kept = BUILD && (!project || plan.kept[distance][field_index]);
+                let value = if kept {
+                    self.class_field::<true>(c, f, depth, distance)?
                 } else {
-                    self.field(f, depth + distance + 1).map_err(|e| {
-                        anyhow::anyhow!("{}.{} at {}: {e}", c.name, f.name, self.pos)
-                    })?
+                    self.class_field::<false>(c, f, depth, distance)?
                 };
                 if self.keeps_spans_of(c.tag) {
                     self.spans.push(FieldSpan {
@@ -582,17 +625,64 @@ impl<'a> Cursor<'a> {
                         end: self.pos,
                     });
                 }
-                let key = plan.keys[distance][field_index].clone();
-                ensure!(
-                    !values.contains_key(&key),
-                    "ambiguous native field key {key} in declaring class {} (tag {})",
-                    c.name,
-                    c.tag
-                );
-                values.insert(key, value);
+                if kept {
+                    let key = plan.keys[distance][field_index].clone();
+                    ensure!(
+                        !values.contains_key(&key),
+                        "ambiguous native field key {key} in declaring class {} (tag {})",
+                        c.name,
+                        c.tag
+                    );
+                    values.insert(key, value);
+                } else {
+                    ensure!(
+                        plan.duplicate != Some((distance, field_index)),
+                        "ambiguous native field key {} in declaring class {} (tag {})",
+                        plan.keys[distance][field_index],
+                        c.name,
+                        c.tag
+                    );
+                }
             }
         }
-        Ok(Value::Object(values))
+        Ok(if BUILD {
+            Value::Object(values)
+        } else {
+            Value::Null
+        })
+    }
+    /// One field `f` of class `c`, the `distance`th of the chain from the
+    /// object's own class, as [`Self::class_in`] reads it.
+    fn class_field<const BUILD: bool>(
+        &mut self,
+        c: &Class,
+        f: &Field,
+        depth: usize,
+        distance: usize,
+    ) -> Result<Value> {
+        if c.name == "ClassDefinitionRef" && f.name == "m_ref" && f.base == 10 && f.modifier == 0 {
+            // ClassDefinitionRef stores a 16-bit schema class tag. The
+            // qualified external reader performs Int16Reader -> ClassesContainer.find.
+            let class_tag = u16::from_le_bytes(self.take(2)?.try_into()?);
+            Ok(if BUILD {
+                json!({"class_tag":class_tag,"class_name":self.registry.class(class_tag).map(|class|class.name.as_str())})
+            } else {
+                Value::Null
+            })
+        } else if c.name == "ESEntity" && f.name == "m_blob" && f.base == 14 && f.modifier == 1 {
+            self.entity_pointer::<BUILD>()
+        } else if c.name == "VarSketchObj"
+            && f.name == "m_params"
+            && f.base == 14
+            && f.modifier == 0x54
+        {
+            // Qualified typeless owning-pointer vector: each entry still
+            // carries its concrete VarParam class tag in the wire data.
+            self.field_as::<BUILD>(f, 0x51, f.array_count, depth + distance + 1)
+        } else {
+            self.field::<BUILD>(f, depth + distance + 1)
+                .map_err(|e| anyhow::anyhow!("{}.{} at {}: {e}", c.name, f.name, self.pos))
+        }
     }
     /// Whether the spans of the fields class `tag` declares are kept.
     fn keeps_spans_of(&self, tag: u16) -> bool {
@@ -662,18 +752,59 @@ impl<'a> Cursor<'a> {
                     .collect::<Vec<String>>()
             })
             .collect();
-        let plan = Rc::new(ClassPlan { lineage, keys });
+        let kept = match self.keep {
+            Some(keep) => lineage
+                .iter()
+                .zip(&keys)
+                .map(|(c, keys)| {
+                    c.fields
+                        .iter()
+                        .zip(keys)
+                        .map(|(f, key)| {
+                            f.uninterpreted_flags & 2 == 0 && keep.contains(&key.as_str())
+                        })
+                        .collect::<Vec<bool>>()
+                })
+                .collect(),
+            None => Vec::new(),
+        };
+        // Only a projected decode reads fields without building them, and so
+        // needs the position; every other decode finds a repeated key in the
+        // object it builds.
+        let duplicate = if self.keep.is_some() {
+            let mut taken = std::collections::HashSet::new();
+            let mut duplicate = None;
+            'chain: for (distance, c) in lineage.iter().enumerate().rev() {
+                for (field_index, f) in c.fields.iter().enumerate() {
+                    if f.uninterpreted_flags & 2 == 0
+                        && !taken.insert(keys[distance][field_index].as_str())
+                    {
+                        duplicate = Some((distance, field_index));
+                        break 'chain;
+                    }
+                }
+            }
+            duplicate
+        } else {
+            None
+        };
+        let plan = Rc::new(ClassPlan {
+            lineage,
+            keys,
+            kept,
+            duplicate,
+        });
         self.plans.insert(tag, Rc::clone(&plan));
         Ok(plan)
     }
-    fn field(&mut self, f: &Field, depth: usize) -> Result<Value> {
-        self.field_as(f, f.modifier, f.array_count, depth)
+    fn field<const BUILD: bool>(&mut self, f: &Field, depth: usize) -> Result<Value> {
+        self.field_as::<BUILD>(f, f.modifier, f.array_count, depth)
     }
     /// [`Self::field`] reading `f` with `modifier` and `array_count` in place
     /// of its own: a container's items are `f` itself, one level down, which
     /// copying the field for each container was a share of a graph's
     /// allocations (#1237).
-    fn field_as(
+    fn field_as<const BUILD: bool>(
         &mut self,
         f: &Field,
         modifier: u8,
@@ -692,12 +823,21 @@ impl<'a> Cursor<'a> {
         );
         self.items += 1;
         match modifier {
-            1..=3 if f.base == 14 => self.pointer(modifier == 3),
+            1..=3 if f.base == 14 => self.pointer::<BUILD>(modifier == 3),
             0x60 if f.base == 8 => {
                 let n = self.u32()? as usize;
                 ensure!(n <= 1_000_000, "native string unit budget exceeded");
-                let units = le_bytes::u16_units(self.take(n * 2)?).collect::<Vec<_>>();
-                Ok(Value::String(String::from_utf16(&units)?))
+                let bytes = self.take(n * 2)?;
+                if BUILD {
+                    let units = le_bytes::u16_units(bytes).collect::<Vec<_>>();
+                    Ok(Value::String(String::from_utf16(&units)?))
+                } else {
+                    if char::decode_utf16(le_bytes::u16_units(bytes)).any(|unit| unit.is_err()) {
+                        let units = le_bytes::u16_units(bytes).collect::<Vec<_>>();
+                        String::from_utf16(&units)?;
+                    }
+                    Ok(Value::Null)
+                }
             }
             0x10 | 0x11 | 0x12 | 0x13 | 0x50 | 0x51 | 0x52 | 0x53 => {
                 let n = if modifier < 0x50 {
@@ -706,35 +846,64 @@ impl<'a> Cursor<'a> {
                     self.u32()?
                 };
                 ensure!(n <= 100_000, "native container count budget exceeded");
-                let mut values = Vec::with_capacity(n.min(1024) as usize);
-                for _ in 0..n {
-                    values.push(self.field_as(f, modifier & 0xf, None, depth + 1)?);
+                if BUILD {
+                    let mut values = Vec::with_capacity(n.min(1024) as usize);
+                    for _ in 0..n {
+                        values.push(self.field_as::<true>(f, modifier & 0xf, None, depth + 1)?);
+                    }
+                    Ok(Value::Array(values))
+                } else {
+                    for _ in 0..n {
+                        self.field_as::<false>(f, modifier & 0xf, None, depth + 1)?;
+                    }
+                    Ok(Value::Null)
                 }
-                Ok(Value::Array(values))
             }
             0 => match f.base {
                 1 => {
                     let b = self.take(1)?[0];
                     ensure!(b <= 1, "invalid native bool");
-                    Ok(json!(b != 0))
+                    Ok(if BUILD { json!(b != 0) } else { Value::Null })
                 }
-                2 => Ok(json!(self.take(1)?[0])),
-                3 => Ok(json!(i16::from_le_bytes(self.take(2)?.try_into()?))),
-                4 => Ok(json!(i32::from_le_bytes(self.take(4)?.try_into()?))),
-                5 => Ok(json!(self.u32()?)),
+                2 => {
+                    let b = self.take(1)?[0];
+                    Ok(if BUILD { json!(b) } else { Value::Null })
+                }
+                3 => {
+                    let n = i16::from_le_bytes(self.take(2)?.try_into()?);
+                    Ok(if BUILD { json!(n) } else { Value::Null })
+                }
+                4 => {
+                    let n = i32::from_le_bytes(self.take(4)?.try_into()?);
+                    Ok(if BUILD { json!(n) } else { Value::Null })
+                }
+                5 => {
+                    let n = self.u32()?;
+                    Ok(if BUILD { json!(n) } else { Value::Null })
+                }
                 6 => {
                     let n = f32::from_le_bytes(self.take(4)?.try_into()?);
                     ensure!(n.is_finite(), "nonfinite native float");
-                    Ok(json!(n))
+                    Ok(if BUILD { json!(n) } else { Value::Null })
                 }
                 7 => {
                     let n = f64::from_le_bytes(self.take(8)?.try_into()?);
                     ensure!(n.is_finite(), "nonfinite native double");
-                    Ok(json!(n))
+                    Ok(if BUILD { json!(n) } else { Value::Null })
                 }
-                9 => Ok(json!({"guid_bytes":self.take(16)?})),
-                11 => Ok(json!(i64::from_le_bytes(self.take(8)?.try_into()?))),
-                13 => self.field(
+                9 => {
+                    let bytes = self.take(16)?;
+                    Ok(if BUILD {
+                        json!({"guid_bytes":bytes})
+                    } else {
+                        Value::Null
+                    })
+                }
+                11 => {
+                    let n = i64::from_le_bytes(self.take(8)?.try_into()?);
+                    Ok(if BUILD { json!(n) } else { Value::Null })
+                }
+                13 => self.field::<BUILD>(
                     f.nested_descriptor
                         .as_deref()
                         .ok_or_else(|| anyhow::anyhow!("nested schema absent"))?,
@@ -745,7 +914,7 @@ impl<'a> Cursor<'a> {
                         f.references.len() == 1,
                         "inline native reference schema count"
                     );
-                    self.class(f.references[0].tag, depth + 1)
+                    self.class::<BUILD>(f.references[0].tag, depth + 1)
                 }
                 _ => anyhow::bail!("unsupported native scalar {}", f.base),
             },
@@ -766,7 +935,7 @@ fn identifier(value: &Value) -> Result<i64> {
 pub fn decode(body: &[u8], registry: &Registry) -> Result<Parameters> {
     let base = crate::native_element::decode_base(body, registry)?;
     let mut cursor = Cursor::new(body, registry, None, 2, GraphLimits::default(), Spans::None);
-    let fields = cursor.class(base.class_tag, 0)?;
+    let fields = cursor.class::<true>(base.class_tag, 0)?;
     let derived_fields_end = cursor.pos;
     let mut parameters = Vec::new();
     for (name, class_name, storage) in [
@@ -797,7 +966,7 @@ pub fn decode(body: &[u8], registry: &Registry) -> Result<Parameters> {
             registry.class(tag).is_some_and(|c| c.name == class_name),
             "parameter set class mismatch"
         );
-        let set = cursor.class(tag, 0)?;
+        let set = cursor.class::<true>(tag, 0)?;
         let pairs = set["m_paramSet"]
             .as_array()
             .ok_or_else(|| anyhow::anyhow!("parameter pair container absent"))?;

@@ -91,13 +91,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update --component rustfmt
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          component: rustfmt
       - run: cargo fmt --all -- --check
 
   clippy:
@@ -109,13 +105,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update --component clippy
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          component: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -214,15 +206,9 @@ jobs:
           repository: phi-ag/rvt
           path: _corpus
       - name: Install Rust
-        shell: bash
-        env:
-          TOOLCHAIN: ${{ matrix.rust }}
-        run: |
-          rustup toolchain install "$TOOLCHAIN" --profile minimal --no-self-update
-          rustup default "$TOOLCHAIN"
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          toolchain: ${{ matrix.rust }}
       # sccache on Windows only (C2). There rust-cache saves the checkout's
       # target directory while the dev drive builds into its own, so sccache
       # is what keeps compiled units (95% hits). On Linux and macOS it hit 0
@@ -275,12 +261,15 @@ jobs:
       # The MCP server declares rust-version 1.88 (rmcp's minimum), one above
       # the workspace's, so it is checked on 1.88 as well; the step above
       # keeps the root crate on its own MSRV.
+      - name: Install Rust 1.88, beside the default
+        if: matrix.label == 'msrv'
+        uses: $/.github/actions/setup-rust
+        with:
+          toolchain: "1.88"
+          make-default: "false"
       - name: Check the MCP server on its own minimum Rust (1.88)
         if: matrix.label == 'msrv'
-        shell: bash
-        run: |
-          rustup toolchain install 1.88 --profile minimal --no-self-update
-          cargo +1.88 check --profile ci -p rvt-rs-mcp --all-targets --locked
+        run: cargo +1.88 check --profile ci -p rvt-rs-mcp --all-targets --locked
       # The API examples docs.rs shows, run against the committed synthetic
       # fixture (corpus/tier1/), so a documented call cannot drift from the
       # code (1.0 criteria S3, #872). Linux only: the examples do not depend
@@ -386,12 +375,9 @@ jobs:
           repository: phi-ag/rvt
           path: _corpus
       - name: Install Rust and the i686 target
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update --target i686-unknown-linux-gnu
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          target: i686-unknown-linux-gnu
       # The 32-bit C runtime and libgcc the i686 test binaries link against.
       # Each apt call is bounded and retried: on 2026-11-01 an Ubuntu mirror
       # stopped answering mid `apt-get update` and the hang used the whole job
@@ -555,13 +541,7 @@ jobs:
           path: _r2025
           key: ${{ steps.r2025-cache.outputs.cache-primary-key }}
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: false
@@ -650,13 +630,7 @@ jobs:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: false
@@ -719,13 +693,7 @@ jobs:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: false
@@ -793,13 +761,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          component: rustfmt
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: false
@@ -817,7 +781,6 @@ jobs:
       # schema; the committed file must be the generator's output.
       - name: The IFC4 property set table is the generator's output
         run: |
-          rustup component add rustfmt
           python tools/ci/gen_standard_property_sets.py > /tmp/standard_property_sets_table.rs
           rustfmt --edition 2024 /tmp/standard_property_sets_table.rs
           diff -u src/ifc/standard_property_sets/table.rs /tmp/standard_property_sets_table.rs
@@ -1204,13 +1167,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -1251,15 +1208,13 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - name: Install Rust stable and the public API listing's nightly
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          rustup toolchain install "$PUBLIC_API_TOOLCHAIN" --profile minimal --no-self-update
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+      - name: Install Rust stable
+        uses: $/.github/actions/setup-rust
+      - name: Install the public API listing's nightly, beside it
+        uses: $/.github/actions/setup-rust
+        with:
+          toolchain: ${{ env.PUBLIC_API_TOOLCHAIN }}
+          make-default: "false"
       - name: Install cargo-semver-checks and cargo-public-api
         uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
@@ -1296,13 +1251,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: false
@@ -1343,13 +1292,9 @@ jobs:
       # a floating nightly saved a new cache every day and restored none.
       # Move the date forward when docs.rs needs a newer feature.
       - name: Install Rust nightly-2026-10-01
-        shell: bash
-        run: |
-          rustup toolchain install nightly-2026-10-01 --profile minimal --no-self-update
-          rustup default nightly-2026-10-01
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          toolchain: nightly-2026-10-01
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -1374,11 +1319,10 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust nightly-2026-10-01
-        shell: bash
-        run: |
-          rustup toolchain install nightly-2026-10-01 --profile minimal --no-self-update
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+        uses: $/.github/actions/setup-rust
+        with:
+          toolchain: nightly-2026-10-01
+          make-default: "false"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -1432,13 +1376,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       # No rust-cache step: the `ci-release` cache holds the `ci` profile's
       # target/ci, and `--release` builds into target/release, so a restored
       # cache is never used. Run 42067754303 restored 246 MB on Linux and 203 MB
@@ -1571,13 +1509,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       # install-action retries the download and verifies its checksum;
       # cargo-deny-action's image fetched the release with a bare
       # `curl --silent -L` and failed the check when GitHub returned an
@@ -1602,13 +1534,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - name: Install cargo-audit
         uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
@@ -1882,6 +1808,25 @@ jobs:
       # cannot follow fails here, not at a release.
       - name: The version files agree with each other
         run: python3 tools/ci/release_preflight.py check --event workflow_dispatch --ref-type branch --ref-name checkout --sha HEAD
+      # Last in the job: a failing step skips the ones after it, and a page edit that adds a bare number should not hide the other checks.
+      # W10 (#1192): every number on the README and the supported profile
+      # names a model of docs/reference-models.md's model index, and says so
+      # when nobody else can fetch it. A number added to either page without
+      # its model fails here (docs/maintaining.md, "Numbers on the README and
+      # the supported profile").
+      - name: Numbers on the README and the supported profile name their model
+        run: python3 tools/ci/measured_numbers.py
+      # The check's refusals, run on copies of the real pages with one
+      # offending line appended (or one index row broken): a number with no
+      # model, a number far from its model in a long clause, a number in a
+      # heading, a local-only model that does not say so (or whose word stands
+      # beside another model's name), a marker without a reason or with
+      # nothing to excuse, a model with no fetchability. It fails here if the
+      # check ever stops refusing one.
+      - name: The numbers check refuses what it must
+        run: python3 tools/ci/measured_numbers.py --refusals
+      - name: The numbers check's pure judgement (failure-first)
+        run: python3 tools/ci/test_measured_numbers.py
 
   # Guards the development environments' config: shellcheck the Cursor
   # install script and the devcontainer's scripts, install the

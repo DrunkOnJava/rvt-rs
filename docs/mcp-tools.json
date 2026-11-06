@@ -260,7 +260,7 @@
               ]
             },
             "value_sources": {
-              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.",
+              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for an element with no body of its own, and for one whose body is none of the kinds `docs/export-diagnostics.md` lists readers for.",
               "items": {
                 "$ref": "#/$defs/ValueSourceOut"
               },
@@ -1285,7 +1285,7 @@
               ]
             },
             "value_sources": {
-              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.",
+              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for an element with no body of its own, and for one whose body is none of the kinds `docs/export-diagnostics.md` lists readers for.",
               "items": {
                 "$ref": "#/$defs/ValueSourceOut"
               },
@@ -2390,7 +2390,7 @@
               ]
             },
             "value_sources": {
-              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.",
+              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for an element with no body of its own, and for one whose body is none of the kinds `docs/export-diagnostics.md` lists readers for.",
               "items": {
                 "$ref": "#/$defs/ValueSourceOut"
               },
@@ -2880,7 +2880,7 @@
               ]
             },
             "value_sources": {
-              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for a body no reader notes yet.",
+              "description": "The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for an element with no body of its own, and for one whose body is none of the kinds `docs/export-diagnostics.md` lists readers for.",
               "items": {
                 "$ref": "#/$defs/ValueSourceOut"
               },

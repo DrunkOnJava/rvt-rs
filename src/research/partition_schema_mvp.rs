@@ -802,6 +802,14 @@ pub fn recover_partition_schema_mvp(
             if let (Some(cut), Some(clean)) =
                 (named(&joins.cut_partners), named(&joins.clean_partners))
             {
+                element.fields.push((
+                    COLUMN_RELEASE_FIELD.into(),
+                    InstanceField::Integer {
+                        value: i64::from(revit_version),
+                        signed: false,
+                        size: 4,
+                    },
+                ));
                 element
                     .fields
                     .push((COLUMN_CUT_PARTNERS_FIELD.into(), InstanceField::Vector(cut)));
