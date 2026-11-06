@@ -312,11 +312,12 @@ these releases, to the 2024 save's: class, GlobalId, placement axes and body.
 It prints how many it compared and how many are off the default axes, fails
 below `OPENINGS_LEAST` per class and above `OPENINGS_LEFT_OUT_MOST`, the doors
 and windows the 2024 save places by the rule that a later save leaves on the
-default axes (28 on the 2026 and 42 on the 2027 save of `rac_advanced` when it
-was set: the pass that takes a door's host from its native record (RE-245) is
-run on `CUT_LOOP_REVIT_VERSIONS`, 2024 and 2025, so on 2026 and 2027 a nearest
-wall that is not the door's own fails the along-the-wall test; and on 2027, 14
-more, set in 8 host walls with no native straight-line row, #1475), which
+default axes (28 on the 2026 and 2027 saves of `rac_advanced`: the pass that
+takes a door's host from its native record (RE-245) is run on
+`CUT_LOOP_REVIT_VERSIONS`, 2024 and 2025, so on 2026 and 2027 a nearest wall
+that is not the door's own fails the along-the-wall test; the 2027 save had 14
+more until RE-360, set in 8 host walls whose record holds a previous location
+line beside the location curve, which `native_walls` now reads, #1475), which
 can only shrink: a count that drops
 moves the ceiling down in the change that drops it. It exercises two buildings
 (`rac_advanced` and `rac_basic`, each saved by each release); `rst_basic` holds

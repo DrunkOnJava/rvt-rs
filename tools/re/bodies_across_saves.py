@@ -138,7 +138,9 @@ OUTLINE_LEAST = {
 }
 # Doors and windows placed by the rule (RE-347) in each candidate save, held to
 # the 2024 save, by project and candidate year (Measure run 42106711251, head
-# c1a2a739). OPENINGS_LEAST: at least this many of each class compared;
+# c1a2a739; rac_advanced 2027 from run 42134051521, head 0a0ba7ce, RE-360: 14
+# doors set in walls whose record holds a previous location line move from left
+# out to compared). OPENINGS_LEAST: at least this many of each class compared;
 # OPENINGS_LEFT_OUT_MOST: at most this many that the 2024 save places by the rule
 # and the candidate leaves on the default axes, which can only shrink: a count
 # that drops moves the ceiling down in that change, and a floor up. rst_basic
@@ -148,7 +150,7 @@ OPENINGS_LEAST = {
     "racadvancedsampleproject": {
         2025: {"IfcDoor": 83, "IfcWindow": 24},
         2026: {"IfcDoor": 61, "IfcWindow": 18},
-        2027: {"IfcDoor": 47, "IfcWindow": 18},
+        2027: {"IfcDoor": 61, "IfcWindow": 18},
     },
     "racbasicsampleproject": {
         2025: {"IfcDoor": 10, "IfcWindow": 7},
@@ -157,7 +159,7 @@ OPENINGS_LEAST = {
     },
 }
 OPENINGS_LEFT_OUT_MOST = {
-    "racadvancedsampleproject": {2025: 0, 2026: 28, 2027: 42},
+    "racadvancedsampleproject": {2025: 0, 2026: 28, 2027: 28},
     "racbasicsampleproject": {2025: 0, 2026: 0, 2027: 0},
 }
 # rac_advanced's ceiling 147534, which the 2024 save draws as its record box
