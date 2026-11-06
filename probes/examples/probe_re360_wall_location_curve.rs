@@ -39,6 +39,12 @@
 //!                     names (token, class tag, the objects holding it), and
 //!                     whether the current rule and `m_pCrv` each read it, so
 //!                     that a wall is followed across the saves by its id
+//!   (a plain line) `previous lines: ...`  counts of `SWall` records, those with a
+//!                     previous location line, of those how many are offset from
+//!                     the location curve, how many walls the rule reads that the
+//!                     old one did not, and how many the old one read: numbers
+//!                     beside fixed words, the only line a model without a
+//!                     licence keeps (tools/ci/scrub-holdout-results.sh)
 //!   kind "native"     the walls `native_walls` gives a row (count and ids), on
 //!                     the build the probe is compiled with
 //!   kind "wallfields" every field of each decoded wall that has an `SWall`
@@ -299,6 +305,33 @@ fn wall_line(id: u64, graph: &ObjectGraph) -> Value {
     })
 }
 
+/// The index of the first `GLine` that only `WallRunTimeData.m_prevLocLine`
+/// names.
+fn previous_line_index(graph: &ObjectGraph) -> Option<usize> {
+    graph
+        .objects
+        .iter()
+        .enumerate()
+        .find_map(|(index, object)| {
+            let named = owners(graph, index);
+            (object.class_name == "GLine"
+                && !named.is_empty()
+                && named.iter().all(|(_, class, _, field)| {
+                    class == "WallRunTimeData" && field == "m_prevLocLine"
+                }))
+            .then_some(index)
+        })
+}
+
+/// How far apart two level lines are, the larger distance between their ends
+/// taken either way round, in feet.
+fn line_gap(a: ([f64; 2], [f64; 2]), b: ([f64; 2], [f64; 2])) -> f64 {
+    let end = |p: [f64; 2], q: [f64; 2]| (p[0] - q[0]).hypot(p[1] - q[1]);
+    let same = end(a.0, b.0).max(end(a.1, b.1));
+    let turned = end(a.0, b.1).max(end(a.1, b.0));
+    same.min(turned)
+}
+
 /// The level line `m_pCrv` names, where it names exactly one object and that is
 /// a level `GLine` (what `location_curve` reads).
 fn pointer_line(graph: &ObjectGraph) -> Option<([f64; 2], [f64; 2])> {
@@ -504,6 +537,9 @@ fn main() -> Result<()> {
     let mut only_current: Vec<u64> = Vec::new();
     let mut shown_only_pointer = 0usize;
     let mut swall_ids: BTreeSet<u64> = BTreeSet::new();
+    let mut old_rule_ids: BTreeSet<u64> = BTreeSet::new();
+    let mut with_previous = 0usize;
+    let mut previous_offset = 0usize;
     let options = Options {
         selected_classes: BTreeSet::from(["SWall".to_string()]),
         ..Options::default()
@@ -567,6 +603,22 @@ fn main() -> Result<()> {
             format!("{state}; {lines} GLine, {arcs} GArc"),
         );
         let (now, pointed) = (current_line(graph), pointer_line(graph));
+        if now.is_some() {
+            old_rule_ids.insert(id);
+        }
+        if let Some(previous) = previous_line_index(graph) {
+            with_previous += 1;
+            let previous_ends = graph
+                .objects
+                .get(previous)
+                .and_then(|object| level_ends(&object.fields));
+            if previous_ends
+                .zip(pointed)
+                .is_some_and(|(a, b)| line_gap(a, b) > 1e-6)
+            {
+                previous_offset += 1;
+            }
+        }
         match (now, pointed) {
             (Some(a), Some(b)) => {
                 let same =
@@ -647,6 +699,16 @@ fn main() -> Result<()> {
             "read": read.len(),
             "ids": read.keys().collect::<Vec<_>>(),
         })
+    );
+    // Counts only, in the alphabet tools/ci/scrub-holdout-results.sh keeps for a
+    // model without a licence to redistribute it.
+    println!(
+        "previous lines: swall records {}, with a previous location line {}, of those offset from the location curve {}, read through the rule {}, read by the old rule {}",
+        swall_ids.len(),
+        with_previous,
+        previous_offset,
+        read.keys().filter(|id| !old_rule_ids.contains(*id)).count(),
+        old_rule_ids.len()
     );
     for wall in decoded_walls
         .iter()
