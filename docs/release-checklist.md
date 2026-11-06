@@ -115,15 +115,22 @@ cargo install rvt --version "$VERSION" --locked --root /tmp/rvt-crates-smoke
 /tmp/rvt-crates-smoke/bin/rvt-info "$SAMPLE"
 ```
 
-Verify the prebuilt binaries the **Release binaries** job attached to the
-GitHub Release (five archives plus `SHA256SUMS`; the job itself already
-smoke-tested four of them on native runners):
+Verify the release page the **Release binaries** job attached to the GitHub
+Release (fifteen files: five archives, the seven wheels, the sdist,
+`SHA256SUMS` and the provenance bundle; the job itself already smoke-tested
+four of the archives on native runners). `SHA256SUMS` lists every file but
+itself and the bundle from v0.16.0 on, and `--source-ref` keeps a manual run
+on a branch from passing for the tag:
 
 ```bash
 rm -rf /tmp/rvt-bin-smoke && mkdir -p /tmp/rvt-bin-smoke && cd /tmp/rvt-bin-smoke
 gh release download "v${VERSION}" --repo DrunkOnJava/rvt-rs
 test "$(ls rvt-rs-v${VERSION}-* | wc -l)" -eq 5
+test "$(ls | wc -l)" -eq 15
 shasum -a 256 -c SHA256SUMS
+for f in SHA256SUMS rvt-${VERSION}.tar.gz rvt-${VERSION}-*manylinux*x86_64*.whl; do
+  gh attestation verify "$f" -R DrunkOnJava/rvt-rs --source-ref "refs/tags/v${VERSION}"
+done
 tar -xzf "rvt-rs-v${VERSION}-aarch64-apple-darwin.tar.gz"   # or your platform's archive
 "./rvt-rs-v${VERSION}-aarch64-apple-darwin/rvt-info" "$SAMPLE"
 cd -

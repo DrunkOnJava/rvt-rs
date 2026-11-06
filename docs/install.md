@@ -118,10 +118,10 @@ needed. In the archive names `<tag>` is the release tag with its `v`
 container image name the version without it (`0.15.0`). The release page also
 carries the Python wheels, the sdist (the files PyPI gets) and the
 provenance bundle (`rvt-rs-<tag>.intoto.jsonl`). From v0.16.0, `SHA256SUMS`
-lists every file on the page but the bundle, wheels and sdist included, and
-the bundle attests each of them and `SHA256SUMS` itself; up to v0.15.0 both
-cover the CLI archives only (#1466). The wheels on PyPI also carry PEP 740
-attestations from trusted publishing.
+lists every file on the page but itself and the bundle, wheels and sdist
+included, and the bundle attests each of them and `SHA256SUMS` itself; up to
+v0.15.0 both cover the CLI archives only (#1466). The wheels on PyPI also
+carry PEP 740 attestations from trusted publishing.
 
 | Platform | Archive |
 |---|---|
@@ -151,16 +151,18 @@ Expand-Archive .\rvt-rs-<tag>-x86_64-pc-windows-msvc.zip -DestinationPath .
 
 Each archive also carries a GitHub build-provenance attestation, which
 proves it was built by this repository's release workflow from the tagged
-commit. Check it with the GitHub CLI:
+commit. Check it with the GitHub CLI, naming the tag's ref: `-R` alone also
+accepts an attestation from a manual run of the workflow on a branch, which
+signs files that were never released.
 
 ```bash
-gh attestation verify rvt-rs-<tag>-<target>.tar.gz -R DrunkOnJava/rvt-rs
+gh attestation verify rvt-rs-<tag>-<target>.tar.gz -R DrunkOnJava/rvt-rs --source-ref refs/tags/<tag>
 ```
 
 From v0.16.0 the page's wheels and sdist carry one as well
-(`gh attestation verify rvt-<version>-<wheel tags>.whl -R DrunkOnJava/rvt-rs`,
-`gh attestation verify rvt-<version>.tar.gz -R DrunkOnJava/rvt-rs`), and so
-does `SHA256SUMS`, so verifying that single file and then running the
+(`gh attestation verify rvt-<version>-<wheel tags>.whl -R DrunkOnJava/rvt-rs --source-ref refs/tags/<tag>`,
+`gh attestation verify rvt-<version>.tar.gz -R DrunkOnJava/rvt-rs --source-ref refs/tags/<tag>`),
+and so does `SHA256SUMS`, so verifying that single file and then running the
 `shasum` check above on the files you downloaded checks each of them.
 
 The binaries are not code-signed. On macOS, a browser download is

@@ -6,8 +6,9 @@ name: Release binaries
 #   - `publish.yml` calls this on a `v*` tag with `upload: true`, which
 #     attaches the archives to that tag's GitHub Release, with the Python
 #     wheels and the sdist its jobs built (artifacts `wheel-*` and `sdist` of
-#     the same run), SHA256SUMS listing every file but the provenance bundle,
-#     and one build-provenance attestation over all of them (#1466).
+#     the same run), SHA256SUMS listing every file but itself and the
+#     provenance bundle, and one build-provenance attestation over all of
+#     them (#1466).
 #   - Pull requests that touch this workflow or docker/ run the full matrix
 #     without uploading, and so does a weekly run of main, so a release
 #     never depends on an untested matrix. Such a run has no wheels, and
@@ -308,11 +309,11 @@ jobs:
           path: dist/*.tar.gz
           if-no-files-found: error
 
-  # SHA256SUMS lists every file the release page carries but the provenance
-  # bundle: the archives, and in a release (or a `python` rehearsal) the wheels
-  # and the sdist (#1466). It hashes everything in `dist`, which holds only what
-  # the downloads below put there, so a file cannot be on the page without a
-  # line here.
+  # SHA256SUMS lists every file the release page carries but itself and the
+  # provenance bundle: the archives, and in a release (or a `python` rehearsal)
+  # the wheels and the sdist (#1466). It hashes everything in `dist`, which holds
+  # only what the downloads below put there, so a file cannot be on the page
+  # without a line here.
   checksums:
     name: SHA256SUMS
     needs: [build, python]
@@ -343,19 +344,26 @@ jobs:
         working-directory: dist
         shell: bash
         env:
+          UPLOAD: ${{ inputs.upload }}
           WITH_PYTHON: ${{ inputs.upload || inputs.python }}
+          # One wheel for each entry of publish.yml's `build-wheels` matrix, which
+          # tools/ci/check-workflows.py compares this with. Nothing else counts
+          # them: release-binaries does not wait for the PyPI job, whose own count
+          # gates only PyPI. A rehearsal builds one.
+          RELEASE_WHEELS: "7"
         run: |
           set -euo pipefail
           export LC_ALL=C
           shopt -s nullglob
-          # A pattern download that matches nothing succeeds, so a release
-          # with no wheels would otherwise be checksummed and attested without
-          # them. publish.yml's PyPI job holds the exact count of seven.
+          # A pattern download that matches nothing succeeds, and one that matches
+          # too few would be checksummed and attested all the same.
           if [[ "${WITH_PYTHON}" == true ]]; then
+            want=1
+            if [[ "${UPLOAD}" == true ]]; then want="${RELEASE_WHEELS}"; fi
             wheels=(*.whl)
             sdists=(rvt-[0-9]*.tar.gz)
-            if [[ ${#wheels[@]} -lt 1 || ${#sdists[@]} -ne 1 ]]; then
-              echo "::error::expected at least one wheel and exactly one sdist, found ${#wheels[@]} and ${#sdists[@]}"
+            if [[ ${#wheels[@]} -ne ${want} || ${#sdists[@]} -ne 1 ]]; then
+              echo "::error::expected ${want} wheels and one sdist, found ${#wheels[@]} and ${#sdists[@]}"
               exit 1
             fi
           fi
@@ -482,10 +490,10 @@ jobs:
 
   # The release page: every file a release attaches, assembled and checked
   # once, attested once, and handed to `upload` as one artifact, so the files
-  # attached are the files attested and listed in SHA256SUMS (#1466). Only this
-  # job holds the OIDC token and `attestations: write`, and `upload`, the only
-  # job that holds `contents: write`, never signs. A dispatch with `python`
-  # runs this job and stops after the artifact.
+  # attached are the files attested and listed in SHA256SUMS (#1466). Of the
+  # jobs that handle the page only this one signs (`image` signs the container
+  # image), and `upload`, the only job that holds `contents: write`, never
+  # signs. A dispatch with `python` runs this job and stops after the artifact.
   attest:
     name: Attest the release page
     if: inputs.upload || inputs.python
@@ -607,3 +615,49 @@ jobs:
               --title "${TAG}" --generate-notes
           fi
           gh release upload "${TAG}" --repo "${GITHUB_REPOSITORY}" --clobber dist/*
+
+  # A release whose page chain was skipped, or that uploaded fewer files than it
+  # attested, goes red here instead of green: `upload` is skipped by an `if`, and
+  # a skipped job leaves nothing to fail. This job runs whether or not `upload`
+  # did, and compares the files the release holds with the page `attest` signed
+  # (#1466). The counts are the page's: the archives, the wheels, the sdist,
+  # SHA256SUMS and the bundle.
+  page:
+    name: Check the release page
+    if: ${{ !cancelled() && inputs.upload }}
+    needs: upload
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-page
+          path: dist
+      - name: The release holds the files that were attested
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          # Counted against the `build` matrix and publish.yml's `build-wheels`
+          # matrix by tools/ci/check-workflows.py.
+          RELEASE_ARCHIVES: "5"
+          RELEASE_WHEELS: "7"
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+          shopt -s nullglob
+          page=$(cd dist && printf '%s\n' * | sort)
+          assets=$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name' | sort)
+          expected=$((RELEASE_ARCHIVES + RELEASE_WHEELS + 3))
+          found=$(printf '%s\n' "${assets}" | grep -c .) || found=0
+          if [[ "${found}" -ne "${expected}" ]]; then
+            echo "::error::release ${TAG} holds ${found} files, not the ${expected} of the page (${RELEASE_ARCHIVES} archives, ${RELEASE_WHEELS} wheels, the sdist, SHA256SUMS, the bundle)"
+            exit 1
+          fi
+          if ! diff <(printf '%s\n' "${page}") <(printf '%s\n' "${assets}"); then
+            echo "::error::release ${TAG} does not hold the files that were attested (< only attested, > only on the release)"
+            exit 1
+          fi
+          echo "release ${TAG} holds the ${found} files attested"

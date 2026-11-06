@@ -31,8 +31,14 @@ Exits 1 with an `::error` line for each of:
   SHA256SUMS, attests `dist/*` and hands the page to `upload` as `release-page`; and `upload`
   attaches that artifact and nothing else. A change to one that leaves the others behind would
   put a file on the page that SHA256SUMS or the attestation lacks, which only a tag push would
-  find. `build`, `python` and `checksums` carry no job-level `if`: a skipped job skips every job
-  that needs it, however far down (run 42134335447 skipped `image` behind a skipped `python`).
+  find. The chain must also publish or fail on a tag: `upload` needs exactly `attest`, which needs
+  exactly `checksums`; `attest` runs on `inputs.upload` and `upload` on exactly `inputs.upload`
+  (`== 'true'` compares a boolean with a string and never matches); no job above `upload` or
+  `image` but `attest` has a job-level `if`, since a skipped job skips every job that needs it,
+  however far down (run 42134335447 skipped `image` behind a skipped `python`); and a `page` job
+  after `upload` fails when the release lacks the attested files. RELEASE_WHEELS and
+  RELEASE_ARCHIVES, which the checksum and page steps count against, equal publish.yml's
+  `build-wheels` matrix and this workflow's `build` matrix.
 
 PENDING lists the jobs another change is still editing, if any. They are reported as warnings,
 so a job added anywhere else without a timeout still fails.
@@ -411,8 +417,6 @@ def prose_msrv_problems(root, texts, mcp=None):
 RELEASE_WORKFLOW = "release-binaries.yml"
 PYTHON_FILES = {"wheel-*", "sdist"}
 PAGE_ARTIFACT = "release-page"
-# The jobs above the ones that publish. Skipping one of them skips `image`, `attest` and `upload` too.
-UNSKIPPABLE = {"build", "python", "checksums"}
 
 
 def used(job, action, key):
@@ -426,20 +430,73 @@ def downloads(job):
     return {v for _, v in used(job, "actions/download-artifact", "name") + used(job, "actions/download-artifact", "pattern") if v}
 
 
-def release_page_problems(doc):
-    """Where release-binaries.yml's checksums, attestation and upload stop describing the same files."""
+def needs_of(job):
+    needs = (job or {}).get("needs") or []
+    return [needs] if isinstance(needs, str) else list(needs)
+
+
+def condition(job):
+    """A job's `if` without its `${{ }}` wrapper, or None."""
+    text = (job or {}).get("if")
+    if text is None:
+        return None
+    text = str(text).strip()
+    return text[3:-2].strip() if text.startswith("${{") and text.endswith("}}") else text
+
+
+def ancestors(jobs, names):
+    seen, todo = set(), list(names)
+    while todo:
+        for need in needs_of(jobs.get(todo.pop(), {})):
+            if need not in seen:
+                seen.add(need)
+                todo.append(need)
+    return seen
+
+
+def release_constants(release_jobs, publish_jobs):
+    """The RELEASE_WHEELS and RELEASE_ARCHIVES a step of the release workflow sets, against the sizes of
+    the matrices they count (publish.yml's build-wheels, this workflow's build)."""
+
+    def size(jobs, name):
+        include = (((jobs.get(name) or {}).get("strategy") or {}).get("matrix") or {}).get("include")
+        return len(include) if isinstance(include, list) else None
+
+    want = {"RELEASE_WHEELS": size(publish_jobs, "build-wheels"), "RELEASE_ARCHIVES": size(release_jobs, "build")}
+    problems = []
+    for name, job in sorted(release_jobs.items()):
+        for step in job.get("steps") or []:
+            for key, expected in want.items():
+                given = (step.get("env") or {}).get(key)
+                if given is not None and str(given) != str(expected):
+                    problems.append(f"{RELEASE_WORKFLOW}: job '{name}' sets {key}={given!r}, but the matrix it counts has {expected} entries")
+    return problems
+
+
+def release_page_problems(doc, publish_doc=None):
+    """Where release-binaries.yml's checksums, attestation, upload and final check stop describing the same
+    files, or a run of a release tag could go green with no page."""
     where = RELEASE_WORKFLOW
     jobs = (doc or {}).get("jobs") or {}
-    gone = [name for name in ("checksums", "attest", "upload") if name not in jobs]
+    gone = [name for name in ("checksums", "attest", "upload", "page") if name not in jobs]
     if gone:
         return [f"{where}: no job named {', '.join(gone)}, which the release page's checks read"]
     problems = []
-    for name in sorted(UNSKIPPABLE & set(jobs)):
-        if "if" in jobs[name]:
-            problems.append(
-                f"{where}: job '{name}' has a job-level `if`; a skipped job skips every job that needs it, however far down,"
-                " so `image`, `attest` and `upload` would be skipped in the run that skips it (put the `if` on its steps)"
-            )
+    # A tag run must publish the page or fail. `attest` is skipped unless a release or rehearsal runs it, and
+    # `upload` unless a release does. Anything else above them that can be skipped (a job-level `if`: a skipped
+    # job skips every job that needs it, however far down) or that stands between them turns a release into a
+    # green run with no page (run 42134335447 skipped `image` that way).
+    if needs_of(jobs["attest"]) != ["checksums"] or needs_of(jobs["upload"]) != ["attest"]:
+        problems.append(f"{where}: job 'attest' must need exactly `checksums` and job 'upload' exactly `attest`, with nothing between them")
+    if "inputs.upload" not in (condition(jobs["attest"]) or ""):
+        problems.append(f"{where}: job 'attest' does not run on `inputs.upload`, so a release would skip the page")
+    if condition(jobs["upload"]) != "inputs.upload":
+        problems.append(f"{where}: job 'upload' runs on {condition(jobs['upload'])!r}, not `inputs.upload` (a boolean compared with a string never matches)")
+    for name in sorted(ancestors(jobs, ["upload", "image"]) - {"attest"}):
+        if "if" in jobs.get(name, {}):
+            problems.append(f"{where}: job '{name}' has a job-level `if` above `upload` and `image`; put it on its steps")
+    if needs_of(jobs["page"]) != ["upload"]:
+        problems.append(f"{where}: job 'page', which fails a release whose page is missing, must need exactly `upload`")
     summed, attested = downloads(jobs["checksums"]), downloads(jobs["attest"])
     for selector in sorted(PYTHON_FILES - summed):
         problems.append(f"{where}: job 'checksums' does not download `{selector}`, so SHA256SUMS cannot list the Python files on the release page")
@@ -458,6 +515,8 @@ def release_page_problems(doc):
         problems.append(f"{where}: job 'attest' does not upload `{PAGE_ARTIFACT}`, the page `upload` attaches")
     if downloads(jobs["upload"]) != {PAGE_ARTIFACT}:
         problems.append(f"{where}: job 'upload' downloads {sorted(downloads(jobs['upload']))}, not only `{PAGE_ARTIFACT}`, so it could attach a file nothing attested")
+    if publish_doc is not None:
+        problems += release_constants(jobs, (publish_doc or {}).get("jobs") or {})
     return problems
 
 
@@ -550,7 +609,7 @@ def main():
                 if isinstance(u, str) and LOCAL_USE.fullmatch(u))
     print(f"local references: {local} uses of this repository's own actions and workflows")
 
-    errors += release_page_problems(workflows.get(RELEASE_WORKFLOW))
+    errors += release_page_problems(workflows.get(RELEASE_WORKFLOW), workflows.get("publish.yml"))
     print(f"release page: {RELEASE_WORKFLOW}'s checksums, attest and upload jobs describe the same files")
 
     for error in errors:

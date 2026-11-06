@@ -60,7 +60,9 @@ Every `vX.Y.Z` release:
   `gh attestation verify <file> -R DrunkOnJava/rvt-rs` also reads from
   GitHub). Verifying `SHA256SUMS` that way and then running
   `sha256sum -c --ignore-missing SHA256SUMS` checks every file on the page
-  but the bundle (#1466). The wheels on PyPI also carry PEP 740 attestations
+  but itself and the bundle (#1466); `--source-ref refs/tags/vX.Y.Z` on
+  `gh attestation verify` keeps a manual run on a branch from passing for
+  the tag. The wheels on PyPI also carry PEP 740 attestations
   from trusted publishing.
 - Publishes the `rvt` crate to [crates.io](https://crates.io/crates/rvt),
   then, once the repository variable `PUBLISH_RVT_RS_MCP` is `true` (step 8),
@@ -236,9 +238,29 @@ project treats a silent skipped step the same as an untested change.
     when `publish.yml` calls the workflow with `upload: true`), but the
     attestation is real: it is signed for that run's ref and files and stays
     in the public Sigstore log. Download the `release-page` artifact and run
-    `sha256sum -c SHA256SUMS` and `gh attestation verify <file> -R DrunkOnJava/rvt-rs`
-    on a wheel, the sdist and `SHA256SUMS`. Run it again after any change to
-    `release-binaries.yml`'s checksum, attestation or upload jobs.
+    `sha256sum -c SHA256SUMS` and `gh attestation verify <file> -R DrunkOnJava/rvt-rs
+    --source-ref refs/heads/<ref>` on a wheel, the sdist and `SHA256SUMS`. Run it
+    again after any change to `release-binaries.yml`'s checksum, attestation or
+    upload jobs. What it cannot reach is the tag run's own conditions (the
+    seven wheels, `inputs.upload`, `upload` and `page`): a dispatch sets none of
+    them, and `tools/ci/check-workflows.py` guards their shape.
+
+    **If the release page is missing files or their attestation,** it shows
+    only on the tag, after crates.io, PyPI and ghcr.io have shipped, and goes
+    red in the run's last job, `Check the release page`. A re-run runs the
+    workflow as tagged, so it cannot carry a fix, and a tag cannot move.
+    If `attest` passed and `upload` failed or was skipped, the signed page is
+    the run's `release-page` artifact (kept for 7 days):
+    `gh run download <run id> -n release-page -D dist`, check it with
+    `(cd dist && sha256sum -c SHA256SUMS)`, then
+    `gh release create vX.Y.Z --verify-tag --title vX.Y.Z --generate-notes` if
+    the release does not exist and
+    `gh release upload vX.Y.Z --clobber dist/*`. If `checksums` or `attest`
+    failed there is no signed page, and an attestation cannot be made after
+    the fact: fix the workflow on `main`, rehearse it, and ship the next patch
+    version. The run's `rvt-rs-*`, `wheel-*` and `sdist` artifacts can be
+    attached to the broken release by hand meanwhile, with a line on its page
+    saying that this release carries no `SHA256SUMS` or attestation.
 
     **When the preflight refuses a tag,** it names every problem and nothing
     was built or published. A tag cannot be moved, so a problem in the tagged
@@ -432,7 +454,11 @@ aspirational state. Update this section when you wire up more of it.
   Intel macOS build is cross-compiled on an arm64 runner and run there under
   Rosetta. It also runs weekly and on changes to itself, without
   uploading anything, and uploads only when the publish workflow calls
-  it for a tag.
+  it for a tag. For a tag it also checksums and attests the release
+  page: the archives, the seven wheels and the sdist the publish run
+  built, and `SHA256SUMS`; its `python` dispatch input rehearses that
+  with one wheel and the sdist, and a final `page` job fails a release
+  whose page is not on it (step 10).
 - **Dependabot** (`.github/dependabot.yml`): see
   [`docs/maintaining.md`](docs/maintaining.md#security-and-automation-settings).
 - **TestPyPI:** no dry run has published to TestPyPI yet (task `Q-13`
