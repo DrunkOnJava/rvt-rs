@@ -238,6 +238,12 @@ pub struct IfcModel {
     /// `exported.wall_end_reads_unmarked`.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub wall_end_reads_unmarked: std::collections::BTreeMap<String, usize>,
+    /// The ends of walls with an edited elevation profile that go on past it, by
+    /// how the line of a sloped end, carried on to the wall's end, stands
+    /// against the top of the wall's box, and the level cut-outs carried
+    /// (#1473, RE-358). Counted in `exported.wall_profile_height_checks`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub wall_profile_height_checks: std::collections::BTreeMap<String, usize>,
 }
 
 /// A layered element's layers across its thickness (RE-53).
@@ -903,6 +909,16 @@ pub struct ExportedModelDiagnostics {
     /// and the refusals of `wall_end_refusals` that are not marked.
     #[serde(default)]
     pub wall_end_reads_unmarked: std::collections::BTreeMap<String, usize>,
+    /// The ends of exported walls with an edited elevation profile that go on
+    /// past it, by key (#1473, RE-358): `<carried|kept>_sloped_<low|high>_<rising|falling|level>_<equal|below|above>`
+    /// for a sloped end, by whether the end was carried, which end of the
+    /// profile it is, whether the line rises or falls towards the wall's end,
+    /// and how the line's height there stands against the top of the wall's
+    /// box (equal within 0.001 ft, the box above it, the box below it), and
+    /// `carried_level_<low|high>` for a level cut-out carried. A measurement:
+    /// nothing is carried or kept by it.
+    #[serde(default)]
+    pub wall_profile_height_checks: std::collections::BTreeMap<String, usize>,
     /// The further pieces of an element of separate loops that the STEP
     /// writer folds into the body of the element that owns them instead of
     /// writing each as an element (#823, #1424), by IFC entity. They are the
@@ -1149,6 +1165,7 @@ impl Exporter for PlaceholderExporter {
             filler_sizes: Default::default(),
             wall_cut_openings_left_out: Default::default(),
             wall_end_reads_unmarked: Default::default(),
+            wall_profile_height_checks: Default::default(),
         })
     }
 }
@@ -1659,6 +1676,15 @@ fn export_rvt_doc_reporting(
         }
     }
 
+    let mut wall_profile_height_checks = std::collections::BTreeMap::<String, usize>::new();
+    for property in record_handoffs.values().flatten() {
+        if let (export_content::WALL_PROFILE_CHECK_PROPERTY, entities::PropertyValue::Text(key)) =
+            (property.name.as_str(), &property.value)
+        {
+            *wall_profile_height_checks.entry(key.clone()).or_insert(0) += 1;
+        }
+    }
+
     Ok(IfcModel {
         project_name,
         description,
@@ -1684,6 +1710,7 @@ fn export_rvt_doc_reporting(
         filler_sizes,
         wall_cut_openings_left_out,
         wall_end_reads_unmarked,
+        wall_profile_height_checks,
     })
 }
 
@@ -4977,6 +5004,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         spaces_without_kind,
         wall_cut_openings_left_out: model.wall_cut_openings_left_out.clone(),
         wall_end_reads_unmarked: model.wall_end_reads_unmarked.clone(),
+        wall_profile_height_checks: model.wall_profile_height_checks.clone(),
         body_pieces_folded,
     }
 }

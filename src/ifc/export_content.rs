@@ -1748,7 +1748,7 @@ pub fn append_typed_production_elements(
     // #1473: the cut-out of an edited elevation profile goes on, a line along
     // its slope and a notch straight out, to the end of a wall that goes on past
     // the profile. After the ends, so that the wall has its final extent.
-    wall_profile::extend_profile_stubs(entities, &pending_profiles);
+    wall_profile::extend_profile_stubs(entities, &pending_profiles, &mut out.record_handoffs);
 
     // RE-270: the side areas and volumes of a wall joined to floors that
     // leave it as its record's box. It runs after the pass above, on purpose:
@@ -4679,6 +4679,14 @@ pub const WALL_END_ORDER_DEPENDENT_PROPERTY: &str = "EndOrderDependent";
 /// past those walls, so that the wall carries no `BodyEndRefusal`: counted in
 /// `exported.wall_end_reads_unmarked` (#1410, RE-348).
 pub const WALL_END_NOT_MARKED_PROPERTY: &str = "EndNotMarked";
+
+/// Hand-off property of a wall (see [`TypedProductionAppend::record_handoffs`],
+/// not written in the file) that names how the line of a sloped end of its
+/// elevation profile, carried on to the wall's end, stands against the top of
+/// the wall's box, or that a level cut-out was carried: counted in
+/// `exported.wall_profile_height_checks`, a measurement and nothing the rule
+/// decides by (#1473, RE-358).
+pub const WALL_PROFILE_CHECK_PROPERTY: &str = "ProfileStubHeightCheck";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how the
 /// cut-out of its edited elevation profile was carried on where the wall goes

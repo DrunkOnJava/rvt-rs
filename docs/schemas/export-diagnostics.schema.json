@@ -664,6 +664,14 @@
           },
           "description": "Of the exported walls with an edited elevation profile that go on past it and keep, past it, what the profile's opening gives them at an end, why, by the RvtElementRecordGeometry.ProfileStubRefusal of each (RE-358), the first reason of the wall only: profile_cut_not_read_at_the_wall_end, profile_level_cut_between_two_lines, profile_level_cut_spans_the_wall, profile_stub_longer_than_the_wall_is_thick and profile_slope_leaves_the_cut. Empty when no wall keeps an end so."
         },
+        "wall_profile_height_checks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "A measurement of RE-358 that nothing is carried or kept by: the ends of exported walls with an edited elevation profile that go on past it, by <carried|kept>_sloped_<low|high>_<rising|falling|level>_<equal|below|above> for a sloped end (whether the end was carried, which end of the profile, whether the line rises or falls towards the wall's end, and how the line's height there stands against the top of the wall's record box) and carried_level_<low|high> for a level cut-out carried. Empty when no wall goes on past its profile."
+        },
         "resolved_outline_spaces": {
           "type": "integer",
           "minimum": 0,

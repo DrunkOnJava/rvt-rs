@@ -47,15 +47,20 @@
 use std::f64::consts::FRAC_PI_4;
 
 use super::{
-    ELEMENT_RECORD_PROPERTY_SET, WALL_PROFILE_REFUSAL_PROPERTY, WALL_PROFILE_SOURCE_PROPERTY,
+    ELEMENT_RECORD_PROPERTY_SET, WALL_PROFILE_CHECK_PROPERTY, WALL_PROFILE_REFUSAL_PROPERTY,
+    WALL_PROFILE_SOURCE_PROPERTY,
 };
 use crate::ifc::entities::{IfcEntity, Property, PropertyValue};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 /// How far a wall must go on past its profile for a stretch to be one, how
 /// near a vertex must lie to the profile's end to be on it, and how far a line
 /// must stay from an edge to be off it, feet.
 const TOLERANCE_FEET: f64 = 1e-3;
+
+/// How far the line's height at a wall's end may lie from the top of the
+/// wall's box to be the box's top, feet.
+const HEIGHT_TOLERANCE_FEET: f64 = 1e-3;
 
 /// The opening does not reach the end of the profile with one vertical edge
 /// whose ends are a line's and a rectangle's, or a level cut-out's two lines.
@@ -99,6 +104,44 @@ enum Kind {
 
 /// An opening's outline carried on, and as what.
 type Carried = (Vec<(f64, f64)>, Kind);
+
+/// Where the line of a sloped end, carried on to the wall's end, stands against
+/// the top of the wall's box: its slope per foot out towards the end, and its
+/// height at the wall's end less the box's top. The box holds the wall's
+/// highest point, so where the line rises towards the end and is that point
+/// the gap is nil; where it falls, the box's top is the wall's own top
+/// elsewhere and the gap says nothing of the stretch. A measurement only: no
+/// end is carried or refused by it (#1473).
+struct Check {
+    slope: f64,
+    gap: f64,
+}
+
+/// The key a sloped end's [`Check`] is counted under: whether the end was
+/// carried, its side, whether the line rises or falls towards the wall's end,
+/// and how the line's height there stands against the box's top.
+fn check_key(carried: bool, side: Side, check: &Check) -> String {
+    let state = if carried { "carried" } else { "kept" };
+    let side = match side {
+        Side::Low => "low",
+        Side::High => "high",
+    };
+    let direction = if check.slope > 1e-6 {
+        "rising"
+    } else if check.slope < -1e-6 {
+        "falling"
+    } else {
+        "level"
+    };
+    let gap = if check.gap.abs() <= HEIGHT_TOLERANCE_FEET {
+        "equal"
+    } else if check.gap < 0.0 {
+        "below"
+    } else {
+        "above"
+    };
+    format!("{state}_sloped_{side}_{direction}_{gap}")
+}
 
 /// The extrusion of a wall and where it stands, copied from its entity.
 struct Frame {
@@ -174,7 +217,11 @@ fn source_value(sides: &[Side], kinds: &[Kind]) -> Option<String> {
 
 /// Carry the cut-out of each wall's profile on to the wall's end (see the
 /// module documentation).
-pub(super) fn extend_profile_stubs(entities: &mut [IfcEntity], pending: &[Pending]) {
+pub(super) fn extend_profile_stubs(
+    entities: &mut [IfcEntity],
+    pending: &[Pending],
+    handoffs: &mut BTreeMap<usize, Vec<Property>>,
+) {
     if pending.is_empty() {
         return;
     }
@@ -221,14 +268,31 @@ pub(super) fn extend_profile_stubs(entities: &mut [IfcEntity], pending: &[Pendin
                 (Side::Low, low, -1.0, low + half),
                 (Side::High, high, 1.0, half - high),
             ] {
-                match extended(
+                let mut check = None;
+                let read = extended_with(
                     outline_feet.as_slice(),
                     edge,
                     direction,
                     reach,
                     frame.height,
                     *thickness_feet,
-                ) {
+                    &mut check,
+                );
+                let key = match (&read, &check) {
+                    (Ok(Some((_, Kind::Level))), _) => Some(format!(
+                        "carried_level_{}",
+                        if side == Side::Low { "low" } else { "high" }
+                    )),
+                    (_, Some(check)) => Some(check_key(matches!(read, Ok(Some(_))), side, check)),
+                    _ => None,
+                };
+                if let Some(key) = key {
+                    handoffs.entry(wall.index).or_default().push(Property {
+                        name: WALL_PROFILE_CHECK_PROPERTY.into(),
+                        value: PropertyValue::Text(key),
+                    });
+                }
+                match read {
                     Ok(Some((outline, kind))) => {
                         *outline_feet = outline;
                         if !sides.contains(&side) {
@@ -259,14 +323,16 @@ pub(super) fn extend_profile_stubs(entities: &mut [IfcEntity], pending: &[Pendin
 /// `edge` is the end of the profile along the outline's `u`, `direction` is 1
 /// when the wall goes on towards greater `u` and -1 towards lesser, and
 /// `height` and `thickness` are the wall's. `Ok(None)` where nothing is to
-/// change, `Err` with the reason where the end is not read.
-fn extended(
+/// change, `Err` with the reason where the end is not read. `check` is set
+/// where a sloped end was read, whatever follows.
+fn extended_with(
     outline: &[(f64, f64)],
     edge: f64,
     direction: f64,
     reach: f64,
     height: f64,
     thickness: f64,
+    check: &mut Option<Check>,
 ) -> Result<Option<Carried>, &'static str> {
     if reach <= TOLERANCE_FEET {
         return Ok(None);
@@ -334,10 +400,16 @@ fn extended(
     } else {
         (v_end - run_before.1) / -out(run_before)
     };
+    let v_new = v_end + slope * reach;
+    if kind == Kind::Sloped {
+        *check = Some(Check {
+            slope,
+            gap: v_new - height,
+        });
+    }
     if reach > thickness + TOLERANCE_FEET {
         return Err(STUB_LONGER_THAN_THE_WALL_IS_THICK);
     }
-    let v_new = v_end + slope * reach;
     let cut_above = v_corner > v_end;
     if (v_corner - v_end).abs() <= TOLERANCE_FEET
         || (v_corner - v_new).abs() <= TOLERANCE_FEET
@@ -383,7 +455,54 @@ mod tests {
         direction: f64,
         reach: f64,
     ) -> Result<Option<Carried>, &'static str> {
-        extended(outline, edge, direction, reach, HEIGHT, THICKNESS)
+        extended_with(
+            outline, edge, direction, reach, HEIGHT, THICKNESS, &mut None,
+        )
+    }
+
+    fn checked(outline: &[(f64, f64)], edge: f64, direction: f64, reach: f64) -> Option<Check> {
+        let mut check = None;
+        let _ = extended_with(
+            outline, edge, direction, reach, HEIGHT, THICKNESS, &mut check,
+        );
+        check
+    }
+
+    #[test]
+    fn a_line_rising_to_the_top_of_the_box_has_no_gap() {
+        // 2.0 + 0.5 x 0.4 = 2.2 at the wall's end, and the box is 2.2 high.
+        let outline = [(4.0, 3.0), (0.0, 3.0), (0.0, 0.0), (4.0, 2.0)];
+        let mut check = None;
+        let _ = extended_with(&outline, 4.0, 1.0, 0.4, 2.2, THICKNESS, &mut check);
+        let Some(check) = check else {
+            panic!("the sloped end was not checked");
+        };
+        assert!(check.gap.abs() < 1e-9);
+        assert_eq!(
+            check_key(true, Side::High, &check),
+            "carried_sloped_high_rising_equal"
+        );
+    }
+
+    #[test]
+    fn a_line_falling_to_the_end_stands_below_the_box() {
+        let outline = [(4.0, 3.3), (0.0, 3.3), (4.0, 2.0)];
+        let Some(check) = checked(&outline, 4.0, 1.0, 0.4) else {
+            panic!("the sloped end was not checked");
+        };
+        assert!(check.gap < -1.0);
+        assert_eq!(
+            check_key(false, Side::Low, &check),
+            "kept_sloped_low_falling_below"
+        );
+    }
+
+    #[test]
+    fn a_level_end_and_an_unread_end_are_not_checked() {
+        let notch = [(4.0, 0.0), (4.0, 1.6), (3.0, 1.6), (3.0, 0.0)];
+        assert!(checked(&notch, 4.0, 1.0, 0.5).is_none());
+        let one_vertex = [(0.0, 3.3), (0.0, 1.0), (4.0, 2.5)];
+        assert!(checked(&one_vertex, 4.0, 1.0, 0.4).is_none());
     }
 
     #[test]
