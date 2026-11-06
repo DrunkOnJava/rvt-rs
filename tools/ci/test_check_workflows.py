@@ -557,6 +557,20 @@ class ReleasePage(unittest.TestCase):
         for steps in ([download("release-page"), download("*", "pattern")], [download("*", "pattern")], []):
             self.assertTrue(any("could attach a file nothing attested" in p for p in self.problems(upload=steps)))
 
+    def test_a_job_level_if_above_the_publishing_jobs_fails(self):
+        for name in ("build", "python", "checksums"):
+            doc = release_workflow()
+            doc["jobs"].setdefault(name, {"steps": []})["if"] = "inputs.python"
+            problems = cw.release_page_problems(doc)
+            self.assertEqual(len([p for p in problems if "job-level `if`" in p]), 1, name)
+
+    def test_an_if_on_a_step_or_on_a_publishing_job_is_fine(self):
+        doc = release_workflow()
+        doc["jobs"]["python"] = {"steps": [{"if": "inputs.python", "run": "true"}]}
+        doc["jobs"]["attest"]["if"] = GATE
+        doc["jobs"]["upload"]["if"] = "inputs.upload"
+        self.assertEqual(cw.release_page_problems(doc), [])
+
     def test_a_workflow_missing_a_job_fails_rather_than_crashing(self):
         for doc in (None, {}, {"jobs": {"checksums": {"steps": []}}}):
             self.assertEqual(len(cw.release_page_problems(doc)), 1)

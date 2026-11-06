@@ -31,7 +31,8 @@ Exits 1 with an `::error` line for each of:
   SHA256SUMS, attests `dist/*` and hands the page to `upload` as `release-page`; and `upload`
   attaches that artifact and nothing else. A change to one that leaves the others behind would
   put a file on the page that SHA256SUMS or the attestation lacks, which only a tag push would
-  find.
+  find. `build`, `python` and `checksums` carry no job-level `if`: a skipped job skips every job
+  that needs it, however far down (run 42134335447 skipped `image` behind a skipped `python`).
 
 PENDING lists the jobs another change is still editing, if any. They are reported as warnings,
 so a job added anywhere else without a timeout still fails.
@@ -410,6 +411,8 @@ def prose_msrv_problems(root, texts, mcp=None):
 RELEASE_WORKFLOW = "release-binaries.yml"
 PYTHON_FILES = {"wheel-*", "sdist"}
 PAGE_ARTIFACT = "release-page"
+# The jobs above the ones that publish. Skipping one of them skips `image`, `attest` and `upload` too.
+UNSKIPPABLE = {"build", "python", "checksums"}
 
 
 def used(job, action, key):
@@ -431,6 +434,12 @@ def release_page_problems(doc):
     if gone:
         return [f"{where}: no job named {', '.join(gone)}, which the release page's checks read"]
     problems = []
+    for name in sorted(UNSKIPPABLE & set(jobs)):
+        if "if" in jobs[name]:
+            problems.append(
+                f"{where}: job '{name}' has a job-level `if`; a skipped job skips every job that needs it, however far down,"
+                " so `image`, `attest` and `upload` would be skipped in the run that skips it (put the `if` on its steps)"
+            )
     summed, attested = downloads(jobs["checksums"]), downloads(jobs["attest"])
     for selector in sorted(PYTHON_FILES - summed):
         problems.append(f"{where}: job 'checksums' does not download `{selector}`, so SHA256SUMS cannot list the Python files on the release page")

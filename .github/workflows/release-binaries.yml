@@ -257,20 +257,30 @@ jobs:
   # `build-wheels` and `build-sdist` jobs run and uploaded under the names those
   # jobs use (`wheel-linux-x86_64`, `sdist`), so the downloads below are the
   # ones a release makes. A release gets its seven wheels and its sdist from
-  # those jobs of the same run instead, and never runs this job.
+  # those jobs of the same run instead, and every step here is skipped.
+  #
+  # The steps are skipped, not the job, on purpose. A skipped job skips every
+  # job that needs it, however far down, unless that job's own `if` repeats a
+  # status check: with `if: inputs.python` here, `checksums` (which would then
+  # need `!failure()` to run) kept running, and `image`, `attest` and `upload`
+  # were skipped behind it in a pull request run (run 42134335447), which a
+  # release would have done too, publishing nothing.
+  # tools/ci/check-workflows.py fails a job-level `if` on any job above `attest`.
   python:
-    name: Python wheel and sdist (rehearsal)
-    if: inputs.python
+    name: Python wheel and sdist (rehearsal only)
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: inputs.python
         with:
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: inputs.python
         with:
           python-version: "3.12"
       - name: Build wheel via maturin
+        if: inputs.python
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           command: build
@@ -278,17 +288,20 @@ jobs:
           manylinux: "2014"
           args: --release --out dist --manifest-path rvt-py/Cargo.toml
       - name: Upload wheel artifact
+        if: inputs.python
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wheel-linux-x86_64
           path: dist/*.whl
           if-no-files-found: error
       - name: Build sdist via maturin
+        if: inputs.python
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           command: sdist
           args: --out dist
       - name: Upload sdist artifact
+        if: inputs.python
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sdist
@@ -299,12 +312,10 @@ jobs:
   # bundle: the archives, and in a release (or a `python` rehearsal) the wheels
   # and the sdist (#1466). It hashes everything in `dist`, which holds only what
   # the downloads below put there, so a file cannot be on the page without a
-  # line here. `python` is skipped in every run but a rehearsal, and a skipped
-  # job is not a failed one.
+  # line here.
   checksums:
     name: SHA256SUMS
     needs: [build, python]
-    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
