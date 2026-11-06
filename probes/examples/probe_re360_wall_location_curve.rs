@@ -15,8 +15,10 @@
 //! two-line records of `rac_advanced`'s 2027 save hold a second `GLine` owned
 //! by `WallRunTimeData.m_prevLocLine`; `m_pCrv` names exactly one `GLine` in
 //! all 180 records of every save. The same member is in 5 `rac_basic` records
-//! and 2 Snowdon Towers Architectural records of the 2024 to 2026 saves, which
-//! no rule that reads the 2027 walls can leave alone.
+//! and 2 Snowdon Towers Architectural records of the 2024 to 2026 saves, so a
+//! rule that reads the 2027 walls reads those too: `native_walls::record_line`
+//! reads a record of two curves by `m_pCrv` when the other is only a
+//! `m_prevLocLine` line, and the `native` line below is what it reads.
 //!
 //! Output, one JSON object per line:
 //!
