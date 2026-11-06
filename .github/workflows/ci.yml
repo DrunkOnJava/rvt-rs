@@ -84,6 +84,8 @@ env:
 jobs:
   fmt:
     name: cargo fmt
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -98,6 +100,8 @@ jobs:
 
   clippy:
     name: cargo clippy
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -146,6 +150,8 @@ jobs:
       - run: cargo clippy -p rvt-probes --examples --no-deps -- -D warnings
 
   test:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     # Unit tests are banned (maintainer directive, 2026-09-23), except a few
     # failure-first tests of a pure helper with no file, network, process or
     # clock I/O (the `--lib` step below). Apart from those, this job builds
@@ -360,7 +366,8 @@ jobs:
   # wrap panics there instead of passing.
   i686-overflow:
     name: 32-bit overflow checks (i686)
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -438,6 +445,8 @@ jobs:
     # and runs lightweight health + known-count checks. Local runs skip
     # when RVT_PROJECT_CORPUS_DIR is unset.
     name: Corpus health (tier 2 — external)
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     # Median 5.6 minutes, longest 10.2. The BIM4LCA and R2025 fetches end
     # as NOT MEASURED, a warning, when their host is down, and a host that drops
@@ -611,6 +620,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
   corpus-mcp:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     # The MCP server's end-to-end test on Einhoven, a job of its own beside
     # Corpus health rather than a step after its tier-two gates: run after
     # them it made Corpus health, already the slowest job on every pull
@@ -675,7 +686,8 @@ jobs:
     # from silently regressing while semantic editing remains out of
     # scope.
     name: Writer patch corpus
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -742,7 +754,8 @@ jobs:
     # exports are small (24 instances each); the real projects carry most of
     # what this job validates.
     name: IfcOpenShell validates exports
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     # Longest 22.9 minutes (run 42034472131, every step slow), median 4.0:
     # 3 times the longest. The EXPRESS rules step has a 25 minute limit of its
@@ -1156,6 +1169,8 @@ jobs:
 
   doc:
     name: cargo doc
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     # Longest 2.9 minutes.
     timeout-minutes: 30
@@ -1190,7 +1205,8 @@ jobs:
   # 2025-11-22, so its nightly is pinned near its release.
   semver:
     name: semver checks
-    if: github.event_name == 'pull_request' && inputs.fast != true
+    needs: changes
+    if: github.event_name == 'pull_request' && inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -1242,7 +1258,8 @@ jobs:
   # high-value, low-noise version we can enforce on every push.
   bench-build:
     name: cargo bench --no-run
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -1274,7 +1291,8 @@ jobs:
   # properly on docs.rs before the release cut.
   docs-rs-preview:
     name: docs.rs build preview
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -1310,7 +1328,8 @@ jobs:
   # after merge, twice (#236 -> #259, #934 -> #965).
   fuzz-check:
     name: fuzz targets build
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -1331,7 +1350,8 @@ jobs:
 
   python-wheel:
     name: Python wheel / ${{ matrix.os }}
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ${{ matrix.os }}
     # Longest 11.6 minutes (Windows), 8.7 macOS, 7.2 Ubuntu, in 100 runs on main,
     # before the smoke wheel was built without LTO; the limit is kept.
@@ -1500,7 +1520,8 @@ jobs:
   # project grows.
   deny:
     name: cargo deny
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -1525,7 +1546,8 @@ jobs:
   # fresh advisories the moment they land.
   audit:
     name: cargo audit
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -1543,7 +1565,8 @@ jobs:
 
   viewer-dependencies:
     name: viewer dependency audit
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     # The audit step retries a down advisory endpoint four times, sleeping
     # 20 to 80 s between tries.
