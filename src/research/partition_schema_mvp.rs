@@ -220,7 +220,7 @@ pub fn recover_partition_schema_mvp(
         resolve_base_at_level(&level_elevations, &mut record_backed);
         resolve_remaining_levels(&level_elevations, &mut record_backed);
         // --- Beams along their location lines, the rotation first (RE-276, RE-49,
-        // RE-348). A beam a named column trims keeps its cut box (RE-122): its
+        // RE-362). A beam a named column trims keeps its cut box (RE-122): its
         // line leaves that box, so none is attached. ---
         if crate::partition_beam_axes::beam_axis_read_on(revit_version) {
             attach_beam_rotations(rf, &mut out.products);
@@ -441,7 +441,7 @@ pub fn recover_partition_schema_mvp(
     attach_connector_pairs(rf, revit_version, &mut out.products);
     // --- Roof outlines from their sketch lines (RE-50) ---
     attach_roof_profiles(rf, revit_version, &mut out.products);
-    // --- Shaft openings cut the outlines within their height (RE-99) ---
+    // --- Shaft openings cut the outlines within their height (RE-99; 2024 only, RE-345) ---
     attach_shaft_voids(rf, revit_version, [&mut out.slabs, &mut out.products]);
 
     // --- The Revit class each record names at +0x4a (RE-76, #154) ---
@@ -850,6 +850,14 @@ pub fn recover_partition_schema_mvp(
         [&mut out.doors, &mut out.windows],
         &walls,
         &plain_walls,
+    );
+    // --- The X axis of the placement Revit gives a door or window set in a
+    // plain wall (RE-347), after the flips and the host are final ---
+    attach_opening_placement_axes(
+        rf,
+        revit_version,
+        &out.walls,
+        [&mut out.doors, &mut out.windows],
     );
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);

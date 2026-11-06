@@ -48,6 +48,13 @@ pub struct GraphicsSelection {
 /// Select reachable Geometry/GPolyMesh carriers from object zero. Pointer edges
 /// are validated against their serialized source offset and token; token-only
 /// lookup is insufficient for deferred anonymous objects and backreferences.
+///
+/// This and the other `select_graphics*` entry points but
+/// [`select_graphics_pre2023_at_detail`] refuse an `InstanceInfo` with no
+/// `m_GRepId`, as they did before RE-342 (#1436 let every route read it as the
+/// default representation; RE-342 section 9.8 narrowed that to the pre-2023
+/// entry point), and a set `m_bHasScale`. This is research API, outside the
+/// semver promise.
 pub fn select_graphics(graph: &ObjectGraph) -> GraphicsSelection {
     select_graphics_with_resolver(graph, &|_| None)
 }
@@ -65,7 +72,33 @@ pub fn select_graphics_with_resolver_at_detail<'a>(
     resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
     detail_level: i64,
 ) -> GraphicsSelection {
-    select_graphics_impl(graph, resolver, detail_level, false, false)
+    select_graphics_impl(graph, resolver, detail_level, false, false, false)
+}
+/// [`select_graphics_with_resolver_at_detail`] for the graphics of a file of
+/// Revit 2015 to 2022, which no export reads: an `InstanceInfo` with no
+/// `m_GRepId` (exactly `m_Trf`, `m_symbolId` and `m_cda`) is read there as the
+/// default representation, and a set `m_bHasScale` on such an `InstanceInfo`
+/// with a rotation matrix is walked through (RE-342). Every other entry point
+/// refuses both, whatever the schema of the `InstanceInfo`, and the caller
+/// decides by the file's release which one to call. `include_hidden` and
+/// `include_filtered` are as in
+/// [`select_graphics_including_hidden_at_detail`] and
+/// [`select_graphics_including_filtered_at_detail`].
+pub fn select_graphics_pre2023_at_detail<'a>(
+    graph: &'a ObjectGraph,
+    resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
+    detail_level: i64,
+    include_hidden: bool,
+    include_filtered: bool,
+) -> GraphicsSelection {
+    select_graphics_impl(
+        graph,
+        resolver,
+        detail_level,
+        include_hidden,
+        include_filtered,
+        true,
+    )
 }
 /// [`select_graphics_with_resolver_at_detail`], also walking the branches
 /// whose visibility flags hide them, each selected carrier marked
@@ -76,7 +109,7 @@ pub fn select_graphics_including_hidden_at_detail<'a>(
     resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
     detail_level: i64,
 ) -> GraphicsSelection {
-    select_graphics_impl(graph, resolver, detail_level, true, false)
+    select_graphics_impl(graph, resolver, detail_level, true, false, false)
 }
 /// [`select_graphics_including_hidden_at_detail`], also walking the children
 /// of a filter whose conditions reject the context or are not read, each
@@ -87,7 +120,7 @@ pub fn select_graphics_including_filtered_at_detail<'a>(
     resolver: &dyn Fn(u64) -> Option<&'a ObjectGraph>,
     detail_level: i64,
 ) -> GraphicsSelection {
-    select_graphics_impl(graph, resolver, detail_level, true, true)
+    select_graphics_impl(graph, resolver, detail_level, true, true, false)
 }
 fn select_graphics_impl<'a>(
     graph: &'a ObjectGraph,
@@ -95,6 +128,7 @@ fn select_graphics_impl<'a>(
     detail_level: i64,
     include_hidden: bool,
     include_filtered: bool,
+    pre2023: bool,
 ) -> GraphicsSelection {
     let mut walk = Walker {
         graph,
@@ -109,6 +143,7 @@ fn select_graphics_impl<'a>(
         hidden_depth: 0,
         include_filtered,
         filtered_depth: 0,
+        pre2023,
     };
     if !(1..=3).contains(&detail_level) {
         walk.fail(0, "detail level must be1,2,or3");
@@ -160,6 +195,9 @@ struct Walker<'a, 'r> {
     hidden_depth: usize,
     include_filtered: bool,
     filtered_depth: usize,
+    /// Whether the graphics are a file of Revit 2015 to 2022's, the only ones
+    /// a set `m_bHasScale` is read in (RE-342).
+    pre2023: bool,
 }
 impl Walker<'_, '_> {
     fn fail(&mut self, index: usize, message: &str) {
@@ -368,7 +406,7 @@ impl Walker<'_, '_> {
                 }
                 let fields = &info_object.fields;
                 let _transform = read_transform(&fields["m_Trf"])?;
-                if !default_representation(fields)
+                if !default_representation(fields, self.pre2023)
                     || fields["m_cda"]["m_pDoc"]["pointer_token"].as_u64() != Some(1)
                     || !fields["m_cda"]["m_pDoc"]["class_tag"].is_null()
                 {
@@ -401,7 +439,12 @@ impl Walker<'_, '_> {
                 }
             }
             "GInstance" => {
-                if obj.fields["m_bHasScale"].as_bool() != Some(false) {
+                let has_scale = obj.fields["m_bHasScale"].as_bool();
+                if has_scale != Some(false)
+                    && !(self.pre2023
+                        && has_scale == Some(true)
+                        && self.unscaled_legacy_instance(index, obj))
+                {
                     return Err("scaled instance mode is not qualified".into());
                 }
                 if obj.fields["m_resolveSymInView"].as_bool() != Some(false) {
@@ -418,7 +461,7 @@ impl Walker<'_, '_> {
                 let embedded_pointer = &obj.fields["m_oEmbeddedSymbolGRep"];
                 if embedded_pointer["pointer_token"].as_u64() == Some(0) {
                     let info_fields = &self.graph.objects[info].fields;
-                    if !default_representation(info_fields)
+                    if !default_representation(info_fields, self.pre2023)
                         || info_fields["m_cda"]["m_pDoc"]["pointer_token"].as_u64() != Some(1)
                         || !info_fields["m_cda"]["m_pDoc"]["class_tag"].is_null()
                     {
@@ -462,6 +505,30 @@ impl Walker<'_, '_> {
         }
         Ok(())
     }
+    /// Whether a `GInstance` whose `m_bHasScale` is set names an
+    /// `InstanceInfo` of the older schema (no `m_GRepId`, the three fields
+    /// `default_representation` accepts) whose 3x3 matrix is a rotation, the
+    /// identity included (RE-342). What the flag means on that schema is not
+    /// read, so only a matrix that scales, shears and mirrors nothing passes:
+    /// the flag with a mirror or a scale, and the flag with the later
+    /// `InstanceInfo`, whose `m_GRepId` is present, stay refused. Asked only
+    /// on the pre-2023 route (`Walker::pre2023`): every other walk refuses a
+    /// set flag before it gets here, whatever the schema of the
+    /// `InstanceInfo`.
+    fn unscaled_legacy_instance(
+        &self,
+        index: usize,
+        obj: &crate::native_parameters::GraphObject,
+    ) -> bool {
+        let Ok(info) = self.target(index, &obj.fields["m_instanceInfo"]) else {
+            return false;
+        };
+        let info = &self.graph.objects[info];
+        info.class_name == "InstanceInfo"
+            && info.fields.get("m_GRepId").is_none()
+            && default_representation(&info.fields, self.pre2023)
+            && read_transform(&info.fields["m_Trf"]).is_ok_and(|t| rotation(&t))
+    }
     fn only_curves(&self, index: usize, seen: &mut HashSet<usize>) -> bool {
         if seen.len() >= 128 || !seen.insert(index) {
             return false;
@@ -491,22 +558,45 @@ fn current_graph_owner_matches(root: &crate::native_parameters::GraphObject, id:
 /// Whether an `InstanceInfo` names the default representation: `m_GRepId` is
 /// 0 on every file of Revit 2023 to 2027 measured. The classes of Revit 2015
 /// to 2022 declare no such field (`InstInfoBase` has `m_Trf` and `m_symbolId`,
-/// `InstanceInfo` `m_cda`, in all 30 sample projects), and an object that
-/// holds exactly those three is read as the default one (RE-342 compares
-/// those meshes with the same projects' 2023 copies); one that holds anything
-/// else is refused. The decoder drops a field flagged transient unread, so a
-/// missing key cannot say whether the class declares one: the release gate
-/// keeps those files out of every export.
-fn default_representation(info: &Value) -> bool {
+/// `InstanceInfo` `m_cda`, in all 30 sample projects), and on the pre-2023
+/// route (`pre2023`, the graphics of a file of Revit 2015 to 2022, which no
+/// export reads) an object that holds exactly those three is read as the
+/// default one (RE-342 compares those meshes with the same projects' 2023
+/// copies); one that holds anything else is refused. On every other route an
+/// `InstanceInfo` with no `m_GRepId` is refused, as it was before RE-342: the
+/// decoder drops a field flagged transient unread, so a missing key cannot say
+/// whether the class declares one, and nothing measured should rest on it.
+fn default_representation(info: &Value, pre2023: bool) -> bool {
     match info.get("m_GRepId") {
         Some(id) => id.as_u64() == Some(0),
-        None => info.as_object().is_some_and(|fields| {
-            fields.len() == 3
-                && fields.contains_key("m_Trf")
-                && fields.contains_key("m_symbolId")
-                && fields.contains_key("m_cda")
-        }),
+        None => {
+            pre2023
+                && info.as_object().is_some_and(|fields| {
+                    fields.len() == 3
+                        && fields.contains_key("m_Trf")
+                        && fields.contains_key("m_symbolId")
+                        && fields.contains_key("m_cda")
+                })
+        }
     }
+}
+/// Whether the 3x3 part of `m` is a rotation: orthonormal rows and a
+/// determinant of 1, no scale, shear or mirror, within the tolerance the
+/// instance transforms of the partition readers hold a rotation to
+/// ([`crate::partition_instance_transforms::ROTATION_TOLERANCE`], 1e-9): a
+/// scale of 1 + 1e-7 is not one.
+fn rotation(m: &GraphicsTransform) -> bool {
+    let tolerance = crate::partition_instance_transforms::ROTATION_TOLERANCE;
+    let orthonormal = (0..3).all(|a| {
+        (0..3).all(|b| {
+            let dot: f64 = (0..3).map(|k| m[a][k] * m[b][k]).sum();
+            (dot - f64::from(u8::from(a == b))).abs() <= tolerance
+        })
+    });
+    let determinant = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    orthonormal && (determinant - 1.0).abs() <= tolerance
 }
 fn graphics_visibility(flags: u64) -> u8 {
     let bits = flags & 0x1e0;
@@ -662,5 +752,141 @@ fn condition_at_detail(class: &str, v: &Value, detail_level: i64) -> Result<bool
         Some(4) => Ok(saved <= actual),
         Some(5) => Ok(saved < actual),
         _ => Err("unsupported integer condition comparison".into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GraphicsTransform, default_representation, rotation};
+    use serde_json::json;
+
+    fn matrix(m: [[f64; 3]; 3]) -> GraphicsTransform {
+        std::array::from_fn(|i| {
+            std::array::from_fn(|j| {
+                if i < 3 && j < 3 {
+                    m[i][j]
+                } else {
+                    f64::from(u8::from(i == j))
+                }
+            })
+        })
+    }
+
+    #[test]
+    fn a_mirror_is_not_a_rotation() {
+        assert!(!rotation(&matrix([
+            [1., 0., 0.],
+            [0., 1., 0.],
+            [0., 0., -1.]
+        ])));
+        assert!(!rotation(&matrix([
+            [0., 1., 0.],
+            [1., 0., 0.],
+            [0., 0., 1.]
+        ])));
+    }
+
+    #[test]
+    fn a_scale_or_a_shear_is_not_a_rotation() {
+        assert!(!rotation(&matrix([
+            [2., 0., 0.],
+            [0., 2., 0.],
+            [0., 0., 2.]
+        ])));
+        assert!(!rotation(&matrix([
+            [1., 1., 0.],
+            [0., 1., 0.],
+            [0., 0., 1.]
+        ])));
+    }
+
+    #[test]
+    fn a_scale_a_hair_off_one_is_not_a_rotation() {
+        assert!(!rotation(&matrix([
+            [1.0000001, 0., 0.],
+            [0., 1., 0.],
+            [0., 0., 1.]
+        ])));
+        assert!(!rotation(&matrix([
+            [1.0000001, 0., 0.],
+            [0., 1.0000001, 0.],
+            [0., 0., 1.0000001]
+        ])));
+    }
+
+    #[test]
+    fn a_rotation_off_by_less_than_the_tolerance_is_one() {
+        assert!(rotation(&matrix([
+            [1.0 + 1e-10, 0., 0.],
+            [0., 1., 0.],
+            [0., 0., 1.]
+        ])));
+        assert!(rotation(&matrix([
+            [1.0 - 1e-10, 0., 0.],
+            [0., 1. + 1e-10, 0.],
+            [0., 0., 1.]
+        ])));
+    }
+
+    #[test]
+    fn a_matrix_with_a_value_that_is_not_a_number_is_not_a_rotation() {
+        assert!(!rotation(&matrix([
+            [f64::NAN, 0., 0.],
+            [0., 1., 0.],
+            [0., 0., 1.]
+        ])));
+    }
+
+    #[test]
+    fn the_identity_and_a_turn_are_rotations() {
+        assert!(rotation(&matrix([
+            [1., 0., 0.],
+            [0., 1., 0.],
+            [0., 0., 1.]
+        ])));
+        assert!(rotation(&matrix([
+            [0., -1., 0.],
+            [1., 0., 0.],
+            [0., 0., 1.]
+        ])));
+        assert!(rotation(&matrix([
+            [0., 1., 0.],
+            [0., 0., 1.],
+            [1., 0., 0.]
+        ])));
+    }
+
+    #[test]
+    fn a_missing_representation_id_is_the_default_only_with_exactly_the_three_fields() {
+        let with = |extra: &[&str]| {
+            let mut info = json!({"m_Trf": {}, "m_symbolId": {}, "m_cda": {}});
+            for key in extra {
+                info[*key] = json!(0);
+            }
+            info
+        };
+        assert!(default_representation(&with(&[]), true));
+        assert!(!default_representation(&with(&["m_other"]), true));
+        assert!(!default_representation(
+            &json!({"m_Trf": {}, "m_cda": {}}),
+            true
+        ));
+        assert!(!default_representation(&json!(null), true));
+    }
+
+    #[test]
+    fn a_missing_representation_id_is_refused_off_the_pre_2023_route() {
+        let exact = json!({"m_Trf": {}, "m_symbolId": {}, "m_cda": {}});
+        assert!(default_representation(&exact, true));
+        assert!(!default_representation(&exact, false));
+    }
+
+    #[test]
+    fn a_representation_id_other_than_zero_is_not_the_default() {
+        for pre2023 in [false, true] {
+            assert!(default_representation(&json!({"m_GRepId": 0}), pre2023));
+            assert!(!default_representation(&json!({"m_GRepId": 1}), pre2023));
+            assert!(!default_representation(&json!({"m_GRepId": null}), pre2023));
+        }
     }
 }

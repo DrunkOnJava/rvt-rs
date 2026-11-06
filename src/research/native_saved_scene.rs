@@ -78,6 +78,10 @@ struct MeshRun<'a> {
     detail_level: i64,
     include_hidden: bool,
     include_filtered: bool,
+    /// Whether the file is of Revit 2015 to 2022, whose saved graphics no
+    /// export reads: only then are they meshed by
+    /// [`native_saved_mesh::graphics_pre2023`] (RE-342).
+    pre2023: bool,
     control: &'a WalkerControl,
     /// Owners meshed so far, counted under a lock so the reports stay in
     /// order across workers.
@@ -97,6 +101,13 @@ fn mesh_elements(
             .ok_or_else(|| anyhow::anyhow!("graphics owner {id} was not decoded"))?;
         let resolver = |id: u64| records.graph(id);
         let mut meshes = match &r.graph {
+            Some(g) if run.pre2023 => native_saved_mesh::graphics_pre2023(
+                g,
+                &resolver,
+                run.detail_level,
+                run.include_hidden || run.include_filtered,
+                run.include_filtered,
+            ),
             Some(g) if run.include_filtered => {
                 native_saved_mesh::graphics_including_filtered(g, &resolver, run.detail_level)
             }
@@ -281,6 +292,7 @@ fn extract_impl(
         detail_level,
         include_hidden,
         include_filtered,
+        pre2023: file.layout_release()? < 2023,
         control,
         done: &done,
         total,
@@ -444,6 +456,7 @@ pub fn extract_in_batches_with_control(
         detail_level,
         include_hidden: false,
         include_filtered: false,
+        pre2023: file.layout_release()? < 2023,
         control,
         done: &done,
         total,

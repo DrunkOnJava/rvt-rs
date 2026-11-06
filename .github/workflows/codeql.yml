@@ -4,6 +4,17 @@
 # TypeScript, and Python, and could not be pointed at Rust: the API offers no
 # `rust` language for default setup. This advanced setup replaces it. Every
 # language here builds with `build-mode: none`, so no compile step runs.
+#
+# A pull request is analysed once it is ready, not on every push of a draft:
+# that was 185 runs and 1,630 job-minutes in one day (#1457), Analyze (rust)
+# 6.9 minutes of each run. Landing still waits for it (arm.sh does not arm a
+# head with a pending check), so `ready_for_review` starts it on the head the
+# watcher marks ready, and a push to a ready pull request starts it again.
+# A draft's run has every job skipped. A pull request that
+# changes only documentation (nothing under these paths is a language
+# CodeQL analyses here) starts no run, so it has no CodeQL check to wait for
+# and no head analysis; `main` is still analysed on every push, so its
+# baseline stays current.
 
 name: CodeQL
 
@@ -12,6 +23,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # `ready_for_review` is not in the default set: without it, marking a
+    # draft ready would run nothing on its head.
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "reports/**"
+      - "changelog.d/**"
   schedule:
     # Weekly, as the default setup ran: Mondays at 05:41 UTC.
     - cron: "41 5 * * 1"
@@ -26,7 +45,10 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: ubuntu-24.04
+    # Longest 8.3 minutes (the Rust leg) in 15 runs, the other languages 1.5 or less.
+    timeout-minutes: 30
     permissions:
       contents: read
       actions: read

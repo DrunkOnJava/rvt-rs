@@ -14,12 +14,38 @@ name: Publish (crates.io + PyPI + release binaries)
 #   2. PyPI — the Python package index. Trusted-publisher OIDC
 #      (no secret needed after one-time account setup).
 #
+# Preflight (#1457) runs first and every other job waits for it, so a bad tag
+# fails in seconds, before any wheel builds. For a tag push it requires:
+#
+#   - the tag is named vX.Y.Z (or vX.Y.Z-prerelease) and is annotated, not
+#     lightweight, with a signature GitHub reports as verified for the tag
+#     object, which names this tag and the commit this run is for;
+#   - that commit is on main or on a hotfix/* branch;
+#   - every version file says the tag's version: Cargo.toml, rvt-py, rvt-mcp,
+#     rvt-wasm, the `=X.Y.Z` pins on rvt, viewer/package.json, CITATION.cff,
+#     both lock files, a CHANGELOG.md section, and pyproject.toml leaving the
+#     wheel's version to rvt-py/Cargo.toml (tools/ci/release_preflight.py);
+#   - `CI passed` succeeded on that commit. A running CI is waited for, up to
+#     80 minutes; a failed, cancelled or missing one stops the release, and
+#     so does a commit whose every file CI's push filter skips (docs and the
+#     like: CI never ran on it, and it could sit on a red commit). A
+#     tag cannot be moved or deleted, so a red tag is fixed in a new commit
+#     and a new version, or, for a flaky job, by re-running CI's failed jobs
+#     and then this run's failed jobs (RELEASE.md).
+#
+# A workflow_dispatch run has no tag: the tag, signature, branch and CI checks
+# say so and pass, and the version files must still agree with each other.
+#
 # Release publication runs only after wheel install, source install,
 # CLI sample, viewer load, and docs preview checks pass. Real PyPI
 # publication and the release binaries wait for crates.io publication, so
 # no channel ships a version crates.io lacks. No approval is asked for:
 # pushing a `v*` tag, which only a maintainer can create, is the release
 # decision.
+#
+# A run that failed part way can be re-run (re-run failed jobs): the
+# crates.io steps skip a version already there, and PyPI skips files already
+# uploaded from the second attempt on.
 #
 # Uses PyPI's Trusted Publisher feature (OIDC): no PYPI_API_TOKEN
 # secret is stored in the repo. PyPI trusts this specific workflow
@@ -64,18 +90,69 @@ on:
 permissions:
   contents: read
 
-# One release run per ref at a time, never cancelled: a second tag push or
-# dispatch waits rather than racing the first to the registries.
+# One release at a time across every tag, never cancelled: two tags pushed
+# together would otherwise run in parallel, and whichever image push finished
+# last would take ghcr's `latest`. GitHub keeps one running and one pending
+# run per group, and a newer run takes the pending one's place: a third tag
+# pushed while two are queued cancels the second, which then needs
+# `gh run rerun <id>` (cancel-in-progress: false protects only the running
+# one). A dispatch publishes nowhere but TestPyPI, so it has groups of its
+# own and can never displace a pending release.
 # No job restores a cache: what is released is built from nothing a pull
 # request's run could have written (zizmor cache-poisoning, C10).
 concurrency:
-  group: publish-${{ github.ref }}
+  group: ${{ github.event_name == 'push' && 'publish-release' || format('publish-dispatch-{0}', github.ref) }}
   cancel-in-progress: false
 
 jobs:
+  # What the header lists: refused in seconds, before a wheel builds, unless
+  # the tag, its signature, its branch, the version files and CI on the tagged
+  # commit are all right. The decisions are tools/ci/release_preflight.py's
+  # (failure-first tests beside it); waiting for CI is the same composite
+  # action Deploy viewer uses. The full history is fetched so the branch check
+  # can ask whether origin/main or an origin/hotfix/* branch holds the commit.
+  preflight:
+    name: Preflight (tag, signature, branch, versions, CI)
+    runs-on: ubuntu-24.04
+    # The CI wait is 80 minutes at most; a bad tag fails long before that.
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      checks: read
+    outputs:
+      version: ${{ steps.preflight.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Tag, signature, branch and version files
+        id: preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          python3 tools/ci/release_preflight.py check \
+            --event "$EVENT" --ref-type "$REF_TYPE" --ref-name "$REF_NAME" --sha "$SHA"
+      # A release is never tagged on a commit CI skipped: a docs-only commit
+      # after a red one would otherwise read as having nothing to wait for and
+      # ship the red commit's tree.
+      - name: Wait for CI on the tagged commit
+        if: ${{ github.event_name == 'push' }}
+        uses: $/.github/actions/wait-for-check
+        with:
+          sha: ${{ github.sha }}
+          docs-only-skips: "false"
+
   # Build release wheels on every target OS. Mirrors the python-wheel
-  # matrix in ci.yml so any regression that would fail a push-CI run
-  # also fails here, before we publish.
+  # platforms in ci.yml, so a regression that would fail a push-CI run
+  # on any of them also fails here, before we publish. ci.yml builds a
+  # smoke wheel without LTO; these are the wheels users get, at the
+  # release profile (fat LTO, one codegen unit), so a failure that only
+  # that profile shows is found here.
   #
   # One abi3 wheel per platform, the same platforms the CLI archives
   # cover plus musllinux. Linux wheels build inside the manylinux2014 /
@@ -85,7 +162,11 @@ jobs:
   # RHEL 9, Amazon Linux 2023 and Debian 11.
   build-wheels:
     name: Build wheel / ${{ matrix.name }}
+    needs: [preflight]
     runs-on: ${{ matrix.os }}
+    # A release job must not die on its limit: each is 5 or more times the longest of its last 9 runs.
+    # Windows leg longest 8.8 minutes.
+    timeout-minutes: 60
     strategy:
       fail-fast: true
       matrix:
@@ -94,9 +175,9 @@ jobs:
           - { name: linux-aarch64, os: ubuntu-24.04-arm, target: aarch64, manylinux: "2014" }
           - { name: musllinux-x86_64, os: ubuntu-24.04, target: x86_64, manylinux: musllinux_1_2 }
           - { name: musllinux-aarch64, os: ubuntu-24.04-arm, target: aarch64, manylinux: musllinux_1_2 }
-          - { name: macos-arm64, os: macos-latest, target: aarch64-apple-darwin }
-          - { name: macos-x86_64, os: macos-latest, target: x86_64-apple-darwin }
-          - { name: windows-x64, os: windows-latest, target: x64 }
+          - { name: macos-arm64, os: macos-26, target: aarch64-apple-darwin }
+          - { name: macos-x86_64, os: macos-26, target: x86_64-apple-darwin }
+          - { name: windows-x64, os: windows-2025-vs2026, target: x64 }
     steps:
       - name: Disable autocrlf on Windows
         if: runner.os == 'Windows'
@@ -109,15 +190,9 @@ jobs:
           python-version: "3.12"
       - name: Install Rust stable
         if: runner.os != 'Linux'
-        shell: bash
-        env:
-          TARGETS: ${{ runner.os == 'macOS' && matrix.target || '' }}
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update ${TARGETS:+--target "$TARGETS"}
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          target: ${{ runner.os == 'macOS' && matrix.target || '' }}
 
       # abi3-py38 means one wheel per OS/arch covers every Python
       # >= 3.8. No per-Python-minor-version matrix needed.
@@ -146,7 +221,9 @@ jobs:
   # Debian, nixpkgs) can build from source if needed.
   build-sdist:
     name: Build sdist
+    needs: [preflight]
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -176,7 +253,8 @@ jobs:
   validate-wheel-install:
     name: Install + open a model / ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    needs: [build-wheels]
+    timeout-minutes: 20
+    needs: [preflight, build-wheels]
     strategy:
       fail-fast: true
       matrix:
@@ -188,14 +266,14 @@ jobs:
           - { name: linux-aarch64, os: ubuntu-24.04-arm, image: "quay.io/pypa/manylinux2014_aarch64", python: oldest }
           - { name: musllinux-x86_64, os: ubuntu-24.04, image: "python:3.12-alpine", python: python3 }
           - { name: musllinux-aarch64, os: ubuntu-24.04-arm, image: "python:3.12-alpine", python: python3 }
-          - { name: macos-arm64, os: macos-latest }
+          - { name: macos-arm64, os: macos-26 }
           # The x86_64 macOS wheel is cross-built on arm64; this is the
           # Intel runner that proves it loads.
           # macos-15-intel is GitHub's last Intel macOS image (C5). When it
           # retires, this wheel is cross-built on arm64 macOS
           # (--target x86_64-apple-darwin) and checked under Rosetta.
           - { name: macos-x86_64, os: macos-15-intel }
-          - { name: windows-x64, os: windows-latest }
+          - { name: windows-x64, os: windows-2025-vs2026 }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -212,8 +290,11 @@ jobs:
       - name: Install and open a model in the target Linux environment
         if: runner.os == 'Linux'
         shell: bash
+        env:
+          IMAGE: ${{ matrix.image }}
+          PY: ${{ matrix.python }}
         run: |
-          docker run --rm -v "$PWD:/work" -w /work -e PY="${{ matrix.python }}" "${{ matrix.image }}" sh -c '
+          docker run --rm -v "$PWD:/work" -w /work -e PY "$IMAGE" sh -c '
             set -e
             if [ "$PY" = oldest ]; then
               # /opt/python holds one directory per CPython; skip the
@@ -239,7 +320,10 @@ jobs:
 
   release-source-smoke:
     name: Cargo install + CLI sample smoke
+    needs: [preflight]
     runs-on: ubuntu-24.04
+    # Longest 12.2 minutes (cargo install from crates.io).
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -251,13 +335,7 @@ jobs:
           path: _corpus
           cache: "false"
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - name: Install crate from release source
         run: cargo install --path . --locked --root /tmp/rvt-release-install
       # The MCP server is a crate of its own (rvt-mcp/); `cargo install` of
@@ -292,29 +370,36 @@ jobs:
           test -s /tmp/rvt.ifc
           test -s /tmp/rvt.diagnostics.json
 
+  # The same dated nightly and checks as ci.yml's docs-rs-preview, which every
+  # pull request ran: a floating nightly let a regression no pull request saw
+  # stop a release. Move both dates together when docs.rs needs a newer one.
   docs-rs-preview:
     name: docs.rs build preview
+    needs: [preflight]
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     env:
       RUSTDOCFLAGS: "--cfg docsrs -D warnings"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Install Rust nightly
-        shell: bash
-        run: |
-          rustup toolchain install nightly --profile minimal --no-self-update
-          rustup default nightly
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+      - name: Install Rust nightly-2026-10-01
+        uses: $/.github/actions/setup-rust
+        with:
+          toolchain: nightly-2026-10-01
       - name: Build docs with warnings denied
-        run: cargo +nightly doc --no-deps --all-features -p rvt
+        run: cargo +nightly-2026-10-01 doc --no-deps --all-features -p rvt
+      # docs.rs must mark the research modules as needing the feature.
+      - name: Research modules carry the unstable-research banner
+        run: grep -q 'unstable-research</code>' target/doc/rvt/research/index.html
 
   viewer-release-smoke:
     name: Viewer artifact load smoke
+    needs: [preflight]
     runs-on: ubuntu-24.04
+    # Longest 14.7 minutes.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -329,34 +414,11 @@ jobs:
           path: _project_corpus
           cache: "false"
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update --target wasm32-unknown-unknown
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
-      - name: Locked wasm-bindgen version
-        # wasm-pack fetches the wasm-bindgen CLI that Cargo.lock pins at build
-        # time, from GitHub and then by `cargo install`, which retries for
-        # seconds: a 40 s DNS outage failed both and turned main red (CI run 41954251714). The
-        # prebuilt binary of the locked version is installed below by
-        # install-action, which retries each download for about a minute, and
-        # wasm-pack uses the one it finds on PATH.
-        id: wasm-bindgen
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/version = |"/, ""); print; exit }' Cargo.lock)
-          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::no wasm-bindgen version in Cargo.lock (read '${version}')"
-            exit 1
-          fi
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-      - name: Install wasm-pack and wasm-bindgen
-        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
+        uses: $/.github/actions/setup-rust
         with:
-          tool: wasm-pack@0.14.0,wasm-bindgen@${{ steps.wasm-bindgen.outputs.version }}
+          target: wasm32-unknown-unknown
+      - name: Install wasm-pack and the locked wasm-bindgen
+        uses: $/.github/actions/wasm-tools
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           package_json_file: viewer/package.json
@@ -375,9 +437,13 @@ jobs:
       - name: Stage redistributable demos
         working-directory: viewer
         run: pnpm run stage:demos
+      # Without `--with-deps`, as in viewer-test.yml: its apt step added only
+      # fonts to a runner image that carries Chrome and so every library
+      # Chromium links, and the mirror stalled on them. A missing library
+      # would fail the launch.
       - name: Install Playwright Chromium
         working-directory: viewer
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install chromium
       # The same VW1-21 import audit as the viewer deploy.
       - name: Verify no network imports in wasm (VW1-21)
         working-directory: viewer
@@ -394,14 +460,15 @@ jobs:
   # Prebuilt CLI archives for Linux (static musl, x86_64 + arm64), macOS
   # (arm64 + x86_64) and Windows (x86_64), checksummed and attached to the
   # tag's GitHub Release — see release-binaries.yml. Gated on the source
-  # smoke test only, so a crates.io or PyPI hiccup never withholds the
-  # binaries from people who just need to read a Revit file.
+  # smoke test and on the crates.io publish, so the GitHub release and the
+  # container image never carry a version crates.io lacks. It does not wait
+  # for PyPI, so a PyPI hiccup never withholds the binaries from people who
+  # just need to read a Revit file.
   release-binaries:
     name: Release binaries
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
-    # After crates.io, so the GitHub release and the container image never
-    # carry a version crates.io lacks.
     needs:
+      - preflight
       - release-source-smoke
       - publish-crate
     permissions:
@@ -428,7 +495,9 @@ jobs:
   publish-crate:
     name: Publish to crates.io
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     needs:
+      - preflight
       - build-wheels
       - build-sdist
       - validate-wheel-install
@@ -448,31 +517,18 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
-      # Verify the Cargo.toml version matches the git tag — prevents
-      # mismatched publishes where the tag says v0.1.3 but the crate
-      # goes out as 0.1.2 (or vice versa). Compare `pkgid` output to
-      # the tag, strip the leading "v".
-      - name: Verify tag matches Cargo.toml version
-        shell: bash
-        run: |
-          tag_version="${GITHUB_REF#refs/tags/v}"
-          # Both published crates: `rvt` and the MCP server `rvt-rs-mcp`.
-          for crate in rvt rvt-rs-mcp; do
-            crate_version=$(cargo metadata --no-deps --format-version=1 \
-              | CRATE="$crate" python3 -c "import json,os,sys; print(next(p['version'] for p in json.load(sys.stdin)['packages'] if p['name'] == os.environ['CRATE']))")
-            if [[ "$tag_version" != "$crate_version" ]]; then
-              echo "::error::tag v$tag_version does not match $crate's Cargo.toml version $crate_version"
-              exit 1
-            fi
-          done
-          echo "version match: $tag_version"
+        uses: $/.github/actions/setup-rust
+      # The tag's version was matched against every version file in the
+      # preflight, which is also where this job gets it. A version crates.io
+      # already has is skipped, so a release whose rvt-rs-mcp publish failed
+      # after rvt went out can be re-run instead of failing at `cargo publish
+      # -p rvt`; one that is there but yanked, or that crates.io will not
+      # answer for, fails.
+      - name: Is rvt already on crates.io
+        id: rvt-state
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: python3 tools/ci/release_preflight.py crate-state rvt "$VERSION"
       # Trusted Publishing (C3): a token for this run alone, issued to
       # DrunkOnJava/rvt-rs / publish.yml / environment crates-io. A failed
       # exchange fails the job, and with it PyPI's publish.
@@ -480,6 +536,7 @@ jobs:
         id: crates-io-auth
         uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
       - name: Cargo publish
+        if: ${{ steps.rvt-state.outputs.state == 'publish' }}
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token }}
         # Default features only (`dhat-heap` is a profiling switch for
@@ -494,12 +551,18 @@ jobs:
       # manual, and its trusted publisher (DrunkOnJava/rvt-rs, publish.yml,
       # environment crates-io) is added on crates.io after it. Until then a
       # publish here would fail after `rvt` is already on crates.io and leave
-      # the tag half published, so the step runs only once the repository
+      # the tag half published, so the steps run only once the repository
       # variable PUBLISH_RVT_RS_MCP is `true`, which is set after the first
       # manual publish (RELEASE.md, step 8). The binary is in the release
       # archives either way.
-      - name: Cargo publish the MCP server
+      - name: Is the MCP server already on crates.io
+        id: mcp-state
         if: ${{ vars.PUBLISH_RVT_RS_MCP == 'true' }}
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: python3 tools/ci/release_preflight.py crate-state rvt-rs-mcp "$VERSION"
+      - name: Cargo publish the MCP server
+        if: ${{ vars.PUBLISH_RVT_RS_MCP == 'true' && steps.mcp-state.outputs.state == 'publish' }}
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token }}
         run: cargo publish -p rvt-rs-mcp
@@ -507,8 +570,10 @@ jobs:
   publish-testpypi:
     name: Publish to TestPyPI
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.test-pypi }}
     needs:
+      - preflight
       - build-wheels
       - build-sdist
       - validate-wheel-install
@@ -555,8 +620,10 @@ jobs:
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     needs:
+      - preflight
       - build-wheels
       - build-sdist
       - validate-wheel-install
@@ -600,4 +667,10 @@ jobs:
           # No `password:` — trusted publisher OIDC is auto-detected
           # when `id-token: write` is set and a trusted publisher
           # configuration exists on PyPI for this workflow.
-          skip-existing: false
+          #
+          # A file PyPI already has fails the first attempt, since a version
+          # on PyPI before this release's first upload is not this release's.
+          # From the second attempt on (a re-run after a partial upload, with
+          # the same artifacts: re-run the failed jobs, not all of them) the
+          # files already there are skipped and the rest uploaded.
+          skip-existing: ${{ github.run_attempt != '1' }}

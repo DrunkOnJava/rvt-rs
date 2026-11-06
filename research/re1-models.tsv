@@ -1,0 +1,27 @@
+# The four Revit 2025 RE1 projects and Revit's own IFC2X3 exports of them, from Drshelden/IFC-ECS (MIT),
+# the one list of what CI fetches of them (#1457). Fetched by .github/actions/fetch-re1 for Corpus
+# health (tier 2), IfcOpenShell validates exports, the Python wheel job and the viewer's browser tests,
+# which used to carry the same hashes four times over, with two cache keys, two fetches that cached
+# nothing and a fallback host only one of them had. The action keeps all eight files in one Actions
+# cache entry keyed on this file, saved on main only, checks every file's sha256 and byte count
+# whether it was restored or downloaded, and downloads only a file that is missing or fails its pin,
+# from the raw host and then the media host. A file that fails its pin fails the job. At this commit
+# the media host answers 404 for all eight files (they are plain blobs, not Git LFS objects), so a
+# fetch comes from the raw host; the media host is the fallback for a pin that moves to LFS content.
+# The hashes are the pins ci.yml and viewer-test.yml carried before this file; the byte counts are
+# research/witness-registry.json's, and all sixteen values were measured again from the raw host on
+# 2026-11-05. research/witness-registry.json repeats these hashes for the witness gates (its URLs
+# float on `main`, these are pinned to the commit); .github/workflows/ci.yml checks that the two agree.
+# A new pin is an edit of the commit below and of the rows it changes, and the pull request that
+# moves it runs every job that reads these files.
+# source	repository	commit	directory
+source	Drshelden/IFC-ECS	9e8b37175a0fba1397f7011aeee917fe52de7623	data/RE1
+# file	name	sha256	bytes
+file	RE1-Architecture.rvt	4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4	6627328
+file	RE1-Architecture.ifc	a9b5d36677aa6a8bb91b77d8bc354ed9028a7ca3e9e2491a47ba14cfd8e26200	1677715
+file	RE1-Mechanical.rvt	d559720177aa0ec435133f804e7c45d60da2deb9d5585bb3d55f4830139c014b	3379200
+file	RE1-Mechanical.ifc	9e56cf7246ce86ef73646dd588a1efb8a4756e5e102b30e28b3b58577a454db0	220068
+file	RE1-Plumbing.rvt	03689df2aa426031a216e65051b9f19d3265d6fe96884dd47373b17435f9e54c	3481600
+file	RE1-Plumbing.ifc	294490b222632509779910345f27a4eeda3645956138a593298c241495f7b8b6	500852
+file	RE1-Electrical.rvt	9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b	13438976
+file	RE1-Electrical.ifc	c7002a10c8e10ab2fca64ff61dcf38db04da652924f65ce53c2064827dfa9e16	8441543

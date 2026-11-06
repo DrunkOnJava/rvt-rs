@@ -26,7 +26,7 @@ on:
   workflow_call:
     inputs:
       fast:
-        description: Run only fmt, clippy, cargo doc, the PII guard, the env lint, Corpus health and the Ubuntu builds with their real-file checks.
+        description: Run only fmt, clippy, cargo doc, the PII guard, the env lint, Corpus health, the MCP server on Einhoven and the Ubuntu builds with their real-file checks.
         type: boolean
         default: false
 
@@ -60,39 +60,54 @@ env:
 # to Ubuntu 26 from 2026-10-19, which would change apt packages, Playwright's
 # system dependencies and the preinstalled tools under every job without a
 # commit here. Moving to 26.04 is a deliberate edit of this label.
+#
+# The Windows and macOS legs are pinned the same way, to the images that
+# `windows-latest` and `macos-latest` pointed at on 2026-11-05 (read from the
+# run logs; the labels are those actions/runner-images' README lists for them):
+# `windows-2025-vs2026` (Windows Server 2025 with Visual Studio 2026, whose
+# MSVC linker the Rust builds use) and `macos-26` (macOS 26 on arm64). A pinned
+# label retires eventually: GitHub announces the date in actions/runner-images
+# and runs brownouts first, and after it a job on the label has no runner to
+# pick it up, so the pull request waits until the label is moved. Moving to the
+# next image is a deliberate edit of the label, as for ubuntu-24.04;
+# tools/ci/check-workflows.py fails on a `-latest` label in a job it covers.
+#
+# Every job that runs steps sets `timeout-minutes` (the default is 360, six
+# hours of a hung runner). Each limit is at least three times the longest run
+# of that job among the last 96 runs on main and 29 pull-request runs
+# (2026-11-05) and never under 10 minutes, since a timeout that trips on a
+# slow runner is a false red: IfcOpenShell once took 22.9 minutes against a
+# median of 4.0, and has 70. No run in that window rebuilt the Rust
+# dependencies from an empty cache, so the margins of the build jobs (4 to 12
+# times their longest run) are what covers one. tools/ci/check-workflows.py
+# fails on a job that runs steps without a limit.
 jobs:
   fmt:
     name: cargo fmt
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update --component rustfmt
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          component: rustfmt
       - run: cargo fmt --all -- --check
 
   clippy:
     name: cargo clippy
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update --component clippy
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          component: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -131,9 +146,11 @@ jobs:
       - run: cargo clippy -p rvt-probes --examples --no-deps -- -D warnings
 
   test:
-    # Unit tests are banned (maintainer directive, 2026-09-23): this job
-    # builds every target and runs only what tools/ci/test-targets.txt
-    # classes as real-file, CLI or contract verification. Corpus LFS clones
+    # Unit tests are banned (maintainer directive, 2026-09-23), except a few
+    # failure-first tests of a pure helper with no file, network, process or
+    # clock I/O (the `--lib` step below). Apart from those, this job builds
+    # every target and runs only what tools/ci/test-targets.txt classes as
+    # real-file, CLI or contract verification. Corpus LFS clones
     # dominate wall-clock, so the Autodesk family corpus is fetched on
     # ubuntu-stable (primary) and windows-stable (CFB path-separator
     # regression); elsewhere the corpus checks skip and the CLI and
@@ -141,13 +158,18 @@ jobs:
     # check name does not change when `rust-version` does.
     name: build + real files / ${{ matrix.os }} / ${{ matrix.label || matrix.rust }}
     runs-on: ${{ matrix.os }}
+    # The longest leg took 8.9 minutes (Windows), Ubuntu 4.4. The family
+    # corpus fetch took 2 s on Linux and 10 s on Windows on main's first run
+    # after #1092 moved its pin (run 40957121621).
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       # The fast set (a draft) builds on Ubuntu only, stable and MSRV; the
       # full set on every OS. The MSRV entry's "1.87" is `rust-version` in
-      # Cargo.toml; both lists name it.
+      # Cargo.toml; both lists name it, and tools/ci/check-workflows.py (env
+      # config lint) fails when either differs from it.
       matrix:
-        include: ${{ fromJSON(inputs.fast == true && '[{"os":"ubuntu-24.04","rust":"stable","with_corpus":true},{"os":"ubuntu-24.04","rust":"1.87","label":"msrv","with_corpus":false}]' || '[{"os":"ubuntu-24.04","rust":"stable","with_corpus":true},{"os":"windows-latest","rust":"stable","with_corpus":true},{"os":"macos-latest","rust":"stable","with_corpus":false},{"os":"ubuntu-24.04","rust":"1.87","label":"msrv","with_corpus":false}]') }}
+        include: ${{ fromJSON(inputs.fast == true && '[{"os":"ubuntu-24.04","rust":"stable","with_corpus":true},{"os":"ubuntu-24.04","rust":"1.87","label":"msrv","with_corpus":false}]' || '[{"os":"ubuntu-24.04","rust":"stable","with_corpus":true},{"os":"windows-2025-vs2026","rust":"stable","with_corpus":true},{"os":"macos-26","rust":"stable","with_corpus":false},{"os":"ubuntu-24.04","rust":"1.87","label":"msrv","with_corpus":false}]') }}
     steps:
       # Windows' git default `core.autocrlf=true` mangles binary files
       # that aren't explicitly marked `binary` in `.gitattributes`.
@@ -184,15 +206,9 @@ jobs:
           repository: phi-ag/rvt
           path: _corpus
       - name: Install Rust
-        shell: bash
-        env:
-          TOOLCHAIN: ${{ matrix.rust }}
-        run: |
-          rustup toolchain install "$TOOLCHAIN" --profile minimal --no-self-update
-          rustup default "$TOOLCHAIN"
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          toolchain: ${{ matrix.rust }}
       # sccache on Windows only (C2). There rust-cache saves the checkout's
       # target directory while the dev drive builds into its own, so sccache
       # is what keeps compiled units (95% hits). On Linux and macOS it hit 0
@@ -233,7 +249,7 @@ jobs:
         # Linux owns the shared `ci-release` cache and compiles every
         # target so benches and examples stay green. macOS and Windows
         # never run benches or examples in this job, so they skip them:
-        # on windows-latest the all-targets build was 181 s of a 4.1 min
+        # on Windows the all-targets build was 181 s of a 4.1 min
         # job.
         run: cargo build --profile ci ${{ runner.os == 'Linux' && '--all-targets' || '--lib --bins --tests' }}
       # The MSRV entry checks that every target compiles on the oldest
@@ -245,12 +261,15 @@ jobs:
       # The MCP server declares rust-version 1.88 (rmcp's minimum), one above
       # the workspace's, so it is checked on 1.88 as well; the step above
       # keeps the root crate on its own MSRV.
+      - name: Install Rust 1.88, beside the default
+        if: matrix.label == 'msrv'
+        uses: $/.github/actions/setup-rust
+        with:
+          toolchain: "1.88"
+          make-default: "false"
       - name: Check the MCP server on its own minimum Rust (1.88)
         if: matrix.label == 'msrv'
-        shell: bash
-        run: |
-          rustup toolchain install 1.88 --profile minimal --no-self-update
-          cargo +1.88 check --profile ci -p rvt-rs-mcp --all-targets --locked
+        run: cargo +1.88 check --profile ci -p rvt-rs-mcp --all-targets --locked
       # The API examples docs.rs shows, run against the committed synthetic
       # fixture (corpus/tier1/), so a documented call cannot drift from the
       # code (1.0 criteria S3, #872). Linux only: the examples do not depend
@@ -356,12 +375,9 @@ jobs:
           repository: phi-ag/rvt
           path: _corpus
       - name: Install Rust and the i686 target
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update --target i686-unknown-linux-gnu
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          target: i686-unknown-linux-gnu
       # The 32-bit C runtime and libgcc the i686 test binaries link against.
       # Each apt call is bounded and retried: on 2026-11-01 an Ubuntu mirror
       # stopped answering mid `apt-get update` and the hang used the whole job
@@ -423,6 +439,17 @@ jobs:
     # when RVT_PROJECT_CORPUS_DIR is unset.
     name: Corpus health (tier 2 — external)
     runs-on: ubuntu-24.04
+    # Median 5.6 minutes, longest 10.2. The BIM4LCA and R2025 fetches end
+    # as NOT MEASURED, a warning, when their host is down, and a host that drops
+    # packets holds them to their own retries. Both at once: BIM4LCA tries two
+    # URLs (a mirror, then the archive), each five tries of 300 s with 150 s of
+    # pauses, 55 minutes; R2025 downloads three archives, and two at their
+    # 900 s limit followed by a third refused on four tries of 900 s is 90
+    # minutes; the rest of the job is about 10, and the RE1 fetch (a red failure,
+    # not a warning) is cut off at 15 by its own `timeout 900`, with a curl that
+    # gives up on a stalled transfer, 170 in all. The limit sits above that, so a
+    # dead host stays a warning and never becomes a red timeout.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -433,47 +460,15 @@ jobs:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
       # RE-32 / RE-33: the Revit 2025 oracles, projects and Revit's own IFC
-      # exports of them (Drshelden/IFC-ECS, MIT), pinned by commit and checked by hash,
-      # placed beside the magnetar projects so tests/element_records_2025.rs
-      # runs here instead of skipping.
-      # The download took 3 s on most runs and 6.9 min on one (#1380), so the
-      # files are kept in the Actions cache under their pinned commit, saved on
-      # main; every file is still checked against its hash, and only a missing
-      # or changed one is fetched.
-      - name: Restore the Revit 2025 oracle
-        id: re1-cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: _re1
-          key: re1-oracle-9e8b37175a0fba1397f7011aeee917fe52de7623
+      # exports of them (Drshelden/IFC-ECS, MIT), placed beside the magnetar
+      # projects so tests/element_records_2025.rs runs here instead of
+      # skipping. research/re1-models.tsv pins them by commit and sha256;
+      # fetch-re1 keeps them in the Actions cache, saved on main, checks every
+      # file and downloads only a missing or changed one (#1457, #1380).
       - name: Fetch the Revit 2025 oracle (Drshelden/IFC-ECS RE1, MIT)
-        run: |
-          set -euo pipefail
-          base=https://raw.githubusercontent.com/Drshelden/IFC-ECS/9e8b37175a0fba1397f7011aeee917fe52de7623/data/RE1
-          dir="${GITHUB_WORKSPACE}/_project_corpus/Revit"
-          mkdir -p _re1
-          while read -r name sum; do
-            if ! echo "${sum}  _re1/${name}" | sha256sum -c --status - 2>/dev/null; then
-              curl -sSfL --retry 5 --retry-all-errors -o "_re1/${name}" "${base}/${name}"
-              echo "${sum}  _re1/${name}" | sha256sum -c -
-            fi
-            cp "_re1/${name}" "${dir}/${name}"
-          done <<'LIST'
-          RE1-Architecture.rvt 4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4
-          RE1-Architecture.ifc a9b5d36677aa6a8bb91b77d8bc354ed9028a7ca3e9e2491a47ba14cfd8e26200
-          RE1-Mechanical.rvt d559720177aa0ec435133f804e7c45d60da2deb9d5585bb3d55f4830139c014b
-          RE1-Mechanical.ifc 9e56cf7246ce86ef73646dd588a1efb8a4756e5e102b30e28b3b58577a454db0
-          RE1-Plumbing.rvt 03689df2aa426031a216e65051b9f19d3265d6fe96884dd47373b17435f9e54c
-          RE1-Plumbing.ifc 294490b222632509779910345f27a4eeda3645956138a593298c241495f7b8b6
-          RE1-Electrical.rvt 9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b
-          RE1-Electrical.ifc c7002a10c8e10ab2fca64ff61dcf38db04da652924f65ce53c2064827dfa9e16
-          LIST
-      - name: Save the Revit 2025 oracle
-        if: github.ref == 'refs/heads/main' && steps.re1-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: $/.github/actions/fetch-re1
         with:
-          path: _re1
-          key: ${{ steps.re1-cache.outputs.cache-primary-key }}
+          path: _project_corpus/Revit
       # #766: four Revit 2024 models of VTT's BIM4LCA example buildings and
       # Revit's IFC export of one (CC BY-SA 4.0), read by byte range from the
       # 1.58 GB ARCH.zip by tools/ci/fetch-bim4lca.py and checked against
@@ -546,13 +541,7 @@ jobs:
           path: _r2025
           key: ${{ steps.r2025-cache.outputs.cache-primary-key }}
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: false
@@ -629,6 +618,8 @@ jobs:
     # 2026-11-04).
     name: MCP server on Einhoven (tier 2 — external)
     runs-on: ubuntu-24.04
+    # Longest 4.1 minutes.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -639,13 +630,7 @@ jobs:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: false
@@ -692,6 +677,7 @@ jobs:
     name: Writer patch corpus
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -707,13 +693,7 @@ jobs:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: false
@@ -764,6 +744,10 @@ jobs:
     name: IfcOpenShell validates exports
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    # Longest 22.9 minutes (run 42034472131, every step slow), median 4.0:
+    # 3 times the longest. The EXPRESS rules step has a 25 minute limit of its
+    # own.
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -777,13 +761,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: false
@@ -881,20 +859,10 @@ jobs:
       # rooms are scored here, not by `Corpus health`, because only this
       # job has IfcOpenShell, NumPy and Shapely.
       - name: Fetch the RE1 projects and Revit's export of RE1 Architecture (Drshelden/IFC-ECS, MIT)
-        run: |
-          set -euo pipefail
-          base=https://raw.githubusercontent.com/Drshelden/IFC-ECS/9e8b37175a0fba1397f7011aeee917fe52de7623/data/RE1
-          dir="${GITHUB_WORKSPACE}/_project_corpus/Revit"
-          while read -r name sum; do
-            curl -sSfL --retry 5 --retry-all-errors -o "${dir}/${name}" "${base}/${name}"
-            echo "${sum}  ${dir}/${name}" | sha256sum -c -
-          done <<'LIST'
-          RE1-Architecture.rvt 4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4
-          RE1-Architecture.ifc a9b5d36677aa6a8bb91b77d8bc354ed9028a7ca3e9e2491a47ba14cfd8e26200
-          RE1-Mechanical.rvt d559720177aa0ec435133f804e7c45d60da2deb9d5585bb3d55f4830139c014b
-          RE1-Plumbing.rvt 03689df2aa426031a216e65051b9f19d3265d6fe96884dd47373b17435f9e54c
-          RE1-Electrical.rvt 9875e765c9f47893808c47b845a8379b8777b92510e3e0284f763cb457c9630b
-          LIST
+        uses: $/.github/actions/fetch-re1
+        with:
+          files: RE1-Architecture.rvt RE1-Architecture.ifc RE1-Mechanical.rvt RE1-Plumbing.rvt RE1-Electrical.rvt
+          path: _project_corpus/Revit
       - name: Room areas and outlines against Revit's exports
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
@@ -1189,6 +1157,8 @@ jobs:
   doc:
     name: cargo doc
     runs-on: ubuntu-24.04
+    # Longest 2.9 minutes.
+    timeout-minutes: 30
     env:
       RUSTDOCFLAGS: "-D warnings"
     steps:
@@ -1196,13 +1166,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -1228,6 +1192,7 @@ jobs:
     name: semver checks
     if: github.event_name == 'pull_request' && inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: read
       pull-requests: read
@@ -1242,15 +1207,13 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
-      - name: Install Rust stable and the public API listing's nightly
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          rustup toolchain install "$PUBLIC_API_TOOLCHAIN" --profile minimal --no-self-update
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+      - name: Install Rust stable
+        uses: $/.github/actions/setup-rust
+      - name: Install the public API listing's nightly, beside it
+        uses: $/.github/actions/setup-rust
+        with:
+          toolchain: ${{ env.PUBLIC_API_TOOLCHAIN }}
+          make-default: "false"
       - name: Install cargo-semver-checks and cargo-public-api
         uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
@@ -1281,18 +1244,13 @@ jobs:
     name: cargo bench --no-run
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: false
@@ -1318,6 +1276,7 @@ jobs:
     name: docs.rs build preview
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     env:
       # Same flags docs.rs passes, plus -D warnings so this job fails
       # instead of silently publishing broken docs.
@@ -1332,13 +1291,9 @@ jobs:
       # a floating nightly saved a new cache every day and restored none.
       # Move the date forward when docs.rs needs a newer feature.
       - name: Install Rust nightly-2026-10-01
-        shell: bash
-        run: |
-          rustup toolchain install nightly-2026-10-01 --profile minimal --no-self-update
-          rustup default nightly-2026-10-01
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          toolchain: nightly-2026-10-01
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -1357,16 +1312,16 @@ jobs:
     name: fuzz targets build
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install Rust nightly-2026-10-01
-        shell: bash
-        run: |
-          rustup toolchain install nightly-2026-10-01 --profile minimal --no-self-update
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
+        uses: $/.github/actions/setup-rust
+        with:
+          toolchain: nightly-2026-10-01
+          make-default: "false"
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -1378,6 +1333,9 @@ jobs:
     name: Python wheel / ${{ matrix.os }}
     if: inputs.fast != true
     runs-on: ${{ matrix.os }}
+    # Longest 11.6 minutes (Windows), 8.7 macOS, 7.2 Ubuntu, in 100 runs on main,
+    # before the smoke wheel was built without LTO; the limit is kept.
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -1385,7 +1343,15 @@ jobs:
         # matrix runs on pushes to main, where the wheels are consumed.
         # Frees two scarce macOS/Windows runners per PR without loosening
         # the merge gate, which never required the wheel jobs.
-        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04", "macos-latest", "windows-latest"]') }}
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-24.04"]') || fromJSON('["ubuntu-24.04", "macos-26", "windows-2025-vs2026"]') }}
+    # A smoke build, so no fat LTO and 16 codegen units, as the viewer's WASM
+    # is built in viewer-test.yml; publish.yml builds the wheels users get, at
+    # fat LTO and one codegen unit. maturin-action hands every CARGO_* variable
+    # to the manylinux container (ALLOWED_ENV_PREFIXES in its source), where
+    # the compile happens on Linux.
+    env:
+      CARGO_PROFILE_RELEASE_LTO: "off"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     steps:
       # Windows CFB stream names need the same autocrlf=false guard
       # we use for the Rust Windows integration job, or LFS-bound
@@ -1409,21 +1375,23 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-        with:
-          save-if: false
-          shared-key: ci-release
+        uses: $/.github/actions/setup-rust
+      # No rust-cache step: the `ci-release` cache holds the `ci` profile's
+      # target/ci, and `--release` builds into target/release, so a restored
+      # cache is never used. Run 42067754303 restored 246 MB on Linux and 203 MB
+      # on macOS and still compiled every crate on both (Windows found no cache
+      # at all). On Linux the build also runs in a container whose cargo home is
+      # its own, so it fetched every crate again. A cache of its own for the
+      # macOS and Windows legs, saved on main, was measured with the flags
+      # above (#1461): a warm one took 45 s off the Windows build (155 s against
+      # 200 s) and none off macOS's (113 s against 99 s), for an entry of about
+      # 85 MB each, so there is none.
+      #
       # Build the abi3 wheel. SEC-12/13: wheel sources live in the
       # `rvt-py/` workspace member crate; maturin follows the
-      # `manifest-path` in pyproject.toml. `--release` produces an
-      # optimised binary matching what users get via `pip install rvt`.
+      # `manifest-path` in pyproject.toml. `--release` is optimised
+      # (opt-level 3) but, with the job's `env`, not at fat LTO and one
+      # codegen unit as the release wheels are (publish.yml).
       # Linux builds inside the manylinux2014 container, as the release
       # does (publish.yml), so a change that breaks the glibc 2.17 build
       # fails here rather than at tag time.
@@ -1467,27 +1435,17 @@ jobs:
           family="_corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa"
           if [ -f "$family" ]; then python3 tools/ci/wheel-smoke.py "$family"; fi
       # #1339: the export phase through the Python API, on RE1 Architecture
-      # (tests/python/test_export_phase.py), pinned by commit and hash as the
-      # other jobs that fetch it do. The bytes come from the media host, which
-      # serves a Git LFS object's content (and a plain blob's, where the file
-      # is not in LFS), with the raw host as the fallback; either must hash to
-      # the pinned sha256. They are not cached by the Actions cache.
+      # (tests/python/test_export_phase.py), pinned by commit and hash in
+      # research/re1-models.tsv as the other jobs that fetch it have it. The
+      # step used to try the media host first, which answers 404 for these
+      # files, and retried the 404 five times: all of the 31 s the step took
+      # in run 42067754303.
       - name: Fetch RE1 Architecture (Drshelden/IFC-ECS, MIT)
         if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          commit=9e8b37175a0fba1397f7011aeee917fe52de7623
-          sum=4a78bdd68e7f4dd7806060db07c222da9a810e20b3f303c17a443294b91c8ce4
-          name=RE1-Architecture.rvt
-          out="${GITHUB_WORKSPACE}/_project_corpus/Revit/${name}"
-          mkdir -p "$(dirname "${out}")"
-          for host in media.githubusercontent.com/media raw.githubusercontent.com; do
-            curl -sSfL --retry 5 --retry-all-errors -o "${out}" "https://${host}/Drshelden/IFC-ECS/${commit}/data/RE1/${name}" || continue
-            if echo "${sum}  ${out}" | sha256sum -c - ; then exit 0; fi
-          done
-          echo "::error::${name} did not hash to ${sum} from either host"
-          exit 1
+        uses: $/.github/actions/fetch-re1
+        with:
+          files: RE1-Architecture.rvt
+          path: _project_corpus/Revit
       # #1359: the room fallback through the Python API
       # (tests/python/test_room_phase_fallback.py), on Autodesk's
       # rac_basic_sample_project of Revit 2018: its 14 rooms are in the second of
@@ -1544,18 +1502,13 @@ jobs:
     name: cargo deny
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       # install-action retries the download and verifies its checksum;
       # cargo-deny-action's image fetched the release with a bare
       # `curl --silent -L` and failed the check when GitHub returned an
@@ -1574,18 +1527,13 @@ jobs:
     name: cargo audit
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - name: Install cargo-audit
         uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
         with:
@@ -1597,6 +1545,9 @@ jobs:
     name: viewer dependency audit
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    # The audit step retries a down advisory endpoint four times, sleeping
+    # 20 to 80 s between tries.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1668,6 +1619,7 @@ jobs:
     name: viewer tests needed
     if: inputs.fast != true
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
@@ -1724,6 +1676,7 @@ jobs:
   pii-guard:
     name: PII guard
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1736,23 +1689,34 @@ jobs:
           # any specific sensitive value. The patterns are intentionally
           # broad — they're belt-and-suspenders on top of src/redact.rs.
           # The backslashes in the Windows patterns are regex escapes.
+          # A user name begins with a letter of either case (macOS and
+          # Windows keep the case it was typed in), and a Windows profile
+          # folder may hold spaces.
           # shellcheck disable=SC1003
           PATTERNS=(
             # Absolute home paths (macOS, Linux, Windows).
-            '/Users/[a-z][a-z0-9._-]+/'
-            '/home/[a-z][a-z0-9._-]+/'
-            'C:\\Users\\[a-z][a-z0-9._-]+\\'
+            '/Users/[A-Za-z][A-Za-z0-9._-]+/'
+            '/home/[A-Za-z][A-Za-z0-9._-]+/'
+            'C:\\Users\\[A-Za-z][A-Za-z0-9._ -]+\\'
             # Autodesk employee-owned OneDrive authoring paths.
             'OneDrive - Autodesk\\[^\\]*\\Revit - [0-9]{3,}'
             # Autodesk build-server paths baked into DLLs.
             'F:\\Ship\\[0-9]{4}_'
           )
+          # Only this file is left out of the scan, since it defines the
+          # patterns; every other workflow is scanned like the rest of the
+          # tree. A `git grep` that fails (a status above 1, such as a
+          # pattern that does not compile) fails the step: it used to read as
+          # no match.
           failed=0
           for p in "${PATTERNS[@]}"; do
-            if git grep -I -n -P "$p" -- ':!.github/workflows/' ':!src/redact.rs' 2>/dev/null; then
-              echo "::error::PII-shaped pattern matched: $p"
-              failed=1
-            fi
+            status=0
+            git grep -I -n -P "$p" -- ':!.github/workflows/ci.yml' ':!src/redact.rs' || status=$?
+            case "$status" in
+              0) echo "::error::PII-shaped pattern matched: $p"; failed=1 ;;
+              1) ;;
+              *) echo "::error::git grep failed (status $status) for: $p"; failed=1 ;;
+            esac
           done
           if [ "$failed" -ne 0 ]; then
             exit 1
@@ -1798,6 +1762,11 @@ jobs:
       # docs/support-matrix.json, so it cannot claim more than the matrix.
       - name: The README support table matches the support matrix
         run: python3 tools/ci/readme-matrix.py --check
+      # research/re1-models.tsv is the one list the RE1 models are fetched by
+      # (#1457); the witness registry repeats the same eight files, so a pin
+      # moved in one and not the other fails here, not in a job that fetches.
+      - name: The RE1 pins agree with the witness registry
+        run: python3 tools/ci/check-re1-pins.py
       # The semantic merge check's diff (#1334) is a pure function of two JSON
       # documents; its three failure modes (a change hidden as cosmetic, a
       # reorder reported as a change, a bulk collapse that hides a different
@@ -1813,23 +1782,97 @@ jobs:
         run: python3 tools/ci/test_same_project_verdict.py
       - name: The semantic check's verdict failure modes
         run: python3 tools/ci/test_jev_check.py
+      # The scheduled checks' pure parts (#1457): which NOT MEASURED streaks
+      # persist (a measured run ends one, a run whose job failed neither adds
+      # to it nor ends it), the label and body of the issue a failed job gets,
+      # and which Actions caches the cleaner treats as one family.
+      - name: The scheduled checks' failure modes
+        run: |
+          python3 tools/ci/test_not_measured.py
+          python3 tools/maintainer/test_clean_caches.py
+      # publish.yml's preflight (#1457) refuses a tag that is lightweight or
+      # unverified, on no release branch, or that disagrees with a version
+      # file; these are its pure judgements, and what must never publish.
+      - name: Release preflight's pure judgement (failure-first)
+        run: python3 tools/ci/test_release_preflight.py
+      # The same reader the preflight runs on the tagged commit, on this tree:
+      # every version file agrees (a half-finished bump fails the release pull
+      # request, not the tag) and a change to a file's layout that the reader
+      # cannot follow fails here, not at a release.
+      - name: The version files agree with each other
+        run: python3 tools/ci/release_preflight.py check --event workflow_dispatch --ref-type branch --ref-name checkout --sha HEAD
+      # Last in the job: a failing step skips the ones after it, and a page edit that adds a bare number should not hide the other checks.
+      # W10 (#1192): every number on the README and the supported profile
+      # names a model of docs/reference-models.md's model index, and says so
+      # when nobody else can fetch it. A number added to either page without
+      # its model fails here (docs/maintaining.md, "Numbers on the README and
+      # the supported profile").
+      - name: Numbers on the README and the supported profile name their model
+        run: python3 tools/ci/measured_numbers.py
+      # The check's refusals, run on copies of the real pages with one
+      # offending line appended (or one index row broken): a number with no
+      # model, a number far from its model in a long clause, a number in a
+      # heading, a local-only model that does not say so (or whose word stands
+      # beside another model's name), a marker without a reason or with
+      # nothing to excuse, a model with no fetchability. It fails here if the
+      # check ever stops refusing one.
+      - name: The numbers check refuses what it must
+        run: python3 tools/ci/measured_numbers.py --refusals
+      - name: The numbers check's pure judgement (failure-first)
+        run: python3 tools/ci/test_measured_numbers.py
 
   # Guards the development environments' config: shellcheck the Cursor
   # install script and the devcontainer's scripts, install the
   # devcontainer's tools from their lock, and validate
   # `.cursor/environment.json` against the published Cursor environment
   # schema. Keeps the env setup from silently drifting into an invalid state
-  # on any PR.
+  # on any PR. It also lints the workflows themselves: actionlint with
+  # shellcheck on every `run:` script, and tools/ci/check-workflows.py for
+  # what a linter cannot know (timeouts, pinned runner labels, values that
+  # must agree across files).
   env-config:
     name: env config lint
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # shellcheck is preinstalled on ubuntu-24.04 runners.
+      # shellcheck 0.11.0, pinned. The runner image carries a copy of its own
+      # that moves with the image, and actionlint below runs whichever
+      # shellcheck it finds first on PATH.
+      - name: Install shellcheck
+        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
+        with:
+          tool: shellcheck@0.11.0
       - name: ShellCheck .cursor/install.sh and the devcontainer's scripts
-        run: shellcheck .cursor/install.sh .devcontainer/*.sh
+        run: |
+          test "$(shellcheck --version | sed -n 's/^version: //p')" = 0.11.0
+          shellcheck .cursor/install.sh .devcontainer/*.sh
+      # actionlint, pinned to a release and to the sha256 its checksums file
+      # gives for the Linux tarball (taiki-e/install-action carries shellcheck
+      # but no actionlint). A new version is a new tag and a new hash from
+      # https://github.com/rhysd/actionlint/releases.
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/actionlint.tar.gz"
+          curl -sSfL --retry 5 --retry-all-errors -o "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  ${archive}" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/actionlint"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/actionlint" actionlint
+          echo "$RUNNER_TEMP/actionlint" >> "$GITHUB_PATH"
+      # With shellcheck on every `run:` script. .github/actionlint.yaml ignores
+      # exactly one message, about the `$/` form of local actions and workflows
+      # that actionlint does not know, and says why.
+      - name: actionlint on every workflow
+        run: |
+          actionlint -version
+          actionlint .github/workflows/*.yml
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '24'
@@ -1844,13 +1887,14 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
+      - name: Install the Python tools
+        run: python -m pip install --require-hashes -r tools/ci/requirements-test.txt
       # Against a copy of https://cursor.com/schemas/environment.schema.json
       # taken 2026-10-05 (C8): downloading it on every pull request made the
       # check depend on cursor.com. Refresh the copy by hand when Cursor
       # changes the schema.
       - name: Validate .cursor/environment.json against the Cursor schema
         run: |
-          python -m pip install --require-hashes -r tools/ci/requirements-test.txt
           python - <<'PY'
           import json
           import jsonschema
@@ -1860,6 +1904,21 @@ jobs:
           jsonschema.validate(config, schema)
           print(".cursor/environment.json validates against the Cursor environment schema")
           PY
+      # The workflows' own rules, which no linter knows: every job that runs
+      # steps sets `timeout-minutes`, no runner label is `-latest`, every
+      # `$/.github/...` action or workflow a job uses exists and gets the inputs
+      # it declares (actionlint cannot read that form), the MSRV in the test
+      # matrix, in every crate and in the README, CONTRIBUTING.md, AGENTS.md,
+      # RELEASE.md, docs/python.md, docs/install.md and .cursor/install.sh is
+      # Cargo.toml's `rust-version` (the MCP server's, in docs/install.md, is
+      # rvt-mcp's),
+      # and the documentation-only path list is one list in CI's
+      # `paths-ignore`, the viewer tests' path filter and Deploy viewer's wait
+      # step. Its comparisons are tested first, on the ways they can fail.
+      - name: The workflow checks' failure modes
+        run: python tools/ci/test_check_workflows.py
+      - name: Workflow timeouts, runner pins, local references, MSRV and documentation paths
+        run: python tools/ci/check-workflows.py
 
   # The one check the main-protection ruleset requires (C1), as `full / CI
   # passed` when ci-pr.yml calls this for a ready pull request. It passes only
@@ -1892,6 +1951,7 @@ jobs:
       - env-config
       - semver
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Every job passed
         env:

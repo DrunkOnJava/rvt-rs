@@ -47,11 +47,32 @@ use crate::le_bytes;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Releases where this layout is measured: 2024, and Revit 2026 and 2027
-/// against the same Autodesk samples saved by an earlier release (RE-341):
-/// the beams of `rst_basic` 2027 and of `rac_advanced` 2026 and 2027 are
-/// their 2024 saves'. 2025 is not measured here.
-pub const BEAM_AXIS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2026, 2027];
+/// Releases where a beam's location line is measured: 2024, and Revit 2025,
+/// 2026 and 2027 against the same Autodesk samples saved by an earlier
+/// release (RE-341, RE-345): the beams of `rst_basic` and `rac_advanced` on
+/// 2025 to 2027 are their 2024 saves'.
+pub const BEAM_AXIS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
+
+/// Releases where the arc records of a sketch line are read, for the outlines
+/// of floors, ceilings and roofs: 2024, and Revit 2025, 2026 and 2027 against
+/// the same Autodesk samples saved by an earlier release (RE-341, RE-345). No
+/// Revit export checks them on 2025 to 2027: the models with Revit's own 2025
+/// exports hold no floor, ceiling or roof with an arc. Its own list, apart
+/// from the beams' and the shafts', so that each reader's release is a
+/// decision of its own.
+pub const SKETCH_CURVE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
+
+/// Releases where a shaft opening's outline, its lines and circles, is read
+/// and cut from the floors, ceilings and roofs it passes through (RE-99,
+/// RE-100): 2024 only (Griffin, 2026-11-05). Measured there on Autodesk's
+/// Snowdon Towers architectural sample, 9 shaft openings of which 7 give a
+/// void that equals a shaft's outline. The only shafts measured on a Revit
+/// 2025 file, the 2 of rac_advanced, cut nothing, and no file of 2026 or 2027
+/// is known to hold one that does, so the same-project check could not catch
+/// a bad cut there (RE-345). A shaft on a later release leaves its floor,
+/// ceiling or roof whole, and the export's `shaft_opening_not_cut` skipped
+/// item counts it.
+pub const SHAFT_OUTLINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024];
 
 /// The bytes a bounded line starts with.
 pub const BOUNDED_LINE_TAG: [u8; 4] = [0x04, 0x00, 0x08, 0x01];
@@ -82,11 +103,24 @@ pub fn supports_revit_version(revit_version: u32) -> bool {
     BEAM_AXIS_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
 }
 
+/// Whether `revit_version` is a release a sketch line's arcs are read on
+/// ([`SKETCH_CURVE_SUPPORTED_REVIT_VERSIONS`]).
+pub fn supports_sketch_curves(revit_version: u32) -> bool {
+    SKETCH_CURVE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
+}
+
+/// Whether `revit_version` is a release a shaft opening is cut on
+/// ([`SHAFT_OUTLINE_SUPPORTED_REVIT_VERSIONS`]).
+pub fn supports_shaft_outlines(revit_version: u32) -> bool {
+    SHAFT_OUTLINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
+}
+
 /// Releases where a beam's location line and rotation are read from the 32-bit
-/// records, apart from [`BEAM_AXIS_SUPPORTED_REVIT_VERSIONS`], which also gates
-/// a sketch line's arcs, circles and shaft lines, not measured there. The line
-/// is the record a wall's is on these releases (RE-114, RE-180, RE-181); the
-/// beams are held to the same Autodesk samples saved by Revit 2024 (RE-348).
+/// records, apart from [`BEAM_AXIS_SUPPORTED_REVIT_VERSIONS`] (2024 to 2027),
+/// which also gates [`scan_bounded_lines`] and the probes that list a line's
+/// copies, none measured on these releases. The line is the record a wall's is
+/// on these releases (RE-114, RE-180, RE-181); the beams are held to the same
+/// Autodesk samples saved by Revit 2024 (RE-362).
 pub const BEAM_AXIS_32BIT_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2023;
 
 /// Whether a beam's location line is read on `revit_version`.
@@ -316,13 +350,15 @@ pub fn first_circle(data: &[u8]) -> Option<BoundedArc> {
 }
 
 /// The full circle of each sketch line in `ids` ([`first_circle`]), read as
-/// [`scan_bounded_lines`] reads lines (RE-100).
+/// [`scan_bounded_lines`] reads lines (RE-100). Only a shaft's sketch is read
+/// for circles, so it is empty for a release a shaft is not cut on
+/// ([`supports_shaft_outlines`]).
 pub fn scan_sketch_circles(
     rf: &mut RevitFile,
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, BoundedArc>> {
-    if !supports_revit_version(revit_version) {
+    if !supports_shaft_outlines(revit_version) {
         return Ok(BTreeMap::new());
     }
     scan_first_records(
@@ -360,13 +396,13 @@ pub fn first_sketch_curve(data: &[u8]) -> Option<SketchCurve> {
 
 /// The curve of each sketch line in `ids` ([`first_sketch_curve`]), read as
 /// [`scan_bounded_lines`] reads lines (RE-96). Empty for a release this
-/// layout is not measured on.
+/// layout is not measured on ([`supports_sketch_curves`]).
 pub fn scan_sketch_curves(
     rf: &mut RevitFile,
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, SketchCurve>> {
-    if !supports_revit_version(revit_version) {
+    if !supports_sketch_curves(revit_version) {
         return Ok(BTreeMap::new());
     }
     scan_first_records(

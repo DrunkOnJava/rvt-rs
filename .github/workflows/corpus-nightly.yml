@@ -32,6 +32,8 @@ jobs:
   tier2-wide:
     name: Tier 2 — wider project corpus
     runs-on: ubuntu-24.04
+    # Longest 1.9 minutes (15 nights).
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -42,13 +44,7 @@ jobs:
           repository: magnetar-io/revit-test-datasets
           path: _project_corpus
       - name: Install Rust stable
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           save-if: false
@@ -63,3 +59,18 @@ jobs:
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
         run: 'cargo test --profile ci --test integration -- project_corpus_smoke:: --nocapture'
+
+  # A failed night opens an issue under `scheduled:tier-2-wider-project-corpus`, or
+  # leaves the open one alone (report-failure.yml). Before this nobody read a red
+  # night. A manual run is a dry run: it prints the issue it would open.
+  report:
+    name: Report a failed night
+    needs: tier2-wide
+    if: ${{ !cancelled() && (needs.tier2-wide.result == 'failure' || needs.tier2-wide.result == 'cancelled') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    uses: $/.github/workflows/report-failure.yml
+    with:
+      dry_run: ${{ github.event_name != 'schedule' }}

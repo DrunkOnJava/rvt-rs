@@ -1,0 +1,205 @@
+name: Scheduled checks
+
+# Checks that no commit triggers and that nobody would otherwise read (#1457).
+# Each failure opens one issue under a `scheduled:` label, or leaves the open
+# one alone (report-failure.yml); none comments on an issue.
+#
+# - Advisories, daily: `cargo audit` and `cargo deny check advisories` on the
+#   root lockfile and on fuzz/Cargo.lock and tools/ci/witness-ifc-lite/Cargo.lock,
+#   which nothing else audits. The two get advisories only: the witness is MPL on
+#   purpose and has its own licence story, and the full `cargo deny check` stays
+#   a pull-request gate for the root.
+# - NOT MEASURED, daily: BIM4LCA, R2025, `pnpm audit`, the cited-commits lookup,
+#   the viewer test that reads the BIM4LCA office and the advisory database above
+#   pass with a warning when their host is down. A warning on every run of its
+#   job for a day is a host that stays down, with nothing measured
+#   (tools/ci/not_measured.py reads the runs of `main` in ci.yml and these daily
+#   runs, and says why a day). It never fails CI.
+# - The Actions cache, daily: tools/maintainer/clean_caches.py --delete, because a
+#   cache at its 10 GB limit evicts the caches still in use.
+# - docs.rs on a floating nightly, Mondays: publish.yml builds the docs on a dated
+#   nightly, so a nightly that breaks them shows here a week at a time, not at a tag.
+#
+# A run started by hand (or on a branch) is a dry run unless its `dry_run` input
+# is turned off: it opens no issue and deletes no cache, and prints what it would.
+# A new workflow file cannot be dispatched before it is on the default branch.
+
+on:
+  schedule:
+    # Daily at 03:23 UTC, before Corpus nightly (06:15), Fuzz (07:17) and
+    # Performance Budgets (Mondays 07:17).
+    - cron: "23 3 * * *"
+    # Mondays at 03:41 UTC.
+    - cron: "41 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Open no issue and delete no cache; print what would happen.
+        type: boolean
+        default: true
+
+concurrency:
+  group: scheduled-checks
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Only the schedule acts: a manual run or a push to a branch is a dry run
+  # unless the dispatch turns `dry_run` off.
+  DRY_RUN: ${{ github.event_name != 'schedule' && (github.event_name != 'workflow_dispatch' || inputs.dry_run) }}
+
+jobs:
+  audit:
+    name: Audit ${{ matrix.name }}
+    if: github.event_name != 'schedule' || github.event.schedule == '23 3 * * *'
+    runs-on: ubuntu-24.04
+    # A leg took 10 to 17 seconds (run 42078699446): the tools are prebuilt and
+    # nothing is compiled. The limit allows for a slow tool download or a slow
+    # advisory database clone.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: rvt, manifest: Cargo.toml, lock: Cargo.lock }
+          - { name: fuzz, manifest: fuzz/Cargo.toml, lock: fuzz/Cargo.lock }
+          - { name: witness, manifest: tools/ci/witness-ifc-lite/Cargo.toml, lock: tools/ci/witness-ifc-lite/Cargo.lock }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Rust stable
+        uses: $/.github/actions/setup-rust
+      # The versions ci.yml pins for the same two checks.
+      - name: Install cargo-audit and cargo-deny
+        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
+        with:
+          tool: cargo-audit@0.22.2,cargo-deny@0.20.2
+      # Through tools/ci/advisory_check.py: an advisory (or any other failure)
+      # fails the step at once, but a database or index that cannot be fetched is
+      # tried three times and then reported as a NOT MEASURED warning, not as a
+      # finding, so a host that is down opens no `scheduled:audit-*` issue.
+      # tools/ci/not_measured.py follows that warning from one day to the next.
+      - name: cargo audit
+        env:
+          NAME: Audit ${{ matrix.name }}
+          LOCK: ${{ matrix.lock }}
+        run: python3 tools/ci/advisory_check.py "$NAME" cargo audit --file "$LOCK"
+      # Also when the audit found something: the two read the same database,
+      # but the issue should name every check that failed. deny.toml is the
+      # root's for all three (its ignore list and its yanked and unmaintained
+      # policy); only advisories are checked. `--config` is a global option of
+      # cargo-deny 0.20, before `check`; `--locked` audits the committed lock.
+      - name: cargo deny check advisories
+        if: ${{ !cancelled() }}
+        env:
+          NAME: Audit ${{ matrix.name }}
+          MANIFEST: ${{ matrix.manifest }}
+        run: python3 tools/ci/advisory_check.py "$NAME" cargo deny --locked --manifest-path "$MANIFEST" --config deny.toml check advisories
+
+  not-measured:
+    name: NOT MEASURED streaks
+    if: github.event_name != 'schedule' || github.event.schedule == '23 3 * * *'
+    runs-on: ubuntu-24.04
+    # 9 seconds when the newest run measured everything (run 42078699446). A
+    # streak that has to be followed back reads three API pages a run, at most
+    # 100 runs, with retries on a server error.
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools/ci/not_measured.py
+            tools/ci/open_issue.py
+          sparse-checkout-cone-mode: false
+      - name: Open an issue for each NOT MEASURED warning that has persisted
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          args=(--open)
+          if [ "$DRY_RUN" = true ]; then
+            args+=(--dry-run)
+          fi
+          python3 tools/ci/not_measured.py "${args[@]}"
+
+  clean-caches:
+    name: Clean the Actions caches
+    if: github.event_name != 'schedule' || github.event.schedule == '23 3 * * *'
+    runs-on: ubuntu-24.04
+    # A dry run took 9 seconds (run 42078699446). Deleting sleeps 0.15 s after
+    # each cache and backs off up to 60 s on a rate limit, so 1,200 caches take
+    # about 6 minutes without one.
+    timeout-minutes: 30
+    # The least it needs: list and delete caches, list the open pull requests
+    # and the branches whose caches are live.
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/maintainer/clean_caches.py
+          sparse-checkout-cone-mode: false
+      - name: Delete the caches nobody can use again
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          args=(--repo "$GH_REPO")
+          if [ "$DRY_RUN" != true ]; then
+            args+=(--delete)
+          fi
+          python3 tools/maintainer/clean_caches.py "${args[@]}"
+
+  docs-rs-nightly:
+    name: docs.rs on a floating nightly
+    if: github.event_name != 'schedule' || github.event.schedule == '41 3 * * 1'
+    runs-on: ubuntu-24.04
+    # No cache: a floating nightly would save a new one every week and restore
+    # none (ci.yml's docs.rs preview pins a date for that reason). It took 41
+    # seconds on 2026-11-05 (run 42078699446, rustc 1.101.0-nightly).
+    timeout-minutes: 20
+    env:
+      # The flags ci.yml's docs.rs preview and docs.rs itself use.
+      RUSTFLAGS: "-D warnings"
+      RUSTDOCFLAGS: "--cfg docsrs -D warnings"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the latest Rust nightly
+        uses: $/.github/actions/setup-rust
+        with:
+          toolchain: nightly
+      # Mirrors [package.metadata.docs.rs] in Cargo.toml (`all-features = true`).
+      - run: cargo doc --no-deps --all-features
+      - name: Research modules carry the unstable-research banner
+        run: grep -q 'unstable-research</code>' target/doc/rvt/research/index.html
+
+  # GitHub ends a job that exceeds its `timeout-minutes` as cancelled, not as
+  # failed, so `failure()` alone would never see a timeout. This runs when a
+  # needed job failed or was cancelled, unless the run itself was cancelled (a
+  # person, or a newer run), which `!cancelled()` is false for.
+  report:
+    name: Report failed checks
+    needs: [audit, not-measured, clean-caches, docs-rs-nightly]
+    if: ${{ !cancelled() && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')) }}
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    uses: $/.github/workflows/report-failure.yml
+    with:
+      dry_run: ${{ github.event_name != 'schedule' && (github.event_name != 'workflow_dispatch' || inputs.dry_run) }}
