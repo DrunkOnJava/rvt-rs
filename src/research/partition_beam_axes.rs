@@ -115,6 +115,24 @@ pub fn supports_shaft_outlines(revit_version: u32) -> bool {
     SHAFT_OUTLINE_SUPPORTED_REVIT_VERSIONS.contains(&revit_version)
 }
 
+/// Releases 2015 to 2023, where a beam's location line and rotation are read
+/// from the 32-bit records, apart from [`BEAM_AXIS_SUPPORTED_REVIT_VERSIONS`]
+/// (2024 to 2027), which also gates [`scan_bounded_lines`], not measured on these
+/// releases. The line is the record a wall's is on them (RE-114, RE-180,
+/// RE-181). It is measured on Autodesk's sample projects only, against the same
+/// samples' later saves (the 2024 saves, `rst_advanced` 2015's 2019 save,
+/// `rst_basic` 2015 none), and on no model from elsewhere: none of BIMcollab's
+/// 91 Revit 2015 beams holds a line in the window (RE-362, #1514). A
+/// range of its own, not the whole 32-bit set (`REVIT_32BIT_RELEASES`, 2008 to
+/// 2023): 2008 to 2014 are not read.
+pub const BEAM_AXIS_2015_TO_2023_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2023;
+
+/// Whether a beam's location line is read on `revit_version`.
+pub fn beam_axis_read_on(revit_version: u32) -> bool {
+    supports_revit_version(revit_version)
+        || BEAM_AXIS_2015_TO_2023_REVIT_VERSIONS.contains(&revit_version)
+}
+
 /// A bounded line record.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BoundedLine {
@@ -747,13 +765,13 @@ fn collect_copies<T>(
 /// What [`scan_bounded_lines`] finds for each id in `ids`, without choosing
 /// among copies: the partitions whose element data names the id, and the
 /// line each copy holds, for a probe of why a beam keeps its box (#1247).
-/// Empty for a release this layout is not measured on.
+/// Empty for a release a beam's line is not read on ([`beam_axis_read_on`]).
 pub fn line_copies(
     rf: &mut RevitFile,
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, LineCopies>> {
-    if !supports_revit_version(revit_version) {
+    if !beam_axis_read_on(revit_version) {
         return Ok(BTreeMap::new());
     }
     let (mut found, holders, _) =
@@ -771,14 +789,14 @@ pub fn line_copies(
 pub type AllLineCopies = BTreeMap<u32, Vec<(u32, Vec<BoundedLine>)>>;
 
 /// What [`all_bounded_lines`] finds in each copy of each id's element data in
-/// `ids`, without choosing among copies (RE-328). Empty for a release this
-/// layout is not measured on.
+/// `ids`, without choosing among copies (RE-328). Empty for a release a
+/// beam's line is not read on ([`beam_axis_read_on`]).
 pub fn all_line_copies(
     rf: &mut RevitFile,
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<AllLineCopies> {
-    if !supports_revit_version(revit_version) {
+    if !beam_axis_read_on(revit_version) {
         return Ok(BTreeMap::new());
     }
     let (found, _, _) = collect_copies(rf, revit_version, ids, all_bounded_lines, false)?;
