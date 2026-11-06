@@ -369,6 +369,42 @@ class LocalUses(unittest.TestCase):
         self.assertEqual(self.problems(self.step("$/.github/actions/fetch-corpus", repository="r", path="p"), files), [])
 
 
+GOOD_LEGS = '[{"name":"browser tests","files":"/a\\\\.spec"},{"name":"saved-mesh measurement","measure":true}]'
+
+
+class Legs(unittest.TestCase):
+    def test_a_written_out_list_of_legs_passes(self):
+        self.assertEqual(cw.legs_problems("w", GOOD_LEGS), [])
+
+    def test_a_list_that_yields_no_leg_fails(self):
+        for text in ("[]", "{}", "null", '{"name":"x","files":"/"}'):
+            self.assertEqual(len(cw.legs_problems("w", text)), 1, text)
+
+    def test_a_list_that_is_computed_fails_whatever_it_would_hold(self):
+        self.assertEqual(len(cw.legs_problems("w", "${{ needs.plan.outputs.legs }}")), 1)
+        self.assertEqual(len(cw.legs_problems("w", '[{"name":"x","files":"${{ inputs.f }}"}]')), 1)
+
+    def test_a_leg_that_runs_nothing_fails(self):
+        for text in (
+            '[{"name":"x"}]',
+            '[{"name":"x","files":""}]',
+            '[{"name":"x","measure":false}]',
+            '[{"name":"a","files":"/a"},{"name":"b"}]',
+        ):
+            self.assertEqual(len(cw.legs_problems("w", text)), 1, text)
+
+
+class LegsSources(unittest.TestCase):
+    def test_both_defaults_and_each_callers_list_are_read(self):
+        on = {
+            "workflow_call": {"inputs": {"legs": {"default": GOOD_LEGS}}},
+            "workflow_dispatch": {"inputs": {"legs": {"default": GOOD_LEGS}}},
+        }
+        caller = {"uses": "$/.github/workflows/viewer-test.yml", "with": {"legs": "[]"}}
+        sources = cw.viewer_legs_sources({"viewer-test.yml": {True: on}, "ci.yml": {"jobs": {"viewer": caller}}})
+        self.assertEqual([text for _, text in sources], [GOOD_LEGS, GOOD_LEGS, "[]"])
+
+
 STATEMENTS = {
     "README.md": "Rust 2024 edition (MSRV 1.87). Build: stable Rust 1.87 or newer.",
     "CONTRIBUTING.md": "You need stable Rust 1.87 or newer (`rustup` installs it).",
