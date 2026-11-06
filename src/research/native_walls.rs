@@ -444,12 +444,49 @@ fn real_joined(graph: &crate::native_parameters::ObjectGraph, id: u64) -> [Optio
 }
 
 /// Whether a wall's top is joined to a roof or floor: one of the
-/// `JoinToRoofGStep` objects of its record has `m_baseOrTop` 1.
+/// `JoinToRoofGStep` objects of its record has `m_baseOrTop` 1. Read from the
+/// graph [`WallReads::read`] builds only [`WALL_READ_FIELDS`] of, through
+/// [`wall_facts`]: a field read here is added to that list.
 fn is_top_joined(graph: &crate::native_parameters::ObjectGraph) -> bool {
     graph.objects.iter().any(|object| {
         object.class_name == "JoinToRoofGStep"
             && object.fields.get("m_baseOrTop").and_then(Value::as_i64) == Some(1)
     })
+}
+
+/// The fields of an `SWall` and an `ArcWall` graph that [`wall_facts`] reads
+/// (`wall_type_id`: `m_WallAttributesId`; `is_top_joined`: `m_baseOrTop`),
+/// and `m_id`, which the check of a record against its identity reads.
+/// [`WallReads::read`] builds no other field of those graphs (#1335), so a field
+/// either function comes to read must be added here.
+pub const WALL_READ_FIELDS: &[&str] = &["m_id", "m_WallAttributesId", "m_baseOrTop"];
+
+/// What [`WallReads::read`] takes from the graph of a wall's record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WallFacts {
+    /// The type the record names (`wall_type_id`).
+    pub type_id: Option<u64>,
+    /// Whether a roof or floor is joined to the wall's top (`is_top_joined`).
+    pub top_joined: bool,
+}
+
+/// [`WallFacts`] of a wall's graph: the only reader of the graph
+/// [`WallReads::read`] projects to [`WALL_READ_FIELDS`] (the probe of #1335
+/// runs it on the full graph and on the projected one).
+pub fn wall_facts(graph: &crate::native_parameters::ObjectGraph) -> WallFacts {
+    WallFacts {
+        type_id: wall_type_id(graph),
+        top_joined: is_top_joined(graph),
+    }
+}
+
+/// The fields [`WallReads::read`] builds of a record of `class`
+/// ([`crate::native_document::Options::graph_fields`]).
+fn wall_read_fields(class: &str) -> Option<&'static [&'static str]> {
+    match class {
+        "SWall" | "ArcWall" => Some(WALL_READ_FIELDS),
+        _ => None,
+    }
 }
 
 /// What reads of walls' native records have found, kept so that the reader
@@ -473,6 +510,14 @@ impl WallReads {
     /// of `type_walls` and whether the top of each of `join_walls` is joined
     /// ([`wall_top_joins`]), in one pass over the records of the walls not
     /// read already. Nothing is read where there are none.
+    ///
+    /// On Revit 2015 to 2023 this is the read of the wall records that
+    /// `read_wall_records`, `attach_wall_type_functions` and
+    /// `attach_wall_top_joins` share, and it builds only [`WALL_READ_FIELDS`] of
+    /// an `SWall` or `ArcWall` graph (#1335): a fact added to it that takes
+    /// another field must add the field to the list, not assume the whole
+    /// graph, and reads it through [`wall_facts`]. The wall cuts and
+    /// [`native_walls_and_top_joins`] read their own selections, in full.
     pub fn read(
         &mut self,
         rf: &mut RevitFile,
@@ -494,6 +539,7 @@ impl WallReads {
         let options = Options {
             selected_ids: selected,
             releases: crate::native_document::NATIVE_RELEASES,
+            graph_fields: Some(wall_read_fields),
             ..Options::default()
         };
         let mut type_ids: BTreeMap<u64, u64> = BTreeMap::new();
@@ -503,15 +549,16 @@ impl WallReads {
                 return Ok(());
             };
             let id = record.identity.element_id;
+            let facts = wall_facts(graph);
             if types.contains(&id) {
-                if let Some(type_id) = wall_type_id(graph) {
+                if let Some(type_id) = facts.type_id {
                     type_ids.insert(id, type_id);
                 }
             }
             if joins.contains(&id)
                 && matches!(record.class_name.as_deref(), Some("SWall" | "ArcWall"))
             {
-                top_joined.insert(id, is_top_joined(graph));
+                top_joined.insert(id, facts.top_joined);
             }
             Ok(())
         })?;
