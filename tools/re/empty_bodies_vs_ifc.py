@@ -5,7 +5,9 @@ Reads what `probes/examples/probe_re363_empty_bodies.rs` prints for a model: for
 ids of the family instances rvt-rs writes that the probe analysed (`analysed`), and of those the
 ids whose saved graphics at the Fine detail level decode to no surface with no diagnostic at all
 (`empty ... empty_none`) or with only the view-component or nested-detail-filter diagnostics
-(`empty ... empty_view_only`). It joins them with the numeric `Tag`s of Revit's own export and says,
+(`empty ... empty_view_only`), and of the empty ones how many branches the walk left out as
+flagged not visible (`emptyinfo`): the third rule drops an `empty_none` instance only where some
+branch was, so an instance with no saved graphics at all is kept. It joins them with the numeric `Tag`s of Revit's own export and says,
 for each category and in total, how many instances in Revit's export the rule would drop (a false
 negative: an element Revit writes would be lost) and how many of those Revit's export lacks it
 would drop. A door or a window is counted apart: revit-ifc's `FamilyInstanceExporter` writes one
@@ -27,18 +29,18 @@ import collections
 import sys
 
 DOORS_AND_WINDOWS = {-2000023, -2000014}
-RULES = {
-    "empty_none": ("empty_none",),
-    "empty_none_or_view_only": ("empty_none", "empty_view_only"),
-}
+RULES = ("empty_none", "empty_none_or_view_only", "empty_none_and_hidden_branches")
 
 
 def parse(path):
-    """(analysed, empty, notes): category -> (name, ids); (category, outcome) -> ids; other lines."""
+    """(analysed, empty, names, notes, hidden): the ids analysed by category, the empty ids by
+    (category, outcome), the category names, the other lines and, for each empty id, how many
+    branches of its graphics the walk left out as flagged not visible."""
     analysed = {}
     empty = collections.defaultdict(set)
     names = {}
     notes = []
+    hidden = {}
     for raw in open(path):
         line = raw.rstrip("\n")
         head = line.split(" ", 1)[0]
@@ -50,9 +52,27 @@ def parse(path):
             _, category, name, outcome, _count, ids = (line.split(" ", 5) + [""])[:6]
             empty[(int(category), outcome)] = {int(i) for i in ids.split(",") if i}
             names[int(category)] = name
-        elif head in ("truncated", "written", "done", "release"):
+        elif head == "emptyinfo":
+            word = tokens(line)
+            hidden[int(word["id"])] = int(word.get("vis_branches", "0"))
+        elif head in ("truncated", "written", "done", "release", "timing", "memory"):
             notes.append(line)
-    return analysed, empty, names, notes
+    return analysed, empty, names, notes, hidden
+
+
+def tokens(line):
+    """The `key=value` words of a line, as a dict."""
+    return dict(word.split("=", 1) for word in line.split()[1:] if "=" in word)
+
+
+def dropped_by(rule, category, empty, hidden):
+    """The ids of `category` that `rule` leaves out."""
+    none = empty.get((category, "empty_none"), set())
+    if rule == "empty_none":
+        return set(none)
+    if rule == "empty_none_or_view_only":
+        return none | empty.get((category, "empty_view_only"), set())
+    return {i for i in none if hidden.get(i, 0) > 0}
 
 
 def safe(text):
@@ -83,7 +103,7 @@ def main(argv):
     if len(argv) != 3:
         print(__doc__, file=sys.stderr)
         return 2
-    analysed, empty, names, notes = parse(argv[1])
+    analysed, empty, names, notes, hidden = parse(argv[1])
     schema, tags = export_tags(argv[2])
     truncated = [line for line in notes if line.startswith("truncated")]
     complete = any(line == "done" for line in notes) and not truncated
@@ -93,13 +113,11 @@ def main(argv):
         f"instances {total_analysed}; probe {'complete' if complete else 'incomplete'}"
     )
     print(safe(f"re363 empty bodies: schema {schema}; analysed {total_analysed}; complete {'yes' if complete else 'no'}"))
-    for rule, outcomes in RULES.items():
+    for rule in RULES:
         totals = {"other": collections.Counter(), "door_window": collections.Counter()}
         for category in sorted(analysed):
             ids = analysed[category]
-            dropped = set()
-            for outcome in outcomes:
-                dropped |= empty.get((category, outcome), set())
+            dropped = dropped_by(rule, category, empty, hidden)
             held = ids & set(tags)
             wrong = dropped & set(tags)
             right = dropped - set(tags)

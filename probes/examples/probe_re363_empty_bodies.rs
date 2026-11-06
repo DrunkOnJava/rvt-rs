@@ -28,6 +28,11 @@
 //!   emptyinfo id=<id> category=<c> outcome=<o> hidden=<n> visible=<n> vis_branches=<n>
 //!       filters=<n> nonsurface=<n>
 //!   truncated <analysed> of <total>   (only where the time budget ran out)
+//!   timing export_ms=<n> entities=<n>          the default export, on this handle
+//!   timing classes_ms=<n>                      the class of each written element
+//!   timing pass_ms=<n> read_ms=<n> analyse_ms=<n> instances=<n>
+//!                                              the saved-graphics pass, after the export
+//!   memory vmhwm_kb after_export=<n> after_pass=<n>   (Linux only)
 //!   done
 //!
 //! ```bash
@@ -35,6 +40,7 @@
 //! ```
 
 use rvt::RevitFile;
+use rvt::ifc::RvtDocExporter;
 use rvt::research::native_document::{NATIVE_RELEASES, Options, Record, extract_graphs};
 use rvt::research::native_graphics_traversal::{
     NESTED_DETAIL_FILTER_DIAGNOSTIC, VIEW_COMPONENT_DIAGNOSTIC,
@@ -126,6 +132,14 @@ fn identifier(value: &Value) -> Option<i64> {
 fn ignorable(diagnostic: &str) -> bool {
     diagnostic.ends_with(NESTED_DETAIL_FILTER_DIAGNOSTIC)
         || diagnostic.ends_with(VIEW_COMPONENT_DIAGNOSTIC)
+}
+
+/// The process's peak resident set in kilobytes, where `/proc` gives it.
+fn peak_kb() -> Option<u64> {
+    let text = std::fs::read_to_string("/proc/self/status").ok()?;
+    text.lines()
+        .find_map(|line| line.strip_prefix("VmHWM:"))
+        .and_then(|rest| rest.trim().trim_end_matches("kB").trim().parse().ok())
 }
 
 fn name_of(category: i64) -> String {
@@ -266,7 +280,20 @@ fn main() -> anyhow::Result<()> {
     }
     let written: BTreeSet<u64> = category_of.keys().map(|id| u64::from(*id)).collect();
 
+    // The default export on this handle, for what the pass below adds to it.
+    let timed = Instant::now();
+    match RvtDocExporter.export_with_diagnostics(&mut rf) {
+        Ok(result) => println!(
+            "timing export_ms={} entities={}",
+            timed.elapsed().as_millis(),
+            result.model.entities.len()
+        ),
+        Err(error) => println!("export refused: {error}"),
+    }
+    let after_export = peak_kb();
+
     // The native class of each written element, read without its graph.
+    let timed = Instant::now();
     let mut instances: BTreeSet<u64> = BTreeSet::new();
     let mut classes: BTreeMap<String, usize> = BTreeMap::new();
     let base = Options {
@@ -286,6 +313,7 @@ fn main() -> anyhow::Result<()> {
     if let Err(error) = read {
         println!("native refused: {error}");
     }
+    println!("timing classes_ms={}", timed.elapsed().as_millis());
     let shown: Vec<String> = classes
         .iter()
         .take(12)
@@ -305,17 +333,22 @@ fn main() -> anyhow::Result<()> {
     let mut outcomes: BTreeMap<(i64, &'static str), usize> = BTreeMap::new();
     let mut empty = EmptyIds::new();
     let mut done = 0usize;
+    let pass = Instant::now();
+    let (mut read_time, mut analyse_time) = (Duration::ZERO, Duration::ZERO);
     for chunk in ordered.chunks(CHUNK) {
         if started.elapsed() > BUDGET {
             println!("truncated {done} of {}", ordered.len());
             break;
         }
+        let timed = Instant::now();
         load(
             &mut rf,
             &mut graphics,
             &mut attempted,
             chunk.iter().copied().collect(),
         );
+        read_time += timed.elapsed();
+        let timed = Instant::now();
         for id in chunk {
             let Ok(short) = u32::try_from(*id) else {
                 continue;
@@ -331,12 +364,24 @@ fn main() -> anyhow::Result<()> {
                 println!("emptyinfo id={id} category={category} {info}");
             }
         }
+        analyse_time += timed.elapsed();
         for id in chunk {
             graphics.remove(id);
         }
         done += chunk.len();
         println!("progress {done} of {}", ordered.len());
     }
+    println!(
+        "timing pass_ms={} read_ms={} analyse_ms={} instances={done}",
+        pass.elapsed().as_millis(),
+        read_time.as_millis(),
+        analyse_time.as_millis()
+    );
+    println!(
+        "memory vmhwm_kb after_export={} after_pass={}",
+        after_export.map_or_else(|| "-".to_string(), |kb| kb.to_string()),
+        peak_kb().map_or_else(|| "-".to_string(), |kb| kb.to_string())
+    );
     for (category, ids) in &analysed {
         println!(
             "analysed {category} {} {} {}",
