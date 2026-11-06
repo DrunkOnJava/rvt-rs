@@ -220,6 +220,9 @@ jobs:
             {
               "language": "rust"
             }
+      # A kept SARIF is covered when this file has a step that uploads it, which
+      # the checkout above holds (the workflow of this run: a pull request's
+      # merge commit is both).
       - name: Fail on a SARIF no step above uploads
         if: ${{ !cancelled() }}
         shell: bash
@@ -227,12 +230,9 @@ jobs:
           shopt -s nullglob
           status=0
           for file in retry/*.sarif; do
-            case "$(basename "$file")" in
-              actions.sarif | javascript.sarif | python.sarif | rust.sarif) ;;
-              *)
-                echo "::error::${file} is kept results that no step of this job uploads: add one for its language, as the steps above do"
-                status=1
-                ;;
-            esac
+            if ! grep -qF "sarif_file: ${file}" .github/workflows/codeql.yml; then
+              echo "::error::${file} is kept results that no step of this job uploads: add one for its language, as the steps above do"
+              status=1
+            fi
           done
           exit "$status"
