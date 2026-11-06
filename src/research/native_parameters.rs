@@ -225,9 +225,12 @@ pub struct PlanCache {
     /// How many times the cache was emptied for passing its limit.
     clears: usize,
 }
-/// What a [`PlanCache`] holds by default, as a sum of plan costs: about 60
-/// bytes for each unit. A real file keeps well under a tenth of it (the probe
-/// of #1335 prints the largest it reaches).
+/// What a [`PlanCache`] holds by default, as a sum of plan costs: an estimate
+/// of about 60 bytes for each unit. Measured over 88 files of Revit 2015 to
+/// 2027 with one cache shared by seven field lists at once, more than any pass
+/// shares, the most a file made it hold was 174,316 (8,127 plans, Snowdon
+/// Towers architectural), 17.4% of it, and no file emptied it (the probe of
+/// #1335 prints the figure).
 pub const PLAN_CACHE_COST: usize = 1_000_000;
 /// What each plan costs besides its fields: its entry in the table, its
 /// vectors and its share of the cache's overhead.
