@@ -16,9 +16,9 @@
   neither is added. Revit's public IFC4 export of the 2018 `rac_basic` (RE-326)
   writes its 3 Furniture Systems as `IfcSystemFurnitureElement` with no
   `PredefinedType`, and all 3 of the sweep's placed ones are in it (3 of 3),
-  none written that the export lacks: the category now meets the rule and is
-  left for a change of its own, since `category_map` maps it to
-  `IfcFurniture`. The only `IfcElementAssembly` in a measured export are 3 in
+  none written that the export lacks: the category meets the rule, and
+  RE-352 exports it (one project, 3 elements; `category_map` mapped it to
+  `IfcFurniture` before). The only `IfcElementAssembly` in a measured export are 3 in
   each of Vitoria's two 2018 files, Revit assemblies with no representation
   (RE-315) that no frame carries. The sweep reads 1,349 curtain panels, 3,276
   mullions and 100 doors on `rac_advanced` and 44, 144 and 16 on `rac_basic`

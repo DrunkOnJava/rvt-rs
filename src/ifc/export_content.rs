@@ -2230,7 +2230,11 @@ fn reference_set_kinds(
     super::standard_property_sets::StandardPropertyKind,
 )> {
     use super::standard_property_sets::STANDARD_PROPERTY_SETS;
-    if ifc_type == "IFCSPACE" {
+    // RE-352: Revit's IFC4 export of Autodesk's 2018 `rac_basic` writes no
+    // property set on its 3 system furniture elements, so no set holds a
+    // `Reference` for the class (the standing rule: a set is written only
+    // where a Revit export confirms it).
+    if ifc_type == "IFCSPACE" || ifc_type == "IFCSYSTEMFURNITUREELEMENT" {
         return Vec::new();
     }
     STANDARD_PROPERTY_SETS
@@ -4212,9 +4216,10 @@ fn pipe_invert_height(fields: &[(String, InstanceField)]) -> Option<f64> {
 /// proxies, and no wall, door, slab, covering or curtain wall. On the
 /// BIM4LCA office (#792) Revit's export also puts its waste, fire
 /// suppression and air terminals and electric appliances in their rooms'
-/// spaces.
+/// spaces. RE-352: and Revit's IFC4 export of Autodesk's 2018 `rac_basic`
+/// contains its 3 system furniture elements in a space (3 of 3).
 // Tracker: B63.
-const ROOM_CONTENT_TYPES: [&str; 7] = [
+const ROOM_CONTENT_TYPES: [&str; 8] = [
     "IFCFURNITURE",
     "IFCSANITARYTERMINAL",
     "IFCBUILDINGELEMENTPROXY",
@@ -4222,6 +4227,7 @@ const ROOM_CONTENT_TYPES: [&str; 7] = [
     "IFCFIRESUPPRESSIONTERMINAL",
     "IFCAIRTERMINAL",
     "IFCELECTRICAPPLIANCE",
+    "IFCSYSTEMFURNITUREELEMENT",
 ];
 
 /// A closed plan loop, model feet.
