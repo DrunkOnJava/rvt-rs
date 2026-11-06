@@ -4291,6 +4291,19 @@ pub(crate) fn build_export_diagnostics_and_decisions(
                  design option are written."
             )
         };
+        // RE-364: from 2015 a wall is drawn along its line and cut at its joins.
+        let (walls, wall_gaps) =
+            if crate::partition_compound_structure::WALL_JOIN_32BIT_REVIT_VERSIONS
+                .contains(&version)
+            {
+                (
+                    "a wall is drawn along its location line and joined by its join lists where \
+                     those are read, and otherwise keeps its record box",
+                    "A wall's joined-wall lists, end steps, profile openings and `Length`",
+                )
+            } else {
+                ("walls keep their record box", "Wall joins and profiles")
+            };
         warnings.push(format!(
             "Revit {version}: elements come from their records with their ElementId, category and \
              bounding box, doors and windows with their host wall, rooms with their outline, \
@@ -4298,8 +4311,8 @@ pub(crate) fn build_export_diagnostics_and_decisions(
              record names; family instances, walls, floors and roofs carry their family and \
              type names, and family instances their type's materials. Layers become \
              material layer sets where their materials are named, a layer that takes its \
-             category's material taking the object styles' one, and walls keep their record box. \
-             {filters} Wall joins and profiles, parameters and \
+             category's material taking the object styles' one, and {walls}. \
+             {filters} {wall_gaps}, parameters and \
              \"Export to IFC As\" overrides are not read for {version}, and components \
              nested in doors and windows are left out."
         ));

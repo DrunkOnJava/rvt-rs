@@ -2511,3 +2511,7 @@ mahach666's counts (Discussion #1241) differ from rvt-rs's on `rst_basic` by 346
 ## Addendum — RE-369 Level parameters on Revit 2015 to 2023 (2026-11-07)
 
 On Revit 2015 to 2023 an element's Level parameters are the Levels its own native record names: the Element base's `m_assocLevelId` (RE-281), and where that is unset a field of its class, a wall's `m_upToLevelId`, a roof's or stair's base and top Level, a family instance's `m_scheduleOnlyLevelId` or `FamInstCurveDriver.m_refLevelId`, a duct's or pipe's `m_idLevelStart`. On Autodesk's samples every one both saves give equals the same project's 2024 save: 85,121 of 85,121 across 30 saves. See `reports/element-framing/RE-369-2015-2023-level-parameters.md`.
+
+## Addendum — RE-364 a wall's join lists on Revit 2015 to 2023 (2026-11-06)
+
+A wall's join list on Revit 2015 to 2023 is `07 00 00 00 · u32 tag · 02 00 00 00 · u32`, 13 zero bytes, a `u32` count 29 bytes past the opening word and that many entries `u32 · u32 ElementId · u32`, against 2024's count at +12 and 16-byte entries (RE-70). With them, walls are drawn along their lines as on 2024, held to the same Autodesk samples' later saves and not scored against a Revit export. A record on these releases is read without its control joins, so a wall's `Length` is left out. See `reports/element-framing/RE-364-2015-2023-wall-lines-and-joins.md`.
