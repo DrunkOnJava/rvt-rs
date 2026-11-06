@@ -498,9 +498,12 @@ jobs:
 
   # Prebuilt CLI archives for Linux (static musl, x86_64 + arm64), macOS
   # (arm64 + x86_64) and Windows (x86_64), checksummed and attached to the
-  # tag's GitHub Release — see release-binaries.yml. Gated on the source
-  # smoke test and on the crates.io publish, so the GitHub release and the
-  # container image never carry a version crates.io lacks. It does not wait
+  # tag's GitHub Release — see release-binaries.yml. The release page also
+  # gets the wheels and the sdist built above, the very files the PyPI job
+  # uploads (the `wheel-*` and `sdist` artifacts of this run), listed in
+  # SHA256SUMS and covered by the same attestation (#1466). Gated on the
+  # source smoke test and on the crates.io publish, so the GitHub release and
+  # the container image never carry a version crates.io lacks. It does not wait
   # for PyPI, so a PyPI hiccup never withholds the binaries from people who
   # just need to read a Revit file.
   release-binaries:
@@ -508,6 +511,8 @@ jobs:
     if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
     needs:
       - preflight
+      - build-wheels
+      - build-sdist
       - release-source-smoke
       - publish-crate
     permissions:

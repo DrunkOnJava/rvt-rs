@@ -481,5 +481,95 @@ class ProseMsrv(unittest.TestCase):
         self.assertEqual(prose("1.87", texts), [])
 
 
+GATE = "inputs.upload || inputs.python"
+
+
+def download(value, key="name", gate=None):
+    step = {"uses": "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333", "with": {key: value}}
+    if gate:
+        step["if"] = gate
+    return step
+
+
+def release_workflow(checksums=None, attest=None, upload=None, subject="dist/*", page="release-page"):
+    steps = {
+        "checksums": [download("rvt-rs-*", "pattern"), download("wheel-*", "pattern", GATE), download("sdist", gate=GATE)],
+        "attest": [
+            download("rvt-rs-*", "pattern"),
+            download("SHA256SUMS"),
+            download("wheel-*", "pattern"),
+            download("sdist"),
+            {"uses": "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6", "with": {"subject-path": subject}},
+            {"uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9", "with": {"name": page, "path": "dist"}},
+        ],
+        "upload": [download("release-page")],
+    }
+    for name, replaced in (("checksums", checksums), ("attest", attest), ("upload", upload)):
+        if replaced is not None:
+            steps[name] = replaced
+    return {"jobs": {name: {"steps": found} for name, found in steps.items()}}
+
+
+class ReleasePage(unittest.TestCase):
+    def problems(self, **given):
+        return cw.release_page_problems(release_workflow(**given))
+
+    def test_agreement_passes(self):
+        self.assertEqual(self.problems(), [])
+
+    def test_checksums_that_leave_the_wheels_out_fail(self):
+        problems = self.problems(checksums=[download("rvt-rs-*", "pattern"), download("sdist", gate=GATE)])
+        self.assertTrue(any("`wheel-*`" in p for p in problems), problems)
+
+    def test_checksums_that_leave_the_sdist_out_fail(self):
+        problems = self.problems(checksums=[download("rvt-rs-*", "pattern"), download("wheel-*", "pattern", GATE)])
+        self.assertTrue(any("`sdist`" in p for p in problems), problems)
+
+    def test_a_python_download_every_run_makes_fails(self):
+        problems = self.problems(checksums=[download("rvt-rs-*", "pattern"), download("wheel-*", "pattern"), download("sdist", gate=GATE)])
+        self.assertEqual(len([p for p in problems if "every run" in p]), 1, problems)
+
+    def test_a_python_download_gated_on_something_else_fails(self):
+        problems = self.problems(checksums=[download("rvt-rs-*", "pattern"), download("wheel-*", "pattern", "github.ref_type == 'tag'"), download("sdist", gate=GATE)])
+        self.assertEqual(len([p for p in problems if "every run" in p]), 1, problems)
+
+    def test_an_attest_job_that_misses_a_download_fails(self):
+        for left_out in ("wheel-*", "sdist", "SHA256SUMS", "rvt-rs-*"):
+            steps = release_workflow()["jobs"]["attest"]["steps"]
+            kept = [s for s in steps if (s.get("with") or {}).get("name", (s.get("with") or {}).get("pattern")) != left_out]
+            self.assertTrue(any("not what SHA256SUMS lists" in p for p in self.problems(attest=kept)), left_out)
+
+    def test_an_attest_job_that_downloads_more_fails(self):
+        steps = release_workflow()["jobs"]["attest"]["steps"] + [download("*", "pattern")]
+        self.assertTrue(any("not what SHA256SUMS lists" in p for p in self.problems(attest=steps)))
+
+    def test_a_narrower_or_wider_subject_fails(self):
+        for subject in ("dist/rvt-rs-*\ndist/SHA256SUMS", "dist/rvt-rs-*\ndist/*.whl\ndist/SHA256SUMS", "dist/*\ndist/*", "", "*"):
+            self.assertTrue(any("not `dist/*`" in p for p in self.problems(subject=subject)), repr(subject))
+
+    def test_one_subject_on_one_line_passes(self):
+        self.assertEqual(self.problems(subject="dist/*\n"), [])
+
+    def test_an_attest_job_that_hands_nothing_on_fails(self):
+        self.assertTrue(any("does not upload" in p for p in self.problems(page="other")))
+
+    def test_an_upload_job_that_downloads_more_than_the_page_fails(self):
+        for steps in ([download("release-page"), download("*", "pattern")], [download("*", "pattern")], []):
+            self.assertTrue(any("could attach a file nothing attested" in p for p in self.problems(upload=steps)))
+
+    def test_a_workflow_missing_a_job_fails_rather_than_crashing(self):
+        for doc in (None, {}, {"jobs": {"checksums": {"steps": []}}}):
+            self.assertEqual(len(cw.release_page_problems(doc)), 1)
+
+    def test_a_job_with_no_steps_reads_as_downloading_nothing(self):
+        problems = cw.release_page_problems({"jobs": {"checksums": {}, "attest": {}, "upload": {}}})
+        self.assertTrue(any("`wheel-*`" in p for p in problems))
+
+    def test_another_action_with_the_same_inputs_is_not_a_download(self):
+        other = {"uses": "someone/else@v1", "with": {"name": "sdist"}}
+        problems = self.problems(checksums=[download("rvt-rs-*", "pattern"), download("wheel-*", "pattern", GATE), other])
+        self.assertTrue(any("`sdist`" in p for p in problems))
+
+
 if __name__ == "__main__":
     unittest.main()

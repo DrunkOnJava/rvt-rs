@@ -25,6 +25,13 @@ Exits 1 with an `::error` line for each of:
 * The MSRV in prose. README.md, CONTRIBUTING.md, .cursor/install.sh, AGENTS.md, docs/python.md,
   RELEASE.md and docs/install.md each state it and each must state Cargo.toml's `rust-version`.
   docs/install.md also states the MCP server's minimum, which must be rvt-mcp's `rust-version`.
+* The release page's files (issue #1466). In release-binaries.yml, the `checksums` job downloads
+  the archives, the wheels and the sdist (the wheels and the sdist only for a release or a
+  `python` rehearsal, since any other run builds none); the `attest` job downloads the same and
+  SHA256SUMS, attests `dist/*` and hands the page to `upload` as `release-page`; and `upload`
+  attaches that artifact and nothing else. A change to one that leaves the others behind would
+  put a file on the page that SHA256SUMS or the attestation lacks, which only a tag push would
+  find.
 
 PENDING lists the jobs another change is still editing, if any. They are reported as warnings,
 so a job added anywhere else without a timeout still fails.
@@ -400,6 +407,51 @@ def prose_msrv_problems(root, texts, mcp=None):
     return problems
 
 
+RELEASE_WORKFLOW = "release-binaries.yml"
+PYTHON_FILES = {"wheel-*", "sdist"}
+PAGE_ARTIFACT = "release-page"
+
+
+def used(job, action, key):
+    """The `with:` values under `key` of a job's steps that use `action`, in step order."""
+    steps = [s for s in (job or {}).get("steps") or [] if str(s.get("uses") or "").startswith(action + "@")]
+    return [(s, (s.get("with") or {}).get(key)) for s in steps]
+
+
+def downloads(job):
+    """The artifact names and patterns a job downloads."""
+    return {v for _, v in used(job, "actions/download-artifact", "name") + used(job, "actions/download-artifact", "pattern") if v}
+
+
+def release_page_problems(doc):
+    """Where release-binaries.yml's checksums, attestation and upload stop describing the same files."""
+    where = RELEASE_WORKFLOW
+    jobs = (doc or {}).get("jobs") or {}
+    gone = [name for name in ("checksums", "attest", "upload") if name not in jobs]
+    if gone:
+        return [f"{where}: no job named {', '.join(gone)}, which the release page's checks read"]
+    problems = []
+    summed, attested = downloads(jobs["checksums"]), downloads(jobs["attest"])
+    for selector in sorted(PYTHON_FILES - summed):
+        problems.append(f"{where}: job 'checksums' does not download `{selector}`, so SHA256SUMS cannot list the Python files on the release page")
+    if attested != summed | {"SHA256SUMS"}:
+        problems.append(
+            f"{where}: job 'attest' downloads {sorted(attested)} but job 'checksums' downloads {sorted(summed)} and SHA256SUMS"
+            " is made from those, so the page is not what SHA256SUMS lists"
+        )
+    for step, value in used(jobs["checksums"], "actions/download-artifact", "name") + used(jobs["checksums"], "actions/download-artifact", "pattern"):
+        if value in PYTHON_FILES and "inputs.upload" not in str(step.get("if") or ""):
+            problems.append(f"{where}: job 'checksums' downloads `{value}` on every run, and a pull request or weekly run builds none")
+    subjects = [line.strip() for _, value in used(jobs["attest"], "actions/attest", "subject-path") for line in str(value or "").splitlines() if line.strip()]
+    if subjects != ["dist/*"]:
+        problems.append(f"{where}: job 'attest' attests {subjects}, not `dist/*`, the files the page carries")
+    if PAGE_ARTIFACT not in {v for _, v in used(jobs["attest"], "actions/upload-artifact", "name")}:
+        problems.append(f"{where}: job 'attest' does not upload `{PAGE_ARTIFACT}`, the page `upload` attaches")
+    if downloads(jobs["upload"]) != {PAGE_ARTIFACT}:
+        problems.append(f"{where}: job 'upload' downloads {sorted(downloads(jobs['upload']))}, not only `{PAGE_ARTIFACT}`, so it could attach a file nothing attested")
+    return problems
+
+
 def step_run(job, **want):
     for step in job.get("steps", []):
         if all(step.get(k) == v for k, v in want.items()):
@@ -488,6 +540,9 @@ def main():
                 for u in [j.get("uses")] + [s.get("uses") for s in j.get("steps") or []]
                 if isinstance(u, str) and LOCAL_USE.fullmatch(u))
     print(f"local references: {local} uses of this repository's own actions and workflows")
+
+    errors += release_page_problems(workflows.get(RELEASE_WORKFLOW))
+    print(f"release page: {RELEASE_WORKFLOW}'s checksums, attest and upload jobs describe the same files")
 
     for error in errors:
         print(annotation("error", error))
