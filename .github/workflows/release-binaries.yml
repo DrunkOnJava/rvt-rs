@@ -110,15 +110,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        env:
-          TARGETS: ${{ matrix.target }}
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update ${TARGETS:+--target "$TARGETS"}
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          target: ${{ matrix.target }}
       # cargo-auditable embeds the dependency list in each binary, so
       # `cargo audit bin` and other scanners can check a shipped binary
       # against advisories (C10).
