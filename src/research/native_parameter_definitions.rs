@@ -214,9 +214,33 @@ pub struct BuiltinDefinition {
     #[serde(default)]
     pub caption_locale: String,
 }
+/// The fields of a `Family` graph that [`Registry::ingest_binding_context`]
+/// reads, with `m_id`, which the check of a record against its identity reads.
+pub const FAMILY_BINDING_FIELDS: &[&str] = &["m_id", "m_categoryId"];
+/// [`FAMILY_BINDING_FIELDS`] for a `FamilySymbol` graph.
+pub const SYMBOL_BINDING_FIELDS: &[&str] = &["m_id", "m_familyId"];
+
+/// The fields of a record of `class` that the definitions pass builds
+/// ([`crate::native_document::Options::graph_fields`]): the two lists above for
+/// a `Family` and a `FamilySymbol`, whose graphs the pass reads only through
+/// [`Registry::ingest_binding_context`]; `None` for every other class, which
+/// is built whole (#1335).
+pub fn binding_context_fields(class: &str) -> Option<&'static [&'static str]> {
+    match class {
+        "Family" => Some(FAMILY_BINDING_FIELDS),
+        "FamilySymbol" => Some(SYMBOL_BINDING_FIELDS),
+        _ => None,
+    }
+}
+
 impl Registry {
     /// Retain only the native links needed to resolve category bindings. All IDs
     /// must come from the same current document namespace as the definitions.
+    ///
+    /// The definitions pass builds only [`FAMILY_BINDING_FIELDS`] of a `Family`
+    /// graph and [`SYMBOL_BINDING_FIELDS`] of a `FamilySymbol` graph (#1335),
+    /// and this is the only reader of either: a field read here must be added
+    /// to the list, or it reads as absent.
     pub fn ingest_binding_context(&mut self, graph: &ObjectGraph) -> Result<()> {
         let root = graph
             .objects

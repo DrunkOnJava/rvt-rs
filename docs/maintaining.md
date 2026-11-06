@@ -737,6 +737,20 @@ save it (a pull request's run does not: its caches are its own). A ref that is
 not a full SHA is built each time, the probe examples always are, and
 `clean_caches.py` keeps the newest sixteen.
 
+## Projected graphs (#1335)
+
+A native pass that reads a few fields of a large graph can decode it projected
+(`native_parameters::decode_graph_projected`, `native_document::Options::graph_fields`):
+every byte is read and checked as in the full decode, so the record is refused for
+the same reasons, but only the listed fields are built. Each list is a `pub const`
+beside the one function that reads the projected graph
+(`Registry::ingest_binding_context`, `native_walls::wall_facts`,
+`native_es_catalog::from_graph`), and a field that function comes to read must be
+added to its list, because a field left out reads as absent without an error.
+`probes/examples/probe_1335_projected_graphs.rs` imports the constants, decodes every
+record both ways and runs those functions on both graphs; run it
+(`-f probe=probe_1335_projected_graphs`) after any change to a list or a reader.
+
 ## Dependencies and the MSRV
 
 `rust-version` in `Cargo.toml` is the oldest stable Rust the crate builds on, and
