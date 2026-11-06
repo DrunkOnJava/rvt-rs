@@ -22,7 +22,7 @@ group became per-ref, leaving only the deploy job on the shared
 each other
 ([#260](https://github.com/DrunkOnJava/rvt-rs/pull/260), merged
 2026-09-19). The fourth: the workflow builds the WASM once and uploads it
-(with `gen-fixture` and the WASM's sha256), and the browser tests
+(with `gen-fixture`, `rvt-elements` and the WASM's sha256), and the browser tests
 (`viewer-test.yml`) download that file instead of building their own, so the
 site is published from the bytes that were tested (#1457).
 

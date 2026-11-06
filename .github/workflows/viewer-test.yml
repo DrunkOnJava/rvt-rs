@@ -64,7 +64,7 @@ on:
       # Not a dispatch input: a dispatched run has no artifact to name, so it
       # builds its own.
       wasm_artifact:
-        description: Name of an artifact of this run that holds a build of the WASM, laid out as the `build` job writes it (pkg/ from wasm-pack, bin/gen-fixture, wasm.sha256), for a caller that built it already; `build` is then skipped and `release_wasm` is ignored
+        description: Name of an artifact of this run that holds a build of the WASM, laid out as the `build` job writes it (pkg/ from wasm-pack, bin/gen-fixture, bin/rvt-elements, wasm.sha256), for a caller that built it already; `build` is then skipped and `release_wasm` is ignored
         type: string
         default: ''
   workflow_dispatch:
@@ -100,13 +100,9 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust toolchain
-        shell: bash
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update --target wasm32-unknown-unknown
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          target: wasm32-unknown-unknown
 
       # The two builds are cached apart: the faster WASM has other profile
       # settings, so none of the release build's dependencies would be reused.
@@ -118,27 +114,8 @@ jobs:
           shared-key: ${{ inputs.release_wasm && 'viewer-wasm' || 'viewer-wasm-fast' }}
           cache-directories: target-native
 
-      - name: Locked wasm-bindgen version
-        # wasm-pack fetches the wasm-bindgen CLI that Cargo.lock pins at build
-        # time, from GitHub and then by `cargo install`, which retries for
-        # seconds: a 40 s DNS outage failed both and turned main red (CI run 41954251714). The
-        # prebuilt binary of the locked version is installed below by
-        # install-action, which retries each download for about a minute, and
-        # wasm-pack uses the one it finds on PATH.
-        id: wasm-bindgen
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/version = |"/, ""); print; exit }' Cargo.lock)
-          if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::no wasm-bindgen version in Cargo.lock (read '${version}')"
-            exit 1
-          fi
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-      - name: Install wasm-pack and wasm-bindgen
-        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68  # v2.88.1
-        with:
-          tool: wasm-pack@0.14.0,wasm-bindgen@${{ steps.wasm-bindgen.outputs.version }}
+      - name: Install wasm-pack and the locked wasm-bindgen
+        uses: $/.github/actions/wasm-tools
 
       - name: Build WASM, and gen-fixture beside it
         shell: bash
@@ -155,9 +132,14 @@ jobs:
         # build's lock on target/, and at the same time: it finishes well
         # inside the WASM build, which took 150 to 225 s while the two
         # builds in turn took 200 to 290 s.
+        #
+        # rvt-elements is built in the same invocation (a link of the library
+        # gen-fixture already compiled): tests/parameters-row.spec.ts runs it
+        # on the sample and holds the panel's saved parameters to what it prints
+        # (#35).
         run: |
           set -euo pipefail
-          CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target-native" cargo build --profile ci --bin gen-fixture &
+          CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target-native" cargo build --profile ci --bin gen-fixture --bin rvt-elements &
           fixture=$!
           if [ "${RELEASE_WASM}" != true ]; then
             export CARGO_PROFILE_RELEASE_LTO=off CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
@@ -189,6 +171,7 @@ jobs:
           mkdir -p "${dir}/bin"
           cp -R viewer/pkg "${dir}/pkg"
           cp target-native/ci/gen-fixture "${dir}/bin/gen-fixture"
+          cp target-native/ci/rvt-elements "${dir}/bin/rvt-elements"
           (cd "${dir}" && sha256sum pkg/rvt_bg.wasm > wasm.sha256)
           sha=$(cut -d' ' -f1 "${dir}/wasm.sha256")
           echo "WASM sha256 ${sha}"
@@ -258,9 +241,10 @@ jobs:
           set -euo pipefail
           dir="${RUNNER_TEMP}/viewer-build"
           cp -R "${dir}/pkg" viewer/pkg
-          chmod +x "${dir}/bin/gen-fixture"
+          chmod +x "${dir}/bin/gen-fixture" "${dir}/bin/rvt-elements"
           echo "${dir}/bin" >> "$GITHUB_PATH"
           "${dir}/bin/gen-fixture" --help >/dev/null
+          "${dir}/bin/rvt-elements" --help >/dev/null
           expected=$(cut -d' ' -f1 "${dir}/wasm.sha256")
           actual=$(sha256sum viewer/pkg/rvt_bg.wasm | cut -d' ' -f1)
           echo "WASM sha256 ${actual}"

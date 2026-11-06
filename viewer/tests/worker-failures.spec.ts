@@ -6,13 +6,14 @@ import { fileURLToPath } from 'node:url';
 // #1195: what the page says when the wasm call fails in ways a lowered memory
 // ceiling cannot produce in Chromium: another engine's wording of the same trap,
 // a panic that is not a memory failure, and a stop after the open call. The
-// page's worker is the shipped one and the wasm is the shipped one; the test
-// serves the worker's script with a few lines in front of it that patch
-// `WebAssembly.instantiateStreaming` and `instantiate` so that one export of the
-// instance, the one named, fails the way the case says. The page's
-// Content-Security-Policy allows workers from 'self' only, so the script is
-// served from its own address, by a route, not from a blob. Nothing is added to
-// what ships.
+// page's worker is the shipped one and the wasm is the shipped one. The worker
+// is bundled into the page and starts from a blob URL (so that nothing is
+// requested once the page has loaded), so the test puts a few lines in front of
+// that blob's script as the page makes its URL: they patch
+// `WebAssembly.instantiate` (and `instantiateStreaming`) so that one export of
+// the instance, the one named, fails the way the case says. The page's
+// Content-Security-Policy allows `blob:` workers, so the patched script runs
+// under the page's own policy. Nothing is added to what ships.
 //
 //   - "unreachable executed" (Firefox) and "Unreachable code should not be
 //     executed" (Safari), with no panic message before them, are the same
@@ -39,10 +40,14 @@ interface Fault {
 
 /**
  * Fails one export of the worker's wasm instance, in every worker after the
- * first `healthy` ones, which run as shipped. Returns how many patched worker
- * scripts have been served.
+ * first `healthy` ones, which run as shipped. Returns how many patched workers
+ * the page has started.
  */
-async function failWasm(page: Page, fault: Fault, healthy = 0): Promise<() => number> {
+async function failWasm(
+  page: Page,
+  fault: Fault,
+  healthy = 0,
+): Promise<() => Promise<number>> {
   const prelude = `(() => {
     const fault = ${JSON.stringify(fault)};
     const failing = () => {
@@ -67,20 +72,28 @@ async function failWasm(page: Page, fault: Fault, healthy = 0): Promise<() => nu
       const real = WebAssembly[name];
       WebAssembly[name] = async (...args) => wrap(await real.apply(WebAssembly, args));
     }
-  })();`;
-  let requests = 0;
-  let served = 0;
-  await page.context().route(/\/assets\/worker-[^/?]+\.js(\?.*)?$/, async (route) => {
-    requests += 1;
-    if (requests <= healthy) {
-      await route.continue();
-      return;
-    }
-    const response = await route.fetch();
-    served += 1;
-    await route.fulfill({ response, body: `${prelude}\n${await response.text()}` });
-  });
-  return () => served;
+  })();\n`;
+  await page.addInitScript(
+    ({ prelude, healthy }) => {
+      let seen = 0;
+      let served = 0;
+      (window as unknown as { __workersFailed: () => number }).__workersFailed = () => served;
+      const real = URL.createObjectURL.bind(URL);
+      URL.createObjectURL = (object: Blob | MediaSource) => {
+        if (object instanceof Blob && /javascript/.test(object.type)) {
+          seen += 1;
+          if (seen > healthy) {
+            served += 1;
+            return real(new Blob([prelude, object], { type: object.type }));
+          }
+        }
+        return real(object);
+      };
+    },
+    { prelude, healthy },
+  );
+  return () =>
+    page.evaluate(() => (window as unknown as { __workersFailed: () => number }).__workersFailed());
 }
 
 async function open(page: Page, query = ''): Promise<void> {
@@ -104,7 +117,7 @@ test('a panic that is not a memory failure keeps its own message', async ({ page
   const served = await failWasm(page, { fn: OPEN, panic, error: 'unreachable' });
   await open(page);
   // A route that never saw the worker would leave the page unbroken.
-  await expect.poll(served, 'the patched worker script was served').toBeGreaterThan(0);
+  await expect.poll(served, 'the patched worker was started').toBeGreaterThan(0);
 
   // An error, in the panic's own words; not a claim about memory.
   await expect(page.locator('#status')).toHaveText(/^Error: rvt-rs wasm panic: .*index out of bounds/s);
@@ -126,7 +139,7 @@ test('a bare unreachable in Firefox wording is a memory failure', async ({ page 
   // A ceiling the page's memory is within reach of, so the stop reads as near it.
   await open(page, '?memoryCeilingBytes=1048576');
   // A route that never saw the worker would leave the page unbroken.
-  await expect.poll(served, 'the patched worker script was served').toBeGreaterThan(0);
+  await expect.poll(served, 'the patched worker was started').toBeGreaterThan(0);
 
   await expect(page.locator('#status')).toHaveAttribute('data-load-failure', 'too-large');
   await expect(page.locator('#status')).toHaveText(/^Too large for the browser · stopped at /);
@@ -145,7 +158,7 @@ test('a bare unreachable in Safari wording is a memory failure, hedged far from 
   });
   await open(page);
   // A route that never saw the worker would leave the page unbroken.
-  await expect.poll(served, 'the patched worker script was served').toBeGreaterThan(0);
+  await expect.poll(served, 'the patched worker was started').toBeGreaterThan(0);
 
   // The real 4 GiB, and a stop at a few MiB on a 20 KiB file: not claimed to
   // be too large, and the page says so.
@@ -162,7 +175,7 @@ test('an allocation that fails after the open call is blamed on the step it was 
   const served = await failWasm(page, { fn: 'buildSceneGraph', panic: null, error: 'unreachable' });
   await open(page, '?memoryCeilingBytes=1048576');
   // A route that never saw the worker would leave the page unbroken.
-  await expect.poll(served, 'the patched worker script was served').toBeGreaterThan(0);
+  await expect.poll(served, 'the patched worker was started').toBeGreaterThan(0);
 
   await expect(page.locator('#status')).toHaveAttribute('data-load-failure', 'too-large');
   await expect(page.locator('#scaffold-note-body')).toContainText(', while building the scene graph,');
