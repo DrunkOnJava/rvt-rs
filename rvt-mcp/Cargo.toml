@@ -9,7 +9,6 @@ license = "Apache-2.0"
 description = "Local, read-only Model Context Protocol server for Autodesk Revit files (.rvt, .rfa, .rte, .rft), over stdio: it links the rvt crate in process, needs no Revit install and makes no network call."
 authors = ["Griffin Long <151978260+DrunkOnJava@users.noreply.github.com>"]
 repository = "https://github.com/DrunkOnJava/rvt-rs"
-homepage = "https://github.com/DrunkOnJava/rvt-rs"
 documentation = "https://github.com/DrunkOnJava/rvt-rs/blob/main/docs/mcp.md"
 readme = "README.md"
 keywords = ["revit", "bim", "mcp", "ifc", "autodesk"]
