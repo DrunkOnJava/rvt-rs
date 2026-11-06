@@ -84,6 +84,8 @@ env:
 jobs:
   fmt:
     name: cargo fmt
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -98,6 +100,8 @@ jobs:
 
   clippy:
     name: cargo clippy
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -146,6 +150,8 @@ jobs:
       - run: cargo clippy -p rvt-probes --examples --no-deps -- -D warnings
 
   test:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     # Unit tests are banned (maintainer directive, 2026-09-23), except a few
     # failure-first tests of a pure helper with no file, network, process or
     # clock I/O (the `--lib` step below). Apart from those, this job builds
@@ -360,7 +366,8 @@ jobs:
   # wrap panics there instead of passing.
   i686-overflow:
     name: 32-bit overflow checks (i686)
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -438,6 +445,8 @@ jobs:
     # and runs lightweight health + known-count checks. Local runs skip
     # when RVT_PROJECT_CORPUS_DIR is unset.
     name: Corpus health (tier 2 — external)
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     # Median 5.6 minutes, longest 10.2. The BIM4LCA and R2025 fetches end
     # as NOT MEASURED, a warning, when their host is down, and a host that drops
@@ -611,6 +620,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
   corpus-mcp:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     # The MCP server's end-to-end test on Einhoven, a job of its own beside
     # Corpus health rather than a step after its tier-two gates: run after
     # them it made Corpus health, already the slowest job on every pull
@@ -675,7 +686,8 @@ jobs:
     # from silently regressing while semantic editing remains out of
     # scope.
     name: Writer patch corpus
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -742,7 +754,8 @@ jobs:
     # exports are small (24 instances each); the real projects carry most of
     # what this job validates.
     name: IfcOpenShell validates exports
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     # Longest 22.9 minutes (run 42034472131, every step slow), median 4.0:
     # 3 times the longest. The EXPRESS rules step has a 25 minute limit of its
@@ -1156,6 +1169,8 @@ jobs:
 
   doc:
     name: cargo doc
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     # Longest 2.9 minutes.
     timeout-minutes: 30
@@ -1190,7 +1205,8 @@ jobs:
   # 2025-11-22, so its nightly is pinned near its release.
   semver:
     name: semver checks
-    if: github.event_name == 'pull_request' && inputs.fast != true
+    needs: changes
+    if: github.event_name == 'pull_request' && inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -1242,7 +1258,8 @@ jobs:
   # high-value, low-noise version we can enforce on every push.
   bench-build:
     name: cargo bench --no-run
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -1274,7 +1291,8 @@ jobs:
   # properly on docs.rs before the release cut.
   docs-rs-preview:
     name: docs.rs build preview
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -1310,7 +1328,8 @@ jobs:
   # after merge, twice (#236 -> #259, #934 -> #965).
   fuzz-check:
     name: fuzz targets build
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -1331,7 +1350,8 @@ jobs:
 
   python-wheel:
     name: Python wheel / ${{ matrix.os }}
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ${{ matrix.os }}
     # Longest 11.6 minutes (Windows), 8.7 macOS, 7.2 Ubuntu, in 100 runs on main,
     # before the smoke wheel was built without LTO; the limit is kept.
@@ -1500,7 +1520,8 @@ jobs:
   # project grows.
   deny:
     name: cargo deny
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -1525,7 +1546,8 @@ jobs:
   # fresh advisories the moment they land.
   audit:
     name: cargo audit
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -1543,7 +1565,8 @@ jobs:
 
   viewer-dependencies:
     name: viewer dependency audit
-    if: inputs.fast != true
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.build == 'true'
     runs-on: ubuntu-24.04
     # The audit step retries a down advisory endpoint four times, sleeping
     # 20 to 80 s between tries.
@@ -1607,26 +1630,57 @@ jobs:
           path: ${{ steps.pnpm-store.outputs.dir }}
           key: ${{ steps.pnpm-cache.outputs.cache-primary-key }}
 
-  # The viewer's browser tests are part of `CI passed` (#1374). They used to
-  # run in Deploy viewer's pull-request run, which `CI passed` did not wait
-  # for: #1370 merged before that run had finished, and Deploy viewer went red
-  # on main. They run in the full set only (a ready pull request, or a push to
-  # main); a draft's fast set leaves them out, and viewer-test.yml can be
-  # dispatched on a draft's branch. A pull request that changes nothing but
-  # documentation skips them, as Deploy viewer's deploy step skips waiting for
-  # CI on such a commit; a skipped job passes `CI passed`.
-  viewer-paths:
-    name: viewer tests needed
-    if: inputs.fast != true
+  # What a pull request changes decides which jobs run (#1457), in the fast set
+  # and the full one. Two answers, both read from the files of the pull request
+  # alone (`pulls/N/files`, with the old name of a renamed file), so that a
+  # skipped job is a statement about this pull request and nothing else:
+  #
+  # - `build`: false when every file is in NO_BUILD below, in which case the
+  #   merged tree builds exactly what `main` builds, and `main`'s own CI tested
+  #   that. Every job that compiles, builds a wheel, reads a corpus, builds a
+  #   fuzz target, bench, the docs.rs preview or the viewer, audits a lockfile
+  #   or checks formatting waits for this job and skips on false. What stays
+  #   whatever the files are: this job, the PII guard (which reads the
+  #   reports, the changelog fragments, the docs and the README), the env
+  #   config lint and `CI passed`. A skipped job passes `CI passed`, which
+  #   fails on a failed or cancelled one, and so on this job if it fails.
+  # - `viewer`: whether the viewer's browser tests run (#1374). They used to
+  #   run in Deploy viewer's pull-request run, which `CI passed` did not wait
+  #   for: #1370 merged before that run had finished, and Deploy viewer went red
+  #   on main. They run in the full set only; a draft's fast set leaves them
+  #   out, and viewer-test.yml can be dispatched on a draft's branch. A pull
+  #   request that changes nothing but documentation skips them, as Deploy
+  #   viewer's deploy step skips waiting for CI on such a commit.
+  #
+  # An answer that does not come, an empty list, or a list of 3,000 files (the
+  # API's limit, so the list may be cut short) runs everything: a skip needs the
+  # whole list. A push to `main` runs everything.
+  #
+  # NO_BUILD is `reports/` and `changelog.d/`. Only those: nothing a skipped job
+  # runs or compiles reads a file under them (the Rust sources and tests only
+  # cite reports in comments; the readers are tools/ci/api-doc-ids.py,
+  # tools/ci/cited-commits.py and tools/release/changelog.py, all in the PII
+  # guard job, which keeps running). tools/check-workflows.py checks that this
+  # list is the one it expects. Left out, each because a skipped job reads it:
+  # `.github/workflows/` and `.github/actions/`, `src/`, `tests/`, `probes/`,
+  # `fuzz/`, the crates, `Cargo.*`, `README.md` (tests/binary_inventory.rs),
+  # `docs/support-matrix.json`, `docs/schemas/` and `docs/status.md`
+  # (tests/support_matrix.rs, tests/json_schema_contracts.rs), `research/` (the
+  # pin lists), `tools/ci/` and `tools/re/` (the corpus jobs run their scripts),
+  # `corpus/`, and the `docs/` pages that tests, the MCP server or the Python
+  # tests read.
+  changes:
+    name: what changed
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
     outputs:
-      run: ${{ steps.paths.outputs.run }}
+      build: ${{ steps.paths.outputs.build }}
+      viewer: ${{ steps.paths.outputs.viewer }}
     steps:
-      - name: Does the change touch more than documentation
+      - name: Does the change touch more than reports and changelog fragments
         id: paths
         shell: bash
         env:
@@ -1636,18 +1690,35 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
+          everything() {
+            echo "$1"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "viewer=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
           if [ "${EVENT}" != pull_request ]; then
-            echo "not a pull request; the viewer tests run"
-            echo "run=true" >> "$GITHUB_OUTPUT"
+            everything "not a pull request; everything runs"
+          fi
+          # Every page of the pull request's files, each with the name it had
+          # before a rename, which is a file this change removes.
+          if ! files=$(gh api --paginate "repos/${GH_REPO}/pulls/${PR}/files" --jq '.[] | .filename, (.previous_filename // empty)') || [ -z "${files}" ]; then
+            everything "::warning::could not list the files of pull request ${PR}; everything runs"
+          fi
+          changed=$(gh api "repos/${GH_REPO}/pulls/${PR}" --jq .changed_files) || changed=3000
+          case "${changed}" in
+            '' | *[!0-9]*) changed=3000 ;;
+          esac
+          if [ "${changed}" -ge 3000 ]; then
+            everything "::warning::the file list of pull request ${PR} is cut short at 3000 files or could not be counted; everything runs"
+          fi
+          no_build='^(reports|changelog\.d)/'
+          if [ -z "$(grep -vE "${no_build}" <<<"$files" || true)" ]; then
+            echo "only reports and changelog fragments changed; the jobs that build are skipped"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "viewer=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Every page of the pull request's files. An answer that does not
-          # come, or an empty one, runs the tests: a skip needs the list.
-          if ! files=$(gh api --paginate "repos/${GH_REPO}/pulls/${PR}/files" --jq '.[].filename') || [ -z "${files}" ]; then
-            echo "::warning::could not list the files of pull request ${PR}; the viewer tests run"
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          echo "build=true" >> "$GITHUB_OUTPUT"
           # The files Deploy viewer's deploy step counts as documentation, but
           # for the two JSON files under docs/ that the viewer is built from:
           # the demo catalogue and, through src/capability.rs, the support
@@ -1655,16 +1726,16 @@ jobs:
           rest=$(grep -vE '(\.md$|^docs/|^LICENSE|^\.gitignore$|^\.github/ISSUE_TEMPLATE/|^CITATION\.cff$)' <<<"$files" || true)
           built_from=$(grep -E '^docs/(viewer-demos|support-matrix)\.json$' <<<"$files" || true)
           if [ -n "${rest}" ] || [ -n "${built_from}" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "viewer=true" >> "$GITHUB_OUTPUT"
           else
             echo "only documentation changed; the viewer tests are skipped"
-            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "viewer=false" >> "$GITHUB_OUTPUT"
           fi
 
   viewer:
     name: viewer tests
-    needs: viewer-paths
-    if: inputs.fast != true && needs.viewer-paths.outputs.run == 'true'
+    needs: changes
+    if: inputs.fast != true && needs.changes.outputs.viewer == 'true'
     uses: $/.github/workflows/viewer-test.yml
     permissions:
       contents: read
@@ -1945,7 +2016,7 @@ jobs:
       - deny
       - audit
       - viewer-dependencies
-      - viewer-paths
+      - changes
       - viewer
       - pii-guard
       - env-config

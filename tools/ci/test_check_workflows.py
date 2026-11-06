@@ -273,6 +273,48 @@ class Docs(unittest.TestCase):
         self.assertTrue(self.problems(d=deploy(GROUP + "|.*")))
 
 
+CHANGES_RUN = "no_build='^(reports|changelog\\.d)/'\nif grep -vE \"${no_build}\"; then :; fi"
+
+
+def gated(**overrides):
+    jobs = {
+        "changes": {},
+        "pii-guard": {},
+        "env-config": {},
+        "fmt": {"needs": "changes", "if": "needs.changes.outputs.build == 'true'"},
+        "doc": {"needs": ["changes"], "if": "inputs.fast != true && needs.changes.outputs.build == 'true'"},
+        "viewer": {"needs": "changes", "if": "inputs.fast != true && needs.changes.outputs.viewer == 'true'"},
+        "ci-ok": {"needs": ["fmt", "doc", "viewer", "changes"]},
+    }
+    jobs.update(overrides)
+    return jobs
+
+
+class BuildGate(unittest.TestCase):
+    def test_jobs_that_wait_for_changes_and_ask_for_its_answer_pass(self):
+        self.assertEqual(cw.build_gate_problems(gated(), CHANGES_RUN), [])
+
+    def test_a_job_that_does_not_wait_for_changes_fails(self):
+        problems = cw.build_gate_problems(gated(clippy={"if": "inputs.fast != true"}), CHANGES_RUN)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("'clippy'", problems[0])
+
+    def test_a_job_that_waits_but_runs_whatever_the_answer_fails(self):
+        problems = cw.build_gate_problems(gated(fmt={"needs": "changes"}, doc={"needs": ["changes"], "if": "inputs.fast != true"}), CHANGES_RUN)
+        self.assertEqual(len(problems), 2)
+
+    def test_the_viewer_call_is_gated_on_its_own_answer_not_the_build_one(self):
+        viewer = {"needs": "changes", "if": "needs.changes.outputs.build == 'true'"}
+        self.assertEqual(len(cw.build_gate_problems(gated(viewer=viewer), CHANGES_RUN)), 1)
+
+    def test_ci_passed_that_does_not_wait_for_changes_fails(self):
+        self.assertEqual(len(cw.build_gate_problems(gated(**{"ci-ok": {"needs": ["fmt", "doc", "viewer"]}}), CHANGES_RUN)), 1)
+
+    def test_a_list_of_files_that_skips_more_than_the_expected_one_fails(self):
+        for run in (CHANGES_RUN.replace("reports|", "reports|src|"), "", CHANGES_RUN + "\n" + CHANGES_RUN):
+            self.assertEqual(len(cw.build_gate_problems(gated(), run)), 1, run)
+
+
 class StepText(unittest.TestCase):
     JOB = {"steps": [{"name": "a", "run": "echo a"}, {"name": "wait", "uses": "$/.github/actions/wait-for-check"}, {"name": "ext", "uses": "actions/checkout@v7"}]}
 

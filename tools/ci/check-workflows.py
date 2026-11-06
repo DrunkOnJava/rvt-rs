@@ -14,10 +14,14 @@ Exits 1 with an `::error` line for each of:
   their `msrv` entry, and so does every other crate that declares one, but for the crates in
   DELIBERATE_MSRV.
 * The documentation-only path list. ci.yml's `paths-ignore` (the commits that run no CI), the
-  regex in ci.yml's `viewer-paths` job (the pull requests that skip the viewer tests) and the
+  regex in ci.yml's `changes` job (the pull requests that skip the viewer tests) and the
   regex in Deploy viewer's wait step (the commits it deploys without waiting for CI, read from
   its `run` or from the script of the local action it uses) must name the same paths, but for
   the files in EXPECTED_BUILT_FROM.
+* The jobs that build. Every job of ci.yml but those in ALWAYS_RUN waits for `changes` and runs
+  only when its `build` answer (the viewer call: its `viewer` answer) is true, `CI passed` waits
+  for `changes` too, and `changes` skips them only for the files in NO_BUILD, the one list this
+  check expects. A pull request that changes nothing else skips every job that builds.
 * Local references. Every `uses: $/.github/...` or `./.github/...` of an action or a reusable
   workflow names a file that exists, and its `with:` names only inputs that file declares and
   gives those it requires. actionlint does not know the `$/` form (.github/actionlint.yaml
@@ -56,10 +60,19 @@ DELIBERATE_MSRV = {
     "rvt-mcp/Cargo.toml": "1.88",  # rmcp's minimum; nothing in `rvt` depends on this crate
 }
 
-# viewer-paths counts these two files as code, not documentation: the viewer is built from
+# The `changes` job counts these two files as code, not documentation: the viewer is built from
 # the demo catalogue and, through src/capability.rs, the support matrix. Deploy viewer's wait
 # step and CI's paths-ignore treat them as documentation.
 EXPECTED_BUILT_FROM = {"docs/viewer-demos.json", "docs/support-matrix.json"}
+
+# The jobs of ci.yml that run whatever a pull request changes. Every other job waits for `changes`
+# and runs only when it answers `build` (the viewer call, `viewer`): a pull request that changes
+# nothing but NO_BUILD skips them, and a new job that forgot to wait would run on it (#1457).
+ALWAYS_RUN = {"changes", "pii-guard", "env-config", "ci-ok"}
+# The one list of files a pull request may change alone without anything building. The evidence
+# for it is in ci.yml, at the `changes` job, and any other path needs the same: no job that is
+# skipped may read it.
+NO_BUILD = r"^(reports|changelog\.d)/"
 
 MISSING = object()
 LATEST = re.compile(r"\b(?:ubuntu|windows|macos)-latest\b")
@@ -259,7 +272,7 @@ def docs_problems(paths_ignore, viewer_run, deploy_run, expected_built_from):
     except ValueError as error:
         problems.append(f"ci.yml paths-ignore: {error}")
     groups = {}
-    for where, run in (("ci.yml viewer-paths", viewer_run), ("deploy-viewer.yml wait step", deploy_run)):
+    for where, run in (("ci.yml changes", viewer_run), ("deploy-viewer.yml wait step", deploy_run)):
         group, error = group_of(run, where)
         if error:
             problems.append(error)
@@ -278,24 +291,51 @@ def docs_problems(paths_ignore, viewer_run, deploy_run, expected_built_from):
                 parts.append(f"does not count {show(reference - rules)} as documentation, which ci.yml's push paths-ignore does")
             problems.append(f"{where} {' and '.join(parts)}")
     if len(set(groups.values())) > 1:
-        problems.append("ci.yml viewer-paths and deploy-viewer.yml's wait step must carry the same documentation regex")
+        problems.append("ci.yml changes and deploy-viewer.yml's wait step must carry the same documentation regex")
     built = BUILT_FROM.findall(viewer_run or "")
     if len(built) != 1:
-        problems.append(f"ci.yml viewer-paths: expected one built_from pattern, found {len(built)}")
+        problems.append(f"ci.yml changes: expected one built_from pattern, found {len(built)}")
         return problems
     match = BUILT_FILES.fullmatch(built[0])
     if not match:
-        problems.append(f"ci.yml viewer-paths: cannot read the built_from pattern {built[0]!r}")
+        problems.append(f"ci.yml changes: cannot read the built_from pattern {built[0]!r}")
         return problems
     files = {f"{match['dir']}{name}.{match['ext']}" for name in match["names"].split("|")}
     if files != set(expected_built_from):
         problems.append(
-            f"ci.yml viewer-paths runs the viewer tests for {sorted(files)}, not the deliberate {sorted(expected_built_from)}"
+            f"ci.yml changes runs the viewer tests for {sorted(files)}, not the deliberate {sorted(expected_built_from)}"
         )
     if reference is not None:
         for path in sorted(files):
             if not any(matches(rule, path) for rule in reference):
-                problems.append(f"ci.yml viewer-paths carves out {path}, which paths-ignore does not count as documentation")
+                problems.append(f"ci.yml changes carves out {path}, which paths-ignore does not count as documentation")
+    return problems
+
+
+NO_BUILD_ASSIGNMENT = re.compile(r"no_build='([^']*)'")
+
+
+def build_gate_problems(jobs, changes_run):
+    """Where a job of ci.yml would run on a pull request that changes nothing a job reads: one
+    that does not wait for `changes`, whose `if` does not ask for its answer, or `CI passed`
+    not waiting for `changes`; and where the list `changes` skips on is not NO_BUILD."""
+    problems = []
+    for job_id, job in sorted(jobs.items()):
+        if job_id in ALWAYS_RUN:
+            continue
+        needs = job.get("needs")
+        needs = [needs] if isinstance(needs, str) else list(needs or [])
+        answer = "viewer" if job_id == "viewer" else "build"
+        if "changes" not in needs:
+            problems.append(f"ci.yml: job '{job_id}' does not wait for `changes`, so it runs on a pull request that builds nothing")
+        elif f"needs.changes.outputs.{answer} == 'true'" not in str(job.get("if", "")):
+            problems.append(f"ci.yml: job '{job_id}' waits for `changes` but its `if` does not ask for needs.changes.outputs.{answer}")
+    ok = (jobs.get("ci-ok") or {}).get("needs")
+    if "changes" not in ([ok] if isinstance(ok, str) else list(ok or [])):
+        problems.append("ci.yml: `CI passed` does not wait for `changes`, so a failed `changes` job would not fail it")
+    found = NO_BUILD_ASSIGNMENT.findall(changes_run or "")
+    if found != [NO_BUILD]:
+        problems.append(f"ci.yml changes: expected the one no_build pattern {NO_BUILD!r}, found {found}")
     return problems
 
 
@@ -473,11 +513,14 @@ def main():
     deploy = workflows["deploy-viewer.yml"]["jobs"]["deploy"]
     errors += docs_problems(
         workflow_on(ci).get("push", {}).get("paths-ignore", []),
-        step_run(ci["jobs"]["viewer-paths"], id="paths"),
+        step_run(ci["jobs"]["changes"], id="paths"),
         step_text(deploy, action_text, name="Wait for CI on the commit"),
         EXPECTED_BUILT_FROM,
     )
-    print("documentation paths: ci.yml paths-ignore, viewer-paths and Deploy viewer's wait step")
+    print("documentation paths: ci.yml paths-ignore, changes and Deploy viewer's wait step")
+
+    errors += build_gate_problems(ci["jobs"], step_run(ci["jobs"]["changes"], id="paths"))
+    print(f"build gate: {len(ci['jobs']) - len(ALWAYS_RUN)} jobs of ci.yml wait for `changes`, which skips them for {NO_BUILD} alone")
 
     def read(path):
         file = ROOT / path
