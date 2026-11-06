@@ -1094,6 +1094,29 @@ fn property_readers(name: &str, value: &str) -> &'static [&'static str] {
             ec::OPENING_PLACEMENT_AXES_SOURCE => PLACEMENT_READERS,
             _ => &[],
         },
+        "ThicknessSource" => match value {
+            ec::WALL_TYPE_THICKNESS_SOURCE => &["wall_type_layers"],
+            crate::element_record_wall_joins::WALL_THICKNESS_SOURCE
+            | ec::RECORD_BBOX_THICKNESS_SOURCE => &[SELECTED_FRAME_READER],
+            _ => &[],
+        },
+        ec::SPACE_OUTLINE_SOURCE_PROPERTY => match value {
+            ec::SPACE_OUTLINE_STORED_SOLID
+            | ec::SPACE_OUTLINE_STORED_SOLID_FACES
+            | ec::SPACE_OUTLINE_STORED_SOLID_APPROXIMATE => &["room_solid_faces"],
+            ec::SPACE_OUTLINE_RECORD_BOX => &[SELECTED_FRAME_READER],
+            ec::SPACE_OUTLINE_SAVED_MESH => &["saved_graphics"],
+            ec::SPACE_OUTLINE_AREA_BOUNDARY | ec::SPACE_OUTLINE_AREA_BOUNDARY_JOINED => &[
+                crate::partition_area_records::AREA_LINES_READER,
+                crate::partition_area_records::AREA_LEVELS_READER,
+            ],
+            ec::SPACE_OUTLINE_AREA_PLAN_TOPOLOGY
+            | ec::SPACE_OUTLINE_AREA_PLAN_TOPOLOGY_UNCHECKED => &[
+                crate::partition_area_records::AREA_TOPOLOGY_READER,
+                crate::partition_area_records::AREA_LEVELS_READER,
+            ],
+            _ => &[],
+        },
         _ => &[],
     }
 }

@@ -794,6 +794,21 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
         Gap { reason: BINDING },
     ),
     (
+        "StoreyBindSource",
+        "record_level_reference",
+        Gap { reason: BINDING },
+    ),
+    (
+        "LevelBindSource",
+        "structural_framing_top_level",
+        Gap { reason: BINDING },
+    ),
+    (
+        "ProfileSource",
+        "partition_element_record_join_cut",
+        BY_COVERAGE,
+    ),
+    (
         "FamilyNameSource",
         "system_family_by_category",
         Gap {
@@ -1500,9 +1515,9 @@ fn check_source_values(
             problems.push(format!("SOURCE_VALUES has {name}={value} twice"));
         }
         let text = match row {
-            Row::Unread { reason } | Row::Gap { reason } => reason,
-            Row::Checked { by } => by,
-            Row::Sourced { all, any } => {
+            Unread { reason } | Gap { reason } => reason,
+            Checked { by } => by,
+            Sourced { all, any } => {
                 if all.is_empty() && any.is_empty() {
                     problems.push(format!("{name}={value} is sourced from no reader"));
                 }
@@ -1524,7 +1539,7 @@ fn check_source_values(
                 ));
                 "no row"
             }
-            Some(Row::Sourced { all, any }) => {
+            Some(Sourced { all, any }) => {
                 let mut missing: Vec<u32> = Vec::new();
                 let mut short = 0usize;
                 for id in ids {
@@ -1559,15 +1574,15 @@ fn check_source_values(
                 found.sourced += 1;
                 "sourced"
             }
-            Some(Row::Checked { .. }) => {
+            Some(Checked { .. }) => {
                 found.checked += 1;
                 "checked"
             }
-            Some(Row::Unread { .. }) => {
+            Some(Unread { .. }) => {
                 found.unread += 1;
                 "unread"
             }
-            Some(Row::Gap { .. }) => {
+            Some(Gap { .. }) => {
                 found.gap_values += 1;
                 found.gap_elements += elements;
                 "gap"
