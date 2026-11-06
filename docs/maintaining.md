@@ -851,7 +851,15 @@ Configured on the repository, with the rulesets kept as code in
   on every push to main, weekly, and on every ready pull request that changes
   more than documentation (`**.md`, `docs/`, `reports/`, `changelog.d/`): a
   draft's jobs are skipped and its analysis starts when it is marked ready
-  (#1457). The default setup stays
+  (#1457). Each `Analyze (<language>)` job writes its SARIF and uploads it in a
+  step of its own that may fail without failing the job; a failed upload leaves
+  the SARIF as the artifact `codeql-sarif-<language>` (7 days), and the job
+  `Analyze upload retry` uploads what it finds once more, with the leg's
+  category, analysis key and matrix, in a job of its own because codeql-action
+  refuses a second upload of one category in a job (#1499). A file code
+  scanning rejects fails the retry and the run, and so does a kept SARIF whose
+  language the retry job has no step for: adding a language to the matrix means
+  adding its upload step there. The default setup stays
   off: it cannot scan Rust, and GitHub refuses an advanced setup's results
   while it is on.
 - Every action is pinned to a full commit SHA and the repository requires it.
