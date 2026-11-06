@@ -277,6 +277,10 @@ fn check_model(model: &str, path: &Path, case: Option<&Case>) {
         ("slab_shape_refused", &exported.slab_shape_refusals),
         ("wall_base_cut_refused", &exported.wall_base_refusals),
         ("wall_end_extension_refused", &exported.wall_end_refusals),
+        (
+            "wall_profile_extension_refused",
+            &exported.wall_profile_refusals,
+        ),
     ] {
         aggregate.insert(reason.to_string(), refusals.values().sum());
         classes.insert(reason.to_string(), refusals.clone());
@@ -326,6 +330,7 @@ fn check_model(model: &str, path: &Path, case: Option<&Case>) {
                 | "slab_shape_refused"
                 | "wall_base_cut_refused"
                 | "wall_end_extension_refused"
+                | "wall_profile_extension_refused"
         ) {
             let found = counted(&entries, |entry| entry.detail.as_ref());
             assert_eq!(&found, &classes[reason], "{name}: {reason} by detail");

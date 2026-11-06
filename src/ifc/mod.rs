@@ -238,6 +238,12 @@ pub struct IfcModel {
     /// `exported.wall_end_reads_unmarked`.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub wall_end_reads_unmarked: std::collections::BTreeMap<String, usize>,
+    /// The ends of walls with an edited elevation profile that go on past it, by
+    /// how the line of a sloped end, carried on to the wall's end, stands
+    /// against the top of the wall's box, and the level cut-outs carried
+    /// (#1473, RE-358). Counted in `exported.wall_profile_height_checks`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub wall_profile_height_checks: std::collections::BTreeMap<String, usize>,
 }
 
 /// A layered element's layers across its thickness (RE-53).
@@ -830,6 +836,28 @@ pub struct ExportedModelDiagnostics {
     /// would be the same in any order.
     #[serde(default)]
     pub wall_ends_order_dependent: usize,
+    /// Of the exported walls with an edited elevation profile that go on past
+    /// it, how many have the profile's cut-out carried on to the wall's end, by
+    /// the `ProfileStubSource` property of each (#1473, RE-358):
+    /// `wall_profile_<what>_past_<where>`, `<what>` being `sloped` (a line
+    /// carried along its slope), `level` (a notch's cut-out carried straight
+    /// out) or `sloped_and_level`, and `<where>` `the_low_end`, `the_high_end`
+    /// or `both_ends` of the profile along its own axis. Empty when no wall
+    /// does.
+    #[serde(default)]
+    pub wall_profile_sources: std::collections::BTreeMap<String, usize>,
+    /// Of the exported walls with an edited elevation profile that go on past
+    /// it and keep, past it, what the profile's opening gives them at an end,
+    /// why, by reason: the `ProfileStubRefusal` property of each (#1473,
+    /// RE-358): `profile_cut_not_read_at_the_wall_end`,
+    /// `profile_level_cut_between_two_lines`,
+    /// `profile_level_cut_spans_the_wall`,
+    /// `profile_stub_longer_than_the_wall_is_thick` or
+    /// `profile_slope_leaves_the_cut`. A wall holds its first reason only, and
+    /// one carried at one end and refused at the other is counted here and in
+    /// `wall_profile_sources`.
+    #[serde(default)]
+    pub wall_profile_refusals: std::collections::BTreeMap<String, usize>,
     /// Of the exported `IfcSpace`s, the rooms whose outline was read from the
     /// faces their stored solid lists, up to the solid's own end, where the
     /// walk of RE-101 did not close them (`SpaceOutlineSource` is
@@ -881,6 +909,16 @@ pub struct ExportedModelDiagnostics {
     /// and the refusals of `wall_end_refusals` that are not marked.
     #[serde(default)]
     pub wall_end_reads_unmarked: std::collections::BTreeMap<String, usize>,
+    /// The ends of exported walls with an edited elevation profile that go on
+    /// past it, by key (#1473, RE-358): `<carried|kept>_sloped_<low|high>_<rising|falling|level>_<equal|below|above>`
+    /// for a sloped end, by whether the end was carried, which end of the
+    /// profile it is, whether the line rises or falls towards the wall's end,
+    /// and how the line's height there stands against the top of the wall's
+    /// box (equal within 0.001 ft, the box above it, the box below it), and
+    /// `carried_level_<low|high>` for a level cut-out carried. A measurement:
+    /// nothing is carried or kept by it.
+    #[serde(default)]
+    pub wall_profile_height_checks: std::collections::BTreeMap<String, usize>,
     /// The further pieces of an element of separate loops that the STEP
     /// writer folds into the body of the element that owns them instead of
     /// writing each as an element (#823, #1424), by IFC entity. They are the
@@ -1127,6 +1165,7 @@ impl Exporter for PlaceholderExporter {
             filler_sizes: Default::default(),
             wall_cut_openings_left_out: Default::default(),
             wall_end_reads_unmarked: Default::default(),
+            wall_profile_height_checks: Default::default(),
         })
     }
 }
@@ -1637,6 +1676,15 @@ fn export_rvt_doc_reporting(
         }
     }
 
+    let mut wall_profile_height_checks = std::collections::BTreeMap::<String, usize>::new();
+    for property in record_handoffs.values().flatten() {
+        if let (export_content::WALL_PROFILE_CHECK_PROPERTY, entities::PropertyValue::Text(key)) =
+            (property.name.as_str(), &property.value)
+        {
+            *wall_profile_height_checks.entry(key.clone()).or_insert(0) += 1;
+        }
+    }
+
     Ok(IfcModel {
         project_name,
         description,
@@ -1662,6 +1710,7 @@ fn export_rvt_doc_reporting(
         filler_sizes,
         wall_cut_openings_left_out,
         wall_end_reads_unmarked,
+        wall_profile_height_checks,
     })
 }
 
@@ -4762,6 +4811,8 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut wall_end_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_base_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_ends_order_dependent = 0usize;
+    let mut wall_profile_sources = std::collections::BTreeMap::<String, usize>::new();
+    let mut wall_profile_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut resolved_outline_spaces = 0usize;
     let mut approximate_outline_spaces = 0usize;
     let mut space_kinds = std::collections::BTreeMap::<String, usize>::new();
@@ -4827,6 +4878,14 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                         export_content::WALL_BASE_SOURCE_PROPERTY,
                         entities::PropertyValue::Text(text),
                     ) => *wall_base_sources.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_PROFILE_SOURCE_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *wall_profile_sources.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_PROFILE_REFUSAL_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *wall_profile_refusals.entry(text.clone()).or_insert(0) += 1,
                     (
                         export_content::WALL_END_ORDER_DEPENDENT_PROPERTY,
                         entities::PropertyValue::Integer(count),
@@ -4937,12 +4996,15 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         wall_end_sources,
         wall_base_sources,
         wall_ends_order_dependent,
+        wall_profile_sources,
+        wall_profile_refusals,
         resolved_outline_spaces,
         approximate_outline_spaces,
         space_kinds,
         spaces_without_kind,
         wall_cut_openings_left_out: model.wall_cut_openings_left_out.clone(),
         wall_end_reads_unmarked: model.wall_end_reads_unmarked.clone(),
+        wall_profile_height_checks: model.wall_profile_height_checks.clone(),
         body_pieces_folded,
     }
 }
@@ -5122,8 +5184,9 @@ fn geometry_gap_skipped_items(
 
 /// The decisions behind `exported.bounding_box_bodies`,
 /// `exported.bounding_box_spaces`, `exported.area_body_refusals`,
-/// `exported.slab_shape_refusals`, `exported.wall_base_refusals` and
-/// `exported.wall_end_refusals` (#1326, #1384, #1396), read from `model` as
+/// `exported.slab_shape_refusals`, `exported.wall_base_refusals`,
+/// `exported.wall_end_refusals` and `exported.wall_profile_refusals` (#1326,
+/// #1384, #1396, #1473), read from `model` as
 /// [`exported_model_diagnostics`] counts them: a body that is only its
 /// record's box, a room or space whose outline is its record's box, an Area
 /// with no body, a shape-edited floor kept as its box, a wall that keeps its
@@ -5157,6 +5220,7 @@ pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportD
         let mut slab_refusals: Vec<&String> = Vec::new();
         let mut base_refusals: Vec<&String> = Vec::new();
         let mut end_refusals: Vec<&String> = Vec::new();
+        let mut profile_refusals: Vec<&String> = Vec::new();
         let mut profile_resolved = false;
         for property in property_set.iter().flat_map(|set| &set.properties) {
             match (property.name.as_str(), &property.value) {
@@ -5176,6 +5240,10 @@ pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportD
                     export_content::WALL_END_REFUSAL_PROPERTY,
                     entities::PropertyValue::Text(text),
                 ) => end_refusals.push(text),
+                (
+                    export_content::WALL_PROFILE_REFUSAL_PROPERTY,
+                    entities::PropertyValue::Text(text),
+                ) => profile_refusals.push(text),
                 ("BodySource", entities::PropertyValue::Text(text)) => source = Some(text),
                 (
                     export_content::SPACE_OUTLINE_SOURCE_PROPERTY,
@@ -5219,6 +5287,13 @@ pub(crate) fn model_decisions(model: &IfcModel) -> Vec<export_decisions::ExportD
             push(
                 DecisionStage::BodyLeftAsBox,
                 "wall_end_extension_refused",
+                Some(text),
+            );
+        }
+        for text in profile_refusals {
+            push(
+                DecisionStage::BodyLeftAsBox,
+                "wall_profile_extension_refused",
                 Some(text),
             );
         }
