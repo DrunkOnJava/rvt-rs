@@ -681,7 +681,7 @@ into an IFC common property set (`Pset_*`), and
 `partial_revit_element_parameters` when it writes some. Revit's exporter fills
 those sets from element parameters, and rvt-rs writes the ones it reads, such as
 `Reference`, `SerialNumber`, a door's `IsExternal` and a pipe's
-`InvertElevation`; the rest of an element's parameters are not read yet.
+`InvertElevation`. The rest of an element's saved parameters are read (RE-207) and listed by `rvt-elements`, Python and the viewer's info panel, but written to IFC only by `rvt-ifc --revit-property-sets` (RE-210).
 
 Important nested fields:
 
