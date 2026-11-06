@@ -60,7 +60,12 @@ when a release ships.
   wheels, the audits and the viewer's browser tests included) passed or was
   skipped, so auto-merge waits for all of them. A draft runs only the fast
   jobs, as `fast / ...`, and never a check of the required name; marking it
-  ready runs the full set (#1237). A push to `main` runs `ci.yml` directly, as
+  ready runs the full set (#1237). A pull request that changes nothing but
+  `reports/` and `changelog.d/` skips every job that builds, in both sets: the
+  `changes` job reads the pull request's files, and a skipped job passes `CI
+  passed`. Nothing a skipped job reads is under those two directories, and
+  `tools/ci/check-workflows.py` holds the list, so another path needs the same
+  evidence first. A push to `main` runs `ci.yml` directly, as
   `CI passed`. Measure and the release and deploy workflows are not part of
   it. The viewer's browser tests are: `ci.yml` calls `viewer-test.yml` as its
   `viewer` job in the full set (#1374), in three groups of spec files on a
