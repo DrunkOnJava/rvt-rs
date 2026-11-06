@@ -760,13 +760,13 @@ fn collect_copies<T>(
 /// What [`scan_bounded_lines`] finds for each id in `ids`, without choosing
 /// among copies: the partitions whose element data names the id, and the
 /// line each copy holds, for a probe of why a beam keeps its box (#1247).
-/// Empty for a release this layout is not measured on.
+/// Empty for a release a beam's line is not read on ([`beam_axis_read_on`]).
 pub fn line_copies(
     rf: &mut RevitFile,
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, LineCopies>> {
-    if !supports_revit_version(revit_version) {
+    if !beam_axis_read_on(revit_version) {
         return Ok(BTreeMap::new());
     }
     let (mut found, holders, _) =
@@ -784,14 +784,14 @@ pub fn line_copies(
 pub type AllLineCopies = BTreeMap<u32, Vec<(u32, Vec<BoundedLine>)>>;
 
 /// What [`all_bounded_lines`] finds in each copy of each id's element data in
-/// `ids`, without choosing among copies (RE-328). Empty for a release this
-/// layout is not measured on.
+/// `ids`, without choosing among copies (RE-328). Empty for a release a
+/// beam's line is not read on ([`beam_axis_read_on`]).
 pub fn all_line_copies(
     rf: &mut RevitFile,
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<AllLineCopies> {
-    if !supports_revit_version(revit_version) {
+    if !beam_axis_read_on(revit_version) {
         return Ok(BTreeMap::new());
     }
     let (found, _, _) = collect_copies(rf, revit_version, ids, all_bounded_lines, false)?;
