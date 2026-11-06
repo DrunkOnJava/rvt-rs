@@ -37,7 +37,7 @@ const VALUE_BLOCK_MARK: [u8; 59] = {
 };
 
 /// [`VALUE_BLOCK_MARK`] on Revit 2023, where the owner is a `u32`.
-const VALUE_BLOCK_MARK_2023: [u8; 31] = {
+pub(crate) const VALUE_BLOCK_MARK_2023: [u8; 31] = {
     let mut mark = [0xffu8; 31];
     mark[28] = 0;
     mark[29] = 0;
