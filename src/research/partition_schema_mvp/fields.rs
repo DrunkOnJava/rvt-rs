@@ -241,6 +241,16 @@ pub const COLUMN_CLEAN_PARTNERS_FIELD: &str = "m_column_clean_partners";
 /// ([`crate::partition_type_parameters::rectangular_section`], RE-291).
 pub const COLUMN_RECTANGLE_FIELDS: [&str; 2] = ["m_column_rect_b", "m_column_rect_h"];
 
+/// Field holding the diameter, feet, of a column's round section, read from
+/// its type's length parameter `Diameter` (with at most the family's two zero offsets)
+/// ([`crate::partition_type_parameters::round_section`], RE-353).
+pub const COLUMN_DIAMETER_FIELD: &str = "m_column_round_diameter";
+
+/// Field holding the Revit release (its version, 2024) of the file a column
+/// was read from, beside the elements its pair steps name (RE-353): what the
+/// rules measured on one release only are gated on.
+pub const COLUMN_RELEASE_FIELD: &str = "m_column_release";
+
 /// Classes whose type's hollow section is read (W6).
 pub const HOLLOW_SECTION_CLASSES: [&str; 2] = ["StructuralColumn", "Column"];
 
