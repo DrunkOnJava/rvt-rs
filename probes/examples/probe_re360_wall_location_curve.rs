@@ -37,6 +37,13 @@
 //!                     names (token, class tag, the objects holding it), and
 //!                     whether the current rule and `m_pCrv` each read it, so
 //!                     that a wall is followed across the saves by its id
+//!   kind "native"     the walls `native_walls` gives a row (count and ids), on
+//!                     the build the probe is compiled with
+//!   kind "wallfields" every field of each decoded wall that has an `SWall`
+//!                     record, as text (a long value: its start, FNV-1a hash and
+//!                     length)
+//!   kind "opening"    each door and window: host, flips, placed by the rule,
+//!                     and the placement X axis
 //!   kind "wall"       one record in full: every object (index, class, token),
 //!                     each curve's geometry, owners and the chain from the
 //!                     root to it, `m_pCrv`, and the step classes. For each
@@ -52,6 +59,7 @@ use anyhow::Result;
 use rvt::RevitFile;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
+use rvt::research::native_walls::native_walls;
 use rvt::research::partition_schema_mvp::{
     CURTAIN_WALL_CLASS, OPENING_HOST_FIELD, OPENING_PLACEMENT_X_AXIS_FIELDS,
     opening_flips_from_fields, wall_native_direction_from_fields,
@@ -63,12 +71,37 @@ const NAMED: [u64; 2] = [234869, 428745];
 const ONLY_POINTER_DETAIL: usize = 6;
 const ID_LIST: usize = 60;
 const FIELD_CLIP: usize = 900;
+const VALUE_CLIP: usize = 240;
 
 type Count = BTreeMap<String, usize>;
 
 /// An object that names another: its index, class, token and the path of the
 /// field.
 type Owner = (usize, String, u32, String);
+
+/// A decoded wall: its id, class and every field the export holds for it.
+struct DecodedWall {
+    id: u32,
+    class: String,
+    fields: Vec<(String, InstanceField)>,
+}
+
+fn fnv(text: &str) -> u64 {
+    text.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
+/// A field's value as text: exact where short, else its start, its FNV-1a hash
+/// and its length, so a changed long value still reads as changed.
+fn field_text(value: &InstanceField) -> String {
+    let text = format!("{value:?}");
+    if text.chars().count() <= VALUE_CLIP {
+        return text;
+    }
+    let start: String = text.chars().take(VALUE_CLIP).collect();
+    format!("{start}...#{:016x}/{}", fnv(&text), text.len())
+}
 
 fn bump(count: &mut Count, key: impl Into<String>) {
     *count.entry(key.into()).or_default() += 1;
@@ -371,14 +404,22 @@ fn main() -> Result<()> {
     // The decoded walls, doors and windows, as the export reads them.
     let mut wall_class: BTreeMap<u32, (String, bool)> = BTreeMap::new();
     let mut openings: BTreeMap<u32, (String, Option<u32>, bool, bool)> = BTreeMap::new();
+    let mut axes: BTreeMap<u32, [f64; 2]> = BTreeMap::new();
+    let mut decoded_walls: Vec<DecodedWall> = Vec::new();
     for element in iter_elements(&mut rf)? {
         let Some(id) = element.id else { continue };
         match element.class.as_str() {
             "Door" | "Window" => {
-                let placed = element
-                    .fields
-                    .iter()
-                    .any(|(name, _)| name == OPENING_PLACEMENT_X_AXIS_FIELDS[0]);
+                let axis = OPENING_PLACEMENT_X_AXIS_FIELDS.map(|wanted| {
+                    element.fields.iter().find_map(|(name, value)| match value {
+                        InstanceField::Float { value, .. } if name == wanted => Some(*value),
+                        _ => None,
+                    })
+                });
+                let placed = axis[0].is_some();
+                if let [Some(x), Some(y)] = axis {
+                    axes.insert(id, [x, y]);
+                }
                 openings.insert(
                     id,
                     (
@@ -392,6 +433,11 @@ fn main() -> Result<()> {
             class if class.contains("Wall") && !class.contains("Type") => {
                 let read = wall_native_direction_from_fields(&element.fields).is_some();
                 wall_class.insert(id, (class.to_string(), read));
+                decoded_walls.push(DecodedWall {
+                    id,
+                    class: class.to_string(),
+                    fields: element.fields.clone(),
+                });
             }
             _ => {}
         }
@@ -455,6 +501,7 @@ fn main() -> Result<()> {
     let mut only_pointer: Vec<u64> = Vec::new();
     let mut only_current: Vec<u64> = Vec::new();
     let mut shown_only_pointer = 0usize;
+    let mut swall_ids: BTreeSet<u64> = BTreeSet::new();
     let options = Options {
         selected_classes: BTreeSet::from(["SWall".to_string()]),
         ..Options::default()
@@ -468,6 +515,7 @@ fn main() -> Result<()> {
             return Ok(());
         }
         let id = record.identity.element_id;
+        swall_ids.insert(id);
         let lines = graph
             .objects
             .iter()
@@ -583,5 +631,48 @@ fn main() -> Result<()> {
             "only_current_ids": only_current,
         })
     );
+
+    // What the library reads: the walls `native_walls` gives a row, and every
+    // field of the decoded walls that have an `SWall` record and of the doors and
+    // windows, so that two builds of the same file are compared field by field.
+    let read = native_walls(&mut rf, &swall_ids).unwrap_or_default();
+    println!(
+        "{}",
+        json!({
+            "kind": "native",
+            "release": release,
+            "swall_records": swall_ids.len(),
+            "read": read.len(),
+            "ids": read.keys().collect::<Vec<_>>(),
+        })
+    );
+    for wall in decoded_walls
+        .iter()
+        .filter(|wall| swall_ids.contains(&u64::from(wall.id)))
+    {
+        let fields: Vec<(&String, String)> = wall
+            .fields
+            .iter()
+            .map(|(name, value)| (name, field_text(value)))
+            .collect();
+        println!(
+            "{}",
+            json!({ "kind": "wallfields", "id": wall.id, "class": wall.class, "fields": fields })
+        );
+    }
+    for (id, (class, host, flips, placed)) in &openings {
+        println!(
+            "{}",
+            json!({
+                "kind": "opening",
+                "id": id,
+                "class": class,
+                "host": host,
+                "flips_read": flips,
+                "placed": placed,
+                "axis": axes.get(id),
+            })
+        );
+    }
     Ok(())
 }
