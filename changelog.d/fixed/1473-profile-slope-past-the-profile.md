@@ -1,7 +1,7 @@
 - **A wall whose elevation profile was edited keeps its cut-out past the
   profile, to the wall's end (#1473, RE-358).** The sketch of a profile spans
-  the wall's location curve, but the wall's body goes on past it where a join
-  extends the wall, and the opening that voids the wall (RE-151) stopped at the
+  the wall's location curve, but the wall's body goes on past it at some ends
+  (the record lists no joined wall at the ones measured), and the opening that voids the wall (RE-151) stopped at the
   profile's end: the stretch stayed as the wall's box had it while Revit's body
   goes on along the profile. Where a wall goes on past an end of its profile
   and an opening reaches that end with one vertical edge, the
