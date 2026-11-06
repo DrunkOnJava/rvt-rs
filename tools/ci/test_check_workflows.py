@@ -369,6 +369,87 @@ class LocalUses(unittest.TestCase):
         self.assertEqual(self.problems(self.step("$/.github/actions/fetch-corpus", repository="r", path="p"), files), [])
 
 
+GOOD_LEGS = '[{"name":"browser tests","files":"/a\\\\.spec"},{"name":"saved-mesh measurement","measure":true}]'
+
+
+class Legs(unittest.TestCase):
+    def test_a_written_out_list_of_legs_passes(self):
+        self.assertEqual(cw.legs_problems("w", GOOD_LEGS), [])
+
+    def test_a_list_that_yields_no_leg_fails(self):
+        for text in ("[]", "{}", '{"name":"x","files":"/"}', "null", "3", '""'):
+            self.assertEqual(len(cw.legs_problems("w", text)), 1, text)
+
+    def test_text_that_is_not_json_fails(self):
+        for text in ("", "legs", "[{", "[{'name': 'x', 'files': '/'}]"):
+            self.assertEqual(len(cw.legs_problems("w", text)), 1, text)
+
+    def test_a_list_that_is_computed_fails_whatever_it_would_hold(self):
+        self.assertEqual(len(cw.legs_problems("w", "${{ needs.plan.outputs.legs }}")), 1)
+        self.assertEqual(len(cw.legs_problems("w", '[{"name":"x","files":"${{ inputs.f }}"}]')), 1)
+
+    def test_a_value_that_is_not_text_fails(self):
+        for value in (None, [], [{"name": "x", "files": "/"}], 3):
+            self.assertEqual(len(cw.legs_problems("w", value)), 1, value)
+
+    def test_a_leg_with_no_name_fails(self):
+        for leg in ('{"files":"/a"}', '{"name":"","files":"/a"}', '{"name":3,"files":"/a"}', '"browser"', "[]"):
+            self.assertEqual(len(cw.legs_problems("w", f"[{leg}]")), 1, leg)
+
+    def test_a_leg_that_runs_nothing_fails(self):
+        for leg in ('{"name":"x"}', '{"name":"x","files":""}', '{"name":"x","files":3}', '{"name":"x","measure":"true"}', '{"name":"x","measure":false}'):
+            self.assertEqual(len(cw.legs_problems("w", f"[{leg}]")), 1, leg)
+
+    def test_one_bad_leg_among_good_ones_is_found(self):
+        text = '[{"name":"a","files":"/a"},{"name":"b"},{"name":"c","measure":true}]'
+        problems = cw.legs_problems("w", text)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("'b'", problems[0])
+
+    def test_the_problem_names_where_it_is(self):
+        self.assertTrue(cw.legs_problems("deploy-viewer.yml: job 'tests'", "[]")[0].startswith("deploy-viewer.yml: job 'tests'"))
+
+
+def viewer_workflows(call_default=GOOD_LEGS, dispatch_default=GOOD_LEGS, **callers):
+    on = {
+        "workflow_call": {"inputs": {"legs": {"default": call_default}}},
+        "workflow_dispatch": {"inputs": {"legs": {"default": dispatch_default}}},
+    }
+    return {"viewer-test.yml": {True: on}, "ci.yml": {"jobs": callers}}
+
+
+class LegsSources(unittest.TestCase):
+    def test_both_defaults_and_each_callers_list_are_read(self):
+        workflows = viewer_workflows(
+            viewer={"uses": "$/.github/workflows/viewer-test.yml", "with": {"legs": "[]"}},
+            plain={"uses": "$/.github/workflows/viewer-test.yml"},
+        )
+        sources = cw.viewer_legs_sources(workflows)
+        self.assertEqual([where for where, _ in sources], [
+            "viewer-test.yml: the workflow_call default of legs",
+            "viewer-test.yml: the workflow_dispatch default of legs",
+            "ci.yml: job 'viewer'",
+        ])
+        self.assertEqual(sources[2][1], "[]")
+
+    def test_a_caller_that_omits_legs_uses_the_default_and_is_not_a_source(self):
+        workflows = viewer_workflows(viewer={"uses": "$/.github/workflows/viewer-test.yml", "with": {"release_wasm": False}})
+        self.assertEqual(len(cw.viewer_legs_sources(workflows)), 2)
+
+    def test_another_workflow_with_a_legs_input_is_not_read(self):
+        workflows = viewer_workflows(other={"uses": "$/.github/workflows/other.yml", "with": {"legs": "[]"}})
+        self.assertEqual(len(cw.viewer_legs_sources(workflows)), 2)
+
+    def test_a_default_that_is_missing_is_a_source_with_no_text(self):
+        workflows = viewer_workflows(call_default=None)
+        self.assertEqual(cw.viewer_legs_sources(workflows)[0][1], None)
+        self.assertEqual(len(cw.legs_problems(*cw.viewer_legs_sources(workflows)[0])), 1)
+
+    def test_a_viewer_workflow_with_no_inputs_does_not_crash(self):
+        sources = cw.viewer_legs_sources({"viewer-test.yml": {True: {"workflow_call": None}}})
+        self.assertEqual([text for _, text in sources], [None, None])
+
+
 STATEMENTS = {
     "README.md": "Rust 2024 edition (MSRV 1.87). Build: stable Rust 1.87 or newer.",
     "CONTRIBUTING.md": "You need stable Rust 1.87 or newer (`rustup` installs it).",
