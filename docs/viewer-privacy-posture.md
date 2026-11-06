@@ -83,13 +83,35 @@ rules:
   static `rvt_bg.wasm` bundle from the viewer origin; `blob:` is
   needed for Three.js to read the in-memory GLB object URL generated
   from local WASM output. Application data requests are not allowed.
+- The same policy's `worker-src` is `'self' blob:`. `blob:` was added on
+  2026-11-05 (Griffin: "Keep the claim, no request") so that the page's two
+  workers, the one that opens the file and the one that reads an element's
+  saved parameters, can be bundled into the page's own script and started from
+  blob URLs, which name bytes the page made itself and are no request. The
+  alternative, a worker script fetched when it was first needed, would have been
+  a request after the file was open (the first selection, or opening the file
+  again with another phase or the saved-mesh toggle), and the claim that nothing
+  is requested once the file is open would no longer have been true.
+  `script-src`, `connect-src` and every other directive are unchanged, and a
+  worker started from a blob URL takes the policy of the page that made it.
 
 Allowed browser requests are limited to initial same-origin static
 assets needed to boot the viewer:
 
 - the HTML document;
-- Vite-generated JavaScript chunks, including the worker script;
-- the generated `rvt_bg.wasm` WebAssembly binary;
+- Vite-generated JavaScript chunks. Both workers are inside the page's own
+  bundle and start from blob URLs, and so is the decoder's JavaScript glue (a
+  static import, not a chunk fetched at the first export), so none of them is a
+  request; the first page load carries them, which made it heavier by the
+  amount `docs/viewer-api.md` states;
+- the generated `rvt_bg.wasm` WebAssembly binary, fetched once, by the worker
+  of the first open, which compiles it and hands the compiled module to the
+  page. The page keeps it for good: the next open (another phase, the
+  saved-mesh toggle, the large-model retry, another file), a worker that reads
+  an element's saved parameters and the main thread's exports start from that
+  module and fetch nothing. So selecting an element, exporting IFC, plan or
+  glTF, and opening the file again make no request, and a page taken offline
+  after it has loaded still does all of them;
 - optional same-origin source maps or favicon requests from the
   browser tooling/runtime;
 - optional same-origin `/demos/` catalog JSON, thumbnails, and
@@ -119,7 +141,12 @@ Three checks make the posture verifiable post-facto:
    open a sample (`RVT_VIEWER_SAMPLE`; in the deploy job, the
    MIT-licensed `Revit_IFC5_Einhoven.rvt` project), allow only
    same-origin static boot assets, then assert zero HTTP/WebSocket
-   requests after the model is loaded.
+   requests after the model is loaded, after an element is selected (the
+   selection step fails the test when the sample has no element to select),
+   after an IFC, a plan and a glTF export are made, and after the file is opened
+   again. `viewer/tests/parameters-row.spec.ts` adds that a page taken offline
+   after the load still does all of those, and that no request of any kind, a
+   worker's included, is made while it does.
 
 The CI viewer deploy job runs checks #2 and #3. Browser-network
 failures print the request URL, method, phase, resource type, and

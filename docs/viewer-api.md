@@ -146,6 +146,129 @@ use rvt::ifc::scene_graph::{
   panel and its per-type scene highlight. Rebuild it with
   `Schedule::from_rows` after resorting or filtering rows.
 
+## Saved parameters
+
+The info panel lists an element's saved parameters (#35, RE-207) under
+"Saved parameters", beside the property sets the IFC export writes. They are
+not part of `element_info_panel`, which stays what the export holds: they are
+read when an element is selected, by `savedParameters`, in a worker of its
+own (`viewer/src/parameters-worker.ts`).
+
+`savedParameters(bytes, ids, limits)` returns JSON text (not a JS object, so
+no `Map` or large number is made of it). `ids` is a `Float64Array` of
+ElementIds. The keys are the binding's contract under `RELEASE.md`:
+
+```json
+{
+  "release": 2023,
+  "release_read": true,
+  "release_experimental": false,
+  "releases_read": [2015, 2027],
+  "releases_measured": [2023, 2027],
+  "elements": { "123456": [ { "name": "Mark", "parameter_id": 4711, "kind": "family", "...": "..." } ] },
+  "unresolved_family_slots": 0,
+  "instance_parameters_without_value": 0
+}
+```
+
+- `elements[id]` holds the entries `rvt-elements` prints as that element's
+  `parameters` (`docs/schemas/decoded-elements.schema.json`; the same Rust
+  value, `rvt::research::native_element_parameters::ElementParameter`):
+  `name` (the definition's caption, or `null` for a built-in parameter, which
+  keeps its negative `parameter_id` and no name, #255), `kind`
+  (`built_in`, `family`, `shared`, `global`, `project`, `undefined`),
+  `storage_type`, `value` in Revit's internal units, `si_value` and
+  `si_unit` for a length, area, volume or angle, `target_name` and
+  `target_family` for an ElementId that names a material or a family type,
+  `level` (`instance`, or `type` for the values an instance takes from its
+  type), and the record the value came from. An element with no record is not
+  in `elements`; one whose record holds none has an empty list.
+- `release_read` is false, and `elements` empty, for a file whose release is
+  outside `releases_read` (Revit 2015 to 2027). `release_experimental` is true
+  for a release in `releases_read` that `releases_measured` (Revit 2023 to
+  2027) leaves out: Revit 2015 to 2022 files are read experimentally, since no
+  Revit export of those releases saves a parameter to check them against
+  (RE-281, `docs/support-matrix.json`).
+- `unresolved_family_slots` and `instance_parameters_without_value` count what
+  the read could not list for these elements, so the panel can say so.
+
+The panel shows the instance parameters and then the type parameters, named
+ones first, with the nameless ones behind a fold that groups them by why they
+have no name (a built-in parameter's name is not in the file, #255; an id the
+file holds no definition for). Each row says in words where its parameter is
+defined, and a value reads as saved, with its unit where the entry has one:
+`3 ft · 0.9144 m`, `Yes`, `Wall type · ElementId 123`. It says so when the file
+is of a release that is not read, when the release is read only
+experimentally, when the element has no saved parameters, when the read failed
+(with "Try again"), and while it runs; a button that is pressed is gone, so
+focus moves to the group's message and then to its result, and a live region
+announces the read and its result.
+
+**Nothing is requested once the first file is open.** Both workers, the open's
+and this one, are bundled into the page's own script (Vite's `?worker&inline`)
+and start from blob URLs, which the page's `Content-Security-Policy` allows
+with `blob:` in `worker-src` (`docs/viewer-privacy-posture.md`); the page's other
+directives are unchanged. The decoder's glue is a static import of the page. The
+first open's worker fetches the wasm once (the page tells it where it is, as a
+blob worker has no base to resolve against), compiles it
+(`WebAssembly.compileStreaming`) and hands the module to the page, which keeps
+it: the next open, the workers that read, and the main thread's IFC, plan and
+CSV exports start from it (`initSync({ module })` in a worker, the module given
+to `default` on the main thread, whose synchronous instantiation of a large
+module is not allowed), so there is no chunk or wasm to fetch. A page taken
+offline after it has loaded still reads, exports and opens the file again
+(`viewer/tests/parameters-row.spec.ts`, `no-network.spec.ts`). Every lazy load in
+`viewer/src` that could run after the open is therefore gone: the main thread's
+`import('../pkg/rvt.js')` is static, the workers' scripts are inlined, and the
+wasm's `new URL(..., import.meta.url)` is resolved once by the page. What still
+fetches is opening a gallery demo, which is an open, and the catalog and
+thumbnails the page loads to show the gallery.
+
+The read is a pass over the file, so it does not run in the worker that opened
+it: that worker would be held up for as long as it takes, and the wasm linear
+memory of an instance only grows. A worker is started for one element, reads
+the file again from the `File` the page already holds, and ends with its
+answer (or when another element is selected, or a storey or category, or the
+panel is replaced by one with no parameters), so the page holds no more of the
+file than before and a read costs memory only while it runs. A worker the
+browser ends without a word (it raises no event) is found by a Web Lock it
+holds, so the group cannot say "Reading" for ever.
+
+**When a selection is read on its own.** A read has taken 0.74 to 1.04 times
+the wasm memory of the worker that opened the file, a ratio that rises with the
+file, and nothing above the BIM4LCA office's 910 MiB has been measured. The
+page therefore reads on selection only while the wasm memory it holds (the
+open's, and the main thread's instance if an export made one) is at most 1 GiB
+(or a quarter of `?memoryCeilingBytes=` where that lowers the 4 GiB ceiling),
+and shows a button above that, saying that clicking may close the tab: a
+renderer that runs out of memory takes the tab and the open model with it, with
+no error to show. After a read has run out of memory, or its worker has gone
+without a word, that file is read only when asked.
+
+The page keeps each element's answer, up to 64 elements and the least recently
+selected going first, until a file is opened again, so an element selected a
+second time reads nothing.
+
+Measured in the viewer tests, run 42125048710 on head 3146f14e (CI runner, WASM without LTO): a read's wasm
+instance took 17 MiB on Einhoven (the open's worker 23 MiB), 275 MiB on Core
+Interior (326 MiB) and 943 MiB on the BIM4LCA office as built (910 MiB), 0.74
+to 1.04 times the open's, in a median of 153 ms, 1.5 to 1.9 s and 3.9 s (the
+module is handed over, so a read starts without a fetch or a compile; the
+times are a CI runner's and vary with it). On the office the page kept 2
+answers, 4,654 characters of JSON. Under a V8 cap of 927 MiB of wasm memory,
+between the office's open and its read, the open succeeds and the read runs out
+of memory for real (`viewer/tests/parameters-row.spec.ts`).
+
+**What the first page load carries.** The page's one script is 999.56 kB (271.47
+kB gzipped) where the build of d1de8adf (run 42109657349) had 959.29 kB (262.82
+kB): 40.27 kB, 8.65 kB gzipped, more. Most of it is the decoder's glue (12.91
+kB) and the two workers (12.43 and 9.82 kB), which were fetched as files the
+first time they were needed and are now inside it (a worker's base64 is a third
+larger than its script); the rest is this round's panel code. The built site
+holds the script, the stylesheet, the page and the wasm, whose one sha256
+`check-wasm-in-site.sh` finds in the site (run 42125048710, build of this
+head). The wasm is fetched once, by the first open.
+
 ## Viewer state
 
 ```rust
@@ -535,6 +658,7 @@ describing the error.
 | `buildSceneGraph` | `model` | scene tree | The model's scene graph |
 | `distinctIfcTypes` | `scene` | `string[]` | The IFC types in a scene, for the layer toggles |
 | `elementInfoPanel` | `model`, `entity_index: number` | info panel | What the info panel shows for one element, on the storey the IFC export puts it in |
+| `savedParameters` | `bytes`, `ids: Float64Array` (ElementIds), `limits: { largeModel?, maxStreamBytes?, maxInflateBytes? }` or `null` | JSON `string` | The saved parameters of the elements `ids`, the read `rvt-elements` and Python's `decoded_elements()` list as an element's `parameters` (RE-207), as `{ release, release_read, release_experimental, releases_read, releases_measured, elements, unresolved_family_slots, instance_parameters_without_value }`; see [Saved parameters](#saved-parameters). Opens `bytes` for the call alone, under the limits the file was opened with, and keeps nothing of them |
 | `buildSchedule` | `model` | schedule table | A flat table of the building elements the IFC export writes, each on the storey it puts it in |
 | `modelToGlb` | `model` | `Uint8Array` | The model as a glTF 2.0 binary |
 | `modelToIfcStep` | `model` | `string` | The model as an IFC4 STEP document |

@@ -8,9 +8,30 @@ use anyhow::{Result, ensure};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-/// Global object streams carry a fixed u32 footer after the deferred graph.
-/// Only the independently observed zero-footer envelope is qualified here.
-pub fn decode(bytes: &[u8], registry: &Registry) -> Result<(Catalog, Value)> {
+/// The fields of the `Global/Latest` document's graph that [`from_graph`]
+/// reads: the root's pointer to the app info manager, the manager's array of
+/// pointers, and the schema storage's two maps. [`decode`] builds no other
+/// field of the document (it reads and checks every one, #1335), and
+/// [`from_graph`] is the only reader of that graph: a field it comes to read
+/// must be added here.
+pub const CATALOG_FIELDS: &[&str] = &[
+    "m_pAppInfoManager",
+    "m_appInfoArr",
+    "m_storedSchemas",
+    "m_schemaUsageMap",
+];
+
+/// The resource budgets the document is decoded under.
+pub fn document_limits() -> GraphLimits {
+    GraphLimits {
+        max_values: 2_000_000,
+        ..Default::default()
+    }
+}
+
+/// The graph's bytes of a global stream, the stream without its fixed u32
+/// footer. Only the independently observed zero-footer envelope is qualified.
+pub fn document(bytes: &[u8]) -> Result<&[u8]> {
     ensure!(
         bytes.len() >= 6 && bytes.len() <= 32 * 1024 * 1024,
         "ES global stream size unqualified"
@@ -20,14 +41,27 @@ pub fn decode(bytes: &[u8], registry: &Registry) -> Result<(Catalog, Value)> {
         bytes[end..] == [0; 4],
         "ES global fixed footer is not the qualified zero value"
     );
-    let graph = native_parameters::decode_graph_with_limits(
-        &bytes[..end],
+    Ok(&bytes[..end])
+}
+
+/// The catalog of the global stream `bytes` and what is known of where it
+/// was read from. Global object streams carry a fixed u32 footer after the
+/// deferred graph.
+pub fn decode(bytes: &[u8], registry: &Registry) -> Result<(Catalog, Value)> {
+    let (graph, _) = native_parameters::decode_graph_projected(
+        document(bytes)?,
         registry,
-        &GraphLimits {
-            max_values: 2_000_000,
-            ..Default::default()
-        },
+        &document_limits(),
+        None,
+        CATALOG_FIELDS,
     )?;
+    from_graph(&graph, bytes)
+}
+
+/// The catalog in the graph of `bytes`' document, built only of
+/// [`CATALOG_FIELDS`] or whole: the same either way.
+pub fn from_graph(graph: &ObjectGraph, bytes: &[u8]) -> Result<(Catalog, Value)> {
+    let end = bytes.len().saturating_sub(4);
     let root = graph
         .objects
         .first()
@@ -36,7 +70,7 @@ pub fn decode(bytes: &[u8], registry: &Registry) -> Result<(Catalog, Value)> {
         root.class_name == "ADocument",
         "ES catalog requires ADocument root"
     );
-    let manager = owned(&graph, 0, &root.fields["m_pAppInfoManager"])?;
+    let manager = owned(graph, 0, &root.fields["m_pAppInfoManager"])?;
     ensure!(
         graph.objects[manager].class_name == "AppInfoManager",
         "ES manager class mismatch"
@@ -49,7 +83,7 @@ pub fn decode(bytes: &[u8], registry: &Registry) -> Result<(Catalog, Value)> {
         if pointer["pointer_token"].as_u64() == Some(0) {
             continue;
         }
-        let index = owned(&graph, manager, pointer)?;
+        let index = owned(graph, manager, pointer)?;
         if graph.objects[index].class_name == "ESSchemaStorage" {
             storages.push(index);
         }
@@ -122,7 +156,7 @@ pub fn decode(bytes: &[u8], registry: &Registry) -> Result<(Catalog, Value)> {
     }
     Ok((
         catalog,
-        json!({"stream":"Global/Latest","inflated_sha256":Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect::<String>(),"graph_bytes":end,"stream_bytes":bytes.len(),"fixed_footer":0,"root_class":"ADocument","app_info_object_index":manager,"storage_object_index":storages[0],"storage_start":storage.start,"storage_end":storage.fields_end,"complete_global_graph":true,"scope":"Owned file-local schemas; general nonzero fixed footers remain unqualified"}),
+        json!({"stream":"Global/Latest","inflated_sha256":crate::native_document::lower_hex(&Sha256::digest(bytes)),"graph_bytes":end,"stream_bytes":bytes.len(),"fixed_footer":0,"root_class":"ADocument","app_info_object_index":manager,"storage_object_index":storages[0],"storage_start":storage.start,"storage_end":storage.fields_end,"complete_global_graph":true,"scope":"Owned file-local schemas; general nonzero fixed footers remain unqualified"}),
     ))
 }
 fn string(v: &Value, key: &str) -> Result<String> {
