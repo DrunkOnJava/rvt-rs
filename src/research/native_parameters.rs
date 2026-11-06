@@ -200,7 +200,17 @@ pub fn decode_graph_projected(
 /// made by an earlier one reads exactly as it would have with its own. A cache
 /// is for one schema: [`decode_graph_cached`] empties it when it is given
 /// another.
-#[derive(Debug, Default)]
+///
+/// What a cache holds is bounded: a plan costs [`PLAN_ENTRY_COST`] and one for
+/// each field of every class of its chain and each field kept, the cache holds
+/// at most [`PLAN_CACHE_COST`] of them (or the limit given to
+/// [`Self::with_limit`]), and one that would pass it empties the cache first. A
+/// plan dearer than the whole limit is not kept. Either way a decode that
+/// finds no plan makes its own, which is what every decode did before the cache,
+/// so the bound cannot change a graph: a schema made to hold plans of tens of
+/// thousands of fields, or a caller that passes a new list of fields each call,
+/// gets the decode it always got, not an allocation that grows with the file.
+#[derive(Debug)]
 pub struct PlanCache {
     /// The checksum of the schema the plans were made for.
     registry: String,
@@ -208,6 +218,48 @@ pub struct PlanCache {
     /// says which fields, so that the same address holding other fields is
     /// not taken for the same list.
     plans: HashMap<PlanKey, Rc<ClassPlan>>,
+    /// The cost of the plans held.
+    cost: usize,
+    /// The most cost the cache holds.
+    limit: usize,
+    /// How many times the cache was emptied for passing its limit.
+    clears: usize,
+}
+/// What a [`PlanCache`] holds by default, as a sum of plan costs: about 60
+/// bytes for each unit. A real file keeps well under a tenth of it (the probe
+/// of #1335 prints the largest it reaches).
+pub const PLAN_CACHE_COST: usize = 1_000_000;
+/// What each plan costs besides its fields: its entry in the table, its
+/// vectors and its share of the cache's overhead.
+pub const PLAN_ENTRY_COST: usize = 8;
+impl Default for PlanCache {
+    fn default() -> Self {
+        Self::with_limit(PLAN_CACHE_COST)
+    }
+}
+impl PlanCache {
+    /// An empty cache that holds at most `limit` of cost.
+    pub fn with_limit(limit: usize) -> Self {
+        Self {
+            registry: String::new(),
+            plans: HashMap::new(),
+            cost: 0,
+            limit,
+            clears: 0,
+        }
+    }
+    /// The number of plans held.
+    pub fn entries(&self) -> usize {
+        self.plans.len()
+    }
+    /// The cost of the plans held.
+    pub fn cost(&self) -> usize {
+        self.cost
+    }
+    /// How many times the cache was emptied for passing its limit.
+    pub fn clears(&self) -> usize {
+        self.clears
+    }
 }
 /// A class's tag and the address and length of the fields a decode keeps.
 type PlanKey = (u16, usize, usize);
@@ -240,6 +292,7 @@ fn decode_graph_in(
         le_bytes::u16_at(body, 0).ok_or_else(|| anyhow::anyhow!("truncated root object tag"))?;
     if plans.registry != registry.source_sha256 {
         plans.plans.clear();
+        plans.cost = 0;
         plans.registry.clone_from(&registry.source_sha256);
     }
     let mut cursor =
@@ -432,6 +485,13 @@ struct ClassPlan {
     keep: Option<Vec<String>>,
 }
 impl ClassPlan {
+    /// What the plan costs a [`PlanCache`]: its entry, a unit for each field
+    /// of every class of its chain, and one for each field kept.
+    fn cost(&self) -> usize {
+        PLAN_ENTRY_COST
+            + self.keys.iter().map(Vec::len).sum::<usize>()
+            + self.keep.as_ref().map_or(0, Vec::len)
+    }
     /// Whether the plan was made for the fields `keep` names.
     fn is_for(&self, keep: Option<&[&str]>) -> bool {
         match (&self.keep, keep) {
@@ -881,7 +941,21 @@ impl<'a> Cursor<'a> {
                 .keep
                 .map(|keep| keep.iter().map(|field| (*field).to_string()).collect()),
         });
-        self.plans.plans.insert(key, Rc::clone(&plan));
+        // A plan is kept only while the cache's cost stays within its limit:
+        // one that would pass it empties the cache, and one dearer than the
+        // limit alone is not kept. The decode has the plan either way.
+        let cost = plan.cost();
+        if cost <= self.plans.limit {
+            if self.plans.cost + cost > self.plans.limit {
+                self.plans.plans.clear();
+                self.plans.cost = 0;
+                self.plans.clears += 1;
+            }
+            if let Some(replaced) = self.plans.plans.insert(key, Rc::clone(&plan)) {
+                self.plans.cost = self.plans.cost.saturating_sub(replaced.cost());
+            }
+            self.plans.cost += cost;
+        }
         Ok(plan)
     }
     fn field<const BUILD: bool>(&mut self, f: &Field, depth: usize) -> Result<Value> {

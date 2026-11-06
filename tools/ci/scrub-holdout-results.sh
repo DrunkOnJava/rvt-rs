@@ -75,7 +75,11 @@
 # fine tessellation decides some bodies and the line that counts them (RE-331
 # section 8, #1365: the same), the counts of the IFC4 schema's findings on
 # the export (`schema validate:` and `schema rules:` lines, #1430: a number, and
-# for a rule finding the entity and rule that name it, never its message), and
+# for a rule finding the entity and rule that name it, never its message), the
+# `projected graphs:` count lines of probe_1335_projected_graphs (#1335: counts
+# of records decoded and of differences, a verdict word for the catalog, schema
+# class names and the field names of the readers' lists, never a file name or an
+# ElementId) with its `probe: exit N` line, and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
@@ -107,6 +111,13 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^saved graphics pre2023: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^census stages: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # probe_1335_projected_graphs (#1335): counts, verdict words, schema class
+      # names (a class name is the schema's, never the model's) and the field
+      # names of the readers' lists, as numbers beside fixed words. Its `file`
+      # line names the model's file and its `native:` line may carry an error
+      # with an ElementId; both are dropped, and `exit N` stays.
+      grep -E '^(global-catalog [a-z-]+|compared records [0-9]+ decodes [0-9]+ full-ok [0-9]+ full-refused [0-9]+ mismatches [0-9]+ budget-stopped (true|false)|keep [A-Za-z0-9_,]* compared [0-9]+ mismatches [0-9]+|refused [A-Za-z0-9_]* [0-9]+|binding-context family-categories [0-9]+ symbol-families [0-9]+ same (true|false) ingest-refusals [0-9]+ same-refusals (true|false)|wall-facts compared [0-9]+ same (true|false)|plan-cache compared [0-9]+ mismatches [0-9]+|plan-cache limited compared [0-9]+ mismatches [0-9]+|plan-cache size peak-entries [0-9]+ peak-cost [0-9]+ clears [0-9]+|mismatch [a-z-]+ [A-Za-z0-9_]*)$' "$f" | sed 's/^/projected graphs: /' || true
+      grep -E '^exit [0-9]+$' "$f" | sed 's/^/probe: /' || true
     done
     for f in "$dir"qtos_vs_ifc*.txt; do
       [ -f "$f" ] || continue
