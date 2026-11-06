@@ -64,7 +64,7 @@ data is decoded and its bounding box where it is not. It writes that as IFC4,
 glTF, plan SVG and CSV, from the CLIs, Python, the zero-upload browser
 viewer, and a local, read-only MCP server (`rvt-rs-mcp`, [`docs/mcp.md`](mcp.md))
 that answers an agent's questions from the model the IFC export writes. On Revit 2023 projects it reads each element's ElementId, category
-and bounding box (RE-81), walls cut back at their joins (RE-120), beams at their columns
+and bounding box (RE-81), curtain walls with their parts under them on 2015 to 2023 (RE-366), walls cut back at their joins (RE-120), beams at their columns
 (RE-122), door and
 window hosts (RE-85), room outlines
 (RE-102) with their numbers and names (RE-117, which names every

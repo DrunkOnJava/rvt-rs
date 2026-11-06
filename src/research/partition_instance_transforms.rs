@@ -133,9 +133,23 @@ pub fn scan_instance_transforms(
     revit_version: u32,
     ids: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, InstanceTransform>> {
-    let Some(header) = crate::partition_names::element_data_header(revit_version) else {
+    if crate::partition_names::element_data_header(revit_version).is_none() {
+        return Ok(BTreeMap::new());
+    }
+    scan_transforms_in_layout(rf, revit_version, ids)
+}
+
+/// [`scan_instance_transforms`] on any release with an element-data layout,
+/// the 32-bit ones too, for a reader measured on them (RE-366).
+pub fn scan_transforms_in_layout(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    ids: &BTreeSet<u32>,
+) -> Result<BTreeMap<u32, InstanceTransform>> {
+    let Some(layout) = crate::partition_names::element_data_layout(revit_version) else {
         return Ok(BTreeMap::new());
     };
+    let header = layout.header;
     let mut found: BTreeMap<u32, Vec<(u32, InstanceTransform)>> = BTreeMap::new();
     let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     // Where each copy's element-data header starts, in the order of `found`,
@@ -158,10 +172,7 @@ pub fn scan_instance_transforms(
         };
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
-            let Some(id) = le_bytes::u64_at(buf, id_at)
-                .and_then(|id| u32::try_from(id).ok())
-                .filter(|id| ids.contains(id))
-            else {
+            let Some(id) = layout.id_at(buf, id_at).filter(|id| ids.contains(id)) else {
                 continue;
             };
             holders.entry(id).or_default().insert(partition);
