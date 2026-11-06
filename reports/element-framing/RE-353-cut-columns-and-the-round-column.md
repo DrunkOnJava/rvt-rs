@@ -4,7 +4,7 @@
 **Issues:** [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-247 and RE-291 (the columns Revit draws as a cut mesh and the box-drawn columns' quantities)
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, `research/bim4lca-measure.tsv`), as Measure fetches them
 **Probe:** `probes/examples/probe_re353_column_cut_footprints.rs`, Measure runs [42112543949](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42112543949) and [42115439931](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42115439931) (commit 38d9e426, a scratch branch; the same file is at e5247625)
-**Status:** positive on one building, the office. The meshed columns: reproduced offline from the probe's output to Revit's own mesh for all 18 columns, and the rule written from it gives Revit's `CrossSectionArea` and `NetVolume` on 17 of the 18 at permit (the office as built, the R2025 models and the held-out models hold none). The round column: `OuterSurfaceArea` is a formula that is Revit's exactly on one column on each of the two office files, the same column; its other three quantities are measured negatives (section 4). Neither rule is exercised by any model but the office: the held-out, R2025 and RE1 models' counts, and Core Interior's, Einhoven's and RE1 Architecture's IFC, are unchanged (section 5).
+**Status:** positive on one building, the office. The meshed columns: reproduced offline from the probe's output to Revit's own mesh for all 18 columns, and the rule written from it gives Revit's `CrossSectionArea` and `NetVolume` on 17 of the 18 at permit (the office as built, the R2025 models and the held-out models hold none). The round column: `OuterSurfaceArea` is a formula that is Revit's exactly on one column on each of the two office files, the same column; its other three quantities are measured negatives (section 4). Neither rule is scored on any model but the office: the held-out, R2025 and RE1 models' counts, and Core Interior's, Einhoven's and RE1 Architecture's IFC, are unchanged, and one unscored sample project's IFC moves by 136 bytes (section 5).
 
 ## 1. What Revit writes where there is no extrusion
 
@@ -66,9 +66,7 @@ So the three stay out. A formula has to explain both volumes or stay out, and no
 
 ## 5. Measured
 
-These figures are from the run below at 223968aa. The limits of section 3 (the flat slab and set profile, the square cut for `CrossSectionArea`, the release gate, the trimmed column, the slab joined by a clean pair) were added after it and are not yet measured on this head; the 17 columns are the ones they are meant to keep.
-
-Measure run [42122584803](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42122584803) (head 223968aa against `main` at 16682a7a, `qtos_vs_ifc` and `psets_vs_ifc` with `--revit-set-placement`, the office as built and at permit, the 18 held-out models, the 24 R2025 models, the four RE1 models, Core Interior and Einhoven), after [42117851460](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42117851460) (head 0a5d2ad1, before the round column's offsets were read):
+Measure run [42130190386](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42130190386), unfiltered (head 35cfd89f, which holds every limit of section 3, against `main` at 8060ecc8; `-f base=main -f nordic=true -f r2025=true -f holdout=true -f samples=true`, every scorer, `qtos_vs_ifc` and `psets_vs_ifc` with `--revit-set-placement`; the office as built and at permit, the 18 held-out models, the 24 R2025 models, the four RE1 models, Core Interior, Einhoven and the sample projects). **17 columns stay**, the same count as run [42122584803](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42122584803) (head 223968aa, before the limits were added), which measured the rule without them, and the same counts after:
 
 | | office as built | office at permit |
 |---|---:|---:|
@@ -80,7 +78,9 @@ Measure run [42122584803](https://github.com/DrunkOnJava/rvt-rs/actions/runs/421
 | `OuterSurfaceArea` equal | 278 to 279 of 279 | 320 to 321 of 327 |
 | different, quantities Revit does not write | 1, 0 (unchanged) | 1, 0 (unchanged) |
 
-The gains are the 17 columns' two quantities at permit (34) and the round column's `OuterSurfaceArea` on each file (1 each). The property census is identical on both files, and no other model's census text differs from `main`'s; the counts of all 18 held-out models are byte for byte `main`'s, and the IFC of Core Interior, Einhoven and RE1 Architecture has the sha256 of `main`'s. So the two rules are exercised by the office alone: the 17 cut columns and the one round column on each file are every value they write on the models measured; no held-out or reference model has a column either rule takes.
+The gains are the 17 columns' two quantities at permit (34) and the round column's `OuterSurfaceArea` on each file (1 each); the scorer reports counts, not which columns, and the 17 are the number of the 17 square cuts the rule is meant to keep. The property census is identical on both files, every other scorer output of every model (the 18 held-out models', the 24 R2025 models' and the four RE1 models') is byte for byte `main`'s, and the IFC sha256 of Core Interior, Einhoven, RE1 Architecture, the 18 held-out models and 108 of the 111 exports in the run is `main`'s. The three that moved are the office as built, the office at permit, and `sample-2024-snowdon_towers_sample_architectural` (Revit 2024), whose IFC is 136 bytes longer with the same entity total (40,945) and diagnostics: Measure scores none of its quantities against a Revit export, the run kept no IFC, and what moved is not known from this run. The `same-project gates` check passes on 35cfd89f (9 samples held to their earlier saves; it does not compare column quantities).
+
+The rules are exercised on the office, where 17 cut columns and one round column on each file are every value they write that a Revit export scores. The Snowdon Towers Architectural change is a second file where an export moves and nothing scores it.
 
 ## 6. What stays out
 
@@ -97,6 +97,8 @@ The gains are the 17 columns' two quantities at permit (34) and the round column
 gh workflow run measure.yml --ref main -f ref=e5247625 -f base=none -f nordic=true \
   -f models="nordic-office-as-built nordic-office-permit" -f scorers=none \
   -f probe=probe_re353_column_cut_footprints -f probe_scorer=-
+gh workflow run measure.yml --ref main -f ref=35cfd89f -f base=main -f nordic=true -f r2025=true \
+  -f holdout=true -f samples=true
 ```
 
 The probe's lines `col <tag> at <x> <y> <z> rot <r> prof <profile> h <height> pairs <step>:<other>:<entity>:<x>:<y>:<z>:<rot>:<profile>:<height> ...` join to Revit's mesh volumes and areas by `Tag` (the mesh is the column's `IfcPolygonalFaceSet`).
