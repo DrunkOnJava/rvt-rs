@@ -183,9 +183,17 @@ pub(super) fn attach_beam_sections(
             _ => None,
         })
     };
+    // RE-365: on the 32-bit releases a beam's section only; a column's placement
+    // is not measured there.
+    let classes: &[&str] = if crate::partition_element_records_2023::is_32bit_release(revit_version)
+    {
+        &["StructuralFraming"]
+    } else {
+        &I_SECTION_CLASSES
+    };
     let types: BTreeSet<u32> = products
         .iter()
-        .filter(|element| I_SECTION_CLASSES.contains(&element.class.as_str()))
+        .filter(|element| classes.contains(&element.class.as_str()))
         .filter_map(type_of)
         .collect();
     let recording = rf.recording_value_sources();
@@ -205,7 +213,7 @@ pub(super) fn attach_beam_sections(
     };
     for element in products
         .iter_mut()
-        .filter(|element| I_SECTION_CLASSES.contains(&element.class.as_str()))
+        .filter(|element| classes.contains(&element.class.as_str()))
     {
         let Some(section) = type_of(element).and_then(|id| sections.get(&id)).copied() else {
             continue;

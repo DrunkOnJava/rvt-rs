@@ -198,15 +198,35 @@ pub fn scan_partition_length_places(
     parameters: &BTreeSet<i64>,
     want_places: bool,
 ) -> BTreeMap<u32, BTreeMap<i64, (f64, usize)>> {
-    let blocks = value_blocks(buf, declared_ids);
+    scan_length_places(buf, declared_ids, parameters, want_places, false)
+}
+
+/// [`scan_partition_length_places`], or with `narrow` the 32-bit layout: a value
+/// block's owner is a `u32` before the shorter mark (RE-113) and an entry is
+/// `f64 · ff×4 · i32` (RE-365).
+fn scan_length_places(
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+    parameters: &BTreeSet<i64>,
+    want_places: bool,
+    narrow: bool,
+) -> BTreeMap<u32, BTreeMap<i64, (f64, usize)>> {
+    let blocks = if narrow {
+        value_blocks_32(buf, declared_ids)
+    } else {
+        value_blocks(buf, declared_ids)
+    };
+    let entry_len = if narrow { 12 } else { 16 };
     let mut first_at: BTreeMap<(u32, i64), usize> = BTreeMap::new();
     let mut values: BTreeMap<(u32, i64), Option<f64>> = BTreeMap::new();
     for &parameter in parameters {
-        for at in memchr::memmem::find_iter(buf, &parameter.to_le_bytes()) {
+        let wide = parameter.to_le_bytes();
+        let needle = if narrow { &wide[..4] } else { &wide[..] };
+        for at in memchr::memmem::find_iter(buf, needle) {
             let Some(value) = at
-                .checked_sub(16)
+                .checked_sub(entry_len)
                 .and_then(|start| buf.get(start..at))
-                .filter(|entry| entry[8..] == [0xff; 8])
+                .filter(|entry| entry[8..].iter().all(|byte| *byte == 0xff))
                 .and_then(|entry| le_bytes::f64_at(entry, 0))
                 .filter(|value| value.is_finite() && value.abs() <= MAX_LENGTH_FEET)
             else {
@@ -217,7 +237,7 @@ pub fn scan_partition_length_places(
                 continue;
             };
             if want_places {
-                first_at.entry((owner, parameter)).or_insert(at - 16);
+                first_at.entry((owner, parameter)).or_insert(at - entry_len);
             }
             values
                 .entry((owner, parameter))
@@ -424,6 +444,12 @@ pub fn type_i_sections(
     type_i_sections_at(rf, revit_version, types, false).0
 }
 
+/// Releases an I section is read on in the 32-bit layout, against the same
+/// Autodesk samples saved by Revit 2024 (RE-365). Revit 2015 and 2016 hold no
+/// entry under [`SECTION_WIDTH_PARAMETER`] on any sample: their sections' values
+/// are held under ids of the document's own, which are not read.
+pub const I_SECTION_32BIT_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2017..=2023;
+
 /// The parameters an I section is read from (RE-103).
 pub const I_SECTION_PARAMETERS: [i64; 6] = [
     SECTION_WIDTH_PARAMETER,
@@ -475,7 +501,8 @@ pub fn type_i_sections_at(
     types: &BTreeSet<u32>,
     want_places: bool,
 ) -> (BTreeMap<u32, ISection>, ParameterPlaces<i64>) {
-    if !supports_revit_version(revit_version) || types.is_empty() {
+    let narrow = I_SECTION_32BIT_REVIT_VERSIONS.contains(&revit_version);
+    if !(narrow || supports_revit_version(revit_version)) || types.is_empty() {
         return (BTreeMap::new(), ParameterPlaces::new());
     }
     let Ok(records) = crate::elem_table::parse_records(rf) else {
@@ -483,7 +510,7 @@ pub fn type_i_sections_at(
     };
     let declared = crate::elem_table::declared_ids(&records);
     let parameters = BTreeSet::from(I_SECTION_PARAMETERS);
-    let (lengths, places) = type_lengths_at(rf, &declared, types, &parameters, want_places);
+    let (lengths, places) = type_lengths_at(rf, &declared, types, &parameters, want_places, narrow);
     let sections = lengths
         .into_iter()
         .filter_map(|(owner, held)| {
@@ -768,7 +795,7 @@ fn type_lengths(
     types: &BTreeSet<u32>,
     parameters: &BTreeSet<i64>,
 ) -> BTreeMap<u32, BTreeMap<i64, f64>> {
-    type_lengths_at(rf, declared, types, parameters, false).0
+    type_lengths_at(rf, declared, types, parameters, false, false).0
 }
 
 /// [`type_lengths`], also giving, when `want_places` asks, where the first
@@ -779,6 +806,7 @@ fn type_lengths_at(
     types: &BTreeSet<u32>,
     parameters: &BTreeSet<i64>,
     want_places: bool,
+    narrow: bool,
 ) -> (BTreeMap<u32, BTreeMap<i64, f64>>, ParameterPlaces<i64>) {
     let mut values: BTreeMap<u32, BTreeMap<i64, Option<f64>>> = BTreeMap::new();
     let mut places = ParameterPlaces::new();
@@ -787,7 +815,7 @@ fn type_lengths_at(
             continue;
         };
         for (owner, found) in
-            scan_partition_length_places(inflated.bytes(), declared, parameters, want_places)
+            scan_length_places(inflated.bytes(), declared, parameters, want_places, narrow)
         {
             if !types.contains(&owner) {
                 continue;
@@ -820,6 +848,21 @@ fn type_lengths_at(
         })
         .collect();
     (agreed, places)
+}
+
+/// [`value_blocks`] in the 32-bit layout (RE-113, RE-365).
+fn value_blocks_32(buf: &[u8], declared_ids: &BTreeSet<u32>) -> Vec<(usize, Option<u32>)> {
+    memchr::memmem::find_iter(buf, &crate::partition_type_materials::VALUE_BLOCK_MARK_2023)
+        .filter(|&at| at >= 4 && buf[at - 1] != 0xff)
+        .filter_map(|at| {
+            let id = le_bytes::u32_at(buf, at - 4)?;
+            if declared_ids.contains(&id) {
+                Some((at, Some(id)))
+            } else {
+                (id == 0).then_some((at, None))
+            }
+        })
+        .collect()
 }
 
 /// Value block starts in `buf`: the mark, not preceded by a further 0xff (a

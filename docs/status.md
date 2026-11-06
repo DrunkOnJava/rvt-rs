@@ -65,7 +65,7 @@ glTF, plan SVG and CSV, from the CLIs, Python, the zero-upload browser
 viewer, and a local, read-only MCP server (`rvt-rs-mcp`, [`docs/mcp.md`](mcp.md))
 that answers an agent's questions from the model the IFC export writes. On Revit 2023 projects it reads each element's ElementId, category
 and bounding box (RE-81), walls cut back at their joins (RE-120), beams at their columns
-(RE-122) and elsewhere along their location lines on 2015 to 2023, read on Autodesk's samples only (RE-362: none of BIMcollab's 91 beams holds a line, #1514), door and
+(RE-122) and elsewhere along their location lines on 2015 to 2023, read on Autodesk's samples only (RE-362: none of BIMcollab's 91 beams holds a line, #1514), steel beams as their type's I section on 2017 to 2023 (RE-365), door and
 window hosts (RE-85), room outlines
 (RE-102) with their numbers and names (RE-117, which names every
 release's rooms), Levels with the storey each element sits on (RE-107;

@@ -227,6 +227,8 @@ pub fn recover_partition_schema_mvp(
             attach_beam_rotations(rf, &mut out.products);
             attach_beam_axes(rf, revit_version, &mut out.products);
         }
+        // --- A steel beam's I section from its type (RE-103, RE-365) ---
+        attach_beam_sections(rf, revit_version, &mut out.products);
         // --- System families' names (RE-63); a wall's, roof's or
         // ceiling's needs its type's layers, not read on 2023 ---
         attach_system_family_names(
