@@ -64,7 +64,7 @@ on:
       # Not a dispatch input: a dispatched run has no artifact to name, so it
       # builds its own.
       wasm_artifact:
-        description: Name of an artifact of this run that holds a build of the WASM, laid out as the `build` job writes it (pkg/ from wasm-pack, bin/gen-fixture, wasm.sha256), for a caller that built it already; `build` is then skipped and `release_wasm` is ignored
+        description: Name of an artifact of this run that holds a build of the WASM, laid out as the `build` job writes it (pkg/ from wasm-pack, bin/gen-fixture, bin/rvt-elements, wasm.sha256), for a caller that built it already; `build` is then skipped and `release_wasm` is ignored
         type: string
         default: ''
   workflow_dispatch:
@@ -132,9 +132,14 @@ jobs:
         # build's lock on target/, and at the same time: it finishes well
         # inside the WASM build, which took 150 to 225 s while the two
         # builds in turn took 200 to 290 s.
+        #
+        # rvt-elements is built in the same invocation (a link of the library
+        # gen-fixture already compiled): tests/parameters-row.spec.ts runs it
+        # on the sample and holds the panel's saved parameters to what it prints
+        # (#35).
         run: |
           set -euo pipefail
-          CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target-native" cargo build --profile ci --bin gen-fixture &
+          CARGO_TARGET_DIR="${GITHUB_WORKSPACE}/target-native" cargo build --profile ci --bin gen-fixture --bin rvt-elements &
           fixture=$!
           if [ "${RELEASE_WASM}" != true ]; then
             export CARGO_PROFILE_RELEASE_LTO=off CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
@@ -166,6 +171,7 @@ jobs:
           mkdir -p "${dir}/bin"
           cp -R viewer/pkg "${dir}/pkg"
           cp target-native/ci/gen-fixture "${dir}/bin/gen-fixture"
+          cp target-native/ci/rvt-elements "${dir}/bin/rvt-elements"
           (cd "${dir}" && sha256sum pkg/rvt_bg.wasm > wasm.sha256)
           sha=$(cut -d' ' -f1 "${dir}/wasm.sha256")
           echo "WASM sha256 ${sha}"
@@ -235,9 +241,10 @@ jobs:
           set -euo pipefail
           dir="${RUNNER_TEMP}/viewer-build"
           cp -R "${dir}/pkg" viewer/pkg
-          chmod +x "${dir}/bin/gen-fixture"
+          chmod +x "${dir}/bin/gen-fixture" "${dir}/bin/rvt-elements"
           echo "${dir}/bin" >> "$GITHUB_PATH"
           "${dir}/bin/gen-fixture" --help >/dev/null
+          "${dir}/bin/rvt-elements" --help >/dev/null
           expected=$(cut -d' ' -f1 "${dir}/wasm.sha256")
           actual=$(sha256sum viewer/pkg/rvt_bg.wasm | cut -d' ' -f1)
           echo "WASM sha256 ${actual}"
