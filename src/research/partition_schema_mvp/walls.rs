@@ -265,6 +265,11 @@ const WALL_PROFILE_OPENING_REVIT_VERSIONS: &[u32] = &[2024];
 /// takes the rule only when it is added here.
 const WALL_END_JOIN_REVIT_VERSIONS: &[u32] = &[2024];
 
+/// Releases a wall is drawn along its location line and cut by its joins: 2024
+/// to 2027, and Revit 2015 to 2023 against the same Autodesk samples saved by
+/// Revit 2024. None of 2015 to 2023 is scored against a Revit export here.
+const WALL_CENTRELINE_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2027;
+
 /// Give each wall whose elevation profile was edited the openings that cuts
 /// (RE-151's 63rd opening).
 ///
@@ -654,10 +659,9 @@ pub(super) fn attach_wall_layers(
     {
         return;
     }
-    // A 2023 wall keeps its record body, cut back at its joins (RE-120),
-    // and takes only its layers and exterior side: its location line is not
-    // read (RE-114).
-    let centreline_bodies = !crate::partition_element_records_2023::is_32bit_release(revit_version);
+    // A wall before 2015 keeps its record body, cut back at its joins (RE-120),
+    // and takes only its layers and exterior side.
+    let centreline_bodies = WALL_CENTRELINE_REVIT_VERSIONS.contains(&revit_version);
     let type_of = |element: &DecodedElement| {
         element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
@@ -909,7 +913,10 @@ pub(super) fn attach_wall_layers(
                 (first == 0.0 && third == 0.0 && exterior > 0.0 && exterior < FRAC_PI_4)
                     .then_some(exterior)
             });
-        let centred = centreline_bodies && measured && (word == 1 || taper.is_some());
+        // RE-180, RE-181: Revit 2015 to 2020 write no cross-section word, so
+        // nothing marks a slanted wall and each is drawn vertical.
+        let vertical = word == 1 || !pcs::wall_orientation_has_word(revit_version);
+        let centred = centreline_bodies && measured && (vertical || taper.is_some());
         let float = |value: f64| InstanceField::Float { value, size: 8 };
         // The direction the exterior side is taken from: the line's, or the
         // arc's tangent at its middle (RE-75).
@@ -1011,7 +1018,12 @@ pub(super) fn attach_wall_layers(
         attach_wall_butt_joins(rf, revit_version, walls, &layers, &native);
         attach_native_tee_reaches(walls, &native);
         attach_wall_corner_reaches(walls, &layers, &native);
-        attach_wall_lengths(walls, &native);
+        // A 2015 to 2023 record is read without its control joins (RE-364), and
+        // the rule takes a wall with none listed as joined to nothing, so its
+        // `Length` is left out.
+        if !crate::partition_element_records_2023::is_32bit_release(revit_version) {
+            attach_wall_lengths(walls, &native);
+        }
     }
 }
 
