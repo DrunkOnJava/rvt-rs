@@ -57,6 +57,58 @@ fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
+/// How a beam's other line lies against the line the reader takes: its
+/// direction (`parallel`, `reversed`, `perpendicular`, `other`), its offset from
+/// the first line (`no_offset`, `offset_z_only`, `offset_in_plan`), whether it is a
+/// level line at the mid-depth of the record box, and whether it has the same
+/// start and end parameters (RE-49: "a second line with the same parameters,
+/// origin and direction at the section's mid-depth").
+fn relation(first: &BoundedLine, other: &BoundedLine, bbox: [f64; 6]) -> String {
+    let d = dot(first.direction, other.direction);
+    let direction = if d > 1.0 - 1e-9 {
+        "parallel"
+    } else if d < -(1.0 - 1e-9) {
+        "reversed"
+    } else if d.abs() < 1e-6 {
+        "perpendicular"
+    } else {
+        "other"
+    };
+    let delta = [
+        other.origin[0] - first.origin[0],
+        other.origin[1] - first.origin[1],
+        other.origin[2] - first.origin[2],
+    ];
+    let along = dot(delta, first.direction);
+    let across = [
+        delta[0] - along * first.direction[0],
+        delta[1] - along * first.direction[1],
+        delta[2] - along * first.direction[2],
+    ];
+    let offset = if dot(across, across).sqrt() < 1e-6 {
+        "no_offset"
+    } else if across[0].hypot(across[1]) < 1e-6 {
+        "offset_z_only"
+    } else {
+        "offset_in_plan"
+    };
+    let mid = (bbox[2] + bbox[5]) * 0.5;
+    let level_at_mid = (other.origin[2] - mid).abs() < 1e-3 && other.direction[2].abs() < 1e-9;
+    let at_mid = if level_at_mid {
+        "at_mid_depth"
+    } else {
+        "not_at_mid_depth"
+    };
+    let same = if (other.start_parameter - first.start_parameter).abs() < 1e-9
+        && (other.end_parameter - first.end_parameter).abs() < 1e-9
+    {
+        "same_parameters"
+    } else {
+        "other_parameters"
+    };
+    format!("{direction} {offset} {at_mid} {same}")
+}
+
 fn float_field(element: &DecodedElement, wanted: &str) -> Option<f64> {
     element.fields.iter().find_map(|(name, value)| match value {
         InstanceField::Float { value, .. } if name == wanted => Some(*value),
@@ -210,6 +262,17 @@ fn main() -> anyhow::Result<()> {
                 &mut counts,
                 format!("one_line accepted other_line_fits {other_fits}"),
             );
+            // Every other line of the copy the reader took, against the first.
+            let copy_lines = all_lines
+                .get(&id)
+                .and_then(|found| found.first())
+                .map_or(&[][..], |(_, lines)| lines.as_slice());
+            for other in copy_lines.iter().filter(|other| **other != line) {
+                bump(
+                    &mut counts,
+                    format!("accepted second_line {}", relation(&line, other, bbox)),
+                );
+            }
             if !attached {
                 bump(&mut counts, "MISMATCH accepted_but_not_attached");
             }
