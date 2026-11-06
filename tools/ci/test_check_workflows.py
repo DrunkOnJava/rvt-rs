@@ -481,5 +481,104 @@ class ProseMsrv(unittest.TestCase):
         self.assertEqual(prose("1.87", texts), [])
 
 
+GATE = "inputs.upload || inputs.python"
+
+
+def download(value, key="name", gate=None):
+    step = {"uses": "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333", "with": {key: value}}
+    if gate:
+        step["if"] = gate
+    return step
+
+
+def release_workflow():
+    return {
+        "jobs": {
+            "build": {"strategy": {"matrix": {"include": [{}] * 5}}, "steps": []},
+            "python": {"needs": [], "steps": [{"if": "inputs.python", "run": "true"}]},
+            "checksums": {
+                "needs": ["build", "python"],
+                "steps": [download("rvt-rs-*", "pattern"), download("wheel-*", "pattern", GATE), download("sdist", gate=GATE),
+                          {"run": "true", "env": {"RELEASE_WHEELS": "7"}}],
+            },
+            "image": {"needs": "checksums", "steps": []},
+            "attest": {
+                "needs": "checksums",
+                "if": GATE,
+                "steps": [
+                    download("rvt-rs-*", "pattern"),
+                    download("SHA256SUMS"),
+                    download("wheel-*", "pattern"),
+                    download("sdist"),
+                    {"uses": "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6", "with": {"subject-path": "dist/*"}},
+                    {"uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9", "with": {"name": "release-page"}},
+                ],
+            },
+            "upload": {"needs": "attest", "if": "inputs.upload", "steps": [download("release-page")]},
+            "page": {"needs": "upload", "if": "${{ !cancelled() && inputs.upload }}", "steps": [
+                {"run": "true", "env": {"RELEASE_ARCHIVES": "5", "RELEASE_WHEELS": "7"}}]},
+        }
+    }
+
+
+def publish_workflow(wheels=7):
+    return {"jobs": {"build-wheels": {"strategy": {"matrix": {"include": [{}] * wheels}}}}}
+
+
+class ReleasePage(unittest.TestCase):
+    def mutated(self, change):
+        doc = release_workflow()
+        change(doc["jobs"])
+        return cw.release_page_problems(doc, publish_workflow())
+
+    def test_agreement_passes(self):
+        self.assertEqual(cw.release_page_problems(release_workflow(), publish_workflow()), [])
+
+    def test_a_page_that_checksums_attest_and_upload_disagree_about_fails(self):
+        steps = lambda jobs, name: jobs[name]["steps"]
+        for label, change in {
+            "checksums without the wheels": lambda j: steps(j, "checksums").pop(1),
+            "checksums without the sdist": lambda j: steps(j, "checksums").pop(2),
+            "wheels downloaded on every run": lambda j: steps(j, "checksums")[1].pop("if"),
+            "attest without the sdist": lambda j: steps(j, "attest").pop(3),
+            "attest downloading more": lambda j: steps(j, "attest").append(download("*", "pattern")),
+            "a narrower subject": lambda j: steps(j, "attest")[4]["with"].update({"subject-path": "dist/rvt-rs-*\ndist/SHA256SUMS"}),
+            "no page handed on": lambda j: steps(j, "attest")[5]["with"].update({"name": "other"}),
+            "upload downloading more": lambda j: steps(j, "upload").append(download("*", "pattern")),
+        }.items():
+            self.assertTrue(self.mutated(change), label)
+
+    def test_a_tag_run_that_can_go_green_with_no_page_fails(self):
+        def inserted(jobs):
+            jobs["gate"] = {"needs": "attest", "if": "inputs.upload", "steps": []}
+            jobs["upload"]["needs"] = "gate"
+
+        for label, change in {
+            "attest loses inputs.upload": lambda j: j["attest"].update({"if": "inputs.python"}),
+            "upload compares with a string": lambda j: j["upload"].update({"if": "inputs.upload == 'true'"}),
+            "upload needs checksums": lambda j: j["upload"].update({"needs": ["checksums"]}),
+            "a job between attest and upload": inserted,
+            "a job-level if on checksums": lambda j: j["checksums"].update({"if": "inputs.python"}),
+            "a job-level if on a job above the image": lambda j: j["build"].update({"if": "true"}),
+            "no final check": lambda j: j.pop("page"),
+            "the final check not after upload": lambda j: j["page"].update({"needs": "attest"}),
+        }.items():
+            self.assertTrue(self.mutated(change), label)
+
+    def test_an_if_on_a_step_or_a_job_below_the_page_is_fine(self):
+        problems = self.mutated(lambda j: j["image"].update({"if": "inputs.upload"}))
+        self.assertEqual(problems, [])
+
+    def test_the_counts_follow_the_matrices(self):
+        self.assertTrue(cw.release_page_problems(release_workflow(), publish_workflow(8)))
+        doc = release_workflow()
+        doc["jobs"]["build"]["strategy"]["matrix"]["include"].append({})
+        self.assertTrue(cw.release_page_problems(doc, publish_workflow()))
+
+    def test_a_workflow_missing_a_job_fails_rather_than_crashing(self):
+        for doc in (None, {}, {"jobs": {"checksums": {"steps": []}}}):
+            self.assertEqual(len(cw.release_page_problems(doc)), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
