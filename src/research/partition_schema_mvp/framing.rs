@@ -78,11 +78,21 @@ pub fn column_rectangle_from_fields(fields: &[(String, InstanceField)]) -> Optio
     Some([b?, h?])
 }
 
+/// The diameter [`COLUMN_DIAMETER_FIELD`] records.
+pub fn column_diameter_from_fields(fields: &[(String, InstanceField)]) -> Option<f64> {
+    fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Float { value, .. } if name == COLUMN_DIAMETER_FIELD => Some(*value),
+        _ => None,
+    })
+}
+
 /// Give each column whose type is a hollow structural section
 /// ([`crate::partition_type_parameters::hollow_section`]) and holds no I
-/// section that section (W6), and each whose type is a plain rectangle
+/// section that section (W6), each whose type is a plain rectangle
 /// ([`crate::partition_type_parameters::rectangular_section`]) its two sides
-/// (RE-291). The exporter draws a hollow section only where its record box is
+/// (RE-291) and each whose type is round
+/// ([`crate::partition_type_parameters::round_section`]) its diameter
+/// (RE-353). The exporter draws a hollow section only where its record box is
 /// the section's outside.
 pub(super) fn attach_column_sections(
     rf: &mut RevitFile,
@@ -147,6 +157,11 @@ pub(super) fn attach_column_sections(
                     .fields
                     .push(((*name).into(), InstanceField::Float { value, size: 8 }));
             }
+        } else if let Some(value) = crate::partition_type_parameters::round_section(by_name) {
+            element.fields.push((
+                COLUMN_DIAMETER_FIELD.into(),
+                InstanceField::Float { value, size: 8 },
+            ));
         }
     }
 }
