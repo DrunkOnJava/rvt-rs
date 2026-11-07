@@ -47,7 +47,14 @@ pub fn scan_curtain_type_materials(
     revit_version: u32,
     materials: &BTreeSet<u32>,
 ) -> Result<BTreeMap<u32, u32>> {
-    if !supports_revit_version(revit_version) || materials.is_empty() {
+    if materials.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    // RE-367: 2015 to 2023 by the native record alone; the offsets are 2024's.
+    if crate::partition_schema_mvp::CURTAIN_32BIT_REVIT_VERSIONS.contains(&revit_version) {
+        return Ok(native_render_styles(rf, materials).unwrap_or_default());
+    }
+    if !supports_revit_version(revit_version) {
         return Ok(BTreeMap::new());
     }
     let mut out = native_render_styles(rf, materials).unwrap_or_default();
@@ -70,6 +77,7 @@ fn native_render_styles(
             .iter()
             .map(|(name, _)| name.to_string())
             .collect(),
+        releases: native_document::NATIVE_RELEASES,
         ..native_document::Options::default()
     };
     native_document::extract_graphs(rf, &options, |record| {
