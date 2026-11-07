@@ -271,7 +271,7 @@ pub(super) fn attach_curtain_axes(
         return;
     }
     let Ok(transforms) =
-        crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &ids)
+        crate::partition_instance_transforms::scan_transforms_in_layout(rf, revit_version, &ids)
     else {
         return;
     };
@@ -344,7 +344,12 @@ pub(super) fn attach_curtain_walls(
     walls: &mut [DecodedElement],
     products: &mut [DecodedElement],
     openings: [&mut Vec<DecodedElement>; 2],
+    narrow_references: Option<&BTreeMap<u32, Vec<u64>>>,
 ) {
+    let read_references = |rf: &mut RevitFile, element: &DecodedElement| match narrow_references {
+        Some(lists) => element.id.and_then(|id| lists.get(&id)).cloned(),
+        None => record_references(rf, element).map(|(list, _)| list),
+    };
     let wall_ids: BTreeSet<u32> = walls.iter().filter_map(|wall| wall.id).collect();
     if wall_ids.is_empty() {
         return;
@@ -356,7 +361,7 @@ pub(super) fn attach_curtain_walls(
             references.push(None);
             continue;
         }
-        let list = record_references(rf, product).map(|(list, _)| list);
+        let list = read_references(rf, product);
         if product.class == "CurtainWallMullion" {
             for id in list.iter().flatten() {
                 if let Ok(id) = u32::try_from(*id) {
@@ -373,7 +378,7 @@ pub(super) fn attach_curtain_walls(
         .map(|elements| {
             elements
                 .iter()
-                .map(|element| record_references(rf, element).map(|(list, _)| list))
+                .map(|element| read_references(rf, element))
                 .collect()
         })
         .collect();
@@ -456,6 +461,99 @@ pub(super) fn attach_curtain_walls(
                 ));
             }
         }
+    }
+}
+
+/// Give each curtain mullion and panel its type and family (RE-367), on a 32-bit
+/// release, where a name entry holds no category for
+/// [`crate::partition_names::resolve_type`] to test.
+///
+/// The type is the one id in its reference list that has a name entry and is
+/// no element's record, in `references`. The family is the id its type's data
+/// holds at [`CURTAIN_TYPE_FAMILY_OFFSET_32`], where that has a name entry. A
+/// part with no such type, or a type with no such family, takes neither.
+pub(super) fn attach_curtain_part_types_32(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    references: &BTreeMap<u32, Vec<u64>>,
+    products: &mut [DecodedElement],
+) {
+    let Ok(table) = crate::elem_table::parse_records(rf) else {
+        return;
+    };
+    let declared = crate::elem_table::declared_ids(&table);
+    let names = crate::partition_names::name_entries_2023(rf, &declared);
+    let type_of = |element: &DecodedElement| -> Option<u32> {
+        let own = element.id?;
+        let mut named = references
+            .get(&own)?
+            .iter()
+            .filter_map(|&id| u32::try_from(id).ok())
+            .filter(|id| *id != own && names.contains_key(id) && !references.contains_key(id))
+            .collect::<BTreeSet<u32>>()
+            .into_iter();
+        let type_id = named.next()?;
+        named.next().is_none().then_some(type_id)
+    };
+    let is_part =
+        |element: &DecodedElement| CURTAIN_WALL_PART_CLASSES.contains(&element.class.as_str());
+    let types: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| is_part(element))
+        .filter_map(type_of)
+        .collect();
+    let Some(layout) = crate::partition_names::element_data_layout(revit_version) else {
+        return;
+    };
+    let mut families: BTreeMap<u32, Option<u32>> = BTreeMap::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for hit in memchr::memmem::find_iter(buf, &layout.header) {
+            let id_at = hit + layout.header.len();
+            let Some(id) = layout.id_at(buf, id_at).filter(|id| types.contains(id)) else {
+                continue;
+            };
+            let family = le_bytes::u32_at(buf, id_at + 8 + CURTAIN_TYPE_FAMILY_OFFSET_32)
+                .filter(|family| names.contains_key(family));
+            families
+                .entry(id)
+                .and_modify(|held| {
+                    if *held != family {
+                        *held = None;
+                    }
+                })
+                .or_insert(family);
+        }
+    }
+    for element in products.iter_mut().filter(|element| is_part(element)) {
+        let Some(type_id) = type_of(element) else {
+            continue;
+        };
+        let Some(family_id) = families.get(&type_id).copied().flatten() else {
+            continue;
+        };
+        let (Some(type_name), Some(family_name)) = (names.get(&type_id), names.get(&family_id))
+        else {
+            continue;
+        };
+        element.fields.push((
+            TYPE_ID_FIELD.into(),
+            InstanceField::ElementId {
+                tag: 0,
+                id: type_id,
+            },
+        ));
+        element.fields.push((
+            TYPE_NAME_FIELD.into(),
+            InstanceField::String(type_name.clone()),
+        ));
+        element.fields.push((
+            FAMILY_NAME_FIELD.into(),
+            InstanceField::String(family_name.clone()),
+        ));
     }
 }
 

@@ -187,7 +187,7 @@ pub fn recover_partition_schema_mvp(
     // identity, category and box only; nothing else 2024 decodes on top of
     // records is read. ---
     if crate::partition_element_records_2023::is_32bit_release(revit_version) {
-        recover_2023_records(rf, revit_version, &mut out);
+        let references = recover_2023_records(rf, revit_version, &mut out);
         attach_room_outlines(rf, revit_version, &mut out.rooms);
         // --- Storeys from the Levels the records name (RE-107), by the
         // same rules as 2024's (RE-59, RE-68) ---
@@ -219,6 +219,23 @@ pub fn recover_partition_schema_mvp(
         resolve_base_constraint_levels(&level_elevations, &mut record_backed);
         resolve_base_at_level(&level_elevations, &mut record_backed);
         resolve_remaining_levels(&level_elevations, &mut record_backed);
+        // --- Curtain walls, their parts and those parts' axes (RE-46, RE-106,
+        // RE-366), then doors and windows in the nearest wall that is not a
+        // curtain wall (#439) ---
+        if CURTAIN_32BIT_REVIT_VERSIONS.contains(&revit_version) {
+            attach_curtain_walls(
+                rf,
+                revit_version,
+                &mut out.walls,
+                &mut out.products,
+                [&mut out.doors, &mut out.windows],
+                Some(&references),
+            );
+            attach_curtain_axes(rf, revit_version, &mut out.products);
+            attach_curtain_part_types_32(rf, revit_version, &references, &mut out.products);
+        }
+        bind_opening_hosts(&out.walls, &mut out.doors);
+        bind_opening_hosts(&out.walls, &mut out.windows);
         // --- System families' names (RE-63); a wall's, roof's or
         // ceiling's needs its type's layers, not read on 2023 ---
         attach_system_family_names(
@@ -252,7 +269,10 @@ pub fn recover_partition_schema_mvp(
                 InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
                 _ => None,
             });
-            if let (true, Some(type_id)) = (system, type_id) {
+            // A curtain part's type holds no such map: its material is its
+            // `m_renderStyleId` (RE-166, RE-367).
+            let part = CURTAIN_AXES_CLASSES.contains(&element.class.as_str());
+            if let (true, Some(type_id)) = (system || part, type_id) {
                 type_materials.remove(&type_id);
             }
         }
@@ -264,6 +284,8 @@ pub fn recover_partition_schema_mvp(
         ] {
             attach_type_materials(&type_materials, elements);
         }
+        // --- Curtain mullions' and panels' materials, from their types (RE-166, RE-367) ---
+        attach_curtain_materials(rf, revit_version, &mut out.products);
         // --- A wall's type Function from its native type record (RE-185),
         // the parameters named for IsExternal or a standard property from the
         // saved parameters (RE-193, RE-194), and the IsExternal Revit's
@@ -292,6 +314,8 @@ pub fn recover_partition_schema_mvp(
                 .chain(out.rooms.iter_mut())
                 .chain(out.products.iter_mut()),
         );
+        // --- A curtain mullion's or panel's IsExternal: its curtain wall's (RE-193, RE-269) ---
+        attach_curtain_member_is_external(&out.walls, &mut out.products);
         // --- Whether a wall's top is joined to a roof or floor, from its
         // native record (RE-228, RE-284) ---
         attach_wall_top_joins(rf, revit_version, &mut out.walls, &mut wall_reads);
@@ -409,6 +433,7 @@ pub fn recover_partition_schema_mvp(
         &mut out.walls,
         &mut out.products,
         [&mut out.doors, &mut out.windows],
+        None,
     );
     // --- Doors and windows in the nearest listed wall that is not a curtain wall (#439) ---
     bind_opening_hosts(&out.walls, &mut out.doors);
