@@ -66,7 +66,7 @@ viewer, and a local, read-only MCP server (`rvt-rs-mcp`, [`docs/mcp.md`](mcp.md)
 that answers an agent's questions from the model the IFC export writes. On Revit 2023 projects it reads each element's ElementId, category
 and bounding box (RE-81), walls cut back at their joins (RE-120), beams at their columns
 (RE-122), door and
-window hosts (RE-85), room outlines
+window hosts (RE-85), each element's Phase Created on 2015 to 2023 (RE-368), room outlines
 (RE-102) with their numbers and names (RE-117, which names every
 release's rooms), Levels with the storey each element sits on (RE-107;
 beams by the Level at their top, RE-119), and

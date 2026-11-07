@@ -468,6 +468,50 @@ pub(super) fn attach_phases_created(rf: &mut RevitFile, groups: [&mut Vec<Decode
     }
 }
 
+/// Give each element on Revit 2015 to 2023 the phase its own body names in
+/// `m_createdPhaseId`, by that phase's `m_name` (RE-368): the fields the
+/// export's phase filter reads (RE-184, RE-281). 2024's reference-list rule
+/// ([`attach_phases_created`]) is not used, as its phase-name frame is
+/// measured on 2024 only. An element whose field is unset, names no phase of
+/// the project, or whose copies name different phases gets none.
+pub(super) fn attach_phases_created_32(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 6],
+) {
+    if !PHASE_CREATED_32BIT_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let filter = rf.memoised_phase_filter();
+    let mut created: BTreeMap<u32, Option<&str>> = BTreeMap::new();
+    for (id, phase, _) in &filter.phased {
+        let (Ok(id), Some(name)) = (
+            u32::try_from(*id),
+            filter
+                .names
+                .get(phase)
+                .filter(|_| filter.order.contains(phase)),
+        ) else {
+            continue;
+        };
+        let slot = created.entry(id).or_insert(Some(name.as_str()));
+        if *slot != Some(name.as_str()) {
+            *slot = None;
+        }
+    }
+    for element in groups.into_iter().flat_map(|group| group.iter_mut()) {
+        if let Some(name) = element
+            .id
+            .and_then(|id| created.get(&id).copied().flatten())
+        {
+            element.fields.push((
+                PHASE_CREATED_FIELD.into(),
+                InstanceField::String((*name).into()),
+            ));
+        }
+    }
+}
+
 /// Give each element of `groups` its value of the shared parameter `Serial
 /// Number`: the text entry with the parameter's ElementId in the element's
 /// own data object (RE-156). A file with no such parameter changes nothing.

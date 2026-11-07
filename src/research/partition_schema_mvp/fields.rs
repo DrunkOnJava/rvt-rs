@@ -861,6 +861,12 @@ pub const WALL_BOUNDED_FIELD: &str = "m_wall_bounded";
 /// ([`crate::partition_phases`], #755).
 pub const PHASE_CREATED_FIELD: &str = "m_phase_created";
 
+/// The 32-bit releases whose elements take their Phase Created from their own
+/// body's `m_createdPhaseId` (RE-368): Revit 2015 to 2023, the 32-bit releases
+/// whose phases [`crate::native_phases`] reads. On Autodesk's sample projects
+/// of each, every element's phase is the one its 2024 save gives it.
+pub const PHASE_CREATED_32BIT_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2023;
+
 /// Field carrying an element's value of the shared parameter `Serial Number`
 /// (RE-156).
 pub const SERIAL_NUMBER_FIELD: &str = "m_serial_number";
