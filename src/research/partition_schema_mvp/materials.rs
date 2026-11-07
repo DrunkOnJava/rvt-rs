@@ -330,30 +330,32 @@ pub(super) fn attach_curtain_materials(
 ) {
     use crate::partition_curtain_materials as pcm;
     let is_part = |element: &DecodedElement| CURTAIN_AXES_CLASSES.contains(&element.class.as_str());
-    if !pcm::supports_revit_version(revit_version) || !products.iter().any(is_part) {
+    let narrow = CURTAIN_32BIT_REVIT_VERSIONS.contains(&revit_version);
+    if !(narrow || pcm::supports_revit_version(revit_version)) || !products.iter().any(is_part) {
         return;
     }
     let Ok(records) = crate::elem_table::parse_records(rf) else {
         return;
     };
     let declared = crate::elem_table::declared_ids(&records);
-    let Ok(names) = crate::partition_materials::scan_material_names(rf, revit_version, &declared)
-    else {
-        return;
+    let names = if narrow {
+        crate::partition_materials::scan_materials_32(rf, revit_version, &declared).1
+    } else {
+        let Ok(names) =
+            crate::partition_materials::scan_material_names(rf, revit_version, &declared)
+        else {
+            return;
+        };
+        names
     };
     let materials: BTreeSet<u32> = names.keys().copied().collect();
     let Ok(type_materials) = pcm::scan_curtain_type_materials(rf, revit_version, &materials) else {
         return;
     };
+    // A part's type's own material replaces what its map gave, which on Autodesk's
+    // `rac_advanced` 2024 is one wrong material on every part (RE-367), as it
+    // does `<Unnamed>` (RE-201).
     for element in products.iter_mut().filter(|element| is_part(element)) {
-        // A part whose type's map holds only unset values has `<Unnamed>`
-        // (#580); its type's own material replaces it (RE-201).
-        if element.fields.iter().any(|(name, value)| {
-            name == TYPE_MATERIAL_FIELD
-                && !matches!(value, InstanceField::String(s) if s == crate::partition_type_materials::UNNAMED_MATERIAL)
-        }) {
-            continue;
-        }
         let type_id = element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
             _ => None,

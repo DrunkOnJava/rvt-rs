@@ -2505,3 +2505,7 @@ On the BIM4LCA office at building permit (Revit 2024), Revit's export gives each
 ## Addendum — RE-366 curtain walls on Revit 2015 to 2023 (2026-11-06)
 
 A 32-bit record's reference list names a mullion's curtain wall as 2024's does, and a part's element data holds its transform in the same form, so RE-46's and RE-106's readers run on Revit 2015 to 2023 with no new layout. On `rac_advanced` all 34 curtain walls and every part aggregated are the 2024 save's or not aggregated, none under another wall. See `reports/element-framing/RE-366-2015-2023-curtain-walls.md`.
+
+## Addendum — RE-367 a curtain part's type and family on Revit 2015 to 2023 (2026-11-06)
+
+On Revit 2015 to 2023 a curtain mullion's or panel's type is the one id in its reference list with a name entry and no record of its own, and the type's data names its family as a `u32` at +265 past the ElementId and four bytes. Its material is the type's `m_renderStyleId` (RE-166), which equals its 2024 save's on every type both hold. See `reports/element-framing/RE-367-2015-2023-curtain-part-types.md`.

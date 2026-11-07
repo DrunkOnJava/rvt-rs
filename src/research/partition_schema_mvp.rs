@@ -232,6 +232,7 @@ pub fn recover_partition_schema_mvp(
                 Some(&references),
             );
             attach_curtain_axes(rf, revit_version, &mut out.products);
+            attach_curtain_part_types_32(rf, revit_version, &references, &mut out.products);
         }
         bind_opening_hosts(&out.walls, &mut out.doors);
         bind_opening_hosts(&out.walls, &mut out.windows);
@@ -268,7 +269,10 @@ pub fn recover_partition_schema_mvp(
                 InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
                 _ => None,
             });
-            if let (true, Some(type_id)) = (system, type_id) {
+            // A curtain part's type holds no such map: its material is its
+            // `m_renderStyleId` (RE-166, RE-367).
+            let part = CURTAIN_AXES_CLASSES.contains(&element.class.as_str());
+            if let (true, Some(type_id)) = (system || part, type_id) {
                 type_materials.remove(&type_id);
             }
         }
@@ -280,6 +284,8 @@ pub fn recover_partition_schema_mvp(
         ] {
             attach_type_materials(&type_materials, elements);
         }
+        // --- Curtain mullions' and panels' materials, from their types (RE-166, RE-367) ---
+        attach_curtain_materials(rf, revit_version, &mut out.products);
         // --- A wall's type Function from its native type record (RE-185),
         // the parameters named for IsExternal or a standard property from the
         // saved parameters (RE-193, RE-194), and the IsExternal Revit's
