@@ -687,6 +687,12 @@ pub const PIPE_RADIUS_FIELD: &str = "m_pipe_radius";
 /// second end (#847), each a vector of `[element, connector index]` pairs.
 pub const PIPE_END_KEYS_FIELDS: [&str; 2] = ["m_pipe_start_keys", "m_pipe_end_keys"];
 
+/// Field holding the direction Revit calculated for each of a pipe's
+/// connectors, read from its own record where nothing else reads it (RE-370):
+/// a vector of `[connector index, direction]` pairs, the direction numbered
+/// as a family's Flow Direction (1 In, 2 Out, 0 bidirectional, RE-212).
+pub const PIPE_FLOW_DIRECTIONS_FIELD: &str = "m_pipe_flow_directions";
+
 /// Fields holding a duct's two ends, model feet: the centres of the faces of
 /// its record box across its length (#847, RE-134).
 pub const DUCT_ENDS_FIELDS: [[&str; 3]; 2] = [
@@ -709,6 +715,13 @@ pub const DUCT_LENGTH_FIELD: &str = "m_duct_length";
 /// Field holding a pipe's inner diameter, feet, from its curve object
 /// (RE-157).
 pub const PIPE_INNER_DIAMETER_FIELD: &str = "m_pipe_inner_diameter";
+
+/// Releases whose pipes take their type, centreline and outside radius from
+/// their own `RbsPipeCurve` record where nothing else gives them (RE-370):
+/// those the native record path reads, Revit 2015 to 2027. Measured on
+/// Autodesk's MEP samples of 2015, 2019 and 2024 to 2027 against the same
+/// projects saved by 2024.
+pub const NATIVE_PIPE_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2027;
 
 /// How closely a duct's width and height must match two of its box's
 /// dimensions, feet.

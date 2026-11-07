@@ -384,9 +384,10 @@ pub fn pipe_body_from_fields(
 }
 
 /// Give each pipe the cylinder its connector entries and its record box make
-/// ([`crate::partition_pipe_axes`], RE-131). A pipe whose ends are not found,
-/// or whose two ends and box no cylinder reproduces, is not given one and
-/// keeps its box.
+/// ([`crate::partition_pipe_axes`], RE-131), and a pipe they do not place, or
+/// every pipe of a release whose entries are not measured, the one its own
+/// record gives ([`attach_native_pipes`], RE-370). A pipe neither places keeps
+/// its box.
 pub(super) fn attach_pipe_axes(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -394,6 +395,9 @@ pub(super) fn attach_pipe_axes(
 ) {
     use crate::partition_pipe_axes as ppa;
     if !ppa::supports_revit_version(revit_version) {
+        // A release whose connector entries are not measured: every pipe from
+        // its own record (RE-370).
+        attach_native_pipes(rf, revit_version, products);
         return;
     }
     let mut by_stream: BTreeMap<String, Vec<(u32, [f64; 6])>> = BTreeMap::new();
@@ -409,9 +413,7 @@ pub(super) fn attach_pipe_axes(
     if by_stream.is_empty() {
         return;
     }
-    let Ok(bodies) = ppa::scan_pipe_bodies(rf, revit_version, &by_stream) else {
-        return;
-    };
+    let bodies = ppa::scan_pipe_bodies(rf, revit_version, &by_stream).unwrap_or_default();
     for element in products
         .iter_mut()
         .filter(|element| element.class == "Pipe")
@@ -437,6 +439,9 @@ pub(super) fn attach_pipe_axes(
             },
         ));
     }
+    // The pipes the connector entries do not place, from their own record
+    // (RE-370), before their ends are keyed.
+    attach_native_pipes(rf, revit_version, products);
     // #847: the keys at each end say which of the pipe's connectors it is.
     let mut ends = ppa::CurveEnds::new();
     for element in products.iter().filter(|element| element.class == "Pipe") {
@@ -457,6 +462,14 @@ pub(super) fn attach_pipe_axes(
         .iter_mut()
         .filter(|element| element.class == "Pipe")
     {
+        // A pipe its own record keyed (RE-370) keeps those keys.
+        if element
+            .fields
+            .iter()
+            .any(|(name, _)| name == PIPE_END_KEYS_FIELDS[0])
+        {
+            continue;
+        }
         let Some(end_keys) = element.id.and_then(|id| keys.get(&id)) else {
             continue;
         };
@@ -745,6 +758,383 @@ pub(super) fn attach_connector_pairs(
                     size: 4,
                 },
             ));
+        }
+    }
+}
+
+/// The fields [`attach_native_pipes`] reads from a pipe's `RbsPipeCurve` record
+/// and its type's `RbsPipeType` record (`graph_fields`, #1335).
+fn pipe_read_fields(class: &str) -> Option<&'static [&'static str]> {
+    Some(match class {
+        "RbsPipeCurve" => &[
+            "m_id",
+            "m_idType",
+            "m_origin",
+            "m_dirVec",
+            "m_endParams",
+            "m_dOuterDiameter",
+            "m_nIndex",
+            "m_pConnector",
+            "m_paramOnCurve",
+            "m_eDirection",
+        ],
+        "RbsPipeType" => &["m_id", "m_name"],
+        _ => &["m_id"],
+    })
+}
+
+/// What a pipe's own record holds (RE-370): its type, the two ends of its
+/// one `GLine`, its outer diameter, feet, the index of the connector at
+/// each end, and each connector's calculated direction.
+#[derive(Debug, Clone, PartialEq)]
+struct NativePipe {
+    type_id: Option<u32>,
+    ends: Option<[[f64; 3]; 2]>,
+    outer_diameter: Option<f64>,
+    connectors: Option<[u32; 2]>,
+    directions: BTreeMap<u32, i64>,
+}
+
+fn native_pipe(graph: &crate::native_parameters::ObjectGraph) -> NativePipe {
+    use crate::native_json::{finite_triple, identifier_i64};
+    let object = |class: &str| {
+        let mut found = graph
+            .objects
+            .iter()
+            .filter(move |object| object.class_name == class);
+        match (found.next(), found.next()) {
+            (Some(object), None) => Some(object),
+            _ => None,
+        }
+    };
+    let positive = |class: &str, field: &str| {
+        object(class)?
+            .fields
+            .get(field)?
+            .as_f64()
+            .filter(|value| value.is_finite() && *value > 0.0)
+    };
+    let type_id = object("RbsPipeCurve")
+        .and_then(|curve| curve.fields.get("m_idType"))
+        .and_then(identifier_i64)
+        .and_then(|id| u32::try_from(id).ok());
+    // The centreline is the pipe's one line, from its first end parameter to
+    // its second.
+    let ends = object("GLine").and_then(|line| {
+        let origin = finite_triple(line.fields.get("m_origin")?)?;
+        let direction = finite_triple(line.fields.get("m_dirVec")?)?;
+        let [start, end] = line
+            .fields
+            .get("m_endParams")?
+            .as_array()?
+            .iter()
+            .map(serde_json::Value::as_f64)
+            .collect::<Option<Vec<f64>>>()?[..]
+        else {
+            return None;
+        };
+        let at = |t: f64| std::array::from_fn(|axis| origin[axis] + direction[axis] * t);
+        let ends = [at(start), at(end)];
+        ends.iter()
+            .flatten()
+            .all(|value| value.is_finite())
+            .then_some(ends)
+    });
+    // Each end's connector: a `SegmentConnectorPosition` names its
+    // `Connector` by pointer and sits at parameter 0 (the line's start) or 1
+    // (its end).
+    let mut at_ends: [Vec<u32>; 2] = [Vec::new(), Vec::new()];
+    for position in graph
+        .objects
+        .iter()
+        .filter(|object| object.class_name == "SegmentConnectorPosition")
+    {
+        let end = match position
+            .fields
+            .get("m_paramOnCurve")
+            .and_then(serde_json::Value::as_f64)
+        {
+            Some(0.0) => 0,
+            Some(1.0) => 1,
+            _ => {
+                at_ends = [Vec::new(), Vec::new()];
+                break;
+            }
+        };
+        let index = position
+            .fields
+            .pointer("/m_pConnector/pointer_token")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|token| {
+                let mut found = graph.objects.iter().filter(|object| {
+                    object.class_name == "Connector" && u64::from(object.token) == token
+                });
+                match (found.next(), found.next()) {
+                    (Some(connector), None) => connector.fields.get("m_nIndex")?.as_u64(),
+                    _ => None,
+                }
+            })
+            .and_then(|index| u32::try_from(index).ok());
+        match index {
+            Some(index) => at_ends[end].push(index),
+            None => {
+                at_ends = [Vec::new(), Vec::new()];
+                break;
+            }
+        }
+    }
+    let connectors = match (at_ends[0].as_slice(), at_ends[1].as_slice()) {
+        ([start], [end]) if start != end => Some([*start, *end]),
+        _ => None,
+    };
+    NativePipe {
+        type_id,
+        ends,
+        outer_diameter: positive("PipeDomainDesignPropertyManager", "m_dOuterDiameter"),
+        connectors,
+        directions: pipe_directions(graph),
+    }
+}
+
+/// Each connector's calculated direction in a pipe's record (RE-212): the
+/// `m_eDirection` of the `SegmentConnectorCalculation` whose `m_pConnector`
+/// names the connector, by the connector's `m_nIndex`. A connector with two
+/// calculations that disagree is left out.
+fn pipe_directions(graph: &crate::native_parameters::ObjectGraph) -> BTreeMap<u32, i64> {
+    let index_of_token: BTreeMap<u64, u32> = graph
+        .objects
+        .iter()
+        .filter(|object| object.class_name == "Connector")
+        .filter_map(|connector| {
+            let index = connector.fields.get("m_nIndex")?.as_u64()?;
+            Some((u64::from(connector.token), u32::try_from(index).ok()?))
+        })
+        .collect();
+    let mut directions: BTreeMap<u32, Option<i64>> = BTreeMap::new();
+    for calculation in graph
+        .objects
+        .iter()
+        .filter(|object| object.class_name == "SegmentConnectorCalculation")
+    {
+        let Some((index, direction)) = calculation
+            .fields
+            .pointer("/m_pConnector/pointer_token")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|token| index_of_token.get(&token))
+            .zip(
+                calculation
+                    .fields
+                    .get("m_eDirection")
+                    .and_then(serde_json::Value::as_i64),
+            )
+        else {
+            continue;
+        };
+        let held = directions.entry(*index).or_insert(Some(direction));
+        if *held != Some(direction) {
+            *held = None;
+        }
+    }
+    directions
+        .into_iter()
+        .filter_map(|(index, direction)| Some((index, direction?)))
+        .collect()
+}
+
+/// The calculated direction of each of a pipe's connectors its record gave
+/// ([`PIPE_FLOW_DIRECTIONS_FIELD`], RE-370), by connector index.
+pub fn pipe_flow_directions_from_fields(fields: &[(String, InstanceField)]) -> BTreeMap<u32, i64> {
+    fields
+        .iter()
+        .find_map(|(name, value)| match value {
+            InstanceField::Vector(pairs) if name == PIPE_FLOW_DIRECTIONS_FIELD => Some(
+                pairs
+                    .iter()
+                    .filter_map(|pair| match pair {
+                        InstanceField::Vector(parts) => match parts.as_slice() {
+                            [
+                                InstanceField::Integer { value: index, .. },
+                                InstanceField::Integer {
+                                    value: direction, ..
+                                },
+                            ] => Some((u32::try_from(*index).ok()?, *direction)),
+                            _ => None,
+                        },
+                        _ => None,
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+/// Give each pipe still without a type or a body what its own
+/// `RbsPipeCurve` record names (RE-370), on the releases the native record
+/// path reads (`NATIVE_PIPE_REVIT_VERSIONS`): its type (`m_idType`, an
+/// `RbsPipeType` whose `SymbolInfo.m_name` is its name, as RE-240 reads it on
+/// 2024), and the cylinder it is drawn as, its one `GLine` between its two end
+/// parameters and half its `m_dOuterDiameter`, so its quantities (RE-247) and
+/// a vertical pipe's invert (RE-157) are written as for a pipe RE-131 places.
+/// On 2024 to 2027 it runs from [`attach_pipe_axes`], before RE-130's and
+/// RE-134's type names, so every pipe takes its type from its record, as
+/// RE-240 measured against Revit's export; there it draws the pipes RE-131's
+/// connector entries do not place (on 2026 and 2027, which RE-131 does not
+/// read, every pipe). On 2015 to 2023 it types and draws every pipe. The cylinder is held to RE-131's own test: its record box must
+/// give the same radius and be the box the cylinder fills
+/// ([`crate::partition_pipe_axes::pipe_body`]). Its inner diameter is not
+/// given: a level pipe's invert, which needs it, is written on 2025 only, the
+/// release RE-157 measured it on. A pipe whose copies disagree, or whose
+/// record holds no line, more than one or no positive outer diameter, keeps
+/// its box.
+pub(super) fn attach_native_pipes(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::partition_pipe_axes as ppa;
+    if !NATIVE_PIPE_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let has = |element: &DecodedElement, field: &str| {
+        element.fields.iter().any(|(name, _)| name == field)
+    };
+    let wanting = |element: &DecodedElement| {
+        element.class == "Pipe"
+            && !(has(element, TYPE_NAME_FIELD) && has(element, PIPE_RADIUS_FIELD))
+    };
+    let selected: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| wanting(element))
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    if selected.is_empty() {
+        return;
+    }
+    let untyped = products
+        .iter()
+        .any(|element| element.class == "Pipe" && !has(element, TYPE_NAME_FIELD));
+    let options = crate::native_document::Options {
+        selected_ids: selected.clone(),
+        selected_classes: if untyped {
+            ["RbsPipeType".to_string()].into()
+        } else {
+            BTreeSet::new()
+        },
+        graph_fields: Some(pipe_read_fields),
+        releases: crate::native_document::NATIVE_RELEASES,
+        ..crate::native_document::Options::default()
+    };
+    let mut pipes: BTreeMap<u64, Option<NativePipe>> = BTreeMap::new();
+    let mut type_names: BTreeMap<u64, Option<String>> = BTreeMap::new();
+    let read = crate::native_document::extract_graphs(rf, &options, |record| {
+        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
+        else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        if class == "RbsPipeType" {
+            let name = graph
+                .objects
+                .iter()
+                .find(|object| object.class_name == "SymbolInfo")
+                .and_then(|object| object.fields.get("m_name"))
+                .and_then(serde_json::Value::as_str)
+                .filter(|name| !name.is_empty())
+                .map(str::to_string);
+            crate::native_json::agree(&mut type_names, id, name);
+        } else if class == "RbsPipeCurve" && selected.contains(&id) {
+            crate::native_json::agree(&mut pipes, id, Some(native_pipe(graph)));
+        }
+        Ok(())
+    });
+    if read.is_err() {
+        return;
+    }
+    for element in products.iter_mut().filter(|element| wanting(element)) {
+        let Some(Some(pipe)) = element.id.and_then(|id| pipes.get(&u64::from(id))) else {
+            continue;
+        };
+        if !has(element, TYPE_NAME_FIELD) {
+            if let Some((type_id, Some(Some(name)))) = pipe
+                .type_id
+                .map(|type_id| (type_id, type_names.get(&u64::from(type_id))))
+            {
+                element.fields.push((
+                    TYPE_ID_FIELD.into(),
+                    InstanceField::ElementId {
+                        tag: 0,
+                        id: type_id,
+                    },
+                ));
+                element
+                    .fields
+                    .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+            }
+        }
+        // Each connector's calculated direction (RE-212), for its port.
+        if !pipe.directions.is_empty() && !has(element, PIPE_FLOW_DIRECTIONS_FIELD) {
+            element.fields.push((
+                PIPE_FLOW_DIRECTIONS_FIELD.into(),
+                InstanceField::Vector(
+                    pipe.directions
+                        .iter()
+                        .map(|(index, direction)| {
+                            InstanceField::Vector(vec![
+                                InstanceField::Integer {
+                                    value: i64::from(*index),
+                                    signed: false,
+                                    size: 4,
+                                },
+                                InstanceField::Integer {
+                                    value: *direction,
+                                    signed: true,
+                                    size: 4,
+                                },
+                            ])
+                        })
+                        .collect(),
+                ),
+            ));
+        }
+        if has(element, PIPE_RADIUS_FIELD) {
+            continue;
+        }
+        let (Some([start, end]), Some(outer), Some(bbox)) =
+            (pipe.ends, pipe.outer_diameter, element_record_bbox(element))
+        else {
+            continue;
+        };
+        let radius = outer / 2.0;
+        // RE-131's test: the record box gives this radius and is the box the
+        // cylinder fills.
+        if !ppa::pipe_body(bbox, start, end)
+            .is_some_and(|fitted| (fitted.radius_feet - radius).abs() <= ppa::RADIUS_TOLERANCE_FEET)
+        {
+            continue;
+        }
+        for (names, point) in [(PIPE_AXIS_START_FIELDS, start), (PIPE_AXIS_END_FIELDS, end)] {
+            for (name, value) in names.iter().zip(point) {
+                element
+                    .fields
+                    .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+            }
+        }
+        element.fields.push((
+            PIPE_RADIUS_FIELD.into(),
+            InstanceField::Float {
+                value: radius,
+                size: 8,
+            },
+        ));
+        // Which of its connectors each end is (#847), as the connector
+        // entries key it: the pipe itself and the connector's index.
+        if let (Some(connectors), Some(id)) = (pipe.connectors, element.id) {
+            for (name, index) in PIPE_END_KEYS_FIELDS.iter().zip(connectors) {
+                element
+                    .fields
+                    .push(((*name).into(), end_keys_field(&[(u64::from(id), index)])));
+            }
         }
     }
 }

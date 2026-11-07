@@ -189,6 +189,9 @@ pub fn recover_partition_schema_mvp(
     if crate::partition_element_records_2023::is_32bit_release(revit_version) {
         recover_2023_records(rf, revit_version, &mut out);
         attach_room_outlines(rf, revit_version, &mut out.rooms);
+        // --- Pipes' types and centrelines, from their own native record
+        // (RE-370) ---
+        attach_native_pipes(rf, revit_version, &mut out.products);
         // --- Storeys from the Levels the records name (RE-107), by the
         // same rules as 2024's (RE-59, RE-68) ---
         let levels = crate::partition_level_records::recover_partition_levels(rf, revit_version)
