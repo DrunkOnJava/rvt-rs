@@ -299,6 +299,20 @@ pub fn recover_partition_schema_mvp(
         // --- A structural beam's or column's LoadBearing is its category's
         // (RE-285), unless a parameter named for it says otherwise ---
         attach_load_bearing(out.columns.iter_mut().chain(out.products.iter_mut()));
+        // --- The phase each element was created in, from its own body
+        // (RE-368) ---
+        attach_phases_created_32(
+            rf,
+            revit_version,
+            [
+                &mut out.walls,
+                &mut out.columns,
+                &mut out.doors,
+                &mut out.windows,
+                &mut out.slabs,
+                &mut out.products,
+            ],
+        );
         return Ok(out);
     }
 
