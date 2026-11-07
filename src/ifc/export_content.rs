@@ -2079,7 +2079,8 @@ fn wall_geometry_from_decoded(decoded: &DecodedElement) -> Option<RecoveredWallG
 }
 
 /// Revit's `Constraints` properties for the Level an element's association
-/// record names (RE-172), under the names Revit's export uses for its class.
+/// record names (RE-172), or on Revit 2015 to 2023 its own native record
+/// (RE-369), under the names Revit's export uses for its class.
 fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Option<PropertySet> {
     use crate::partition_level_parameters as lp;
     // RE-319: the names Revit gives a conduit's, conduit fitting's or
@@ -2111,8 +2112,11 @@ fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Opt
         ),
         // The highest of several listed Levels is the Reference Level of a
         // beam or brace only (RE-175).
+        // A beam's or brace's own record names it on Revit 2015 to 2023
+        // (RE-369).
         None if matches!(ifc_type, "IFCBEAM" | "IFCMEMBER") => (
-            text(crate::partition_schema_mvp::REFERENCE_LEVEL_FROM_LIST_FIELD)?,
+            text(crate::partition_schema_mvp::REFERENCE_LEVEL_FROM_LIST_FIELD)
+                .or_else(|| text(crate::partition_schema_mvp::REFERENCE_LEVEL_FIELD))?,
             true,
         ),
         None => return None,

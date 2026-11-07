@@ -115,6 +115,205 @@ pub(super) fn attach_level_parameters(
     }
 }
 
+/// The fields of a record's graph [`attach_levels_32`] reads, by the
+/// record's class: a wall's Top Constraint (`m_upToLevelId`), a roof's Base
+/// Level (`m_baseLevelId`), a stair's Base and Top Level (`m_baseLevelId` and
+/// `m_topLevelId`; `m_bottomId` and `m_topId` on a sketched `Stairs`), a
+/// family instance's Schedule Level (`m_scheduleOnlyLevelId`) and a beam's or
+/// brace's Reference Level (`FamInstCurveDriver`'s `m_refLevelId`), and a
+/// duct's or pipe's (`m_idLevelStart`). Each list holds `m_id`, which the
+/// check of a record against its identity reads; no other field of the graph
+/// is built (#1335), and a record of another class builds none but `m_id`.
+fn level_read_fields(class: &str) -> Option<&'static [&'static str]> {
+    Some(match class {
+        "SWall" | "ArcWall" => &["m_id", "m_upToLevelId"],
+        "Roof" => &["m_id", "m_baseLevelId"],
+        "StairsElement" => &["m_id", "m_baseLevelId", "m_topLevelId"],
+        "Stairs" => &["m_id", "m_bottomId", "m_topId"],
+        "FamilyInstance" => &["m_id", "m_scheduleOnlyLevelId", "m_refLevelId"],
+        "RbsDuctCurve" | "RbsPipeCurve" => &["m_id", "m_idLevelStart"],
+        _ => &["m_id"],
+    })
+}
+
+/// What one record names: its Element base's Level, and from its graph a
+/// roof's or stair's base Level, a wall's or stair's top Level, a Schedule
+/// Level, an MEP curve's start Level and a framing member's reference Level.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct NamedLevels {
+    base: Option<u32>,
+    own_base: Option<u32>,
+    top: Option<u32>,
+    schedule: Option<u32>,
+    curve_start: Option<u32>,
+    reference: Option<u32>,
+}
+
+/// Keep `found` for `id`, or nothing where two copies of the record disagree.
+fn agree_levels<T: PartialEq + Copy>(map: &mut BTreeMap<u32, Option<T>>, id: u32, found: T) {
+    let slot = map.entry(id).or_insert(Some(found));
+    if *slot != Some(found) {
+        *slot = None;
+    }
+}
+
+/// Give each element on Revit 2015 to 2023 the Level parameters its own
+/// native record names (RE-369), as 2024's association record gives them
+/// (RE-172): `m_assocLevelId` of its Element base, which the export writes as
+/// `Level`, `Base Constraint` or `Base Level` by class; a wall's
+/// `m_upToLevelId` (`Top Constraint`) and a stair's top Level (`Top Level`);
+/// where the base names none, a roof's or stair's base Level (`Base Level`),
+/// a family instance's `m_scheduleOnlyLevelId` (`Level`), a duct's or pipe's
+/// `m_idLevelStart` and a beam's or brace's `FamInstCurveDriver.m_refLevelId`
+/// (`Reference Level`). Each is written only where it is one of `levels`, the
+/// Levels [`crate::partition_level_records`] recovers, and every copy of the
+/// record names the same one. The graphs are read only for walls and for
+/// elements whose base names no Level, projected to the fields
+/// `level_read_fields` lists.
+pub(super) fn attach_levels_32(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    levels: &[crate::partition_level_records::PartitionLevel],
+    groups: [&mut Vec<DecodedElement>; 6],
+) {
+    use crate::native_document::{self, Options};
+    use crate::native_json::identifier_i64;
+    use crate::partition_level_parameters as lp;
+    if !LEVEL_32BIT_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let mut groups = groups;
+    let ids = |pick: &dyn Fn(&DecodedElement) -> bool, groups: &[&mut Vec<DecodedElement>; 6]| {
+        groups
+            .iter()
+            .flat_map(|group| group.iter())
+            .filter(|element| pick(element))
+            .filter_map(|element| element.id.map(u64::from))
+            .collect::<BTreeSet<u64>>()
+    };
+    let selected = ids(&|_| true, &groups);
+    if selected.is_empty() {
+        return;
+    }
+    let names: BTreeMap<u32, &str> = levels
+        .iter()
+        .map(|level| (level.element_id, level.name.as_str()))
+        .collect();
+    if names.is_empty() {
+        return;
+    }
+    let level = |value: i64| {
+        u32::try_from(value)
+            .ok()
+            .filter(|id| names.contains_key(id))
+    };
+    // Every element's Element base, its graph left undecoded.
+    let mut bases: BTreeMap<u32, Option<Option<u32>>> = BTreeMap::new();
+    let base_options = Options {
+        selected_ids: selected,
+        graph_classes: Some(BTreeSet::new()),
+        releases: native_document::NATIVE_RELEASES,
+        ..Options::default()
+    };
+    if native_document::extract_graphs(rf, &base_options, |record| {
+        if let (Some(base), Ok(id)) = (&record.base, u32::try_from(record.identity.element_id)) {
+            agree_levels(&mut bases, id, level(base.associated_level_id));
+        }
+        Ok(())
+    })
+    .is_err()
+    {
+        return;
+    }
+    // The graphs of walls and of the elements whose base names no Level.
+    let graphed = ids(
+        &|element| {
+            element.class == "Wall"
+                || element
+                    .id
+                    .is_some_and(|id| matches!(bases.get(&id), Some(Some(None)) | None))
+        },
+        &groups,
+    );
+    let mut graphs: BTreeMap<u32, Option<NamedLevels>> = BTreeMap::new();
+    if !graphed.is_empty() {
+        let graph_options = Options {
+            selected_ids: graphed,
+            graph_fields: Some(level_read_fields),
+            releases: native_document::NATIVE_RELEASES,
+            ..Options::default()
+        };
+        let _ = native_document::extract_graphs(rf, &graph_options, |record| {
+            let (Some(graph), Ok(id)) = (
+                record.graph.as_ref(),
+                u32::try_from(record.identity.element_id),
+            ) else {
+                return Ok(());
+            };
+            let Some(root) = graph.objects.first() else {
+                return Ok(());
+            };
+            let field = |object: &crate::native_parameters::GraphObject, name: &str| {
+                object
+                    .fields
+                    .get(name)
+                    .and_then(identifier_i64)
+                    .and_then(level)
+            };
+            let mut drivers = graph
+                .objects
+                .iter()
+                .filter(|object| object.class_name == "FamInstCurveDriver");
+            let reference = match (drivers.next(), drivers.next()) {
+                (Some(driver), None) => field(driver, "m_refLevelId"),
+                _ => None,
+            };
+            agree_levels(
+                &mut graphs,
+                id,
+                NamedLevels {
+                    base: None,
+                    own_base: field(root, "m_baseLevelId").or_else(|| field(root, "m_bottomId")),
+                    top: field(root, "m_upToLevelId")
+                        .or_else(|| field(root, "m_topLevelId"))
+                        .or_else(|| field(root, "m_topId")),
+                    schedule: field(root, "m_scheduleOnlyLevelId"),
+                    curve_start: field(root, "m_idLevelStart"),
+                    reference,
+                },
+            );
+            Ok(())
+        });
+    }
+    for element in groups.iter_mut().flat_map(|group| group.iter_mut()) {
+        let Some(id) = element.id else {
+            continue;
+        };
+        let named = NamedLevels {
+            base: bases.get(&id).copied().flatten().flatten(),
+            ..graphs.get(&id).copied().flatten().unwrap_or_default()
+        };
+        let mut push = |field: &str, level: u32| {
+            element
+                .fields
+                .push((field.into(), InstanceField::String(names[&level].into())));
+        };
+        if let Some(level) = named
+            .base
+            .or(named.own_base)
+            .or(named.schedule)
+            .or(named.curve_start)
+        {
+            push(lp::LEVEL_PARAMETER_FIELD, level);
+        } else if let Some(level) = named.reference {
+            push(REFERENCE_LEVEL_FIELD, level);
+        }
+        if let Some(level) = named.top {
+            push(lp::TOP_LEVEL_PARAMETER_FIELD, level);
+        }
+    }
+}
+
 /// A stair's Base and Top Level from the Levels its record lists: the
 /// lowest and the next above it (RE-176). `None` unless every named Level
 /// has an elevation and the lowest three are at distinct elevations.

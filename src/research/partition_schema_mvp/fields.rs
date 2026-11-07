@@ -1119,6 +1119,17 @@ pub const LEVEL_FROM_LIST_FIELD: &str = "m_level_parameter_from_list";
 /// in its id lists: a beam's or brace's Reference Level (RE-175).
 pub const REFERENCE_LEVEL_FROM_LIST_FIELD: &str = "m_reference_level_from_list";
 
+/// Field naming a beam's or brace's Reference Level where its own record
+/// names it (`FamInstCurveDriver.m_refLevelId`, RE-369), on Revit 2015 to
+/// 2023.
+pub const REFERENCE_LEVEL_FIELD: &str = "m_reference_level";
+
+/// The 32-bit releases whose elements take their Level parameters from their
+/// own native record (RE-369): Revit 2015 to 2023, which the native record
+/// path reads. On Autodesk's sample projects of each, every Level so read is
+/// the one the same project's 2024 save gives.
+pub const LEVEL_32BIT_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2023;
+
 /// Field recording where a column's bottom came from, when not its record.
 pub const COLUMN_Z_SOURCE_FIELD: &str = "m_column_z_source";
 
