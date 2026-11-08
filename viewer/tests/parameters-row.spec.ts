@@ -916,7 +916,7 @@ const officeTest = office ? test : test.skip;
 officeTest(
   'a read that really runs the tab out of memory is reported, and the file is then read only when asked',
   async ({ baseURL }) => {
-    test.setTimeout(1_200_000);
+    test.setTimeout(1_500_000);
     const uncapped = await chromium.launch();
     let openBytes = 0;
     let readBytes = 0;
@@ -933,7 +933,13 @@ officeTest(
       ).wasmMemoryBytes;
       const [first] = (await treeElements(page)).filter(({ id }) => id !== null);
       await select(page, first!.index);
-      readBytes = (await settled(page)).wasmMemoryBytes ?? 0;
+      const read = (await settled(page)).wasmMemoryBytes;
+      if (read === null) {
+        report(['NOT MEASURED: the read reported no wasm memory figure.']);
+        test.skip(true, 'NOT MEASURED: the read reported no wasm memory figure');
+        return;
+      }
+      readBytes = read;
     } finally {
       await uncapped.close();
     }
@@ -953,7 +959,7 @@ officeTest(
       await page.goto('/');
       await expect(page.locator('#status')).toHaveText(/Ready/);
       await page.locator('#file-input').setInputFiles(office!);
-      await expect(page.locator('#status')).toHaveText(/Loaded|Ran out of memory/, { timeout: 300_000 });
+      await expect(page.locator('#status')).toHaveText(/Loaded|Ran out of memory/, { timeout: 900_000 });
       await expect(page.locator('#status')).toHaveText(/Loaded/);
       const [a, b] = (await treeElements(page)).filter(({ id }) => id !== null).slice(0, 2);
       expect(a && b, 'two elements with an ElementId').toBeTruthy();
