@@ -73,7 +73,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           languages: ${{ matrix.language }}
           build-mode: none
@@ -86,7 +86,7 @@ jobs:
       # (init-action-post-helper.ts, `prepareFailedSarif`, skips that for
       # `never`). The overlay base database on `main` is still saved by this
       # step.
-      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           category: "/language:${{ matrix.language }}"
           upload: failure-only
@@ -96,7 +96,7 @@ jobs:
       - name: Upload the results to code scanning
         id: sarif
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
           sarif_file: ${{ runner.temp }}/codeql-sarif
           category: "/language:${{ matrix.language }}"
@@ -174,7 +174,7 @@ jobs:
           done
       - name: Upload the actions results to code scanning (retry)
         if: ${{ !cancelled() && hashFiles('retry/actions.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         env:
           CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/codeql.yml:analyze
         with:
@@ -186,7 +186,7 @@ jobs:
             }
       - name: Upload the javascript-typescript results to code scanning (retry)
         if: ${{ !cancelled() && hashFiles('retry/javascript.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         env:
           CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/codeql.yml:analyze
         with:
@@ -198,7 +198,7 @@ jobs:
             }
       - name: Upload the python results to code scanning (retry)
         if: ${{ !cancelled() && hashFiles('retry/python.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         env:
           CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/codeql.yml:analyze
         with:
@@ -210,7 +210,7 @@ jobs:
             }
       - name: Upload the rust results to code scanning (retry)
         if: ${{ !cancelled() && hashFiles('retry/rust.sarif') != '' }}
-        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         env:
           CODEQL_ACTION_ANALYSIS_KEY: .github/workflows/codeql.yml:analyze
         with:
