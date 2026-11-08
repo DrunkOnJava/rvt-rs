@@ -229,6 +229,20 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
              print "schema " section ": not read" }
            END { if (rules_seen && !rules_counted) print "schema rules: not read" }' "$f"
     done
+    # The wall bodies against Revit's export, per class of wall (#1534): the
+    # scorer's summary rows, which are counts and distances.
+    for f in "$dir"wall_bodies_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E '^(faces \(across\)|ends \(along\)), (axis-parallel|angled|curved): [0-9]+ walls; within [0-9. ft:]+; max [0-9.]+ ft$' "$f" | sed 's/^/wall bodies: /' || true
+    done
+    # Which source drew each body (#1534), as counts: a source name in a
+    # restricted alphabet and a number, so a moved export can be attributed.
+    if [ -f "${dir}diagnostics.json" ]; then
+      python3 -I -c 'import json, re, sys
+for name, count in sorted(((json.load(open(sys.argv[1])).get("exported") or {}).get("body_sources") or {}).items()):
+    if re.fullmatch(r"[a-z0-9_]+", name) and isinstance(count, int):
+        print(f"body sources: {name} {count}")' "${dir}diagnostics.json" 2> /dev/null || true
+    fi
   } > "$RUNNER_TEMP/counts.txt"
   find "$dir" -mindepth 1 ! -name ifc.sha256 -delete
   mv "$RUNNER_TEMP/counts.txt" "${dir}counts.txt"
