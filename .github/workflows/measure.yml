@@ -620,7 +620,46 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The base side of a run measures a commit that earlier runs have often
+      # measured already: 45% of Measure's runner-minutes in a sample of 40 runs.
+      # Its results are reused when everything that can change them is the same:
+      # the base commit, the workflow, its scorers and fetch scripts, the pins
+      # under research/, the inputs and the shard, and the runner image. A run
+      # with a probe, `keep_ifc` or `timing` measures afresh. What is kept is the
+      # `results` directory after the scrub, which is what the artifact uploads
+      # anyway, so a held-out model's cache holds no more than its public counts.
+      - name: Key of this base commit's earlier results
+        id: reuse-key
+        if: github.event_name == 'workflow_dispatch' && matrix.side == 'base' && inputs.probe == '' && inputs.keep_ifc != true && inputs.timing != true
+        shell: bash
+        env:
+          BASE: ${{ needs.plan.outputs.base_sha }}
+          INPUTS: ${{ toJSON(inputs) }}
+          MATRIX: ${{ toJSON(matrix) }}
+        run: |
+          set -euo pipefail
+          tools=$(git ls-files -s .github/workflows/measure.yml .github/actions tools/ci tools/re tools/fetch-reference-models.sh tools/fetch-autodesk-samples.sh research | sha256sum | cut -c1-32)
+          options=$(jq -Sc 'del(.ref, .base, .score_cache)' <<<"$INPUTS" | sha256sum | cut -c1-16)
+          shard=$(jq -Sc . <<<"$MATRIX" | sha256sum | cut -c1-16)
+          echo "key=measure-results-v1-$BASE-$tools-$options-$shard-$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
+      - name: Results this base commit already has
+        id: reuse
+        if: steps.reuse-key.outputs.key != ''
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: results
+          key: ${{ steps.reuse-key.outputs.key }}
+      - name: Say that the results are reused
+        if: steps.reuse.outputs.cache-hit == 'true'
+        shell: bash
+        env:
+          KEY: ${{ steps.reuse-key.outputs.key }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          echo "::notice::the base side of ${SHARD} reuses earlier results of the same inputs (${KEY})"
+          echo "Base side of ${SHARD}: reused earlier results, key ${KEY}" >> "$GITHUB_STEP_SUMMARY"
       - name: Measured source
+        if: steps.reuse.outputs.cache-hit != 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -631,11 +670,13 @@ jobs:
       # its path. A ref that is not a full SHA can move between the two jobs;
       # then the binaries and this source would be two commits.
       - name: Measured binaries
+        if: steps.reuse.outputs.cache-hit != 'true'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: measure-bin-${{ matrix.side }}
           path: measured/target/ci
       - name: Check the binaries are of this source, and make them executable
+        if: steps.reuse.outputs.cache-hit != 'true'
         shell: bash
         run: |
           built=$(cat measured/target/ci/built-commit.txt)
@@ -648,9 +689,11 @@ jobs:
           find measured/target/ci -type f -exec chmod +x {} +
           git -C measured log -1 --format='%H %s' > measured-commit.txt
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: steps.reuse.outputs.cache-hit != 'true'
         with:
           python-version: "3.12"
       - name: Install IfcOpenShell
+        if: steps.reuse.outputs.cache-hit != 'true'
         run: python -m pip install --require-hashes -r tools/ci/requirements-ifc.txt
       # The score cache (tools/ci/measure-cache.py, docs/maintaining.md): a
       # scorer or schema step whose every input is as it was in an earlier run
@@ -668,6 +711,7 @@ jobs:
       # against an export with no licence (racadv-*) and the pairs once held out
       # (spent-*) are never cached (RE-252).
       - name: Score cache key
+        if: steps.reuse.outputs.cache-hit != 'true'
         id: score-cache-key
         shell: bash
         env:
@@ -715,13 +759,14 @@ jobs:
       # this cache writable, so the rule on saving it (main's own code only) is
       # as it was before the build moved out of the shard.
       - name: Restore the score cache
-        if: steps.score-cache-key.outputs.enabled == 'true'
+        if: steps.reuse.outputs.cache-hit != 'true' && (steps.score-cache-key.outputs.enabled == 'true')
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: _score-cache
           key: ${{ steps.score-cache-key.outputs.prefix }}${{ matrix.side }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: ${{ steps.score-cache-key.outputs.restore }}
       - name: Fetch the reference models
+        if: steps.reuse.outputs.cache-hit != 'true'
         run: tools/fetch-reference-models.sh models
       # The office models' host being down is NOT MEASURED; a file that no
       # longer matches its pin fails the run.
@@ -736,14 +781,14 @@ jobs:
       # saves. The held-out models carry no licence and are never cached.
       - name: Restore the BIM4LCA office models
         id: bim4lca-cache
-        if: matrix.nordic
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.nordic)
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: _bim4lca-measure
           key: bim4lca-measure-${{ hashFiles('research/bim4lca-measure.tsv', 'tools/ci/fetch-bim4lca.py') }}
       - name: Fetch the BIM4LCA office models
         id: bim4lca
-        if: matrix.nordic
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.nordic)
         shell: bash
         run: |
           set +e
@@ -767,7 +812,7 @@ jobs:
         # ref's build scripts before the fetch, which could have written into
         # the folder; the build is a job of its own now, and the rule is kept
         # as it was.
-        if: matrix.nordic && github.ref == 'refs/heads/main' && steps.bim4lca-cache.outputs.cache-hit != 'true' && steps.bim4lca.outputs.ok == 'true' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '')
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.nordic && github.ref == 'refs/heads/main' && steps.bim4lca-cache.outputs.cache-hit != 'true' && steps.bim4lca.outputs.ok == 'true' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == ''))
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: _bim4lca-measure
@@ -776,14 +821,14 @@ jobs:
       # longer matches its pin fails the run.
       - name: Restore the R2025 models
         id: r2025-cache
-        if: matrix.r2025
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.r2025)
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: _r2025
           key: r2025-${{ hashFiles('research/r2025-models.tsv', 'tools/ci/fetch-r2025-models.sh') }}
       - name: Fetch the R2025 models
         id: r2025
-        if: matrix.r2025
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.r2025)
         shell: bash
         env:
           HIT: ${{ steps.r2025-cache.outputs.cache-hit }}
@@ -803,7 +848,7 @@ jobs:
           esac
       - name: Save the R2025 models
         # Saved only by a job that measured main's own code (see above).
-        if: matrix.r2025 && github.ref == 'refs/heads/main' && steps.r2025-cache.outputs.cache-hit != 'true' && steps.r2025.outputs.ok == 'true' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '')
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.r2025 && github.ref == 'refs/heads/main' && steps.r2025-cache.outputs.cache-hit != 'true' && steps.r2025.outputs.ok == 'true' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == ''))
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: _r2025
@@ -811,7 +856,7 @@ jobs:
       # BIMcollab's host being unreachable is NOT MEASURED; a file that no
       # longer matches its pin fails the run.
       - name: Fetch the BIMcollab example model
-        if: matrix.bimcollab
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.bimcollab)
         shell: bash
         run: |
           set +e
@@ -826,7 +871,7 @@ jobs:
       # The export's host being unreachable is NOT MEASURED; a file that no
       # longer matches its pin fails the run. Nothing is cached.
       - name: Fetch Autodesk's rac_advanced sample and its IFC2X3 export
-        if: matrix.racadv
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.racadv)
         shell: bash
         run: |
           set +e
@@ -843,7 +888,7 @@ jobs:
       # file that no longer matches its pin does: a run asked for the held-out
       # check that checked nothing must not read as a pass (#1392).
       - name: Fetch the held-out models
-        if: matrix.holdout
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.holdout)
         shell: bash
         run: |
           set +e
@@ -860,7 +905,7 @@ jobs:
             *) echo "::error::a held-out model no longer matches its pin in research/holdout-models.tsv or research/holdout-archive-models.tsv"; exit 1 ;;
           esac
       - name: Fetch the family corpus
-        if: matrix.families
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.families)
         uses: $/.github/actions/fetch-corpus
         with:
           repository: phi-ag/rvt
@@ -868,16 +913,17 @@ jobs:
       # Families their makers publish (research/public-families.tsv, #152),
       # read with the family corpus. An unreachable host is NOT MEASURED.
       - name: Fetch the makers' public families
-        if: matrix.families
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.families)
         run: tools/fetch-public-families.sh _corpus/examples/Autodesk
       - name: Fetch Autodesk's sample projects
-        if: matrix.samples
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.samples)
         env:
           SAMPLE_YEARS: ${{ matrix.years }}
         run: |
           # shellcheck disable=SC2086 # SAMPLE_YEARS is the first and last year.
           tools/fetch-autodesk-samples.sh _samples $SAMPLE_YEARS
       - name: Measure
+        if: steps.reuse.outputs.cache-hit != 'true'
         env:
           PROBE: ${{ inputs.probe }}
           RVT_IFC_FLAGS: ${{ inputs.ifc_flags }}
@@ -919,7 +965,7 @@ jobs:
       # generations it supersedes).
       - name: Finish the score cache
         id: score-cache
-        if: ${{ !cancelled() && steps.score-cache-key.outputs.enabled == 'true' }}
+        if: ${{ steps.reuse.outputs.cache-hit != 'true' && (!cancelled() && steps.score-cache-key.outputs.enabled == 'true') }}
         shell: bash
         env:
           SHARD: ${{ matrix.shard }}
@@ -927,7 +973,7 @@ jobs:
           mkdir -p results
           python tools/ci/measure-cache.py finish --report "results/score-cache-$SHARD.log"
       - name: Save the score cache
-        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && steps.score-cache.outputs.changed == 'true' && steps.score-cache-key.outputs.save == 'true' }}
+        if: ${{ steps.reuse.outputs.cache-hit != 'true' && (!cancelled() && github.event_name == 'workflow_dispatch' && steps.score-cache.outputs.changed == 'true' && steps.score-cache-key.outputs.save == 'true') }}
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: _score-cache
@@ -939,7 +985,7 @@ jobs:
       # (every model filtered out by `models`, or nothing scored) fails, so an
       # empty check never reads as a pass (#1392).
       - name: The held-out check measured something
-        if: matrix.holdout
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.holdout)
         shell: bash
         run: |
           measured=$(find results -maxdepth 1 -type d \( -name 'holdout-*' -o -name 'spent-*' \) | wc -l | tr -d ' ')
@@ -949,8 +995,15 @@ jobs:
             exit 1
           fi
       - name: Keep only the unlicensed models' counts
+        if: steps.reuse.outputs.cache-hit != 'true'
         shell: bash
         run: tools/ci/scrub-holdout-results.sh results
+      - name: Keep this base commit's scrubbed results for later runs
+        if: steps.reuse-key.outputs.key != '' && steps.reuse.outputs.cache-hit != 'true' && success()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: results
+          key: ${{ steps.reuse-key.outputs.key }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: measure-${{ matrix.side }}-${{ matrix.shard }}
