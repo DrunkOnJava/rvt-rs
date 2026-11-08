@@ -968,6 +968,7 @@ pub(super) fn attach_wall_layers(
             if let Some(angle) = taper {
                 wall.fields
                     .push((WALL_EXTERIOR_FACE_ANGLE_FIELD.into(), float(angle)));
+                rf.attribute_value_source(type_id, "type_face_angles", id, "wall_type_face_angle");
             }
             rf.attribute_value_source(type_id, "type_layers", id, "wall_type_layers");
         }

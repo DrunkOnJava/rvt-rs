@@ -540,6 +540,7 @@ impl WallReads {
             selected_ids: selected,
             releases: crate::native_document::NATIVE_RELEASES,
             graph_fields: Some(wall_read_fields),
+            value_source: Some("native_wall"),
             ..Options::default()
         };
         let mut type_ids: BTreeMap<u64, u64> = BTreeMap::new();
@@ -670,6 +671,7 @@ pub fn native_walls_and_top_joins_into(
     let options = Options {
         selected_ids: walls.clone(),
         selected_classes: BTreeSet::from(["BasicWallType".to_string()]),
+        value_source: Some("native_wall"),
         ..Options::default()
     };
     let mut found: BTreeMap<u64, (NativeWall, Option<u64>)> = BTreeMap::new();
@@ -886,6 +888,28 @@ pub fn native_walls_and_top_joins_into(
         }
         Ok(())
     })?;
+    // #1498: the native records of the walls each wall's `m_realJoined` lists
+    // name, where every one of them was read in this pass.
+    if rf.recording_value_sources() {
+        for (wall, joins) in &end_joins {
+            let partners: BTreeSet<u32> = joins
+                .real
+                .iter()
+                .flatten()
+                .flatten()
+                .filter_map(|partner| u32::try_from(*partner).ok())
+                .collect();
+            if let (Ok(owner), false) = (u32::try_from(*wall), partners.is_empty()) {
+                rf.attribute_value_sources(
+                    partners,
+                    "native_wall",
+                    owner,
+                    "native_wall_joined",
+                    crate::ifc::element_provenance::CopyRule::Native,
+                );
+            }
+        }
+    }
     reads.type_ids.extend(type_ids);
     reads.type_ids_read.extend(walls.iter().copied());
     reads.functions.extend(functions);
