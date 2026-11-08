@@ -219,6 +219,21 @@ pub fn recover_partition_schema_mvp(
         resolve_base_constraint_levels(&level_elevations, &mut record_backed);
         resolve_base_at_level(&level_elevations, &mut record_backed);
         resolve_remaining_levels(&level_elevations, &mut record_backed);
+        // --- The Level parameters each element's own native record names
+        // (RE-369) ---
+        attach_levels_32(
+            rf,
+            revit_version,
+            &levels,
+            [
+                &mut out.walls,
+                &mut out.columns,
+                &mut out.doors,
+                &mut out.windows,
+                &mut out.slabs,
+                &mut out.products,
+            ],
+        );
         // --- System families' names (RE-63); a wall's, roof's or
         // ceiling's needs its type's layers, not read on 2023 ---
         attach_system_family_names(
