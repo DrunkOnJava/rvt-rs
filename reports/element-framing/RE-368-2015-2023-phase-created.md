@@ -35,7 +35,7 @@ An element's Phase Created is now that phase's name, on Revit 2015 to 2023 (`PHA
 
 Each sample puts all its elements in one phase, which is not always the last: `rac_basic`'s are in `Working Drawings`, the second of its three, and the others' in `New Construction`. So the samples show the field is read, and that it is not the export phase, but not that it tells two phases apart.
 
-**Two phases in one file.** BIMcollab's 2015 example orders five phases. 241 elements take the last and 4 the first. Those 4 are among the 8 elements RE-281 finds outside the last phase, each demolished before `Nieuw` (`compute_phase_filter` gives `Demolished` for all 8). Revit's IFC2X3 export of it holds no `Phasing` set, so the value is not scored, but it is consistent: an element demolished in a later phase was created in an earlier one.
+**Two phases in one file.** BIMcollab's 2015 example orders five phases. 241 elements take the last and 4 the first. Those 4 are among the 8 elements RE-281 finds outside the last phase, each demolished before the last phase (`compute_phase_filter` gives `Demolished` for all 8). Revit's IFC2X3 export of it holds no `Phasing` set, so the value is not scored, but it is consistent: an element demolished in a later phase was created in an earlier one.
 
 ## 4. What else changes
 
