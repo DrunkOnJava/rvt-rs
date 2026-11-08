@@ -14,7 +14,7 @@ BIMcollab's Revit 2015 structural example is the one Revit 2015 export with phas
 
 ## 3. Measured
 
-Measure run 42519395233, head `f3d8f702`, main's side `d51c6aa5` (`-f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true -f bimcollab=true -f racadv=true`, every scorer). The `same-project gates` check passes on `f3d8f702`.
+Measure run 42519395233, head `f3d8f702`, main's side `d51c6aa5` (`-f base=main -f nordic=true -f r2025=true -f samples=true -f holdout=true -f bimcollab=true -f racadv=true`, every scorer). The `same-project gates` check passes on `f3d8f702`. The landing head differs from that commit by this report, `docs/export-diagnostics.md` and the changelog fragment, and no code.
 
 - **BIMcollab's structural example, against Revit 2015's own export:** elements and spaces paired 244 to 241, and `IfcAirTerminal` written beyond the export 3 to 0: the 3 of #879 go and no other class changes. Revit's export holds 241. Elements on no storey 19 to 16, which are the 16 footings of #879, still open. It is the only model of the run whose scorer output moves.
 - **Autodesk's six Revit 2015 samples:** `ifc.sha256` is the same on both sides. On `rac_basic` the rule now applies and the room fallback of #1359 writes the same 14 rooms: `room_phase_fallback` is absent on main's side and names 14 rooms on the head, as on the 2016, 2017 and 2018 saves. The rooms therefore stay, by the rule the later saves follow.
