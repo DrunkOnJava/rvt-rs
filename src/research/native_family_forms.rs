@@ -700,6 +700,78 @@ fn root_id(graph: &ObjectGraph, class: &str, field: &str) -> Option<u64> {
     u64::try_from(element_id(root.fields.get(field))?).ok()
 }
 
+/// The family types of `types` whose saved graphics draw nothing visible
+/// (RE-363, #1496): at the Fine detail level Revit's exporter asks for, they
+/// decode cleanly to no surface, with a branch left out as not visible. Revit's
+/// exporter writes a family instance that is not a door or a window only when
+/// its 3D body has a solid or a mesh (`FamilyInstanceExporter` in revit-ifc,
+/// CLEANROOM.md source 5). On 52 models with a Revit export, no instance of
+/// such a type is in that export. A type with no saved graphics is not one.
+pub fn types_without_visible_body(
+    rf: &mut RevitFile,
+    types: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeSet<u64>> {
+    const GRAPHICS_CHANNEL: u64 = 103;
+    const FINE_DETAIL: i64 = 3;
+    // A symbol's graphics name the symbols nested in it, so reading goes on
+    // until no new one is named. The bound stops a file whose symbols name
+    // each other for ever.
+    const MAX_ROUNDS: usize = 128;
+    let mut options = native_document::Options {
+        channels: BTreeSet::from([GRAPHICS_CHANNEL]),
+        max_graph_values: 1_000_000,
+        max_graph_objects: 1_000_000,
+        releases: native_document::NATIVE_RELEASES,
+        ..native_document::Options::default()
+    };
+    let mut graphs: BTreeMap<u64, ObjectGraph> = BTreeMap::new();
+    let mut attempted: BTreeSet<u64> = BTreeSet::new();
+    let mut pending = types.clone();
+    for _ in 0..MAX_ROUNDS {
+        if pending.is_empty() {
+            break;
+        }
+        attempted.extend(&pending);
+        options.selected_ids = std::mem::take(&mut pending);
+        let mut fresh: Vec<(u64, ObjectGraph)> = Vec::new();
+        native_document::extract_graphs(rf, &options, |record| {
+            if let Some(graph) = record.graph {
+                fresh.push((record.identity.element_id, graph));
+            }
+            Ok(())
+        })?;
+        for (id, graph) in fresh {
+            for object in &graph.objects {
+                if object.class_name != "InstanceInfo" {
+                    continue;
+                }
+                let symbol = element_id(object.fields.get("m_symbolId"))
+                    .and_then(|symbol| u64::try_from(symbol).ok())
+                    .filter(|symbol| *symbol > 0 && !attempted.contains(symbol));
+                pending.extend(symbol);
+            }
+            graphs.insert(id, graph);
+        }
+    }
+    let resolver = |id: u64| graphs.get(&id);
+    Ok(types
+        .iter()
+        .copied()
+        .filter(|id| {
+            graphs.get(id).is_some_and(|graph| {
+                let drawn = crate::native_saved_mesh::graphics_with_resolver_at_detail(
+                    graph,
+                    &resolver,
+                    FINE_DETAIL,
+                );
+                drawn.primitives.is_empty()
+                    && drawn.diagnostics.is_empty()
+                    && drawn.excluded_visibility_branches > 0
+            })
+        })
+        .collect())
+}
+
 /// The family instances of `instances` that have no 3D body (RE-312, #1262).
 ///
 /// Revit's exporter writes a family instance that is not a door or a window

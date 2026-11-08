@@ -58,6 +58,66 @@ pub(super) fn attach_ifc_export_overrides(
     }
 }
 
+/// Leave out the family instances that are not doors or windows and whose
+/// type draws nothing visible ([`crate::native_family_forms::types_without_visible_body`],
+/// RE-363, #1496). The export diagnostics count what is left out, and a check
+/// that could not run is reported there with every instance kept.
+pub(super) fn without_invisible_family_types(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    lists: [&mut Vec<DecodedElement>; 2],
+) {
+    if !crate::native_document::NATIVE_RELEASES.contains(&revit_version) {
+        return;
+    }
+    let type_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(u64::from(*id)),
+            _ => None,
+        })
+    };
+    let types: BTreeSet<u64> = lists
+        .iter()
+        .flat_map(|list| list.iter())
+        .filter_map(|element| type_of(element))
+        .collect();
+    if types.is_empty() {
+        return;
+    }
+    let invisible = match crate::native_family_forms::types_without_visible_body(rf, &types) {
+        Ok(invisible) => invisible,
+        Err(error) => {
+            rf.note_invisible_type_error(types.len(), error.to_string());
+            return;
+        }
+    };
+    if invisible.is_empty() {
+        return;
+    }
+    let mut classes: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>> =
+        BTreeMap::new();
+    for list in lists {
+        list.retain(|element| {
+            let left_out = type_of(element).is_some_and(|id| invisible.contains(&id));
+            if left_out {
+                let framed =
+                    element.provenance.record_kind.as_deref() == Some("partition_element_record");
+                classes.entry(element.class.clone()).or_default().push(
+                    crate::partition_element_records::LeftOutElement {
+                        element_id: element.id,
+                        class: element.class.clone(),
+                        stream: element.provenance.source_stream.clone().filter(|_| framed),
+                        offset: element.provenance.source_offset.filter(|_| framed),
+                        detail: None,
+                    },
+                );
+            }
+            !left_out
+        });
+    }
+    rf.note_invisible_type_instances(classes);
+}
+
 /// Leave out the family instances written as spaces through their "Export to
 /// IFC As" that have no 3D body, as Revit's export leaves them out (RE-312,
 /// #1262). Revit writes a family instance that is not a door or a window

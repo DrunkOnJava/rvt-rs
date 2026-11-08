@@ -271,6 +271,11 @@ pub struct RevitFile {
     /// How many family instances written as spaces were not checked for a 3D
     /// body, and why, where the check could not run (RE-312).
     bodiless_family_space_error: Option<(usize, String)>,
+    /// Family instances left out because their type draws nothing visible
+    /// (RE-363), by class, and the error that stopped that check.
+    invisible_type_instances:
+        BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
+    invisible_type_error: Option<(usize, String)>,
     /// The copy of an element's data each reader took a value from, by
     /// ElementId, noted where the reader chose it (#1360). `None` unless the
     /// export asked for the provenance table: the readers then note nothing.
@@ -506,6 +511,8 @@ impl RevitFile {
             wall_cut_steps_asked: BTreeSet::new(),
             bodiless_family_spaces: BTreeMap::new(),
             bodiless_family_space_error: None,
+            invisible_type_instances: BTreeMap::new(),
+            invisible_type_error: None,
             value_sources: None,
         })
     }
@@ -588,6 +595,29 @@ impl RevitFile {
         self.bodiless_family_spaces = classes;
     }
 
+    /// The family instances left out because their type draws nothing visible
+    /// (RE-363), by class.
+    pub(crate) fn invisible_type_instances(
+        &self,
+    ) -> &BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>> {
+        &self.invisible_type_instances
+    }
+
+    pub(crate) fn note_invisible_type_instances(
+        &mut self,
+        classes: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
+    ) {
+        self.invisible_type_instances = classes;
+    }
+
+    pub(crate) fn invisible_type_error(&self) -> Option<&(usize, String)> {
+        self.invisible_type_error.as_ref()
+    }
+
+    pub(crate) fn note_invisible_type_error(&mut self, checked: usize, error: String) {
+        self.invisible_type_error = Some((checked, error));
+    }
+
     /// Forget what an earlier production walk noted for its diagnostics: the
     /// Areas left unwritten, the family spaces left out for want of a body,
     /// the error that stopped that check, and the doors and windows written
@@ -600,6 +630,8 @@ impl RevitFile {
         self.dropped_chain_entries = 0;
         self.bodiless_family_spaces.clear();
         self.bodiless_family_space_error = None;
+        self.invisible_type_instances.clear();
+        self.invisible_type_error = None;
         self.unread_type_doors_windows.clear();
         if let Some(noted) = self.value_sources.as_mut() {
             noted.clear();
