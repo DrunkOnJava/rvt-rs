@@ -4,7 +4,7 @@
 **Issues:** [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185), W7 of [`docs/release-1.0-criteria.md`](../../docs/release-1.0-criteria.md); follows RE-77
 **Artefacts:** the BIM4LCA office as built (Revit 2024, CC BY-SA 4.0) with Revit's IFC4 export (exporter 24.0.5.432), as Measure fetches them
 **Probe:** `probes/examples/probe_type_text_parameters.rs`, Measure run [41138121530](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41138121530) (`-f nordic=true -f models=nordic-office-as-built -f scorers=none`, commit 5d30bdb0)
-**Status:** negative. Nothing is written.
+**Status:** negative for RE-77's form, which is all the probe searched, and overturned by [RE-354](RE-354-door-type-values-and-family-type-manufacturer.md): the six texts are in a family type table's form, text first, under -1010108, in the six types' own blocks, and are written. What follows is the original negative.
 
 ## 1. The values
 

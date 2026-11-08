@@ -38,8 +38,25 @@ pub const TYPE_TEXT_PARAMETERS: &[(i64, &str)] = &[
     (-1001206, "Fire Rating"),
 ];
 
+/// The type parameters read in the form of a family type table's entries,
+/// `u32 n · UTF-16 × n · (u32 0 | ff ff ff ff · u16) · f64 · i64 -1 · i64
+/// BuiltInParameter`, with the text before the parameter it belongs to
+/// (RE-185 section 3.3, RE-354). The BIM4LCA office's door types hold their
+/// Fire Rating this way and in no other: `EI30`, `EI60` and `-` on the six
+/// door types Revit's export gives a `FireRating`, and its family types hold
+/// their Manufacturer so: the six texts of the six family types Revit's
+/// export gives a `Manufacturer`, which RE-289 looked for in RE-77's form
+/// alone. An entry is a type's only where no mark of any id lies between the
+/// type's block mark and the entry ([`scan_partition`]), and its copies must
+/// agree ([`type_text_parameters`]).
+pub const TABLE_TEXT_PARAMETERS: &[(i64, &str)] =
+    &[(-1001206, "Fire Rating"), (-1010108, "Manufacturer")];
+
 /// Longest value read, in UTF-16 units.
 const MAX_VALUE_UNITS: usize = 400;
+
+/// Longest text of a table entry read, in UTF-16 units.
+const MAX_TABLE_TEXT_UNITS: usize = 60;
 
 /// The bytes that follow an ElementId to open its value block.
 pub const VALUE_BLOCK_MARK: [u8; 59] = {
@@ -50,44 +67,95 @@ pub const VALUE_BLOCK_MARK: [u8; 59] = {
     mark
 };
 
-/// Every type's text parameters in one inflated partition, by the declared
-/// ElementId of the value block each entry follows.
-pub fn scan_partition(
-    buf: &[u8],
-    declared_ids: &BTreeSet<u32>,
-) -> BTreeMap<u32, BTreeMap<&'static str, String>> {
-    let blocks = value_blocks(buf, declared_ids);
-    let mut values: BTreeMap<(u32, &'static str), Option<String>> = BTreeMap::new();
+/// The text parameters of every type in one inflated partition, by the
+/// declared ElementId of the value block each entry follows.
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct PartitionTexts {
+    /// RE-77's form: the values this partition's entries agree on.
+    pub id_form: BTreeMap<u32, BTreeMap<&'static str, String>>,
+    /// The table form (RE-354), by type and parameter: the value this
+    /// partition's entries agree on, or `None` where two of them disagree.
+    pub table_form: BTreeMap<(u32, &'static str), Option<String>>,
+}
+
+/// Every type's text parameters in one inflated partition. An id-first entry
+/// belongs to the nearest preceding declared block; a table entry belongs to
+/// a block only when no mark of any id, declared or not, lies between that
+/// block's mark and the entry. A mark of an undeclared id opens another
+/// element's block (on the BIM4LCA office a loaded family's document, up to
+/// 3.2 MB on from the last mark of a declared id), and `value_blocks` does
+/// not end a block at it.
+pub fn scan_partition(buf: &[u8], declared_ids: &BTreeSet<u32>) -> PartitionTexts {
+    let marks = block_marks(buf);
+    let blocks = owned_blocks(buf, &marks, declared_ids);
+    let owner_of = |at: usize| {
+        let index = blocks.partition_point(|(start, _)| *start < at);
+        match index.checked_sub(1).and_then(|i| blocks.get(i)) {
+            Some(&(start, Some(owner))) => Some((start, owner)),
+            _ => None,
+        }
+    };
+    let note = |values: &mut BTreeMap<(u32, &'static str), Option<String>>,
+                owner: u32,
+                name: &'static str,
+                text: String| {
+        values
+            .entry((owner, name))
+            .and_modify(|seen| {
+                if seen.as_deref() != Some(text.as_str()) {
+                    *seen = None;
+                }
+            })
+            .or_insert(Some(text));
+    };
+    let mut id_values: BTreeMap<(u32, &'static str), Option<String>> = BTreeMap::new();
+    let mut table_values: BTreeMap<(u32, &'static str), Option<String>> = BTreeMap::new();
     for (parameter, name) in TYPE_TEXT_PARAMETERS {
         for at in memchr::memmem::find_iter(buf, &parameter.to_le_bytes()) {
-            let Some(text) = text_at(buf, at + 8) else {
+            let (Some(text), Some((_, owner))) = (text_at(buf, at + 8), owner_of(at)) else {
                 continue;
             };
-            let index = blocks.partition_point(|(start, _)| *start < at);
-            let Some(&(_, Some(owner))) = index.checked_sub(1).and_then(|i| blocks.get(i)) else {
-                continue;
-            };
-            values
-                .entry((owner, name))
-                .and_modify(|seen| {
-                    if seen.as_deref() != Some(text.as_str()) {
-                        *seen = None;
-                    }
-                })
-                .or_insert(Some(text));
+            note(&mut id_values, owner, name, text);
         }
     }
-    let mut out: BTreeMap<u32, BTreeMap<&'static str, String>> = BTreeMap::new();
-    for ((owner, name), value) in values {
+    for (parameter, name) in TABLE_TEXT_PARAMETERS {
+        let mut mark = [0xffu8; 16];
+        mark[8..].copy_from_slice(&parameter.to_le_bytes());
+        for at in memchr::memmem::find_iter(buf, &mark) {
+            let Some((start, owner)) = owner_of(at) else {
+                continue;
+            };
+            let nearest = marks.partition_point(|&mark_at| mark_at < at);
+            if nearest.checked_sub(1).and_then(|i| marks.get(i)) != Some(&start) {
+                continue;
+            }
+            if let Some(text) = table_text_before(buf, at) {
+                note(&mut table_values, owner, name, text);
+            }
+        }
+    }
+    for (key, value) in &id_values {
+        if let (None, Some(table)) = (value, table_values.get_mut(key)) {
+            *table = None;
+        }
+    }
+    let mut id_form: BTreeMap<u32, BTreeMap<&'static str, String>> = BTreeMap::new();
+    for ((owner, name), value) in id_values {
         if let Some(value) = value {
-            out.entry(owner).or_default().insert(name, value);
+            id_form.entry(owner).or_default().insert(name, value);
         }
     }
-    out
+    PartitionTexts {
+        id_form,
+        table_form: table_values,
+    }
 }
 
 /// Every type's text parameters in the file, by type ElementId. Empty for a
-/// release whose element records are not decoded.
+/// release whose element records are not decoded. RE-77's entries take a later
+/// partition's copy over an earlier one's; a table entry's copies must agree
+/// across partitions and with the id-first value, or the type gets neither
+/// and the handle notes it for the diagnostics.
 pub fn type_text_parameters(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -100,15 +168,66 @@ pub fn type_text_parameters(
     };
     let declared = crate::elem_table::declared_ids(&records);
     let mut out: BTreeMap<u32, BTreeMap<&'static str, String>> = BTreeMap::new();
+    let mut table: BTreeMap<(u32, &'static str), Option<String>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        for (owner, parameters) in scan_partition(inflated.bytes(), &declared) {
+        let found = scan_partition(inflated.bytes(), &declared);
+        for (owner, parameters) in found.id_form {
             out.entry(owner).or_default().extend(parameters);
         }
+        for (key, value) in found.table_form {
+            table
+                .entry(key)
+                .and_modify(|seen| {
+                    if *seen != value {
+                        *seen = None;
+                    }
+                })
+                .or_insert(value);
+        }
     }
+    let mut disagreeing: BTreeSet<(u32, &'static str)> = BTreeSet::new();
+    for ((owner, name), value) in table {
+        let held = out.get(&owner).and_then(|parameters| parameters.get(name));
+        match (value, held) {
+            (Some(value), None) => {
+                out.entry(owner).or_default().insert(name, value);
+            }
+            (Some(value), Some(held)) if *held == value => {}
+            _ => {
+                disagreeing.insert((owner, name));
+                if let Some(parameters) = out.get_mut(&owner) {
+                    parameters.remove(name);
+                }
+            }
+        }
+    }
+    out.retain(|_, parameters| !parameters.is_empty());
+    rf.note_disagreeing_type_texts(disagreeing);
     out
+}
+
+/// The text of the table entry whose element id (`-1`) is at `at`: the
+/// `u32`-counted UTF-16 string before the entry's flag and `f64`, the flag
+/// being a zero `u32` or `ff ff ff ff` and a `u16`.
+fn table_text_before(buf: &[u8], at: usize) -> Option<String> {
+    let flag_ends = at.checked_sub(8)?;
+    let text_ends = if le_bytes::u32_at(buf, flag_ends.checked_sub(4)?)? == 0 {
+        flag_ends - 4
+    } else if buf.get(flag_ends.checked_sub(6)?..flag_ends.checked_sub(2)?)? == [0xff; 4] {
+        flag_ends - 6
+    } else {
+        return None;
+    };
+    (1..=MAX_TABLE_TEXT_UNITS).find_map(|units| {
+        let start = text_ends.checked_sub(4 + 2 * units)?;
+        if le_bytes::u32_at(buf, start)? as usize != units {
+            return None;
+        }
+        text_at(buf, start)
+    })
 }
 
 /// A `u32`-counted UTF-16 string at `at` of printable characters.
@@ -831,9 +950,26 @@ fn type_lengths_at(
 /// blocks were cut there; without the cut, RE1 Architecture's curtain wall
 /// type took the next block's `Type Mark`.)
 fn value_blocks(buf: &[u8], declared_ids: &BTreeSet<u32>) -> Vec<(usize, Option<u32>)> {
+    owned_blocks(buf, &block_marks(buf), declared_ids)
+}
+
+/// Every value block mark in `buf` that is not preceded by a further 0xff,
+/// whatever id precedes it.
+fn block_marks(buf: &[u8]) -> Vec<usize> {
     memchr::memmem::find_iter(buf, &VALUE_BLOCK_MARK)
         .filter(|&at| at >= 8 && buf[at - 1] != 0xff)
-        .filter_map(|at| {
+        .collect()
+}
+
+/// The marks in `marks` that [`value_blocks`] keeps.
+fn owned_blocks(
+    buf: &[u8],
+    marks: &[usize],
+    declared_ids: &BTreeSet<u32>,
+) -> Vec<(usize, Option<u32>)> {
+    marks
+        .iter()
+        .filter_map(|&at| {
             let id = le_bytes::u64_at(buf, at - 8)?;
             let id = u32::try_from(id).ok()?;
             if declared_ids.contains(&id) {

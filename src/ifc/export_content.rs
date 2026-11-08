@@ -2545,6 +2545,9 @@ fn add_load_bearing(
 #[derive(Clone, PartialEq)]
 struct TypeCommon {
     fire_rating: Option<String>,
+    /// The type's Manufacturer, which Revit's export writes in
+    /// `Pset_ManufacturerTypeInformation` on the type object alone (RE-354).
+    manufacturer: Option<String>,
     load_bearing: Option<bool>,
     /// A stair type of a stair whose data is read: revit-ifc's stair
     /// calculators, run on the type itself, give 0 (RE-286).
@@ -2619,6 +2622,21 @@ impl TypeCommon {
                 });
             }
         }
+        if let Some(manufacturer) = self.manufacturer.filter(|_| {
+            super::standard_property_sets::applies_to(
+                "Pset_ManufacturerTypeInformation",
+                occurrence,
+                None,
+            )
+        }) {
+            sets.push(PropertySet {
+                name: "Pset_ManufacturerTypeInformation".into(),
+                properties: vec![Property {
+                    name: "Manufacturer".into(),
+                    value: PropertyValue::Label(manufacturer),
+                }],
+            });
+        }
         if let (true, Some(nosing)) = (occurrence == "IFCSTAIRFLIGHT", self.nosing_feet) {
             sets.push(PropertySet {
                 name: "Pset_StairFlightCommon".into(),
@@ -2669,7 +2687,22 @@ fn record_type_common(
 ) {
     use crate::partition_schema_mvp as mvp;
     let upper = ifc_type.to_ascii_uppercase();
-    if !TYPE_COMMON_ENTITIES.contains(&upper.as_str()) {
+    let type_text = |wanted: &str| {
+        decoded
+            .fields
+            .iter()
+            .find_map(|(field, value)| match value {
+                InstanceField::String(text)
+                    if field.strip_prefix(mvp::TYPE_PARAMETER_FIELD_PREFIX) == Some(wanted)
+                        && !text.is_empty() =>
+                {
+                    Some(text.clone())
+                }
+                _ => None,
+            })
+    };
+    let manufacturer = type_text("Manufacturer");
+    if !TYPE_COMMON_ENTITIES.contains(&upper.as_str()) && manufacturer.is_none() {
         return;
     }
     let Some(type_id) = decoded.fields.iter().find_map(|(name, value)| match value {
@@ -2678,20 +2711,10 @@ fn record_type_common(
     }) else {
         return;
     };
-    let fire_rating = decoded
-        .fields
-        .iter()
-        .find_map(|(field, value)| match value {
-            InstanceField::String(text)
-                if field.strip_prefix(mvp::TYPE_PARAMETER_FIELD_PREFIX) == Some("Fire Rating")
-                    && !text.is_empty() =>
-            {
-                Some(text.clone())
-            }
-            _ => None,
-        });
+    let fire_rating = type_text("Fire Rating");
     let found = TypeCommon {
         fire_rating,
+        manufacturer,
         load_bearing: LOAD_BEARING_TYPE_CLASSES
             .contains(&decoded.class.as_str())
             .then_some(true),

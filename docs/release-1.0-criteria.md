@@ -93,6 +93,7 @@ unrotated beams' `Roll` (RE-276),
 walls' `ExtendToStructure` (RE-228),
 type objects' `FireRating` and `LoadBearing`, with stair types' and flight types' dimensions
 (RE-286, [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185); no `IsExternal` on a type object: the office's and the R2025 models' exporters write it, but Revit's newer exporters, those of the held-out models and of RE1 Architecture, write none),
+door types' `FireRating` and family types' `Manufacturer`, read from a family type table's entries (RE-354, [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185); a door type's `ThermalTransmittance` is left out, Revit's exporters disagree on it),
 walls' `ExtendToStructure` on Revit 2015 to 2023 (RE-284),
 structural columns' and framing's `LoadBearing` from their category, and on Revit 2015 to 2023 their `IsExternal` (RE-285),
 railings' `Height` (RE-231),
@@ -169,7 +170,7 @@ Core Interior's and RE1 Architecture's exports were made with Revit's "Export ba
 and RE1 Mechanical's and Plumbing's pipe areas,
 12 and 126), and `rvt-ifc --no-base-quantities` leaves them out, base quantities being on by default as in each of Revit's built-in IFC4 setups (RE-242);
 RE-353 ([#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)) adds, on Revit 2024 files, the round column's `OuterSurfaceArea`, the circumference times its height (one column on each of the two office files, the same column, and the 2 round columns of Snowdon Towers Architectural, whose Revit export holds no base quantities), and at permit the `CrossSectionArea` and `NetVolume` of 17 of the 18 columns a flat slab cuts across their top, `CrossSectionArea` where every edge of the slab inside the section runs parallel to a side of it (unfiltered Measure run 42130190386, head 35cfd89f, which holds the limits RE-353 section 3 lists, against `main` at 8060ecc8: 17 columns stay, as built 29,760 to 29,761 of 39,765 equal and 10,004 to 10,003 missing, at permit 30,002 to 30,037 of 40,015 and 10,012 to 9,977, different 1 and rvt-rs's own 0 on both; the totals above are those of run 41959375917 and are not re-based);
-the census scores type objects' own sets too ([#1018](https://github.com/DrunkOnJava/rvt-rs/issues/1018)): of the 182 values Revit's export writes on the type objects rvt-rs writes on the office as built, 34 are written equal (`FireRating`, `LoadBearing` and stair types' dimensions, RE-286, [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185)), and the other 148 are their `IsExternal` (135), which rvt-rs writes on no type object because Revit's newer exporters write none (the maintainer, 2026-10-31), the door types' `FireRating` (6) and `ThermalTransmittance` (1) and the family types' `Manufacturer` (6, RE-289) (four more,
+the census scores type objects' own sets too ([#1018](https://github.com/DrunkOnJava/rvt-rs/issues/1018)): of the 182 values Revit's export writes on the type objects rvt-rs writes on the office as built, 46 are written equal (`FireRating`, `LoadBearing` and stair types' dimensions, RE-286, and the door types' `FireRating` (6) and the family types' `Manufacturer` (6), RE-354, [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185); unfiltered Measure run 42135050819, head e07349c0 against `main` at daf36102: the census's one different value and the 2 as built (7 at permit) it writes that Revit's export leaves out are the same on `main`), and the other 136 are their `IsExternal` (135), which rvt-rs writes on no type object because Revit's newer exporters write none (the maintainer, 2026-10-31), and the one door type's `ThermalTransmittance`, left out because the R2025 models' exports do not write it where the file holds a value (RE-354) (four more,
 the mullion types' `IsExternal`,
 are counted apart,
 RE-269).
@@ -208,9 +209,10 @@ The held-out and BIMcollab runs keep quantity counts only, so no property census
 Most instance and type parameters are not ([#35](https://github.com/DrunkOnJava/rvt-rs/issues/35),
 [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155),
 the 0.16.0 milestone)
-Open: type objects' values ([#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185)),
+Open: windows' `Pset_WindowCommon.FireRating`, whose R2025 values sit under family-parameter ids ([#1507](https://github.com/DrunkOnJava/rvt-rs/issues/1507)), the RE1 Plumbing water closet tank and its type, written where Revit's export holds neither ([#1496](https://github.com/DrunkOnJava/rvt-rs/issues/1496)), the office's one type-object value Revit's export omits, `Pset_SanitaryTerminalTypeCommon.Reference` ([#792](https://github.com/DrunkOnJava/rvt-rs/issues/792)),
 the round column's `CrossSectionArea`, `GrossVolume` and `NetVolume`, which are not the circle's, and the one meshed column a cut wall touches (RE-353, [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)),
 and the remaining values with no rule yet ([#1193](https://github.com/DrunkOnJava/rvt-rs/issues/1193)).
+Closed: [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185) (RE-354), with its two declared leave-outs: type objects' `IsExternal`, left out by the maintainer's decision, and a door type's `ThermalTransmittance`, left out as Revit's exporters disagree.
 
 ## Interfaces 1.0 stabilizes
 
