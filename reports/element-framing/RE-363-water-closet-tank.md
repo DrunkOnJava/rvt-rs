@@ -26,7 +26,7 @@ rvt-rs writes a family instance whenever its record box has a volume (RE-21). Re
 | `work_plane_unset` | 363 | 362 | 1 |
 | `nested_mutual_any_category` | 194 | 194 | 0 |
 
-The record fields (container slot, design option, host, work plane, mutual references) and the family's forms do not separate them: the rules that drop the tank drop fixtures Revit writes as well, 71 to 388 of them. Only the saved graphics do. The tank's graphics at Fine detail decode with no surface, no diagnostic, and every primitive under a branch flagged not visible.
+The record fields (host, work plane, mutual references) and the family's forms do not separate them: the rules that read them and drop the tank also drop 71 to 362 fixtures Revit writes, and the mutual-reference rule drops 194 Revit writes and not the tank. The container slot and design option rules drop nothing. Of the graphics rules only the two that need no surface and no diagnostic have no false negative; a broader reading of the graphics drops 38 or 48 fixtures Revit writes. The tank's graphics at Fine detail decode with no surface, no diagnostic, and every primitive under a branch flagged not visible.
 
 ## 3. The same test on every family instance
 
@@ -50,8 +50,8 @@ Reading every instance's saved graphics costs 31% to 36% of an office export. An
 ## 5. What is not established
 
 - The rule is not written. The type-level rule needs the symbols of every category it would apply to, and this report measures the two categories the timing probe scoped (plumbing fixtures and structural columns) for cost.
-- A family with a branch hidden for one instance and shown for another is seen only through the instance-level reading, which agreed with the type-level one on every model.
-- The office's column 1927742, the other extra of #1496, is not a case of this rule.
+- The type-level rule drops 5 more instances than the instance-level one, all 5 not in Revit's export. A type whose instances differ is seen only by the instance-level reading, so a rule read per type could differ from the instance's own body on a model not measured here.
+- The office's column 1927742, the other extra of #1496, is not dropped by this rule on the permit file: its 2,685 drops are all curtain panels.
 
 ## 6. Reproduce
 
