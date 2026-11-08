@@ -700,6 +700,16 @@ areas_across_saves() {
 # 2x, so a probe would stop sooner than it always has.
 read -ra PROBES <<< "${PROBE:-}"
 read -ra PROBE_SCORERS <<< "${PROBE_SCORER:-}"
+# A scorer that reads a probe's output, named in MEASURE_SCORERS, would be given
+# the IFC as that output, find nothing in it and report zeros with success (#1505).
+for s in "${STEPS[@]:-}"; do
+  [ -n "$s" ] && [ -f "$SCORERS/$s.py" ] || continue
+  listed "$s" && continue
+  if grep -q '<probe output>' "$SCORERS/$s.py"; then
+    echo "::error::$s reads a probe's output: dispatch it with -f probe=<probe> -f probe_scorer=$s, not in scorers" >&2
+    exit 2
+  fi
+done
 # A run of one probe writes probe.txt (probe_score.txt, probe-pair.txt), a
 # run of several probe-<probe>.txt (probe_score-<probe>.txt, ...).
 probe_out() { # dir stem probe
