@@ -27,6 +27,14 @@ pub(super) fn attach_level_parameters(
     elevations: &BTreeMap<u32, f64>,
 ) {
     use crate::partition_level_parameters as lp;
+    // A duct's own record named its reference level (RE-371).
+    if element
+        .fields
+        .iter()
+        .any(|(name, _)| name == lp::LEVEL_PARAMETER_FIELD)
+    {
+        return;
+    }
     let found = element
         .id
         .and_then(|id| parameters.get(&id))

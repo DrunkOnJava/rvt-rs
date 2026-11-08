@@ -288,6 +288,13 @@ const COVERAGE: &[(&str, Coverage)] = &[
         },
     ),
     (
+        "native_duct_line",
+        Recorded {
+            readers: &["native_duct", "native_duct_type"],
+            rules: &["native"],
+        },
+    ),
+    (
         "partition_roof_slope",
         Recorded {
             readers: &["roof_slope_edges"],
@@ -413,7 +420,15 @@ const MIN_READERS: &[(&str, &[&str])] = &[
             "roof_type_layers",
         ],
     ),
-    ("RE1-Mechanical", &["selected_frame", "pipe_connectors"]),
+    (
+        "RE1-Mechanical",
+        &[
+            "selected_frame",
+            "pipe_connectors",
+            "native_duct",
+            "native_duct_type",
+        ],
+    ),
     ("RE1-Plumbing", &["selected_frame", "pipe_connectors"]),
     ("Revit_IFC5_Einhoven", &["selected_frame", "saved_graphics"]),
     (
@@ -492,6 +507,7 @@ const REQUIRED: &[(&str, &[&str])] = &[
         &["native_landing_type", "native_run_type"],
     ),
     ("native_spiral_run_treads", &["native_run_type"]),
+    ("native_duct_line", &["native_duct", "native_duct_type"]),
 ];
 
 /// How a written value of a `*Source` property is covered (#1498).

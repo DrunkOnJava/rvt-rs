@@ -2953,27 +2953,48 @@ fn attach_family_instance_ports(
             id,
             index,
             flow_direction,
+            system_type,
             ..
         } = entity
         else {
             continue;
         };
-        if let Some(&direction) = read.segments.get(&(u64::from(*id), *index)) {
-            *flow_direction =
-                crate::native_connectors::flow_direction_of(direction).map(str::to_string);
+        if let Some(calculation) = read.segments.get(&(u64::from(*id), *index)) {
+            // An Exhaust Air connector is SOURCEANDSINK (RE-371).
+            if calculation.system_type == Some(crate::native_connectors::EXHAUST_AIR) {
+                *flow_direction = Some("SOURCEANDSINK".to_string());
+            } else if let Some(direction) = calculation.direction {
+                *flow_direction =
+                    crate::native_connectors::flow_direction_of(direction).map(str::to_string);
+            }
+            *system_type = calculation
+                .system_type
+                .and_then(crate::native_connectors::distribution_system_of)
+                .map(str::to_string);
         }
     }
     // #869: a connector no placed duct or pipe port joins is at its point in
     // its symbol, through the instance's transform (RE-87).
+    // A duct's tap (RE-371) is on its axis, not where the element tapped into
+    // it puts its own connector: it places none.
     let placed: std::collections::BTreeSet<(u32, u32)> = entities
         .iter()
         .filter_map(|entity| match entity {
             entities::IfcEntity::Port {
+                element,
                 id,
                 index,
                 location_feet: Some(_),
                 ..
-            } => Some((*id, *index)),
+            } if !(*index >= 2
+                && matches!(
+                    entities.get(*element),
+                    Some(entities::IfcEntity::BuildingElement { ifc_type, .. })
+                        if ifc_type == "IFCDUCTSEGMENT"
+                )) =>
+            {
+                Some((*id, *index))
+            }
             _ => None,
         })
         .collect();
@@ -3029,10 +3050,73 @@ fn attach_family_instance_ports(
                 flow_direction: port.flow_direction.map(str::to_string),
                 location_feet: place.map(|(point, _)| point),
                 direction: place.map(|(_, axis)| axis),
+                system_type: port
+                    .system_type
+                    .and_then(crate::native_connectors::distribution_system_of)
+                    .map(str::to_string),
             });
         }
     }
     apply_partner_directions(entities);
+    apply_partner_systems(entities);
+}
+
+/// A duct or pipe port whose own system is not read (a family instance
+/// whose record the native path does not decode, on 2015 to 2022) takes the
+/// system of the port joined to it (RE-371): every one of the 2,634 joins of
+/// Revit's export of Snowdon Towers HVAC joins two ports of the same
+/// `SystemType`.
+fn apply_partner_systems(entities: &mut [entities::IfcEntity]) {
+    let mut systems: std::collections::BTreeMap<(u32, u32), String> =
+        std::collections::BTreeMap::new();
+    for entity in entities.iter() {
+        if let entities::IfcEntity::Port {
+            id,
+            index,
+            system_type: Some(system),
+            ..
+        } = entity
+        {
+            systems.insert((*id, *index), system.clone());
+        }
+    }
+    let mut taken: std::collections::BTreeMap<(u32, u32), String> =
+        std::collections::BTreeMap::new();
+    for entity in entities.iter() {
+        if let entities::IfcEntity::PortConnection {
+            a_id,
+            a_index,
+            b_id,
+            b_index,
+            ..
+        } = entity
+        {
+            for (own, other) in [
+                ((*a_id, *a_index), (*b_id, *b_index)),
+                ((*b_id, *b_index), (*a_id, *a_index)),
+            ] {
+                if let (false, Some(system)) = (systems.contains_key(&own), systems.get(&other)) {
+                    taken.entry(own).or_insert_with(|| system.clone());
+                }
+            }
+        }
+    }
+    for entity in entities.iter_mut() {
+        if let entities::IfcEntity::Port {
+            id,
+            index,
+            predefined_type,
+            system_type: system_type @ None,
+            ..
+        } = entity
+        {
+            if matches!(predefined_type.as_deref(), Some("DUCT" | "PIPE")) {
+                if let Some(system) = taken.get(&(*id, *index)) {
+                    *system_type = Some(system.clone());
+                }
+            }
+        }
+    }
 }
 
 /// Releases a family instance's unjoined ports are placed on (#869): 2025,
@@ -3098,13 +3182,19 @@ fn apply_partner_directions(entities: &mut [entities::IfcEntity]) {
             index,
             predefined_type,
             flow_direction,
+            system_type,
             ..
         } = entity
         else {
             continue;
         };
+        // An Exhaust Air connector stays SOURCEANDSINK (RE-371).
+        // A connector whose direction is not read (a family instance whose
+        // record the native path does not decode, on 2015 to 2022) is
+        // treated as bidirectional (RE-371).
         if !matches!(predefined_type.as_deref(), Some("DUCT" | "PIPE"))
-            || flow_direction.as_deref() != Some("SOURCEANDSINK")
+            || !matches!(flow_direction.as_deref(), Some("SOURCEANDSINK") | None)
+            || system_type.as_deref() == Some("EXHAUST")
         {
             continue;
         }

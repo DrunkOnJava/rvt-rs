@@ -194,6 +194,12 @@ pub fn recover_partition_schema_mvp(
         // --- Pipes' types and centrelines, from their own native record
         // (RE-370) ---
         attach_native_pipes(rf, revit_version, &mut out.products);
+        // --- Ducts' types, lines and sections, from their own native record
+        // (RE-371) ---
+        attach_native_ducts(rf, revit_version, &mut out.products);
+        // --- Which element each connector of a family instance is joined to
+        // (RE-171), on 2015 to 2023 too (RE-371) ---
+        attach_connector_pairs(rf, revit_version, &mut out.products);
         // --- Storeys from the Levels the records name (RE-107), by the
         // same rules as 2024's (RE-59, RE-68) ---
         let levels = crate::partition_level_records::recover_partition_levels(rf, revit_version)
@@ -564,6 +570,9 @@ pub fn recover_partition_schema_mvp(
     );
     // --- Pipes' types, which have no name entry (RE-130) ---
     attach_pipe_type_names(rf, &mut out.products);
+    // --- Ducts' types, lines and sections, from their own native record,
+    // before RE-134's scan (RE-371) ---
+    attach_native_ducts(rf, revit_version, &mut out.products);
     // --- Ducts' and pipes' sizes, and ducts' types (RE-134) ---
     attach_curve_fields(rf, revit_version, &mut out.products);
     // --- Which connector each end of a duct is (#847) ---

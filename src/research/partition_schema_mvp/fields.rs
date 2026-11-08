@@ -749,6 +749,27 @@ pub const PIPE_INNER_DIAMETER_FIELD: &str = "m_pipe_inner_diameter";
 /// projects saved by 2024.
 pub const NATIVE_PIPE_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2027;
 
+/// Fields holding the direction across a duct's section its height lies
+/// along (`m_vNormal`), where its own record draws it along its line
+/// (RE-371): the width lies across both it and the line.
+pub const DUCT_NORMAL_FIELDS: [&str; 3] = ["m_duct_normal_x", "m_duct_normal_y", "m_duct_normal_z"];
+
+/// Fields holding a duct's Start and End Middle Elevation, feet above its
+/// reference level (`m_dOffsetStart`, `m_dOffsetEnd`), where its own record
+/// gives them and its justification is centred (RE-371).
+pub const DUCT_OFFSET_FIELDS: [&str; 2] = ["m_duct_offset_start", "m_duct_offset_end"];
+
+/// Field holding a duct's taps, where its own record drew it along its line
+/// (RE-371): a vector of `[connector index, parameter]` pairs, each a
+/// connector its `SegmentConnectorPosition` puts between the line's start
+/// (0) and end (1), where another duct is tapped into it.
+pub const DUCT_TAPS_FIELD: &str = "m_duct_taps";
+
+/// Releases whose ducts take their type, line, section and ports from their
+/// own `RbsDuctCurve` record (RE-371): those the native record path reads,
+/// Revit 2015 to 2027.
+pub const NATIVE_DUCT_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2027;
+
 /// How closely a duct's width and height must match two of its box's
 /// dimensions, feet.
 pub const CURVE_BOX_TOLERANCE_FEET: f64 = 2e-3;

@@ -16,7 +16,7 @@
 //! Design principle: string-based emission, no external IFC library
 //! dependency, fully `#![deny(unsafe_code)]`-clean.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use super::IfcModel;
 use super::entities::{Extrusion, OpeningCut, PropertySet, SolidShape};
@@ -336,6 +336,9 @@ const PORT_FLOW_DIRECTIONS: [&str; 4] = ["SOURCE", "SINK", "SOURCEANDSINK", "NOT
 /// `ObjectType` a port is written without: the values a port's
 /// `PredefinedType` is written with (#828).
 const PORT_TYPES: [&str; 5] = ["CABLE", "CABLECARRIER", "DUCT", "PIPE", "NOTDEFINED"];
+/// The values of IFC4's `IfcDistributionSystemEnum` a port's `SystemType`
+/// is written with (RE-371).
+const PORT_SYSTEM_TYPES: [&str; 3] = ["VENTILATION", "EXHAUST", "HEATING"];
 
 /// `raw` as a token of `allowed`, an IFC4 enumeration, or `None`.
 fn step_enum_of(raw: &str, allowed: &[&str]) -> Option<String> {
@@ -3980,11 +3983,12 @@ impl StepWriter<'_> {
                     index,
                     predefined_type,
                     flow_direction,
+                    system_type,
                     ..
                 } => Some((
                     (*id, *index),
                     format!(
-                        ".{}.,{}",
+                        ".{}.,{},{}",
                         flow_direction
                             .as_deref()
                             .and_then(|flow| step_enum_of(flow, &PORT_FLOW_DIRECTIONS))
@@ -3992,7 +3996,12 @@ impl StepWriter<'_> {
                         predefined_type
                             .as_deref()
                             .and_then(|kind| step_enum_of(kind, &PORT_TYPES))
-                            .map_or("$".to_string(), |kind| format!(".{kind}."))
+                            .map_or("$".to_string(), |kind| format!(".{kind}.")),
+                        // RE-371: the connector's system's classification.
+                        system_type
+                            .as_deref()
+                            .and_then(|system| step_enum_of(system, &PORT_SYSTEM_TYPES))
+                            .map_or("$".to_string(), |system| format!(".{system}."))
                     ),
                 )),
                 _ => None,
@@ -4001,7 +4010,7 @@ impl StepWriter<'_> {
         let port_attribute = |id: u32, index: u32| {
             port_attributes
                 .get(&(id, index))
-                .map_or(".NOTDEFINED.,$", String::as_str)
+                .map_or(".NOTDEFINED.,$,$", String::as_str)
                 .to_string()
         };
         // RE-212: Revit names a port by its flow, `InPort_` for a sink,
@@ -4059,9 +4068,47 @@ impl StepWriter<'_> {
             })
             .collect();
         // #869: a connector joined to a placed connector of a duct or pipe is
-        // at the same point, with the same axis, as Revit's export writes
-        // every port joined to a segment's (RE1: 118 of 118 on Plumbing, 59
-        // of 59 on Mechanical, at the point).
+        // at the same point, as Revit's export writes every port joined to a
+        // segment's (RE1: 118 of 118 on Plumbing, 59 of 59 on Mechanical, at
+        // the point). Its own axis points out of its element, the other's
+        // reversed, and Revit's export turns a sink's axis round, so the axis
+        // written is the other port's where exactly one of the two is a sink,
+        // as on every one of RE1's, and reversed where neither or both are
+        // (RE-371: Snowdon Towers HVAC's bidirectional pairs). A duct's tap
+        // (a connector of a duct segment past its two ends, RE-371) is on its
+        // axis, where the element tapped into it does not put its own: it
+        // places no other.
+        let sinks: HashSet<(u32, u32)> = model
+            .entities
+            .iter()
+            .filter_map(|entity| match entity {
+                super::entities::IfcEntity::Port {
+                    id,
+                    index,
+                    flow_direction: Some(flow),
+                    ..
+                } if flow.eq_ignore_ascii_case("SINK") => Some((*id, *index)),
+                _ => None,
+            })
+            .collect();
+        let taps: HashSet<(u32, u32)> = model
+            .entities
+            .iter()
+            .filter_map(|entity| match entity {
+                super::entities::IfcEntity::Port {
+                    element, id, index, ..
+                } if *index >= 2
+                    && matches!(
+                        model.entities.get(*element),
+                        Some(super::entities::IfcEntity::BuildingElement { ifc_type, .. })
+                            if ifc_type == "IFCDUCTSEGMENT"
+                    ) =>
+                {
+                    Some((*id, *index))
+                }
+                _ => None,
+            })
+            .collect();
         for entity in &model.entities {
             let super::entities::IfcEntity::PortConnection {
                 a,
@@ -4078,10 +4125,13 @@ impl StepWriter<'_> {
                 ((*a_id, *a_index), *b, (*b_id, *b_index)),
                 ((*b_id, *b_index), *a, (*a_id, *a_index)),
             ] {
-                if port_points.contains_key(&open) {
+                if port_points.contains_key(&open) || taps.contains(&placed) {
                     continue;
                 }
                 if let Some(&(_, point, direction)) = port_points.get(&placed) {
+                    let turned = sinks.contains(&placed) == sinks.contains(&open);
+                    // `0.0 - v` keeps an exact zero unsigned.
+                    let direction = direction.map(|d| if turned { d.map(|v| 0.0 - v) } else { d });
                     port_points.insert(open, (element, point, direction));
                 }
             }
@@ -4138,7 +4188,7 @@ impl StepWriter<'_> {
                 self.emit_entity(
                     port,
                     format!(
-                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'{}','Flow',$,{placement},$,{},$)",
+                        "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'{}','Flow',$,{placement},$,{})",
                         gid(&["port", &id_text, &index_text]),
                         port_name(id, index),
                         port_attribute(id, index),
@@ -4199,7 +4249,7 @@ impl StepWriter<'_> {
             self.emit_entity(
                 port,
                 format!(
-                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'{}','Flow',$,{placement},$,{},$)",
+                    "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'{}','Flow',$,{placement},$,{})",
                     gid(&["port", &id_text, &index_text]),
                     port_name(*id, *index),
                     port_attribute(*id, *index),

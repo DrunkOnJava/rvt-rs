@@ -22,7 +22,7 @@ pub enum DuctShape {
 
 impl DuctShape {
     /// The shape a sweep profile object's class names.
-    fn of_profile(class: &str) -> Option<Self> {
+    pub fn of_profile(class: &str) -> Option<Self> {
         Some(match class {
             "AbsSysRectSweepProfile" => Self::Rectangular,
             "AbsSysCircSweepProfile" => Self::Round,
@@ -55,7 +55,8 @@ impl DuctShape {
 
 /// The shape of each of `types` that is a rigid duct type (`AbsDuctType`)
 /// with one sweep profile. Errs where the native record path does not read
-/// the file's release.
+/// the file's release: 2015 to 2027 (RE-371, measured on Autodesk's MEP
+/// samples of 2015 and 2019 against the same projects saved by 2024).
 pub fn duct_type_shapes(
     rf: &mut RevitFile,
     types: &BTreeSet<u64>,
@@ -63,6 +64,7 @@ pub fn duct_type_shapes(
     let mut shapes = BTreeMap::new();
     let options = native_document::Options {
         selected_ids: types.clone(),
+        releases: native_document::NATIVE_RELEASES,
         ..native_document::Options::default()
     };
     native_document::extract_graphs(rf, &options, |record| {
