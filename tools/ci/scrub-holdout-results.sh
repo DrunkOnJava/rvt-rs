@@ -27,6 +27,10 @@
 # alphabet; it prints no ElementId), the `native readers:`
 # count lines of the RE-283 to RE-285 probes and scorers (the same alphabet;
 # their `native readers example:` lines name ElementIds and are dropped), the
+# `previous lines:` count line of probe_re360_wall_location_curve (RE-360: how
+# many wall records hold a previous location line, how many of those it is offset
+# from the location curve and how many walls the previous-line rule reads, numbers
+# beside fixed words; the probe's JSON lines, which carry ElementIds, are dropped), the
 # `census stages:` count lines of probe_re350_category_stages and the
 # `category census` lines of tools/re/category_census_vs_ifc.py (RE-350: for
 # each built-in category the counts of ids by stage and reason, the export
@@ -110,6 +114,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^saved graphics pre2023: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^census stages: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      grep -E '^previous lines: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
     done
     for f in "$dir"wall_rules.txt; do
       [ -f "$f" ] || continue
