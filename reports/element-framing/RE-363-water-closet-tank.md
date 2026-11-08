@@ -1,0 +1,62 @@
+# RE-363: What separates the water closet tank Revit's export lacks from the fixtures it holds
+
+**Date:** 2026-11-08
+**Issues:** #1496 (RE1 Plumbing's water closet tank 442378 is written, and Revit's export holds neither it nor its type).
+**Artefacts:** `RE1-Plumbing.rvt`, sha256 `03689df2aa426031a216e65051b9f19d3265d6fe96884dd47373b17435f9e54c`, against `RE1-Plumbing.ifc`, sha256 `294490b222632509779910345f27a4eeda3645956138a593298c241495f7b8b6` (Revit 26.2, IFC2X3); every other model Measure has with a Revit export (51 models with the plumbing probe, 52 with the empty-body and type-level probes; the held-out models as counts only).
+**Scorers:** `tools/re/tank_rules_vs_ifc.py`, `tools/re/empty_bodies_vs_ifc.py`.
+**Runs:** Measure 42518898114 (head af85afad) and 42521763730 (head c5bd28e3).
+**Status:** positive. A family instance whose saved graphics decode cleanly to no surface, with a branch left out as not visible, is not in Revit's export on any model measured. No rule is written here; this report records what separates them.
+
+## 1. The question
+
+rvt-rs writes a family instance whenever its record box has a volume (RE-21). Revit's exporter writes a family instance that is not a door or a window only when its 3D body has a solid or a mesh (`FamilyInstanceExporter` in revit-ifc, CLEANROOM.md source 5). The tank is the one plumbing fixture of RE1 Plumbing Revit's export lacks.
+
+## 2. Rules on plumbing fixtures
+
+`tools/re/tank_rules_vs_ifc.py` over every model with an export. A rule lands only with no false negative, which is a fixture in Revit's export that the rule would drop.
+
+| rule | drops | false negatives | of Revit's lacked fixtures |
+|---|---:|---:|---:|
+| `bodiless_by_forms_or_graphics` | 1 | 0 | 1 |
+| `graphics_no_surface_and_no_diagnostic` | 1 | 0 | 1 |
+| `graphics_all_hidden` | 39 | 38 | 1 |
+| `graphics_no_surface_at_all` | 49 | 48 | 1 |
+| `forms_family_nests_instance_or_unread` | 72 | 71 | 1 |
+| `host_unset` | 193 | 192 | 1 |
+| `work_plane_unset` | 363 | 362 | 1 |
+| `nested_mutual_any_category` | 194 | 194 | 0 |
+
+The record fields (container slot, design option, host, work plane, mutual references) and the family's forms do not separate them: the rules that drop the tank drop fixtures Revit writes as well, 71 to 388 of them. Only the saved graphics do. The tank's graphics at Fine detail decode with no surface, no diagnostic, and every primitive under a branch flagged not visible.
+
+## 3. The same test on every family instance
+
+`tools/re/empty_bodies_vs_ifc.py`, 52 models, 31,958 family instances other than doors and windows, of which 6,526 are not in Revit's export:
+
+| rule | drops | false negatives | dropped, not in the export |
+|---|---:|---:|---:|
+| saved graphics decode to no surface, no diagnostic | 5,553 | 2 | 5,551 |
+| the same, or only view-component diagnostics | 5,553 | 2 | 5,551 |
+| the same, and a branch left out as not visible | 5,551 | **0** | 5,551 |
+| read once per type symbol, the same test | 5,556 | **0** | 5,556 |
+
+The two false negatives of the first two rules are one element on each terrain variant of the BIM4LCA office, and the requirement that a branch was left out as not visible is what removes them. An instance with no saved graphics at all is kept.
+
+What the type-level rule drops, by model: the BIM4LCA office's 2,685 curtain panels on each of its two files, 89 parking spaces on each terrain variant, RE1 Plumbing's tank, and on the held-out models 1 on the flowbim house and 6 on Frigento (counts only). A door or window is counted apart: revit-ifc writes one with no geometry, so no rule here touches it.
+
+## 4. Cost
+
+Reading every instance's saved graphics costs 31% to 36% of an office export. An instance draws its type symbol's graphics, so `probe_re363_type_level` reads only the symbols: 534 ms against a 13,082 ms export on the BIM4LCA office as built (55 symbols requested), about 4%.
+
+## 5. What is not established
+
+- The rule is not written. The type-level rule needs the symbols of every category it would apply to, and this report measures the two categories the timing probe scoped (plumbing fixtures and structural columns) for cost.
+- A family with a branch hidden for one instance and shown for another is seen only through the instance-level reading, which agreed with the type-level one on every model.
+- The office's column 1927742, the other extra of #1496, is not a case of this rule.
+
+## 6. Reproduce
+
+```bash
+gh workflow run measure.yml --ref research/1496-water-closet-tank -f ref=c5bd28e3684feac1e23751f3dfca410d7bb3bd68 -f base=none \
+  -f nordic=true -f r2025=true -f holdout=true -f scorers=none \
+  -f probe=probe_re363_type_level -f probe_scorer=empty_bodies_vs_ifc
+```
