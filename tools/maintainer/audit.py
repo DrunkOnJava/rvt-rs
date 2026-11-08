@@ -25,8 +25,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CACHE_LIMIT_BYTES = 10 * 1024**3
-# A research or Measure branch with no pull request is kept while its work is
-# live; one whose last commit is older than this is stale (docs/maintaining.md).
+# A research or Measure branch with no pull request is kept while its issue is
+# open; one whose name carries no open issue's number and whose last commit is
+# older than this is stale (docs/maintaining.md).
 BRANCH_STALE_DAYS = 14
 # Directories with a lockfile that Dependabot deliberately does not update, and why
 # (docs/maintaining.md says the same).
@@ -132,6 +133,9 @@ def branches(repo):
     problems = []
     for b in pages(f"repos/{repo}/branches?per_page=100"):
         if b["name"] == "main" or b["name"] in open_heads:
+            continue
+        issue = re.search(r"(?:^|/)(\d{2,5})(?:-|$)", b["name"])
+        if issue and gh(f"repos/{repo}/issues/{issue[1]}").get("state") == "open":
             continue
         commit = gh(f"repos/{repo}/commits/{b['commit']['sha']}")
         stamp = commit["commit"]["committer"]["date"]

@@ -255,3 +255,17 @@ Measured at `a7ca6ee0`, the head that holds sections 9.7 and 9.8 (the commits af
 - **What the runs exercise, as before.** `history deferred episode pointers` is 0 in all 111 reads (34, 59 and 18; 92 distinct open files and 18 held-out models), no `FacetedTopology9` object appears in any, and `history default reading` printed `read` on all 111 and `refused` on none. Our files exercise no export path of the three changes, and none exercises the deferred read or `normals_follow_winding`; STE1200's run is the only evidence for them (section 9.6).
 
 What STE1200's run of this probe should print, at this head: `history deferred episode pointers 109 1` and `history episodes read 109 1` (the second a count of the episodes the research route read); `history default reading refused inline history episodes require a different contract 1` (the default reading's refusal of the same history, the one new line); and `topology FacetedTopology9 normals_flag 2 objects the winding rule keeps 325`. That 325 holds only if all 325 meshes are well-formed: the probe counts the rule on the arrays as the reader takes them, so a malformed row, an index that is not an unsigned 32-bit integer in range, no normals or a count that is not the facets' makes a mesh `refuses`, where `objects with one normal per facet` and the facet counts would still read 325 and 47,968.
+
+### 9.9 The contributor's run at `ab5f8e1c` (2026-11-06)
+
+STE1200 ran `probe_re342_saved_graphics_pre2023` at `main` `ab5f8e1c` on the same Revit 2020 family and posted the output ([Discussion #112](https://github.com/DrunkOnJava/rvt-rs/discussions/112#discussioncomment-19436539)). Every line section 9.8 and the request on that discussion named came back as expected:
+
+- `history deferred episode pointers 109 1` and `history episodes read 109 1`;
+- `history default reading refused inline history episodes require a different contract 1`;
+- `topology FacetedTopology9 normals_flag 2 objects the winding rule keeps 325`;
+- the `m_bHasScale` rows, 26 identity and 10 rotation;
+- `scene owners drawn whole 36` and `scene triangles of whole owners 48520`.
+
+The 10 rotations hold only 0 and ±1 in the JSON STE1200 posted, so they are quarter turns: Rᵀ·R − I is exactly zero and the determinant exactly 1, and the 1e-9 tolerance does no work on this file.
+
+These are counts STE1200 published, on a file CI cannot fetch. No run in CI reproduces them and nothing in CI would catch a regression in them, so all three reads stay on the research route (section 9.4).
