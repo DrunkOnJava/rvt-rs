@@ -101,6 +101,8 @@ The tagging also runs for the other elements whose sketches `sketch_plan_profile
 
 Counted: before this change 3147725 was the one floor void in each office file whose Tag is not Revit's (1 of 36 as built, 1 of 35 at permit; `extra: none in IfcSlab` in `unfilled_openings_vs_ifc`, RE-339 §4), and on Core Interior none of 62; after it, none of the 133 and Snowdon architectural 12 of 12.
 
+On the landing head (Measure run 42517948182, 118 models), the newly paired opening of the office also takes `Pset_EnvironmentalImpactIndicators.Reference` from 36 to 37 values missing, beside the quantity above: that set is written on no opening, so it counts as missing wherever Revit's export holds the opening.
+
 ## 6. Reproduce
 
 `<sha>` is a commit, never a branch.
