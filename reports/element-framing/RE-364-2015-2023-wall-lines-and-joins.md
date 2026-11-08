@@ -13,7 +13,7 @@
 
 - Warmond's wall quantities are main's: equal 272, different 5, missing 3,135, values Revit does not write 5.
 - On Vitoria `ALD26 Before`, axis-parallel walls return to 160 of 199 with both ends within 0.001 ft. **Its angled walls stay as on main**, faces 1 of 48 and ends 4 of 48, and none takes a line body. The first head's 33 of 48 is not kept: 2018 has no cross-section word, and the check that a body must be the rectangle its box closes on refuses the joint-to-joint fallback those walls took. Between the two heads it is the only change that touches an angled wall's body. No value read on 2015 to 2020 marks a slanted wall, so the check stays.
-- A line body reaches 24 walls in 12 exports (`rac_basic` of 2015 to 2023, `rst_basic` of 2021 to 2023), none in a file with a Revit export. **So no Revit export scores this rule.**
+- A line body reaches 24 walls in 12 sample exports (`rac_basic` of 2015 to 2023, `rst_basic` of 2021 to 2023), and none on Vitoria `ALD26 Before`, `modelo_bim` or the `racadv` pairs. **So no Revit export read here scores this rule.** Five other held-out exports move (Warmond, the Vitoria project, Frigento, Gdynia and bim-whale). They keep no count of body sources, so whether any of their walls takes a line body is not measured.
 - `modelo_bim` and the `racadv` pairs of 2015 to 2020 are byte for byte main's, so RE-120's score on `modelo_bim` stands. `Exemplo_data` is not in that run.
 - Layer sets gain on three held-out models (counts only): Frigento 10 to 12, all 12 whole; Gdynia 108 to 109, 107 of 108 whole; bim-whale 43 to 302, 300 of 300 whole.
 

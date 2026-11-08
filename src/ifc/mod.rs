@@ -4291,14 +4291,23 @@ pub(crate) fn build_export_diagnostics_and_decisions(
                  design option are written."
             )
         };
-        // RE-364: from 2015 a wall is drawn along its line and cut at its joins.
+        // RE-364: a wall at an angle can follow its line from 2015, but nothing on
+        // 2015 to 2020 marks a slanted one, and a wall along a model axis keeps its box.
         let (walls, wall_gaps) =
             if crate::partition_compound_structure::WALL_JOIN_32BIT_REVIT_VERSIONS
                 .contains(&version)
             {
                 (
-                    "a wall is drawn along its location line and joined by its join lists where \
-                     those are read, and otherwise keeps its record box",
+                    if crate::partition_compound_structure::wall_orientation_has_word(version) {
+                        "a wall at an angle is drawn along its location line and joined by its \
+                         join lists where those are read, and any other wall keeps its record \
+                         box, cut back at its joins"
+                    } else {
+                        "a wall at an angle is drawn along its location line and joined by its \
+                         join lists where those are read and its record box closes on the \
+                         line's rectangle, and any other wall keeps its record box, cut back at \
+                         its joins"
+                    },
                     "A wall's joined-wall lists, end steps, profile openings and `Length`",
                 )
             } else {
