@@ -130,9 +130,13 @@ def release_criteria(repo):
 @check(f"no remote branch but main, open pull requests' heads and branches active in the last {BRANCH_STALE_DAYS} days")
 def branches(repo):
     open_heads = {p["head"]["ref"] for p in pages(f"repos/{repo}/pulls?state=open&per_page=100")}
+    # A workflow dispatch needs a branch or tag, so a report's reproduce command can need one.
+    reports = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "reports").rglob("*.md"))
     problems = []
     for b in pages(f"repos/{repo}/branches?per_page=100"):
         if b["name"] == "main" or b["name"] in open_heads:
+            continue
+        if f"--ref {b['name']} " in reports:
             continue
         issue = re.search(r"(?:^|/)(\d{2,5})(?:-|$)", b["name"])
         if issue and gh(f"repos/{repo}/issues/{issue[1]}").get("state") == "open":
