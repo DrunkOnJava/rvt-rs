@@ -63,7 +63,7 @@ You need stable Rust 1.87 or newer (`rustup` installs it) and git.
    replaces an unsigned commit on your branch with the same change, keeping
    you as its author.
 
-7. A maintainer reviews and squash-merges. GitHub holds the checks of a
+7. A maintainer reviews, approves and squash-merges. GitHub holds the checks of a
    first-time contributor's pull request until a maintainer has looked at the
    proposed change and approved the workflow run, so a pull request whose
    checks say they are awaiting approval is waiting on us, not on you. Approval to run

@@ -74,6 +74,18 @@ when a release ships.
   builds holds that file); `CI passed` does not wait for those,
   but the deploy job does, and it waits for `CI passed` on the pushed commit.
   To check a draft's viewer, dispatch `viewer-test.yml` on its branch.
+- A pull request needs one approval. The maintainer account opens and lands most
+  changes, and GitHub does not let an account approve its own pull request, so a
+  second reader, the `rvt-rs-review` GitHub App (an automated Claude Code
+  reviewer, not a person), approves the maintainer's, and the maintainer approves
+  a contributor's and the App's. A push dismisses an approval, so the formal
+  approval comes last, on the up-to-date head with its CI green: only the next
+  pull request in line needs one. Its findings are the review itself, and no
+  separate summary comment is posted.
+- One full Measure is run per code state for a change that moves an export, and
+  a clean merge of `main` needs none of its own. As a maintainer's practice, not
+  a scheduled job, `main` itself is measured every three landings, which catches
+  changes that interact.
 - The squash commit's title is the pull request's title plus its number and its
   body is the pull request's description, so the description is permanent
   history: fix it before merging.
@@ -436,8 +448,9 @@ verdict on the commit it measured. A NOT MEASURED check, on that commit or a lat
 one, does not clear a fail either: only a new pass or a new warn does, so read the
 newest verdict that is one of those three. A filtered Measure run writes no verdict
 at all, so a pull request that changes output needs its final unfiltered run (no
-`models` filter), made on the head it is armed at, and the verdict that run writes
-is the one to read.
+`models` filter), made on the code it is armed with (a clean merge of `main` on
+top needs no new run, and the verdict stays on the commit it measured), and the
+verdict that run writes is the one to read.
 
 **The Summary must state each change specifically.** The agent that makes a
 change also writes its Summary, so "changes how walls are drawn" could cover any

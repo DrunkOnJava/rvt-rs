@@ -1,4 +1,4 @@
-# ADR-005: Require PRs + resolved conversations on `main` (no external approval deadlock)
+# ADR-005: Require PRs + resolved conversations on `main`, and one approval since 2026-11-08
 
 ## Status
 
@@ -7,6 +7,15 @@ update returned HTTP 403 for the automation token; the maintainer's token
 applied it, and the live ruleset matches
 [`.github/rulesets/main-protection.json`](../../.github/rulesets/main-protection.json),
 which also limits merges to squash.
+
+Amended 2026-11-08: a pull request needs one approval
+(`required_approving_review_count: 1`). The maintainer account opens most changes
+and GitHub refuses an account's approval of its own pull request, so a GitHub App,
+`rvt-rs-review` (an automated Claude Code reviewer), approves the maintainer's and
+the maintainer approves a contributor's and the App's. #1521 merged on CI alone
+before its second read had finished, with a figure that read found overstated. The
+item 3 and 4 below and the last bullet under Consequences describe the state before
+this amendment; the ruleset has had no bypass actors since 2026-10-05.
 
 Amended 2026-10-19: a merge waits only on `CI passed`, never on a
 review from Codex or Cursor Bugbot. Codex still reviews pull requests
