@@ -705,7 +705,7 @@ read -ra PROBE_SCORERS <<< "${PROBE_SCORER:-}"
 for s in "${STEPS[@]:-}"; do
   [ -n "$s" ] && [ -f "$SCORERS/$s.py" ] || continue
   listed "$s" && continue
-  if grep -q '<probe output>' "$SCORERS/$s.py"; then
+  if grep -qE '\.py +<probe[ ._a-z]*>' "$SCORERS/$s.py"; then
     echo "::error::$s reads a probe's output: dispatch it with -f probe=<probe> -f probe_scorer=$s, not in scorers" >&2
     exit 2
   fi
