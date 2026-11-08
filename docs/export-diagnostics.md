@@ -756,6 +756,13 @@ those sets from element parameters, and rvt-rs writes the ones it reads, such as
 `Reference`, `SerialNumber`, a door's `IsExternal` and a pipe's
 `InvertElevation`. The rest of an element's saved parameters are read (RE-207) and listed by `rvt-elements`, Python and the viewer's info panel, but written to IFC only by `rvt-ifc --revit-property-sets` (RE-210).
 
+It carries `revit_compound_assemblies_and_walltype_widths` only when a wall, a
+slab other than a stair landing, a roof or a ceiling is written with no
+`IfcMaterialLayerSetUsage`. Where one is written, its layers, materials and
+widths are read from the host type's compound structure (RE-53, RE-112) and
+are Revit's (RE-58: 88 of 88 sets on Core Interior, 15 of 15 on RE1
+Architecture).
+
 Important nested fields:
 
 | Field | Type | Meaning |
