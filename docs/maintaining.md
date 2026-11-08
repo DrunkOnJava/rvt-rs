@@ -370,11 +370,12 @@ not remove Compare's report.
   its Width times its Height, which both saves of an Autodesk sample read alike,
   RE-346). Nothing in it is a Revit export. It compares bodies, and the property
   names `ADDED` lists, not the others. No 2026 or 2027 held-out model, and none of
-  the 25 models with Revit's own 2025 exports (the R2025 models and RE1
-  Architecture), holds an `IfcBeam` or a tread landing, so the beam and landing
-  readers have run only on two Autodesk samples saved by earlier releases; no held-out
-  model holds a pipe, a duct or a port; and those 25 models hold no floor, ceiling or
-  roof with an arc, so no Revit export checks the arc reading on 2025 either (RE-345).
+  the 28 Revit 2025 models read (the R2025 models and the four RE1 models), holds an
+  `IfcBeam` or a tread landing, so the beam and landing readers have run only on two
+  Autodesk samples saved by earlier releases; no held-out model holds a pipe, a duct
+  or a port; and the 25 with Revit's own 2025 exports (the R2025 models and RE1
+  Architecture) hold no floor, ceiling or roof with an arc, so no Revit export checks
+  the arc reading on 2025 either (RE-345).
   Shaft openings are cut on 2024 only, for the same reason: the only two measured on
   2025 cut nothing.
 - **Products that share a Tag** (a floor Revit writes as several, a stair once for each
