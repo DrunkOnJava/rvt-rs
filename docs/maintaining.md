@@ -77,8 +77,9 @@ when a release ships.
 - A pull request needs one approval. The maintainer account opens and lands most
   changes, and GitHub does not let an account approve its own pull request, so a
   second reader, the `rvt-rs-review` GitHub App (an automated Claude Code
-  reviewer, not a person), approves the maintainer's, and the maintainer approves
-  a contributor's and the App's. A push dismisses an approval, so the formal
+  reviewer, not a person), approves the maintainer's and a contributor's, and the
+  maintainer approves only the App's own, so no pull request lands on the approval of
+  the session that lands it. A push dismisses an approval, so the formal
   approval comes last, on the up-to-date head with its CI green: only the next
   pull request in line needs one. Its findings are the review itself, and no
   separate summary comment is posted.

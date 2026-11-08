@@ -11,9 +11,12 @@ which also limits merges to squash.
 Amended 2026-11-08: a pull request needs one approval
 (`required_approving_review_count: 1`). The maintainer account opens most changes
 and GitHub refuses an account's approval of its own pull request, so a GitHub App,
-`rvt-rs-review` (an automated Claude Code reviewer), approves the maintainer's and
-the maintainer approves a contributor's and the App's. #1521 merged on CI alone
-before its second read had finished, with a figure that read found overstated. The
+`rvt-rs-review` (an automated Claude Code reviewer), approves the maintainer's and a
+contributor's, and the maintainer approves only the App's own. The maintainer account
+can approve a contributor's pull request, so the rule alone would not stop what it
+is for: the maintainer's landing script also refuses a pull request with no approval
+by the App on its current head. #1521, a contributor's, merged on the maintainer's
+own approval before its second read had finished, with a figure that read found overstated. The
 item 3 and 4 below and the last bullet under Consequences describe the state before
 this amendment; the ruleset has had no bypass actors since 2026-10-05.
 
