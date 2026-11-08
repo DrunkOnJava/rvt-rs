@@ -1002,11 +1002,15 @@ jobs:
         id: whole
         if: steps.reuse-key.outputs.key != '' && steps.reuse.outputs.cache-hit != 'true'
         shell: bash
+        env:
+          FAMILIES: ${{ matrix.families }}
         run: |
           whole=true
           [ ! -e "$RUNNER_TEMP/not-measured" ] || { whole=false; echo "a model's host was down"; }
           [ -e measured/target/ci/rvt-rs-mcp ] || { whole=false; echo "the MCP server did not build"; }
-          if grep -rlE '^exit [1-9]' results --include='*.txt'; then whole=false; echo "a scorer exited non-zero"; fi
+          if grep -rlE '^exit [1-9]' results --include='*.txt' --include='*.log' --include='*.exit'; then whole=false; echo "an export or a scorer exited non-zero"; fi
+          # The public families' fetch reports a host that was down only in its log.
+          [ "$FAMILIES" != true ] || { whole=false; echo "a family shard is not kept"; }
           echo "whole=$whole" >> "$GITHUB_OUTPUT"
       - name: Keep only the unlicensed models' counts
         if: steps.reuse.outputs.cache-hit != 'true'
