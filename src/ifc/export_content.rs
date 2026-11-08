@@ -6137,11 +6137,6 @@ fn wall_centreline_body(
     {
         ([x, y], run_from_width)
     } else {
-        // RE-364: where nothing marks a slanted wall, a box that does not
-        // close on the line's rectangle may be one.
-        if axis.box_must_close {
-            return None;
-        }
         // A box far wider than the line's own rectangle holds a body that
         // is not that rectangle: a leaning or profiled wall.
         let limit = 2.0 * thickness.max(1.0);
@@ -6149,6 +6144,20 @@ fn wall_centreline_body(
         let excess_depth = depth - (length * uy.abs() + thickness * ux.abs());
         if excess_width > limit || excess_depth > limit {
             return None;
+        }
+        // #1535: where a wall's joins are read without their control joins,
+        // the faces come from the line and the ends stay where the box cuts them.
+        if axis.box_must_close {
+            let along = (x - sx) * ux + (y - sy) * uy;
+            let run = run_from_width.min(run_from_depth);
+            return (run > 0.0).then_some(WallCentrelineBody {
+                centre: [sx + ux * along, sy + uy * along],
+                rotation: Some(uy.atan2(ux)),
+                width_feet: run,
+                depth_feet: thickness,
+                thickness_feet: thickness,
+                join_reach_feet: [None, None],
+            });
         }
         ([mx, my], length)
     };
