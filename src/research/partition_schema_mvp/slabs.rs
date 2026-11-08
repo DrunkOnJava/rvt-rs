@@ -129,7 +129,7 @@ pub(super) fn sketch_plan_profiles(
     exact: bool,
 ) -> BTreeMap<u32, crate::element_record_plan_profiles::PlanProfile> {
     let mut evidence = ProfileEvidence::default();
-    let profiles = solve_sketch_plan_profiles(
+    let mut profiles = solve_sketch_plan_profiles(
         rf,
         revit_version,
         sketch_lines,
@@ -138,6 +138,9 @@ pub(super) fn sketch_plan_profiles(
         exact,
         &mut evidence,
     );
+    if exact {
+        retag_voids_by_first_line(rf, revit_version, &mut profiles, &evidence.void_lines);
+    }
     if rf.recording_value_sources() {
         note_profile_sources(rf, &profiles, &evidence);
     }
@@ -174,6 +177,10 @@ impl LineFrame {
 /// The frames of each sketched element's lines, by line (#1368).
 type LineFrames = BTreeMap<u32, BTreeMap<u32, LineFrame>>;
 
+/// Each sketched element's lines as `tag_voids` takes them: ElementId, a point
+/// on the edge the line makes, and whether it is straight (RE-355).
+type VoidLines = BTreeMap<u32, Vec<(u32, (f64, f64), bool)>>;
+
 /// What [`sketch_plan_profiles`] read, kept for the value sources while the
 /// handle records them (#1368).
 #[derive(Default)]
@@ -185,6 +192,9 @@ struct ProfileEvidence {
     current: BTreeSet<u32>,
     /// The elements whose outline was read from their lines' own ends.
     exact: BTreeSet<u32>,
+    /// The lines of each element whose profile has a void, for the second look
+    /// at its tags (RE-355).
+    void_lines: VoidLines,
 }
 
 /// Note, under each sketched element with a profile, the records the profile
@@ -272,6 +282,78 @@ fn note_profile_sources(
     }
     for (owner, source) in new_notes {
         rf.note_value_source(owner, source);
+    }
+}
+
+/// A sketched element's lines from the record boxes, as `tag_voids` takes them:
+/// the first frame of each line, by frame order, and the centre of its box.
+fn box_void_lines(
+    records: &[crate::partition_element_records::PartitionElementRecord],
+    owner: u32,
+) -> Vec<(u32, (f64, f64), bool)> {
+    let mut by_id: BTreeMap<u32, &crate::partition_element_records::PartitionElementRecord> =
+        BTreeMap::new();
+    for record in records
+        .iter()
+        .filter(|record| record.owner_reference == Some(owner))
+    {
+        let keep = by_id
+            .get(&record.element_id)
+            .is_none_or(|held| record.frame_order() < held.frame_order());
+        if keep {
+            by_id.insert(record.element_id, record);
+        }
+    }
+    by_id
+        .into_iter()
+        .map(|(id, record)| {
+            let b = record.bbox_feet;
+            (id, ((b[0] + b[3]) / 2.0, (b[1] + b[4]) / 2.0), true)
+        })
+        .collect()
+}
+
+/// Tag each void again from the direction its loop's first line is stored in
+/// (RE-355): the ends of the lowest line on each void's loop are read from its
+/// own data, and where they say which way it runs the tag is Revit's, as
+/// `erpp::tag_voids` has it. A void whose first line has no ends read keeps its
+/// tag.
+fn retag_voids_by_first_line(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    profiles: &mut BTreeMap<u32, crate::element_record_plan_profiles::PlanProfile>,
+    void_lines: &VoidLines,
+) {
+    use crate::element_record_plan_profiles as erpp;
+    let firsts: BTreeSet<u32> = profiles
+        .iter()
+        .filter_map(|(owner, profile)| {
+            Some(erpp::void_first_lines(profile, void_lines.get(owner)?))
+        })
+        .flatten()
+        .collect();
+    if firsts.is_empty() {
+        return;
+    }
+    let Ok(curves) = crate::partition_beam_axes::scan_sketch_curves(rf, revit_version, &firsts)
+    else {
+        return;
+    };
+    let stored: erpp::StoredEnds = curves
+        .iter()
+        .filter_map(|(id, curve)| {
+            let line = curve.line.as_ref()?;
+            let (start, end) = (line.start(), line.end());
+            Some((*id, ((start[0], start[1]), (end[0], end[1]))))
+        })
+        .collect();
+    if stored.is_empty() {
+        return;
+    }
+    for (owner, profile) in profiles.iter_mut() {
+        if let Some(lines) = void_lines.get(owner) {
+            erpp::tag_voids(profile, lines, &stored);
+        }
     }
 }
 
@@ -376,6 +458,13 @@ fn solve_sketch_plan_profiles(
         }
     }
     let mut profiles = erpp::plan_profiles_from_sketch_line_records(sketch_lines);
+    for (owner, profile) in &profiles {
+        if !profile.void_openings.is_empty() {
+            evidence
+                .void_lines
+                .insert(*owner, box_void_lines(sketch_lines, *owner));
+        }
+    }
     profiles.retain(|owner, profile| !relisted.contains(owner) || spans_box(*owner, profile));
     profiles.retain(|owner, _| owners.contains_key(owner));
     // RE-96: a quarter arc's ends are two corners of its record box, so the
@@ -527,7 +616,10 @@ fn solve_sketch_plan_profiles(
         // RE-96: an outline with an arc spans the element's own record box,
         // or the sketch holds curves that are not the element's edge.
         if !(has_arc || relisted.contains(&owner)) || spans_box(owner, &profile) {
-            erpp::tag_voids(&mut profile, &points);
+            erpp::tag_voids(&mut profile, &points, &erpp::StoredEnds::new());
+            if !profile.void_openings.is_empty() {
+                evidence.void_lines.insert(owner, points);
+            }
             profile.segment_ids = segments.keys().copied().collect();
             if recording {
                 evidence.exact.insert(owner);
