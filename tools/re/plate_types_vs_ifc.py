@@ -31,7 +31,9 @@ def materials(entity):
 
 def rows(path):
     out = {}
-    for plate in ifcopenshell.open(path).by_type("IfcPlate"):
+    # Entities read from a file whose object has been collected crash the process.
+    model = ifcopenshell.open(path)
+    for plate in model.by_type("IfcPlate"):
         kind = ue.get_type(plate)
         out[plate.Tag] = (
             kind.Tag if kind else None,
