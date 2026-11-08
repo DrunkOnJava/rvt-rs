@@ -836,6 +836,10 @@ pub const WALL_TOP_JOIN_RECORD_REVIT_VERSIONS: &[u32] =
 /// is as tall as Revit's, and Revit's export writes that as its `Height`.
 pub const WALL_UNCUT_FIELD: &str = "m_wall_uncut";
 
+/// Field marking a wall whose angled body must be the rectangle its record box
+/// closes on, on the releases with no cross-section word (RE-364).
+pub const WALL_AXIS_BOX_MUST_CLOSE_FIELD: &str = "m_wall_axis_box_must_close";
+
 /// Field holding, as a vector of ElementIds, the elements a wall's top join
 /// (`JoinToRoofGStep` with `m_baseOrTop` 1) and its `CutPairGStep`s name
 /// ([`crate::native_walls::WallRecords::top_cutters`], RE-267): the floors,

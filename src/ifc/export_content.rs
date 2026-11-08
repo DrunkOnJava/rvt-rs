@@ -6122,6 +6122,11 @@ fn wall_centreline_body(
     {
         ([x, y], run_from_width)
     } else {
+        // RE-364: where nothing marks a slanted wall, a box that does not
+        // close on the line's rectangle may be one.
+        if axis.box_must_close {
+            return None;
+        }
         // A box far wider than the line's own rectangle holds a body that
         // is not that rectangle: a leaning or profiled wall.
         let limit = 2.0 * thickness.max(1.0);
