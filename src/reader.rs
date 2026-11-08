@@ -1169,12 +1169,12 @@ impl RevitFile {
     /// The project's phases in order, the last being the one an export shows
     /// unless [`Self::set_export_phase`] chooses another. Empty where the
     /// export applies no phase: a family, a release whose phases are not read
-    /// (Revit 2015 and earlier), or a file whose phases could not be read.
+    /// (Revit 2014 and earlier), or a file whose phases could not be read.
     /// Reads nothing the export does not.
     pub fn project_phases(&mut self) -> Vec<ProjectPhase> {
         if let Ok(release) = self.layout_release() {
             if crate::partition_element_records_2023::is_32bit_release(release)
-                && !crate::partition_element_records_2023::applies_export_filters(release)
+                && !crate::partition_element_records_2023::applies_phase_filter(release)
             {
                 return Vec::new();
             }
@@ -1205,7 +1205,7 @@ impl RevitFile {
     pub fn room_phase_fallback(&mut self) -> Option<ProjectPhase> {
         if let Ok(release) = self.layout_release() {
             if crate::partition_element_records_2023::is_32bit_release(release)
-                && !crate::partition_element_records_2023::applies_export_filters(release)
+                && !crate::partition_element_records_2023::applies_phase_filter(release)
             {
                 return None;
             }
@@ -1248,10 +1248,10 @@ impl RevitFile {
     pub fn set_export_phase(&mut self, phase: &str) -> Result<()> {
         if let Ok(release) = self.layout_release() {
             if crate::partition_element_records_2023::is_32bit_release(release)
-                && !crate::partition_element_records_2023::applies_export_filters(release)
+                && !crate::partition_element_records_2023::applies_phase_filter(release)
             {
                 return Err(Error::InvalidInput(format!(
-                    "the export phase is applied to Revit 2016 and later, and this file is \
+                    "the export phase is applied to Revit 2015 and later, and this file is \
                      Revit {release}: it writes every element and room whatever its phase"
                 )));
             }

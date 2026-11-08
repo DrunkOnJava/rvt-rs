@@ -79,13 +79,27 @@ pub fn is_32bit_release(revit_version: u32) -> bool {
 /// design option are left out (RE-315): Revit 2016 to 2023. The design option
 /// layout is read on Autodesk's `rst_basic_sample_project` of each of them,
 /// and the phase filter's only evidence that it is right on a 32-bit file is
-/// a 2018 project. 2008 to 2015 have no evidence, and keep every element.
+/// a 2018 project. 2008 to 2015 have no evidence of the design option layout,
+/// and keep every element in one.
 pub const EXPORT_FILTER_RELEASES: std::ops::RangeInclusive<u32> = 2016..=2023;
+
+/// The releases whose elements and rooms outside the export phase are left out
+/// (RE-315, RE-326, RE-372): [`EXPORT_FILTER_RELEASES`] and Revit 2015, whose
+/// one Revit export with phases, BIMcollab's structural example, is what the
+/// rule is measured on there (#1332). 2008 to 2014 have no such export, and
+/// keep every element and room.
+pub const PHASE_FILTER_RELEASES: std::ops::RangeInclusive<u32> = 2015..=2023;
 
 /// Whether `revit_version` leaves out the elements outside the export phase
 /// and in a non-primary design option ([`EXPORT_FILTER_RELEASES`]).
 pub fn applies_export_filters(revit_version: u32) -> bool {
     EXPORT_FILTER_RELEASES.contains(&revit_version)
+}
+
+/// Whether `revit_version` leaves out the elements and rooms outside the
+/// export phase ([`PHASE_FILTER_RELEASES`]).
+pub fn applies_phase_filter(revit_version: u32) -> bool {
+    PHASE_FILTER_RELEASES.contains(&revit_version)
 }
 
 /// The schema tags the 32-bit readers match, each the tag of the named
