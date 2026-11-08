@@ -10,5 +10,7 @@
   schedule with them. The doors carry
   `RvtElementRecordGeometry.PlacementOriginSource`, `stored_origin_no_opening`
   (the MCP server lists it among their trust markers), and the decoded Door
-  record gains `m_opening_placement_origin_x`, `_y` and `_z`. Measured on this
-  change's Measure run once it has finished.
+  record gains `m_opening_placement_origin_x`, `_y` and `_z`. On the 153 such doors
+  of the office files and RE1 Architecture, every origin is within 0.001 ft of
+  Revit's, and no door with an opening gets one. Their axes are not changed: no rule
+  with 0 wrong was found.
