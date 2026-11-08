@@ -29,7 +29,12 @@ import collections
 import sys
 
 DOORS_AND_WINDOWS = {-2000023, -2000014}
-RULES = ("empty_none", "empty_none_or_view_only", "empty_none_and_hidden_branches")
+RULES = (
+    "empty_none",
+    "empty_none_or_view_only",
+    "empty_none_and_hidden_branches",
+    "type_level_empty_hidden",
+)
 
 
 def parse(path):
@@ -52,6 +57,10 @@ def parse(path):
             _, category, name, outcome, _count, ids = (line.split(" ", 5) + [""])[:6]
             empty[(int(category), outcome)] = {int(i) for i in ids.split(",") if i}
             names[int(category)] = name
+        elif head == "typedrop":
+            _, category, name, _count, ids = (line.split(" ", 4) + [""])[:5]
+            empty[(int(category), "typedrop")] = {int(i) for i in ids.split(",") if i}
+            names[int(category)] = name
         elif head == "emptyinfo":
             word = tokens(line)
             hidden[int(word["id"])] = int(word.get("vis_branches", "0"))
@@ -72,6 +81,8 @@ def dropped_by(rule, category, empty, hidden):
         return set(none)
     if rule == "empty_none_or_view_only":
         return none | empty.get((category, "empty_view_only"), set())
+    if rule == "type_level_empty_hidden":
+        return set(empty.get((category, "typedrop"), set()))
     return {i for i in none if hidden.get(i, 0) > 0}
 
 
@@ -138,6 +149,21 @@ def main(argv):
                         f"dropped not in export {len(right)}"
                     )
                 )
+            if rule == "type_level_empty_hidden":
+                by_instance = dropped_by("empty_none_and_hidden_branches", category, empty, hidden)
+                if dropped or by_instance:
+                    print(
+                        safe(
+                            f"re363 empty bodies type level against instance level: category "
+                            f"{category} {names.get(category, '-')}; schema {schema}; instance "
+                            f"level drops {len(by_instance)}; type level drops {len(dropped)}; "
+                            f"both {len(dropped & by_instance)}; type level only "
+                            f"{len(dropped - by_instance)} (in export "
+                            f"{len((dropped - by_instance) & set(tags))}); instance level only "
+                            f"{len(by_instance - dropped)} (in export "
+                            f"{len((by_instance - dropped) & set(tags))})"
+                        )
+                    )
             if listing and dropped:
                 print(
                     f"  {rule} category {category} drops: in export "
