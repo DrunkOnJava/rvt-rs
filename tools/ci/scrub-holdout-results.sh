@@ -241,7 +241,8 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       python3 -I -c 'import json, re, sys
 for name, count in sorted(((json.load(open(sys.argv[1])).get("exported") or {}).get("body_sources") or {}).items()):
     if re.fullmatch(r"[a-z0-9_]+", name) and isinstance(count, int):
-        print(f"body sources: {name} {count}")' "${dir}diagnostics.json" 2> /dev/null || true
+        print(f"body sources: {name} {count}")' "${dir}diagnostics.json" 2> /dev/null \
+        || echo "body sources: not read"
     fi
   } > "$RUNNER_TEMP/counts.txt"
   find "$dir" -mindepth 1 ! -name ifc.sha256 -delete
