@@ -99,6 +99,10 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^door flips: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" | grep -v -E '^door flips: field ' || true
       grep -E '^door flips: field [A-Za-z0-9_]+ values ((true|false|null|[0-9]{1,2})=[0-9]+(, )?)+$' "$f" || true
     done
+    for f in "$dir"wall_bodies_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E '^(faces \(across\)|ends \(along\)), (axis-parallel|angled|curved): [0-9]+ walls; within [0-9. ft:]+; max [0-9.]+ ft$' "$f" | sed 's/^/wall bodies: /' || true
+    done
     for f in "$dir"psets_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E "^(Revit values on objects rvt-rs writes: [0-9]+; equal: [0-9]+; different: [0-9]+; missing: [0-9]+; rvt-rs values Revit does not write: [0-9]+|  (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+: [0-9]+, equal [0-9]+, different [0-9]+, missing [0-9]+|  (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+: [0-9]+, [0-9]+|  (Pset|Qto)_[A-Za-z0-9]+\.[A-Za-z0-9]+: [0-9]+|IFC4 properties IFC2X3's definitions do not have, which Revit's IFC2X3 export cannot write, not scored: [0-9]+|rvt-rs values Revit does not write, on objects Revit writes and on others:|IFC2X3 (lengths IFC4 holds as quantities|values also in an IFC4 set and scored there), not scored here: [0-9]+|IFC2X3 values no IFC4 set Revit's export writes holds, in rvt-rs's own set, not scored here: [0-9]+)$" "$f" | sed 's/^/psets: /' || true
