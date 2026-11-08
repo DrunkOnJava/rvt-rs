@@ -9,10 +9,16 @@ answer() { echo "skip=$1"; echo "prose=$2"; exit 0; }
 
 case "${EVENT:-}" in
   pull_request)
-    files=$(gh api --paginate "repos/${GH_REPO}/pulls/${PR}/files" --jq '.[].filename') || files=
-    [ -n "$files" ] || { say "the pull request's files could not be listed"; answer false false; }
+    # The files of this run's own commits, not of whatever the pull request
+    # holds by now. A renamed file counts under its old name too: moving a
+    # source file into reports/ deletes that source file. The API lists at
+    # most 300 files, so a longer list proves nothing.
+    files=$(gh api "repos/${GH_REPO}/compare/${BASE_SHA}...${HEAD_SHA}" \
+      --jq 'if (.files | length) >= 300 then empty else .files[] | .filename, (.previous_filename // empty) end') || files=
+    [ -n "$files" ] || { say "the change's files could not be listed"; answer false false; }
     # A name a test or a check under tests/ mentions is read by it.
-    read_by_tests=$(grep -rhoE '[A-Za-z0-9_.-]+\.md' tests | sort -u) || read_by_tests=
+    read_by_tests=$(grep -rhoE '[A-Za-z0-9_.-]+\.md' tests) || { say "the tests could not be read"; answer false false; }
+    read_by_tests=$(sort -u <<<"$read_by_tests")
     while IFS= read -r file; do
       case "$file" in
         reports/*|changelog.d/*) ;;
