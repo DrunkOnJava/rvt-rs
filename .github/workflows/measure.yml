@@ -560,6 +560,8 @@ jobs:
           # The commit the binaries are of, which each shard checks against its
           # own checkout of the ref (a ref that is not a full SHA can move).
           git rev-parse HEAD > "$out/built-commit.txt"
+          # What compiled them, for the key of a base commit's reused results.
+          rustc -vV | sha256sum | cut -c1-16 > "$out/rustc-version.txt"
           {
             echo "### Binaries of the $SIDE side"
             echo
@@ -620,11 +622,40 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Measured source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}
+          path: measured
+      # The binaries come from this side's Build job (artifacts do not keep the
+      # executable bit). Downloaded after the measured checkout, which cleans
+      # its path. A ref that is not a full SHA can move between the two jobs;
+      # then the binaries and this source would be two commits.
+      - name: Measured binaries
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: measure-bin-${{ matrix.side }}
+          path: measured/target/ci
+      - name: Check the binaries are of this source, and make them executable
+        shell: bash
+        run: |
+          built=$(cat measured/target/ci/built-commit.txt)
+          have=$(git -C measured rev-parse HEAD)
+          if [ "$built" != "$have" ]; then
+            echo "::error::the binaries were built at $built and this shard's source is at $have: the ref moved during the run"
+            exit 1
+          fi
+          rm measured/target/ci/built-commit.txt
+          echo "RUSTC_HASH=$(cat measured/target/ci/rustc-version.txt)" >> "$GITHUB_ENV"
+          rm measured/target/ci/rustc-version.txt
+          find measured/target/ci -type f -exec chmod +x {} +
+          git -C measured log -1 --format='%H %s' > measured-commit.txt
       # The base side of a run measures a commit that earlier runs have often
       # measured already: 45% of Measure's runner-minutes in a sample of 40 runs.
       # Its results are reused when everything that can change them is the same:
       # the base commit, the workflow, its scorers and fetch scripts, the pins
-      # under research/, the inputs and the shard, and the runner image. A run
+      # under research/, the inputs and the shard, the compiler and the runner image. A run
       # with a probe, `keep_ifc` or `timing` measures afresh. What is kept is the
       # `results` directory after the scrub, which is what the artifact uploads
       # anyway, so a held-out model's cache holds no more than its public counts.
@@ -641,7 +672,7 @@ jobs:
           tools=$(git ls-files -s .github/workflows/measure.yml .github/actions tools/ci tools/re tools/fetch-reference-models.sh tools/fetch-autodesk-samples.sh research | sha256sum | cut -c1-32)
           options=$(jq -Sc 'del(.ref, .base, .score_cache)' <<<"$INPUTS" | sha256sum | cut -c1-16)
           shard=$(jq -Sc . <<<"$MATRIX" | sha256sum | cut -c1-16)
-          echo "key=measure-results-v1-$BASE-$tools-$options-$shard-$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
+          echo "key=measure-results-v1-$BASE-$tools-$options-$shard-$RUSTC_HASH-$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
       - name: Results this base commit already has
         id: reuse
         if: steps.reuse-key.outputs.key != ''
@@ -658,36 +689,6 @@ jobs:
         run: |
           echo "::notice::the base side of ${SHARD} reuses earlier results of the same inputs (${KEY})"
           echo "Base side of ${SHARD}: reused earlier results, key ${KEY}" >> "$GITHUB_STEP_SUMMARY"
-      - name: Measured source
-        if: steps.reuse.outputs.cache-hit != 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ matrix.side == 'base' && needs.plan.outputs.base_sha || needs.plan.outputs.head_sha }}
-          path: measured
-      # The binaries come from this side's Build job (artifacts do not keep the
-      # executable bit). Downloaded after the measured checkout, which cleans
-      # its path. A ref that is not a full SHA can move between the two jobs;
-      # then the binaries and this source would be two commits.
-      - name: Measured binaries
-        if: steps.reuse.outputs.cache-hit != 'true'
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: measure-bin-${{ matrix.side }}
-          path: measured/target/ci
-      - name: Check the binaries are of this source, and make them executable
-        if: steps.reuse.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          built=$(cat measured/target/ci/built-commit.txt)
-          have=$(git -C measured rev-parse HEAD)
-          if [ "$built" != "$have" ]; then
-            echo "::error::the binaries were built at $built and this shard's source is at $have: the ref moved during the run"
-            exit 1
-          fi
-          rm measured/target/ci/built-commit.txt
-          find measured/target/ci -type f -exec chmod +x {} +
-          git -C measured log -1 --format='%H %s' > measured-commit.txt
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         if: steps.reuse.outputs.cache-hit != 'true'
         with:
@@ -803,7 +804,7 @@ jobs:
               awk -F'\t' '$1 == "entry" { n = split($2, a, "/"); print a[n] }' research/bim4lca-measure.tsv |
                 while read -r name; do ln -f "_bim4lca-measure/$name" models/; done
               echo "ok=true" >> "$GITHUB_OUTPUT" ;;
-            2) echo "::warning::BIM4LCA office models NOT MEASURED: the host was unreachable" ;;
+            2) echo "::warning::BIM4LCA office models NOT MEASURED: the host was unreachable" ; : > "$RUNNER_TEMP/not-measured" ;;
             *) echo "::error::the BIM4LCA office models no longer match research/bim4lca-measure.tsv"; exit 1 ;;
           esac
       - name: Save the BIM4LCA office models
@@ -843,7 +844,7 @@ jobs:
           fi
           case "$status" in
             0) mkdir -p models/r2025 && ln -f _r2025/r2025/* models/r2025/ && echo "ok=true" >> "$GITHUB_OUTPUT" ;;
-            2) echo "::warning::R2025 models NOT MEASURED: the archive could not be downloaded" ;;
+            2) echo "::warning::R2025 models NOT MEASURED: the archive could not be downloaded" ; : > "$RUNNER_TEMP/not-measured" ;;
             *) echo "::error::an R2025 archive no longer matches research/r2025-models.tsv"; exit 1 ;;
           esac
       - name: Save the R2025 models
@@ -865,7 +866,7 @@ jobs:
           set -e
           case "$status" in
             0) ;;
-            2) echo "::warning::BIMcollab example model NOT MEASURED: an archive could not be downloaded" ;;
+            2) echo "::warning::BIMcollab example model NOT MEASURED: an archive could not be downloaded" ; : > "$RUNNER_TEMP/not-measured" ;;
             *) echo "::error::the BIMcollab example model no longer matches research/bimcollab-models.tsv"; exit 1 ;;
           esac
       # The export's host being unreachable is NOT MEASURED; a file that no
@@ -880,7 +881,7 @@ jobs:
           set -e
           case "$status" in
             0) ;;
-            2) echo "::warning::rac_advanced and its IFC2X3 export NOT MEASURED: a file could not be downloaded" ;;
+            2) echo "::warning::rac_advanced and its IFC2X3 export NOT MEASURED: a file could not be downloaded" ; : > "$RUNNER_TEMP/not-measured" ;;
             *) echo "::error::a rac_advanced file or its export no longer matches its pin (research/rac-advanced-export.tsv, research/autodesk-sample-projects.tsv)"; exit 1 ;;
           esac
       # A held-out model's host still unreachable after the fetchers' resumed
@@ -994,12 +995,25 @@ jobs:
             echo "::error::holdout=true but no held-out model was measured: the models input excluded them (use models=\"holdout-* spent-*\" or leave it empty), or none could be scored"
             exit 1
           fi
+      # Results only worth keeping if nothing was left out: a host that was down,
+      # a server that did not build, or a scorer that died would otherwise stand
+      # for this base commit in every later run. Read before the scrub drops them.
+      - name: Whether these results are whole
+        id: whole
+        if: steps.reuse-key.outputs.key != '' && steps.reuse.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          whole=true
+          [ ! -e "$RUNNER_TEMP/not-measured" ] || { whole=false; echo "a model's host was down"; }
+          [ -e measured/target/ci/rvt-rs-mcp ] || { whole=false; echo "the MCP server did not build"; }
+          if grep -rlE '^exit [1-9]' results --include='*.txt'; then whole=false; echo "a scorer exited non-zero"; fi
+          echo "whole=$whole" >> "$GITHUB_OUTPUT"
       - name: Keep only the unlicensed models' counts
         if: steps.reuse.outputs.cache-hit != 'true'
         shell: bash
         run: tools/ci/scrub-holdout-results.sh results
       - name: Keep this base commit's scrubbed results for later runs
-        if: steps.reuse-key.outputs.key != '' && steps.reuse.outputs.cache-hit != 'true' && success()
+        if: steps.whole.outputs.whole == 'true' && success()
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: results
