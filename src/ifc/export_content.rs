@@ -855,14 +855,6 @@ pub fn append_typed_production_elements(
             continue;
         }
 
-        // Opening-index rows are not typed Door/Window. Keep them in
-        // `iter_elements` / production_class_counts for File Status, but
-        // do not flood IFC with thousands of hostless IFCOPENINGELEMENT
-        // stubs — emit only once host Wall ElementIds join (still open).
-        if decoded.class == "ArcWallRectOpening" {
-            continue;
-        }
-
         let mapping = category_map::lookup(&decoded.class);
         if mapping.is_none() && policy.require_mapped_ifc_type {
             continue;
@@ -2097,75 +2089,6 @@ fn material_info_from_decoded(decoded: &DecodedElement) -> Option<MaterialInfo> 
         color_packed: material.color,
         transparency: material.transparency,
     })
-}
-
-#[allow(dead_code)] // retained for when opening→host IFC emission lands
-fn opening_index_property_set(decoded: &DecodedElement) -> PropertySet {
-    let mut properties = vec![
-        Property {
-            name: "OpeningKindResolved".into(),
-            value: PropertyValue::Boolean(false),
-        },
-        Property {
-            name: "DoorWindowDiscriminated".into(),
-            value: PropertyValue::Boolean(false),
-        },
-        Property {
-            name: "Source".into(),
-            value: PropertyValue::Text("partition_rect_opening_index".into()),
-        },
-    ];
-    for (name, value) in &decoded.fields {
-        match (name.as_str(), value) {
-            ("m_related_id_a", InstanceField::ElementId { id, .. }) => {
-                properties.push(Property {
-                    name: "RelatedIdA".into(),
-                    value: PropertyValue::Integer(i64::from(*id)),
-                });
-            }
-            ("m_related_id_b", InstanceField::ElementId { id, .. }) => {
-                properties.push(Property {
-                    name: "RelatedIdB".into(),
-                    value: PropertyValue::Integer(i64::from(*id)),
-                });
-            }
-            ("m_host_id", InstanceField::ElementId { id, .. }) => {
-                properties.push(Property {
-                    name: "HostIdCandidate".into(),
-                    value: PropertyValue::Integer(i64::from(*id)),
-                });
-            }
-            ("m_related_id_a_in_elem_table", InstanceField::Bool(b)) => {
-                properties.push(Property {
-                    name: "RelatedIdAInElemTable".into(),
-                    value: PropertyValue::Boolean(*b),
-                });
-            }
-            ("m_related_id_b_in_elem_table", InstanceField::Bool(b)) => {
-                properties.push(Property {
-                    name: "RelatedIdBInElemTable".into(),
-                    value: PropertyValue::Boolean(*b),
-                });
-            }
-            ("m_host_elem_table_confirmed", InstanceField::Bool(b)) => {
-                properties.push(Property {
-                    name: "HostElemTableConfirmed".into(),
-                    value: PropertyValue::Boolean(*b),
-                });
-            }
-            ("m_index", InstanceField::Integer { value, .. }) => {
-                properties.push(Property {
-                    name: "Index".into(),
-                    value: PropertyValue::Integer(*value),
-                });
-            }
-            _ => {}
-        }
-    }
-    PropertySet {
-        name: "RvtArcWallRectOpening".into(),
-        properties,
-    }
 }
 
 struct RecoveredWallGeom {
@@ -4796,10 +4719,7 @@ fn space_by_export_value(decoded: &DecodedElement) -> bool {
 /// an element the export does not write, or writes as its value says.
 pub(crate) fn unapplied_export_value(decoded: &DecodedElement) -> Option<&str> {
     if is_misleading_proxy_class(&decoded.class)
-        || matches!(
-            decoded.class.as_str(),
-            "Material" | "ArcWall" | "ArcWallRectOpening"
-        )
+        || matches!(decoded.class.as_str(), "Material" | "ArcWall")
     {
         return None;
     }

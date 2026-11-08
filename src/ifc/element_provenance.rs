@@ -696,7 +696,7 @@ fn entry_of(
             entry.offset = provenance.source_offset;
             entry.record_offset = provenance.source_offset;
         }
-        Some("partition_materials" | "partition_schema_mvp" | "partition_rect_opening_index") => {
+        Some("partition_materials" | "partition_schema_mvp") => {
             entry.carrier = ElementCarrier::PartitionDerived;
         }
         _ => {}

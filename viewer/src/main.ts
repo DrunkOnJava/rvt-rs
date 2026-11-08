@@ -3566,7 +3566,6 @@ function renderStatusPanel(diagnostics: ExportDiagnostics): void {
     'Room',
     'Material',
     'ArcWall',
-    'ArcWallRectOpening',
     'Wall',
     'Door',
     'Window',

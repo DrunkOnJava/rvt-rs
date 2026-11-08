@@ -103,7 +103,7 @@
       "area": "elements",
       "name": "Revit 2024 partition element records as typed IFC elements, with joins, profiles and cuts where decoded, storeys, family and type names, materials and layers, GlobalIds and stair dimensions",
       "status": "partial",
-      "evidence": "Production iter_elements: ArcWall (2023) + partition MVP Level/Material + 2024 ArcWallRectOpening (ElemTable-confirmed ids) + 2024 partition element-record Wall/Door/Window/Column instances (RE-21/#211) Slab/BuildingPad instances with per-element IFC export overrides (RE-22/#212) and Room instances with their parameter-block name, number and Level (RE-29/#90); RE-19/RE-20 negatives",
+      "evidence": "Production iter_elements: ArcWall (2023) + partition MVP Level/Material + 2024 partition element-record Wall/Door/Window/Column instances (RE-21/#211) Slab/BuildingPad instances with per-element IFC export overrides (RE-22/#212) and Room instances with their parameter-block name, number and Level (RE-29/#90); RE-19/RE-20 negatives",
       "notes": "Revit 2024 projects export typed elements from their partition element records (RE-21 onward), with joins, profiles and cuts where decoded and the element's bounding box elsewhere; the measured figures are in docs/evidence.md. Full model conversion is not solved. Never mark verified without corpus-backed converter-grade evidence (COR-001).",
       "user_impact": "Useful recovery on supported subsets; full model conversion is not ready."
     },
@@ -652,9 +652,9 @@
       "area": "elements",
       "name": "Typed Door and Window discrimination from the ArcWallRectOpening index",
       "status": "unsupported",
-      "evidence": "RE-19: no reliable Door vs Window discriminator in the opening-index bytes; unchanged by RE-21 and RE-23",
-      "notes": "RE-21/#211 recovers Door and Window *instances* and RE-23/#222 binds them to their host wall, both from the partition element record (see element-record-instance-recovery and element-record-door-window-host-binding). Neither touches the carrier this row names: the 2024 ArcWallRectOpening index bytes still hold no Door vs Window discriminator and no host claim, and its rows still surface only ElemTable-confirmed related ids. RE-19's negative stands.",
-      "user_impact": "Opening-index rows are not turned into typed Doors or Windows, and carry no host claim of their own."
+      "evidence": "RE-19: no reliable Door vs Window discriminator in the opening-index bytes; RE-375: the rows are not openings at all, every id they name being a system element",
+      "notes": "RE-21/#211 recovers Door and Window *instances* and RE-23/#222 binds them to their host wall, both from the partition element record (see element-record-instance-recovery and element-record-door-window-host-binding). The carrier this row names is not an opening index: on 2024 Core Interior all 4,917 rows name system elements (ConceptualConstructionType, GStyleElem, FillPatternElem and the like), none of the 192 elements that cut its walls, and Autodesk's 2024 rac_basic sample, whose walls hold two SWallRectOpenings, gives none (RE-375). The rows are no longer merged into iter_elements.",
+      "user_impact": "None: doors, windows and wall openings come from element records and the walls' own records, never from these rows."
     },
     {
       "id": "level-elementid-storey-bind",

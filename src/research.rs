@@ -97,7 +97,7 @@
 //! - [`es_refs`]: ES reference occurrence locator contracts, with no decoder yet
 //! - [`evidence`]: Named evidence tiers and lightweight ledgers
 //! - [`identity`]: Document-scoped identity and source-span contracts
-//! - [`rect_opening_index`]: Version-gated decoder for Revit 2024 ArcWallRectOpening 60 B index records (RE-15, #89)
+//! - [`rect_opening_index`]: Revit 2024's 60 B rows RE-15 read as a wall-opening index, which name system elements, not openings (RE-375)
 //! - [`revit_global_ids`]: The IFC `GlobalId` Revit's own exporter gives an element, rebuilt from the file (RE-48)
 //! - [`schema_registry`]: Forward-only Formats/Latest registry framing, without byte-name scanning
 // Tracker: D20, B66, B44, B33, M3-03, M3-04, B54, B59, B43, L5B-10.

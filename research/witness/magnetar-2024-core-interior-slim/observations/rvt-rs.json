@@ -714,7 +714,6 @@
   ],
   "unsupported_entities": [
     "revit_compound_assemblies_and_walltype_widths",
-    "opening_index_to_ifc_openingelement_host_join",
     "schema_field_wall_instances",
     "partial_revit_element_parameters"
   ],

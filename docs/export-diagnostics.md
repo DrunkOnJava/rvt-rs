@@ -382,7 +382,7 @@ for each, so an empty log cannot pass.
 |---|---|---|---|
 | `element_skipped` | `below_min_element_confidence`, `low_confidence_schema_scan_candidate`, `element_record_without_element_id`, `element_record_frame_stopped` (`class`: the stage), `element_record_without_volume`, `element_record_in_non_primary_design_option`, `element_record_not_in_export_phase`, `room_not_in_export_phase`, `element_record_empty_curtain_panel`, `element_record_family_space_without_body`, `area_without_proven_body`, `shaft_opening_not_cut` (`class`: `ShaftOpening`) | The element is not in the export. A shaft opening is no element of the IFC: it is counted because its cut from the floors, ceilings and roofs it passes through is read on Revit 2024 only (RE-345), so on a 2025 to 2027 file they stay whole. | the `skipped` item of the same reason |
 | `body_not_drawn` | `unsupported_geometry_curve`, `unsupported_geometry_profile`, `unsupported_geometry_missing_dimensions` | The element is written with no body. | the `skipped` item |
-| `opening_not_cut` | `unsupported_geometry_unresolved_host`, `opening_index_without_host_geometry` | A door or window has no host to cut, or an opening index row has no host geometry. | the `skipped` item |
+| `opening_not_cut` | `unsupported_geometry_unresolved_host` | A door or window has no host to cut. | the `skipped` item |
 | `storey_not_bound` | `unsupported_geometry_missing_level` | The element is written outside any storey. | the `skipped` item |
 | `outline_not_read` | `floor_boundary_annotation_only` | A floor keeps its boundary annotation alone. | the `skipped` item |
 | `outline_not_read` | `space_outline_is_record_box` | A room or space is its record's box. | `exported.bounding_box_spaces` |

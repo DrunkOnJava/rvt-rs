@@ -5354,10 +5354,6 @@ fn geometry_gap_skipped_items(
         "floor_boundary_annotation_only",
         DecisionStage::OutlineNotRead,
     );
-    let mut opening_index_only = GeometryGapBucket::new(
-        "opening_index_without_host_geometry",
-        DecisionStage::OpeningNotCut,
-    );
 
     let placements = step_writer::placements(model);
     for (index, entity) in model.entities.iter().enumerate() {
@@ -5390,18 +5386,11 @@ fn geometry_gap_skipped_items(
         let floor_annotation = property_set
             .as_ref()
             .is_some_and(|p| p.name == "RvtFloorGeometry");
-        let opening_annotation = property_set
-            .as_ref()
-            .is_some_and(|p| p.name == "RvtArcWallRectOpening");
 
         // Honest partial recovers: do not dump them into the hard
         // "unsupported_geometry_*" buckets used for walls missing curves.
         if floor_annotation && !has_body_shape {
             floor_boundary_only.add(ifc_type, name, id);
-            continue;
-        }
-        if opening_annotation {
-            opening_index_only.add(ifc_type, name, id);
             continue;
         }
 
@@ -5431,7 +5420,6 @@ fn geometry_gap_skipped_items(
         missing_level,
         missing_dimensions,
         floor_boundary_only,
-        opening_index_only,
     ] {
         let (item, made) = bucket.into_parts();
         items.extend(item);
@@ -5712,9 +5700,6 @@ fn unsupported_export_features(model: &IfcModel) -> Vec<String> {
         // closed, the host-binding half is not.
         features.push("door_window_host_wall_binding".into());
     }
-    // Opening-index rows may be present in production_class_counts without
-    // IFC emission until host Wall ElementIds join.
-    features.push("opening_index_to_ifc_openingelement_host_join".into());
     // RE-19 stands: an `IFCWALL` recovered from a partition element record
     // (#211) is not a schema-field wall decode. Only a wall carrying a
     // non-element-record body clears this feature.

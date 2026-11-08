@@ -1,8 +1,7 @@
 //! Schema / partition MVP recovers for production `iter_elements`.
 //!
 //! Extends the ArcWall-only partition merge with fail-closed recovers
-//! for Level and Material, and (on Revit 2024) ArcWallRectOpening index
-//! rows, plus `OST_Columns` / `OST_Walls` / `OST_Doors` /
+//! for Level and Material, plus `OST_Columns` / `OST_Walls` / `OST_Doors` /
 //! `OST_Windows` element records
 //! ([`instances_from_partition_category_records`]),
 //! `OST_Floors` / `OST_BuildingPad` slab instances
@@ -11,34 +10,31 @@
 //! ([`rooms_from_partition_category_records`], #90 / RE-29) on the
 //! releases whose element records decode.
 //!
-//! Semantic `Door` / `Window` classes are still **not** invented from
-//! opening-index rows — those keep surfacing as `ArcWallRectOpening`
-//! with related-id provenance only, and RE-19's negative (no
-//! discriminator in the opening-index bytes, no schema-field Wall)
-//! stands untouched. Typed `Wall` / `Door` / `Window` come from a
-//! different carrier: the element record's own `BuiltInCategory`
-//! field, which names the category outright (#211). Opening-index
-//! related ids are cross-checked against `Global/ElemTable` when
-//! present; a hit confirms the id is declared, not that it is a host
-//! Wall or a Door/Window family instance.
+//! Typed `Wall` / `Door` / `Window` come from the element record's own
+//! `BuiltInCategory` field, which names the category outright (#211).
+//! The 2024 rows [`crate::rect_opening_index`] decodes are not merged:
+//! they are not wall openings (RE-375). Every id they name is a system
+//! element (`ConceptualConstructionType`, `GStyleElem`,
+//! `FillPatternElem`, ...), none is an element that cuts a wall, and
+//! a 2024 file's rectangular wall openings (`SWallRectOpening`) give
+//! none of them. Wall openings are written from the walls' own records
+//! (RE-321, RE-338).
 //!
 //! # Version guard
 //!
 //! Partition byte scans reuse [`crate::partition_scanner`] /
-//! [`crate::partition_arc_walls`] / [`crate::rect_opening_index`]
-//! version gates. Unsupported releases yield empty lists.
+//! [`crate::partition_arc_walls`] version gates. Unsupported releases yield empty lists.
 //!
 //! # Honesty
 //!
 //! - Never invent ElementIds, host walls, elevations, or geometry.
 //! - Tier1 synthetics have no partition building elements — callers
-//!   must observe zero Level/Material/Floor/opening hits there.
+//!   must observe zero Level/Material/Floor hits there.
 //! - Rooms and floors come from element records or not at all. The
 //!   name-only rooms and plan-loop floors that once filled in were
 //!   removed after they matched nothing in Revit's own exports.
 
 use crate::partition_name_candidates::{building_storey_name_candidates, collect_name_candidates};
-use crate::rect_opening_index::ArcWallRectOpeningIndex;
 use crate::walker::{DecodedElement, ElementProvenance, InstanceField, WalkerLimits};
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
@@ -96,8 +92,6 @@ pub struct PartitionSchemaMvp {
     /// Placed Areas from their partition chain records, written as
     /// `IfcSpace` (#763, [`crate::partition_area_records`]).
     pub areas: Vec<DecodedElement>,
-    /// 2024 ArcWallRectOpening index rows — not typed Door/Window.
-    pub rect_openings: Vec<DecodedElement>,
     /// 2024 `OST_Columns` partition element records (#204).
     // Tracker: M4-09.
     pub columns: Vec<DecodedElement>,
@@ -125,7 +119,6 @@ impl PartitionSchemaMvp {
                 + self.materials.len()
                 + self.rooms.len()
                 + self.areas.len()
-                + self.rect_openings.len()
                 + self.columns.len()
                 + self.walls.len()
                 + self.doors.len()
@@ -137,7 +130,6 @@ impl PartitionSchemaMvp {
         out.extend(self.materials);
         out.extend(self.rooms);
         out.extend(self.areas);
-        out.extend(self.rect_openings);
         out.extend(self.columns);
         out.extend(self.walls);
         out.extend(self.doors);
@@ -179,11 +171,6 @@ pub fn recover_partition_schema_mvp(
     // the Revit 2025 RE1 MEP models 38 slabs and 71 spaces where their
     // exports hold none, and no 2023 plan loop (mostly triangles) came
     // within 10% of the plan area of a slab in two paired exports.
-
-    // --- 2024 opening index (not Door/Window) ---
-    if ArcWallRectOpeningIndex::supports_revit_version(revit_version) {
-        out.rect_openings = rect_openings_from_partitions(rf, revit_version, limits)?;
-    }
 
     // --- Revit 2015 to 2023 element records (RE-81, RE-180, RE-181, #421):
     // identity, category, box and the readers called here; nothing else 2024
@@ -1202,149 +1189,4 @@ fn element_record_decoded(
                 .saturating_add(crate::partition_element_records::RECORD_MIN_LEN),
         provenance,
     }
-}
-
-fn partition_streams_largest_first(rf: &mut RevitFile) -> Vec<String> {
-    let mut streams: Vec<(usize, String)> = rf
-        .stream_names()
-        .into_iter()
-        .filter(|s| s.starts_with("Partitions/"))
-        .filter_map(|s| {
-            let raw = rf.read_stream(&s).ok()?;
-            Some((raw.len(), s))
-        })
-        .collect();
-    streams.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
-    streams.into_iter().map(|(_, s)| s).collect()
-}
-
-fn rect_openings_from_partitions(
-    rf: &mut RevitFile,
-    revit_version: u32,
-    limits: WalkerLimits,
-) -> Result<Vec<DecodedElement>> {
-    let mut out = Vec::new();
-    let opening_cap = limits.max_candidates.min(5_000);
-
-    // Confirm related ids against ElemTable when available — never invent
-    // Door/Window classes from the index alone.
-    let elem_ids: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
-        Ok(records) => crate::elem_table::declared_ids(&records),
-        Err(_) => BTreeSet::new(),
-    };
-
-    // Largest partition first — 2024 Core Interior openings live in
-    // the ~98 MiB Partitions/46 stream.
-    for stream in partition_streams_largest_first(rf) {
-        let Ok(inflated) = rf.inflated_partition(&stream) else {
-            continue;
-        };
-        let concat = inflated.bytes();
-        let offsets = ArcWallRectOpeningIndex::find_all_for_revit_version(revit_version, concat);
-        for off in offsets {
-            if out.len() >= opening_cap {
-                break;
-            }
-            let Ok(rec) = ArcWallRectOpeningIndex::decode(concat, off) else {
-                continue;
-            };
-            let a_in = elem_ids.contains(&rec.related_id_a);
-            let b_in = elem_ids.contains(&rec.related_id_b);
-            // related_id_a is the historical host *candidate* (RE-15);
-            // ElemTable confirmation only proves the id is declared —
-            // not that it is a Wall host or a Door/Window instance.
-            let host_confirmed = a_in;
-            out.push(DecodedElement {
-                id: None,
-                class: "ArcWallRectOpening".into(),
-                fields: vec![
-                    (
-                        "m_index".into(),
-                        InstanceField::Integer {
-                            value: i64::from(rec.index),
-                            signed: false,
-                            size: 4,
-                        },
-                    ),
-                    (
-                        "m_related_id_a".into(),
-                        InstanceField::ElementId {
-                            tag: 0,
-                            id: rec.related_id_a,
-                        },
-                    ),
-                    (
-                        "m_related_id_b".into(),
-                        InstanceField::ElementId {
-                            tag: 0,
-                            id: rec.related_id_b,
-                        },
-                    ),
-                    (
-                        "m_related_id_a_in_elem_table".into(),
-                        InstanceField::Bool(a_in),
-                    ),
-                    (
-                        "m_related_id_b_in_elem_table".into(),
-                        InstanceField::Bool(b_in),
-                    ),
-                    (
-                        "m_host_id".into(),
-                        InstanceField::ElementId {
-                            tag: 0,
-                            id: rec.related_id_a,
-                        },
-                    ),
-                    (
-                        "m_host_elem_table_confirmed".into(),
-                        InstanceField::Bool(host_confirmed),
-                    ),
-                    (
-                        "m_host_provenance".into(),
-                        InstanceField::String(if host_confirmed {
-                            "related_id_a_in_elem_table".into()
-                        } else {
-                            "related_id_a_unvalidated".into()
-                        }),
-                    ),
-                    (
-                        "m_source_stream".into(),
-                        InstanceField::String(stream.clone()),
-                    ),
-                    (
-                        "m_source_offset".into(),
-                        InstanceField::Integer {
-                            value: off as i64,
-                            signed: false,
-                            size: 8,
-                        },
-                    ),
-                    (
-                        "m_source".into(),
-                        InstanceField::String("partition_rect_opening_index".into()),
-                    ),
-                ],
-                byte_range: off..off
-                    .saturating_add(crate::rect_opening_index::OPENING_INDEX_STRIDE),
-                provenance: ElementProvenance::partition(
-                    &stream,
-                    off,
-                    "partition_rect_opening_index",
-                    "partition_schema_mvp::arcwall_rect_opening",
-                    if host_confirmed { 0.7 } else { 0.55 },
-                    if host_confirmed {
-                        None
-                    } else {
-                        Some("related_id_a_unvalidated")
-                    },
-                ),
-            });
-        }
-        // Openings concentrate in one large partition; stop once we
-        // found any validated index rows.
-        if !out.is_empty() {
-            break;
-        }
-    }
-    Ok(out)
 }
