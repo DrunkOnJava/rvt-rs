@@ -1731,6 +1731,7 @@ const IFC_ENTITY_NAMES = [
   'IfcSpace',
   'IfcStair',
   'IfcStairFlight',
+  'IfcSystemFurnitureElement',
   'IfcTransportElement',
   'IfcWall',
   'IfcWallStandardCase',
