@@ -599,10 +599,10 @@ measure_sample() { # sample
   # C9: the IFC4 schema's view of the export, so a writer path only the
   # samples reach (I-shape profiles and profile set usages on the
   # structural samples) is checked somewhere. Attribute counts on every
-  # export; IfcOpenShell's full validation on exports up to 30 MB, the
-  # rest marked as skipped.
+  # export; IfcOpenShell's full validation on exports up to 120 MB, as
+  # for a reference model, the rest marked as skipped.
   if [ -s "$dir/model.ifc" ]; then
-    schema "$dir" 31457280
+    schema "$dir" 125829120
     grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
     # #1437: every space of the sample's export says what it is.
     wanted space_kinds_vs_ifc && score "$dir/space_kinds_vs_ifc.txt" "$SCORERS/space_kinds_vs_ifc.py" "$dir/model.ifc"
