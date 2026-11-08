@@ -79,7 +79,7 @@ pub(super) fn without_invisible_family_types(
     let types: BTreeSet<u64> = lists
         .iter()
         .flat_map(|list| list.iter())
-        .filter_map(|element| type_of(element))
+        .filter_map(&type_of)
         .collect();
     if types.is_empty() {
         return;
