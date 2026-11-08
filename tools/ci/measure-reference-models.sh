@@ -472,7 +472,10 @@ model_task() { # name rvt ref task
       if [ "$ref" != "-" ]; then
         for s in $GLB_SCORERS; do
           wanted "$s" || continue
-          cscore "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref"
+          case "$(basename "$dir"):$s" in
+            spent-*:wall_bodies_vs_ifc) score "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref" --list 100000 ;;
+            *) cscore "$dir/$s.txt" "$SCORERS/$s.py" "$dir/model.glb" "$MODELS/$ref" ;;
+          esac
         done
       fi
       ;;
