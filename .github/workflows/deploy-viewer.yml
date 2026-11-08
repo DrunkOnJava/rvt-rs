@@ -179,8 +179,8 @@ jobs:
 
   # The browser tests again, on the release WASM that `build` uploaded and
   # this workflow publishes: ci.yml's `viewer` job tests the faster build
-  # without LTO, which is what a pull request waits for. One leg, since
-  # nothing waits for it but the deploy, which waits for `CI passed` as long.
+  # without LTO, which is what a pull request waits for. The same three legs
+  # as ci.yml's, since the deploy waits for them: one leg took 12 to 16 minutes.
   # `needs: build` is what makes the artifact exist, and the call builds
   # nothing: it tests the bytes that are published.
   tests:
@@ -189,7 +189,6 @@ jobs:
       contents: read
     uses: $/.github/workflows/viewer-test.yml
     with:
-      legs: '[{"name":"browser tests","files":"/"}]'
       wasm_artifact: viewer-build-release
 
   # The viewer draws doors and windows from their saved meshes by default, on
