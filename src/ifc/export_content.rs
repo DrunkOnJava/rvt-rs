@@ -2702,7 +2702,9 @@ fn record_type_common(
             })
     };
     let manufacturer = type_text("Manufacturer");
-    if !TYPE_COMMON_ENTITIES.contains(&upper.as_str()) && manufacturer.is_none() {
+    // An entity outside the list is here for its Manufacturer alone.
+    let common = TYPE_COMMON_ENTITIES.contains(&upper.as_str());
+    if !common && manufacturer.is_none() {
         return;
     }
     let Some(type_id) = decoded.fields.iter().find_map(|(name, value)| match value {
@@ -2711,26 +2713,30 @@ fn record_type_common(
     }) else {
         return;
     };
-    let fire_rating = type_text("Fire Rating");
+    let fire_rating = type_text("Fire Rating").filter(|_| common);
     let found = TypeCommon {
         fire_rating,
         manufacturer,
-        load_bearing: LOAD_BEARING_TYPE_CLASSES
-            .contains(&decoded.class.as_str())
+        load_bearing: (common && LOAD_BEARING_TYPE_CLASSES.contains(&decoded.class.as_str()))
             .then_some(true),
-        stair_type: decoded.class == "Stair"
+        stair_type: common
+            && decoded.class == "Stair"
             && decoded
                 .fields
                 .iter()
                 .any(|(name, _)| name == mvp::STAIR_RISER_COUNT_FIELD),
-        nosing_feet: decoded.fields.iter().find_map(|(name, value)| match value {
-            InstanceField::Float { value, .. }
-                if decoded.class == "StairsRun" && name == mvp::STAIR_NOSING_LENGTH_FIELD =>
-            {
-                Some(*value)
-            }
-            _ => None,
-        }),
+        nosing_feet: decoded
+            .fields
+            .iter()
+            .find_map(|(name, value)| match value {
+                InstanceField::Float { value, .. }
+                    if decoded.class == "StairsRun" && name == mvp::STAIR_NOSING_LENGTH_FIELD =>
+                {
+                    Some(*value)
+                }
+                _ => None,
+            })
+            .filter(|_| common),
     };
     commons
         .entry((type_id, format!("{upper}TYPE")))
