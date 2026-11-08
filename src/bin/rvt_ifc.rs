@@ -997,7 +997,7 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool, family: bo
                 "element_record_empty_curtain_panel" => "empty curtain panels",
                 "room_not_in_export_phase" => "rooms in a phase other than the export phase",
                 "element_record_family_type_draws_nothing" => {
-                    "family instances whose type draws nothing visible"
+                    "plumbing fixtures whose type draws nothing visible"
                 }
                 "element_record_family_space_without_body" => {
                     "family instances written as spaces whose family draws no model form"

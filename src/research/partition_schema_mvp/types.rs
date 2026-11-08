@@ -58,14 +58,16 @@ pub(super) fn attach_ifc_export_overrides(
     }
 }
 
-/// Leave out the family instances that are not doors or windows and whose
-/// type draws nothing visible ([`crate::native_family_forms::types_without_visible_body`],
-/// RE-363, #1496). The export diagnostics count what is left out, and a check
-/// that could not run is reported there with every instance kept.
-pub(super) fn without_invisible_family_types(
+/// Leave out the plumbing fixtures whose type draws nothing visible
+/// ([`crate::native_family_forms::types_without_visible_body`], RE-363, #1496).
+/// Only this category: it is the one where the test was scored on every model
+/// with a Revit export and the rule fires, and no other category has both. The
+/// export diagnostics count what is left out, and a check that could not run
+/// is reported there with every instance kept.
+pub(super) fn without_invisible_plumbing_fixture_types(
     rf: &mut RevitFile,
     revit_version: u32,
-    lists: [&mut Vec<DecodedElement>; 2],
+    products: &mut Vec<DecodedElement>,
 ) {
     if !crate::native_document::NATIVE_RELEASES.contains(&revit_version) {
         return;
@@ -76,9 +78,10 @@ pub(super) fn without_invisible_family_types(
             _ => None,
         })
     };
-    let types: BTreeSet<u64> = lists
+    let is_fixture = |element: &DecodedElement| element.class == "PlumbingFixture";
+    let types: BTreeSet<u64> = products
         .iter()
-        .flat_map(|list| list.iter())
+        .filter(|element| is_fixture(element))
         .filter_map(&type_of)
         .collect();
     if types.is_empty() {
@@ -96,25 +99,24 @@ pub(super) fn without_invisible_family_types(
     }
     let mut classes: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>> =
         BTreeMap::new();
-    for list in lists {
-        list.retain(|element| {
-            let left_out = type_of(element).is_some_and(|id| invisible.contains(&id));
-            if left_out {
-                let framed =
-                    element.provenance.record_kind.as_deref() == Some("partition_element_record");
-                classes.entry(element.class.clone()).or_default().push(
-                    crate::partition_element_records::LeftOutElement {
-                        element_id: element.id,
-                        class: element.class.clone(),
-                        stream: element.provenance.source_stream.clone().filter(|_| framed),
-                        offset: element.provenance.source_offset.filter(|_| framed),
-                        detail: None,
-                    },
-                );
-            }
-            !left_out
-        });
-    }
+    products.retain(|element| {
+        let left_out =
+            is_fixture(element) && type_of(element).is_some_and(|id| invisible.contains(&id));
+        if left_out {
+            let framed =
+                element.provenance.record_kind.as_deref() == Some("partition_element_record");
+            classes.entry(element.class.clone()).or_default().push(
+                crate::partition_element_records::LeftOutElement {
+                    element_id: element.id,
+                    class: element.class.clone(),
+                    stream: element.provenance.source_stream.clone().filter(|_| framed),
+                    offset: element.provenance.source_offset.filter(|_| framed),
+                    detail: None,
+                },
+            );
+        }
+        !left_out
+    });
     rf.note_invisible_type_instances(classes);
 }
 

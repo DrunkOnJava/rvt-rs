@@ -184,7 +184,7 @@ fn re1_names_are_revits() {
     for (model, expected) in [
         ("Architecture", 73),
         ("Mechanical", 74),
-        ("Plumbing", 124),
+        ("Plumbing", 123),
         ("Electrical", 46),
     ] {
         let rvt = dir.join(format!("RE1-{model}.rvt"));

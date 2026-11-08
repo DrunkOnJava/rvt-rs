@@ -705,8 +705,7 @@ fn root_id(graph: &ObjectGraph, class: &str, field: &str) -> Option<u64> {
 /// decode cleanly to no surface, with a branch left out as not visible. Revit's
 /// exporter writes a family instance that is not a door or a window only when
 /// its 3D body has a solid or a mesh (`FamilyInstanceExporter` in revit-ifc,
-/// CLEANROOM.md source 5). On 52 models with a Revit export, no instance of
-/// such a type is in that export. A type with no saved graphics is not one.
+/// CLEANROOM.md source 5). A type with no saved graphics is not one.
 pub fn types_without_visible_body(
     rf: &mut RevitFile,
     types: &BTreeSet<u64>,

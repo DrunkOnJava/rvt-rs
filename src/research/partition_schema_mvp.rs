@@ -647,9 +647,9 @@ pub fn recover_partition_schema_mvp(
     // --- Empty curtain panels are left out, as Revit leaves them out (#309) ---
     out.products
         .retain(|product| !is_empty_curtain_panel(product));
-    // --- Family instances whose type draws nothing visible are left out, as
+    // --- Plumbing fixtures whose type draws nothing visible are left out, as
     // Revit leaves them out (RE-363, #1496) ---
-    without_invisible_family_types(rf, revit_version, [&mut out.columns, &mut out.products]);
+    without_invisible_plumbing_fixture_types(rf, revit_version, &mut out.products);
     // --- Curtain panels that are walls export as curtain walls (RE-72) ---
     // Last, so every step above still sees them as panels.
     for product in &mut out.products {

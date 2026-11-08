@@ -5,7 +5,7 @@
 **Artefacts:** `RE1-Plumbing.rvt`, sha256 `03689df2aa426031a216e65051b9f19d3265d6fe96884dd47373b17435f9e54c`, against `RE1-Plumbing.ifc`, sha256 `294490b222632509779910345f27a4eeda3645956138a593298c241495f7b8b6` (Revit 26.2, IFC2X3); every other model Measure has with a Revit export (51 models with the plumbing probe, 52 with the empty-body and type-level probes; the held-out models as counts only).
 **Scorers:** `tools/re/tank_rules_vs_ifc.py`, `tools/re/empty_bodies_vs_ifc.py`.
 **Runs:** Measure 42518898114 (head af85afad) and 42521763730 (head c5bd28e3).
-**Status:** positive. A family instance whose saved graphics decode cleanly to no surface, with a branch left out as not visible, is not in Revit's export on any model measured. No rule is written here; this report records what separates them.
+**Status:** positive. A family instance whose saved graphics decode cleanly to no surface, with a branch left out as not visible, is not in Revit's export on any model measured. The rule is written for plumbing fixtures only (section 7).
 
 ## 1. The question
 
@@ -49,9 +49,17 @@ Reading every instance's saved graphics costs 31% to 36% of an office export. An
 
 ## 5. What is not established
 
-- The rule is not written. The type-level rule needs the symbols of every category it would apply to, and this report measures the two categories the timing probe scoped (plumbing fixtures and structural columns) for cost.
+- The rule in any other category (section 7).
 - The type-level rule drops 5 more instances than the instance-level one, all 5 not in Revit's export. A type whose instances differ is seen only by the instance-level reading, so a rule read per type could differ from the instance's own body on a model not measured here.
 - The office's column 1927742, the other extra of #1496, is not dropped by this rule on the permit file: its 2,685 drops are all curtain panels.
+
+## 7. The rule as written
+
+A plumbing fixture whose type's saved graphics decode cleanly to no surface, with a branch left out as not visible, is left out and counted as `element_record_family_type_draws_nothing` (`types_without_visible_body`, `without_invisible_plumbing_fixture_types`). It is the type-level reading of section 3, on one category.
+
+**Why one category.** A first version applied it to every family instance but doors and windows. Measure run 42532619862 (head `8979e20c`, base `ad607125`) moved two of 118 exports. On RE1 Plumbing the tank went, as intended: elements 124 to 123, the 2 connections not in Revit's export to 0, values Revit does not write 2 to 0, different 0. On Autodesk's Snowdon Towers Structural it left out 91 Generic Models, on a file with no Revit export. In section 3's census the rule never fires on a Generic Model of the 52 models, so nothing supports those 91, and they stay written. Section 2 scores this category on every model with an export, and the rule's false negatives there are 0.
+
+**Limits.** The tank is the one fixture the rule has left out on a model with a Revit export. Reading per type left out 5 more instances than reading per instance in section 3, so a type whose instances differ could be read differently on a model not measured here. Cost: only plumbing fixtures' types are read, the scope of section 4's timing.
 
 ## 6. Reproduce
 

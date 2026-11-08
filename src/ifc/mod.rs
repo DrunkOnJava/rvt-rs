@@ -4255,7 +4255,7 @@ pub(crate) fn build_export_diagnostics_and_decisions(
              no model form (RE-312)."
         ));
     }
-    // RE-363: a family instance whose type draws nothing visible has no body
+    // RE-363: a plumbing fixture whose type draws nothing visible has no body
     // for Revit's exporter to write. A check that could not run keeps them all.
     let invisible_types: Vec<crate::partition_element_records::LeftOutElement> = rf
         .invisible_type_instances()
@@ -4273,9 +4273,9 @@ pub(crate) fn build_export_diagnostics_and_decisions(
     );
     if let Some((checked, error)) = rf.invisible_type_error() {
         warnings.push(format!(
-            "{checked} family type(s) could not be checked for visible geometry ({error}); their \
-             instances are written, though Revit's export leaves out one whose type draws nothing \
-             visible (RE-363)."
+            "{checked} plumbing fixture type(s) could not be checked for visible geometry \
+             ({error}); their instances are written, though Revit's export leaves out one whose \
+             type draws nothing visible (RE-363)."
         ));
     }
     if !empty_panels.types_with_material.is_empty() {
