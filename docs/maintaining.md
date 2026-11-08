@@ -908,7 +908,9 @@ line names what to fix (its rulesets check needs an admin token). The list:
    GitHub, which keeps it off the branch list, and into a git bundle the
    maintainer keeps, with a list of its commits, and the branch is then
    deleted. The audit lists such a branch once its last commit is more than
-   14 days old. A commit a report's reproduce commands cite (`-f ref=<sha>`)
+   14 days old, unless its name carries the number of an open issue or a
+   report's reproduce commands dispatch from it (`--ref <branch>`; a dispatch
+   needs a branch or tag). A commit a report's reproduce commands cite (`-f ref=<sha>`)
    that no branch, archive ref or pull request head reaches, such as the head
    of a branch rebuilt before it landed, is pushed by hand to
    `refs/archive/<date>/cited/<first 12 characters of the sha>` so GitHub

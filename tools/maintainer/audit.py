@@ -25,8 +25,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CACHE_LIMIT_BYTES = 10 * 1024**3
-# A research or Measure branch with no pull request is kept while its work is
-# live; one whose last commit is older than this is stale (docs/maintaining.md).
+# A research or Measure branch with no pull request is kept while its issue is
+# open; one whose name carries no open issue's number and whose last commit is
+# older than this is stale (docs/maintaining.md).
 BRANCH_STALE_DAYS = 14
 # Directories with a lockfile that Dependabot deliberately does not update, and why
 # (docs/maintaining.md says the same).
@@ -126,12 +127,26 @@ def release_criteria(repo):
     return problems
 
 
-@check(f"no remote branch but main, open pull requests' heads and branches active in the last {BRANCH_STALE_DAYS} days")
+@check(f"no remote branch but main, open pull requests' heads, branches active in the last {BRANCH_STALE_DAYS} days, those of an open issue and those a report dispatches from")
 def branches(repo):
     open_heads = {p["head"]["ref"] for p in pages(f"repos/{repo}/pulls?state=open&per_page=100")}
+    # A workflow dispatch needs a branch or tag, so a report's reproduce command can need one.
+    reports = "\n".join(path.read_text(encoding="utf-8") for path in (ROOT / "reports").rglob("*.md"))
     problems = []
     for b in pages(f"repos/{repo}/branches?per_page=100"):
         if b["name"] == "main" or b["name"] in open_heads:
+            continue
+        if f"--ref {b['name']} " in reports:
+            continue
+        number = re.search(r"(?:^|/)(\d{2,5})(?:-|$)", b["name"])
+        issue = None
+        if number:
+            try:
+                issue = gh(f"repos/{repo}/issues/{number[1]}")
+            except RuntimeError:  # a number with no issue behind it is an ordinary branch
+                issue = None
+        # The issues endpoint also answers for pull requests.
+        if issue and issue.get("state") == "open" and "pull_request" not in issue:
             continue
         commit = gh(f"repos/{repo}/commits/{b['commit']['sha']}")
         stamp = commit["commit"]["committer"]["date"]
