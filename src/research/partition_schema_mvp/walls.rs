@@ -15,6 +15,9 @@ pub struct WallAxis {
     /// How far past its start and its end the body reaches at a butt join,
     /// where the join lists decide it (RE-70).
     pub join_reach_feet: [Option<f64>; 2],
+    /// Whether an angled wall's body must be the rectangle its box closes on
+    /// (RE-364): on Revit 2015 to 2020 nothing marks a slanted wall.
+    pub box_must_close: bool,
 }
 
 /// The centreline and thickness [`WALL_AXIS_START_FIELDS`],
@@ -34,6 +37,9 @@ pub fn wall_axis_from_fields(fields: &[(String, InstanceField)]) -> Option<WallA
         end: [ex?, ey?],
         thickness_feet: float(WALL_TYPE_THICKNESS_FIELD)?,
         join_reach_feet: WALL_JOIN_REACH_FIELDS.map(float),
+        box_must_close: fields.iter().any(|(name, value)| {
+            name == WALL_AXIS_BOX_MUST_CLOSE_FIELD && matches!(value, InstanceField::Bool(true))
+        }),
     })
 }
 
@@ -264,6 +270,11 @@ const WALL_PROFILE_OPENING_REVIT_VERSIONS: &[u32] = &[2024];
 /// [`WALL_PROFILE_OPENING_REVIT_VERSIONS`], and a release added to that list
 /// takes the rule only when it is added here.
 const WALL_END_JOIN_REVIT_VERSIONS: &[u32] = &[2024];
+
+/// Releases a wall is drawn along its location line and cut by its joins: 2024
+/// to 2027, and Revit 2015 to 2023 against the same Autodesk samples saved by
+/// Revit 2024. None of 2015 to 2023 is scored against a Revit export here.
+const WALL_CENTRELINE_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2027;
 
 /// Give each wall whose elevation profile was edited the openings that cuts
 /// (RE-151's 63rd opening).
@@ -654,10 +665,10 @@ pub(super) fn attach_wall_layers(
     {
         return;
     }
-    // A 2023 wall keeps its record body, cut back at its joins (RE-120),
-    // and takes only its layers and exterior side: its location line is not
-    // read (RE-114).
-    let centreline_bodies = !crate::partition_element_records_2023::is_32bit_release(revit_version);
+    // A wall before 2015 keeps its record body, cut back at its joins (RE-120),
+    // and takes only its layers and exterior side.
+    let centreline_bodies = WALL_CENTRELINE_REVIT_VERSIONS.contains(&revit_version);
+    let narrow = crate::partition_element_records_2023::is_32bit_release(revit_version);
     let type_of = |element: &DecodedElement| {
         element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
@@ -738,7 +749,9 @@ pub(super) fn attach_wall_layers(
             wall.fields
                 .push((WALL_TOP_JOINED_FIELD.into(), InstanceField::Bool(*joined)));
         }
-        if wall.id.is_some_and(|id| uncut.contains(&u64::from(id))) {
+        // RE-364: a 2015 to 2023 record is read without its control joins, so
+        // what reads as uncut or whole there is not known to be.
+        if !narrow && wall.id.is_some_and(|id| uncut.contains(&u64::from(id))) {
             wall.fields
                 .push((WALL_UNCUT_FIELD.into(), InstanceField::Bool(true)));
         }
@@ -825,7 +838,7 @@ pub(super) fn attach_wall_layers(
                 ));
             }
         }
-        if wall.id.is_some_and(|id| whole.contains(&u64::from(id))) {
+        if !narrow && wall.id.is_some_and(|id| whole.contains(&u64::from(id))) {
             wall.fields
                 .push((WALL_WHOLE_FIELD.into(), InstanceField::Bool(true)));
         }
@@ -909,7 +922,23 @@ pub(super) fn attach_wall_layers(
                 (first == 0.0 && third == 0.0 && exterior > 0.0 && exterior < FRAC_PI_4)
                     .then_some(exterior)
             });
-        let centred = centreline_bodies && measured && (word == 1 || taper.is_some());
+        // RE-180, RE-181: Revit 2015 to 2020 write no cross-section word, so
+        // nothing marks a slanted wall and each is drawn vertical.
+        let vertical = word == 1 || !pcs::wall_orientation_has_word(revit_version);
+        // RE-364: on 2015 to 2023 a wall along a model axis keeps its record
+        // box cut back at its joins, whose ends Revit's own export of a 2018
+        // project confirms where the line's overrun them: its control joins,
+        // which tell a butt end, are not read there.
+        let along_a_model_axis = lines.get(&id).is_some_and(|line| {
+            let (start, end) = (line.start(), line.end());
+            let (dx, dy) = (end[0] - start[0], end[1] - start[1]);
+            let length = dx.hypot(dy);
+            (dx / length).abs() <= 1e-9 || (dy / length).abs() <= 1e-9
+        });
+        let centred = centreline_bodies
+            && measured
+            && (vertical || taper.is_some())
+            && !(narrow && along_a_model_axis);
         let float = |value: f64| InstanceField::Float { value, size: 8 };
         // The direction the exterior side is taken from: the line's, or the
         // arc's tangent at its middle (RE-75).
@@ -921,6 +950,12 @@ pub(super) fn attach_wall_layers(
                 continue;
             }
             if centred {
+                if !pcs::wall_orientation_has_word(revit_version) {
+                    wall.fields.push((
+                        WALL_AXIS_BOX_MUST_CLOSE_FIELD.into(),
+                        InstanceField::Bool(true),
+                    ));
+                }
                 for (names, point) in [(WALL_AXIS_START_FIELDS, start), (WALL_AXIS_END_FIELDS, end)]
                 {
                     for (name, value) in names.iter().zip(point) {
@@ -1011,7 +1046,12 @@ pub(super) fn attach_wall_layers(
         attach_wall_butt_joins(rf, revit_version, walls, &layers, &native);
         attach_native_tee_reaches(walls, &native);
         attach_wall_corner_reaches(walls, &layers, &native);
-        attach_wall_lengths(walls, &native);
+        // A 2015 to 2023 record is read without its control joins (RE-364), and
+        // the rule takes a wall with none listed as joined to nothing, so its
+        // `Length` is left out.
+        if !crate::partition_element_records_2023::is_32bit_release(revit_version) {
+            attach_wall_lengths(walls, &native);
+        }
     }
 }
 

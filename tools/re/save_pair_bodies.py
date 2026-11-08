@@ -9,7 +9,9 @@ is a box and volume check, not shape equality: a mirrored body, or one whose
 volume sits differently inside the same box, agrees. Openings are left out
 (their own elements). With `--sources`, only the candidate's elements whose
 `BodySource` is one of those named are scored, and each one that differs is
-listed with the reference's `BodySource`.
+listed with the reference's `BodySource`. With `--no-openings`, a body is meshed
+without the voids of its openings, so that a wall scores apart from the doors
+and windows that cut it (RE-364).
 
 A body that cannot be paired is counted and printed, and the exit status is 1
 when there is one: a shape that did not mesh, or a `Tag` more than one product
@@ -43,11 +45,13 @@ DID_NOT_MESH = "did not mesh"
 REPEATED_TAG = "share a Tag with another product"
 
 
-def bodies(path, only=None):
+def bodies(path, only=None, openings=True):
     """(Tag -> (class, BodySource, volume, low corner, high corner),
     Tag -> (why it was not scored, BodySource), products with no Tag)."""
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
+    if not openings:
+        settings.set("disable-opening-subtractions", True)
     model = ifcopenshell.open(path)
     out = {}
     lost = {}
@@ -104,8 +108,16 @@ def main():
     parser.add_argument("candidate")
     parser.add_argument("reference")
     parser.add_argument("--sources", help="comma-separated BodySource values to score")
+    parser.add_argument(
+        "--no-openings",
+        action="store_true",
+        help="mesh each body without the voids of its openings",
+    )
     args = parser.parse_args()
-    candidate, candidate_lost, candidate_untagged = bodies(args.candidate)
+    openings = not args.no_openings
+    candidate, candidate_lost, candidate_untagged = bodies(
+        args.candidate, openings=openings
+    )
     if args.sources:
         wanted = set(args.sources.split(","))
         candidate = {tag: b for tag, b in candidate.items() if b[1] in wanted}
@@ -113,7 +125,7 @@ def main():
             tag: why for tag, why in candidate_lost.items() if why[1] in wanted
         }
     reference, reference_lost, reference_untagged = bodies(
-        args.reference, set(candidate) | set(candidate_lost)
+        args.reference, set(candidate) | set(candidate_lost), openings
     )
     tally = collections.defaultdict(lambda: [0, 0, 0])
     listed = []
