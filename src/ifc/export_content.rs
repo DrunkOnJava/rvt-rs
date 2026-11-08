@@ -694,6 +694,9 @@ pub fn append_typed_production_elements(
     let mut curve_ends: Vec<(usize, u32, &'static str)> = Vec::new();
     // #847: each pipe's two ends and the connector entry keys at each.
     let mut pipe_ends: BTreeMap<usize, PipeEnds> = BTreeMap::new();
+    // RE-370: a pipe's connectors' directions, where its own record gave
+    // them.
+    let mut pipe_flows: BTreeMap<usize, BTreeMap<u32, i64>> = BTreeMap::new();
     // RE-162: each MEP system's name and members, by its ElementId.
     let mut pending_systems: BTreeMap<u32, (Option<String>, Vec<usize>)> = Default::default();
     // Bodies of aggregate wholes, held back until their parts are known: a
@@ -1185,6 +1188,12 @@ pub fn append_typed_production_elements(
                 }
                 "Pipe" => {
                     curve_ends.push((entity_index, id, "PIPE"));
+                    let flows = crate::partition_schema_mvp::pipe_flow_directions_from_fields(
+                        &decoded.fields,
+                    );
+                    if !flows.is_empty() {
+                        pipe_flows.insert(entity_index, flows);
+                    }
                     if let Some(body) =
                         crate::partition_schema_mvp::pipe_body_from_fields(&decoded.fields)
                     {
@@ -1865,7 +1874,13 @@ pub fn append_typed_production_elements(
                 id,
                 index,
                 predefined_type: Some(kind.to_string()),
-                flow_direction: None,
+                // RE-212's direction, from the pipe's own record (RE-370); a
+                // release whose connector pass reads it sets it there too.
+                flow_direction: pipe_flows
+                    .get(&element)
+                    .and_then(|flows| flows.get(&index))
+                    .and_then(|&direction| crate::native_connectors::flow_direction_of(direction))
+                    .map(str::to_string),
                 location_feet: place.map(|(point, _)| point),
                 direction: place.map(|(_, outward)| outward),
             });
