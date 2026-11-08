@@ -40,8 +40,11 @@ name: Viewer tests
 # test, the toggle in saved-meshes-measure.spec.ts, is 114 s and sits in a
 # group with short files, and the group with viewer-regression.spec.ts (four
 # Core Interior opens) has no other long file: it took 213 to 227 s in four
-# runs while the others took 77 to 143. Every spec file must be in a group: the
-# first step of a leg fails on one that is not.
+# runs while the others took 77 to 143. The groups are by the sum of each file's
+# time in a run of all three (2026-11-08: 8.0, 2.9 and 2.3 minutes before this,
+# the first the last job of 8 of 15 full CI runs); parameters-row.spec.ts, at
+# 572 s, stands nearly alone. Every spec file must be in a group: the first step
+# of a leg fails on one that is not.
 #
 # `release_wasm: false` builds the WASM without LTO, at 16 codegen units: 55 s
 # warm against 150 to 225 s for the release profile (fat LTO, one codegen
@@ -56,7 +59,7 @@ on:
       legs:
         description: JSON list of the legs to run, each with a `name` and either `files` (the spec files of the suite it runs, as Playwright path filters) or `measure` true (the saved-mesh measurement)
         type: string
-        default: '[{"name":"browser tests 1/3","files":"/folded-pieces\\.spec /parameters-row\\.spec /saved-meshes-measure\\.spec /wasm-no-network-imports\\.spec /worker-failures\\.spec"},{"name":"browser tests 2/3","files":"/export-phase\\.spec /journey\\.spec /load-progress\\.spec /memory-ceiling\\.spec /memory-ceiling-capped\\.spec"},{"name":"browser tests 3/3","files":"/large-model-retry\\.spec /no-network\\.spec /viewer-regression\\.spec"}]'
+        default: '[{"name":"browser tests 1/3","files":"/parameters-row\\.spec /wasm-no-network-imports\\.spec /worker-failures\\.spec"},{"name":"browser tests 2/3","files":"/export-phase\\.spec /folded-pieces\\.spec /journey\\.spec /memory-ceiling\\.spec"},{"name":"browser tests 3/3","files":"/large-model-retry\\.spec /load-progress\\.spec /memory-ceiling-capped\\.spec /no-network\\.spec /saved-meshes-measure\\.spec /viewer-regression\\.spec"}]'
       release_wasm:
         description: Build the WASM as Deploy viewer publishes it (fat LTO, one codegen unit); false builds it in a third of the time, with no LTO and 16 codegen units
         type: boolean
@@ -72,7 +75,7 @@ on:
       legs:
         description: JSON list of the legs to run, each with a `name` and either `files` (the spec files of the suite it runs, as Playwright path filters) or `measure` true (the saved-mesh measurement)
         type: string
-        default: '[{"name":"browser tests 1/3","files":"/folded-pieces\\.spec /parameters-row\\.spec /saved-meshes-measure\\.spec /wasm-no-network-imports\\.spec /worker-failures\\.spec"},{"name":"browser tests 2/3","files":"/export-phase\\.spec /journey\\.spec /load-progress\\.spec /memory-ceiling\\.spec /memory-ceiling-capped\\.spec"},{"name":"browser tests 3/3","files":"/large-model-retry\\.spec /no-network\\.spec /viewer-regression\\.spec"}]'
+        default: '[{"name":"browser tests 1/3","files":"/parameters-row\\.spec /wasm-no-network-imports\\.spec /worker-failures\\.spec"},{"name":"browser tests 2/3","files":"/export-phase\\.spec /folded-pieces\\.spec /journey\\.spec /memory-ceiling\\.spec"},{"name":"browser tests 3/3","files":"/large-model-retry\\.spec /load-progress\\.spec /memory-ceiling-capped\\.spec /no-network\\.spec /saved-meshes-measure\\.spec /viewer-regression\\.spec"}]'
       release_wasm:
         description: Build the WASM as Deploy viewer publishes it (fat LTO, one codegen unit); false builds it in a third of the time, with no LTO and 16 codegen units
         type: boolean
@@ -299,8 +302,9 @@ jobs:
           files: RE1-Architecture.rvt RE1-Mechanical.rvt RE1-Plumbing.rvt RE1-Electrical.rvt
           path: _project_corpus/Revit
 
-      # folded-pieces.spec.ts opens the BIM4LCA office as built, the one model with
-      # a piece folded into another element's body (CC BY-SA 4.0). A file restored
+      # folded-pieces.spec.ts and parameters-row.spec.ts open the BIM4LCA office as
+      # built, the one model with a piece folded into another element's body and a
+      # read larger than its open (CC BY-SA 4.0). A file restored
       # is checked against its pin like a fetched one, and only main saves a file
       # that was verified. The host being unreachable says nothing about the
       # viewer, so that test is then not measured, and says so: `timeout`, since
@@ -308,14 +312,14 @@ jobs:
       # matches its pin fails. Deploy viewer's leg runs every file ("/").
       - name: Restore the BIM4LCA office as built
         id: office-cache
-        if: ${{ contains(matrix.files, 'folded-pieces') || matrix.files == '/' }}
+        if: ${{ contains(matrix.files, 'folded-pieces') || contains(matrix.files, 'parameters-row') || matrix.files == '/' }}
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: _bim4lca-viewer
           key: bim4lca-viewer-${{ hashFiles('research/bim4lca-measure.tsv', 'tools/ci/fetch-bim4lca.py') }}
       - name: Fetch the BIM4LCA office as built
         id: office
-        if: ${{ contains(matrix.files, 'folded-pieces') || matrix.files == '/' }}
+        if: ${{ contains(matrix.files, 'folded-pieces') || contains(matrix.files, 'parameters-row') || matrix.files == '/' }}
         shell: bash
         run: |
           name=ARK_NordicLCA_Office_Concrete_As-Built.rvt
