@@ -127,7 +127,7 @@ def release_criteria(repo):
     return problems
 
 
-@check(f"no remote branch but main, open pull requests' heads and branches active in the last {BRANCH_STALE_DAYS} days")
+@check(f"no remote branch but main, open pull requests' heads, branches active in the last {BRANCH_STALE_DAYS} days, those of an open issue and those a report dispatches from")
 def branches(repo):
     open_heads = {p["head"]["ref"] for p in pages(f"repos/{repo}/pulls?state=open&per_page=100")}
     # A workflow dispatch needs a branch or tag, so a report's reproduce command can need one.
@@ -138,8 +138,15 @@ def branches(repo):
             continue
         if f"--ref {b['name']} " in reports:
             continue
-        issue = re.search(r"(?:^|/)(\d{2,5})(?:-|$)", b["name"])
-        if issue and gh(f"repos/{repo}/issues/{issue[1]}").get("state") == "open":
+        number = re.search(r"(?:^|/)(\d{2,5})(?:-|$)", b["name"])
+        issue = None
+        if number:
+            try:
+                issue = gh(f"repos/{repo}/issues/{number[1]}")
+            except RuntimeError:  # a number with no issue behind it is an ordinary branch
+                issue = None
+        # The issues endpoint also answers for pull requests.
+        if issue and issue.get("state") == "open" and "pull_request" not in issue:
             continue
         commit = gh(f"repos/{repo}/commits/{b['commit']['sha']}")
         stamp = commit["commit"]["committer"]["date"]
