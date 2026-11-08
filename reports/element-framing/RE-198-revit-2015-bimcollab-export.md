@@ -18,7 +18,7 @@ The export is Revit 2015's own, but it was written on 2014-10-08. The file was s
 | of them written by rvt-rs, same ElementId | **241** |
 | in Revit's class | 127 (91 IfcBeam, 15 IfcColumn, 16 IfcFooting, 5 IfcSlab) |
 | in IFC4's class for Revit's IFC2X3 one | 114 (`IfcWall`, where IFC2X3 writes `IfcWallStandardCase`) |
-| written by rvt-rs and not in Revit's export | **3** `IfcAirTerminal` (124771, 148100, 221553; #879) |
+| written by rvt-rs and not in Revit's export | **3** `IfcAirTerminal` (#879) |
 
 The three air terminals are older than every element the export holds (its Tags run from 392844 to 407741), so they are not additions after the export. What made Revit's exporter skip them is not decoded.
 
