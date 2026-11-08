@@ -750,8 +750,7 @@ pub(super) fn attach_wall_layers(
                 .push((WALL_TOP_JOINED_FIELD.into(), InstanceField::Bool(*joined)));
         }
         // RE-364: a 2015 to 2023 record is read without its control joins, so
-        // what reads as uncut or whole there is not known to be: Revit's own
-        // exports differ on walls' quantities built on it.
+        // what reads as uncut or whole there is not known to be.
         if !narrow && wall.id.is_some_and(|id| uncut.contains(&u64::from(id))) {
             wall.fields
                 .push((WALL_UNCUT_FIELD.into(), InstanceField::Bool(true)));
