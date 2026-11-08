@@ -2504,4 +2504,4 @@ On the BIM4LCA office at building permit (Revit 2024), Revit's export gives each
 
 ## Addendum — RE-368 Phase Created on Revit 2015 to 2023 (2026-11-07)
 
-On Revit 2015 to 2023 an element's Phase Created is the phase its own body's `m_createdPhaseId` names, which `native_phases` reads with the phases' names (RE-184, RE-281). On Autodesk's samples every element both saves give a phase has its 2024 save's (2019's for `rst_advanced`): 84,950 of 84,950 across 31 saves. See `reports/element-framing/RE-368-2015-2023-phase-created.md`.
+On Revit 2015 to 2023 an element's Phase Created is the phase its own body's `m_createdPhaseId` names, which `native_phases` reads with the phases' names (RE-184, RE-281). On Autodesk's samples every element both saves give a phase has its 2024 save's: 84,045 of 84,045 across 30 saves (`rst_advanced` 2015's 905 agree with its 2019 save, which this rule also reads). Each sample holds its elements in one phase. See `reports/element-framing/RE-368-2015-2023-phase-created.md`.
