@@ -1337,11 +1337,10 @@ project's 38 framing members (23 of them the system's), so neither is added.
 Furniture Systems are `IfcSystemFurnitureElement` in the public IFC4 export of
 the 2018 `rac_basic` (RE-326 section 5, read locally): the 3 placed Furniture
 Systems of that save are all in it (3 of 3), none written that it lacks;
-the category qualifies and is not yet added, since a new category is a pull
-request of its own, and `category_map`'s `IfcFurniture` mapping for it is not
-what that export writes. Revit's exporter has code for rebar and beam systems
-(revit-ifc, CLEANROOM source 5), so the absence of an export is not evidence
-that Revit never writes them. On `rac_advanced` and `rac_basic` the sweep reads
+the category meets the rule, and RE-352 below adds it. Revit's exporter has
+code for rebar and beam systems (revit-ifc, CLEANROOM source 5), so the
+absence of an export is not evidence that Revit never writes them. On
+`rac_advanced` and `rac_basic` the sweep reads
 1,349 panels, 3,276 mullions and 100 doors, and 44 panels, 144 mullions and 16
 doors, on all eight saves of 2020 to 2027, every placed frame written. The 192
 panels, 1 door, 4 mullions and 2 panels that RvtIO counts beyond them on its
@@ -1350,6 +1349,26 @@ panels, 1 door, 4 mullions and 2 panels that RvtIO counts beyond them on its
 export of the 2018 `rac_basic` holds none of the 6, and the IFC2X3 export of
 `rac_advanced` none of the 193. Their family types are not read from the file
 (`reports/element-framing/RE-350-unread-categories-and-rvtio-extras.md`).
+
+**RE-352 (2026-11-05)** exports Furniture Systems (`OST_FurnitureSystems`,
+#1444) as `IfcSystemFurnitureElement` with no `PredefinedType`, from their
+element records on every release the exporter reads, where `category_map` gave
+`FurnitureSystem` the class `IfcFurniture` and nothing produced it. It rests
+on one project and 3 elements: Revit's public IFC4 export of Autodesk's 2018
+`rac_basic` holds 3 `IfcSystemFurnitureElement`, and the 3 the head writes for
+that save are its 3 by `Tag`, none extra and none missing, with record boxes
+equal to Revit's bodies to 0.0000 ft (counts and distances; the export has no
+licence and nothing is quoted from it; Measure run 42135914864 on `4ca938ad`).
+That export writes no property set on its 3, so no `Reference` is written. It
+contains all 3 in a space; rvt-rs contains 2 of the 3 in a space on Revit 2024
+and later only, as for every furniture class, and the third has no Level and
+stays in the building. Type objects are not written, though Revit's export
+types all 3. In that run 13 of 111 exports move, every `rac_basic` save of 2015
+to 2027, each by 3 `IfcSystemFurnitureElement` and nothing else, 98 are byte
+for byte main's, and the same-project gates pass (the three `rac_basic` saves
+among their 9 samples hold the category). No other model in Measure places a
+Furniture System
+(`reports/element-framing/RE-352-furniture-systems.md`).
 
 ## Performance
 

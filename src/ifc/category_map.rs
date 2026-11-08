@@ -268,9 +268,12 @@ pub const MAPPINGS: &[Mapping] = &[
         ifc_type: "IFCFURNITURE",
         predefined_type: None,
     },
+    // RE-352: system furniture is `IfcSystemFurnitureElement`, with no
+    // `PredefinedType`, in Revit's own IFC4 export of Autodesk's 2018
+    // `rac_basic` sample, for all 3 the sweep selects there.
     Mapping {
         revit_class: "FurnitureSystem",
-        ifc_type: "IFCFURNITURE",
+        ifc_type: "IFCSYSTEMFURNITUREELEMENT",
         predefined_type: None,
     },
     Mapping {
