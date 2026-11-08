@@ -59,4 +59,7 @@ Reading every instance's saved graphics costs 31% to 36% of an office export. An
 gh workflow run measure.yml --ref research/1496-water-closet-tank -f ref=c5bd28e3684feac1e23751f3dfca410d7bb3bd68 -f base=none \
   -f nordic=true -f r2025=true -f holdout=true -f scorers=none \
   -f probe=probe_re363_type_level -f probe_scorer=empty_bodies_vs_ifc
+gh workflow run measure.yml --ref research/1496-water-closet-tank -f ref=af85afada989bc1ea4d734eb868d3fe964606a69 -f base=none \
+  -f nordic=true -f r2025=true -f holdout=true -f scorers=none \
+  -f probe="probe_re363_plumbing_fixtures probe_re363_empty_bodies" -f probe_scorer="tank_rules_vs_ifc empty_bodies_vs_ifc"
 ```

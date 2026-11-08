@@ -1,7 +1,1 @@
-- **A probe and a scorer for what separates RE1 Plumbing's water closet tank
-  from the plumbing fixtures Revit's export holds (#1496, RE-363).**
-  `probe_re363_plumbing_fixtures` prints, for every plumbing fixture a file
-  holds, the record, native, family-form and saved-graphics readings that
-  candidate rules would use, and `tools/re/tank_rules_vs_ifc.py` counts, for
-  each rule, the fixtures in Revit's export it would drop. Not yet measured on
-  this head.
+- **RE-363: what separates the family instances Revit's export leaves out (#1496).** On 52 models with a Revit export (Measure runs 42518898114 and 42521763730; the held-out models as counts only), a family instance other than a door or window whose saved graphics decode to no surface and no diagnostic, with a branch left out as not visible, is never in Revit's export: 5,551 of 31,958 instances, no false negative, and 5,556 when read once per type symbol, also none. RE1 Plumbing's water closet tank is one of them. No export changes: the rule is not written yet.
