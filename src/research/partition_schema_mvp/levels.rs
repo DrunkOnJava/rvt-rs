@@ -207,8 +207,10 @@ pub(super) fn attach_levels_32(
             .ok()
             .filter(|id| names.contains_key(id))
     };
-    // Every element's Element base, its graph left undecoded.
-    let mut bases: BTreeMap<u32, Option<Option<u32>>> = BTreeMap::new();
+    // Every element's Element base, its graph left undecoded: the id the base
+    // names, as stored, so that one naming a Level that was not recovered is
+    // told from one naming none.
+    let mut bases: BTreeMap<u32, Option<i64>> = BTreeMap::new();
     let base_options = Options {
         selected_ids: selected,
         graph_classes: Some(BTreeSet::new()),
@@ -217,7 +219,7 @@ pub(super) fn attach_levels_32(
     };
     if native_document::extract_graphs(rf, &base_options, |record| {
         if let (Some(base), Ok(id)) = (&record.base, u32::try_from(record.identity.element_id)) {
-            agree_levels(&mut bases, id, level(base.associated_level_id));
+            agree_levels(&mut bases, id, base.associated_level_id);
         }
         Ok(())
     })
@@ -229,9 +231,12 @@ pub(super) fn attach_levels_32(
     let graphed = ids(
         &|element| {
             element.class == "Wall"
-                || element
-                    .id
-                    .is_some_and(|id| matches!(bases.get(&id), Some(Some(None)) | None))
+                || element.id.is_some_and(|id| match bases.get(&id) {
+                    Some(Some(raw)) => *raw <= 0,
+                    // Copies that disagree, or a base that was not read, may name a
+                    // Level: no other field stands in for it.
+                    Some(None) | None => false,
+                })
         },
         &groups,
     );
@@ -243,7 +248,7 @@ pub(super) fn attach_levels_32(
             releases: native_document::NATIVE_RELEASES,
             ..Options::default()
         };
-        let _ = native_document::extract_graphs(rf, &graph_options, |record| {
+        let read = native_document::extract_graphs(rf, &graph_options, |record| {
             let (Some(graph), Ok(id)) = (
                 record.graph.as_ref(),
                 u32::try_from(record.identity.element_id),
@@ -284,29 +289,47 @@ pub(super) fn attach_levels_32(
             );
             Ok(())
         });
+        if read.is_err() {
+            graphs.clear();
+        }
     }
     for element in groups.iter_mut().flat_map(|group| group.iter_mut()) {
         let Some(id) = element.id else {
             continue;
         };
+        let raw = bases.get(&id).copied().flatten();
         let named = NamedLevels {
-            base: bases.get(&id).copied().flatten().flatten(),
+            base: raw.and_then(level),
             ..graphs.get(&id).copied().flatten().unwrap_or_default()
         };
-        let mut push = |field: &str, level: u32| {
-            element
-                .fields
-                .push((field.into(), InstanceField::String(names[&level].into())));
+        // A base naming a Level that was not recovered says the element has
+        // one, so no other field stands in for it.
+        let base_unrecovered = raw.is_some_and(|raw| raw > 0 && level(raw).is_none());
+        // A beam's or brace's Reference Level is its own field: its Schedule
+        // Level is another parameter, and never stands in for it.
+        let schedule = if element.class == "StructuralFraming" {
+            None
+        } else {
+            named.schedule
         };
-        if let Some(level) = named
-            .base
-            .or(named.own_base)
-            .or(named.schedule)
-            .or(named.curve_start)
-        {
-            push(lp::LEVEL_PARAMETER_FIELD, level);
-        } else if let Some(level) = named.reference {
-            push(REFERENCE_LEVEL_FIELD, level);
+        let mut push = |field: &str, level: u32| {
+            if let Some(name) = names.get(&level) {
+                element
+                    .fields
+                    .push((field.into(), InstanceField::String((*name).into())));
+            }
+        };
+        if !base_unrecovered {
+            if let Some(level) = named
+                .base
+                .or(named.own_base)
+                .or(schedule)
+                .or(named.curve_start)
+            {
+                push(lp::LEVEL_PARAMETER_FIELD, level);
+            } else if let Some(level) = named.reference {
+                push(REFERENCE_LEVEL_FIELD, level);
+            }
         }
         if let Some(level) = named.top {
             push(lp::TOP_LEVEL_PARAMETER_FIELD, level);
