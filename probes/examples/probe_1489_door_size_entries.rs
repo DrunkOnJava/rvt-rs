@@ -22,7 +22,8 @@ use std::collections::BTreeSet;
 use rvt::RevitFile;
 use rvt::elem_table;
 use rvt::research::partition_type_parameters::{
-    WINDOW_HEIGHT_PARAMETER, WINDOW_WIDTH_PARAMETER, scan_partition_lengths, type_door_sizes,
+    VALUE_BLOCK_MARK, WINDOW_HEIGHT_PARAMETER, WINDOW_WIDTH_PARAMETER, scan_partition_lengths,
+    type_door_sizes,
 };
 
 const OWNERS: [u32; 4] = [431054, 490150, 235155, 232780];
@@ -118,6 +119,22 @@ fn main() -> anyhow::Result<()> {
                 .map(|b| format!("{b:02x}"))
                 .collect();
             println!("width {stream} @{at} owner={owner} {}", hex.join(""));
+            // The block marks before the entry, nearest first, with the u64 in
+            // the eight bytes before each and whether it is a declared id: the
+            // owner is the nearest mark with a declared id or a zero, and a
+            // mark of any other id is passed over.
+            let marks: Vec<usize> = memchr::memmem::find_iter(&bytes[..at], &VALUE_BLOCK_MARK)
+                .filter(|&mark| mark >= 8)
+                .collect();
+            for &mark in marks.iter().rev().take(4) {
+                let id = u64::from_le_bytes(bytes[mark - 8..mark].try_into().unwrap_or([0; 8]));
+                let is_declared = u32::try_from(id).is_ok_and(|id| declared.contains(&id));
+                println!(
+                    "  mark {stream} @{mark} back={} id={id} declared={is_declared} before=0x{:02x}",
+                    at - mark,
+                    bytes[mark - 1]
+                );
+            }
         }
     }
     let sizes = type_door_sizes(&mut rf, version, &owners);
