@@ -274,12 +274,15 @@ def properties(element):
         if not rel.is_a("IfcRelDefinesByProperties"):
             continue
         for prop in getattr(rel.RelatingPropertyDefinition, "HasProperties", None) or []:
-            if prop.NominalValue is None:
+            # An enumerated or list value, such as a duct's
+            # Pset_DuctSegmentTypeCommon.Shape, has no NominalValue at all.
+            value = getattr(prop, "NominalValue", None)
+            if value is None:
                 continue
             if prop.Name == "BodySource":
-                source = prop.NominalValue.wrappedValue
+                source = value.wrappedValue
             elif prop.Name == "ProfileResolved":
-                resolved = bool(prop.NominalValue.wrappedValue)
+                resolved = bool(value.wrappedValue)
     return source, resolved
 
 
@@ -289,8 +292,9 @@ def placement_source(element):
         if not rel.is_a("IfcRelDefinesByProperties"):
             continue
         for prop in getattr(rel.RelatingPropertyDefinition, "HasProperties", None) or []:
-            if prop.Name == "PlacementAxesSource" and prop.NominalValue is not None:
-                return prop.NominalValue.wrappedValue
+            value = getattr(prop, "NominalValue", None)
+            if prop.Name == "PlacementAxesSource" and value is not None:
+                return value.wrappedValue
     return None
 
 
