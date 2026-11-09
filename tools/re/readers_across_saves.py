@@ -37,9 +37,8 @@ shares with this one cannot be caught.
                 `save_pair_bodies.py` does it (world box to 3 mm, volume to
                 0.1%). A body that differs fails, except a roof left as a record
                 box where the 2025 save draws it (ROOFS_LEFT_AS_BOXES, counted,
-                exactly those) and the PINNED_WALLS, 16 walls of rac_basic that
-                must differ exactly as pinned (a wall whose source, volume or
-                world box moves, or that heals, fails). The pins can only shrink.
+                exactly those). The PINNED_WALLS, 16 walls of rac_basic pinned
+                until #1471 healed them, are empty, and no entry joins them.
 
 Every check prints how many it compared, and a check whose least number is
 not reached fails (MINIMUMS), so one that compared nothing is never a pass.
@@ -92,108 +91,15 @@ ADDED = [
 ]
 ADDED = [tuple(re.compile(part) for part in rule) for rule in ADDED]
 
-# The only bodies that are allowed to differ from the 2025 save's: 16 walls of
-# rac_basic, which both saves draw from the same source and of another extent
-# (up to 3.19 m), as on `main` (Griffin, 2026-11-05; #1471 is the lane fixing
-# them). This list can only shrink, and no entry is ever added: PINNED_MOST caps
-# it, and tools/ci/check_same_project_projects.py holds the 16 tags. Each wall is
-# pinned for each release to its exact source pair, the volume of each body and
-# the world box of each body, so a wall whose source, volume or box moves by
-# more than PIN_TOLERANCE fails, one that heals included, which forces its pin
-# out. Six of them host cut openings that this change moves to exactly the
-# 2025 save's volume (the check of hosts); their bodies still differ from the
-# 2025 save's by 0.56 to 2.35 m3 without their openings too, as on `main`.
-# The 2027 save's 16 are the 2026 save's, wall for wall, source, volumes and
-# boxes (Measure run 42107917715, head f1460b32, scored with this script on the
-# IFC files it kept).
-# tag: (BodySource here, BodySource in the 2025 save, volume here, volume there in m3,
-#       world box here, world box there as (low x, y, z, high x, y, z) in m)
-_LAYERS = "partition_wall_centreline_layer_joins"
-_TRIMMED = "partition_element_record_join_trimmed"
-_RAC_BASIC_WALLS = {
-    "234869": (
-        _LAYERS, _LAYERS, 2.549528, 5.529220,
-        (9.900932, -3.214594, 3.0, 10.102932, 1.418406, 5.726517),
-        (9.900932, -3.214594, 3.0, 10.102932, 1.418406, 8.91306),
-    ),
-    "428588": (
-        _TRIMMED, _TRIMMED, 9.584475, 10.544400,
-        (-6.438068, 2.798406, 2.7, 13.061932, 3.000406, 6.0),
-        (-6.438068, 2.798406, 2.7, 13.061932, 3.000406, 6.0),
-    ),
-    "428745": (
-        _TRIMMED, _TRIMMED, 10.735875, 11.695800,
-        (-6.438068, -3.403594, 2.2, 13.061932, -3.201594, 6.0),
-        (-6.438068, -3.403594, 2.2, 13.061932, -3.201594, 6.0),
-    ),
-    "429964": (
-        _LAYERS, _LAYERS, 1.768581, 4.071177,
-        (1.001931, -3.214594, 3.0, 1.121932, 2.811406, 5.726517),
-        (1.001931, -3.214594, 3.0, 1.121932, 2.811406, 8.91306),
-    ),
-    "430064": (
-        _TRIMMED, _TRIMMED, 2.055400, 4.406434,
-        (-1.318068, 1.298406, 3.0, 9.900932, 1.418406, 5.726517),
-        (-1.318068, 1.298406, 3.0, 9.900932, 1.418406, 7.472836),
-    ),
-    "430318": (
-        _LAYERS, _LAYERS, 0.725089, 1.808131,
-        (4.061932, -1.525594, 3.0, 4.181932, 1.308406, 5.726517),
-        (4.061932, -1.525594, 3.0, 4.181932, 1.308406, 8.91306),
-    ),
-    "430361": (
-        _LAYERS, _LAYERS, 0.905749, 1.542956,
-        (4.181932, -1.525594, 3.0, 6.951932, -1.405594, 5.726517),
-        (4.181932, -1.525594, 3.0, 6.951932, -1.405594, 7.644659),
-    ),
-    "430412": (
-        _LAYERS, _LAYERS, 0.488536, 1.051978,
-        (6.941931, -3.214594, 3.0, 7.061932, -1.085594, 5.726517),
-        (6.941931, -3.214594, 3.0, 7.061932, -1.085594, 7.952507),
-    ),
-    "430859": (
-        _LAYERS, _LAYERS, 1.055402, 2.826164,
-        (-1.438068, -3.214594, 3.0, -1.318068, 1.418406, 5.726517),
-        (-1.438068, -3.214594, 3.0, -1.318068, 1.418406, 8.91306),
-    ),
-    "497540": (
-        _LAYERS, _LAYERS, 0.764515, 1.638923,
-        (-1.328068, -0.021594, 3.0, 1.011932, 0.098406, 5.726517),
-        (-1.328068, -0.021594, 3.0, 1.011932, 0.098406, 8.844945),
-    ),
-    "506386": (
-        _TRIMMED, _TRIMMED, 0.392618, 0.735880,
-        (-0.788068, -1.041594, 3.0, 0.411932, -0.921594, 5.726517),
-        (-0.788068, -1.041594, 3.0, 0.411932, -0.921594, 8.110278),
-    ),
-    "506797": (
-        _LAYERS, _LAYERS, 0.299917, 0.650437,
-        (-0.248068, -0.931594, 3.0, -0.128068, -0.011594, 5.726517),
-        (-0.248068, -0.931594, 3.0, -0.128068, -0.011594, 8.91306),
-    ),
-    "768442": (
-        _LAYERS, _LAYERS, 0.911475, 1.655623,
-        (4.171932, -1.205594, 3.0, 7.051932, -1.085594, 5.726517),
-        (4.171932, -1.205594, 3.0, 7.051932, -1.085594, 7.952507),
-    ),
-    "937935": (
-        _LAYERS, _LAYERS, 0.554628, 0.921333,
-        (4.445646, -3.214594, 3.0, 4.565646, -1.515594, 5.726517),
-        (4.445646, -3.214594, 3.0, 4.565646, -1.515594, 7.529216),
-    ),
-    "938974": (
-        _LAYERS, _LAYERS, 0.785455, 1.703434,
-        (6.556832, -1.095594, 3.0, 6.676832, 1.308406, 5.726517),
-        (6.556832, -1.095594, 3.0, 6.676832, 1.308406, 8.91306),
-    ),
-    "939084": (
-        _LAYERS, _LAYERS, 0.782478, 1.494859,
-        (4.171932, 0.590406, 3.0, 6.566832, 0.710406, 5.726517),
-        (4.171932, 0.590406, 3.0, 6.566832, 0.710406, 8.208785),
-    ),
-}
-PINNED_WALLS = {"racbasicsampleproject": {2026: _RAC_BASIC_WALLS, 2027: _RAC_BASIC_WALLS}}
-PINNED_MOST = 16
+# No body may differ from the 2025 save's but the ROOFS_LEFT_AS_BOXES. The 16
+# walls of rac_basic pinned here on 2026-11-05 (Griffin; their source pair,
+# volumes and world boxes, at most PINNED_MOST) all became the 2025 save's with
+# #1471 (RE-351), and left the list, which no entry ever joins:
+# tools/ci/check_same_project_projects.py holds PINNED_MOST at 0. A pinned wall
+# whose source, volume or box moves by more than PIN_TOLERANCE fails, and so
+# does one that heals.
+PINNED_WALLS = {}
+PINNED_MOST = 0
 PIN_TOLERANCE = 1e-6
 # The roofs a save may leave as a record box where the 2025 save draws them (the
 # roof is cut by walls, #1471; Griffin, 2026-11-05), exactly: one in each of

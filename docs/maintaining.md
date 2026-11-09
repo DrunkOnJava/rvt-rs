@@ -414,14 +414,11 @@ not remove Compare's report.
 - **A difference** is a reader that is wrong or a project that really differs
   between saves. Narrow the reader until it is never wrong and let what it
   leaves out stay a box, counted (`left as boxes`); do not allowlist. The one
-  exception (Griffin, 2026-11-05) is `PINNED_WALLS` in `readers_across_saves.py`:
-  16 walls of `rac_basic` that both saves draw from the same source, of another
-  extent, as on `main` (#1471 is the lane fixing them). It can only shrink and no
-  entry is ever added: `tools/ci/check_same_project_projects.py` (a CI step) holds the
-  16 tags and fails on a release with more than 16 or with a tag not among them. Each
-  wall is pinned for each release to its source pair, the volume of each body and the
-  world box of each body (1e-6), so a wall whose source, volume or box moves fails,
-  and one that heals fails too, which forces its pin out. A roof a save leaves as a
+  exception (Griffin, 2026-11-05), `PINNED_WALLS` in `readers_across_saves.py`, held
+  16 walls of `rac_basic` that both saves drew from the same source, of another
+  extent; #1471 (RE-351) healed all 16 and the list is empty. No entry is ever
+  added: `tools/ci/check_same_project_projects.py` (a CI step) holds `PINNED_MOST` at
+  0 and fails on any tag beyond the 16 first pinned. A roof a save leaves as a
   record box where the 2025 save draws it is counted, not scored, and exactly:
   `ROOFS_LEFT_AS_BOXES` names `rac_advanced`'s 201262 and `rac_basic`'s 243274, and one
   more or one fewer fails. Any other body that differs from the 2025 save fails; a
