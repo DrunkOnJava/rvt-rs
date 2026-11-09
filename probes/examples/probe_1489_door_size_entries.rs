@@ -97,6 +97,9 @@ fn main() -> anyhow::Result<()> {
             continue;
         };
         let bytes = inflated.bytes();
+        let chain = rvt::research::partition_element_records::bbox_marker(version).map(|marker| {
+            rvt::research::partition_element_records::partition_record_chain(bytes, &marker)
+        });
         let placed: Vec<(u32, usize)> =
             rvt::research::partition_type_parameters::scan_partition_length_places(
                 bytes, &declared, &widths, true,
@@ -130,7 +133,19 @@ fn main() -> anyhow::Result<()> {
                 .iter()
                 .map(|b| format!("{b:02x}"))
                 .collect();
-            println!("width {stream} @{at} owner={owner} {}", hex.join(""));
+            // The record of the partition's chain (RE-35) the entry sits in.
+            let record = chain
+                .as_ref()
+                .and_then(|chain| {
+                    rvt::research::partition_element_records::enclosing_record(chain, at)
+                })
+                .map_or("outside the chain".to_string(), |span| {
+                    format!("record {} @{}..{}", span.element_id, span.start, span.end)
+                });
+            println!(
+                "width {stream} @{at} owner={owner} in {record} {}",
+                hex.join("")
+            );
             // The block marks before the entry, nearest first, with the u64 in
             // the eight bytes before each and whether it is a declared id: the
             // owner is the nearest mark with a declared id or a zero, and a
