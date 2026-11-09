@@ -108,3 +108,26 @@ cargo run --profile ci -p rvt-probes --example probe_re364_wall_join_lists_32 --
 cargo run --profile ci -p rvt-probes --example probe_re364_wall_join_lists_32 -- samples/2024-racadvancedsampleproject.rvt 2024 walls.txt > 2024.txt
 diff 2023.txt 2024.txt
 ```
+
+## 8. Addendum, 2026-11-08: angled walls on Revit 2015 to 2020 keep their box (#1535)
+
+On 2015 to 2020 an angled wall keeps its record box unless the box closes on its line's rectangle (section 3), because nothing read on those releases marks a slanted wall. #1535 asked whether the line bodies of the first head (`0aad0b0c`, archived at `refs/archive/2026-11-08/pr1517-first-head`) could come back wall by wall. It was answered on the spent Vitoria `ALD26 Before` (Revit 2018, IFC2X3), the one model whose walls can be listed, against the code before the change.
+
+**Faces gain and ends do not.** A trial that takes an angled wall's faces from its line and its ends from its box (`7180ba95`, Measure run 42532798082) takes `ALD26 Before`'s angled walls with both faces within 0.001 ft of Revit's from 1 to 33 of 48. Its two held-out projects show the same gain: Frigento (Revit 2020, IFC4) from 2 to 69 of 83, and Vitoria's `ALD26 Project` from 1 to 33 of 74, both counts only, and both already scored for this work. Taking each wall's larger error, faces or ends, against its box, 25 walls are better, 15 the same and 8 worse. Those 8 are worse at their ends alone, and their faces are exact.
+
+**What the 8 walls' ends are** (Measure run 42558474888, with a temporary scorer that signs each end's difference: positive where rvt-rs's body runs past Revit's end):
+
+| wall | box: start, end (ft) | line: start, end (ft) |
+|---|---|---|
+| 705842 | +0.164, +0.164 | +0.278, +0.277 |
+| 706031 | +0.163, +0.165 | +0.279, +0.276 |
+| 706347 | +0.174, +0.014 | +0.279, -0.002 |
+| 706416 | +0.174, +0.009 | +0.277, -0.004 |
+| 706468 | +0.169, +0.171 | +0.275, +0.278 |
+| 706632 | +0.186, +0.186 | +0.279, +0.279 |
+| 706787 | +0.184, +0.184 | +0.278, +0.279 |
+| 706109 | +0.000, -0.000 | -0.003, -0.001 |
+
+On 7 of them Revit's wall stops 0.275 to 0.279 ft (about 85 mm) short of the line's end, at one or both ends, and short of the box's end as well. That fits a trim at a join, and it fits a rule for the one wall type as well. All 8 are `LKS_T9 10cm`, and the 58 ends of that type's 29 angled walls under the line body fall on a few values: 12 about 0.28 ft past Revit's, 12 about 0.17 ft past, 4 about 0.39 ft short, 4 0.037 ft short and 26 within 0.02 ft. No step compared Revit's end with a neighbouring wall's face, so neither reading is tested. None of the 48 angled walls has a join reach on these releases. Four other explanations were tried and are ruled out: the wall type's thickness, the wall lying within 5° of a model axis, the run estimate (taking it from the dominant axis left the same 8 worse by the same amounts, run 42541485876) and how the box's run estimates differ. Of the 25 walls the trial improves, only 5 have both ends within 0.01 ft of Revit's. The other 20 have 28 ends beyond 0.01 ft: 16 of them are about 0.17 or 0.39 ft, and the rest are between 0.02 and 0.28 ft.
+
+**Result.** By the second case of #1535's done-when, these walls set the limit. An angled wall of Revit 2015 to 2020 whose box does not close on its line's rectangle stays its box, as on `main`. Which rule gives its ends is not known. If it is a join trim, it needs the control joins these releases' records do not yet give (section 6, #1158). The decision holds either way. The wall quantities the first head wrote on 2015 to 2023 remain separate work under #1535.
