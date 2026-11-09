@@ -8,4 +8,7 @@
   railing joins the stair its record names (`BaseRailing.m_stairsId`, the field
   RE-254 reads a stair railing's length from) on Revit 2024 to 2027, where a run,
   landing or stringer already makes that stair a whole; a stair no part names
-  keeps its own body.
+  keeps its own body. A railing whose record names a component of the stair
+  (`m_stairsComponentId`, a run) stays a plain element, as in Revit's export
+  (RE-390): one of the BIM4LCA office's 26 stair railings, Tag 2598405, which
+  Revit's export puts on Level_01 while its stair is in the Basement.

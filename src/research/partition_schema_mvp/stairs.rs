@@ -527,10 +527,13 @@ pub(super) fn attach_stair_dimensions(
 /// Give each railing of a stair whose path is one line along that stair's
 /// runs its `Length` ([`crate::native_stairs::railing_records`], RE-254), and
 /// each railing that belongs to a stair the stair as its whole, as Revit's
-/// export aggregates it (#1624): 76 of Snowdon Towers' 142 railings and all 10 of
-/// the R2025 stair models' (13 to 17). Only a stair that one of its runs, landings or
-/// stringers already names is a whole here: a stair carried by its parts has
-/// no body of its own, and a railing alone must not take the stair's away.
+/// export aggregates it (#1624), except a railing that sits on one of the
+/// stair's components (`BaseRailing.m_stairsComponentId`, RE-390), which
+/// Revit's export leaves a plain element of its storey: the office's railing
+/// 2598405, on a run of a stair of the Basement and itself on Level_01. Only a
+/// stair that one of its runs, landings or stringers already names is a whole
+/// here: a stair carried by its parts has no body of its own, and a railing
+/// alone must not take the stair's away.
 pub(super) fn attach_railing_lengths(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -577,6 +580,7 @@ pub(super) fn attach_railing_lengths(
         let stair = records
             .stairs
             .get(&id)
+            .filter(|_| !records.on_components.contains(&id))
             .and_then(|stair| u32::try_from(*stair).ok())
             .filter(|stair| carried_stairs.contains(stair));
         if let Some(stair) = stair {

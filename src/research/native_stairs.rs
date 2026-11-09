@@ -888,13 +888,19 @@ pub struct RailingRecords {
     /// aggregates such a railing under its stair, as it does the stair's runs
     /// and stringers (#1624).
     pub stairs: BTreeMap<u64, u64>,
+    /// The railings among them whose record names a component of their
+    /// stair (`BaseRailing.m_stairsComponentId`, a run). Revit's export
+    /// leaves such a railing out of the stair's aggregate, a plain element of
+    /// its own storey (RE-390).
+    pub on_components: BTreeSet<u64>,
     /// The `Length` Revit's export writes on each railing whose path is one
     /// straight line along its stair's runs, feet; see [`railing_records`].
     pub lengths: BTreeMap<u64, f64>,
 }
 
 /// The stair of each railing in `railings` that belongs to one
-/// (`BaseRailing.m_stairsId`) and the `Length` Revit's export writes on each
+/// (`BaseRailing.m_stairsId`), the railings among them that sit on a component
+/// of it (`m_stairsComponentId`), and the `Length` Revit's export writes on each
 /// whose path, the sketch its record names (`m_sketchId`), is one straight
 /// line along one or more of that stair's runs, feet (RE-254). The line
 /// climbs at the stair's riser height over its tread depth (its
@@ -926,6 +932,9 @@ pub fn railing_records(
         let stair = root.and_then(|root| element_id(&root.fields, "m_stairsId"));
         if let Some(stair) = stair {
             records.stairs.insert(id, stair);
+        }
+        if root.is_some_and(|root| element_id(&root.fields, "m_stairsComponentId").is_some()) {
+            records.on_components.insert(id);
         }
         let sketch = root.and_then(|root| element_id(&root.fields, "m_sketchId"));
         if let (Some(sketch), Some(stair)) = (sketch, stair) {
