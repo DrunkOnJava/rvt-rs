@@ -93,6 +93,7 @@ mod export_pipeline;
 pub mod family_extrusions;
 pub mod from_decoded;
 pub mod gltf;
+mod mesh_volume;
 pub mod pbr;
 pub mod revit_property_sets;
 pub mod revit_set_placement;
