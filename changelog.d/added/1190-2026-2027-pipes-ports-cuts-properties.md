@@ -16,11 +16,13 @@
   writes no `Family:Type` there (the `ObjectType` of every other class differs on
   those releases as well, #1472); their Width, Height and the stairs' names and
   types are written and equal. No
-  held-out model holds a pipe, a duct or a port. On the 2026 saves of Measure
-  run 42063046730 (head 3149973f) the bodies that differ from the 2025 save fall
-  from 490 and 493 to 0 on `rme_advanced` and `rme_basic`, and every port of the
-  four Autodesk samples that hold one, 14,095 in all, is the 2025 save's; the
-  2027 saves, held to the gate by Measure run 42119142486 (head 95fe042f), give
-  the same numbers but for two doors of `rac_basic` that write no Width and
-  Height (#1489), and the unfiltered run that scores the shipped head is not yet made. Every 2015 to 2025 file exports as
-  before on puzzbobb's local run.
+  held-out model holds a pipe, a duct or a port. In Measure run 42545885153
+  (this change against `main` at 1c088750, unfiltered), on the 2026 and 2027
+  saves of `rme_advanced` and `rme_basic` every body is the 2025 save's (6,605
+  and 6,650; 36 walls differed on `main`, uncut by their doors and windows),
+  every pipe (488 and 491) is the 2025 save's cylinder, as it already was since
+  RE-370, and the placed ports are the 2025 save's, 6,967 and 7,054 of them
+  against 1,944 on `main`. `rac_advanced`'s 2027 save compares its 83 doors and
+  24 windows and leaves none out. Only 2026 and 2027 exports move (15 of 118),
+  and on the held-out 2026 and 2027 pairs every value added is equal, with
+  "different" and the values Revit does not write unchanged.

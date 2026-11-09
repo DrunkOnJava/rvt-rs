@@ -198,15 +198,15 @@ CYLINDER_LEAST = {
 # and on rac_advanced 2027 68 doors and 24 windows compared and 15 doors left out, in the
 # 8 host walls of #1475: 14 whose frame differs from the 2024 save's and one whose frame
 # is the same. The 2027 doors floor and ceiling were set differently from what was
-# predicted, and its windows floor is the 24 measured. RE-360 (#1500) now reads the
-# 14 doors' host walls, so 15 is an upper bound here until the merged head's Measure
-# run counts them; that run sets the 2027 floor and ceiling. When #1475 is read in
-# full they return to 83 doors, 24 windows and a ceiling of 0.
+# predicted, and its windows floor is the 24 measured. RE-360 (#1500) reads the 14
+# doors' host walls, and on this change merged with it rac_advanced 2027 compares
+# 83 doors and 24 windows and leaves none out, as 2026 does (Measure run 42545885153,
+# head ea21dfc6): the floor is 83 and 24 and the ceiling 0.
 OPENINGS_LEAST = {
     "racadvancedsampleproject": {
         2025: {"IfcDoor": 83, "IfcWindow": 24},
         2026: {"IfcDoor": 83, "IfcWindow": 24},
-        2027: {"IfcDoor": 68, "IfcWindow": 24},
+        2027: {"IfcDoor": 83, "IfcWindow": 24},
     },
     "racbasicsampleproject": {
         2025: {"IfcDoor": 10, "IfcWindow": 7},
@@ -225,7 +225,7 @@ OPENINGS_LEAST = {
     },
 }
 OPENINGS_LEFT_OUT_MOST = {
-    "racadvancedsampleproject": {2025: 0, 2026: 0, 2027: 15},
+    "racadvancedsampleproject": {2025: 0, 2026: 0, 2027: 0},
     "racbasicsampleproject": {2025: 0, 2026: 0, 2027: 0},
     "rmeadvancedsampleproject": {2025: 0, 2026: 0, 2027: 0},
     "rmebasicsampleproject": {2025: 0, 2026: 0, 2027: 0},
