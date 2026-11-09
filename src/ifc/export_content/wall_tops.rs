@@ -2457,15 +2457,22 @@ fn shift_profile_openings(entities: &mut [IfcEntity], host: usize, moved: &Moved
         cos * moved.delta[1] - sin * moved.delta[0],
     );
     for entity in entities.iter_mut() {
-        let IfcEntity::WallProfileOpening {
-            host: opening_host,
-            outline_feet,
-            axis_turn_radians,
-            plane_offset_feet,
-            ..
-        } = entity
-        else {
-            continue;
+        let (opening_host, outline_feet, axis_turn_radians, plane_offset_feet) = match entity {
+            IfcEntity::WallProfileOpening {
+                host,
+                outline_feet,
+                axis_turn_radians,
+                plane_offset_feet,
+                ..
+            }
+            | IfcEntity::WallProfilePocket {
+                host,
+                outline_feet,
+                axis_turn_radians,
+                plane_offset_feet,
+                ..
+            } => (host, outline_feet, axis_turn_radians, plane_offset_feet),
+            _ => continue,
         };
         if *opening_host != host {
             continue;

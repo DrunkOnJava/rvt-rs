@@ -394,16 +394,26 @@ pub(super) fn attach_wall_profile_openings(
                 ));
             }
         }
-        for (k, (tag, outline)) in cuts.into_iter().enumerate() {
-            let points = outline.iter().map(point_field).collect();
-            wall.fields.push((
-                format!("{PROFILE_OPENING_FIELD}_{k}"),
-                InstanceField::Vector(points),
-            ));
-            wall.fields.push((
-                format!("{PROFILE_OPENING_FIELD}_{k}_tag"),
-                InstanceField::ElementId { tag: 0, id: tag },
-            ));
+        // #1607: the pockets of the profile against its hull, which are what
+        // Revit's export writes as the wall's openings, beside the regions.
+        let pockets = if cuts.is_empty() {
+            Vec::new()
+        } else {
+            elevation_profile_pockets(&segments)
+        };
+        for (field, found) in [
+            (PROFILE_OPENING_FIELD, cuts),
+            (PROFILE_POCKET_FIELD, pockets),
+        ] {
+            for (k, (tag, outline)) in found.into_iter().enumerate() {
+                let points = outline.iter().map(point_field).collect();
+                wall.fields
+                    .push((format!("{field}_{k}"), InstanceField::Vector(points)));
+                wall.fields.push((
+                    format!("{field}_{k}_tag"),
+                    InstanceField::ElementId { tag: 0, id: tag },
+                ));
+            }
         }
     }
 }
@@ -521,86 +531,16 @@ pub fn profile_extent_from_fields(
 // Tracker: B55.
 pub fn elevation_profile_cuts(segments: &[SketchSegment]) -> Vec<(u32, Vec<[f64; 3]>)> {
     let eps = PROFILE_EPS_FEET;
-    let points: Vec<[f64; 3]> = segments.iter().flat_map(|(_, a, b)| [*a, *b]).collect();
-    let plan = |a: [f64; 3], b: [f64; 3]| ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt();
-    let mut far = (0.0, [0.0; 3], [0.0; 3]);
-    for a in &points {
-        for b in &points {
-            let distance = plan(*a, *b);
-            if distance > far.0 {
-                far = (distance, *a, *b);
-            }
-        }
-    }
-    let (length, origin, toward) = far;
-    if length <= eps {
-        return Vec::new();
-    }
-    let axis = [
-        (toward[0] - origin[0]) / length,
-        (toward[1] - origin[1]) / length,
-    ];
-    // A point's place along the plane's axis and up it, and how far off the
-    // plane it lies.
-    let to_uv = |p: [f64; 3]| {
-        let (dx, dy) = (p[0] - origin[0], p[1] - origin[1]);
-        (
-            (dx * axis[0] + dy * axis[1], p[2]),
-            (dx * axis[1] - dy * axis[0]).abs(),
-        )
-    };
-    if points.iter().any(|p| to_uv(*p).1 > eps) {
-        return Vec::new();
-    }
-    let edges: Vec<PlaneEdge> = segments
-        .iter()
-        .map(|(id, a, b)| (*id, to_uv(*a).0, to_uv(*b).0))
-        .collect();
-    let meets = |a: (f64, f64), b: (f64, f64)| (a.0 - b.0).abs() <= eps && (a.1 - b.1).abs() <= eps;
-    // Chain the lines into one loop: its corners, and the line leaving each.
-    let Some(first) = edges.first() else {
+    let Some(ProfileLoop {
+        origin,
+        axis,
+        corners,
+        ids,
+    }) = profile_loop(segments)
+    else {
         return Vec::new();
     };
-    let mut corners = vec![first.1];
-    let mut ids = vec![first.0];
-    let mut end = first.2;
-    let mut used = vec![false; edges.len()];
-    used[0] = true;
-    for _ in 1..edges.len() {
-        let Some((index, next)) = edges.iter().enumerate().find_map(|(index, (_, a, b))| {
-            if used[index] {
-                None
-            } else if meets(*a, end) {
-                Some((index, *b))
-            } else if meets(*b, end) {
-                Some((index, *a))
-            } else {
-                None
-            }
-        }) else {
-            return Vec::new();
-        };
-        used[index] = true;
-        corners.push(end);
-        ids.push(edges[index].0);
-        end = next;
-    }
-    if !meets(end, corners[0]) {
-        return Vec::new();
-    }
     let count = corners.len();
-    let area: f64 = (0..count)
-        .map(|i| {
-            let (a, b) = (corners[i], corners[(i + 1) % count]);
-            a.0 * b.1 - b.0 * a.1
-        })
-        .sum();
-    if area < 0.0 {
-        corners = std::iter::once(corners[0])
-            .chain(corners[1..].iter().rev().copied())
-            .collect();
-        ids.reverse();
-    }
     let corner = |i: usize| corners[i % count];
     let (u_min, u_max, v_min, v_max) = corners.iter().fold(
         (f64::MAX, f64::MIN, f64::MAX, f64::MIN),
@@ -690,15 +630,332 @@ pub fn elevation_profile_cuts(segments: &[SketchSegment]) -> Vec<(u32, Vec<[f64;
     cuts
 }
 
+/// A wall's elevation profile as one loop in its own plane (see
+/// [`elevation_profile_cuts`]).
+struct ProfileLoop {
+    /// Where the plane's axis starts, model feet.
+    origin: [f64; 3],
+    /// The plane's axis, a unit vector in plan.
+    axis: [f64; 2],
+    /// The loop's corners along the axis and up, counter-clockwise.
+    corners: Vec<(f64, f64)>,
+    /// The ElementId of the line leaving each corner.
+    ids: Vec<u32>,
+}
+
+/// The lines of an elevation profile (ElementId, start, end, model feet) as one
+/// loop in the vertical plane they lie in. `None` where they do not lie in one
+/// plane or do not close one loop.
+// Tracker: B55.
+fn profile_loop(segments: &[SketchSegment]) -> Option<ProfileLoop> {
+    let eps = PROFILE_EPS_FEET;
+    let points: Vec<[f64; 3]> = segments.iter().flat_map(|(_, a, b)| [*a, *b]).collect();
+    let plan = |a: [f64; 3], b: [f64; 3]| ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt();
+    let mut far = (0.0, [0.0; 3], [0.0; 3]);
+    for a in &points {
+        for b in &points {
+            let distance = plan(*a, *b);
+            if distance > far.0 {
+                far = (distance, *a, *b);
+            }
+        }
+    }
+    let (length, origin, toward) = far;
+    if length <= eps {
+        return None;
+    }
+    let axis = [
+        (toward[0] - origin[0]) / length,
+        (toward[1] - origin[1]) / length,
+    ];
+    // A point's place along the plane's axis and up it, and how far off the
+    // plane it lies.
+    let to_uv = |p: [f64; 3]| {
+        let (dx, dy) = (p[0] - origin[0], p[1] - origin[1]);
+        (
+            (dx * axis[0] + dy * axis[1], p[2]),
+            (dx * axis[1] - dy * axis[0]).abs(),
+        )
+    };
+    if points.iter().any(|p| to_uv(*p).1 > eps) {
+        return None;
+    }
+    let edges: Vec<PlaneEdge> = segments
+        .iter()
+        .map(|(id, a, b)| (*id, to_uv(*a).0, to_uv(*b).0))
+        .collect();
+    let meets = |a: (f64, f64), b: (f64, f64)| (a.0 - b.0).abs() <= eps && (a.1 - b.1).abs() <= eps;
+    // Chain the lines into one loop: its corners, and the line leaving each.
+    let first = edges.first()?;
+    let mut corners = vec![first.1];
+    let mut ids = vec![first.0];
+    let mut end = first.2;
+    let mut used = vec![false; edges.len()];
+    used[0] = true;
+    for _ in 1..edges.len() {
+        let (index, next) = edges.iter().enumerate().find_map(|(index, (_, a, b))| {
+            if used[index] {
+                None
+            } else if meets(*a, end) {
+                Some((index, *b))
+            } else if meets(*b, end) {
+                Some((index, *a))
+            } else {
+                None
+            }
+        })?;
+        used[index] = true;
+        corners.push(end);
+        ids.push(edges[index].0);
+        end = next;
+    }
+    if !meets(end, corners[0]) {
+        return None;
+    }
+    let count = corners.len();
+    let area: f64 = (0..count)
+        .map(|i| {
+            let (a, b) = (corners[i], corners[(i + 1) % count]);
+            a.0 * b.1 - b.0 * a.1
+        })
+        .sum();
+    if area < 0.0 {
+        corners = std::iter::once(corners[0])
+            .chain(corners[1..].iter().rev().copied())
+            .collect();
+        ids.reverse();
+    }
+    Some(ProfileLoop {
+        origin,
+        axis,
+        corners,
+        ids,
+    })
+}
+
+/// Which of a loop's `corners` lie on the boundary of its convex hull
+/// (Andrew's monotone chain): a corner within the sketch's tolerance of a hull
+/// edge does, so that a notch cut in a side is a stretch between its two
+/// shoulders and not between the side's ends.
+fn hull_corners(corners: &[(f64, f64)]) -> Vec<bool> {
+    let mut order: Vec<usize> = (0..corners.len()).collect();
+    order.sort_by(|a, b| {
+        corners[*a]
+            .0
+            .total_cmp(&corners[*b].0)
+            .then(corners[*a].1.total_cmp(&corners[*b].1))
+    });
+    let cross = |o: usize, a: usize, b: usize| {
+        let (o, a, b) = (corners[o], corners[a], corners[b]);
+        (a.0 - o.0) * (b.1 - o.1) - (a.1 - o.1) * (b.0 - o.0)
+    };
+    let mut hull: Vec<usize> = Vec::new();
+    for &point in &order {
+        while hull.len() >= 2 && cross(hull[hull.len() - 2], hull[hull.len() - 1], point) <= 0.0 {
+            hull.pop();
+        }
+        hull.push(point);
+    }
+    let lower = hull.len() + 1;
+    for &point in order.iter().rev().skip(1) {
+        while hull.len() >= lower && cross(hull[hull.len() - 2], hull[hull.len() - 1], point) <= 0.0
+        {
+            hull.pop();
+        }
+        hull.push(point);
+    }
+    hull.pop();
+    let edges: Vec<((f64, f64), (f64, f64))> = hull
+        .iter()
+        .enumerate()
+        .map(|(k, index)| (corners[*index], corners[hull[(k + 1) % hull.len()]]))
+        .collect();
+    corners
+        .iter()
+        .map(|point| {
+            edges
+                .iter()
+                .any(|(a, b)| distance_to_segment(*point, *a, *b) <= PROFILE_EPS_FEET)
+        })
+        .collect()
+}
+
+/// How far a point stands from the segment `a` to `b`, feet.
+fn distance_to_segment(point: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let squared = dx * dx + dy * dy;
+    let along = if squared > 0.0 {
+        (((point.0 - a.0) * dx + (point.1 - a.1) * dy) / squared).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    (point.0 - (a.0 + along * dx)).hypot(point.1 - (a.1 + along * dy))
+}
+
+/// The pockets of an edited elevation profile against its convex hull: each
+/// stretch of the profile's loop between two corners of the hull that the
+/// hull's edge cuts off, as model-feet points in the profile's plane,
+/// counter-clockwise in its own along-and-up coordinates, tagged with the
+/// ElementId of the first line of the stretch in that walk. These are the
+/// openings Revit's export writes for a wall's profile (#1607, RE-380), and a
+/// profile whose region is convex, as a straight sloped top, has none, as
+/// Revit's export writes none for the terrain wall 1351524 and the office's
+/// eight.
+/// A stretch no further than the sketch's tolerance from its edge is not one.
+///
+/// What closes the stretch depends on where the hull's edge ends, against the
+/// loop's bounding rectangle, and only the ends measured are read:
+///
+/// - an end off the rectangle's edge: the hull's edge closes the stretch, as
+///   on the terrain wall 1387731 (Tag 1389018), whose first three lines of its
+///   top are closed by the edge back to the first;
+/// - the ends on a side of the rectangle in common, as a notch cut in it: the
+///   hull's edge runs along the side, so it closes the stretch;
+/// - the ends on two adjacent sides, neither at a corner: the rectangle's
+///   corner between them closes it, as on Core Interior's wall 55840 (Tag
+///   55859), whose polygon takes in the corner the hull's edge cuts off, 301.65
+///   ft2 where the stretch and the edge hold 71.23.
+///
+/// A stretch whose hull edge ends otherwise (at a corner of the rectangle with
+/// the other end on a side it does not share) is not read: no wall of the five
+/// Revit 2024 files with Revit's export has one. Empty where the lines do not
+/// lie in one vertical plane or do not close one loop.
+// Tracker: B55.
+pub fn elevation_profile_pockets(segments: &[SketchSegment]) -> Vec<(u32, Vec<[f64; 3]>)> {
+    let Some(ProfileLoop {
+        origin,
+        axis,
+        corners,
+        ids,
+    }) = profile_loop(segments)
+    else {
+        return Vec::new();
+    };
+    let count = corners.len();
+    let (u_min, u_max, v_min, v_max) = corners.iter().fold(
+        (f64::MAX, f64::MIN, f64::MAX, f64::MIN),
+        |(a, b, c, d), (u, v)| (a.min(*u), b.max(*u), c.min(*v), d.max(*v)),
+    );
+    // The sides of the loop's bounding rectangle a point lies on: left, right,
+    // bottom, top.
+    let sides = |(u, v): (f64, f64)| {
+        [
+            (u - u_min).abs() <= PROFILE_EPS_FEET,
+            (u - u_max).abs() <= PROFILE_EPS_FEET,
+            (v - v_min).abs() <= PROFILE_EPS_FEET,
+            (v - v_max).abs() <= PROFILE_EPS_FEET,
+        ]
+    };
+    let touching = |on: [bool; 4]| on.iter().filter(|side| **side).count();
+    let on_hull = hull_corners(&corners);
+    let at: Vec<usize> = (0..count).filter(|i| on_hull[*i]).collect();
+    let mut pockets = Vec::new();
+    for (k, &from) in at.iter().enumerate() {
+        let to = at[(k + 1) % at.len()];
+        let lines = (to + count - from) % count;
+        if lines < 2 {
+            continue;
+        }
+        let mut outline: Vec<(f64, f64)> = (0..=lines)
+            .map(|step| corners[(from + step) % count])
+            .collect();
+        let (a, b) = (corners[from], corners[to]);
+        let chord = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
+        if chord <= PROFILE_EPS_FEET {
+            continue;
+        }
+        // Which side of the hull's edge each point stands on, and how far.
+        let across =
+            |p: (f64, f64)| ((b.0 - a.0) * (p.1 - a.1) - (b.1 - a.1) * (p.0 - a.0)) / chord;
+        // The stretch's farthest corner from the edge, signed.
+        let farthest = outline[1..lines]
+            .iter()
+            .map(|p| across(*p))
+            .fold(
+                0.0_f64,
+                |most, side| {
+                    if side.abs() > most.abs() { side } else { most }
+                },
+            );
+        if farthest.abs() <= PROFILE_EPS_FEET {
+            continue;
+        }
+        let (on_a, on_b) = (sides(a), sides(b));
+        let (touch_a, touch_b) = (touching(on_a), touching(on_b));
+        // Both ends on the rectangle's edge, and on no side in common (on a side
+        // in common the hull's edge runs along it and closes the stretch): read
+        // for two adjacent sides, neither end at a corner, and not otherwise.
+        if touch_a > 0 && touch_b > 0 && !(0..4).any(|side| on_a[side] && on_b[side]) {
+            let (vertical_a, vertical_b) = (on_a[0] || on_a[1], on_b[0] || on_b[1]);
+            if touch_a != 1 || touch_b != 1 || vertical_a == vertical_b {
+                continue;
+            }
+            let (vertical, horizontal) = if vertical_a {
+                (on_a, on_b)
+            } else {
+                (on_b, on_a)
+            };
+            let corner = (
+                if vertical[0] { u_min } else { u_max },
+                if horizontal[2] { v_min } else { v_max },
+            );
+            // The corner is what the hull's edge cuts off, so it stands on the
+            // other side of the edge from the stretch.
+            if across(corner) * farthest >= 0.0 {
+                continue;
+            }
+            outline.push(corner);
+        }
+        let area: f64 = outline
+            .iter()
+            .zip(outline.iter().cycle().skip(1))
+            .map(|(p, q)| p.0 * q.1 - q.0 * p.1)
+            .sum();
+        if area < 0.0 {
+            outline.reverse();
+        }
+        // Tag: the line the stretch starts with. Revit's export names it on 12 of
+        // the 15 pockets measured (Core Interior's, the terrain wall's and 10 of
+        // Snowdon Towers' 13); the highest id of the stretch is right on 6, the
+        // lowest on 8, and the last line is Revit's on the 3 of Snowdon's wall
+        // 698364, which nothing read explains (RE-380 section 5).
+        let tag = ids[from % count];
+        pockets.push((
+            tag,
+            outline
+                .into_iter()
+                .map(|(u, v)| [origin[0] + axis[0] * u, origin[1] + axis[1] * u, v])
+                .collect(),
+        ));
+    }
+    pockets
+}
+
 /// The openings a wall's edited elevation profile cuts, as the partition MVP
 /// gives them ([`PROFILE_OPENING_FIELD`]): each one's tag and outline.
 // Tracker: B55.
 pub fn profile_openings_from_fields(
     fields: &[(String, InstanceField)],
 ) -> Vec<(u32, Vec<[f64; 3]>)> {
+    indexed_outlines(fields, PROFILE_OPENING_FIELD)
+}
+
+/// The pockets a wall's edited elevation profile has against its hull, as the
+/// partition MVP gives them ([`PROFILE_POCKET_FIELD`]): each one's tag and
+/// outline (#1607, RE-380).
+// Tracker: B55.
+pub fn profile_pockets_from_fields(
+    fields: &[(String, InstanceField)],
+) -> Vec<(u32, Vec<[f64; 3]>)> {
+    indexed_outlines(fields, PROFILE_POCKET_FIELD)
+}
+
+/// The tagged outlines `<prefix>_<k>` and `<prefix>_<k>_tag` of a wall's fields,
+/// for `k` from 0 on while there is one.
+fn indexed_outlines(fields: &[(String, InstanceField)], prefix: &str) -> Vec<(u32, Vec<[f64; 3]>)> {
     (0..)
         .map_while(|k| {
-            let outline_name = format!("{PROFILE_OPENING_FIELD}_{k}");
+            let outline_name = format!("{prefix}_{k}");
             let tag_name = format!("{outline_name}_tag");
             let outline = fields.iter().find_map(|(name, value)| match value {
                 InstanceField::Vector(points) if *name == outline_name => Some(points),
@@ -1241,4 +1498,285 @@ pub fn wall_instances_from_records(
             decoded
         })
         .collect()
+}
+
+#[cfg(test)]
+mod pocket_tests {
+    use super::*;
+
+    /// The BIM4LCA office's terrain wall 1387731 (Revit 2024): the sketch lines
+    /// of its profile, whose one opening Revit's export tags 1389018.
+    fn terrain_wall() -> Vec<SketchSegment> {
+        vec![
+            (
+                1388545,
+                [122.4038, 121.5711, 196.5223],
+                [122.4038, 121.5711, 182.0866],
+            ),
+            (
+                1388546,
+                [122.4038, 121.5711, 182.0866],
+                [296.2603, 121.5718, 182.0866],
+            ),
+            (
+                1388547,
+                [296.2603, 121.5718, 182.0866],
+                [296.2603, 121.5718, 183.0898],
+            ),
+            (
+                1388558,
+                [122.4038, 121.5711, 196.5223],
+                [138.8080, 121.5711, 195.6988],
+            ),
+            (
+                1388568,
+                [138.8080, 121.5711, 195.6988],
+                [171.6386, 121.5713, 192.4075],
+            ),
+            (
+                1389018,
+                [171.6386, 121.5713, 192.4075],
+                [215.9444, 121.5714, 192.4075],
+            ),
+            (
+                1389150,
+                [215.9444, 121.5714, 192.4075],
+                [296.2603, 121.5718, 183.0898],
+            ),
+        ]
+    }
+
+    /// The terrain wall 1351524, whose slope steepens to the right, so that its
+    /// profile is convex and Revit's export writes it no opening.
+    fn convex_wall() -> Vec<SketchSegment> {
+        vec![
+            (
+                1,
+                [122.4038, 99.6879, 193.2415],
+                [122.4038, 99.6879, 177.1654],
+            ),
+            (
+                2,
+                [122.4038, 99.6879, 177.1654],
+                [242.2201, 99.6879, 177.1654],
+            ),
+            (
+                3,
+                [242.2201, 99.6879, 177.1654],
+                [242.2201, 99.6879, 182.1176],
+            ),
+            (
+                4,
+                [242.2201, 99.6879, 182.1176],
+                [138.8080, 99.6879, 192.4255],
+            ),
+            (
+                5,
+                [138.8080, 99.6879, 192.4255],
+                [122.4038, 99.6879, 193.2415],
+            ),
+        ]
+    }
+
+    /// Core Interior's wall 55840 (Revit 2024), along y, whose one opening
+    /// Revit's export tags 55859.
+    fn core_interior_wall() -> Vec<SketchSegment> {
+        vec![
+            (55847, [43.5, 81.0, 76.0], [43.5, 81.0, 56.4167]),
+            (55848, [43.5, 81.0, 56.4167], [43.5, 51.0833, 56.4167]),
+            (55849, [43.5, 51.0833, 56.4167], [43.5, 51.0833, 58.5]),
+            (55850, [43.5, 77.4167, 76.0], [43.5, 81.0, 76.0]),
+            (55853, [43.5, 77.4167, 76.0], [43.5, 77.4167, 69.1667]),
+            (55854, [43.5, 77.4167, 69.1667], [43.5, 71.4167, 69.1667]),
+            (55855, [43.5, 60.5, 63.0833], [43.5, 60.5, 61.8333]),
+            (55856, [43.5, 60.5, 61.8333], [43.5, 56.9167, 61.8333]),
+            (55857, [43.5, 71.4167, 69.1667], [43.5, 60.5, 63.0833]),
+            (55858, [43.5, 56.9167, 61.8333], [43.5, 56.9167, 58.5]),
+            (55859, [43.5, 56.9167, 58.5], [43.5, 51.0833, 58.5]),
+        ]
+    }
+
+    /// Two coordinates of each point, hundredths of a foot, sorted.
+    fn corners(outline: &[[f64; 3]], first: usize, second: usize) -> Vec<(i64, i64)> {
+        let mut found: Vec<(i64, i64)> = outline
+            .iter()
+            .map(|p| {
+                (
+                    (p[first] * 100.0).round() as i64,
+                    (p[second] * 100.0).round() as i64,
+                )
+            })
+            .collect();
+        found.sort_unstable();
+        found
+    }
+
+    #[test]
+    fn the_terrain_wall_has_the_pocket_revit_writes() {
+        let pockets = elevation_profile_pockets(&terrain_wall());
+        assert_eq!(pockets.len(), 1);
+        let (tag, outline) = &pockets[0];
+        // The line its stretch starts with, 1389018 (also the highest id of its
+        // three lines), and not the last line of the sketch's top, 1389150,
+        // which the hull's edge runs along.
+        assert_eq!(*tag, 1389018);
+        assert_eq!(
+            corners(outline, 0, 2),
+            vec![
+                (12240, 19652),
+                (13881, 19570),
+                (17164, 19241),
+                (21594, 19241)
+            ]
+        );
+        // Counter-clockwise along the wall's axis and up.
+        let area: f64 = outline
+            .iter()
+            .zip(outline.iter().cycle().skip(1))
+            .map(|(a, b)| a[0] * b[2] - b[0] * a[2])
+            .sum();
+        assert!(area > 0.0);
+    }
+
+    #[test]
+    fn a_convex_profile_has_no_pocket() {
+        assert!(elevation_profile_pockets(&convex_wall()).is_empty());
+    }
+
+    #[test]
+    fn core_interiors_wall_has_the_pocket_revit_writes() {
+        let pockets = elevation_profile_pockets(&core_interior_wall());
+        assert_eq!(pockets.len(), 1);
+        let (tag, outline) = &pockets[0];
+        assert_eq!(*tag, 55859);
+        // The stretch's eight corners and the rectangle's corner the hull's edge
+        // cuts off, (51.08, 76): Revit's polygon has nine, and 301.65 ft2.
+        assert_eq!(
+            corners(outline, 1, 2),
+            vec![
+                (5108, 5850),
+                (5108, 7600),
+                (5692, 5850),
+                (5692, 6183),
+                (6050, 6183),
+                (6050, 6308),
+                (7142, 6917),
+                (7742, 6917),
+                (7742, 7600),
+            ]
+        );
+        // The wall runs toward -y, so counter-clockwise along the wall's axis
+        // and up is clockwise in (y, z).
+        let area: f64 = outline
+            .iter()
+            .zip(outline.iter().cycle().skip(1))
+            .map(|(a, b)| a[1] * b[2] - b[1] * a[2])
+            .sum();
+        assert!(
+            (area.abs() / 2.0 - 301.65).abs() < 0.01,
+            "area {}",
+            area / 2.0
+        );
+    }
+
+    /// A 10 by 8 ft wall with a notch 3 ft wide and 2 ft deep cut in its top.
+    fn notched_wall() -> Vec<SketchSegment> {
+        vec![
+            (1, [0.0, 0.0, 0.0], [10.0, 0.0, 0.0]),
+            (2, [10.0, 0.0, 0.0], [10.0, 0.0, 8.0]),
+            (3, [10.0, 0.0, 8.0], [6.0, 0.0, 8.0]),
+            (4, [6.0, 0.0, 8.0], [6.0, 0.0, 6.0]),
+            (5, [6.0, 0.0, 6.0], [3.0, 0.0, 6.0]),
+            (6, [3.0, 0.0, 6.0], [3.0, 0.0, 8.0]),
+            (7, [3.0, 0.0, 8.0], [0.0, 0.0, 8.0]),
+            (8, [0.0, 0.0, 8.0], [0.0, 0.0, 0.0]),
+        ]
+    }
+
+    #[test]
+    fn a_notch_in_one_side_is_closed_by_the_hulls_edge_along_it() {
+        let pockets = elevation_profile_pockets(&notched_wall());
+        assert_eq!(pockets.len(), 1);
+        let (tag, outline) = &pockets[0];
+        // The line leaving the shoulder the stretch starts at, not the highest id.
+        assert_eq!(*tag, 4);
+        assert_eq!(
+            corners(outline, 0, 2),
+            vec![(300, 600), (300, 800), (600, 600), (600, 800)]
+        );
+    }
+
+    #[test]
+    fn a_hull_edge_from_a_corner_to_a_side_is_not_read() {
+        // A dent in a top that slopes from the left corner (0, 8) down to the
+        // right side (10, 6): the hull's edge runs from a corner of the
+        // rectangle to a side, which no measured wall has.
+        let dented = vec![
+            (1, [0.0, 0.0, 8.0], [0.0, 0.0, 0.0]),
+            (2, [0.0, 0.0, 0.0], [10.0, 0.0, 0.0]),
+            (3, [10.0, 0.0, 0.0], [10.0, 0.0, 6.0]),
+            (4, [10.0, 0.0, 6.0], [7.0, 0.0, 4.0]),
+            (5, [7.0, 0.0, 4.0], [3.0, 0.0, 5.0]),
+            (6, [3.0, 0.0, 5.0], [0.0, 0.0, 8.0]),
+        ];
+        assert!(elevation_profile_pockets(&dented).is_empty());
+    }
+
+    #[test]
+    fn a_rectangle_has_no_pocket() {
+        let rectangle = vec![
+            (1, [0.0, 0.0, 0.0], [10.0, 0.0, 0.0]),
+            (2, [10.0, 0.0, 0.0], [10.0, 0.0, 8.0]),
+            (3, [10.0, 0.0, 8.0], [0.0, 0.0, 8.0]),
+            (4, [0.0, 0.0, 8.0], [0.0, 0.0, 0.0]),
+        ];
+        assert!(elevation_profile_pockets(&rectangle).is_empty());
+    }
+
+    #[test]
+    fn lines_that_do_not_close_a_loop_give_none() {
+        let mut open = terrain_wall();
+        open.remove(3);
+        assert!(elevation_profile_pockets(&open).is_empty());
+    }
+
+    #[test]
+    fn lines_off_one_plane_give_none() {
+        let mut bent = terrain_wall();
+        bent[5].1[1] += 1.0;
+        bent[5].2[1] += 1.0;
+        assert!(elevation_profile_pockets(&bent).is_empty());
+    }
+
+    #[test]
+    fn the_same_lines_listed_backwards_give_the_same_pocket() {
+        let backwards: Vec<SketchSegment> = terrain_wall()
+            .into_iter()
+            .rev()
+            .map(|(id, a, b)| (id, b, a))
+            .collect();
+        let pockets = elevation_profile_pockets(&backwards);
+        assert_eq!(pockets.len(), 1);
+        // The Tag is the line the walk starts with, and the walk follows the
+        // sketch's first line: listed backwards it starts at the stretch's other
+        // end. The shape is the same.
+        assert!(
+            matches!(pockets[0].0, 1389018 | 1388558),
+            "tag {}",
+            pockets[0].0
+        );
+        assert_eq!(pockets[0].1.len(), 4);
+    }
+
+    #[test]
+    fn a_top_split_in_two_straight_lines_is_not_a_pocket() {
+        let split = vec![
+            (1, [0.0, 0.0, 0.0], [10.0, 0.0, 0.0]),
+            (2, [10.0, 0.0, 0.0], [10.0, 0.0, 5.0]),
+            (3, [10.0, 0.0, 5.0], [5.0, 0.0, 7.5]),
+            (4, [5.0, 0.0, 7.5], [0.0, 0.0, 10.0]),
+            (5, [0.0, 0.0, 10.0], [0.0, 0.0, 0.0]),
+        ];
+        assert!(elevation_profile_pockets(&split).is_empty());
+    }
 }

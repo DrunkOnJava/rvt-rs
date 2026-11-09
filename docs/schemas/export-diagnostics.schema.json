@@ -643,6 +643,14 @@
           },
           "description": "Of the exported walls whose edited elevation profile closes below the top of their record box, how many have their top taken at the profile's highest point, by the RvtElementRecordGeometry.ProfileTopSource of each (RE-378, #1600): wall_top_at_profile_top. Revit's body ends there and the wall's Height is the profile's. Empty when no wall does."
         },
+        "wall_profile_cuts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Of the exported walls whose edited elevation profile cuts the wall, how many have a cut made in the wall's body (the regions RE-151 reads that no pocket of the profile equals) and the openings Revit's export writes for the profile (the pockets of the profile against its convex hull) written beside it, by the RvtElementRecordGeometry.ProfileCutSource of each (RE-380, #1607): wall_profile_cut_in_body. A wall whose every region a pocket equals has no cut (its body is its box and its pockets are its openings), and a wall whose regions cannot be cut is voided by them, as before; neither is counted. Empty when no wall has a cut."
+        },
         "wall_base_sources": {
           "type": "object",
           "additionalProperties": {

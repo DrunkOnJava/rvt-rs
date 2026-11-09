@@ -311,6 +311,23 @@ pub enum IfcEntity {
         recess: bool,
         quantities: bool,
     },
+    /// A pocket of the edited elevation profile of the wall at `host` against
+    /// the profile's convex hull: the opening Revit's export writes for it
+    /// (#1607, RE-380), tagged with the highest ElementId of the profile's
+    /// lines it follows. Placed as a [`IfcEntity::WallProfileOpening`] is. It
+    /// is not written as it stands: the pass that makes the profile's cut in the
+    /// wall's body turns it into a [`IfcEntity::WallProfileOpening`] once it
+    /// has, so that the openings a wall carries are Revit's.
+    // Tracker: B55.
+    WallProfilePocket {
+        host: usize,
+        tag: String,
+        name: String,
+        outline_feet: Vec<(f64, f64)>,
+        axis_turn_radians: f64,
+        plane_offset_feet: f64,
+        thickness_feet: f64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
