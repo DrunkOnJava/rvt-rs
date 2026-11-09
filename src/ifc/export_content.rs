@@ -6149,7 +6149,9 @@ fn wall_centreline_body(
         // the faces come from the line and the ends stay where the box cuts them.
         if axis.box_must_close {
             let along = (x - sx) * ux + (y - sy) * uy;
-            let run = run_from_width.min(run_from_depth);
+            // The axis the wall mostly lies along: the other estimate divides
+            // by a component near zero on a wall close to a model axis.
+            let run = if ux.abs() >= uy.abs() { run_from_width } else { run_from_depth };
             return (run > 0.0).then_some(WallCentrelineBody {
                 centre: [sx + ux * along, sy + uy * along],
                 rotation: Some(uy.atan2(ux)),
