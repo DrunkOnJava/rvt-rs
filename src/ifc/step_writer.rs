@@ -3137,25 +3137,21 @@ impl StepWriter<'_> {
                         })
                     })
                 };
-                // RE-346: not on a stair, a flight or a stringer from 2026, where
-                // Revit's own export does not write it (#1472).
-                let stair_part_class = ["IFCSTAIR", "IFCSTAIRFLIGHT", "IFCMEMBER"]
-                    .iter()
-                    .any(|class| ifc_type.eq_ignore_ascii_case(class));
-                let stair_part_family = property_text(super::export_content::FAMILY_NAME_PROPERTY)
-                    .is_some_and(|family| {
-                        crate::native_stairs::NATIVE_STAIR_FAMILIES.contains(&family.as_str())
-                    });
+                // Not from 2026, where Revit's own export writes no `ObjectType`
+                // (#1472): of the five held-out pairs saved by 2026 and 2027
+                // (flowbim's house, and hemanth1986's house and office of each
+                // release), 418 typed elements of nine classes had an
+                // `ObjectType` that differed from Revit's, and on every one
+                // Revit writes none, where its export of the same projects
+                // saved by 2025 writes `Family:Type` on every typed element.
                 let object_type_left_out = model.global_ids.revit_version.is_some_and(|version| {
-                    version >= crate::native_stairs::STAIR_OBJECT_TYPE_LEFT_OUT_FROM
+                    version >= crate::native_stairs::OBJECT_TYPE_LEFT_OUT_FROM
                 });
-                let stair_part_without_object_type =
-                    stair_part_class && stair_part_family && object_type_left_out;
                 let object_type_quoted = match (
                     property_text(super::export_content::FAMILY_NAME_PROPERTY),
                     property_text(super::export_content::TYPE_NAME_PROPERTY),
                 ) {
-                    (Some(family), Some(type_name)) if !stair_part_without_object_type => {
+                    (Some(family), Some(type_name)) if !object_type_left_out => {
                         quoted_or_dollar(&escape(&format!("{family}:{type_name}")))
                     }
                     _ => "$".into(),

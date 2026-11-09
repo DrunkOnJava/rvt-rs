@@ -36,7 +36,6 @@ milestone is for.
 | [#1478](https://github.com/DrunkOnJava/rvt-rs/issues/1478) | Walls under a read roof: cut along its sloped underside, as Revit does (RE-351 follow-up) |
 | [#1474](https://github.com/DrunkOnJava/rvt-rs/issues/1474) | Walls 2056705 and 2056770: Revit cuts their ends back above 182.087 ft and steps them, and neither office file draws that |
 | [#1473](https://github.com/DrunkOnJava/rvt-rs/issues/1473) | A profile-edited wall's sloped top stops at the profile's end: a 0.41 ft stub stays flat, 0.65 ft too high |
-| [#1472](https://github.com/DrunkOnJava/rvt-rs/issues/1472) | Revit 2026 and 2027: ObjectType differs from Revit's export on every typed class |
 | [#1427](https://github.com/DrunkOnJava/rvt-rs/issues/1427) | Semantic check: recalibrate on real pull requests, and settle fails that noise can cross (#1334 follow-up) |
 | [#1418](https://github.com/DrunkOnJava/rvt-rs/issues/1418) | Wall-end rule: count the solid-beneath skip and exercise the unmeasured paths (RE-337 follow-up) |
 | [#1407](https://github.com/DrunkOnJava/rvt-rs/issues/1407) | Wall 2177212: its saved mesh is 0.114 ft shorter than Revit's IFC body (RE-340 follow-up) |

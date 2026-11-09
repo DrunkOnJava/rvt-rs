@@ -138,10 +138,10 @@ first, as on 2025 (RE-370 draws the rest from its record), family
 instances' ports are placed, walls are cut to their doors' and windows'
 outlines, and `IsExternal`, railing heights and lengths, stair names, rooms'
 height and net volume and the pipe and duct quantities are written, as on 2025,
-except a door's or window's Area on 2027 and the ObjectType of a stair, its
-flights and its stringers on 2026 and 2027, which Revit's own exports write
-otherwise (held-out counts, RE-346 section 5; the ObjectType of every other class
-differs there as well, #1472). Each
+except a door's or window's Area on 2027 and, on 2026 and 2027, the `ObjectType`
+of every class, which Revit's own exports of those releases do not write (418
+typed elements of nine classes on the five held-out pairs, counts only, and
+Revit writes none on any of them; #1472). Each
 is held to the same Autodesk project's 2025 save, on the MEP samples too
 (`tools/re/bodies_across_saves.py`, which Measure fails on a difference), and
 not to a Revit export: no held-out model holds a pipe, a duct or a port, and
