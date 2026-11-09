@@ -57,12 +57,23 @@ def unfilled(path, boxes=True):
         if not element.is_a("IfcOpeningElement") and element.Tag and element.Tag not in cutters:
             cutters[element.Tag] = element.is_a()
     out = {}
+    hosts = {}
+
+    def corners_of(element):
+        try:
+            shape = ifcopenshell.geom.create_shape(settings, element)
+            verts = np.array(shape.geometry.verts, dtype=float).reshape(-1, 3)
+            return sorted({tuple(round(float(c), 3) for c in p) for p in frame(verts)})
+        except Exception:
+            return None
+
     for rel in f.by_type("IfcRelVoidsElement"):
         opening = rel.RelatedOpeningElement
         host = rel.RelatingBuildingElement
         if opening.HasFillings or not opening.Tag:
             continue
         box = None
+        points = host_points = None
         try:
             if not boxes:
                 raise ValueError("no box wanted")
@@ -71,6 +82,10 @@ def unfilled(path, boxes=True):
             if len(verts):
                 moved = frame(verts)
                 box = (moved.min(axis=0), moved.max(axis=0))
+                points = corners_of(opening)
+                if host.GlobalId not in hosts:
+                    hosts[host.GlobalId] = corners_of(host)
+                host_points = hosts[host.GlobalId]
         except Exception:
             pass
         psets = ifcopenshell.util.element.get_psets(opening)
@@ -82,6 +97,8 @@ def unfilled(path, boxes=True):
             "name": opening.Name,
             "predefined": getattr(opening, "PredefinedType", None),
             "box": box,
+            "points": points,
+            "host_points": host_points,
             "host": host.is_a(),
             "cutter": cutters.get(opening.Tag, "none"),
             "common": common.get("Reference"),
@@ -163,17 +180,24 @@ def main(argv):
     for key, mine in sorted(missing.items()):
         if key not in apart:
             print(f"  extra: {mine['cutter']} in {mine['host']}, Tag {key[0]} in {key[1]}")
-    # The openings Revit's export writes that rvt-rs's does not (#1600): kind, Tags and box.
+    # The openings Revit's export writes that rvt-rs's does not (#1600): kind, Tags, box
+    # and the corners of the opening's mesh and of its host's, in the plane of the wall.
+    def corners(points):
+        if not points:
+            return "no points"
+        xz = sorted({(x, z) for x, _, z in points})
+        ys = sorted({y for _, y, _ in points})
+        return "xz " + " ".join(f"({x:.3f},{z:.3f})" for x, z in xz) + " y " + " ".join(f"{y:.3f}" for y in ys)
+
     only_revit = {key: theirs for key, theirs in revit.items() if key not in ours}
     print(f"written by Revit's export, not by rvt-rs: {len(only_revit)}")
-    for key, theirs in sorted(only_revit.items())[:80]:
-        box = theirs["box"]
-        text = "no box" if box is None else " ".join(f"{v:.3f}" for v in (*box[0], *box[1]))
-        print(f"  revit only: {theirs['cutter']} in {theirs['host']}, Tag {key[0]} in {key[1]}, box {text}")
-    for key, mine in sorted(missing.items())[:80]:
-        box = mine["box"]
-        text = "no box" if box is None else " ".join(f"{v:.3f}" for v in (*box[0], *box[1]))
-        print(f"  rvt-rs only: {mine['cutter']} in {mine['host']}, Tag {key[0]} in {key[1]}, box {text}")
+    for side, rows in (("revit only", sorted(only_revit.items())[:80]), ("rvt-rs only", sorted(missing.items())[:80])):
+        for key, facts in rows:
+            box = facts["box"]
+            text = "no box" if box is None else " ".join(f"{v:.3f}" for v in (*box[0], *box[1]))
+            print(f"  {side}: {facts['cutter']} in {facts['host']}, Tag {key[0]} in {key[1]}, name {facts['name']}, box {text}")
+            print(f"    opening {corners(facts['points'])}")
+            print(f"    host {corners(facts['host_points'])}")
     return 0
 
 
