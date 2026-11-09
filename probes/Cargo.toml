@@ -17,7 +17,7 @@ workspace = true
 [dependencies]
 rvt = { path = "..", features = ["unstable-research"] }
 anyhow = "1"
-cfb = "0.15"
+cfb = "0.16"
 dhat = "0.3"
 memchr = "2"
 serde_json = "1"
