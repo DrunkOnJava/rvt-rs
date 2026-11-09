@@ -87,6 +87,39 @@ fn main() -> anyhow::Result<()> {
             }
         }
     }
+    // Every place a value entry holds the type's Width (a f64, eight 0xff and
+    // the parameter), and the owner the scan gives that place, if any: an entry
+    // that exists but is attributed to another owner, or to none, is the gap.
+    let widths: BTreeSet<i64> = BTreeSet::from([WINDOW_WIDTH_PARAMETER]);
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let bytes = inflated.bytes();
+        let placed: Vec<(u32, usize)> =
+            rvt::research::partition_type_parameters::scan_partition_length_places(
+                bytes, &declared, &widths, true,
+            )
+            .into_iter()
+            .flat_map(|(owner, held)| held.into_values().map(move |(_, at)| (owner, at)))
+            .collect();
+        let mut needle = 2.624_671_916_010_498_8_f64.to_le_bytes().to_vec();
+        needle.extend_from_slice(&[0xff; 8]);
+        needle.extend_from_slice(&WINDOW_WIDTH_PARAMETER.to_le_bytes());
+        for at in memchr::memmem::find_iter(bytes, &needle) {
+            let param_at = at + 16;
+            let owner = placed
+                .iter()
+                .find(|(_, place)| place.abs_diff(param_at) <= 16 || place.abs_diff(at) <= 16)
+                .map_or("none".to_string(), |(owner, _)| owner.to_string());
+            let from = at.saturating_sub(96);
+            let hex: Vec<String> = bytes[from..(at + 24).min(bytes.len())]
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect();
+            println!("width {stream} @{at} owner={owner} {}", hex.join(""));
+        }
+    }
     let sizes = type_door_sizes(&mut rf, version, &owners);
     for owner in OWNERS {
         match sizes.get(&owner) {
