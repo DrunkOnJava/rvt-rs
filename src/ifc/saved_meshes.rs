@@ -16,14 +16,19 @@
 //! record box is 3.75 ft deep because it includes the swing: the 2.92 ft
 //! difference #227 measured against Revit's own export.
 //!
-//! Doors and windows are drawn from their saved meshes by default
-//! ([`default_scope`], [`SavedMeshScope::DoorsAndWindows`]: the maintainer,
-//! 2026-10-29, for the CLIs and 2026-10-30 for Python and the viewer), where
-//! every vertex is Revit's within 0.001 ft on Core Interior's 132 doors and
-//! 6 windows and the BIM4LCA office's 269 windows (Measure run
-//! 40932136360). Every other class is opt-in ([`SavedMeshScope::All`],
-//! `rvt-ifc --saved-meshes`, `rvt-gltf --saved-meshes`): reading saved
-//! graphics is slow on large files, and some partial meshes record nothing.
+//! Every element drawn as its record's box is drawn from its saved mesh by
+//! default on Revit 2023 to 2027 ([`default_scope`], [`SavedMeshScope::All`]:
+//! the maintainer, 2026-11-09, #1191), as doors and windows were from
+//! 2026-10-29 for the CLIs and 2026-10-30 for Python and the viewer, and only
+//! where all of the mesh decodes (RE-224). Of the bodies scored on 31 models
+//! (Measure run 42612357300), the meshes of 17 classes have every vertex of
+//! Revit's export within 0.001 ft ("ref on ours"), windows among them; doors
+//! are 675 of 681, sanitary terminals 68 of 94, flow fittings 71 of 89, flow
+//! terminals 30 of 35 and walls 14 of 18. The cost is reading the saved
+//! graphics of every boxed element: on the BIM4LCA office as built 24.4 s
+//! against 21.2 s and a peak of 1,423 MiB against 913, with its IFC 83 MB
+//! against 68, and 1.01 times the time and the same peak on Core Interior
+//! (Measure run 42614230465, median of 3 on one runner).
 //!
 //! One kind of wall is drawn from its saved mesh in every scope that reads
 //! graphics, on Revit 2024 to 2027, the releases whose wall records name what
@@ -128,9 +133,12 @@ fn local_mesh(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SavedMeshScope {
-    /// Every element drawn as its record's box (`rvt-ifc --saved-meshes`).
+    /// Every element drawn as its record's box: the default on Revit 2023 to
+    /// 2027 ([`default_scope`]), and `rvt-ifc --saved-meshes` on any release.
     All,
-    /// Doors and windows only, as `rvt-ifc` and `rvt-gltf` do by default.
+    /// Doors and windows only, which `rvt-ifc` and `rvt-gltf` drew by default
+    /// before #1191. No switch selects it now; a caller of the library asks
+    /// for it with [`attach_scoped_with_control`].
     DoorsAndWindows,
 }
 
@@ -144,14 +152,14 @@ impl SavedMeshScope {
 }
 
 /// The bodies drawn from saved graphics by default, by `rvt-ifc`, `rvt-gltf`,
-/// the Python package and the viewer alike: doors and windows on Revit 2023
+/// the Python package and the viewer alike: every boxed element on Revit 2023
 /// to 2027, the releases whose saved graphics are read, and none on any
 /// other release.
 pub fn default_scope(rf: &mut crate::RevitFile) -> Option<SavedMeshScope> {
     let release = rf.basic_file_info().ok()?.version;
     (2023..=2027)
         .contains(&release)
-        .then_some(SavedMeshScope::DoorsAndWindows)
+        .then_some(SavedMeshScope::All)
 }
 
 /// Replace each bounding-box body with the element's saved mesh, where the

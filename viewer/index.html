@@ -168,9 +168,9 @@
         <div class="status-panel" id="status-panel" aria-live="polite"></div>
         <label class="option-toggle" id="saved-meshes-toggle">
           <input id="saved-meshes" type="checkbox" checked aria-describedby="saved-meshes-hint" />
-          Draw doors and windows from saved meshes
+          Draw family instances from saved meshes
         </label>
-        <p class="option-hint" id="saved-meshes-hint">For Revit 2023 to 2027 files, as rvt-ifc does. Off keeps each one's bounding box. Changing this reopens the open file.</p>
+        <p class="option-hint" id="saved-meshes-hint">For Revit 2023 to 2027 files, as rvt-ifc does: every element Revit saved a mesh for, doors and windows among them. Off keeps each one's bounding box and uses less memory. Changing this reopens the open file.</p>
         <label class="option-toggle hidden" id="export-phase-field" for="export-phase">
           <span>Phase</span>
           <select class="mode-select" id="export-phase" aria-describedby="export-phase-hint"></select>

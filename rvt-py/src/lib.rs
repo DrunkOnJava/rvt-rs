@@ -140,7 +140,7 @@ fn warn_room_fallback(
 }
 
 /// The default IFC export of `rf` (`ifc::run_export_with_limits`, the build `rvt-ifc`
-/// runs), drawing doors and windows from their saved meshes (Revit 2023 to
+/// runs), drawing every boxed element from its saved mesh (Revit 2023 to
 /// 2027) when `saved_meshes`, at `phase` (`None`: the project's last). Saved
 /// graphics only improve bodies: when they cannot be read, the export keeps the
 /// bodies it has and a `RuntimeWarning` says so. A phase the file lacks raises
@@ -892,10 +892,10 @@ impl PyRevitFile {
     /// being read (`unread_streams()` lists it), unless
     /// `allow_partial=True`.
     ///
-    /// Doors and windows of Revit 2023 to 2027 files are drawn from the
-    /// meshes Revit saved for them where all of a mesh decodes, as `rvt-ifc`
-    /// draws them; `saved_meshes=False` keeps their bounding boxes
-    /// (`rvt-ifc --no-saved-meshes`). On Revit 2024 to 2027 files a wall that
+    /// Every element of a Revit 2023 to 2027 file that would be a bounding
+    /// box is drawn from the mesh Revit saved for it where all of a mesh
+    /// decodes, as `rvt-ifc` draws them; `saved_meshes=False` keeps their
+    /// bounding boxes (`rvt-ifc --no-saved-meshes`). On Revit 2024 to 2027 files a wall that
     /// embeds a curtain wall is drawn from its saved mesh too where Revit
     /// raised its base, and `saved_meshes=False` keeps its record's body.
     ///
