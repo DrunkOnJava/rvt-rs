@@ -244,6 +244,14 @@ pub struct IfcModel {
     /// (#1473, RE-358). Counted in `exported.wall_profile_height_checks`.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub wall_profile_height_checks: std::collections::BTreeMap<String, usize>,
+    /// The joins between two connectors that the writer leaves out because a
+    /// connector of either end is named with two partners that the two sides'
+    /// lists do not settle, by why (RE-371, #1524): the partner both sides
+    /// name is kept where there is exactly one, and a join is written only
+    /// where each of its ends keeps the other. Counted in
+    /// `exported.port_joins_left_out`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub port_joins_left_out: std::collections::BTreeMap<String, usize>,
 }
 
 /// A layered element's layers across its thickness (RE-53).
@@ -926,6 +934,15 @@ pub struct ExportedModelDiagnostics {
     /// nothing is carried or kept by it.
     #[serde(default)]
     pub wall_profile_height_checks: std::collections::BTreeMap<String, usize>,
+    /// The joins between two connectors that the export leaves out because a
+    /// connector of either end is named with two partners that the two sides'
+    /// lists do not settle, by reason (RE-371, #1524):
+    /// `connector_named_with_conflicting_partners`. A connector has one
+    /// physical partner, so one of two is not real; the partner both sides
+    /// name is kept where there is exactly one. Empty where no connector is
+    /// named with two.
+    #[serde(default)]
+    pub port_joins_left_out: std::collections::BTreeMap<String, usize>,
     /// The further pieces of an element of separate loops that the STEP
     /// writer folds into the body of the element that owns them instead of
     /// writing each as an element (#823, #1424), by IFC entity. They are the
@@ -1173,6 +1190,7 @@ impl Exporter for PlaceholderExporter {
             wall_cut_openings_left_out: Default::default(),
             wall_end_reads_unmarked: Default::default(),
             wall_profile_height_checks: Default::default(),
+            port_joins_left_out: Default::default(),
         })
     }
 }
@@ -1514,6 +1532,7 @@ fn export_rvt_doc_reporting(
         body_pieces,
         type_entity_sets,
         record_handoffs,
+        port_joins_left_out,
     ) = append_production_walker_elements(
         rf,
         &mut entities,
@@ -1721,6 +1740,7 @@ fn export_rvt_doc_reporting(
         wall_cut_openings_left_out,
         wall_end_reads_unmarked,
         wall_profile_height_checks,
+        port_joins_left_out,
     })
 }
 
@@ -2953,27 +2973,48 @@ fn attach_family_instance_ports(
             id,
             index,
             flow_direction,
+            system_type,
             ..
         } = entity
         else {
             continue;
         };
-        if let Some(&direction) = read.segments.get(&(u64::from(*id), *index)) {
-            *flow_direction =
-                crate::native_connectors::flow_direction_of(direction).map(str::to_string);
+        if let Some(calculation) = read.segments.get(&(u64::from(*id), *index)) {
+            // An Exhaust Air connector is SOURCEANDSINK (RE-371).
+            if calculation.system_type == Some(crate::native_connectors::EXHAUST_AIR) {
+                *flow_direction = Some("SOURCEANDSINK".to_string());
+            } else if let Some(direction) = calculation.direction {
+                *flow_direction =
+                    crate::native_connectors::flow_direction_of(direction).map(str::to_string);
+            }
+            *system_type = calculation
+                .system_type
+                .and_then(crate::native_connectors::distribution_system_of)
+                .map(str::to_string);
         }
     }
     // #869: a connector no placed duct or pipe port joins is at its point in
     // its symbol, through the instance's transform (RE-87).
+    // A duct's tap (RE-371) is on its axis, not where the element tapped into
+    // it puts its own connector: it places none.
     let placed: std::collections::BTreeSet<(u32, u32)> = entities
         .iter()
         .filter_map(|entity| match entity {
             entities::IfcEntity::Port {
+                element,
                 id,
                 index,
                 location_feet: Some(_),
                 ..
-            } => Some((*id, *index)),
+            } if !(*index >= 2
+                && matches!(
+                    entities.get(*element),
+                    Some(entities::IfcEntity::BuildingElement { ifc_type, .. })
+                        if ifc_type == "IFCDUCTSEGMENT"
+                )) =>
+            {
+                Some((*id, *index))
+            }
             _ => None,
         })
         .collect();
@@ -3029,10 +3070,73 @@ fn attach_family_instance_ports(
                 flow_direction: port.flow_direction.map(str::to_string),
                 location_feet: place.map(|(point, _)| point),
                 direction: place.map(|(_, axis)| axis),
+                system_type: port
+                    .system_type
+                    .and_then(crate::native_connectors::distribution_system_of)
+                    .map(str::to_string),
             });
         }
     }
     apply_partner_directions(entities);
+    apply_partner_systems(entities);
+}
+
+/// A duct or pipe port whose own system is not read (a family instance
+/// whose record the native path does not decode, on 2015 to 2022) takes the
+/// system of the port joined to it (RE-371): every one of the 2,634 joins of
+/// Revit's export of Snowdon Towers HVAC joins two ports of the same
+/// `SystemType`.
+fn apply_partner_systems(entities: &mut [entities::IfcEntity]) {
+    let mut systems: std::collections::BTreeMap<(u32, u32), String> =
+        std::collections::BTreeMap::new();
+    for entity in entities.iter() {
+        if let entities::IfcEntity::Port {
+            id,
+            index,
+            system_type: Some(system),
+            ..
+        } = entity
+        {
+            systems.insert((*id, *index), system.clone());
+        }
+    }
+    let mut taken: std::collections::BTreeMap<(u32, u32), String> =
+        std::collections::BTreeMap::new();
+    for entity in entities.iter() {
+        if let entities::IfcEntity::PortConnection {
+            a_id,
+            a_index,
+            b_id,
+            b_index,
+            ..
+        } = entity
+        {
+            for (own, other) in [
+                ((*a_id, *a_index), (*b_id, *b_index)),
+                ((*b_id, *b_index), (*a_id, *a_index)),
+            ] {
+                if let (false, Some(system)) = (systems.contains_key(&own), systems.get(&other)) {
+                    taken.entry(own).or_insert_with(|| system.clone());
+                }
+            }
+        }
+    }
+    for entity in entities.iter_mut() {
+        if let entities::IfcEntity::Port {
+            id,
+            index,
+            predefined_type,
+            system_type: system_type @ None,
+            ..
+        } = entity
+        {
+            if matches!(predefined_type.as_deref(), Some("DUCT" | "PIPE")) {
+                if let Some(system) = taken.get(&(*id, *index)) {
+                    *system_type = Some(system.clone());
+                }
+            }
+        }
+    }
 }
 
 /// Releases a family instance's unjoined ports are placed on (#869): 2025,
@@ -3098,13 +3202,21 @@ fn apply_partner_directions(entities: &mut [entities::IfcEntity]) {
             index,
             predefined_type,
             flow_direction,
+            system_type,
             ..
         } = entity
         else {
             continue;
         };
+        // An Exhaust Air connector stays SOURCEANDSINK (RE-371).
+        // A connector whose direction is not read is treated as bidirectional
+        // on every release (RE-371). On the samples measured only a file of
+        // 2015 to 2022 has one, a family instance whose record the native
+        // path does not decode; no sample of 2024 or later has a port with no
+        // direction.
         if !matches!(predefined_type.as_deref(), Some("DUCT" | "PIPE"))
-            || flow_direction.as_deref() != Some("SOURCEANDSINK")
+            || !matches!(flow_direction.as_deref(), Some("SOURCEANDSINK") | None)
+            || system_type.as_deref() == Some("EXHAUST")
         {
             continue;
         }
@@ -3794,6 +3906,7 @@ type WalkerElementData = (
     std::collections::BTreeMap<usize, Vec<usize>>,
     std::collections::BTreeMap<u32, std::collections::BTreeMap<String, Vec<entities::PropertySet>>>,
     std::collections::BTreeMap<usize, Vec<entities::Property>>,
+    std::collections::BTreeMap<String, usize>,
 );
 
 fn append_production_walker_elements(
@@ -3837,6 +3950,7 @@ fn append_production_walker_elements(
             append.body_pieces,
             append.type_entity_sets,
             append.record_handoffs,
+            append.port_joins_left_out,
         ));
     }
     Ok(Default::default())
@@ -5148,6 +5262,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         wall_cut_openings_left_out: model.wall_cut_openings_left_out.clone(),
         wall_end_reads_unmarked: model.wall_end_reads_unmarked.clone(),
         wall_profile_height_checks: model.wall_profile_height_checks.clone(),
+        port_joins_left_out: model.port_joins_left_out.clone(),
         body_pieces_folded,
     }
 }

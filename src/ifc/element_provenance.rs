@@ -984,6 +984,10 @@ fn body_readers(body: &str) -> &'static [&'static str] {
             "type_i_section",
         ],
         ec::PIPE_AXIS_BODY_SOURCE => &[SELECTED_FRAME_READER, "pipe_connectors"],
+        ec::DUCT_LINE_BODY_SOURCE => &[
+            crate::partition_schema_mvp::DUCT_RECORD_READER,
+            crate::partition_schema_mvp::DUCT_TYPE_READER,
+        ],
         ec::ROOF_SLOPE_BODY_SOURCE => &[
             SELECTED_FRAME_READER,
             "sketch_lines",

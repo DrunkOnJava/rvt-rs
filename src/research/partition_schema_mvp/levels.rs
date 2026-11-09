@@ -27,6 +27,14 @@ pub(super) fn attach_level_parameters(
     elevations: &BTreeMap<u32, f64>,
 ) {
     use crate::partition_level_parameters as lp;
+    // A duct's own record named its reference level (RE-371).
+    if element
+        .fields
+        .iter()
+        .any(|(name, _)| name == lp::LEVEL_PARAMETER_FIELD)
+    {
+        return;
+    }
     let found = element
         .id
         .and_then(|id| parameters.get(&id))
@@ -314,9 +322,16 @@ pub(super) fn attach_levels_32(
         };
         let mut push = |field: &str, level: u32| {
             if let Some(name) = names.get(&level) {
-                element
-                    .fields
-                    .push((field.into(), InstanceField::String((*name).into())));
+                // A duct's own record named its reference level (RE-371): the
+                // same name is not pushed a second time.
+                let held = element.fields.iter().any(|(key, value)| {
+                    key == field && matches!(value, InstanceField::String(held) if held == *name)
+                });
+                if !held {
+                    element
+                        .fields
+                        .push((field.into(), InstanceField::String((*name).into())));
+                }
             }
         };
         if !base_unrecovered {

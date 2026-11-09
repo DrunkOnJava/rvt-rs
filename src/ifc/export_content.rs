@@ -92,6 +92,11 @@ pub struct TypedProductionAppend {
     /// [`CUT_LOOP_SIZE_PROPERTIES`], [`CUT_SOLID_SIZE_PROPERTIES`],
     /// [`INSTANCE_BOX_SIZE_PROPERTIES`] and [`SYMBOL_WIRE_WIDTH_PROPERTY`].
     pub record_handoffs: BTreeMap<usize, Vec<Property>>,
+    /// The joins between two connectors that the writer leaves out because a
+    /// connector of either end is named with two partners and the two sides'
+    /// lists do not settle which is real, by reason (RE-371, #1524). Counted
+    /// in `exported.port_joins_left_out`.
+    pub port_joins_left_out: BTreeMap<String, usize>,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -698,6 +703,9 @@ pub fn append_typed_production_elements(
     // RE-370: a pipe's connectors' directions, where its own record gave
     // them.
     let mut pipe_flows: BTreeMap<usize, BTreeMap<u32, i64>> = BTreeMap::new();
+    // RE-371: each tap of a duct its own record drew along its line, a
+    // point along it.
+    let mut duct_taps: BTreeMap<usize, Vec<DuctTap>> = BTreeMap::new();
     // RE-162: each MEP system's name and members, by its ElementId.
     let mut pending_systems: BTreeMap<u32, (Option<String>, Vec<usize>)> = Default::default();
     // Bodies of aggregate wholes, held back until their parts are known: a
@@ -1182,6 +1190,36 @@ pub fn append_typed_production_elements(
             match decoded.class.as_str() {
                 "Duct" => {
                     curve_ends.push((entity_index, id, "DUCT"));
+                    if let Some([start, end]) =
+                        crate::partition_schema_mvp::duct_ends_from_fields(&decoded.fields)
+                    {
+                        // A tap's port is on the duct's line at its parameter,
+                        // its axis the line's, as Revit's export places all
+                        // 406 of Snowdon Towers HVAC's.
+                        let length = (0..3)
+                            .map(|axis| (end[axis] - start[axis]).powi(2))
+                            .sum::<f64>()
+                            .sqrt();
+                        let taps: Vec<DuctTap> =
+                            crate::partition_schema_mvp::duct_taps_from_fields(&decoded.fields)
+                                .into_iter()
+                                .filter(|_| length > 0.0)
+                                .map(|(index, at)| {
+                                    (
+                                        index,
+                                        std::array::from_fn(|axis| {
+                                            start[axis] + at * (end[axis] - start[axis])
+                                        }),
+                                        std::array::from_fn(|axis| {
+                                            (end[axis] - start[axis]) / length
+                                        }),
+                                    )
+                                })
+                                .collect();
+                        if !taps.is_empty() {
+                            duct_taps.insert(entity_index, taps);
+                        }
+                    }
                     if let Some(ends) =
                         crate::partition_schema_mvp::duct_ends_from_fields(&decoded.fields)
                     {
@@ -1858,8 +1896,19 @@ pub fn append_typed_production_elements(
             )
     };
     let mut connections: std::collections::BTreeSet<[(usize, u32, u32); 2]> = Default::default();
+    let mut conflicting: std::collections::BTreeSet<[(usize, u32, u32); 2]> = Default::default();
     // #847: each connector's joins, read from either side's list.
     let mut joined: HashMap<(u32, u32), Vec<(u32, u32)>> = HashMap::new();
+    // RE-371: each connector's partners, with how many of the two sides' lists
+    // name each (2 where both do). A connector has one physical partner, so a
+    // connector that two partners are named for has at least one that is not
+    // real: on the MEP samples of 2015 and 2019, each of five chains of three
+    // joins holds one that the 2024 save does not, a join of one element's
+    // connector to the other connector of an element it is joined to at its
+    // first. The partner both sides name is kept where there is exactly one;
+    // otherwise none is, and a join is written only where each of its ends
+    // keeps the other, so a join this cannot settle is counted, not guessed.
+    let mut named: BTreeMap<(u32, u32), BTreeMap<(u32, u32), usize>> = BTreeMap::new();
     for (_, id, joins) in &pending_joins {
         for &(index, other_id, other_index) in joins {
             joined
@@ -1870,8 +1919,32 @@ pub fn append_typed_production_elements(
                 .entry((other_id, other_index))
                 .or_default()
                 .push((*id, index));
+            *named
+                .entry((*id, index))
+                .or_default()
+                .entry((other_id, other_index))
+                .or_default() += 1;
+            *named
+                .entry((other_id, other_index))
+                .or_default()
+                .entry((*id, index))
+                .or_default() += 1;
         }
     }
+    let kept = |connector: (u32, u32)| -> Option<(u32, u32)> {
+        let partners = named.get(&connector)?;
+        if partners.len() == 1 {
+            return partners.keys().next().copied();
+        }
+        let mut both = partners
+            .iter()
+            .filter(|(_, sides)| **sides > 1)
+            .map(|(partner, _)| *partner);
+        match (both.next(), both.next()) {
+            (Some(partner), None) => Some(partner),
+            _ => None,
+        }
+    };
     for (entity, id, joins) in pending_joins {
         for (index, other_id, other_index) in joins {
             let Some(&other) = out.id_to_entity.get(&other_id) else {
@@ -1882,8 +1955,20 @@ pub fn append_typed_production_elements(
             }
             let mut ends = [(entity, id, index), (other, other_id, other_index)];
             ends.sort();
-            connections.insert(ends);
+            if kept((id, index)) == Some((other_id, other_index))
+                && kept((other_id, other_index)) == Some((id, index))
+            {
+                connections.insert(ends);
+            } else {
+                conflicting.insert(ends);
+            }
         }
+    }
+    if !conflicting.is_empty() {
+        out.port_joins_left_out.insert(
+            "connector_named_with_conflicting_partners".to_string(),
+            conflicting.len(),
+        );
     }
     let curve_ends: Vec<(usize, u32, &'static str)> = curve_ends
         .into_iter()
@@ -1919,6 +2004,19 @@ pub fn append_typed_production_elements(
                     .map(str::to_string),
                 location_feet: place.map(|(point, _)| point),
                 direction: place.map(|(_, outward)| outward),
+                system_type: None,
+            });
+        }
+        for &(index, point, along) in duct_taps.get(&element).into_iter().flatten() {
+            entities.push(entities::IfcEntity::Port {
+                element,
+                id,
+                index,
+                predefined_type: Some(kind.to_string()),
+                flow_direction: None,
+                location_feet: Some(point),
+                direction: Some(along),
+                system_type: None,
             });
         }
     }
@@ -2201,10 +2299,79 @@ fn level_parameter_property_set(decoded: &DecodedElement, ifc_type: &str) -> Opt
             _ => {}
         }
     }
+    if ifc_type == "IFCDUCTSEGMENT" {
+        properties.extend(duct_elevation_properties(&decoded.fields));
+    }
     Some(PropertySet {
         name: "Constraints".into(),
         properties,
     })
+}
+
+/// A duct's elevations and slope among Revit's `Constraints` (RE-371), from
+/// its own record's Start and End Middle Elevation above its reference level
+/// and its line, where its justification is centred: on Snowdon Towers HVAC
+/// (2025) these are Revit's own on 1,053 of 1,053 ducts. `Middle Elevation`
+/// is the start's, as Revit gives it on every one, sloped ones included. A
+/// lower or upper end's bottom and top are its centreline less and plus half
+/// the section's height as it stands across the slope, the half-height times
+/// the cosine of the slope, so a vertical duct's are its centreline. `Slope`
+/// is its rise over its run, left out of a vertical duct's set as Revit
+/// leaves it; Revit writes it as an `IfcPositiveRatioMeasure`, 0 on a level
+/// duct, which that type does not allow, so it is an `IfcRatioMeasure`.
+fn duct_elevation_properties(fields: &[(String, InstanceField)]) -> Vec<Property> {
+    use crate::partition_schema_mvp as mvp;
+    let (Some([start_offset, end_offset]), Some([start, end]), Some((_, height))) = (
+        mvp::duct_offsets_from_fields(fields),
+        mvp::duct_ends_from_fields(fields),
+        mvp::curve_size_from_fields(fields),
+    ) else {
+        return Vec::new();
+    };
+    let length = (0..3)
+        .map(|axis| (end[axis] - start[axis]).powi(2))
+        .sum::<f64>()
+        .sqrt();
+    let run = (end[0] - start[0]).hypot(end[1] - start[1]);
+    if !(length.is_finite() && length > 0.0) {
+        return Vec::new();
+    }
+    let half = height / 2.0 * run / length;
+    let (lower, upper) = if start[2] <= end[2] {
+        (start_offset, end_offset)
+    } else {
+        (end_offset, start_offset)
+    };
+    let length_property = |name: &str, feet: f64| Property {
+        name: name.into(),
+        value: PropertyValue::LengthFeet(feet),
+    };
+    let mut properties = vec![
+        length_property("Start Middle Elevation", start_offset),
+        length_property("End Middle Elevation", end_offset),
+        length_property("Middle Elevation", start_offset),
+        length_property("Lower End Centerline Elevation", lower),
+        length_property("Lower End Bottom Elevation", lower - half),
+        length_property("Lower End Top Elevation", lower + half),
+        length_property("Upper End Centerline Elevation", upper),
+        length_property("Upper End Bottom Elevation", upper - half),
+        length_property("Upper End Top Elevation", upper + half),
+        Property {
+            name: "Horizontal Justification".into(),
+            value: PropertyValue::Identifier("Center".into()),
+        },
+        Property {
+            name: "Vertical Justification".into(),
+            value: PropertyValue::Identifier("Middle".into()),
+        },
+    ];
+    if run > PIPE_AXIS_TOLERANCE_FEET {
+        properties.push(Property {
+            name: "Slope".into(),
+            value: PropertyValue::Ratio((end[2] - start[2]).abs() / run),
+        });
+    }
+    properties
 }
 
 /// `Pset_StairCommon` for a stair and `Pset_StairFlightCommon` for a
@@ -5285,6 +5452,61 @@ fn pipe_cylinder_solid(
     }
 }
 
+/// A duct's tap (RE-371): its connector's index, the point on the duct's
+/// line it is at, and the line's direction, its axis.
+type DuctTap = (u32, [f64; 3], [f64; 3]);
+
+/// `BodySource` of a duct drawn as its section along its own record's line
+/// (RE-371).
+pub const DUCT_LINE_BODY_SOURCE: &str = "native_duct_line";
+
+/// A duct's body (RE-371): a round section is its circle extruded from one
+/// end to the other, as a pipe's (RE-131); a rectangular one its width by
+/// its height, the height along the record's normal and the width across the
+/// normal and the line. `location` is the element's placement.
+fn duct_swept_solid(
+    duct: &crate::partition_schema_mvp::DuctBody,
+    location: [f64; 3],
+) -> entities::SolidShape {
+    if duct.round {
+        return pipe_cylinder_solid(
+            &crate::partition_pipe_axes::PipeBody {
+                start: duct.start,
+                end: duct.end,
+                radius_feet: duct.width_feet / 2.0,
+            },
+            location,
+        );
+    }
+    let length = (0..3)
+        .map(|axis| (duct.end[axis] - duct.start[axis]).powi(2))
+        .sum::<f64>()
+        .sqrt();
+    let axis: [f64; 3] = std::array::from_fn(|i| (duct.end[i] - duct.start[i]) / length);
+    let n = crate::partition_schema_mvp::square_to(duct.normal, axis).unwrap_or(duct.normal);
+    // The profile's X axis is the width's direction, so its Y axis, the
+    // extrusion's axis crossed with it, is the normal.
+    let x = [
+        n[1] * axis[2] - n[2] * axis[1],
+        n[2] * axis[0] - n[0] * axis[2],
+        n[0] * axis[1] - n[1] * axis[0],
+    ];
+    entities::SolidShape::PlacedExtrusion {
+        profile: entities::ProfileDef::Rectangle {
+            width_feet: duct.width_feet,
+            depth_feet: duct.height_feet,
+        },
+        origin_feet: [
+            duct.start[0] - location[0],
+            duct.start[1] - location[1],
+            duct.start[2] - location[2],
+        ],
+        axis,
+        ref_direction: x,
+        depth_feet: length,
+    }
+}
+
 /// `BodySource` of a structural column drawn as its type's I section
 /// (RE-104).
 pub const COLUMN_I_SECTION_BODY_SOURCE: &str = "family_type_i_section";
@@ -6897,6 +7119,13 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     } else {
         None
     };
+    // RE-371: a duct its own record drew along its line is its section swept
+    // along it.
+    let duct = if class == "Duct" {
+        crate::partition_schema_mvp::duct_body_from_fields(&decoded.fields)
+    } else {
+        None
+    };
     // RE-103: a beam whose type is an I section, drawn as it where its body
     // along its line holds the section.
     let i_beam = beam_closed.and_then(|beam| {
@@ -7240,6 +7469,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     .or_else(|| beam_longer.map(|_| BEAM_BOX_BODY_SOURCE.into()))
                     .or_else(|| beam.map(|_| BEAM_AXIS_BODY_SOURCE.into()))
                     .or_else(|| pipe.map(|_| PIPE_AXIS_BODY_SOURCE.into()))
+                    .or_else(|| duct.map(|_| DUCT_LINE_BODY_SOURCE.into()))
                     .or_else(|| stair_run.as_ref().map(|_| STAIR_RUN_BODY_SOURCE.into()))
                     .or_else(|| spiral_run.as_ref().map(|_| SPIRAL_RUN_BODY_SOURCE.into()))
                     .or_else(|| {
@@ -7272,6 +7502,7 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     || type_section.is_some()
                     || beam_closed.is_some()
                     || pipe.is_some()
+                    || duct.is_some()
                     || stair_run.is_some()
                     || spiral_run.is_some()
                     || landing_tread.is_some()
@@ -7852,6 +8083,11 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
                     None,
                     record_body,
                     pipe.map(|body| pipe_cylinder_solid(&body, [x, y, z])),
+                ),
+                None if duct.is_some() => (
+                    None,
+                    record_body,
+                    duct.map(|body| duct_swept_solid(&body, [x, y, z])),
                 ),
                 None if oriented.is_some() => (
                     None,

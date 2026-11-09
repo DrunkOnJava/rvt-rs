@@ -66,7 +66,7 @@ viewer, and a local, read-only MCP server (`rvt-rs-mcp`, [`docs/mcp.md`](mcp.md)
 that answers an agent's questions from the model the IFC export writes. On Revit 2023 projects it reads each element's ElementId, category
 and bounding box (RE-81), curtain walls with their parts under them on 2015 to 2023 (RE-366), walls at an angle along their lines (on 2015 to 2020 only where the record box closes on the line's rectangle) and joined by their join lists on 2015 to 2023 (RE-364), or cut back at their joins (RE-120), with their `Height` where nothing is joined to them or cuts them, though not their areas or volumes (RE-364 section 9), beams at their columns
 (RE-122) and elsewhere along their location lines on 2015 to 2023, read on Autodesk's samples only (RE-362: none of BIMcollab's 91 beams holds a line, #1514), steel beams as their type's I section on 2017 to 2023 (RE-365), door and
-window hosts (RE-85), pipes' types, cylinders and ports on 2015 to 2027 (RE-370), each element's Phase Created on 2015 to 2023 (RE-368), each element's Level parameters on 2015 to 2023 (RE-369), room outlines
+window hosts (RE-85), pipes' types, cylinders and ports on 2015 to 2027 (RE-370), ducts' types, lines, sections and ports and ports' systems on 2015 to 2027 (RE-371), each element's Phase Created on 2015 to 2023 (RE-368), each element's Level parameters on 2015 to 2023 (RE-369), room outlines
 (RE-102) with their numbers and names (RE-117, which names every
 release's rooms), Levels with the storey each element sits on (RE-107;
 beams by the Level at their top, RE-119), and

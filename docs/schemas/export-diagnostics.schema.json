@@ -672,6 +672,14 @@
           },
           "description": "A measurement of RE-358 that nothing is carried or kept by: the ends of exported walls with an edited elevation profile that go on past it, by <carried|kept>_sloped_<low|high>_<rising|falling|level>_<equal|below|above> for a sloped end (whether the end was carried, which end of the profile, whether the line rises or falls towards the wall's end, and how the line's height there stands against the top of the wall's record box) and carried_level_<low|high> for a level cut-out carried. Empty when no wall goes on past its profile."
         },
+        "port_joins_left_out": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "The joins between two connectors that the export leaves out because a connector of either end is named with two partners that the two sides' lists do not settle (RE-371, #1524), by reason: connector_named_with_conflicting_partners. A connector has one physical partner, so one of two is not real; the partner both sides name is kept where there is exactly one, and a join is written only where each of its ends keeps the other. Empty where no connector is named with two."
+        },
         "resolved_outline_spaces": {
           "type": "integer",
           "minimum": 0,

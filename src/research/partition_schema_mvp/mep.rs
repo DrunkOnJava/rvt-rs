@@ -251,13 +251,17 @@ pub(super) fn attach_curve_fields(
         let Some(curve) = element.id.and_then(|id| fields.get(&id)).copied() else {
             continue;
         };
-        for (name, value) in CURVE_SIZE_FIELDS
-            .iter()
-            .zip([curve.width_feet, curve.height_feet])
-        {
-            element
-                .fields
-                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        // A duct its own record sized and drew (RE-371) keeps its values.
+        let native = has(element, CURVE_SIZE_FIELDS[0]);
+        if !native {
+            for (name, value) in CURVE_SIZE_FIELDS
+                .iter()
+                .zip([curve.width_feet, curve.height_feet])
+            {
+                element
+                    .fields
+                    .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+            }
         }
         // A pipe's inner diameter (RE-157).
         if let Some(&(inner, _)) = element.id.and_then(|id| diameters.get(&id)) {
@@ -271,7 +275,7 @@ pub(super) fn attach_curve_fields(
         }
         // A duct along one of the model's axes: its box is its section by its
         // length (RE-134: 25 of 25 RE1 ducts).
-        if element.class == "Duct" {
+        if element.class == "Duct" && !has(element, DUCT_LENGTH_FIELD) {
             if let Some(length) = element_record_bbox(element)
                 .and_then(|bbox| curve.length_in_box(bbox, CURVE_BOX_TOLERANCE_FEET))
             {
@@ -579,9 +583,17 @@ pub(super) fn attach_duct_end_keys(
         return;
     }
     let mut ends = ppa::CurveEnds::new();
+    // A duct its own record drew along its line (RE-371) has its ends and
+    // keys already.
+    let drawn = |element: &DecodedElement| {
+        element
+            .fields
+            .iter()
+            .any(|(name, _)| name == DUCT_ENDS_FIELDS[0][0])
+    };
     for element in products
         .iter_mut()
-        .filter(|element| element.class == "Duct")
+        .filter(|element| element.class == "Duct" && !drawn(element))
     {
         let (Some(id), Some(bbox), Some((width, height)), Some(stream)) = (
             element.id,
@@ -623,10 +635,13 @@ pub(super) fn attach_duct_end_keys(
     let Ok(keys) = ppa::scan_pipe_end_keys(rf, revit_version, &ends) else {
         return;
     };
-    for element in products
-        .iter_mut()
-        .filter(|element| element.class == "Duct")
-    {
+    for element in products.iter_mut().filter(|element| {
+        element.class == "Duct"
+            && !element
+                .fields
+                .iter()
+                .any(|(name, _)| name == DUCT_END_KEYS_FIELDS[0])
+    }) {
         let Some(end_keys) = element.id.and_then(|id| keys.get(&id)) else {
             continue;
         };
@@ -774,6 +789,7 @@ fn pipe_read_fields(class: &str) -> Option<&'static [&'static str]> {
             "m_endParams",
             "m_dOuterDiameter",
             "m_nIndex",
+            "m_arrRefs",
             "m_pConnector",
             "m_paramOnCurve",
             "m_eDirection",
@@ -793,56 +809,58 @@ struct NativePipe {
     outer_diameter: Option<f64>,
     connectors: Option<[u32; 2]>,
     directions: BTreeMap<u32, i64>,
+    /// Each connector's first join to another element (RE-371).
+    joins: Vec<(u32, u32, u32)>,
 }
 
-fn native_pipe(graph: &crate::native_parameters::ObjectGraph) -> NativePipe {
-    use crate::native_json::{finite_triple, identifier_i64};
-    let object = |class: &str| {
-        let mut found = graph
-            .objects
-            .iter()
-            .filter(move |object| object.class_name == class);
-        match (found.next(), found.next()) {
-            (Some(object), None) => Some(object),
-            _ => None,
-        }
+/// The one object of `class` in a record's graph, or `None` where it holds
+/// none or more than one.
+fn only_object<'a>(
+    graph: &'a crate::native_parameters::ObjectGraph,
+    class: &str,
+) -> Option<&'a crate::native_parameters::GraphObject> {
+    let mut found = graph
+        .objects
+        .iter()
+        .filter(move |object| object.class_name == class);
+    match (found.next(), found.next()) {
+        (Some(object), None) => Some(object),
+        _ => None,
+    }
+}
+
+/// The two ends of a duct's or pipe's one `GLine`, from its first end
+/// parameter to its second (RE-370), model feet.
+fn line_ends(graph: &crate::native_parameters::ObjectGraph) -> Option<[[f64; 3]; 2]> {
+    use crate::native_json::finite_triple;
+    let line = only_object(graph, "GLine")?;
+    let origin = finite_triple(line.fields.get("m_origin")?)?;
+    let direction = finite_triple(line.fields.get("m_dirVec")?)?;
+    let [start, end] = line
+        .fields
+        .get("m_endParams")?
+        .as_array()?
+        .iter()
+        .map(serde_json::Value::as_f64)
+        .collect::<Option<Vec<f64>>>()?[..]
+    else {
+        return None;
     };
-    let positive = |class: &str, field: &str| {
-        object(class)?
-            .fields
-            .get(field)?
-            .as_f64()
-            .filter(|value| value.is_finite() && *value > 0.0)
-    };
-    let type_id = object("RbsPipeCurve")
-        .and_then(|curve| curve.fields.get("m_idType"))
-        .and_then(identifier_i64)
-        .and_then(|id| u32::try_from(id).ok());
-    // The centreline is the pipe's one line, from its first end parameter to
-    // its second.
-    let ends = object("GLine").and_then(|line| {
-        let origin = finite_triple(line.fields.get("m_origin")?)?;
-        let direction = finite_triple(line.fields.get("m_dirVec")?)?;
-        let [start, end] = line
-            .fields
-            .get("m_endParams")?
-            .as_array()?
-            .iter()
-            .map(serde_json::Value::as_f64)
-            .collect::<Option<Vec<f64>>>()?[..]
-        else {
-            return None;
-        };
-        let at = |t: f64| std::array::from_fn(|axis| origin[axis] + direction[axis] * t);
-        let ends = [at(start), at(end)];
-        ends.iter()
-            .flatten()
-            .all(|value| value.is_finite())
-            .then_some(ends)
-    });
-    // Each end's connector: a `SegmentConnectorPosition` names its
-    // `Connector` by pointer and sits at parameter 0 (the line's start) or 1
-    // (its end).
+    let at = |t: f64| std::array::from_fn(|axis| origin[axis] + direction[axis] * t);
+    let ends = [at(start), at(end)];
+    ends.iter()
+        .flatten()
+        .all(|value| value.is_finite())
+        .then_some(ends)
+}
+
+/// Which connector sits at each end of a duct's or pipe's line (RE-370): a
+/// `SegmentConnectorPosition` names its `Connector` by pointer and sits at
+/// parameter 0 (the line's start) or 1 (its end). `None` unless each end
+/// has exactly one, and they differ. With `taps`, a connector between the
+/// ends (a duct's tap, RE-371) is passed over; without, it gives `None`, as
+/// for a pipe.
+fn end_connectors(graph: &crate::native_parameters::ObjectGraph, taps: bool) -> Option<[u32; 2]> {
     let mut at_ends: [Vec<u32>; 2] = [Vec::new(), Vec::new()];
     for position in graph
         .objects
@@ -856,10 +874,8 @@ fn native_pipe(graph: &crate::native_parameters::ObjectGraph) -> NativePipe {
         {
             Some(0.0) => 0,
             Some(1.0) => 1,
-            _ => {
-                at_ends = [Vec::new(), Vec::new()];
-                break;
-            }
+            Some(between) if taps && between > 0.0 && between < 1.0 => continue,
+            _ => return None,
         };
         let index = position
             .fields
@@ -874,25 +890,36 @@ fn native_pipe(graph: &crate::native_parameters::ObjectGraph) -> NativePipe {
                     _ => None,
                 }
             })
-            .and_then(|index| u32::try_from(index).ok());
-        match index {
-            Some(index) => at_ends[end].push(index),
-            None => {
-                at_ends = [Vec::new(), Vec::new()];
-                break;
-            }
-        }
+            .and_then(|index| u32::try_from(index).ok())?;
+        at_ends[end].push(index);
     }
-    let connectors = match (at_ends[0].as_slice(), at_ends[1].as_slice()) {
+    match (at_ends[0].as_slice(), at_ends[1].as_slice()) {
         ([start], [end]) if start != end => Some([*start, *end]),
         _ => None,
+    }
+}
+
+fn native_pipe(graph: &crate::native_parameters::ObjectGraph, own: u64) -> NativePipe {
+    use crate::native_json::identifier_i64;
+    let positive = |class: &str, field: &str| {
+        only_object(graph, class)?
+            .fields
+            .get(field)?
+            .as_f64()
+            .filter(|value| value.is_finite() && *value > 0.0)
     };
+    let type_id = only_object(graph, "RbsPipeCurve")
+        .and_then(|curve| curve.fields.get("m_idType"))
+        .and_then(identifier_i64)
+        .and_then(|id| u32::try_from(id).ok());
     NativePipe {
         type_id,
-        ends,
+        // The centreline is the pipe's one line.
+        ends: line_ends(graph),
         outer_diameter: positive("PipeDomainDesignPropertyManager", "m_dOuterDiameter"),
-        connectors,
+        connectors: end_connectors(graph, false),
         directions: pipe_directions(graph),
+        joins: segment_joins(graph, own),
     }
 }
 
@@ -1045,7 +1072,7 @@ pub(super) fn attach_native_pipes(
                 .map(str::to_string);
             crate::native_json::agree(&mut type_names, id, name);
         } else if class == "RbsPipeCurve" && selected.contains(&id) {
-            crate::native_json::agree(&mut pipes, id, Some(native_pipe(graph)));
+            crate::native_json::agree(&mut pipes, id, Some(native_pipe(graph, id)));
         }
         Ok(())
     });
@@ -1073,6 +1100,7 @@ pub(super) fn attach_native_pipes(
                     .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
             }
         }
+        push_joins(element, &pipe.joins);
         // Each connector's calculated direction (RE-212), for its port.
         if !pipe.directions.is_empty() && !has(element, PIPE_FLOW_DIRECTIONS_FIELD) {
             element.fields.push((
@@ -1137,5 +1165,550 @@ pub(super) fn attach_native_pipes(
                     .push(((*name).into(), end_keys_field(&[(u64::from(id), index)])));
             }
         }
+    }
+}
+
+/// The fields [`attach_native_ducts`] reads from a duct's `RbsDuctCurve`
+/// record and its type's `AbsDuctType` record (`graph_fields`, #1335).
+fn duct_read_fields(class: &str) -> Option<&'static [&'static str]> {
+    Some(match class {
+        "RbsDuctCurve" => &[
+            "m_id",
+            "m_idType",
+            "m_assocLevelId",
+            "m_idLevelStart",
+            "m_dWidthOrDiameter",
+            "m_dHeight",
+            "m_vNormal",
+            "m_dOffsetStart",
+            "m_dOffsetEnd",
+            "m_eHorOffset",
+            "m_eVertOffset",
+            "m_origin",
+            "m_dirVec",
+            "m_endParams",
+            "m_nIndex",
+            "m_arrRefs",
+            "m_pConnector",
+            "m_paramOnCurve",
+        ],
+        "AbsDuctType" => &["m_id", "m_name"],
+        _ => &["m_id"],
+    })
+}
+
+/// What a duct's own record holds (RE-371): its type, the two ends of its one
+/// `GLine`, its section's width and height and the direction its height lies
+/// along (`m_vNormal`), feet, its reference level and the elevations of its
+/// two ends above it where its justification is centred, and the index of
+/// the connector at each end.
+#[derive(Debug, Clone, PartialEq)]
+struct NativeDuct {
+    type_id: Option<u32>,
+    ends: Option<[[f64; 3]; 2]>,
+    size: Option<(f64, f64)>,
+    normal: Option<[f64; 3]>,
+    level: Option<u32>,
+    offsets: Option<[f64; 2]>,
+    connectors: Option<[u32; 2]>,
+    /// Each tap: its connector's index and its parameter along the line.
+    taps: Vec<(u32, f64)>,
+    /// Each connector's first join to another element (RE-171's type-1
+    /// reference): its index, the element and that element's connector.
+    joins: Vec<(u32, u32, u32)>,
+}
+
+/// Each connector a duct's `SegmentConnectorPosition` puts between its
+/// line's ends (a tap, RE-371), with its parameter, by index.
+fn duct_taps(graph: &crate::native_parameters::ObjectGraph) -> Vec<(u32, f64)> {
+    let index_of_token = connector_indices(graph);
+    graph
+        .objects
+        .iter()
+        .filter(|object| object.class_name == "SegmentConnectorPosition")
+        .filter_map(|position| {
+            let at = position
+                .fields
+                .get("m_paramOnCurve")?
+                .as_f64()
+                .filter(|at| *at > 0.0 && *at < 1.0)?;
+            let token = position
+                .fields
+                .pointer("/m_pConnector/pointer_token")?
+                .as_u64()?;
+            Some((*index_of_token.get(&token)?, at))
+        })
+        .collect()
+}
+
+/// Each `Connector` object's index (`m_nIndex`), by its pointer token.
+fn connector_indices(graph: &crate::native_parameters::ObjectGraph) -> BTreeMap<u64, u32> {
+    graph
+        .objects
+        .iter()
+        .filter(|object| object.class_name == "Connector")
+        .filter_map(|connector| {
+            let index = connector.fields.get("m_nIndex")?.as_u64()?;
+            Some((u64::from(connector.token), u32::try_from(index).ok()?))
+        })
+        .collect()
+}
+
+/// Each of a duct's or pipe's connectors' first join to another element: the first of
+/// its `m_arrRefs` of connection type 1 (RE-171) that names an element other
+/// than the duct, with that element's connector index.
+fn segment_joins(graph: &crate::native_parameters::ObjectGraph, own: u64) -> Vec<(u32, u32, u32)> {
+    use crate::native_json::identifier_i64;
+    graph
+        .objects
+        .iter()
+        .filter(|object| object.class_name == "Connector")
+        .filter_map(|connector| {
+            let index = u32::try_from(connector.fields.get("m_nIndex")?.as_u64()?).ok()?;
+            connector
+                .fields
+                .get("m_arrRefs")?
+                .as_array()?
+                .iter()
+                .find_map(|reference| {
+                    if reference.get("m_connType")?.as_u64()? != 1 {
+                        return None;
+                    }
+                    let other = u64::try_from(identifier_i64(reference.get("m_id")?)?).ok()?;
+                    let other_index = u32::try_from(reference.get("m_nIndex")?.as_u64()?).ok()?;
+                    (other != own).then_some((index, u32::try_from(other).ok()?, other_index))
+                })
+        })
+        .collect()
+}
+
+fn native_duct(graph: &crate::native_parameters::ObjectGraph, own: u64) -> NativeDuct {
+    use crate::native_json::{finite_triple, identifier_i64};
+    let root = only_object(graph, "RbsDuctCurve");
+    let field = |name: &str| root.and_then(|root| root.fields.get(name));
+    // An unset id is -1, which no `u32` holds.
+    let id = |name: &str| {
+        field(name)
+            .and_then(identifier_i64)
+            .and_then(|id| u32::try_from(id).ok())
+    };
+    let float = |name: &str| {
+        field(name)
+            .and_then(serde_json::Value::as_f64)
+            .filter(|value| value.is_finite())
+    };
+    let positive = |name: &str| float(name).filter(|value| *value > 0.0);
+    // The offsets are the centreline's elevations where the duct is justified
+    // by its centre across and up (both 0, Center and Middle): the one case
+    // Revit's export is measured on.
+    let centred = [field("m_eHorOffset"), field("m_eVertOffset")]
+        .iter()
+        .all(|value| value.and_then(serde_json::Value::as_i64) == Some(0));
+    let normal = field("m_vNormal").and_then(finite_triple).filter(|normal| {
+        let length = normal.iter().map(|v| v * v).sum::<f64>().sqrt();
+        (length - 1.0).abs() <= 1e-6
+    });
+    NativeDuct {
+        type_id: id("m_idType"),
+        ends: line_ends(graph),
+        size: positive("m_dWidthOrDiameter").zip(positive("m_dHeight")),
+        normal,
+        // Before Revit 2024 the reference level is `m_idLevelStart`, and
+        // `m_assocLevelId` names none (RE-371).
+        level: id("m_assocLevelId").or_else(|| id("m_idLevelStart")),
+        offsets: float("m_dOffsetStart")
+            .zip(float("m_dOffsetEnd"))
+            .filter(|_| centred)
+            .map(|(start, end)| [start, end]),
+        connectors: end_connectors(graph, true),
+        taps: duct_taps(graph),
+        joins: segment_joins(graph, own),
+    }
+}
+
+/// `normal` made square to the unit vector `line`, where it is within 1e-3
+/// of square already: a duct level to within 0.0002 ft over 14 ft (on
+/// Autodesk's `rme_basic` sample) has a normal straight up.
+pub fn square_to(normal: [f64; 3], line: [f64; 3]) -> Option<[f64; 3]> {
+    let along: f64 = (0..3).map(|axis| normal[axis] * line[axis]).sum();
+    if along.abs() > 1e-3 {
+        return None;
+    }
+    let squared: [f64; 3] = std::array::from_fn(|axis| normal[axis] - along * line[axis]);
+    let length = squared.iter().map(|v| v * v).sum::<f64>().sqrt();
+    Some(squared.map(|v| v / length))
+}
+
+/// The box a duct's section of `width` by `height` swept from `start` to
+/// `end` fills, its height along `normal` (`None` for a round section of
+/// diameter `width`), as [`element_record_bbox`] gives a record box: the
+/// minimum corner, then the maximum.
+fn swept_duct_box(
+    start: [f64; 3],
+    end: [f64; 3],
+    width: f64,
+    height: f64,
+    normal: Option<[f64; 3]>,
+) -> Option<[f64; 6]> {
+    let length = (0..3)
+        .map(|axis| (end[axis] - start[axis]).powi(2))
+        .sum::<f64>()
+        .sqrt();
+    if !(length.is_finite() && length > 0.0) {
+        return None;
+    }
+    let unit: [f64; 3] = std::array::from_fn(|axis| (end[axis] - start[axis]) / length);
+    let across: [f64; 3] = match normal {
+        // A round section reaches its radius out along every direction
+        // square to the line.
+        None => unit.map(|u| width / 2.0 * (1.0 - u * u).max(0.0).sqrt()),
+        Some(n) => {
+            // The height lies along the normal, squared to the line, and the
+            // width across the normal and the line.
+            let n = square_to(n, unit)?;
+            let x = [
+                n[1] * unit[2] - n[2] * unit[1],
+                n[2] * unit[0] - n[0] * unit[2],
+                n[0] * unit[1] - n[1] * unit[0],
+            ];
+            std::array::from_fn(|axis| width / 2.0 * x[axis].abs() + height / 2.0 * n[axis].abs())
+        }
+    };
+    let mut bbox = [0.0; 6];
+    for axis in 0..3 {
+        bbox[axis] = start[axis].min(end[axis]) - across[axis];
+        bbox[axis + 3] = start[axis].max(end[axis]) + across[axis];
+    }
+    Some(bbox)
+}
+
+/// Give each duct what its own `RbsDuctCurve` record holds (RE-371), on the
+/// releases the native record path reads (`NATIVE_DUCT_REVIT_VERSIONS`): its
+/// type (`m_idType`, an `AbsDuctType` whose `SymbolInfo.m_name` is its name,
+/// RE-240's rule for a pipe's) and so its system family, its section
+/// (`m_dWidthOrDiameter`, `m_dHeight`), and the line it is drawn along, its
+/// one `GLine` between its two end parameters, at any slope: its ends, its
+/// length, the direction its section's height lies along (`m_vNormal`), and
+/// which of its connectors is at each end, keyed as RE-131's connector
+/// entries key a pipe's (#847). The line is held to a box test like
+/// RE-131's: the section swept along it must fill the record box, a round
+/// section as a circle and any other as its rectangle; an oval duct, whose
+/// sweep is neither, keeps its box. Where its justification is centred, its
+/// reference level's name (`m_assocLevelId`) and the elevations of its two
+/// ends above it (`m_dOffsetStart`, `m_dOffsetEnd`) are given too, for its
+/// `Constraints`. A value is written only where every copy of the record
+/// agrees. It runs before RE-134's scan of 2024 and 2025, so the record's
+/// type, size and length win there.
+// Tracker: B59.
+pub(super) fn attach_native_ducts(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut [DecodedElement],
+) {
+    use crate::native_duct_shapes::DuctShape;
+    use crate::partition_level_parameters as lp;
+    if !NATIVE_DUCT_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let has = |element: &DecodedElement, field: &str| {
+        element.fields.iter().any(|(name, _)| name == field)
+    };
+    let wanting =
+        |element: &DecodedElement| element.class == "Duct" && !has(element, DUCT_NORMAL_FIELDS[0]);
+    let selected: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| wanting(element))
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    if selected.is_empty() {
+        return;
+    }
+    let options = crate::native_document::Options {
+        selected_ids: selected.clone(),
+        selected_classes: ["AbsDuctType".to_string()].into(),
+        graph_fields: Some(duct_read_fields),
+        releases: crate::native_document::NATIVE_RELEASES,
+        // Each duct's record is the source of its line and section (#1360).
+        value_source: Some(DUCT_RECORD_READER),
+        ..crate::native_document::Options::default()
+    };
+    let mut ducts: BTreeMap<u64, Option<NativeDuct>> = BTreeMap::new();
+    let mut types: BTreeMap<u64, Option<(String, Option<DuctShape>)>> = BTreeMap::new();
+    let read = crate::native_document::extract_graphs(rf, &options, |record| {
+        let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
+        else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        if class == "AbsDuctType" {
+            let name = graph
+                .objects
+                .iter()
+                .find(|object| object.class_name == "SymbolInfo")
+                .and_then(|object| object.fields.get("m_name"))
+                .and_then(serde_json::Value::as_str)
+                .filter(|name| !name.is_empty())
+                .map(str::to_string);
+            let mut shapes = graph
+                .objects
+                .iter()
+                .filter_map(|object| DuctShape::of_profile(&object.class_name));
+            let shape = match (shapes.next(), shapes.next()) {
+                (Some(shape), None) => Some(shape),
+                _ => None,
+            };
+            crate::native_json::agree(&mut types, id, name.map(|name| (name, shape)));
+        } else if class == "RbsDuctCurve" && selected.contains(&id) {
+            crate::native_json::agree(&mut ducts, id, Some(native_duct(graph, id)));
+        }
+        Ok(())
+    });
+    if read.is_err() {
+        return;
+    }
+    let level_names: BTreeMap<u32, String> = if ducts
+        .values()
+        .any(|duct| duct.as_ref().is_some_and(|duct| duct.offsets.is_some()))
+    {
+        crate::partition_level_records::recover_partition_levels(rf, revit_version)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|level| (level.element_id, level.name))
+            .collect()
+    } else {
+        BTreeMap::new()
+    };
+    let float = |value: f64| InstanceField::Float { value, size: 8 };
+    for element in products.iter_mut().filter(|element| wanting(element)) {
+        let Some(Some(duct)) = element.id.and_then(|id| ducts.get(&u64::from(id))) else {
+            continue;
+        };
+        let duct_type = duct
+            .type_id
+            .and_then(|type_id| Some((type_id, types.get(&u64::from(type_id))?.as_ref()?)));
+        if let (false, Some((type_id, (name, _)))) = (has(element, TYPE_NAME_FIELD), duct_type) {
+            element.fields.push((
+                TYPE_ID_FIELD.into(),
+                InstanceField::ElementId {
+                    tag: 0,
+                    id: type_id,
+                },
+            ));
+            element
+                .fields
+                .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+        }
+        // Each connector's join (RE-171), as a family instance's are given
+        // them: a duct tapped into another joins no family instance.
+        push_joins(element, &duct.joins);
+        let Some((width, height)) = duct.size else {
+            continue;
+        };
+        if !has(element, CURVE_SIZE_FIELDS[0]) {
+            for (name, value) in CURVE_SIZE_FIELDS.iter().zip([width, height]) {
+                element.fields.push(((*name).into(), float(value)));
+            }
+        }
+        // The line, where its swept section is the record box.
+        let shape = duct_type.and_then(|(_, (_, shape))| *shape);
+        let (Some([start, end]), Some(normal), Some(bbox), Some(shape)) =
+            (duct.ends, duct.normal, element_record_bbox(element), shape)
+        else {
+            continue;
+        };
+        let swept = match shape {
+            DuctShape::Round => swept_duct_box(start, end, width, height, None),
+            DuctShape::Rectangular => swept_duct_box(start, end, width, height, Some(normal)),
+            DuctShape::Oval => None,
+        };
+        let fills = swept.is_some_and(|swept| {
+            swept
+                .iter()
+                .zip(bbox)
+                .all(|(a, b)| (a - b).abs() <= crate::partition_pipe_axes::BOX_TOLERANCE_FEET)
+        });
+        if !fills {
+            continue;
+        }
+        for (names, point) in DUCT_ENDS_FIELDS.iter().zip([start, end]) {
+            for (name, value) in names.iter().zip(point) {
+                element.fields.push(((*name).into(), float(value)));
+            }
+        }
+        for (name, value) in DUCT_NORMAL_FIELDS.iter().zip(normal) {
+            element.fields.push(((*name).into(), float(value)));
+        }
+        // Its type's record gives the section's shape: a source of the body
+        // beside the duct's own (#1360).
+        if let (Some((type_id, _)), Some(id)) = (duct_type, element.id) {
+            rf.attribute_value_source(type_id, DUCT_RECORD_READER, id, DUCT_TYPE_READER);
+        }
+        let length = (0..3)
+            .map(|axis| (end[axis] - start[axis]).powi(2))
+            .sum::<f64>()
+            .sqrt();
+        element
+            .fields
+            .push((DUCT_LENGTH_FIELD.into(), float(length)));
+        // Which of its connectors each end is (#847), keyed as a pipe's.
+        if let (Some(connectors), Some(id)) = (duct.connectors, element.id) {
+            for (name, index) in DUCT_END_KEYS_FIELDS.iter().zip(connectors) {
+                element
+                    .fields
+                    .push(((*name).into(), end_keys_field(&[(u64::from(id), index)])));
+            }
+        }
+        // Its taps, each a connector along its line.
+        if !duct.taps.is_empty() {
+            element.fields.push((
+                DUCT_TAPS_FIELD.into(),
+                InstanceField::Vector(
+                    duct.taps
+                        .iter()
+                        .map(|&(index, at)| {
+                            InstanceField::Vector(vec![
+                                InstanceField::Integer {
+                                    value: i64::from(index),
+                                    signed: false,
+                                    size: 4,
+                                },
+                                float(at),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ));
+        }
+        // Its reference level and the elevations of its ends above it.
+        if let (Some(offsets), Some(level)) = (
+            duct.offsets,
+            duct.level.and_then(|level| level_names.get(&level)),
+        ) {
+            if !has(element, lp::LEVEL_PARAMETER_FIELD) {
+                element.fields.push((
+                    lp::LEVEL_PARAMETER_FIELD.into(),
+                    InstanceField::String(level.clone()),
+                ));
+            }
+            for (name, value) in DUCT_OFFSET_FIELDS.iter().zip(offsets) {
+                element.fields.push(((*name).into(), float(value)));
+            }
+        }
+    }
+    attach_duct_system_families(rf, products);
+}
+
+/// The reader name of a duct's own record as the source of its line and
+/// section (RE-371, #1360).
+pub const DUCT_RECORD_READER: &str = "native_duct";
+
+/// The reader name of a duct's type's record as the source of its
+/// section's shape (RE-371, #1360).
+pub const DUCT_TYPE_READER: &str = "native_duct_type";
+
+/// What a duct drawn along its own record's line holds (RE-371): its ends,
+/// its section's width and height and the direction its height lies along,
+/// and whether its section is round.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DuctBody {
+    pub start: [f64; 3],
+    pub end: [f64; 3],
+    pub width_feet: f64,
+    pub height_feet: f64,
+    pub normal: [f64; 3],
+    pub round: bool,
+}
+
+/// The body a duct's own record gave it (`attach_native_ducts`), where its
+/// line was held to its box.
+pub fn duct_body_from_fields(fields: &[(String, InstanceField)]) -> Option<DuctBody> {
+    let field = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    let point = |names: [&str; 3]| Some([field(names[0])?, field(names[1])?, field(names[2])?]);
+    let [start, end] = duct_ends_from_fields(fields)?;
+    let (width_feet, height_feet) = curve_size_from_fields(fields)?;
+    // Drawn only where its shape is known to be round or rectangular.
+    let round = fields.iter().find_map(|(name, value)| match value {
+        InstanceField::String(shape) if name == DUCT_SHAPE_FIELD => match shape.as_str() {
+            "ROUND" => Some(true),
+            "RECTANGULAR" => Some(false),
+            _ => None,
+        },
+        _ => None,
+    })?;
+    Some(DuctBody {
+        start,
+        end,
+        width_feet,
+        height_feet,
+        normal: point(DUCT_NORMAL_FIELDS)?,
+        round,
+    })
+}
+
+/// A duct's Start and End Middle Elevation above its reference level, feet
+/// ([`DUCT_OFFSET_FIELDS`], RE-371).
+pub fn duct_offsets_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 2]> {
+    let field = |wanted: &str| {
+        fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. } if name == wanted => Some(*value),
+            _ => None,
+        })
+    };
+    Some([field(DUCT_OFFSET_FIELDS[0])?, field(DUCT_OFFSET_FIELDS[1])?])
+}
+
+/// A duct's taps ([`DUCT_TAPS_FIELD`], RE-371): each connector's index and
+/// its parameter along the duct's line.
+pub fn duct_taps_from_fields(fields: &[(String, InstanceField)]) -> Vec<(u32, f64)> {
+    fields
+        .iter()
+        .find_map(|(name, value)| match value {
+            InstanceField::Vector(pairs) if name == DUCT_TAPS_FIELD => Some(
+                pairs
+                    .iter()
+                    .filter_map(|pair| match pair {
+                        InstanceField::Vector(parts) => match parts.as_slice() {
+                            [
+                                InstanceField::Integer { value: index, .. },
+                                InstanceField::Float { value: at, .. },
+                            ] => Some((u32::try_from(*index).ok()?, *at)),
+                            _ => None,
+                        },
+                        _ => None,
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+/// Give a duct or pipe the join its own record lists at each connector
+/// (RE-371), as [`attach_connector_pairs`] gives a family instance its own:
+/// one tapped into a duct, or joined to a family instance whose record the
+/// native path does not decode (several on Revit 2015 to 2022), is joined
+/// on no family instance's list. A connector already joined keeps its join.
+fn push_joins(element: &mut DecodedElement, joins: &[(u32, u32, u32)]) {
+    for &(index, other, other_index) in joins {
+        let field = connector_element_field(index);
+        if element.fields.iter().any(|(name, _)| *name == field) {
+            continue;
+        }
+        element
+            .fields
+            .push((field, InstanceField::ElementId { tag: 0, id: other }));
+        element.fields.push((
+            connector_index_field(index),
+            InstanceField::Integer {
+                value: i64::from(other_index),
+                signed: false,
+                size: 4,
+            },
+        ));
     }
 }

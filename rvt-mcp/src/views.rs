@@ -379,7 +379,8 @@ fn natural_value(value: &PropertyValue) -> Value {
         | PropertyValue::Pressure(number)
         | PropertyValue::Power(number)
         | PropertyValue::ElectricVoltage(number)
-        | PropertyValue::ElectricCurrent(number) => Value::from(*number),
+        | PropertyValue::ElectricCurrent(number)
+        | PropertyValue::Ratio(number) => Value::from(*number),
         PropertyValue::Boolean(flag) => Value::from(*flag),
         PropertyValue::Logical(flag) => flag.map_or(Value::Null, Value::from),
         PropertyValue::LengthFeet(feet) | PropertyValue::PositiveLengthFeet(feet) => {
