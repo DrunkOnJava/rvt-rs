@@ -43,6 +43,55 @@ the Curtain Panels category rests on one project, Vitoria's, in two saves; on
 Revit 2024 and later no model has a category that holds one, so which Revit's
 exporter prefers there is not measured.
 
+Measured against 0.16.1 on the reference models, the BIM4LCA office, the
+Revit 2025 models, Autodesk's sample projects of every release, the held-out
+models, `rac_advanced`'s IFC2X3 pairs and BIMcollab's model (Measure run
+[42632958286](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42632958286),
+`main` at 52282ea1, 118 exports; the release adds only its notes, witness files
+and version strings to it):
+
+- 77 of the 118 exports move. The 41 that do not are Core Interior, Einhoven,
+  RE1 Architecture and Electrical, all 24 Revit 2025 models, six held-out
+  models, and Autodesk's `rst_advanced` 2015, `rac_basic` 2024 and 2025,
+  `rst_basic` 2024 and 2025 and Snowdon Towers' electrical and structural
+  models.
+- On the BIM4LCA office the property values and quantities are as in 0.16.1,
+  as built and at permit: equal, different and missing are unchanged. The port
+  `SystemType` equal to Revit's goes from 0 to 24 of 67 on each file (heating),
+  its wall 3004978 as built has Revit's top (606 to 607 of 607 walls with
+  Revit's base and top), and the one room that kept its box at permit takes its
+  floor's outline from its solid's edges, at Revit's area. On its two terrain
+  files the wall `Height` equal to Revit's goes from 1 to 2 of 2, the quantities
+  equal from 15 to 16 on each and "different" from 1 to 0 and from 2 to 1 (the
+  remaining one is a space's `NetVolume`).
+- On RE1 Mechanical the bodies still drawn as their record box fall from 68 to
+  43: its 25 ducts are their sections along their lines. On RE1 Plumbing the
+  ports joined to a segment's port have Revit's Z axis on 118 of 118, from 108.
+  On the 2026 and 2027 MEP samples the ports compared with the 2025 save go
+  from 6,967 to 7,276 and from 7,054 to 7,364 with none different, and the
+  properties compared from 5,140 to 5,158 and from 5,145 to 5,163, none
+  different.
+- On Revit 2018's IFC2X3 exports of the two Vitoria projects, counts only, the
+  equal property values go from 2,737 to 3,494 on `ALD26 Before` and from 3,291
+  to 4,048 on the held-out `ALD26 Project`, and the values rvt-rs writes that
+  those exports do not from 65 to 55 and from 62 to 52. On `ALD26 Before` 5 of
+  its 9 curtain walls are `IfcCurtainWall` (none before), its 206 members and 67
+  plates have Revit's `Name` and `ObjectType`, and 442 elements have the same
+  materials as Revit's, from 375. An IFC2X3 export is counted apart and removes
+  no value.
+- On `rac_advanced` 2015 to 2020 against the three.js IFC2X3 export, counts only,
+  the equal property values go from 2,503 to 15,026 on each save and the missing
+  from 13,605 to 1,078; "different" goes from 0 to 11, the mullions' `Span`
+  (about 7.5 mm, counted apart), which were missing before.
+- On the held-out models, counts only, Revit 2021's Warmond goes from 188 to 279
+  equal quantities (the walls' `Height` on 2015 to 2023, #1535; 5 different as
+  before), Revit 2023's `modelo_bim` from 7 to 8, and the Revit 2022 office
+  pair's property values from 105 to 107.
+- No property value or quantity goes from equal to different or missing on any
+  model, and "different" rises only by those 11. The IFC4 rules check finds
+  nothing on any of the 93 exports that keep it, and the same-project gates pass
+  (15 samples held to their earlier saves, and the Areas).
+
 ### Upgrading from 0.16
 
 - Every export's IFC header names rvt-rs 0.17.0, so an export that is otherwise
