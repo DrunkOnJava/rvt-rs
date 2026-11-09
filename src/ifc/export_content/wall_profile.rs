@@ -80,8 +80,11 @@
 //! Revit's export writes as openings. Revit writes the wall's body as the profile
 //! (a tessellation) and an opening only for each pocket of the profile against
 //! its convex hull ([`crate::partition_schema_mvp::elevation_profile_pockets`]):
-//! none on a straight sloped top, and on the terrain wall 1387731 the first
-//! three lines of its top closed by a chord. [`cut_profiles_from_bodies`] runs
+//! none on a straight sloped top; on the terrain wall 1387731 the first three
+//! lines of its top closed by a chord; and on Core Interior's wall 55840 the
+//! stretch of its stepped top closed through the corner of the profile's
+//! rectangle that the hull's edge cuts off (301.65 ft2, not the 71.23 ft2 the
+//! stretch and the edge hold). [`cut_profiles_from_bodies`] runs
 //! after every pass that reads a wall's body or its openings. For a wall whose
 //! regions can all be made into solids it takes them out of the wall's body as a
 //! boolean difference, writes none of them as openings, and writes its pockets
