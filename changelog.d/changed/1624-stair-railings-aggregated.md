@@ -11,4 +11,7 @@
   keeps its own body. A railing whose record names a component of the stair
   (`m_stairsComponentId`, a run) stays a plain element, as in Revit's export
   (RE-390): one of the BIM4LCA office's 26 stair railings, Tag 2598405, which
-  Revit's export puts on Level_01 while its stair is in the Basement.
+  Revit's export puts on Level_01 while its stair is in the Basement. The
+  stair's height now matches Revit's, but its volume as the sum of its parts is
+  larger than Revit's, 2 to 127 times on the office's 13 stairs that hold
+  railings, because a railing's body is still a record box (RE-303).
