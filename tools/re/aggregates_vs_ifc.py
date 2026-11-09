@@ -14,8 +14,8 @@ Usage:
 
     python3 tools/re/aggregates_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc> [-v]
 
-`-v` lists the parts whose whole differs. Needs IfcOpenShell (tested with
-0.8.5).
+A part whose whole differs, or that only rvt-rs aggregates, is listed; `-v` also
+lists the parts only Revit aggregates. Needs IfcOpenShell (tested with 0.8.5).
 """
 
 import collections
@@ -73,13 +73,16 @@ def main():
         else:
             verdict = "different whole"
         counts[(kind, verdict)] += 1
-        if verdict in ("only Revit aggregates", "different whole"):
-            listed.append((key, kind, a, b))
+        if verdict in ("only Revit aggregates", "different whole", "only rvt-rs aggregates"):
+            listed.append((verdict, key, kind, a, b))
     for (kind, verdict), count in sorted(counts.items()):
         print(f"  {count:>5}  {kind}: {verdict}")
-    if verbose:
-        for key, kind, a, b in listed:
-            print(f"    {key} {kind}: rvt-rs {a}, Revit {b}")
+    # A part rvt-rs aggregates where Revit's export does not, or under another whole, is
+    # named whatever the flags (#1624); the parts only Revit aggregates, which can be
+    # many, are listed with -v.
+    for verdict, key, kind, a, b in listed:
+        if verbose or verdict != "only Revit aggregates":
+            print(f"    {key} {kind}: {verdict}: rvt-rs {a}, Revit {b}")
 
 
 if __name__ == "__main__":
