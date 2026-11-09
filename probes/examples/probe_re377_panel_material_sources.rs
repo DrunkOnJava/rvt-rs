@@ -27,6 +27,8 @@
 //!   how many records of each class hold its ElementId, its own record
 //!   excepted, so that a scorer that knows Revit's material can say which
 //!   classes of record name it;
+//! - `{"kind":"gstyle","id","byte_hits","root"}` for each graphics style (a
+//!   category's or subcategory's Object Styles row) whose body holds a material;
 //! - `{"kind":"summary",...}`.
 //!
 //! The ElementIds and material names are the model's own, so a scorer prints
@@ -53,6 +55,9 @@ const CONTEXT_LIMIT: usize = 400;
 
 /// How many byte hits a record's line lists.
 const BYTE_HITS_LIMIT: usize = 24;
+
+/// How much of a record's decoded root a line keeps.
+const ROOT_LIMIT: usize = 4000;
 
 struct Source {
     path: String,
@@ -257,6 +262,19 @@ fn main() -> anyhow::Result<()> {
         with_material += 1;
         let id = record.identity.element_id;
         let class = graph.objects.first().map(|o| o.class_name.clone());
+        // A type's own fields, to read what else it holds beside a material.
+        let root = roles
+            .get(&id)
+            .filter(|roles| roles.contains("type"))
+            .and_then(|_| graph.objects.first())
+            .map(|object| {
+                object
+                    .fields
+                    .to_string()
+                    .chars()
+                    .take(ROOT_LIMIT)
+                    .collect::<String>()
+            });
         println!(
             "{}",
             json!({
@@ -273,6 +291,7 @@ fn main() -> anyhow::Result<()> {
                         "context": s.context,
                     }))
                     .collect::<Vec<_>>(),
+                "root": root,
                 "byte_hits": hits.iter().take(BYTE_HITS_LIMIT).collect::<Vec<_>>(),
                 "byte_hits_total": hits.len(),
             })
@@ -286,7 +305,7 @@ fn main() -> anyhow::Result<()> {
     let everything = Options {
         releases: native_document::NATIVE_RELEASES,
         keep_body: true,
-        graph_classes: Some(BTreeSet::new()),
+        graph_classes: Some(BTreeSet::from(["GStyleElem".to_string()])),
         ..Options::default()
     };
     native_document::extract_graphs(&mut rf, &everything, |record| {
@@ -301,6 +320,32 @@ fn main() -> anyhow::Result<()> {
             if u64::from(word) != own && materials.contains_key(&word) {
                 seen.insert(word);
             }
+        }
+        // A graphics style (a category's or subcategory's Object Styles row)
+        // that holds a material: where, and what else it holds.
+        if class == "GStyleElem" && !seen.is_empty() {
+            let hits = byte_hits(body, &materials);
+            let root = record
+                .graph
+                .as_ref()
+                .and_then(|graph| graph.objects.first())
+                .map(|object| {
+                    object
+                        .fields
+                        .to_string()
+                        .chars()
+                        .take(ROOT_LIMIT)
+                        .collect::<String>()
+                });
+            println!(
+                "{}",
+                json!({
+                    "kind": "gstyle",
+                    "id": own,
+                    "byte_hits": hits.iter().take(BYTE_HITS_LIMIT).collect::<Vec<_>>(),
+                    "root": root,
+                })
+            );
         }
         for material in seen {
             *named_by
