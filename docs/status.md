@@ -129,7 +129,7 @@ reads and are measured against Revit's own export on `ALD26 Before` only (all
 Towers Electrical export them too, counted and not scored, and cable trays do
 not export, since no Revit export holds one. On
 projects saved by Revit 2011 to 2014, experimentally and outside the 1.0
-range (2015 to 2027), it exports their elements too, measured on a local copy
+range (2024 to 2027), it exports their elements too, measured on a local copy
 of Autodesk's 2013 `rac_advanced` sample against its 2015 copy, and files of
 Revit 2008 to 2013 now open (RE-259); on Revit 2008 to 2010 projects it
 exports their elements, storeys and named materials, checked only for

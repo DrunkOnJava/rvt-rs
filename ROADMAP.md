@@ -213,9 +213,12 @@ symbol cuts no outline, measured on one building's families only
 
 A dependable open-source Revit data reader: a new user installs it, opens a
 model, gets correct elements, geometry and properties, and can reproduce the
-measurements. 1.0 supports every Revit release from 2015 to 2027 and ships with
+measurements. 1.0 supports every Revit release from 2024 to 2027 and ships with
 no gaps or limitations: every body is Revit's own shape, every property
-Revit's export writes is written, and no release is experimental. The
+Revit's export writes is written, and no release in that range is experimental.
+Revit 2015 to 2023 stay readable and labelled experimental, outside 1.0, since
+no year among them has the three same-release Revit exports the bar needs
+(the maintainer, 2026-11-08); a 1.x release adds one once it has them. The
 requirements, each with its bar, measured value and evidence, are in
 [`docs/release-1.0-criteria.md`](docs/release-1.0-criteria.md), which is the
 release decision; the milestone's completion percentage is not. They include
