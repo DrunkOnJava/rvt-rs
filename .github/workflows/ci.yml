@@ -1922,20 +1922,31 @@ jobs:
       # actionlint, pinned to a release and to the sha256 its checksums file
       # gives for the Linux tarball (taiki-e/install-action carries shellcheck
       # but no actionlint). A new version is a new tag and a new hash from
-      # https://github.com/rhysd/actionlint/releases.
+      # https://github.com/rhysd/actionlint/releases. GitHub's release host
+      # answered HTTP 504 for over 20 minutes on 2026-11-09 (#1574), longer
+      # than curl's five tries last, so a download that fails is replaced by
+      # the same version built from the Go module proxy, whose zip the Go
+      # checksum database vouches for. A tarball that downloads with the wrong
+      # sha256 still fails the job; only a download that fails falls back.
       - name: Install actionlint
         env:
           ACTIONLINT_VERSION: 1.7.12
           ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
         run: |
           set -euo pipefail
+          dest="$RUNNER_TEMP/actionlint"
           archive="$RUNNER_TEMP/actionlint.tar.gz"
-          curl -sSfL --retry 5 --retry-all-errors -o "$archive" \
-            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
-          echo "${ACTIONLINT_SHA256}  ${archive}" | sha256sum -c -
-          mkdir -p "$RUNNER_TEMP/actionlint"
-          tar -xzf "$archive" -C "$RUNNER_TEMP/actionlint" actionlint
-          echo "$RUNNER_TEMP/actionlint" >> "$GITHUB_PATH"
+          mkdir -p "$dest"
+          if curl -sSfL --retry 5 --retry-all-errors -o "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"; then
+            echo "${ACTIONLINT_SHA256}  ${archive}" | sha256sum -c -
+            tar -xzf "$archive" -C "$dest" actionlint
+          else
+            echo "::warning::GitHub's release host did not serve actionlint ${ACTIONLINT_VERSION} (#1574); building it from the Go module proxy"
+            GOBIN="$dest" GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org \
+              go install "github.com/rhysd/actionlint/cmd/actionlint@v${ACTIONLINT_VERSION}"
+          fi
+          echo "$dest" >> "$GITHUB_PATH"
       # With shellcheck on every `run:` script. .github/actionlint.yaml ignores
       # exactly one message, about the `$/` form of local actions and workflows
       # that actionlint does not know, and says why.
