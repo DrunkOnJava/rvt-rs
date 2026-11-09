@@ -174,6 +174,9 @@ def main():
             middle = (b[0] + b[1]) / 2
             across = max(abs(a[0] - b[0]), abs(a[1] - b[1]))
             along = max(abs(a[2] - b[2]), abs(a[3] - b[3])) * middle
+            # How far rvt-rs's body runs past Revit's at each end (negative:
+            # short of it), first end then last, along Revit's direction.
+            start_past, end_past = (b[2] - a[2]) * middle, (a[3] - b[3]) * middle
             kind = "curved"
         else:
             d = to_internal_direction(placement[0][0], placement[1][0])
@@ -181,6 +184,7 @@ def main():
             b = extents(theirs, d)
             across = max(abs(a[2] - b[2]), abs(a[3] - b[3]))
             along = max(abs(a[0] - b[0]), abs(a[1] - b[1]))
+            start_past, end_past = b[0] - a[0], a[1] - b[1]
             angled = min(abs(d[0]), abs(d[1])) > 1e-6
             kind = "angled" if angled else "axis-parallel"
         stats[f"compared, {kind}"] += 1
@@ -189,7 +193,7 @@ def main():
         wall_type = ifcopenshell.util.element.get_type(wall)
         worst.append(
             (round(max(across, along), 4), round(across, 4), round(along, 4), tag,
-             kind, wall_type.Name if wall_type else None)
+             kind, wall_type.Name if wall_type else None, round(float(start_past), 4), round(float(end_past), 4))
         )
     print(f"{len(ours)} walls in the GLB")
     for what, count in sorted(stats.items()):
@@ -209,13 +213,14 @@ def main():
         with open(json_out, "w") as out:
             json.dump(
                 {
-                    str(row[3]): {"across": row[1], "along": row[2], "kind": row[4], "type": row[5]}
+                    str(row[3]): {"across": row[1], "along": row[2], "kind": row[4], "type": row[5],
+                                  "start_past": row[6], "end_past": row[7]}
                     for row in worst
                 },
                 out,
             )
     if listing:
-        print("largest differences (max, across, along, tag, kind, type):")
+        print("largest differences (max, across, along, tag, kind, type, start past Revit's, end past Revit's):")
         for row in sorted(worst)[-listing:]:
             print(f"  {row}")
 
