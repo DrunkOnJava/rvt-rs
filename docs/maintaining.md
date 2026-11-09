@@ -827,7 +827,8 @@ a version file, or on a commit whose `CI passed` is red or that CI never ran on
 (RELEASE.md, step 10). Then it
 builds and verifies the wheels and, through the
 release-binaries workflow, the CLI archives and the container image, and
-publishes them with build-provenance attestations. Pushing the tag is the
+publishes them with build-provenance attestations (the release page's wheels
+and sdist are checksummed and attested with the archives, #1466). Pushing the tag is the
 release decision, so the run asks for no approval: the `crates-io` and `pypi`
 environments accept only `v*` tags, with no administrator bypass, and the PyPI
 job and the release binaries wait for the crates.io job, so no channel ships

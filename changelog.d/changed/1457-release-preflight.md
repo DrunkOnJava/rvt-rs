@@ -19,8 +19,8 @@
   nightly and banner check where it floated on `nightly`. The Intel macOS
   CLI is now run on the arm64 runner under Rosetta before it ships, and
   `SHA256SUMS` is attested with the archives, so verifying that one file
-  checks every archive; the wheels and the sdist on the release page are in
-  neither (#1466). Measured by the pure judgements' failure-first tests
+  checks every archive (the wheels and the sdist join them in #1466).
+  Measured by the pure judgements' failure-first tests
   (each comparison mutated in a scratch copy fails them), by running the
   check read-only against v0.15.0 and v0.14.0 (it passes) and against
   missing, mismatched and off-branch cases (it refuses each), by `wait.sh`
