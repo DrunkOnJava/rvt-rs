@@ -1,0 +1,55 @@
+name: tmp 1572 sccache
+
+# Temporary (#1572), removed before the pull request is marked ready: the
+# Windows sccache steps of ci.yml with the download forced to fail (a version
+# that does not exist) and as they run normally.
+
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  sccache:
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [forced-failure, normal]
+    runs-on: windows-2025
+    steps:
+      - name: Set up sccache (Windows)
+        id: sccache
+        continue-on-error: true
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+        with:
+          version: ${{ matrix.case == 'forced-failure' && 'v0.0.0-1572-missing' || '' }}
+      - name: Set up sccache again (Windows)
+        if: steps.sccache.outcome == 'failure'
+        continue-on-error: true
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+        with:
+          version: ${{ matrix.case == 'forced-failure' && 'v0.0.0-1572-missing' || '' }}
+      - name: Use sccache (Windows)
+        shell: bash
+        run: |
+          export SCCACHE_GHA_ENABLED=true SCCACHE_IDLE_TIMEOUT=0
+          if command -v sccache > /dev/null && sccache --start-server; then
+            {
+              echo "SCCACHE_GHA_ENABLED=true"
+              echo "SCCACHE_IGNORE_SERVER_IO_ERROR=1"
+              echo "RUSTC_WRAPPER=sccache"
+            } >> "$GITHUB_ENV"
+          else
+            echo "::warning::sccache is not installed (#1572) or did not start (its Actions cache backend refused it); building without it"
+          fi
+      - name: What the build would use
+        shell: bash
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          echo "case=$CASE wrapper=${RUSTC_WRAPPER:-none}"
+          if [ "$CASE" = forced-failure ]; then
+            test -z "${RUSTC_WRAPPER:-}"
+          else
+            test "${RUSTC_WRAPPER:-}" = sccache && sccache --show-stats
+          fi
