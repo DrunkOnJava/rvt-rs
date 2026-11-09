@@ -14,9 +14,10 @@ check. This fails when:
   - any tracked file other than the registry holds one of its URLs or hashes
     (in any letter case), so no fetch list, script, test or document can
     point at a sealed file;
-  - any tracked file that is not Markdown names the registry, except
-    tools/ci/seal-holdout-pair.sh, which adds rows, and this check. Docs may
-    name it; code may not, so no workflow or script can read it.
+  - any tracked file that is not Markdown names the registry, or the private
+    repository holding an unopened copy of each pair (BACKUP), except
+    tools/ci/seal-holdout-pair.sh, which adds rows and copies, and this check.
+    Docs may name them; code may not, so no workflow or script can read them.
   - the registry itself is missing.
 
 What it cannot see: a path built at run time, a glob over research/, or a
@@ -37,6 +38,7 @@ import subprocess
 import sys
 
 REGISTRY = "research/sealed-holdout-models.tsv"
+BACKUP = "DrunkOnJava/rvt-rs-sealed"
 ALLOWED = frozenset({"tools/ci/seal-holdout-pair.sh", "tools/ci/check_sealed_holdout.py", "tools/ci/test_check_sealed_holdout.py"})
 RELEASES = frozenset({"2024", "2025", "2026", "2027"})
 LICENCES = frozenset({"Apache-2.0", "MIT", "CC-BY-4.0", "CC0-1.0"})
@@ -122,6 +124,8 @@ def file_problems(path, text, sealed):
             problems.append(f"{path}: holds the sealed {value}")
     if REGISTRY.rsplit("/", 1)[1] in text and path not in ALLOWED and not path.endswith(".md"):
         problems.append(f"{path}: names {REGISTRY}, which only the seal script and this check may read")
+    if BACKUP.rsplit("/", 1)[1].lower() in lowered and path not in ALLOWED and not path.endswith(".md"):
+        problems.append(f"{path}: names {BACKUP}, whose copies only the seal script and this check may touch")
     return problems
 
 

@@ -652,6 +652,10 @@ measurement meets W4, W6 and W7, so a pair that arrives before those pass on the
 reference models is sealed until the final 1.0 check, never fetched or opened
 before it.
 
+- **Before any pair is sealed**, every GitHub App installed on the maintainer
+  account is limited to the repositories it needs: one installed on all
+  repositories can read the private copies as well. The same holds for each
+  App installed later.
 - **When a pair arrives** (a contributor's `.rvt` and its release's own IFC4 or
   IFC4X3 export, of Revit 2024 to 2027, under Apache-2.0, MIT, CC BY 4.0 or
   CC0, written `CC-BY-4.0` and `CC0-1.0`, each at a link that names a fixed
@@ -659,13 +663,24 @@ before it.
   asset, or a Zenodo record's file), seal it:
   `tools/ci/seal-holdout-pair.sh RELEASE NAME RVT_URL IFC_URL LICENCE CONTRIBUTOR`.
   It downloads both files to a temporary directory, hashes and counts them,
-  deletes them and adds a row to `research/sealed-holdout-models.tsv`. It looks
+  uploads both unopened to the private repository `DrunkOnJava/rvt-rs-sealed`
+  (its `sealed` release, as `<sha256>.rvt` and `<sha256>.ifc`), deletes the
+  local copies and adds a row to `research/sealed-holdout-models.tsv`. It looks
   only at the first 64 KiB of each, to refuse what is not a pair: a project that
   is not an OLE2 file, an IFC that is not ISO 10303-21 of IFC4 or IFC4X3 naming
   Autodesk Revit of that release (a share page, a zip, another release's export
   or an IFC2X3 view), and a row the check would fail, a link to a branch or a
   share page among them. The final check fetches the files again, maybe months
-  on, and a file that changed or went is a pair lost. The release is read
+  on, from the row's links. Where a link no longer serves the file the row's
+  hash names, it will take the private copy instead (Griffin, 2026-11-08: a
+  contributor can delete the repository behind a pinned link). The copy is
+  uploaded, and each asset's digest checked against the hash it is named by,
+  before the row is added, so no pair is listed without one. The script
+  refuses to upload unless that repository is private: a pair's licence is the
+  contributor's declaration, which the check reads only as a label, and the
+  files embed Autodesk's template families, which no contributor's licence
+  covers, so the copies are never made public or redistributed. The script
+  needs `gh` signed in as the maintainer. The release is read
   from the IFC's exporter only: that the project was last saved by the same
   release is the contributor's word, since the `.rvt` is checked only as an
   OLE2 file. The registry takes no
@@ -677,13 +692,16 @@ before it.
 - **The guard** is the PII guard job's `tools/ci/check_sealed_holdout.py`. It
   fails on a malformed row, on any tracked file other than the registry that
   holds one of its URLs or hashes, and on any tracked file that is not Markdown
-  and names the registry, other than the seal script and the check. Docs may
-  name the registry; they may not hold its URLs. It sees only what is
+  and names the registry or the private copies' repository, other than the
+  seal script and the check. Docs may name both; they may not hold the
+  registry's URLs. It sees only what is
   committed: a path built at run time, a glob over `research/` or a Measure run
   dispatched from an unreviewed branch are for review to catch.
-- **The final check** is the registry's only reader still to come. It is added
-  when W4, W6 and W7 pass on the reference models, in a pull request that adds
-  its Measure input to the guard's `ALLOWED`. It measures each pair once, counts
+- **The final check** is the only reader still to come, of the registry and of
+  the private copies. A hosted runner cannot read a private repository without
+  a credential, so that pull request also decides which one it uses. It is added when W4, W6 and W7 pass on the reference
+  models, in a pull request that adds its Measure input to the guard's
+  `ALLOWED`. It measures each pair once, counts
   only, and moves the pairs it measured to `research/holdout-models.tsv`, used.
 
 ## Measure's score cache

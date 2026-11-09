@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Seal a held-out pair for the final 1.0 check (W5, #408, #1565): download a
-# Revit project and its release's own IFC export, hash and count both, delete
-# them, and add their row to research/sealed-holdout-models.tsv. Only the first
+# Revit project and its release's own IFC export, hash and count both, upload
+# both unopened to the private repository DrunkOnJava/rvt-rs-sealed, delete the
+# local copies, and add their row to research/sealed-holdout-models.tsv. Only the first
 # 64 KiB of each are looked at, and only to refuse what is not a pair: a project
 # that is not an OLE2 file, an IFC that is not ISO 10303-21 of IFC4 or IFC4X3,
 # or one that does not name Autodesk Revit RELEASE there (a share page, a zip,
@@ -16,9 +17,17 @@
 # RELEASE is 2024 to 2027, LICENCE Apache-2.0, MIT, CC-BY-4.0 or CC0-1.0, CONTRIBUTOR the
 # GitHub login that offered the pair. Run tools/ci/check_sealed_holdout.py after
 # it; the row it adds must pass.
+#
+# The copy (Griffin, 2026-11-08): the final check will fetch the pair again from
+# its links, and a contributor can still delete a repository behind a pinned link.
+# Both files go to BACKUP's `sealed` release as <sha256>.rvt and <sha256>.ifc, the
+# hashes the row holds, and each asset's digest must equal its name before the row
+# is added, so a pair is never listed without its copy. It needs `gh` signed in as
+# the maintainer, who alone can write there.
 set -euo pipefail
 
 REGISTRY=research/sealed-holdout-models.tsv
+BACKUP=DrunkOnJava/rvt-rs-sealed
 release="${1:?usage: seal-holdout-pair.sh RELEASE NAME RVT_URL IFC_URL LICENCE CONTRIBUTOR}"
 name="${2:?name}"
 rvt_url="${3:?rvt url}"
@@ -44,6 +53,7 @@ sha256() { if command -v sha256sum > /dev/null; then sha256sum "$1"; else shasum
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 fields=()
+copies=()
 for side in rvt ifc; do
   url=$rvt_url
   [ "$side" = ifc ] && url=$ifc_url
@@ -51,9 +61,12 @@ for side in rvt ifc; do
     echo "could not download the $side file" >&2
     exit 2
   fi
-  fields+=("$url" "$(sha256 "$work/$side")" "$(wc -c < "$work/$side" | tr -d ' ')")
+  sum=$(sha256 "$work/$side")
+  size=$(wc -c < "$work/$side" | tr -d ' ')
+  fields+=("$url" "$sum" "$size")
   head -c 65536 "$work/$side" > "$work/$side.head"
-  rm -f "$work/$side"
+  mv "$work/$side" "$work/$sum.$side"
+  copies+=("$work/$sum.$side")
 done
 if ! python3 "$(dirname "$0")/check_sealed_holdout.py" --pair "$work/rvt.head" "$work/ifc.head" "$release" >&2; then
   echo "not sealed: the files are not a Revit $release project and its own IFC4 export" >&2
@@ -67,5 +80,27 @@ if ! python3 "$(dirname "$0")/check_sealed_holdout.py" --rows "$work/candidate.t
   echo "not sealed: the row would leave the registry failing its check" >&2
   exit 1
 fi
+# The files embed Autodesk's template families, which no contributor's licence
+# covers, and an upload to a public repository cannot be recalled: refuse unless
+# BACKUP is private at the moment of upload.
+if [ "$(gh repo view "$BACKUP" --json isPrivate --jq .isPrivate)" != true ]; then
+  echo "not sealed: $BACKUP is not private" >&2
+  exit 1
+fi
+for file in "${copies[@]}"; do
+  asset=$(basename "$file")
+  # An asset is named by its own hash, so replacing one only repeats a run that
+  # stopped before the row was added.
+  if ! gh release upload sealed "$file" -R "$BACKUP" --clobber > /dev/null; then
+    echo "not sealed: the copy $asset could not be uploaded to $BACKUP" >&2
+    exit 1
+  fi
+  digest=$(gh release view sealed -R "$BACKUP" --json assets --jq ".assets[] | select(.name == \"$asset\") | .digest")
+  if [ "$digest" != "sha256:${asset%.*}" ]; then
+    echo "not sealed: $BACKUP holds $asset with digest ${digest:-none}, not its own hash" >&2
+    exit 1
+  fi
+  rm -f "$file"
+done
 printf '%s\n' "$row" >> "$REGISTRY"
 echo "sealed $name ($release): $(printf '%s' "$row" | cut -f4,7 | tr '\t' ' ')"
