@@ -18,7 +18,8 @@ types, quantities and ports, elements have their `Constraints` Level
 parameters and `Phase Created`, and a Revit 2015 file follows the export phase.
 On Revit 2026 and 2027 beams, stair runs, tread landings, sketch outlines,
 pipes, ports and door and window cuts are read as on 2024 and 2025, with the
-2025 properties; on Revit 2025 beams, tread landings and sketch arcs are read
+2025 properties but the `IsExternal` of walls, curtain walls, members and
+plates; on Revit 2025 beams, tread landings and sketch arcs are read
 as on 2024. Areas of Revit 2025 to 2027 are written, all 25 of
 `rac_advanced`'s on every save from Revit's own plan topology, every
 `IfcSpace` says whether it is a room, an Area or a family instance
@@ -29,8 +30,9 @@ both flips are decoded. The openings fire hose cabinets, doors and curtain
 walls cut in walls, door types' `FireRating`, family types' `Manufacturer`,
 the quantities of columns a slab cuts, and Furniture Systems as
 `IfcSystemFurnitureElement` are written as Revit's export writes them. Exports
-now hold the IFC4 EXPRESS rules IfcOpenShell's default validation leaves out
-and refuse a number that is not finite, and the diagnostics, the elements CSV,
+now hold the IFC4 EXPRESS rules IfcOpenShell's default validation leaves out,
+`rvt-ifc`, Python and the viewer refuse an export holding a number that is not
+finite, and the diagnostics, the elements CSV,
 the viewer's panels and the MCP server count and place exactly what the IFC
 writes. The viewer's info panel lists an element's saved parameters, read in
 the tab with no request once the file is open. Release pages now list and
@@ -42,20 +44,28 @@ saved-graphics findings (discussion #112) and mahach666's RvtIO findings
 reports led to the `rac_advanced` Areas (#1261), the door flips (#1357) and the
 room phase fallback (#1359). Thanks to all four.
 
-Not measured, and said in each entry: no beam, wall line, pipe, Level
-parameter, `Phase Created`, stair run, landing or sketch outline of Revit 2015
-to 2023, 2026 or 2027 is scored against a Revit export; each is held to the
-same Autodesk project's 2024 or 2025 save, which cannot catch an error that
-save shares, and compares bodies, not quantities or property sets. The Areas of
-Revit 2025 to 2027 (`area_plan_topology_unchecked`) and of the Snowdon Towers
-2024 samples are checked against no Revit export, and the only external check
-of `rac_advanced`'s Areas is an IFC2X3 export of unestablished origin. Furniture
-Systems rest on one project and 3 elements, the wall end order on 4 walls of one
-project, and the cut-opening and raised-host thresholds on the BIM4LCA office
-pair alone. A door's or window's placement origin is still its record box's
-centre, more than 0.5 ft from Revit's on almost all (RE-357). The release
-workflow's signature, branch and `CI passed` checks and the page's `upload` and
-`page` jobs run for the first time on this tag.
+Not measured, and said in each entry: no wall line, pipe, Level parameter,
+`Phase Created`, stair run, landing or sketch outline of Revit 2015 to 2023,
+2026 or 2027 is scored against a Revit export, and no beam of them but 3 of 10
+on one held-out Revit 2021 export (`Span` and `Slope` equal, none different,
+counts only); each is held to the same Autodesk project's 2024 or 2025 save
+instead, which cannot catch an error that save shares. On 2025 to 2027 that
+check compares each element's class, GlobalId, storey, placement and body, and
+on 2026 and 2027 also the cuts, ports, door and window sizes and types and the
+properties RE-346 adds; on 2015 to 2023 it compares the values each entry
+names. Among the files Measure fetches outside the held-out pairs, the 2015 to
+2023 beam rule reaches Autodesk's samples only: BIMcollab's 91 beams hold no
+line it reads (#1514). Two doors of `rac_basic`'s 2027 save still write no
+Width and Height quantities (#1489). The Areas of Revit 2025 to 2027
+(`area_plan_topology_unchecked`) and of the Snowdon Towers 2024 samples are
+checked against no Revit export, and the only external check of
+`rac_advanced`'s Areas is an IFC2X3 export of unestablished origin. Furniture
+Systems rest on one project and 3 elements, the wall end order on 4 walls of
+one project, and the cut-opening and raised-host thresholds on the BIM4LCA
+office pair alone. The placement origin of a door or window set in a wall is
+still its record box's centre, more than 0.5 ft from Revit's on almost all
+(RE-357). The release workflow's signature, branch and `CI passed` checks and
+the page's `upload` and `page` jobs run for the first time on this tag.
 
 Measured against 0.15.0: Measure run 42555357168 (`main` at 9c66e9bd, every
 model, sample and held-out pair, with timing) is still running; its figures
@@ -73,14 +83,15 @@ replace this paragraph before the release lands.
   `Phasing.Phase Created`. On Revit 2015 an element not in the export phase,
   and a room not in it, is left out, and `--phase` is accepted.
 - A default export of a Revit 2025, 2026 or 2027 project can change: beams,
-  tread landings and sketch arcs (2025 to 2027), and stair runs, pipes placed by
-  their connector entries, family instances' ports, wall cuts at doors and
-  windows, `IsExternal`, railing, stair, room and pipe and duct values (2026 and
-  2027), as on 2024 and 2025. A door's or window's Area is not written on 2027,
-  nor a stair's, flight's or stringer's `ObjectType` on 2026 and 2027, where
-  Revit's own exports disagree. Shaft openings are cut on Revit 2024 only: on
-  2025 to 2027 floors, ceilings and roofs stay whole and the diagnostics count
-  each shaft as the `skipped` item `shaft_opening_not_cut`.
+  tread landings and sketch arcs (2025 to 2027), and stair runs, pipes placed
+  by their connector entries, family instances' ports, wall cuts at doors and
+  windows, `IsExternal` on the classes RE-193's last step reads (not on walls,
+  curtain walls, members or plates), railing, stair, room and pipe and duct
+  values (2026 and 2027), as on 2024 and 2025. A door's or window's Area is not
+  written on 2027, nor a stair's, flight's or stringer's `ObjectType` on 2026
+  and 2027, where Revit's own exports disagree. Shaft openings are cut on Revit
+  2024 only: on 2025 to 2027 floors, ceilings and roofs stay whole and the
+  diagnostics count each shaft as the `skipped` item `shaft_opening_not_cut`.
 - Areas of Revit 2025 to 2027 are written as `IfcSpace` and say
   `SpaceOutlineSource` `area_plan_topology_unchecked`; an Area drawn from
   Revit's plan topology on 2015 to 2024 says `area_plan_topology`, and
@@ -203,7 +214,11 @@ replace this paragraph before the release lands.
   42134881703): BIMcollab's 91 beams stay record boxes (none holds a line the reader
   finds, #1514, so its reach is Autodesk's samples), and the three.js export
   of `rac_advanced` holds no `IfcBeam`. Each beam is held to the same Autodesk
-  project's later save, which cannot catch an error that save shares.
+  project's later save, which cannot catch an error that save shares. One
+  held-out Revit 2021 project's IFC2X3 export (counts only) scores 3 of its 10
+  beams' `Pset_BeamCommon.Span` and `Slope` equal, none different and 7
+  missing (Measure run 42518199499, head e05db36a, before the change was
+  rebuilt on `main`).
 
 - **Revit 2015 to 2023 elements have their `Constraints` Level parameters (#1190, RE-369).**
   `Level`, `Base Constraint`, `Base Level`, `Top Constraint`, `Top Level` and
@@ -257,8 +272,9 @@ replace this paragraph before the release lands.
   sketch outline of a 2026 or 2027 file is scored against a Revit export**;
   each is held to the same Autodesk project's earlier save instead
   (`tools/re/bodies_across_saves.py`, which Measure runs and fails on), and
-  that cannot catch an error the earlier save shares; it compares bodies,
-  not quantities or property sets. No 2026 or 2027 held-out model holds a
+  that cannot catch an error the earlier save shares; it compared bodies alone
+  when this landed, and since RE-346 (below) also compares cuts, ports, door
+  and window sizes and types and the properties RE-346 adds. No 2026 or 2027 held-out model holds a
   beam, so the beam reader has run only on two Autodesk samples saved from
   earlier releases. Against Revit's own export only one stair flight is
   scored, on a held-out 2026 model and a held-out 2027 one (property values
@@ -275,7 +291,7 @@ replace this paragraph before the release lands.
 - **Revit 2026 and 2027 projects place a pipe by RE-131's connector entries
   first, as 2025 projects do (RE-370 already drew every pipe as its cylinder
   from its record), place family instances' ports, cut walls to their doors' and windows' outlines, and write
-  `IsExternal`, railing heights and lengths, stair names, rooms' height and net
+  `IsExternal` on the classes RE-193's last step reads, railing heights and lengths, stair names, rooms' height and net
   volume and the pipe and duct quantities, as 2025 projects do (#1190,
   RE-346).** Ten readers read the 2025 records these releases write; their
   release lists gain 2026 and 2027. **None of it is scored against a Revit
@@ -289,7 +305,11 @@ replace this paragraph before the release lands.
   stringers' `ObjectType` is not written on 2026 and 2027, where Revit's export
   writes no `Family:Type` there (the `ObjectType` of every other class differs on
   those releases as well, #1472); their Width, Height and the stairs' names and
-  types are written and equal. No
+  types are written and equal. `IsExternal` on walls, curtain walls, members and
+  plates, which the 2025 save writes, is still not written on 2026 and 2027, and
+  two doors of `rac_basic`'s 2027 save write no `Qto_DoorBaseQuantities` Width
+  and Height that its 2025 and 2026 saves write (#1489); the check counts both
+  as values only the 2025 save writes, not as failures. No
   held-out model holds a pipe, a duct or a port. In Measure run 42545885153
   (this change against `main` at 1c088750, unfiltered), on the 2026 and 2027
   saves of `rme_advanced` and `rme_basic` every body is the 2025 save's (6,605
