@@ -60,6 +60,15 @@ class Rows(unittest.TestCase):
             "https://drive.google.com/file/d/abc/view",
             "https://www.dropbox.com/s/abc/house.ifc?dl=1",
             "https://example.org/pairs/house-2026.ifc",
+            # The newest release's asset, which moves with every release.
+            "https://github.com/Owner/Pairs/releases/latest/download/house-2026.ifc",
+            # A blob page at a commit serves HTML, not the file.
+            "https://github.com/Owner/Pairs/blob/" + "0123456789abcdef" * 2 + "01234567/House-2026.ifc",
+            # A short hash can come to name another commit.
+            "https://raw.githubusercontent.com/Owner/Pairs/0123456/House-2026.ifc",
+            # A Zenodo concept record or DOI resolves to the newest version.
+            "https://zenodo.org/doi/10.5281/zenodo.1234567",
+            "https://zenodo.org/records/1234567",
         ):
             self.assertTrue(judge(row(ifc_url=url)), url)
 
@@ -127,11 +136,19 @@ class Files(unittest.TestCase):
 
     def test_the_seal_script_and_docs_may_name_it(self):
         files = {
-            "tools/ci/seal-holdout-pair.sh": "REGISTRY=research/sealed-holdout-models.tsv\n",
-            "docs/maintaining.md": "`research/sealed-holdout-models.tsv` lists them\n",
+            "tools/ci/seal-holdout-pair.sh": "REGISTRY=research/sealed-holdout-models.tsv\nBACKUP=DrunkOnJava/rvt-rs-sealed\n",
+            "docs/maintaining.md": "`research/sealed-holdout-models.tsv` lists them, `DrunkOnJava/rvt-rs-sealed` keeps a copy\n",
             "research/sealed-holdout-models.tsv": self.REG,
         }
         self.assertEqual(judge(self.REG, files), [])
+
+    def test_a_workflow_or_script_naming_the_copies_fails(self):
+        for path, text in (
+            (".github/workflows/measure.yml", "gh release download sealed -R DrunkOnJava/rvt-rs-sealed\n"),
+            ("tools/ci/fetch-holdout-models.sh", "repo=drunkonjava/RVT-RS-SEALED\n"),
+            ("tools/re/x.py", "https://github.com/DrunkOnJava/rvt-rs-sealed/releases/download/sealed/x\n"),
+        ):
+            self.assertTrue(judge(self.REG, {path: text}), path)
 
     def test_a_doc_may_not_hold_a_sealed_url(self):
         self.assertTrue(judge(self.REG, {"docs/maintaining.md": f"see {RVT_URL}"}))
