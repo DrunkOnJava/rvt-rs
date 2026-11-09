@@ -11,14 +11,14 @@
 | File | Host wall | Its `Pset_WallCommon.Reference` | The opening's property sets | Its quantities |
 |---|---|---|---|---|
 | terrain, concrete and timber | 1387731 (type `MS-2`) | `MS-2` | `Pset_OpeningElementCommon.Reference` and `Pset_EnvironmentalImpactIndicators.Reference`, both `MS-2` | `Qto_OpeningElementBaseQuantities.Area` 7.216426890207297 m2, nothing else; the scorer's area of the opening's profile is 7.216427 m2 |
-| Core Interior | 55840 | none | none | none (the export writes no base quantities) |
+| Core Interior | 55840 | none (the export's setup writes no property set on any wall) | none | none (no base quantities either) |
 | Snowdon Towers Architectural | 7 walls | each its own type name | on each of the 13 openings both sets, equal to the host's (26 of 26) | none (the export writes no base quantities) |
 
-So the Reference of a profile wall's opening is its wall's, in both sets, and is not written where the wall has none (Core Interior's 55840: Revit writes no property set at all). The Area is the polygon's area, the only quantity on the one opening that has quantities, where Revit's door and rectangular openings carry Depth, Width and Height (RE-244, RE-321).
+So the Reference of a profile wall's opening is its wall's, in both sets, where Revit's export writes property sets at all. Core Interior's export, whose setup writes none on any wall or opening and no base quantities, shows neither the pair nor the Area, so it cannot say what Revit writes there. The Area is the polygon's area, the only quantity on the one opening that has quantities, where Revit's door and rectangular openings carry Depth, Width and Height (RE-244, RE-321).
 
 ## 2. What rvt-rs writes
 
-`step_writer.rs`, in the loop of a wall's profile openings (RE-151, RE-380): the Reference of the host (`host_references`, the one RE-237 reads for an opening of a floor's sketch void) in both sets where the host has one; and, where the host wall has base quantities (a `Qto_WallBaseQuantities.Width`, the test RE-244 uses for a door's opening), `Qto_OpeningElementBaseQuantities.Area` as the area of the opening's outline. `rvt-ifc --no-base-quantities` leaves the wall's quantities out and so this one. The count of `Pset_` values the exporter reports (`decoded.parameter_value_count`) holds the two Reference values of each written profile opening.
+`step_writer.rs`, in the loop of a wall's profile openings (RE-151, RE-380): the Reference of the host (`host_references`, the one RE-237 reads for an opening of a floor's sketch void) in both sets where the host has one; and, where the host wall has base quantities (a `Qto_WallBaseQuantities.Width`, the test RE-244 uses for a door's opening), `Qto_OpeningElementBaseQuantities.Area` as the area of the opening's outline. `rvt-ifc --no-base-quantities` leaves the wall's quantities out and so this one. The count of `Pset_` values the exporter reports (`decoded.parameter_value_count`) holds the two Reference values of each written profile opening. On Core Interior the opening of wall 55840 gains both Reference values and the Area, as every other element of Core gets the sets Revit's export of it does not write; the census counts them among the values Revit does not write, and the two committed Core Interior witness observations count them (`IFCPROPERTYSET` +2, `IFCELEMENTQUANTITY` +1, `IFCQUANTITYAREA` +1, `IFCRELDEFINESBYPROPERTIES` +3).
 
 ## 3. Measured
 
@@ -28,7 +28,7 @@ So the Reference of a profile wall's opening is its wall's, in both sets, and is
 
 - **The Area rests on one opening** (the same wall in both terrain files). The office's other `Area`-bearing openings (as built 5, all missing) are of other kinds and are not read here.
 - **Volume, Width, Height and Depth** are not written on this opening by Revit's export, on that one opening; a pocket opening on another file that carried them would say that the rule is the profile's shape, not the kind.
-- **The Reference where the host has none** is shown on one wall (Core Interior's 55840).
+- **The Reference where the host has none** is not shown: no export that writes property sets has a profile wall without a Reference, so that rvt-rs writes none then is its own rule.
 
 ## 5. Reproduce
 

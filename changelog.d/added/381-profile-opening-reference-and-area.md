@@ -7,6 +7,7 @@
   the wall's plane, and no other quantity. Revit's export writes exactly these
   on the BIM4LCA terrain files' opening (Reference `MS-2`, Area 7.216427 m2)
   and the Reference pair on all 13 of Snowdon Towers' pocket openings (local
-  only); Core Interior's export has neither, as its wall has no Reference and
-  its setup writes no base quantities. Measured on one opening for the Area,
-  which is why it is the profile's area and nothing more.
+  only). Core Interior's export writes no property sets or base quantities at
+  all (its setup), so it shows neither, and rvt-rs writes them there as it does
+  for every other element of Core. Measured on one opening for the Area, which
+  is why it is the profile's area and nothing more.
