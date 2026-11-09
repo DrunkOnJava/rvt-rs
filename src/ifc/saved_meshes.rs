@@ -151,7 +151,7 @@ pub fn default_scope(rf: &mut crate::RevitFile) -> Option<SavedMeshScope> {
     let release = rf.basic_file_info().ok()?.version;
     (2023..=2027)
         .contains(&release)
-        .then_some(SavedMeshScope::DoorsAndWindows)
+        .then_some(SavedMeshScope::All)
 }
 
 /// Replace each bounding-box body with the element's saved mesh, where the
