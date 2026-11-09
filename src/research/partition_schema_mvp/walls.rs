@@ -920,10 +920,10 @@ pub(super) fn attach_wall_layers(
             }
         }
         // RE-364 section 9: the whole flag also reads as on the later save,
-        // but that save draws 28 of these walls with their layers' joins and
-        // writes them no areas. This save reads no layer joins, so it would
-        // write their record boxes' areas and volumes, which on 156 of their
-        // 163 old saves are not the layered body's volume.
+        // but that save draws 25 of these walls from their centrelines and
+        // writes them no areas. Here they keep their record boxes, so the
+        // areas and volumes would be the boxes', and on all 203 of their old
+        // saves the box's volume differs from the later body's.
         if !narrow && wall.id.is_some_and(|id| whole.contains(&u64::from(id))) {
             wall.fields
                 .push((WALL_WHOLE_FIELD.into(), InstanceField::Bool(true)));
