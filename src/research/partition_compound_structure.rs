@@ -448,6 +448,8 @@ pub fn scan_wall_orientations(
     let header = layout.header;
     let has_word = wall_orientation_has_word(revit_version);
     let mut found: BTreeMap<u32, Option<WallOrientation>> = BTreeMap::new();
+    let recording = rf.recording_value_sources();
+    let mut trail = crate::ifc::element_provenance::CopyTrail::default();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -467,12 +469,22 @@ pub fn scan_wall_orientations(
                 .unwrap_or(buf.len())
                 .min(hit.saturating_add(LAYER_WINDOW))
                 .min(buf.len());
+            if recording {
+                trail.named(
+                    id,
+                    crate::partition_room_parameters::partition_number(&stream),
+                );
+            }
             let Some(orientation) = buf
                 .get(id_at + 8..end)
                 .and_then(|data| wall_orientation_with(data, has_word))
             else {
                 continue;
             };
+            if recording {
+                let partition = crate::partition_room_parameters::partition_number(&stream);
+                trail.gave(id, partition, hit);
+            }
             match found.get_mut(&id) {
                 None => {
                     found.insert(id, Some(orientation));
@@ -485,10 +497,14 @@ pub fn scan_wall_orientations(
             }
         }
     }
-    Ok(found
+    let kept: BTreeMap<u32, WallOrientation> = found
         .into_iter()
         .filter_map(|(id, orientation)| orientation.map(|o| (id, o)))
-        .collect())
+        .collect();
+    if recording {
+        trail.note(rf, "wall_orientation", kept.keys().copied());
+    }
+    Ok(kept)
 }
 
 /// The one tag whose lists name walls, across every wall's copies; `None`
@@ -755,6 +771,8 @@ pub fn scan_wall_type_face_angles(
         return Ok(BTreeMap::new());
     };
     let mut found: BTreeMap<u32, Option<[f64; 3]>> = BTreeMap::new();
+    let recording = rf.recording_value_sources();
+    let mut trail = crate::ifc::element_provenance::CopyTrail::default();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -777,12 +795,22 @@ pub fn scan_wall_type_face_angles(
                 .unwrap_or(buf.len())
                 .min(hit.saturating_add(LAYER_WINDOW))
                 .min(buf.len());
+            if recording {
+                trail.named(
+                    id,
+                    crate::partition_room_parameters::partition_number(&stream),
+                );
+            }
             let Some(angles) = buf
                 .get(id_at + 8..end)
                 .and_then(|data| wall_type_face_angles_after(data, frame))
             else {
                 continue;
             };
+            if recording {
+                let partition = crate::partition_room_parameters::partition_number(&stream);
+                trail.gave(id, partition, hit);
+            }
             match found.get_mut(&id) {
                 None => {
                     found.insert(id, Some(angles));
@@ -795,10 +823,14 @@ pub fn scan_wall_type_face_angles(
             }
         }
     }
-    Ok(found
+    let kept: BTreeMap<u32, [f64; 3]> = found
         .into_iter()
         .filter_map(|(id, angles)| angles.map(|a| (id, a)))
-        .collect())
+        .collect();
+    if recording {
+        trail.note(rf, "type_face_angles", kept.keys().copied());
+    }
+    Ok(kept)
 }
 
 /// Where a join list's count sits past its opening word on
