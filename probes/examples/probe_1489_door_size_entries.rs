@@ -86,6 +86,7 @@ fn main() -> anyhow::Result<()> {
     // What lies between each owner's block mark and the next mark of any id.
     let block_owners: BTreeSet<u64> = BLOCK_OWNERS.iter().map(|&id| u64::from(id)).collect();
     let mut listed: BTreeSet<u64> = BTreeSet::new();
+    let mut found: Vec<(String, usize, i64, f64)> = Vec::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -148,8 +149,10 @@ fn main() -> anyhow::Result<()> {
                     "  length +{} parameter={parameter} value={value} pre={pre}",
                     at - 8
                 );
+                found.push((stream.clone(), mark + at - 8, parameter, value));
                 lengths += 1;
             }
+            listed.insert(owner);
             let mut ids: BTreeMap<u32, usize> = BTreeMap::new();
             for (at, window) in stretch.windows(4).enumerate() {
                 let id = u32::from_le_bytes([window[0], window[1], window[2], window[3]]);
@@ -167,15 +170,41 @@ fn main() -> anyhow::Result<()> {
     }
     // The classes of the ids the blocks listed.
     if !listed.is_empty() {
+        // No graph is decoded: only each record's class and where its bytes lie.
         let options = rvt::research::native_document::Options {
             selected_ids: listed.clone(),
+            graph_classes: Some(BTreeSet::new()),
             ..rvt::research::native_document::Options::default()
         };
         let mut classes: BTreeMap<u64, String> = BTreeMap::new();
+        let mut spans: Vec<(u64, String, usize, usize)> = Vec::new();
         let read = rvt::research::native_document::extract_graphs(&mut rf, &options, |record| {
-            if let Some(class) = record.class_name {
-                classes.insert(record.identity.element_id, class);
+            let class = record.class_name.clone().unwrap_or_else(|| "-".to_string());
+            if let Some(start) = record
+                .source
+                .group
+                .inflated_offset
+                .and_then(|at| at.checked_add(record.source.group_record_offset))
+            {
+                println!(
+                    "record {} {class} {} @{start}..{}",
+                    record.identity.element_id,
+                    record.source.stream,
+                    start + record.source.body_bytes
+                );
+                spans.push((
+                    record.identity.element_id,
+                    record.source.stream.clone(),
+                    start,
+                    start + record.source.body_bytes,
+                ));
+            } else {
+                println!(
+                    "record {} {class} {} not in the partition's own bytes",
+                    record.identity.element_id, record.source.stream
+                );
             }
+            classes.insert(record.identity.element_id, class);
             Ok(())
         });
         if let Err(error) = read {
@@ -183,6 +212,30 @@ fn main() -> anyhow::Result<()> {
         }
         for id in &listed {
             println!("class {id} {}", classes.get(id).map_or("-", String::as_str));
+        }
+        // Which record's bytes hold each length entry the blocks listed, and the
+        // nearest record that starts before it.
+        for (stream, at, parameter, value) in &found {
+            let within: Vec<String> = spans
+                .iter()
+                .filter(|(_, s, start, end)| s == stream && start <= at && at < end)
+                .map(|(id, ..)| id.to_string())
+                .collect();
+            let before = spans
+                .iter()
+                .filter(|(_, s, start, _)| s == stream && start <= at)
+                .max_by_key(|(_, _, start, _)| *start)
+                .map_or("none".to_string(), |(id, _, start, end)| {
+                    format!("{id} @{start}..{end}")
+                });
+            println!(
+                "in {stream} @{at} parameter={parameter} value={value} within={} before={before}",
+                if within.is_empty() {
+                    "none".to_string()
+                } else {
+                    within.join(",")
+                }
+            );
         }
     }
     // Every Width and Height entry each owner's blocks hold, value by value: the
