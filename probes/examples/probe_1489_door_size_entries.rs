@@ -137,6 +137,24 @@ fn main() -> anyhow::Result<()> {
             }
         }
     }
+    // Every Width and Height entry each owner's blocks hold, value by value: the
+    // scan drops a parameter whose entries in one partition disagree.
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let entries = rvt::research::partition_type_parameters::partition_length_entries(
+            inflated.bytes(),
+            &declared,
+        );
+        for owner in OWNERS {
+            for (parameter, value) in entries.get(&owner).into_iter().flatten() {
+                if parameters.contains(parameter) {
+                    println!("held {stream} {owner} parameter={parameter} value={value}");
+                }
+            }
+        }
+    }
     let sizes = type_door_sizes(&mut rf, version, &owners);
     for owner in OWNERS {
         match sizes.get(&owner) {
