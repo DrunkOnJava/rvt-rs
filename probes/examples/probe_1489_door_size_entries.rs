@@ -71,7 +71,18 @@ fn main() -> anyhow::Result<()> {
             for at in memchr::memmem::find_iter(bytes, &owner.to_le_bytes()) {
                 let next = widths.iter().find(|&&w| w > at).map(|&w| w - at);
                 if next.is_some_and(|gap| gap < 4096) {
-                    println!("near {stream} {owner} id@{at} width+{}", next.unwrap_or(0));
+                    let gap = next.unwrap_or(0);
+                    println!("near {stream} {owner} id@{at} width+{gap}");
+                    // The bytes from just before the id to just past the
+                    // Width parameter's value, for the closest few, to see
+                    // what separates an attributed entry from one that is not.
+                    if gap < 400 {
+                        let from = at.saturating_sub(16);
+                        let to = (at + gap + 24).min(bytes.len());
+                        let hex: Vec<String> =
+                            bytes[from..to].iter().map(|b| format!("{b:02x}")).collect();
+                        println!("bytes {stream} {owner} @{from} {}", hex.join(""));
+                    }
                 }
             }
         }
