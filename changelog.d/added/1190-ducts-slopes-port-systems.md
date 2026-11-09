@@ -7,7 +7,10 @@
   `EXHAUST`, `HEATING`), and an Exhaust Air port is `SOURCEANDSINK`. A port
   joined to another is placed with the axis Revit's export gives it however
   the two flow. On Revit 2015 to 2022 the family instances' ports are read
-  and joined too. On Snowdon Towers HVAC (2025, local only) the record gives
+  and joined too; a join is written only where each of its connectors keeps
+  the other, and the 10 joins of five duct taps that the records of the `rme`
+  samples of 2015 and 2019 name in conflict are left out and counted in
+  `exported.port_joins_left_out`. On Snowdon Towers HVAC (2025, local only) the record gives
   Revit's own type name, `Length`, section, body and `Constraints` values on
   1,053 of 1,053 ducts, and `SystemType` on every port whose system is
   named; on RE1 Mechanical the 25 ducts' type, length and body. **Flex ducts

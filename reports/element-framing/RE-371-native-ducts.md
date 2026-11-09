@@ -99,10 +99,14 @@ The ports, against this branch's export of the same project's 2024 save, by name
 | 2024 | 7,370 | 2,948 | | | | | | | |
 | 2025 | 7,370 | 2,948 (2,948) | 7,364 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 2026, 2027 | 7,370 | 2,948 (2,948) | 5,074 | 2,290 | 0 | 0 | 0 | 0 | 0 |
-| 2019 | 7,184 | 2,774 (2,769) | 5,029 | 2,104 | 45 | 1,191 | 38 | 595 | 0 |
-| 2015 | 7,182 | 2,869 (2,858) | 5,014 | 2,107 | 46 | 917 | 39 | 1,697 | 0 |
+| 2019 | 7,184 | 2,764 (2,764) | 5,024 | 2,109 | 45 | 1,191 | 43 | 595 | 0 |
+| 2015 | 7,182 | 2,859 (2,853) | 5,009 | 2,112 | 46 | 917 | 44 | 1,702 | 0 |
 
-The 6 ports unplaced in every save are of ducts whose record box their line does not fill. On 2026 and 2027, and on 2015 and 2019, the family instances' ports not joined to a placed port are unplaced: a family port is placed from its symbol on 2024 and 2025 only (#869). On 2019, 1,171 of the family instances the 2024 save's records calculate have records the native path does not decode (`unsupported_graph`): their ports come from their symbols with no calculated direction or system, and their joins only where a duct's or pipe's record lists them, 186 ports and 179 joins short of the 2024 save's. Such a port joined to one with a direction takes the opposite, as a bidirectional one does (RE-212), and takes the system of the port joined to it: every one of the 2,634 joins of Revit's export of Snowdon Towers HVAC joins two ports of the same `SystemType`. **No port's system is another than the 2024 save's.** The 38 or 39 duct ports whose flow is different are joined to such undecoded instances. On 2015 the project's own calculations name no system (0) for 715 of `rme_basic`'s duct connectors that the 2024 save classifies, and the ElementIds the project replaced (§5) have their ports only in their own save.
+`rme_advanced` has 2,905 connections on its 2024 save, 2,742 (2,742) on 2019 and 2,819 (2,798) on 2015.
+
+The 6 ports unplaced in every save are of ducts whose record box their line does not fill. On 2026 and 2027, and on 2015 and 2019, the family instances' ports not joined to a placed port are unplaced: a family port is placed from its symbol on 2024 and 2025 only (#869). On 2019, 1,171 of the family instances the 2024 save's records calculate have records the native path does not decode (`unsupported_graph`): their ports come from their symbols with no calculated direction or system, and their joins only where a duct's or pipe's record lists them, 186 ports and 184 joins short of the 2024 save's. Such a port joined to one with a direction takes the opposite, as a bidirectional one does (RE-212), and takes the system of the port joined to it: every one of the 2,634 joins of Revit's export of Snowdon Towers HVAC joins two ports of the same `SystemType`. **No port's system is another than the 2024 save's.** Of the 43 and 44 duct ports whose flow is different, 38 and 39 are joined to such undecoded instances and 5 are ports of the joins left out (below). On 2015 the project's own calculations name no system (0) for 715 of `rme_basic`'s duct connectors that the 2024 save classifies, and the ElementIds the project replaced (§5) have their ports only in their own save.
+
+**Joins left out.** On 2015 and 2019 the records of five duct taps on each of `rme_basic` and `rme_advanced` name one duct connector as the partner of two others: three joins in a chain, of which the 2024 save has two and not the third. A join is written only where each of its ends keeps the other (a connector with one partner keeps it, one with two keeps the one both sides' lists name), so none of the five chains is written whole: 10 joins on each of the four saves are left out, five the 2024 save has and five it does not, and each is counted in `exported.port_joins_left_out` under `connector_named_with_conflicting_partners` (#1524). Every join written is then the 2024 save's but for those the project changed between the saves: 2,764 of 2,764 on 2019 and, on 2015, 2,853 of 2,859 (`rme_basic`) and 2,798 of 2,819 (`rme_advanced`), whose others are 5 and 21 joins of ducts the project replaced (§5) and, on `rme_basic`, one between two elements that the 2024 save has a third element between. What the rule costs on `rme_basic` 2019 is the 10 ports of the 5 chains: 5 lose the place their join gave them (placed in one save only, 2,104 to 2,109) and 5 the direction (a sink read as source and sink, where the 2024 save has a sink: flow different 38 to 43). It is the same 5 and 5 on 2015 and on `rme_advanced`.
 
 Before, 2015 and 2019 had 2,430 ports (`rme_basic`), none of a family instance, and no connection.
 
@@ -122,7 +126,7 @@ Against the base of this change (RE-370's branch), with `SOURCE_DATE_EPOCH=17000
 | サンプル意匠 (2025, two copies) | | | | 86 | 86 | 86 |
 | Golden Nugget building services (2025, two copies) | 158 | 17 | 17 | 443 | 6 | 3,256 |
 | Golden Nugget architecture (2025, two copies) | | | 4 | 8 | | 7 |
-| `rme_basic`, `rme_advanced` (2019) | 724, 728 | 4,754, 4,665 | 2,774, 2,752 | 1,438, 1,446 | 1,448, 1,456 | 1,816, 1,826 |
+| `rme_basic`, `rme_advanced` (2019) | 724, 728 | 4,754, 4,665 | 2,764, 2,742 | 1,438, 1,446 | 1,448, 1,456 | 1,816, 1,826 |
 | `rme_basic`, `rme_advanced` (2027) | 724, 728 | 296 | 296 | 2,847, 2,874 | 228 | 4,687, 4,615 |
 | RE1 Mechanical (2025) | 25 | | | 6 | | 128 |
 | RE1 Plumbing (2025) | | | | 10 | | |
