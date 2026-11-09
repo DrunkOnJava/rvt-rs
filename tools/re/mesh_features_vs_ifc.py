@@ -299,6 +299,24 @@ def main(argv):
         for key, revit_value, near, value in items:
             shown = "no measure" if near is None else f"nearest {near} {value:.6g}"
             print(f"  no measure equal {label[0]} {label[1]}.{label[2]} {key}: Revit {revit_value:.6g}, {shown}")
+    # Where Revit omits a quantity it writes on other objects of the same entity: what the omitting objects are.
+    written_by = collections.defaultdict(set)
+    for (key, set_name, name), (kind, revit_value) in theirs.items():
+        if revit_value is not None and key in values:
+            written_by[(our_entities.get(key, "?"), set_name, name)].add(key)
+    objects_of = collections.defaultdict(list)
+    for key in values:
+        objects_of[our_entities.get(key, "?")].append(key)
+    for (entity, set_name, name), holders in sorted(written_by.items()):
+        missing = [k for k in objects_of[entity] if k not in holders]
+        if not missing or len(holders) < 2:
+            continue
+        print(f"Revit omits {entity} {set_name}.{name} on {len(missing)} of {len(objects_of[entity])} objects drawn from a mesh")
+        for key in sorted(missing)[:6]:
+            product = bodies.get(key)
+            label = "" if product is None else f"{product.Name!r} {getattr(product, 'ObjectType', None)!r}"
+            v = values[key]
+            print(f"  omitted {key} {label} extents {v['e_min']:.4f} {v['e_mid']:.4f} {v['e_max']:.4f} volume {v['volume']:.5f}")
     return 0
 
 
