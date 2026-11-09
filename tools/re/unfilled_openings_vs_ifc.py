@@ -82,10 +82,11 @@ def unfilled(path, boxes=True):
             if len(verts):
                 moved = frame(verts)
                 box = (moved.min(axis=0), moved.max(axis=0))
-                points = corners_of(opening)
-                if host.GlobalId not in hosts:
-                    hosts[host.GlobalId] = corners_of(host)
-                host_points = hosts[host.GlobalId]
+                if host.is_a() == "IfcWall" and opening.Tag not in cutters:
+                    points = corners_of(opening)
+                    if host.GlobalId not in hosts:
+                        hosts[host.GlobalId] = corners_of(host)
+                    host_points = hosts[host.GlobalId]
         except Exception:
             pass
         psets = ifcopenshell.util.element.get_psets(opening)
@@ -191,13 +192,18 @@ def main(argv):
 
     only_revit = {key: theirs for key, theirs in revit.items() if key not in ours}
     print(f"written by Revit's export, not by rvt-rs: {len(only_revit)}")
-    for side, rows in (("revit only", sorted(only_revit.items())[:80]), ("rvt-rs only", sorted(missing.items())[:80])):
-        for key, facts in rows:
-            box = facts["box"]
-            text = "no box" if box is None else " ".join(f"{v:.3f}" for v in (*box[0], *box[1]))
-            print(f"  {side}: {facts['cutter']} in {facts['host']}, Tag {key[0]} in {key[1]}, name {facts['name']}, box {text}")
-            print(f"    opening {corners(facts['points'])}")
-            print(f"    host {corners(facts['host_points'])}")
+    listed = [("revit", key, facts) for key, facts in sorted(revit.items()) if facts["points"]]
+    listed += [("rvt-rs only", key, facts) for key, facts in sorted(missing.items()) if facts["points"]]
+    print(f"openings of no cutter in a wall, with their corners: {len(listed)}")
+    for side, key, facts in listed[:120]:
+        both = "both" if key in revit and key in ours else "one side"
+        box = facts["box"]
+        text = "no box" if box is None else " ".join(f"{v:.3f}" for v in (*box[0], *box[1]))
+        print(f"  {side} ({both}): Tag {key[0]} in {key[1]}, name {facts['name']}, box {text}")
+        print(f"    opening {corners(facts['points'])}")
+        if both == "both" and ours[key]["points"]:
+            print(f"    rvt-rs opening {corners(ours[key]['points'])}")
+        print(f"    host {corners(facts['host_points'])}")
     return 0
 
 
