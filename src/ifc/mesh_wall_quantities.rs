@@ -9,9 +9,15 @@
 //! `GrossVolume` the wall type's width times the `GrossSideArea`.
 //! [`wall_mesh_quantities`] reads them from the mesh where it can be trusted to
 //! be the solid: every face a plane, the faces one closed surface wound one
-//! way, all in one piece. A gross area is given only where the two largest
-//! vertical faces, the wall's two sides, face opposite ways and agree on it,
-//! which is the one case in which Revit's choice between them cannot matter.
+//! way, all in one piece. Revit's export writes the volume of every such wall
+//! and the other three only of some (on the BIM4LCA office as built, 26 of 581
+//! walls with quantities have a `NetVolume` and nothing else), and nothing in
+//! the mesh tells them apart but that none of those 26 is a plain prism: each
+//! has five or more vertical faces. So the areas are given only of a wall with
+//! no more than four (its two sides and its two ends), and a gross area only
+//! where the two largest vertical faces, the sides, face opposite ways and
+//! agree on it, the one case in which Revit's choice between them cannot
+//! matter.
 
 use crate::native_saved_mesh::Primitive;
 use crate::vector_math::{cross, dot, sub};
@@ -32,16 +38,27 @@ const VERTICAL_TOLERANCE: f64 = 1e-6;
 /// and still be one area.
 const SIDES_AGREE: f64 = 1e-5;
 
+/// More vertical faces than this and the wall is given no area: Revit's export
+/// writes the areas and the gross volume of a wall of a plain prism's plan and of
+/// others, and the walls it writes only a volume of all have five or more.
+const MAX_VERTICAL_FACES: usize = 4;
+
 /// The quantities a wall's mesh gives, in feet.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct WallMeshQuantities {
     /// The volume of the mesh, cubic feet.
     pub net_volume: f64,
-    /// The area of the largest vertical face, its holes taken out, square feet.
-    pub net_side_area: f64,
-    /// The area inside the outer loop of the wall's sides, square feet, where
-    /// both agree.
-    pub gross_side_area: Option<f64>,
+    /// The areas of its sides, where it has no more than four vertical faces.
+    pub sides: Option<WallSideAreas>,
+}
+
+/// The areas of a wall's sides, square feet.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct WallSideAreas {
+    /// The area of the largest vertical face, its holes taken out.
+    pub net: f64,
+    /// The area inside the outer loop of the wall's sides, where both agree.
+    pub gross: Option<f64>,
 }
 
 type Triangle = ([f64; 3], [f64; 3], [f64; 3]);
@@ -248,9 +265,24 @@ fn agreeing_gross(first: &Side, second: &Side) -> Option<f64> {
         .then_some(a.max(b))
 }
 
+/// The areas of the wall whose vertical faces are `sides`, or none where it has
+/// more than [`MAX_VERTICAL_FACES`] or none.
+fn side_areas(sides: &mut [Side]) -> Option<WallSideAreas> {
+    if sides.len() > MAX_VERTICAL_FACES {
+        return None;
+    }
+    sides.sort_by(|x, y| y.net.total_cmp(&x.net));
+    let largest = sides.first()?;
+    Some(WallSideAreas {
+        net: largest.net,
+        gross: sides
+            .get(1)
+            .and_then(|second| agreeing_gross(largest, second)),
+    })
+}
+
 /// The quantities the saved mesh of a wall gives, or none where its faces are
-/// not all planes, they are not one closed piece wound one way, or the wall
-/// has no vertical face.
+/// not all planes or they are not one closed piece wound one way.
 pub(super) fn wall_mesh_quantities(primitives: &[Primitive]) -> Option<WallMeshQuantities> {
     let mut every: Vec<Triangle> = Vec::new();
     let mut sides: Vec<Side> = Vec::new();
@@ -272,15 +304,9 @@ pub(super) fn wall_mesh_quantities(primitives: &[Primitive]) -> Option<WallMeshQ
         every.extend(triangles);
     }
     let net_volume = one_piece_volume(&every)?;
-    sides.sort_by(|x, y| y.net.total_cmp(&x.net));
-    let largest = sides.first()?;
-    let gross_side_area = sides
-        .get(1)
-        .and_then(|second| agreeing_gross(largest, second));
     Some(WallMeshQuantities {
         net_volume,
-        net_side_area: largest.net,
-        gross_side_area,
+        sides: side_areas(&mut sides),
     })
 }
 
@@ -341,8 +367,9 @@ mod tests {
     fn a_plain_wall_gives_its_volume_and_its_sides() {
         let found = wall_mesh_quantities(&wall([100.0, 200.0, 190.0], 10.0, 1.0, 8.0)).unwrap();
         assert!((found.net_volume - 80.0).abs() < 1e-9);
-        assert!((found.net_side_area - 80.0).abs() < 1e-9);
-        assert!((found.gross_side_area.unwrap() - 80.0).abs() < 1e-9);
+        let sides = found.sides.unwrap();
+        assert!((sides.net - 80.0).abs() < 1e-9);
+        assert!((sides.gross.unwrap() - 80.0).abs() < 1e-9);
     }
 
     #[test]
@@ -412,6 +439,26 @@ mod tests {
         let net: f64 = triangles.iter().map(area).sum();
         assert!((net - 76.0).abs() < 1e-9);
         assert!((outer_loop_area(&triangles, [0.0, -1.0]) - 80.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_wall_with_more_than_four_vertical_faces_gives_no_areas() {
+        let side = |normal: [f64; 2]| Side {
+            net: 80.0,
+            gross: 80.0,
+            normal,
+        };
+        let mut four = vec![
+            side([0.0, -1.0]),
+            side([0.0, 1.0]),
+            side([-1.0, 0.0]),
+            side([1.0, 0.0]),
+        ];
+        assert!(side_areas(&mut four).is_some());
+        let mut five = four.clone();
+        five.push(side([1.0, 0.0]));
+        assert_eq!(side_areas(&mut five), None);
+        assert_eq!(side_areas(&mut []), None);
     }
 
     #[test]

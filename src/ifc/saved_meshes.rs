@@ -459,8 +459,9 @@ fn add_mesh_volumes(model: &mut IfcModel, volumes: &[(usize, f64)]) {
 /// Give each wall of `found` (an index into the entities and what the mesh
 /// Revit saved for it gives) the quantities Revit's export writes from its
 /// solid, in the base quantity set it holds, where that holds none of them
-/// (RE-388): `NetVolume` and `NetSideArea`, and where its two sides agree on
-/// it `GrossSideArea` and, the wall type's `Width` times it, `GrossVolume`
+/// (RE-388): `NetVolume`, and of a wall with no more than four vertical faces
+/// `NetSideArea` and, where its two sides agree on it, `GrossSideArea` and, the
+/// wall type's `Width` times it, `GrossVolume`
 /// (revit-ifc's `PropertyUtil.CreateWallBaseQuantities`, CLEANROOM.md source 5,
 /// RE-270). A wall with no base quantity set, as a wall Revit's export writes
 /// none for may be, gets none.
@@ -505,11 +506,11 @@ fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities
             "NetVolume",
             PropertyValue::VolumeCubicFeet(quantities.net_volume),
         );
-        add(
-            "NetSideArea",
-            PropertyValue::AreaSquareFeet(quantities.net_side_area),
-        );
-        if let Some(gross) = quantities.gross_side_area {
+        let Some(sides) = quantities.sides else {
+            continue;
+        };
+        add("NetSideArea", PropertyValue::AreaSquareFeet(sides.net));
+        if let Some(gross) = sides.gross {
             add("GrossSideArea", PropertyValue::AreaSquareFeet(gross));
             if let Some(width) = width {
                 add("GrossVolume", PropertyValue::VolumeCubicFeet(width * gross));
