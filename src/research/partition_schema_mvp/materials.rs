@@ -319,10 +319,10 @@ pub(super) fn attach_unnamed_materials(
     }
 }
 
-/// Give each curtain wall mullion and panel ([`CURTAIN_AXES_CLASSES`]) that
-/// has no type material yet the material its type holds
-/// ([`crate::partition_curtain_materials`], RE-166), by name, as Revit's
-/// export associates it.
+/// Give each curtain wall mullion and panel ([`CURTAIN_AXES_CLASSES`]) the
+/// material its type holds ([`crate::partition_curtain_materials`], RE-166),
+/// by name, as Revit's export associates it, in place of what a type map gave
+/// (RE-367). A panel of Revit 2015 to 2023 is given none.
 pub(super) fn attach_curtain_materials(
     rf: &mut RevitFile,
     revit_version: u32,
