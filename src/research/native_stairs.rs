@@ -1061,16 +1061,17 @@ pub const NATIVE_STAIR_FAMILIES: [&str; 5] = [
     "Stringer",
 ];
 
-/// The first release on which a stair's, a flight's and a stringer's `ObjectType`
-/// (`Family:Type`, from the family and type [`native_stair_parts`] reads) is not
-/// written. The family and type are read on 2025 to 2027, and give the parts their
-/// Name, their reference property sets and their type objects; but the
-/// `Family:Type` rvt-rs writes as `ObjectType` differs from Revit's own 2026 and
-/// 2027 exports on every class with a type the held-out pairs hold (flowbim's house
-/// and hemanth1986's pairs), and on a stair, its flight and its stringers it
-/// turned an `ObjectType` equal at `$` into a different one (RE-346). Other classes
-/// keep theirs, which differs as well (#1472).
-pub const STAIR_OBJECT_TYPE_LEFT_OUT_FROM: u32 = 2026;
+/// The first release whose saves are written without an `ObjectType`. The family
+/// and type are read on 2025 to 2027 (a stair's, a flight's and a stringer's from
+/// their native records, [`native_stair_parts`]) and give the elements their Name,
+/// their reference property sets and their type objects, but Revit's own export of
+/// a 2026 or 2027 save writes no `ObjectType` on any class (#1472): the five
+/// held-out pairs of those releases hold 418 typed elements of nine classes whose
+/// `Family:Type` differed from Revit's, and Revit writes none on every one, where
+/// its 2025 export of the same projects writes `Family:Type` on them all. On a
+/// stair, its flight and its stringer, writing it had turned an `ObjectType` equal
+/// at `$` into a different one (RE-346).
+pub const OBJECT_TYPE_LEFT_OUT_FROM: u32 = 2026;
 
 /// A stair's or a stair part's type, and the stair and family Revit's export
 /// names it after (#323).

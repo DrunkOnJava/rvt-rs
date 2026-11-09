@@ -85,7 +85,7 @@ ADDED = [
     (r"IfcMember", r"", r"Name"),
     # The type and family a stair and its flights are read with on 2026 and 2027 as on
     # 2025, and what the type gives them. Not the `Family:Type` they would be written as
-    # ObjectType: that is left out on a stair part from 2026 (#1472).
+    # ObjectType: that is left out of every class from 2026 (#1472).
     (r"IfcStair(Flight)?", r"Pset_Stair(Flight)?Common|Pset_EnvironmentalImpactIndicators|Identity Data|Other", r".*"),
     (r"IfcStair(Flight)?", r"RvtElementRecordGeometry", r"FamilyName|FamilyNameSource|TypeName"),
 ]
