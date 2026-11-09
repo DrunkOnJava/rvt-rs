@@ -342,9 +342,10 @@ jobs:
       # cargo-nextest runs the manifest's test binaries in parallel (C6).
       - name: Install cargo-nextest
         if: matrix.label != 'msrv'
-        uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        uses: $/.github/actions/install-cargo-tool
         with:
-          tool: cargo-nextest@0.9.146
+          crate: cargo-nextest
+          version: 0.9.146
       - name: Real-file, CLI and contract verification
         if: matrix.label != 'msrv'
         shell: bash
@@ -472,9 +473,10 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: ci-i686
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        uses: $/.github/actions/install-cargo-tool
         with:
-          tool: cargo-nextest@0.9.146
+          crate: cargo-nextest
+          version: 0.9.146
       - name: Real-file, CLI, contract and hardening checks on i686
         shell: bash
         env:
@@ -608,9 +610,10 @@ jobs:
       # corpus-reading target is gated the moment it exists.
       # cargo-nextest runs the manifest's test binaries in parallel (C6).
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        uses: $/.github/actions/install-cargo-tool
         with:
-          tool: cargo-nextest@0.9.146
+          crate: cargo-nextest
+          version: 0.9.146
       - name: Tier-two gates (real-file, CLI and contract targets against the project corpus)
         shell: bash
         env:
@@ -1276,10 +1279,16 @@ jobs:
         with:
           toolchain: ${{ env.PUBLIC_API_TOOLCHAIN }}
           make-default: "false"
-      - name: Install cargo-semver-checks and cargo-public-api
-        uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+      - name: Install cargo-semver-checks
+        uses: $/.github/actions/install-cargo-tool
         with:
-          tool: cargo-semver-checks@0.51.0,cargo-public-api@0.52.0
+          crate: cargo-semver-checks
+          version: 0.51.0
+      - name: Install cargo-public-api
+        uses: $/.github/actions/install-cargo-tool
+        with:
+          crate: cargo-public-api
+          version: 0.52.0
       - name: The stable API breaks nothing the pull request does not announce
         shell: bash
         env:
@@ -1575,14 +1584,16 @@ jobs:
           persist-credentials: false
       - name: Install Rust stable
         uses: $/.github/actions/setup-rust
-      # install-action retries the download and verifies its checksum;
-      # cargo-deny-action's image fetched the release with a bare
-      # `curl --silent -L` and failed the check when GitHub returned an
-      # error page ("gzip: invalid magic").
+      # install-action retries the download and verifies its checksum, and
+      # the composite action builds the tool from crates.io where GitHub's
+      # release host does not serve it (#1585); cargo-deny-action's image
+      # fetched the release with a bare `curl --silent -L` and failed the
+      # check when GitHub returned an error page ("gzip: invalid magic").
       - name: Install cargo-deny
-        uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        uses: $/.github/actions/install-cargo-tool
         with:
-          tool: cargo-deny@0.20.2
+          crate: cargo-deny
+          version: 0.20.2
       - run: cargo deny check
 
   # Fails CI on any RustSec advisory published against the current
@@ -1601,9 +1612,10 @@ jobs:
       - name: Install Rust stable
         uses: $/.github/actions/setup-rust
       - name: Install cargo-audit
-        uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+        uses: $/.github/actions/install-cargo-tool
         with:
-          tool: cargo-audit@0.22.2
+          crate: cargo-audit
+          version: 0.22.2
       - name: Audit Rust dependencies
         run: cargo audit
 

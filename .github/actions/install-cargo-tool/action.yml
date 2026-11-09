@@ -1,0 +1,46 @@
+name: Install a cargo tool
+description: >-
+  Install a cargo tool at one pinned version with taiki-e/install-action, and,
+  where GitHub's release host does not serve its binary, build the same version
+  from crates.io. Run it after the Rust toolchain is installed (a job that
+  keeps another default toolchain installs the tool with the default one).
+# #1585: install-action retries a download for about a minute, and its own
+# fallback, cargo-binstall, fetches from the same host. On 2026-11-09 that host
+# answered HTTP 504 for hours: `Install cargo-nextest` failed macos-26 after 11
+# attempts (run 42581131725), nothing was tested, and the red said nothing about
+# the change. crates.io's download host is a different one, so a tool the first
+# step cannot fetch is compiled from its published source with `--locked`, which
+# is the lockfile its authors released. The slower build runs only then.
+#
+# `--force` because a binary may already be in ~/.cargo/bin without cargo's
+# record of it (Swatinem/rust-cache restores one that install-action put there on
+# an earlier run), which `cargo install` refuses to overwrite: the forced-failure
+# run of this action's pull request failed on exactly that without it.
+#
+# A version that does not exist, or a crate that does not build, still fails the
+# job: the second step's exit status is the action's.
+inputs:
+  crate:
+    description: The tool's crate, such as cargo-nextest
+    required: true
+  version:
+    description: The one version to install, as MAJOR.MINOR.PATCH, such as 0.9.146
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Download the binary
+      id: binary
+      continue-on-error: true
+      uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+      with:
+        tool: ${{ inputs.crate }}@${{ inputs.version }}
+    - name: Build it from crates.io where the download failed
+      if: steps.binary.outcome == 'failure'
+      shell: bash
+      env:
+        CRATE: ${{ inputs.crate }}
+        VERSION: ${{ inputs.version }}
+      run: |
+        echo "::warning::GitHub's release host did not serve $CRATE $VERSION (#1585); building it from crates.io"
+        cargo install --locked --force "$CRATE" --version "$VERSION"
