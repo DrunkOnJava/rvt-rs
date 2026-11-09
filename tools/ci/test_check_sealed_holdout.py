@@ -6,8 +6,8 @@ import check_sealed_holdout as c
 
 RVT_SHA = "a" * 64
 IFC_SHA = "b" * 64
-RVT_URL = "https://example.org/pairs/house-2026.rvt"
-IFC_URL = "https://example.org/Owner/Pairs/House-2026.ifc"
+RVT_URL = "https://github.com/Owner/Pairs/releases/download/v1/house-2026.rvt"
+IFC_URL = "https://raw.githubusercontent.com/Owner/Pairs/" + "0123456789abcdef" * 2 + "01234567/House-2026.ifc"
 HEADER = "# sealed pairs\n"
 
 
@@ -52,6 +52,25 @@ class Rows(unittest.TestCase):
     def test_a_bad_hash_fails(self):
         for sha in ("A" * 64, "a" * 63, "g" * 64):
             self.assertTrue(judge(row(rvt_sha256=sha)), sha)
+
+    def test_a_link_that_can_change_fails(self):
+        for url in (
+            "https://raw.githubusercontent.com/Owner/Pairs/main/House-2026.ifc",
+            "https://github.com/Owner/Pairs/blob/main/House-2026.ifc",
+            "https://drive.google.com/file/d/abc/view",
+            "https://www.dropbox.com/s/abc/house.ifc?dl=1",
+            "https://example.org/pairs/house-2026.ifc",
+        ):
+            self.assertTrue(judge(row(ifc_url=url)), url)
+
+    def test_each_pinned_link_form_passes(self):
+        commit = "fedcba9876543210" * 2 + "fedcba98"
+        for url in (
+            f"https://github.com/Owner/Pairs/raw/{commit}/house.rvt",
+            f"https://media.githubusercontent.com/media/Owner/Pairs/{commit}/house.rvt",
+            "https://zenodo.org/records/1234567/files/house.rvt?download=1",
+        ):
+            self.assertEqual(judge(row(rvt_url=url)), [], url)
 
     def test_a_plain_http_url_fails(self):
         self.assertTrue(judge(row(ifc_url="http://example.org/x.ifc")))

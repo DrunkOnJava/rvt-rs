@@ -6,7 +6,8 @@ check. This fails when:
 
   - a row is malformed: not 11 tab-separated fields, a release outside 2024
     to 2027, a name that is not [A-Za-z0-9._-], a URL that is not https, a
-    sha256 that is not 64 hex digits, a byte count that is not a positive
+    sha256 that is not 64 hex digits, a link that names no fixed version (a
+    file at a 40-hex commit, a GitHub release asset or a Zenodo record's file), a byte count that is not a positive
     integer, a licence other than Apache-2.0, MIT, CC-BY-4.0 or CC0-1.0, a
     contributor that is not a GitHub login, a received date that is not
     YYYY-MM-DD, or a name, URL or hash used twice;
@@ -43,6 +44,22 @@ FIELDS = ("release", "name", "rvt_url", "rvt_sha256", "rvt_bytes", "ifc_url", "i
 NAME = re.compile(r"[A-Za-z0-9._-]+")
 SHA = re.compile(r"[0-9a-f]{64}")
 URL = re.compile(r"https://[^\s\t]+")
+# A sealed file is fetched again at the final check, maybe months on, and must
+# still match its hash, so its link names a fixed version: a file at a commit
+# (raw, or Git LFS media), a release asset, or a Zenodo record's file. A
+# branch link or a share page can change or go, and the pair would be lost.
+_PART = r"[A-Za-z0-9._-]+"
+_COMMIT = r"[0-9a-f]{40}"
+PINNED = tuple(
+    re.compile(pattern)
+    for pattern in (
+        rf"https://raw\.githubusercontent\.com/{_PART}/{_PART}/{_COMMIT}/\S+",
+        rf"https://github\.com/{_PART}/{_PART}/raw/{_COMMIT}/\S+",
+        rf"https://media\.githubusercontent\.com/media/{_PART}/{_PART}/{_COMMIT}/\S+",
+        rf"https://github\.com/{_PART}/{_PART}/releases/download/[^/\s]+/\S+",
+        r"https://zenodo\.org/records/[0-9]+/files/\S+",
+    )
+)
 LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})")
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 OLE2 = bytes.fromhex("d0cf11e0a1b11ae1")
@@ -75,6 +92,10 @@ def row_problems(text):
             url, sha, size = row[f"{side}_url"], row[f"{side}_sha256"], row[f"{side}_bytes"]
             checks += [
                 (URL.fullmatch(url), f"{side}_url {url!r} is not an https URL"),
+                (
+                    any(pinned.fullmatch(url) for pinned in PINNED),
+                    f"{side}_url {url!r} names no fixed version (a commit, a release asset or a Zenodo record)",
+                ),
                 (SHA.fullmatch(sha), f"{side}_sha256 {sha!r} is not 64 lowercase hex digits"),
                 (size.isdigit() and int(size) > 0, f"{side}_bytes {size!r} is not a positive integer"),
             ]

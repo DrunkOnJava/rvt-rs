@@ -6,7 +6,9 @@
   `research/sealed-holdout-models.tsv`. It refuses, from the first 64 KiB of
   each file alone, a project that is not an OLE2 file and an IFC that is not
   that release's own IFC4 or IFC4X3 export, and it refuses a row the check
-  would fail. `tools/ci/check_sealed_holdout.py`, a step of the PII guard job,
+  would fail, among them a link that names no fixed version (a file at a
+  commit, a release asset or a Zenodo record), since the final check fetches
+  the files again. `tools/ci/check_sealed_holdout.py`, a step of the PII guard job,
   fails on a malformed row, on any other tracked file holding a sealed URL or
   hash, and on any committed file that is not Markdown and names the registry.
   It cannot see a path built at run time or a run dispatched from an
