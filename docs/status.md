@@ -103,7 +103,8 @@ block, which no 2026 or 2027 scorer checks. No beam, landing, stair run or
 sketch outline there is scored against a Revit export: each is held to
 the same Autodesk project's earlier save (`tools/re/bodies_across_saves.py`,
 which Measure runs and fails on), and that cannot catch an error the earlier
-save shares; it compares bodies, not quantities or property sets. No 2026 or
+save shares; it compares bodies, and since RE-346 the cuts, ports and the properties
+and quantities that change adds, not the others. No 2026 or
 2027 held-out model holds a beam, so the beam reader has run only on two
 Autodesk samples saved from earlier releases, never on a natively authored
 2026 beam. **On 2025 no Revit export checks a beam, tread landing or arc
@@ -120,9 +121,28 @@ the 19 held-out and spent models changes. That check cannot catch an error the
 2024 saves share (Measure run 42091457764, head 830a4d94). The floor of
 rac_advanced, drawn with chords on the 2025 save before (24 vertices), has the
 170 vertices of the 2024, 2026 and 2027 saves. One stair flight is scored against Revit's own 2026 and 2027
-exports. Sloped roofs, spiral runs, stair names,
-railing heights and lengths, a wall's profile openings, IFC export overrides
-and the opening index stay unread there.
+exports. Since RE-346 a pipe there is placed by RE-131's connector entries
+first, as on 2025 (RE-370 draws the rest from its record), family
+instances' ports are placed, walls are cut to their doors' and windows'
+outlines, and `IsExternal`, railing heights and lengths, stair names, rooms'
+height and net volume and the pipe and duct quantities are written, as on 2025,
+except a door's or window's Area on 2027 and the ObjectType of a stair, its
+flights and its stringers on 2026 and 2027, which Revit's own exports write
+otherwise (held-out counts, RE-346 section 5; the ObjectType of every other class
+differs there as well, #1472). Each
+is held to the same Autodesk project's 2025 save, on the MEP samples too
+(`tools/re/bodies_across_saves.py`, which Measure fails on a difference), and
+not to a Revit export: no held-out model holds a pipe, a duct or a port, and
+that cannot catch an error the 2025 save shares. In Measure run 42545885153
+(against `main` at 1c088750, unfiltered, the same-project gates passing on 15
+samples) no body of the MEP samples' 2026 and 2027 saves differs from the 2025
+save's (36 walls on each did on `main`), and their placed ports are the 2025 save's
+(6,967 and 7,054, against 1,944 and 1,956 on `main`); two doors of `rac_basic` 2027 write no
+Width and Height (#1489). Only 2026 and 2027 exports move, and on the held-out 2026
+and 2027 pairs every value added is equal. Sloped
+roofs, spiral runs, a wall's profile openings, `IsExternal` on walls, curtain
+walls, members and plates (2025 writes it, 2026 and 2027 do not), IFC export
+overrides and the opening index stay unread there.
 Conduits, conduit fittings and gutters export on every release the exporter
 reads and are measured against Revit's own export on `ALD26 Before` only (all
 178 it holds are Revit's elements, RE-319); Autodesk's MEP samples and Snowdon

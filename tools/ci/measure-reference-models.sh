@@ -576,8 +576,8 @@ pair_key() {
   name=${name//_/}
   echo "${name%sampleproject}"
 }
-# RE-341, RE-345: bodies_across_saves.py holds the 2025, 2026 and 2027 saves of
-# the three projects below to their earlier 2024 and 2025 saves, so those saves
+# RE-341, RE-345, RE-346: bodies_across_saves.py holds the 2025, 2026 and 2027 saves
+# of the five projects below to their earlier 2024 and 2025 saves, so those saves
 # keep their exports until it has run, after every sample item.
 # Whether this run's exports take a flag. A value of only spaces is no flag:
 # export_ifc passes it unquoted, so rvt-ifc gets none.
@@ -588,7 +588,7 @@ saves_gate_keeps() { # sample
   wanted bodies_across_saves || return 1
   flagged_export && return 1
   case "$(basename "$1" | cut -c1-4)" in 2024 | 2025 | 2026 | 2027) ;; *) return 1 ;; esac
-  case "$(pair_key "$1")" in racadvanced | racbasic | rstbasic) return 0 ;; esac
+  case "$(pair_key "$1")" in racadvanced | racbasic | rmeadvanced | rmebasic | rstbasic) return 0 ;; esac
   return 1
 }
 measure_sample() { # sample
@@ -620,9 +620,10 @@ measure_sample() { # sample
   finished "$dir" "$(basename "$sample")" "$item_started"
 }
 
-# RE-341, RE-345: each 2025, 2026 and 2027 save of rac_advanced, rac_basic and
-# rst_basic is held to the same project's earlier 2024 and 2025 saves, whose
-# exports the samples kept (tools/re/bodies_across_saves.py). It writes bodies_across_saves.txt
+# RE-341, RE-345, RE-346: each 2025, 2026 and 2027 save of rac_advanced, rac_basic,
+# rme_advanced, rme_basic and rst_basic is held to the same project's earlier 2024
+# and 2025 saves, whose exports the samples kept (tools/re/bodies_across_saves.py).
+# It writes bodies_across_saves.txt
 # beside the sample, ending with its exit status; the Measure workflow turns a
 # failure on the head side into a red run (tools/ci/check-bodies-across-saves.sh).
 bodies_across_saves() {
@@ -633,7 +634,7 @@ bodies_across_saves() {
   fi
   for candidate in "$SAMPLE_DIR"/202[567]-*.rvt; do
     [ -f "$candidate" ] || continue
-    case "$(pair_key "$candidate")" in racadvanced | racbasic | rstbasic) ;; *) continue ;; esac
+    case "$(pair_key "$candidate")" in racadvanced | racbasic | rmeadvanced | rmebasic | rstbasic) ;; *) continue ;; esac
     references=()
     # A save is held to the project's saves of earlier years only.
     for earlier in "$SAMPLE_DIR"/202[45]-*.rvt; do
@@ -654,8 +655,12 @@ bodies_across_saves() {
       printf 'bodies across saves: SKIPPED (no earlier 2024 or 2025 save of the project is in this run)\nexit 0\n' > "$dir/bodies_across_saves.txt"
       continue
     fi
-    score "$dir/bodies_across_saves.txt" "$SCORERS/bodies_across_saves.py" "$dir/model.ifc" "${references[@]}"
+    # One scorer for each save at a time, up to the jobs the runner holds: the
+    # MEP samples mesh some 6,600 bodies each, and a save's pipes, cuts, ports
+    # and properties are read beside the bodies (RE-346).
+    spawn score "$dir/bodies_across_saves.txt" "$SCORERS/bodies_across_saves.py" "$dir/model.ifc" "${references[@]}"
   done
+  wait
   for sample in "$SAMPLE_DIR"/*.rvt; do
     [ -f "$sample" ] || continue
     if [ -z "${KEEP_IFC:-}" ] && saves_gate_keeps "$sample"; then rm -f "$(sample_dir "$sample")/model.ifc"; fi
