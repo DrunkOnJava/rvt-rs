@@ -90,7 +90,9 @@ pub struct TypedProductionAppend {
     /// them. The names are [`INSTANCE_ORIGIN_PROPERTIES`],
     /// [`FILLER_OPENING_PROPERTIES`], [`DOOR_TYPE_SIZE_PROPERTIES`],
     /// [`CUT_LOOP_SIZE_PROPERTIES`], [`CUT_SOLID_SIZE_PROPERTIES`],
-    /// [`INSTANCE_BOX_SIZE_PROPERTIES`] and [`SYMBOL_WIRE_WIDTH_PROPERTY`].
+    /// [`INSTANCE_BOX_SIZE_PROPERTIES`], [`SYMBOL_WIRE_WIDTH_PROPERTY`] and,
+    /// for a property its parameters name in an opening's set,
+    /// [`CUTTER_OPENING_PROPERTY_PREFIX`].
     pub record_handoffs: BTreeMap<usize, Vec<Property>>,
     /// The joins between two connectors that the writer leaves out because a
     /// connector of either end is named with two partners and the two sides'
@@ -1821,6 +1823,22 @@ pub fn append_typed_production_elements(
         // RE-156: the shared parameter Serial Number.
         for set in reference_sets.into_iter().chain(serial_sets) {
             add_element_set(entities, entity_index, set);
+        }
+        // RE-386: the properties of `Pset_OpeningElementCommon` its parameters
+        // name, which the sets above leave out because the set is not its
+        // entity's, are for the openings it cuts.
+        if policy.include_geometry {
+            for (set, property) in &named {
+                if set == "Pset_OpeningElementCommon" && property.name != "Reference" {
+                    out.record_handoffs
+                        .entry(entity_index)
+                        .or_default()
+                        .push(Property {
+                            name: format!("{CUTTER_OPENING_PROPERTY_PREFIX}{}", property.name),
+                            value: property.value.clone(),
+                        });
+                }
+            }
         }
         if !named.is_empty() {
             pending_named.push((entity_index, named));
@@ -5319,6 +5337,14 @@ pub const INSTANCE_BOX_SIZE_PROPERTIES: [&str; 2] = ["BoxWidth", "BoxHeight"];
 /// its bounding boxes, where the symbol cuts no loop (RE-318,
 /// `crate::partition_schema_mvp::SYMBOL_WIRE_WIDTH_FIELD`), feet.
 pub const SYMBOL_WIRE_WIDTH_PROPERTY: &str = "SymbolWireWidth";
+
+/// The prefix of the name of each hand-off holding a property of
+/// `Pset_OpeningElementCommon` that an element's parameters name (RE-386): a
+/// door's `FireExit` is `OpeningElementCommon.FireExit`. They are not the
+/// element's own properties, which the set does not apply to; Revit's export
+/// gives them to the openings the element cuts in a wall besides the one it
+/// fills (`IfcEntity::CutterOpeningSet`).
+pub const CUTTER_OPENING_PROPERTY_PREFIX: &str = "OpeningElementCommon.";
 
 /// Classes whose body another rule draws, which a family instance's turn
 /// leaves alone: columns (their type's section), beams (their line), and

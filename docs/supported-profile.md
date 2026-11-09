@@ -155,6 +155,7 @@ each floor's `Qto_SlabBaseQuantities.GrossArea` where it is drawn as one extrusi
 each of these base quantities left out by `rvt-ifc --no-base-quantities`, as Revit's exporter leaves them out with "Export base quantities" off; Revit's built-in IFC4 setups turn it on, so rvt-ifc does by default (RE-242),
 the type of each pipe, wall sweep and ramp that neither its stored layout nor its reference list types, the one its own native record names (RE-240),
 each wall's `ExtendToStructure`, whether its top is joined to a roof or floor (RE-228; on Revit 2015 to 2023 too, experimentally, RE-284), each structural column's and framing element's `LoadBearing` from its category unless a parameter named for it says otherwise, and on Revit 2015 to 2023, experimentally, its `IsExternal`, not external (RE-285),
+each opening a door cuts in a second wall, its `Pset_OpeningElementCommon.FireExit`, the door's parameter of that name where the project defines one (RE-386),
 each railing's `Height`, its type's top rail height (RE-231),
 a slab's `PitchAngle` 0<!-- w10: a value rvt-rs writes and, further on in this sentence, buildingSMART's count of its property sets, neither a measurement --> where its top is known to be level (RE-238), and the angle of its top plane from the horizontal on a floor drawn along the plane its shape-edited corners lie in (RE-384),
 the project and shared parameters named for a property of one of IFC4's

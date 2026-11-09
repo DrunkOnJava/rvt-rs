@@ -3770,6 +3770,20 @@ impl StepWriter<'_> {
         // of the export: revit-ifc's `OpeningUtil` hashes its number in the
         // wall's openings with the wall's and the cutter's GlobalIds
         // (CLEANROOM.md source 5).
+        // RE-386: and the properties its cutter's parameters name in each set
+        // of an opening (a door's `FireExit`), which revit-ifc's
+        // `OpeningUtil.CreateOpening` hands the opening as it hands the
+        // cutter its own.
+        let mut cutter_properties: BTreeMap<(usize, &str), Vec<super::entities::Property>> =
+            Default::default();
+        for entity in &model.entities {
+            if let super::entities::IfcEntity::CutterOpeningSet { element, set } = entity {
+                cutter_properties
+                    .entry((*element, set.name.as_str()))
+                    .or_default()
+                    .extend(set.properties.iter().cloned());
+            }
+        }
         for entity in &model.entities {
             let super::entities::IfcEntity::WallCutOpening {
                 host,
@@ -3877,26 +3891,34 @@ impl StepWriter<'_> {
                     if *recess { ".RECESS." } else { ".OPENING." },
                 ),
             );
-            if let Some(reference) = host_references.get(reference_from) {
-                for set_name in [
-                    "Pset_OpeningElementCommon",
-                    "Pset_EnvironmentalImpactIndicators",
-                ] {
-                    let set = PropertySet {
-                        name: set_name.into(),
-                        properties: vec![super::entities::Property {
-                            name: "Reference".into(),
-                            value: super::entities::PropertyValue::Identifier(reference.clone()),
-                        }],
-                    };
-                    self.emit_property_set(
-                        owner_hist,
-                        opening_id,
-                        &set,
-                        &gid(&["property-set", opening_gid.as_str(), set_name]),
-                        &gid(&["defines-by-properties", opening_gid.as_str(), set_name]),
-                    );
+            for set_name in [
+                "Pset_OpeningElementCommon",
+                "Pset_EnvironmentalImpactIndicators",
+            ] {
+                let mut properties = Vec::new();
+                if let Some(reference) = host_references.get(reference_from) {
+                    properties.push(super::entities::Property {
+                        name: "Reference".into(),
+                        value: super::entities::PropertyValue::Identifier(reference.clone()),
+                    });
                 }
+                if let Some(named) = cutter_properties.get(&(*reference_from, set_name)) {
+                    properties.extend(named.iter().cloned());
+                }
+                if properties.is_empty() {
+                    continue;
+                }
+                let set = PropertySet {
+                    name: set_name.into(),
+                    properties,
+                };
+                self.emit_property_set(
+                    owner_hist,
+                    opening_id,
+                    &set,
+                    &gid(&["property-set", opening_gid.as_str(), set_name]),
+                    &gid(&["defines-by-properties", opening_gid.as_str(), set_name]),
+                );
             }
             // RE-321: Revit's `Depth` is the extrusion's depth, and its `Width`
             // and `Height` are the rectangle's extents along the wall and up,
