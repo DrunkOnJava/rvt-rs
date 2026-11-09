@@ -14,9 +14,15 @@
 //!
 //!   wall tag:<id> status <status> primitives <n> triangles <n> unbounded <n> diagnostics <n>
 //!   wall tag:<id> volume <ft3> z <low> <high> vfaces <n>
+//!   wall tag:<id> closed <0|1> open <n> over <n> shells <n>
 //!   wall tag:<id> vface net <ft2> gross <ft2> normal <nx> <ny>
 //!
-//! one `vface` line for each of the four largest flat vertical faces (a primitive
+//! `closed` says whether the mesh is a closed oriented surface (every directed edge
+//! has its reverse once; `open` counts the edges that do not, `over` those the mesh
+//! holds more than once) and `shells` how many connected pieces it has, corners
+//! welded to 1e-6 ft.
+//!
+//! One `vface` line for each of the four largest flat vertical faces (a primitive
 //! whose normals are one horizontal direction), `gross` the area inside its
 //! outer loop and `net` its area less its holes; `gross` is `nan` where its
 //! boundary does not close into loops one way each.
@@ -152,6 +158,49 @@ fn outer_loop_area(triangles: &[(Vec3, Vec3, Vec3)], n: [f64; 2]) -> f64 {
     if outer == 0.0 { f64::NAN } else { outer }
 }
 
+/// (open edges, over-full edges, shells) of the triangles, corners welded: an edge is open
+/// where its reverse is not in the mesh the same number of times, over-full where the mesh
+/// holds it more than once.
+fn closedness(triangles: &[(Vec3, Vec3, Vec3)]) -> (usize, usize, usize) {
+    let mut ids: HashMap<[i64; 3], usize> = HashMap::new();
+    let mut corner = |p: &Vec3| {
+        let key = (*p).map(|x| (x / WELD).round() as i64);
+        let next = ids.len();
+        *ids.entry(key).or_insert(next)
+    };
+    let mut directed: HashMap<(usize, usize), usize> = HashMap::new();
+    let mut parent: Vec<usize> = Vec::new();
+    let mut find = |parent: &mut Vec<usize>, mut i: usize| {
+        while parent[i] != i {
+            parent[i] = parent[parent[i]];
+            i = parent[i];
+        }
+        i
+    };
+    for (a, b, c) in triangles {
+        let (ia, ib, ic) = (corner(a), corner(b), corner(c));
+        while parent.len() <= ia.max(ib).max(ic) {
+            parent.push(parent.len());
+        }
+        for edge in [(ia, ib), (ib, ic), (ic, ia)] {
+            *directed.entry(edge).or_insert(0) += 1;
+            let (ra, rb) = (find(&mut parent, edge.0), find(&mut parent, edge.1));
+            if ra != rb {
+                parent[ra] = rb;
+            }
+        }
+    }
+    let open = directed
+        .iter()
+        .filter(|((from, to), n)| directed.get(&(*to, *from)).copied().unwrap_or(0) != **n)
+        .count();
+    let over = directed.values().filter(|n| **n > 1).count();
+    let shells = (0..parent.len())
+        .filter(|&i| find(&mut parent, i) == i)
+        .count();
+    (open, over, shells)
+}
+
 fn main() -> Result<()> {
     let path = std::env::args()
         .skip(1)
@@ -189,6 +238,7 @@ fn main() -> Result<()> {
         let mut volume = 0.0;
         let (mut low, mut high) = (f64::INFINITY, f64::NEG_INFINITY);
         let mut faces: Vec<(f64, f64, [f64; 2])> = Vec::new();
+        let mut every: Vec<(Vec3, Vec3, Vec3)> = Vec::new();
         for primitive in &meshes.primitives {
             let mut flat: Vec<(Vec3, Vec3, Vec3)> = Vec::new();
             let mut net = 0.0;
@@ -201,6 +251,7 @@ fn main() -> Result<()> {
                     continue;
                 };
                 volume += dot(a, cross(b, c)) / 6.0;
+                every.push((a, b, c));
                 for p in [a, b, c] {
                     low = low.min(p[2]);
                     high = high.max(p[2]);
@@ -232,6 +283,11 @@ fn main() -> Result<()> {
             "wall tag:{id} volume {:.4} z {low:.4} {high:.4} vfaces {}",
             f64::abs(volume),
             faces.len()
+        );
+        let (open, over, shells) = closedness(&every);
+        println!(
+            "wall tag:{id} closed {} open {open} over {over} shells {shells}",
+            u8::from(open == 0 && over == 0)
         );
         faces.sort_by(|x, y| y.0.total_cmp(&x.0));
         for (net, gross, n) in faces.iter().take(SHOWN_FACES) {

@@ -57,6 +57,12 @@ def parse(path):
                 volume=float(m.group(2)), low=float(m.group(3)), high=float(m.group(4)), vfaces=int(m.group(5))
             )
             continue
+        m = re.match(r"^wall tag:(\d+) closed (\d) open (\d+) over (\d+) shells (\d+)", line)
+        if m:
+            walls.setdefault(m.group(1), {}).update(
+                closed=m.group(2) == "1", open=int(m.group(3)), over=int(m.group(4)), shells=int(m.group(5))
+            )
+            continue
         m = re.match(r"^wall tag:(\d+) vface net (\S+) gross (\S+) normal (\S+) (\S+)", line)
         if m:
             walls.setdefault(m.group(1), {}).setdefault("faces", []).append((float(m.group(2)), float(m.group(3))))
@@ -76,9 +82,10 @@ def candidates(wall, width):
     faces = wall.get("faces") or []
     if faces:
         out["NetSideArea"] = max(net for net, _ in faces)
-        grosses = [gross for _, gross in faces if not math.isnan(gross)]
-        if grosses:
-            out["GrossSideArea"] = max(grosses)
+        # A face whose outer loop does not chain gives no gross area, and then none is claimed:
+        # the largest of the others would be a smaller face's.
+        if not any(math.isnan(gross) for _, gross in faces):
+            out["GrossSideArea"] = max(gross for _, gross in faces)
             if width is not None:
                 out["GrossVolume"] = width * out["GrossSideArea"]
     return out
@@ -98,6 +105,8 @@ def main(argv):
     print("  status " + ", ".join(f"{s} {n}" for s, n in sorted(statuses.items())))
     rows = collections.defaultdict(collections.Counter)
     examples = collections.defaultdict(list)
+    listing = "--list" in argv
+    gates = collections.defaultdict(collections.Counter)
     for tag, wall in sorted(meshed.items()):
         key = f"tag:{tag}"
         if entities.get(key) not in ("IfcWall", "IfcWallStandardCase"):
@@ -106,6 +115,7 @@ def main(argv):
         width = None if width_si is None or width_si[1] is None else width_si[1] / FOOT
         mine = candidates(wall, width)
         group = "whole" if tag in whole else "partial"
+        flags = []
         for name, dimension in DIMENSION.items():
             value = revit.get((key, SET, name))
             if value is None or value[1] is None:
@@ -115,19 +125,33 @@ def main(argv):
             candidate = mine.get(name)
             if candidate is None:
                 row["no candidate"] += 1
+                flags.append(f"{name}=none")
                 continue
             theirs = value[1] / FOOT**dimension
+            gate = ("closed" if wall.get("closed") else "open", "unbounded" if wall.get("unbounded") else "bounded")
             if equal(theirs, candidate, dimension):
                 row["equal"] += 1
+                gates[(name, gate)]["equal"] += 1
+                flags.append(f"{name}=equal")
             else:
                 row["different"] += 1
+                gates[(name, gate)]["different"] += 1
+                flags.append(f"{name}=DIFFERENT(Revit {theirs:.4f} mesh {candidate:.4f})")
                 if len(examples[name]) < 8:
                     examples[name].append((tag, group, theirs, candidate))
+        if listing and flags:
+            print(
+                f"wall tag:{tag} status {wall.get('status', '?')} closed {int(bool(wall.get('closed')))} open {wall.get('open', '?')} "
+                f"over {wall.get('over', '?')} shells {wall.get('shells', '?')} unbounded {wall.get('unbounded', '?')} "
+                f"diagnostics {wall.get('diagnostics', '?')} primitives {wall.get('primitives', '?')}: " + "; ".join(flags)
+            )
     for (name, group), row in sorted(rows.items()):
         print(
             f"{name} ({group} meshes): Revit writes {row['revit']}; candidate equal {row['equal']}, "
             f"different {row['different']}, no candidate {row['no candidate']}"
         )
+    for (name, gate), row in sorted(gates.items()):
+        print(f"{name} by gate ({gate[0]} mesh, {gate[1]} faces): equal {row['equal']}, different {row['different']}")
     for name, items in sorted(examples.items()):
         for tag, group, theirs, candidate in items:
             print(f"  different {name} tag:{tag} ({group}): Revit {theirs:.4f}, mesh {candidate:.4f}")
