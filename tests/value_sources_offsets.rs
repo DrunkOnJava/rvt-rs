@@ -653,6 +653,14 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
         },
     ),
     (
+        "PlacementOriginSource",
+        "stored_origin_no_opening",
+        Sourced {
+            all: &["instance_transform"],
+            any: &[],
+        },
+    ),
+    (
         "ThicknessSource",
         "wall_type_compound_structure",
         Sourced {
