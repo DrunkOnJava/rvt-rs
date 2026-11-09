@@ -12,6 +12,11 @@ description: >-
 # step cannot fetch is compiled from its published source with `--locked`, which
 # is the lockfile its authors released. The slower build runs only then.
 #
+# `--force` because a binary may already be in ~/.cargo/bin without cargo's
+# record of it (Swatinem/rust-cache restores one that install-action put there on
+# an earlier run), which `cargo install` refuses to overwrite: the forced-failure
+# run of this action's pull request failed on exactly that without it.
+#
 # A version that does not exist, or a crate that does not build, still fails the
 # job: the second step's exit status is the action's.
 inputs:
@@ -38,4 +43,4 @@ runs:
         VERSION: ${{ inputs.version }}
       run: |
         echo "::warning::GitHub's release host did not serve $CRATE $VERSION (#1585); building it from crates.io"
-        cargo install --locked "$CRATE" --version "$VERSION"
+        cargo install --locked --force "$CRATE" --version "$VERSION"
