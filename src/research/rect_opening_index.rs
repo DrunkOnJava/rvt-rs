@@ -1,7 +1,7 @@
 //! Version-gated decoder for the Revit 2024 60 B rows RE-15 (#89) read as
 //! an `ArcWallRectOpening` index.
 //!
-//! They are not wall openings (RE-375). On 2024 Core Interior every one of
+//! They are not wall openings (RE-376). On 2024 Core Interior every one of
 //! the 4,917 rows names two system elements (`ConceptualConstructionType`,
 //! `ConceptualSurfaceType`, `GStyleElem`, `FillPatternElem`,
 //! `LinePatternElem`, `MaterialElem`), and none of the 192 elements that

@@ -1,6 +1,6 @@
 - **The 2024 rows read as an `ArcWallRectOpening` index are no longer
   elements, and the export no longer claims their host join is missing
-  (RE-375).** Every id those rows name is a system element: on Core
+  (RE-376).** Every id those rows name is a system element: on Core
   Interior all 4,917 name `ConceptualConstructionType`,
   `ConceptualSurfaceType`, `GStyleElem`, `FillPatternElem`,
   `LinePatternElem` or `MaterialElem` records, and none names one of the

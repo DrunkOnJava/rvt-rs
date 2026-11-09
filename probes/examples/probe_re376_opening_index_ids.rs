@@ -1,4 +1,4 @@
-//! RE-375: the 2024 rows RE-15 read as an `ArcWallRectOpening` index name
+//! RE-376: the 2024 rows RE-15 read as an `ArcWallRectOpening` index name
 //! system elements, not wall openings.
 //!
 //! FACT: every 60-byte row [`ArcWallRectOpeningIndex`] finds names two
@@ -13,7 +13,7 @@
 //! wall cut step names with how many of them a row names:
 //!
 //! ```text
-//! cargo run --profile ci -p rvt-probes --example probe_re375_opening_index_ids -- model.rvt
+//! cargo run --profile ci -p rvt-probes --example probe_re376_opening_index_ids -- model.rvt
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -27,7 +27,7 @@ fn ids_named(pairs: &BTreeMap<(u32, u32), usize>, id: u64) -> bool {
 
 fn main() -> anyhow::Result<()> {
     let Some(path) = std::env::args().nth(1) else {
-        anyhow::bail!("usage: probe_re375_opening_index_ids FILE.rvt");
+        anyhow::bail!("usage: probe_re376_opening_index_ids FILE.rvt");
     };
     let mut rf = rvt::RevitFile::open(&path)?;
     let version = rf.basic_file_info()?.version;

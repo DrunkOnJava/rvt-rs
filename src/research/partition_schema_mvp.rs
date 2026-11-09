@@ -13,7 +13,7 @@
 //! Typed `Wall` / `Door` / `Window` come from the element record's own
 //! `BuiltInCategory` field, which names the category outright (#211).
 //! The 2024 rows [`crate::rect_opening_index`] decodes are not merged:
-//! they are not wall openings (RE-375). Every id they name is a system
+//! they are not wall openings (RE-376). Every id they name is a system
 //! element (`ConceptualConstructionType`, `GStyleElem`,
 //! `FillPatternElem`, ...), none is an element that cuts a wall, and
 //! a 2024 file's rectangular wall openings (`SWallRectOpening`) give

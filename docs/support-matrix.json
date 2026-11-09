@@ -652,8 +652,8 @@
       "area": "elements",
       "name": "Typed Door and Window discrimination from the ArcWallRectOpening index",
       "status": "unsupported",
-      "evidence": "RE-19: no reliable Door vs Window discriminator in the opening-index bytes; RE-375: the rows are not openings at all, every id they name being a system element",
-      "notes": "RE-21/#211 recovers Door and Window *instances* and RE-23/#222 binds them to their host wall, both from the partition element record (see element-record-instance-recovery and element-record-door-window-host-binding). The carrier this row names is not an opening index: on 2024 Core Interior all 4,917 rows name system elements (ConceptualConstructionType, GStyleElem, FillPatternElem and the like), none of the 192 elements that cut its walls, and Autodesk's 2024 rac_basic sample, whose walls hold two SWallRectOpenings, gives none (RE-375). The rows are no longer merged into iter_elements.",
+      "evidence": "RE-19: no reliable Door vs Window discriminator in the opening-index bytes; RE-376: the rows are not openings at all, every id they name being a system element",
+      "notes": "RE-21/#211 recovers Door and Window *instances* and RE-23/#222 binds them to their host wall, both from the partition element record (see element-record-instance-recovery and element-record-door-window-host-binding). The carrier this row names is not an opening index: on 2024 Core Interior all 4,917 rows name system elements (ConceptualConstructionType, GStyleElem, FillPatternElem and the like), none of the 192 elements that cut its walls, and Autodesk's 2024 rac_basic sample, whose walls hold two SWallRectOpenings, gives none (RE-376). The rows are no longer merged into iter_elements.",
       "user_impact": "None: doors, windows and wall openings come from element records and the walls' own records, never from these rows."
     },
     {

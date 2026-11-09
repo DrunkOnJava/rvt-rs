@@ -218,7 +218,7 @@ recovers, and additionally merges fail-closed partition MVP recovers for
 Revit 2024 — `Wall`, `Door`, `Window`, `Column`, `Floor` and `BuildingPad`
 instances from partition element records. The 2024 rows RE-15 read as an
 `ArcWallRectOpening` index are no longer merged: every id they name is a
-system element, not a wall opening (RE-375).
+system element, not a wall opening (RE-376).
 **Walls, doors, windows, columns and slabs now match Revit's own
 exporter exactly on a real project**: the Revit 2024 partition element-record
 header carries the element's `ElementId` and its `BuiltInCategory`,
@@ -1144,7 +1144,7 @@ suitable for fail-closed decode; both negatives stand, and the
 `schema_field_wall_instances` diagnostic still fires. What #211 and
 #222 solved is a different carrier — the partition element record.
 The opening-index rows are not openings at all: every id they name is a
-system element (RE-375), and they are no longer merged. AProperty*
+system element (RE-376), and they are no longer merged. AProperty*
 carriers are not present in production `iter_elements` / Global/Latest
 candidate scans on these corpora (#35 host joins idle). Floor↔ElemTable id binding is closed for the recovered
 slab set (every record-backed slab carries its ElementId), slab

@@ -1,8 +1,8 @@
-# RE-375 — The 2024 "ArcWallRectOpening index" names system elements, not wall openings
+# RE-376 — The 2024 "ArcWallRectOpening index" names system elements, not wall openings
 
 **Date:** 2026-11-08
 **Issues:** #89 (RE-15's opening index), #32 (RE-19's Door/Window negative); the `opening_index_to_ifc_openingelement_host_join` claim the B49 audit (`docs/archive/BACKLOG.md`) left "checked against what it asserts, not changed by default"; follows RE-15, RE-19, RE-321 and RE-338
-**Probe:** `probes/examples/probe_re375_opening_index_ids.rs`
+**Probe:** `probes/examples/probe_re376_opening_index_ids.rs`
 **Result:** negative for the carrier. The 60-byte rows `rect_opening_index` finds on Revit 2024 are not wall openings, so there is no host to join them to. Every id they name is a system element, none is an element that cuts a wall, and the rectangular wall openings of every other 2024 file measured give no row. The rows are no longer merged into `iter_elements`, and the export no longer claims the join as a missing feature.
 
 ## 0. The question
@@ -18,7 +18,7 @@ For each Revit 2024 file, the probe:
 - counts the native records of the classes `ArcWallRectOpening`, `SWallRectOpening` and `VWallRectOpening`;
 - reads every wall's (`SWall`, `ArcWall`) cut steps (`native_wall_cuts::wall_cut_steps`, RE-321), the steps that name the element cutting it, and counts by step kind how many of those elements any row names.
 
-Files: the six Revit 2024 projects held locally. `2024_Core_Interior.rvt` (magnetar, the CI project), Autodesk's `rac_basic_sample_project` and `rst_basic_sample_project` 2024, and the BIM4LCA office as built and at building permit and housing terrain (as `research/bim4lca-measure.tsv` pins them). Measured locally, with `cargo run --profile ci -p rvt-probes --example probe_re375_opening_index_ids -- <file>`.
+Files: the six Revit 2024 projects held locally. `2024_Core_Interior.rvt` (magnetar, the CI project), Autodesk's `rac_basic_sample_project` and `rst_basic_sample_project` 2024, and the BIM4LCA office as built and at building permit and housing terrain (as `research/bim4lca-measure.tsv` pins them). Measured locally, with `cargo run --profile ci -p rvt-probes --example probe_re376_opening_index_ids -- <file>`.
 
 ## 2. The rows name system elements
 

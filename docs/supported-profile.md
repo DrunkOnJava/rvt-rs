@@ -214,7 +214,7 @@ Area and an MEP space are written.
 - Semantic editing of a Revit file. `rvt-write` patches whole streams and
   preserves the rest byte for byte; it does not change model data.
 - Door/Window typing from the opening-index rows (RE-19; the rows name
-  system elements, not openings, RE-375) and Level ElementIds from the
+  system elements, not openings, RE-376) and Level ElementIds from the
   Formats schema (RE-20): both closed negative. Element records supply
   both instead.
 

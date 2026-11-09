@@ -5,7 +5,7 @@
 //!   production path).
 //! - Optional magnetar project corpus: ArcWalls, Levels and Materials
 //!   when `RVT_PROJECT_CORPUS_DIR` is set, and no 2024 opening-index rows,
-//!   which name system elements, not openings (RE-375).
+//!   which name system elements, not openings (RE-376).
 //!   Floors and rooms come from element records only, so a 2023 file
 //!   yields none.
 
@@ -336,7 +336,7 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
             );
         }
     }
-    // RE-375: the 2024 rows RE-15 read as an opening index name system
+    // RE-376: the 2024 rows RE-15 read as an opening index name system
     // elements (ConceptualConstructionType, GStyleElem, ...), none of the
     // elements that cut this file's walls, so none is an element.
     assert_eq!(
@@ -345,7 +345,7 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
             .filter(|e| e.class == "ArcWallRectOpening")
             .count(),
         0,
-        "RE-375: the opening-index rows are not openings"
+        "RE-376: the opening-index rows are not openings"
     );
     // Materials still surface from strings even when ArcWall standard
     // decode is version-gated off.
