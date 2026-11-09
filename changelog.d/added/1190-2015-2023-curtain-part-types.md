@@ -7,5 +7,6 @@
   `rac_advanced` 2015 to 2020, the 67 plates and 206 members of Vitoria's `ALD26
   Before` and of the held-out `ALD26 Project`. A plate's type object carries the
   ElementId of a plate in Revit's export, not the type's, which is the exporter's
-  convention. **A panel of these releases takes no material:** none of the 67
-  plates of `ALD26 Before` has the one a panel type's `m_renderStyleId` gives.
+  convention. A panel takes the material of the Curtain Panels category's Object
+  Styles where the category holds one, as Revit's export gives the 67 plates of
+  `ALD26 Before` (RE-377), and its type's `m_renderStyleId` otherwise.

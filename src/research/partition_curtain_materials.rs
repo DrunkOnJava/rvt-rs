@@ -106,6 +106,62 @@ fn native_render_styles(
     Ok(out)
 }
 
+/// The material the Object Styles give a built-in category, by its
+/// `BuiltInCategory` id (RE-377): the `m_materialElemId` of the `GStyle` of
+/// each graphics style (`GStyleElem`, a projection style and a cut style) whose
+/// `m_categoryId` is `category`, where every one of them holds the same one of
+/// `materials`. `None` where the category has no graphics style, a style holds
+/// none of `materials` (the unset value, or a material no name was read for), or
+/// two styles hold different ones. Errs where the native record path does not
+/// read the file's release.
+///
+/// Revit's own export gives the 67 plates of a Revit 2018 project, whose panel
+/// type's `m_renderStyleId` is another material, the material of the Curtain
+/// Panels category's two styles, and on every other model with plates the
+/// category holds none and Revit gives the type's.
+pub fn category_material(
+    rf: &mut RevitFile,
+    materials: &BTreeSet<u32>,
+    category: i64,
+) -> anyhow::Result<Option<u32>> {
+    let mut styles: Vec<Option<u32>> = Vec::new();
+    let options = native_document::Options {
+        selected_classes: BTreeSet::from(["GStyleElem".to_string()]),
+        releases: native_document::NATIVE_RELEASES,
+        ..native_document::Options::default()
+    };
+    native_document::extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let Some(root) = graph.objects.first() else {
+            return Ok(());
+        };
+        let of_category = root
+            .fields
+            .get("m_categoryId")
+            .and_then(|id| crate::native_metadata::identifier(id).ok())
+            == Some(category);
+        if root.class_name != "GStyleElem" || !of_category {
+            return Ok(());
+        }
+        let material = graph
+            .objects
+            .iter()
+            .find(|object| object.class_name == "GStyle")
+            .and_then(|style| style.fields.get("m_materialElemId"))
+            .and_then(|id| crate::native_metadata::identifier(id).ok())
+            .and_then(|id| u32::try_from(id).ok())
+            .filter(|material| materials.contains(material));
+        styles.push(material);
+        Ok(())
+    })?;
+    Ok(match styles.first() {
+        Some(Some(first)) if styles.iter().all(|style| *style == Some(*first)) => Some(*first),
+        _ => None,
+    })
+}
+
 /// Each mullion and panel type's material at +135 or +139 of its data
 /// object, by the type's ElementId.
 fn scan_offsets(rf: &mut RevitFile, materials: &BTreeSet<u32>) -> Result<BTreeMap<u32, u32>> {
