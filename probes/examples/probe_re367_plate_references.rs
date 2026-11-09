@@ -1,7 +1,8 @@
 //! RE-367 (#1520): what each curtain panel's reference list names, for a Revit
 //! 2015 to 2023 save, one line per panel: its ElementId, then each id its list
-//! names as `id`, `R` where the id is itself an element record and `-` where it
-//! is not, and `:<name>` where a name entry holds one.
+//! names as `id`, `R` where the id is itself an element record (with its
+//! `[cat <BuiltInCategory> class <tag>]`) and `-` where it is not, and `:<name>`
+//! where a name entry holds one.
 //!
 //! The 67 plates of Vitoria's `ALD26 Before` get one type from the rule that
 //! takes the one named id that is no record, where Revit's export gives them
@@ -51,8 +52,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             let has_record = by_id.contains_key(&id);
             let name = names.get(&id);
+            let kind = by_id
+                .get(&id)
+                .map(|r| format!("[cat {} class {}]", r.builtin_category, r.class_tag))
+                .unwrap_or_default();
             line.push_str(&format!(
-                " {id}:{}{}",
+                " {id}:{}{kind}{}",
                 if has_record { "R" } else { "-" },
                 name.map(|n| format!(":{n}")).unwrap_or_default()
             ));
