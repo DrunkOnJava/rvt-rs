@@ -23,7 +23,7 @@ By `probe_re365_i_sections_32`, each type's width, depth, web and flange against
 
 ## 3. The change
 
-`scan_length_places` reads either layout, and `type_i_sections_at` takes the narrow one on `I_SECTION_32BIT_REVIT_VERSIONS` (2017 to 2023). The 32-bit branch calls `attach_beam_sections`, for `StructuralFraming` only: a column's I section is placed from its transform, which is not measured on these releases. The rule that decides whether a beam's body holds its section (RE-103) is unchanged.
+`length_places_within` reads either layout (the 64-bit one keeps #1489's record-bounded value blocks, the 32-bit one ends blocks at marks alone, as measured here), and `type_i_sections_at` takes the narrow one on `I_SECTION_32BIT_REVIT_VERSIONS` (2017 to 2023). The 32-bit branch calls `attach_beam_sections`, for `StructuralFraming` only: a column's I section is placed from its transform, which is not measured on these releases. The rule that decides whether a beam's body holds its section (RE-103) is unchanged.
 
 ## 4. Bodies against a later save
 
