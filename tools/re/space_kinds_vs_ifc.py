@@ -92,6 +92,7 @@ ROOM_SOURCES = (
     "stored_solid",
     "stored_solid_faces",
     "stored_solid_approximate",
+    "stored_solid_edges",
     "record_box",
     "saved_mesh",
     "family_body",

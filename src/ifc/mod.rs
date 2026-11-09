@@ -867,6 +867,13 @@ pub struct ExportedModelDiagnostics {
     /// read as the room's.
     #[serde(default)]
     pub resolved_outline_spaces: usize,
+    /// Of the exported `IfcSpace`s, the rooms whose outline was read from the
+    /// edges of their stored solid, where neither the walk of RE-101 nor the
+    /// span of RE-316 reads one (`SpaceOutlineSource` is
+    /// `stored_solid_edges`, #90, RE-374): the outline of the solid's floor,
+    /// read only where the solid is a prism of it up to 4 ft above the floor.
+    #[serde(default)]
+    pub edge_outline_spaces: usize,
     /// Of the exported `IfcSpace`s, the rooms whose resolved outline is the
     /// boundary of a region, a column overlapping a wall having been taken
     /// off it, or falls up to 0.02 ft short of their record box on a side
@@ -4945,6 +4952,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut wall_profile_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_profile_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut resolved_outline_spaces = 0usize;
+    let mut edge_outline_spaces = 0usize;
     let mut approximate_outline_spaces = 0usize;
     let mut space_kinds = std::collections::BTreeMap::<String, usize>::new();
     let mut spaces_without_kind = 0usize;
@@ -5068,6 +5076,9 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                     Some(export_content::SPACE_OUTLINE_STORED_SOLID_APPROXIMATE) => {
                         approximate_outline_spaces += 1;
                     }
+                    Some(export_content::SPACE_OUTLINE_STORED_SOLID_EDGES) => {
+                        edge_outline_spaces += 1;
+                    }
                     _ => {}
                 }
             }
@@ -5130,6 +5141,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         wall_profile_sources,
         wall_profile_refusals,
         resolved_outline_spaces,
+        edge_outline_spaces,
         approximate_outline_spaces,
         space_kinds,
         spaces_without_kind,

@@ -246,7 +246,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (which nothing outside the file checks:\nRevit 2025 to 2027, and an Area drawn from lines whose partition copies\ndisagree), `area_boundary`, `area_boundary_joined` or `none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `stored_solid_edges`,\n`saved_mesh`, `family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (which nothing outside the file checks:\nRevit 2025 to 2027, and an Area drawn from lines whose partition copies\ndisagree), `area_boundary`, `area_boundary_joined` or `none`.",
               "type": [
                 "string",
                 "null"
@@ -1271,7 +1271,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (which nothing outside the file checks:\nRevit 2025 to 2027, and an Area drawn from lines whose partition copies\ndisagree), `area_boundary`, `area_boundary_joined` or `none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `stored_solid_edges`,\n`saved_mesh`, `family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (which nothing outside the file checks:\nRevit 2025 to 2027, and an Area drawn from lines whose partition copies\ndisagree), `area_boundary`, `area_boundary_joined` or `none`.",
               "type": [
                 "string",
                 "null"
@@ -2376,7 +2376,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (which nothing outside the file checks:\nRevit 2025 to 2027, and an Area drawn from lines whose partition copies\ndisagree), `area_boundary`, `area_boundary_joined` or `none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `stored_solid_edges`,\n`saved_mesh`, `family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (which nothing outside the file checks:\nRevit 2025 to 2027, and an Area drawn from lines whose partition copies\ndisagree), `area_boundary`, `area_boundary_joined` or `none`.",
               "type": [
                 "string",
                 "null"
@@ -2866,7 +2866,7 @@
               ]
             },
             "space_outline_source": {
-              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,\n`family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (which nothing outside the file checks:\nRevit 2025 to 2027, and an Area drawn from lines whose partition copies\ndisagree), `area_boundary`, `area_boundary_joined` or `none`.",
+              "description": "For a room or space, where its outline came from: `record_box`\n(the area of its box, not of the room), `stored_solid`,\n`stored_solid_faces`, `stored_solid_approximate`, `stored_solid_edges`,\n`saved_mesh`, `family_body`, and for an Area `area_plan_topology`,\n`area_plan_topology_unchecked` (which nothing outside the file checks:\nRevit 2025 to 2027, and an Area drawn from lines whose partition copies\ndisagree), `area_boundary`, `area_boundary_joined` or `none`.",
               "type": [
                 "string",
                 "null"
@@ -2936,7 +2936,7 @@
           "description": "One room.",
           "properties": {
             "area_square_feet": {
-              "description": "The plan area of the room's outline, where the outline is one read\nexactly (`space_outline_source` is `stored_solid`, `stored_solid_faces`\nor, for an Area, `area_plan_topology`, `area_plan_topology_unchecked`,\n`area_boundary` or `area_boundary_joined`). Absent for\n`record_box`, where the area of a box is not the area of a room, and for\n`stored_solid_approximate`.",
+              "description": "The plan area of the room's outline, where the outline is one read\nexactly (`space_outline_source` is `stored_solid`, `stored_solid_faces`,\n`stored_solid_edges` or, for an Area, `area_plan_topology`,\n`area_plan_topology_unchecked`, `area_boundary` or\n`area_boundary_joined`). Absent for\n`record_box`, where the area of a box is not the area of a room, and for\n`stored_solid_approximate`.",
               "format": "double",
               "type": [
                 "number",

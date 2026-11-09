@@ -1112,7 +1112,8 @@ fn property_readers(name: &str, value: &str) -> &'static [&'static str] {
         ec::SPACE_OUTLINE_SOURCE_PROPERTY => match value {
             ec::SPACE_OUTLINE_STORED_SOLID
             | ec::SPACE_OUTLINE_STORED_SOLID_FACES
-            | ec::SPACE_OUTLINE_STORED_SOLID_APPROXIMATE => &["room_solid_faces"],
+            | ec::SPACE_OUTLINE_STORED_SOLID_APPROXIMATE
+            | ec::SPACE_OUTLINE_STORED_SOLID_EDGES => &["room_solid_faces"],
             ec::SPACE_OUTLINE_RECORD_BOX => &[SELECTED_FRAME_READER],
             ec::SPACE_OUTLINE_SAVED_MESH => &["saved_graphics"],
             ec::SPACE_OUTLINE_AREA_BOUNDARY | ec::SPACE_OUTLINE_AREA_BOUNDARY_JOINED => &[

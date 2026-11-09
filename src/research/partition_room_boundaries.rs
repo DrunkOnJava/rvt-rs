@@ -95,12 +95,23 @@ pub const ROOM_OUTLINE_SOURCE_FACES: &str = "partition_room_solid_faces_resolved
 /// take the column off.
 pub const ROOM_OUTLINE_SOURCE_APPROXIMATE: &str = "partition_room_solid_faces_approximate";
 
+/// Value of the same field on a room outline read from the edges of its stored
+/// solid, where neither the walk nor the span reads one (#90, RE-374): the
+/// outline of the solid's floor, where the solid is a prism of it up to
+/// [`ROOM_PRISM_HEIGHT_FEET`] ([`edge_outline_at`]).
+pub const ROOM_OUTLINE_SOURCE_EDGES: &str = "partition_room_solid_edges";
+
+/// Releases on which a room's outline is read from its solid's edges (RE-374):
+/// those on which the edge layout is measured.
+pub const ROOM_SOLID_EDGES_REVIT_VERSIONS: &[u32] = &[2024];
+
 /// Whether `source` is a value of the profile source field that a room's
 /// outline from its stored solid carries.
 pub fn is_room_outline_source(source: &str) -> bool {
     source == ROOM_OUTLINE_SOURCE
         || source == ROOM_OUTLINE_SOURCE_FACES
         || source == ROOM_OUTLINE_SOURCE_APPROXIMATE
+        || source == ROOM_OUTLINE_SOURCE_EDGES
 }
 
 /// Releases this layout is measured on. On Revit 2026 and 2027 it is the
@@ -1151,6 +1162,387 @@ pub fn outline_of_solids_at(
     let mut used = Vec::new();
     for &at in headers {
         let Some(profile) = room_outline_at(buf, at, bbox) else {
+            continue;
+        };
+        match &found {
+            None => found = Some(profile),
+            Some(held) if *held == profile => {}
+            Some(_) => return None,
+        }
+        if want_used {
+            used.push(at);
+        }
+    }
+    found.map(|profile| (profile, used))
+}
+
+/// The bytes an edge of a room's solid starts with (#90, RE-374): the index
+/// of one face the edge bounds, a `u32` at +4, of the other at +8, and from +32
+/// eight `f64`: the first face's (u, v) at the edge's start, the second's, the
+/// first's at its end and the second's. A record is 113 bytes.
+pub const EDGE_TAG: [u8; 4] = [0x04, 0x82, 0x08, 0x00];
+
+/// The index of a room solid's first face. The solid's list of objects counts
+/// its faces, which take the indices from this one on, one each (RE-374).
+pub const FIRST_FACE_INDEX: u32 = 4;
+
+/// What a face record holds at +8 where it is not a plane or a cylinder
+/// [`face_at`] reads (a solid's floor and ceiling, usually), its index then a
+/// `u16` at +10. A plane's or a cylinder's record holds `u32 0` at +4 and its
+/// index, a `u32`, at +8 (RE-374).
+pub const UNREAD_FACE_MARK: u16 = 0x0546;
+
+/// How far past a solid's start its edges and faces are looked for: the
+/// largest solid measured, Snowdon Towers' room 2181757, ends 90,288 bytes on.
+const SOLID_RECORDS_WINDOW: usize = 0x4_0000;
+
+/// The most edges a solid may have to be read (RE-374): the largest measured
+/// has 419. A solid with more is left to the other readers.
+pub const SOLID_EDGES_MAX: usize = 4 * SOLID_FACES_MAX;
+
+/// How far above its floor a room's solid must hold no point but on its
+/// walls' vertical edges for the floor's outline to be read from its edges,
+/// feet (#90, RE-374). Below this height the solid is then a prism of that
+/// outline. Revit's own area of Snowdon Towers' room 2181757
+/// (`Vim.Room.Area`) is the solid's section at 4.0 ft above its floor
+/// (5177.493, within 0.001 ft² of it) and not at 3.9 ft (5177.449, 0.04 ft²
+/// under it) or at the floor (5172.857, 4.6 ft² under it): a 1-inch pocket and
+/// two features 3.93 ft up lie below it.
+pub const ROOM_PRISM_HEIGHT_FEET: f64 = 4.0;
+
+/// One edge of a room's solid (RE-374).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SolidEdge {
+    /// The indices of the two faces it bounds.
+    pub faces: [u32; 2],
+    /// Each face's (u, v) at two points of the edge: the first face's at the
+    /// first point, the second's, the first's at the second point, the
+    /// second's. On a straight edge the points are its ends. On an edge round
+    /// a cylinder they are not: they lie 1/k and 2/k of the face's angle in
+    /// from one end, k a whole number, on 11,419 of the 11,424 such sides
+    /// measured (RE-374), and a plane across the edge gives the same two
+    /// points.
+    pub uv: [[f64; 2]; 4],
+}
+
+/// A room solid's faces and edges, bounded by its list of objects (RE-374).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SolidTopology {
+    /// Every face, by index: the plane or cylinder [`face_at`] reads, or
+    /// `None` for one whose record it does not read.
+    pub faces: BTreeMap<u32, Option<RoomFace>>,
+    /// The edges, in the solid's order.
+    pub edges: Vec<SolidEdge>,
+}
+
+/// Where the list of objects of the solid that starts at `start` ends, and
+/// what it counts (see [`solid_object_count`]).
+fn solid_list(buf: &[u8], start: usize) -> Option<(usize, usize)> {
+    let end = buf.len().min(start.checked_add(SOLID_LIST_WINDOW)?);
+    let at = start + memchr::memmem::find(buf.get(start..end)?, &SOLID_LIST_TAG)?;
+    let count = le_bytes::u32_at(buf, at + 4)? as usize;
+    let lead = le_bytes::u32_at(buf, at + 8)?;
+    if lead != 4 || !(1..=RESOLVE_FACES_MAX).contains(&count) {
+        return None;
+    }
+    Some((count, at.checked_add(12 + 6 * count)?))
+}
+
+/// The index of the face record at `at`, and whether it is one [`face_at`]
+/// may read; `None` where the bytes there are not a face record's start.
+fn face_record_index(buf: &[u8], at: usize) -> Option<(u32, bool)> {
+    if le_bytes::u32_at(buf, at + 4)? == 0 {
+        return Some((le_bytes::u32_at(buf, at + 8)?, true));
+    }
+    (le_bytes::u16_at(buf, at + 8)? == UNREAD_FACE_MARK)
+        .then(|| le_bytes::u16_at(buf, at + 10).map(|index| (u32::from(index), false)))
+        .flatten()
+}
+
+/// The faces and edges of the solid whose header starts at `header` (#90,
+/// RE-374). Its faces follow its list of objects and its edges, one record for
+/// each index from [`FIRST_FACE_INDEX`] for as many as the list counts; the
+/// edges lie between the list and the first face, and each names two of those
+/// faces. `None` unless every face is found, there is an edge, no edge names a
+/// face the solid does not hold and there are no more than
+/// [`SOLID_EDGES_MAX`]. Bounding the solid by its list keeps the records of
+/// the element that follows it out: their indices start again from
+/// [`FIRST_FACE_INDEX`].
+pub fn solid_topology(buf: &[u8], header: usize) -> Option<SolidTopology> {
+    let start = solid_start(buf, header)?;
+    let (count, list_end) = solid_list(buf, start)?;
+    let window_end = buf.len().min(start.checked_add(SOLID_RECORDS_WINDOW)?);
+    let region = buf.get(list_end..window_end)?;
+    let last = FIRST_FACE_INDEX.checked_add(u32::try_from(count).ok()?)?;
+    let mut faces: BTreeMap<u32, Option<RoomFace>> = BTreeMap::new();
+    let mut first_face = None;
+    for offset in memchr::memmem::find_iter(region, &FACE_TAG) {
+        let at = list_end + offset;
+        let Some((index, readable)) = face_record_index(buf, at) else {
+            continue;
+        };
+        first_face.get_or_insert(at);
+        if !(FIRST_FACE_INDEX..last).contains(&index) || faces.contains_key(&index) {
+            break;
+        }
+        faces.insert(index, if readable { face_at(buf, at) } else { None });
+        if faces.len() == count {
+            break;
+        }
+    }
+    if faces.len() != count {
+        return None;
+    }
+    let first_face = first_face?;
+    let mut edges = Vec::new();
+    for offset in memchr::memmem::find_iter(buf.get(list_end..first_face)?, &EDGE_TAG) {
+        let at = list_end + offset;
+        let a = le_bytes::u32_at(buf, at + 4)?;
+        let b = le_bytes::u32_at(buf, at + 8)?;
+        let values: [f64; 8] = read_f64s(buf, at + 32)?;
+        if !faces.contains_key(&a) || !faces.contains_key(&b) || edges.len() == SOLID_EDGES_MAX {
+            return None;
+        }
+        edges.push(SolidEdge {
+            faces: [a, b],
+            uv: [
+                [values[0], values[1]],
+                [values[2], values[3]],
+                [values[4], values[5]],
+                [values[6], values[7]],
+            ],
+        });
+    }
+    (!edges.is_empty()).then_some(SolidTopology { faces, edges })
+}
+
+impl RoomFace {
+    /// The point of a plane at `uv`, model feet.
+    pub fn plane_point(&self, uv: [f64; 2]) -> [f64; 3] {
+        [0, 1, 2].map(|i| self.origin[i] + self.u[i] * uv[0] + self.v[i] * uv[1])
+    }
+
+    /// The height of a vertical cylinder at the distance `v` along its axis.
+    fn cylinder_height(&self, v: f64) -> Option<f64> {
+        let cylinder = self.cylinder?;
+        Some(self.origin[2] + cylinder.axis[2] * v)
+    }
+}
+
+impl SolidTopology {
+    /// The face of index `index`, where it was read.
+    fn face(&self, index: u32) -> Option<&RoomFace> {
+        self.faces.get(&index).and_then(Option::as_ref)
+    }
+
+    /// The ends of `edge` on its face `side` (0 or 1), where that face is a
+    /// plane that was read.
+    fn plane_ends(&self, edge: &SolidEdge, side: usize) -> Option<[[f64; 3]; 2]> {
+        let face = self.face(edge.faces[side])?;
+        if face.cylinder.is_some() {
+            return None;
+        }
+        Some([
+            face.plane_point(edge.uv[side]),
+            face.plane_point(edge.uv[side + 2]),
+        ])
+    }
+
+    /// The heights of the ends of `edge` on its face `side` (0 or 1), where
+    /// that face was read: a plane's points, or a vertical cylinder's
+    /// distances along its axis.
+    fn side_heights(&self, edge: &SolidEdge, side: usize) -> Option<[f64; 2]> {
+        let face = self.face(edge.faces[side])?;
+        let at = |uv: [f64; 2]| match face.cylinder {
+            Some(_) => face.cylinder_height(uv[1]),
+            None => Some(face.plane_point(uv)[2]),
+        };
+        Some([at(edge.uv[side])?, at(edge.uv[side + 2])?])
+    }
+
+    /// The heights of the ends of `edge`, read on the face across it from
+    /// its face `toward` where that one was read, and otherwise on `toward`.
+    fn edge_heights(&self, edge: &SolidEdge, toward: usize) -> Option<[f64; 2]> {
+        self.side_heights(edge, 1 - toward)
+            .or_else(|| self.side_heights(edge, toward))
+    }
+
+    /// The heights of the ends of every edge of face `index`, read on the face
+    /// itself, or `None` where it was not read.
+    fn vertex_heights(&self, index: u32) -> Option<Vec<f64>> {
+        self.face(index)?;
+        let mut heights = Vec::new();
+        for edge in &self.edges {
+            for side in 0..2 {
+                if edge.faces[side] == index {
+                    heights.extend(self.side_heights(edge, side)?);
+                }
+            }
+        }
+        Some(heights)
+    }
+}
+
+/// The plan outline of the floor of the solid whose header starts at `header`,
+/// read from its edges (#90, RE-374), or why there is none. The walk of RE-101
+/// and the span of RE-316 read a wall's plan edge from its face's uv box,
+/// which is the face's parameter range and not its outline where the face is
+/// not a rectangle, so a room with such a wall keeps its box; its edges give
+/// the wall's real ends.
+///
+/// The floor is the one face all of whose edges lie on the floor of `bbox`.
+/// Each of its edges is drawn as the wall it meets: a plane, between the
+/// edge's ends on it, or a vertical cylinder, as the chords of its arc over the
+/// face's whole angle (RE-334). The outline must close as the walk reads it,
+/// with no edge crossing another, and span `bbox` to [`BOX_TOLERANCE_FEET`].
+/// It is refused where the solid holds a face that is neither vertical nor
+/// horizontal (a face whose record is not read counts as horizontal only where
+/// all its edges lie at one height), an edge whose two planes give it different
+/// ends, a wall the floor meets that was not read,
+/// or any point, other than along a vertical edge, between its floor and
+/// [`ROOM_PRISM_HEIGHT_FEET`] above it: a raised floor, a step, a pocket or a
+/// bulkhead below that height, where the floor's outline is not the room's
+/// area. Every edge of such a solid is then a vertical line or lies at one
+/// height, so no point between those heights means the solid is a prism of
+/// the floor's outline up to that height.
+pub fn edge_outline_at(
+    buf: &[u8],
+    header: usize,
+    bbox: [f64; 6],
+) -> std::result::Result<PlanProfile, &'static str> {
+    let topology = solid_topology(buf, header).ok_or("no_topology")?;
+    let floor_z = bbox[2];
+    let near = |a: f64, b: f64| (a - b).abs() <= BOX_TOLERANCE_FEET;
+    for face in topology.faces.values().flatten() {
+        let upright = match face.cylinder {
+            Some(_) => face.vertical_cylinder_heights().is_some(),
+            None => !matches!(face.kind(), FaceKind::Other),
+        };
+        if !upright {
+            return Err("face_neither_vertical_nor_horizontal");
+        }
+    }
+    // Where both faces of an edge are planes, each gives the edge's ends; on 4
+    // of the BIM4LCA office's 5,094 such edges they do not agree, and the
+    // edges are then not read as one solid's (RE-374).
+    for edge in &topology.edges {
+        if let (Some(a), Some(b)) = (topology.plane_ends(edge, 0), topology.plane_ends(edge, 1)) {
+            let apart = (0..2).any(|end| (0..3).any(|i| !near(a[end][i], b[end][i])));
+            if apart {
+                return Err("edge_faces_disagree");
+            }
+        }
+    }
+    // The heights of each face's edges, read through the face across each.
+    let mut heights: BTreeMap<u32, Vec<f64>> = BTreeMap::new();
+    let mut unread_ends: BTreeMap<u32, usize> = BTreeMap::new();
+    for edge in &topology.edges {
+        for side in 0..2 {
+            match topology.edge_heights(edge, side) {
+                Some(ends) => heights.entry(edge.faces[side]).or_default().extend(ends),
+                None => *unread_ends.entry(edge.faces[side]).or_default() += 1,
+            }
+        }
+    }
+    let level = |values: &[f64]| {
+        let low = values.iter().copied().fold(f64::INFINITY, f64::min);
+        let high = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        (low, high)
+    };
+    for (index, face) in &topology.faces {
+        if face.is_some() {
+            continue;
+        }
+        let Some(values) = heights.get(index) else {
+            return Err("unread_face_not_placed");
+        };
+        let (low, high) = level(values);
+        if unread_ends.contains_key(index) || !near(low, high) {
+            return Err("unread_face_not_horizontal");
+        }
+    }
+    let floors: Vec<u32> = heights
+        .iter()
+        .filter(|(index, values)| {
+            !unread_ends.contains_key(*index)
+                && values.iter().all(|z| near(*z, floor_z))
+                && topology
+                    .face(**index)
+                    .is_none_or(|face| matches!(face.kind(), FaceKind::Horizontal(_)))
+        })
+        .map(|(index, _)| *index)
+        .collect();
+    let [floor] = floors.as_slice() else {
+        return Err("floor_not_one_face");
+    };
+    // No point of the solid between its floor and the prism height, but on a
+    // vertical edge: every end of every edge lies at the floor or above.
+    let low_band =
+        |z: f64| z > floor_z + BOX_TOLERANCE_FEET && z < floor_z + ROOM_PRISM_HEIGHT_FEET;
+    for (index, face) in &topology.faces {
+        let values = match face {
+            Some(_) => topology
+                .vertex_heights(*index)
+                .ok_or("face_heights_not_read")?,
+            None => heights.get(index).cloned().unwrap_or_default(),
+        };
+        if values.iter().any(|z| low_band(*z)) {
+            return Err("solid_not_a_prism_up_to_the_prism_height");
+        }
+    }
+    let mut lines: Vec<[f64; 4]> = Vec::new();
+    for edge in &topology.edges {
+        let Some(side) = edge.faces.iter().position(|index| index == floor) else {
+            continue;
+        };
+        let wall = topology
+            .face(edge.faces[1 - side])
+            .ok_or("floor_wall_not_read")?;
+        if wall.cylinder.is_some() {
+            let (low, _) = wall
+                .vertical_cylinder_heights()
+                .ok_or("floor_wall_not_read")?;
+            if !near(low, floor_z) {
+                return Err("floor_wall_not_on_the_floor");
+            }
+            lines.extend(wall.arc_segments().ok_or("floor_wall_not_read")?);
+        } else {
+            if matches!(wall.kind(), FaceKind::Horizontal(_)) {
+                return Err("floor_wall_not_read");
+            }
+            let ends = topology
+                .plane_ends(edge, 1 - side)
+                .ok_or("floor_wall_not_read")?;
+            if !ends.iter().all(|end| near(end[2], floor_z)) {
+                return Err("floor_wall_not_on_the_floor");
+            }
+            lines.push([ends[0][0], ends[0][1], ends[1][0], ends[1][1]]);
+        }
+        if lines.len() > PLAN_SEGMENTS_MAX {
+            return Err("too_many_segments");
+        }
+    }
+    snap_ends(&mut lines);
+    let profile = plan_profile_from_lines(&lines).ok_or("floor_edges_do_not_close")?;
+    if !profile.pieces.is_empty() || crosses(&lines) {
+        return Err("floor_edges_do_not_close");
+    }
+    profile_on_box(profile, bbox, 0.0).ok_or("outline_not_on_the_record_box")
+}
+
+/// The outline the solids whose headers are at `headers` give from their
+/// edges ([`edge_outline_at`]); where more than one does, every one must give
+/// the same. Also, when `want_used` asks, the headers of those solids.
+pub fn edge_outline_of_solids_at(
+    buf: &[u8],
+    headers: &[usize],
+    bbox: [f64; 6],
+    want_used: bool,
+) -> Option<(PlanProfile, Vec<usize>)> {
+    let mut found: Option<PlanProfile> = None;
+    let mut used = Vec::new();
+    for &at in headers {
+        let Ok(profile) = edge_outline_at(buf, at, bbox) else {
             continue;
         };
         match &found {

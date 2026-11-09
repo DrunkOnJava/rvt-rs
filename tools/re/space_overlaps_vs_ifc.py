@@ -4,8 +4,8 @@
 A room's outline lies inside the walls that bound it and beside the outlines of
 the rooms next to it. An outline that covers a wall's plan or another room's
 is not the room's. For each room rvt-rs writes with an outline read from its
-stored solid (`SpaceOutlineSource` `stored_solid`, `stored_solid_faces` or
-`stored_solid_approximate`), this scorer measures
+stored solid (`SpaceOutlineSource` `stored_solid`, `stored_solid_faces`,
+`stored_solid_approximate` or `stored_solid_edges`), this scorer measures
 
 - the area of the room's top surface that lies inside the top surfaces of the
   walls on the room's level (walls that span at least a foot of its height),
@@ -37,7 +37,12 @@ import plan_profiles_vs_ifc as plan
 from ifc_common import site_frame
 
 SET = "RvtElementRecordGeometry"
-ROOM_SOURCES = ("stored_solid", "stored_solid_faces", "stored_solid_approximate")
+ROOM_SOURCES = (
+    "stored_solid",
+    "stored_solid_faces",
+    "stored_solid_approximate",
+    "stored_solid_edges",
+)
 SHRINK_FEET = 0.02
 LEVEL_FEET = 1.0
 

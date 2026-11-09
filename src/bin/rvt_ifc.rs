@@ -973,6 +973,13 @@ fn export_summary(diagnostics: &ExportDiagnostics, has_sidecar: bool, family: bo
                 exported.resolved_outline_spaces
             ));
         }
+        // RE-374 (#90): rooms read from their solid's edges.
+        if exported.edge_outline_spaces > 0 {
+            lines.push(format!(
+                "  {} rooms take the outline of their stored solid's floor, read from its edges where neither the walk nor the span closed it (SpaceOutlineSource stored_solid_edges)",
+                exported.edge_outline_spaces
+            ));
+        }
         if exported.approximate_outline_spaces > 0 {
             lines.push(format!(
                 "  {} rooms take an approximate outline, a column that overlaps a wall taken off it or up to 0.02 ft short of their record box on a side: the area is within about 1% of the space's, not 0.1% (SpaceOutlineSource stored_solid_approximate)",
