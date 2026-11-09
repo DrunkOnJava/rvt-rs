@@ -1,0 +1,10 @@
+# Held-out Revit projects with their release's own IFC export, sealed for the final 1.0 check
+# (W5 in docs/release-1.0-criteria.md, #408, #1565). A pair listed here is never fetched, opened
+# or measured before that check, so its first measurement is the check itself.
+# tools/ci/check_sealed_holdout.py fails CI when any file other than this one holds one of the
+# URLs or hashes below, or when any workflow, script or code other than
+# tools/ci/seal-holdout-pair.sh and the check names this file. tools/ci/seal-holdout-pair.sh adds
+# a line when a pair arrives: it downloads both files, hashes and counts them, deletes them and
+# reads nothing else from them.
+# Columns, tab-separated: release, name, rvt_url, rvt_sha256, rvt_bytes, ifc_url, ifc_sha256,
+# ifc_bytes, licence (Apache-2.0, MIT or CC-BY-4.0), contributor (GitHub login), received (date).

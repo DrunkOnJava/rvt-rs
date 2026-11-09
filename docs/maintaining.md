@@ -648,6 +648,31 @@ Measure's `ifc.sha256` is what says that an export is identical.
   `neutral`, fail is `failure`: a red check on the measured commit, which an agent does not arm over
   and the watcher counts as failing, as intended.
 
+## Sealed held-out pairs (W5, #1565)
+
+W5 of `docs/release-1.0-criteria.md` counts a held-out pair only when its first
+measurement meets W4, W6 and W7, so a pair that arrives before those pass on the
+reference models is sealed until the final 1.0 check, never fetched or opened
+before it.
+
+- **When a pair arrives** (a contributor's `.rvt` and its release's own IFC4
+  export, of Revit 2024 to 2027, under Apache-2.0, MIT or CC BY 4.0), seal it:
+  `tools/ci/seal-holdout-pair.sh RELEASE NAME RVT_URL IFC_URL LICENCE CONTRIBUTOR`.
+  It downloads both files to a temporary directory, hashes and counts them,
+  deletes them and adds a row to `research/sealed-holdout-models.tsv`. Do not
+  open either file, run a probe on it or read its IFC, here or on a runner.
+  Commit the row in a pull request of its own and thank the contributor without
+  quoting anything from the files.
+- **The guard** is the PII guard job's `tools/ci/check_sealed_holdout.py`. It
+  fails on a malformed row, on any tracked file other than the registry that
+  holds one of its URLs or hashes, and on any workflow, script or code that
+  names the registry, so no Measure run can fetch a sealed pair. Docs may name
+  the registry; they may not hold its URLs.
+- **The final check** is the registry's only reader still to come. It is added
+  when W4, W6 and W7 pass on the reference models, in a pull request that adds
+  its Measure input to the guard's `ALLOWED`. It measures each pair once, counts
+  only, and moves the pairs it measured to `research/holdout-models.tsv`, used.
+
 ## Measure's score cache
 
 Measure runs about 40 scorers and four schema checks on every model, and most
