@@ -661,6 +661,14 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
         },
     ),
     (
+        "ProfileStubSource",
+        "*",
+        Sourced {
+            all: &[],
+            any: &["sketch_lines", "sketch_list"],
+        },
+    ),
+    (
         "ThicknessSource",
         "wall_type_compound_structure",
         Sourced {

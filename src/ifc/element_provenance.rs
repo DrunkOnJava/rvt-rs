@@ -1090,6 +1090,9 @@ fn property_readers(name: &str, value: &str) -> &'static [&'static str] {
             ec::WALL_END_AT_JOINED_WALLS_BODY_END_SOURCE => WALL_END_READERS,
             _ => &[],
         },
+        // RE-358: a wall's elevation profile carried on to its end is drawn
+        // from the profile's sketch, its lines and its Sketch's curve list.
+        ec::WALL_PROFILE_SOURCE_PROPERTY => &["sketch_lines", "sketch_list"],
         ec::PLACEMENT_AXES_SOURCE_PROPERTY => match value {
             ec::OPENING_PLACEMENT_AXES_SOURCE => PLACEMENT_READERS,
             _ => &[],
