@@ -2564,4 +2564,4 @@ A duct's own `RbsDuctCurve` record has a pipe's shape (RE-370): its type in `m_i
 
 ## Addendum — RE-367 a curtain part's type and family on Revit 2015 to 2023 (2026-11-06)
 
-On Revit 2015 to 2023 a curtain mullion's or panel's type is the one id in its reference list with a name entry and no record of its own, and the type's data names its family as a `u32` at +265 past the ElementId and four bytes. Its material is the type's `m_renderStyleId` (RE-166), which equals its 2024 save's on every type both hold. See `reports/element-framing/RE-367-2015-2023-curtain-part-types.md`.
+On Revit 2015 to 2023 a curtain mullion's or panel's type is the one id in its reference list with a name entry and no record of its own, and the type's data names its family as a `u32` at +265 past the ElementId and four bytes. A mullion's material is the type's `m_renderStyleId` (RE-166), which equals its 2024 save's on every type both hold; a panel of these releases takes none, since none of the 67 plates of Revit's export of Vitoria's `ALD26 Before` has the material it gives. See `reports/element-framing/RE-367-2015-2023-curtain-part-types.md`.
