@@ -187,7 +187,8 @@ the four levels a file can reach are in the
   IFC2X3 export (#1261); rooms take off the round columns their solids hold
   (#1354); floor voids tagged as Revit tags them (#1165); and the opt-in
   `rvt-ifc --family-extrusions`, measured on 2024 and 2025 (#156).
-- **0.16.0, 2026-11-08.** Revit 2015 to 2023 beams along their location lines,
+- **0.16.1, 2026-11-09** (the `v0.16.0` tag was never published, #1569).
+  Revit 2015 to 2023 beams along their location lines,
   walls joined by their join lists and angled walls along their lines, pipes
   with their types, cylinders and ports, `Constraints` Level parameters and
   `Phase Created`, and Revit 2015 files following the export phase (#1190,
@@ -207,8 +208,8 @@ the four levels a file can reach are in the
 
 ### 0.17.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.16.0, moved from the
-0.16.0 milestone when 0.16.0 shipped. Each
+The geometry and element-data work that continues after 0.16.1, moved from the
+0.16.0 milestone when 0.16.1 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
@@ -219,7 +220,7 @@ with no oracle (#884, #885), the openings on releases other than 2024 and 2025
 (#227), room boundaries whose solid does not
 close (#90), beams (#94), MEP equipment and routes (#96) and ports and pipes outside
 Revit 2024 and 2025 (#869), geometry and properties on Revit 2015 to 2023, 2026 and 2027
-beyond what 0.16.0 reads (#1190), the sketch-to-solid pipeline (#156), and the Snowdon slab
+beyond what 0.16.1 reads (#1190), the sketch-to-solid pipeline (#156), and the Snowdon slab
 that is not in Revit's export (#309); and the export time on Revit 2015 to 2023
 (#1335). Element data: instance and type parameters with units and precedence
 (#35, #155) and the element-record fields that carry them (#223), written to

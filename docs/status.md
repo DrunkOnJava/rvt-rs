@@ -1442,8 +1442,9 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.16.0** (2026-11-08) is the latest release: crates.io (`rvt` and
-  `rvt-rs-mcp`, both published from the tag), the `rvt` wheels on PyPI,
+- **v0.16.1** (2026-11-09) is the latest release, and the first of 0.16:
+  the `v0.16.0` tag was never published (#1569). It is on crates.io (`rvt`
+  and `rvt-rs-mcp`, both published from the tag), the `rvt` wheels on PyPI,
   GitHub Release archives for Linux, macOS and Windows, and the container
   image, CHANNELS_CHECKED ([`install.md`](install.md)). It reads Revit 2015 to
   2023 beams, walls, pipes, Level parameters and phases, and Revit 2026 and
@@ -1451,8 +1452,8 @@ prints it from any installed build.
   properties. All of these are held to the same project's other save and
   scored on held-out projects only, as counts. It also writes Areas of 2025
   to 2027 with every `IfcSpace`'s kind, places doors and windows on Revit's
-  axes, and holds IFC4's EXPRESS rules. `[0.16.0]` in
-  [`CHANGELOG.md`](../CHANGELOG.md) gives what each change measures and what
+  axes, and holds IFC4's EXPRESS rules. `[0.16.1]` and `[0.16.0]` in
+  [`CHANGELOG.md`](../CHANGELOG.md) give what each change measures and what
   it does not.
 - **v0.15.0** (2026-11-05) says, on request, where each decoded element and the values
   its body took were read from, down to the byte, and why each element,
@@ -1537,7 +1538,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.16.0 has, and is ahead of it by the fragments
+- `main` has everything v0.16.1 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
