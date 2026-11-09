@@ -40,7 +40,7 @@ It runs only where neither the walk nor the span reads the room, and only on Rev
 
 ## 4. Why 4 ft
 
-Snowdon Towers' room 2181757 has a floor of 5172.857 ft², a 1-inch pocket in it and two features 3.93 ft up. Revit's area of it (`Vim.Room.Area`, 5177.492 ft²) is neither the floor nor the record box: it is the solid's horizontal section 4.0 ft above the floor (5177.493). At 3.9 ft the section is 5177.449. Across the stepped rooms the same holds where a height decides: 828537 matches Revit's area at any section from 2 ft up, 2181762 at 6 ft, and 828548 at no height (both local, against the VIM).
+Snowdon Towers' room 2181757 has a floor of 5172.857 ft², a 1-inch pocket in it and two features 3.93 ft up. Revit's area of it (`Vim.Room.Area`, local only) is neither the floor, which is 4.6 ft² under it, nor the record box: it is the solid's horizontal section 4.0 ft above the floor (5177.493), within 0.001 ft². At 3.9 ft the section is 5177.449, 0.04 ft² under it. Across the stepped rooms the same holds where a height decides: 828537 matches Revit's area at any section from 2 ft up, 2181762 at 6 ft, and 828548 at no height (both local, against the VIM).
 
 So the floor's outline is the room's area only where the solid does not change between the floor and that height, which is what the rule requires. 4 ft is measured on 2181757 only: where the height a room's area is taken at is stored, and the elevation it is measured from, are not decoded. Until they are, a room the rule would need that height for keeps its box. The four stepped Snowdon Towers rooms do: each is refused first because a face whose record is not read has edges at more than one height, and 2181757's features 3.93 ft up would refuse it again at the prism check. On the `rme` samples the prism check is the one that refuses 46 of the 49 rooms on their box on each save.
 
@@ -61,7 +61,7 @@ Measure run [42583042107](https://github.com/DrunkOnJava/rvt-rs/actions/runs/425
 The edges never give an outline that differs from one `main` reads. The two they add are both on Revit 2024:
 
 - **The office at building permit, room 3095831** (CORRIDOR 030): 1864.737 ft², against 1864.74 ft² for the same space in Revit's IFC4 export of that file (`space_profiles_vs_ifc.py`; the box was 6642.03).
-- **Snowdon Towers, room 830902**: 304.059 ft², against Revit's 304.058 (`Vim.Room.Area`, a later save, local only; the box was 808.665).
+- **Snowdon Towers, room 830902**: 304.059 ft², within 0.001 ft² of Revit's (`Vim.Room.Area`, a later save, local only; the box was 808.665).
 
 Of the refusals, 564 are rooms whose solid has a point between its floor and 4 ft, 179 have a face whose record is not read and whose edges do not lie at one height, 27 have floor edges that do not close, 2 have a sloped face and 1 an edge its planes place differently. Run [42580514237](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42580514237), at `dbe56298` before the plane check, gave the same comparison, the one room the check refuses having failed to close there. On the 2015 to 2023 and 2025 to 2027 releases the edges add no room on the models measured, so the rule is not read there.
 

@@ -9,8 +9,9 @@
 
   The BIM4LCA office's room 3095831 at building permit, which kept its box,
   is now 1864.737 ft² against the 1864.74 of Revit's IFC4 export, and
-  Snowdon Towers' room 830902 304.059 ft² against Revit's 304.058 (the
-  model's later VIM edition, local only). On every room of Autodesk's samples,
+  Snowdon Towers' room 830902 304.059 ft², within 0.001 ft² of Revit's area
+  for it (`Vim.Room.Area` in the model's later VIM edition, local only). On
+  every room of Autodesk's samples,
   the office and the Revit 2025 models that the walk or the span already
   reads and this rule accepts, the edges give the same outline, to 0.01 ft²
   in area and 0.001 ft on its extent.
@@ -19,5 +20,6 @@
   the solid holds no point between its floor and 4 ft above it except on a
   vertical edge, so that a raised floor, a step, a pocket or a low bulkhead
   refuses it. Snowdon Towers' room 2181757 shows why: its floor is 5172.857
-  ft², its section 4 ft above the floor is 5177.493, and Revit's area in the
-  model's later VIM edition is 5177.492. It keeps its box.
+  ft², its section 4 ft above the floor is 5177.493, and Revit's area for it
+  (`Vim.Room.Area` in the model's later VIM edition) is within 0.001 ft² of
+  that section and 4.6 ft² over the floor. It keeps its box.

@@ -1204,9 +1204,10 @@ pub const SOLID_EDGES_MAX: usize = 4 * SOLID_FACES_MAX;
 /// walls' vertical edges for the floor's outline to be read from its edges,
 /// feet (#90, RE-374). Below this height the solid is then a prism of that
 /// outline. Revit's own area of Snowdon Towers' room 2181757
-/// (`Vim.Room.Area`, 5177.492 ft²) is the solid's section at 4.0 ft above
-/// its floor (5177.493) and not at 3.9 ft (5177.449) or at the floor
-/// (5172.857): a 1-inch pocket and two features 3.93 ft up lie below it.
+/// (`Vim.Room.Area`) is the solid's section at 4.0 ft above its floor
+/// (5177.493, within 0.001 ft² of it) and not at 3.9 ft (5177.449, 0.04 ft²
+/// under it) or at the floor (5172.857, 4.6 ft² under it): a 1-inch pocket and
+/// two features 3.93 ft up lie below it.
 pub const ROOM_PRISM_HEIGHT_FEET: f64 = 4.0;
 
 /// One edge of a room's solid (RE-374).
