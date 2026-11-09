@@ -4231,6 +4231,16 @@ pub(crate) fn build_export_diagnostics_and_decisions(
              opening in Revit is its opening alone in Revit's export (#1247)."
         ));
     }
+    // RE-354: a type whose family type table entries for a Fire Rating or a
+    // Manufacturer disagree gets neither copy.
+    let disagreeing_type_texts = rf.disagreeing_type_texts().len();
+    if disagreeing_type_texts > 0 && mode != ExportDiagnosticsMode::Placeholder {
+        warnings.push(format!(
+            "{disagreeing_type_texts} type text parameter(s) (Fire Rating or Manufacturer) are left \
+             out because the copies of a family type table's entry, or an entry and the id-first \
+             form, give different values (RE-354)."
+        ));
+    }
     // RE-312: a family instance written as a space whose family draws no
     // model form has no 3D body, and is left out as Revit's own export leaves
     // it out. A check that could not run keeps every instance.
