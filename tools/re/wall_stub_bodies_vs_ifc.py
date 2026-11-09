@@ -20,7 +20,9 @@ Usage:
 
     python3 tools/re/wall_stub_bodies_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc>
 
-The columns the hosts have cut partners with (`PARTNERS`) are listed the same way.
+The columns the hosts have cut partners with (`PARTNERS`) are listed the same way,
+and so are the walls of #1067 a floor covers all but a small piece of
+(`STUB_WALLS`, RE-320 section 4).
 
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
@@ -37,6 +39,15 @@ HOSTS = {
     2178914, 2178961, 2180467, 2180468, 2181428, 2181501, 2293116, 2294996, 2491432,
     2495664, 2496491, 2500627, 2724158, 2964905, 3449245, 3450274, 3458395, 3458466,
     3458467, 3458528, 3458559, 1378125, 1416796, 1341937, 1348324,
+}
+
+# The office walls whose plan a floor or roof covers all but a small piece of
+# (RE-320 section 4, #1067): 3004978's stub, inside the wall it abuts, Revit
+# cuts with the rest of the wall; the others' pieces Revit keeps at the wall's
+# full height. Listed so their bodies can be read beside their saved meshes.
+STUB_WALLS = {
+    3004978, 1457415, 1892033, 3123954, 1488456, 1348323, 3039425, 1630966,
+    1429758, 2984235, 2984610, 2992096, 1478932, 1493966,
 }
 
 # The elements those walls have a CutPairGStep or a CleanPairGStep with, on the
@@ -73,7 +84,7 @@ def report(name, path):
             tag = int(wall.Tag)
         except (TypeError, ValueError):
             continue
-        if tag not in HOSTS | PARTNERS or wall.Representation is None:
+        if tag not in HOSTS | PARTNERS | STUB_WALLS or wall.Representation is None:
             continue
         mesh = body_mesh(settings, wall)
         if mesh is None:

@@ -5,7 +5,10 @@
 //! away where Revit cuts them and kept where it keeps them (RE-335 section 3:
 //! 2098938 draws the strip over its curtain wall, 2103576 the strip and two end
 //! stubs), so its horizontal faces tell which hosts keep their stubs where no
-//! other record read so far does (`probe_1385_cut_partners`, RE-340).
+//! other record read so far does (`probe_1385_cut_partners`, RE-340). It prints
+//! the office walls of `STUB_WALLS` too (#1067): whether their saved meshes
+//! keep the small pieces of their plan a floor leaves, as Revit's bodies do on
+//! all but 3004978.
 //!
 //! For each such wall it prints, in the form `tools/re/wall_stub_bodies_vs_ifc.py`
 //! prints a body, in feet and in the document frame:
@@ -28,6 +31,15 @@ use rvt::research::native_saved_scene::extract_at_detail;
 use std::collections::{BTreeMap, BTreeSet};
 
 const WALLS: [&str; 2] = ["SWall", "ArcWall"];
+
+/// The BIM4LCA office's walls whose plan a floor or roof covers all but a small
+/// piece of (RE-320 section 4, #1067), printed as the hosts are: 3004978's
+/// stub, inside the wall it abuts, Revit cuts with the rest of the wall, and
+/// the others' pieces it keeps at the wall's full height.
+const STUB_WALLS: [u64; 14] = [
+    3004978, 1457415, 1892033, 3123954, 1488456, 1348323, 3039425, 1630966, 1429758, 2984235,
+    2984610, 2992096, 1478932, 1493966,
+];
 const DETAIL: i64 = 3;
 const HORIZONTAL: f64 = 0.999;
 
@@ -80,6 +92,13 @@ fn main() -> Result<()> {
     };
     extract_graphs(&mut rf, &walls, |record| hosts_of(record, &mut hosts))?;
     println!("hosts {}", hosts.len());
+    // Only the ids the file declares; another model's walls are not these.
+    let declared: BTreeSet<u64> =
+        rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?)
+            .into_iter()
+            .map(u64::from)
+            .collect();
+    hosts.extend(STUB_WALLS.iter().filter(|id| declared.contains(*id)));
     if hosts.is_empty() {
         return Ok(());
     }
