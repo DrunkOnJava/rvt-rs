@@ -55,6 +55,27 @@ fn main() -> anyhow::Result<()> {
             );
         }
     }
+    for owner in OWNERS {
+        println!("declared {owner} {}", declared.contains(&owner));
+    }
+    // Where each owner's id and the Width parameter sit in each partition,
+    // to tell an entry that is missing from one the scan does not attribute.
+    let width = WINDOW_WIDTH_PARAMETER.to_le_bytes();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let bytes = inflated.bytes();
+        let widths: Vec<usize> = memchr::memmem::find_iter(bytes, &width).collect();
+        for owner in OWNERS {
+            for at in memchr::memmem::find_iter(bytes, &owner.to_le_bytes()) {
+                let next = widths.iter().find(|&&w| w > at).map(|&w| w - at);
+                if next.is_some_and(|gap| gap < 4096) {
+                    println!("near {stream} {owner} id@{at} width+{}", next.unwrap_or(0));
+                }
+            }
+        }
+    }
     let sizes = type_door_sizes(&mut rf, version, &owners);
     for owner in OWNERS {
         match sizes.get(&owner) {
