@@ -13,7 +13,8 @@ line of the loop's top edge there. For each wall whose loop lies in a plane alon
     revit tag:<Tag> loop top at <axis> <s> <z>         (the loop's highest point at s, where it reaches)
     revit tag:<Tag> extension at <axis> <s> <z>        (the loop's top edge at that end, run on to s)
 
-Coordinates are in feet in the model's frame, as the probe prints them.
+Coordinates are in feet in rvt-rs's internal frame, as the probe prints them: Revit's export is taken out of its
+IfcSite placement first (`ifc_common.site_frame`).
 
 Usage:
 
@@ -27,8 +28,9 @@ import sys
 
 import ifcopenshell
 import ifcopenshell.geom
+import numpy as np
 
-FOOT = 0.3048
+from ifc_common import site_frame
 AT_END = 1e-4
 INSIDE = 0.002
 
@@ -57,8 +59,9 @@ def parse_probe(path):
     return walls
 
 
-def wall_mesh(settings, product):
-    """(vertices in feet as 3-tuples, triangles as index triples) of the Body of `product`, or None."""
+def wall_mesh(settings, product, frame):
+    """(vertices in feet of the internal frame as 3-tuples, triangles as index triples) of the Body of `product`,
+    or None."""
     if product.Representation is None:
         return None
     body = next((r for r in product.Representation.Representations if r.RepresentationIdentifier == "Body"), None)
@@ -68,11 +71,11 @@ def wall_mesh(settings, product):
         geometry = ifcopenshell.geom.create_shape(settings, product, body).geometry
     except Exception:
         return None
-    raw = [v / FOOT for v in geometry.verts]
     faces = list(geometry.faces)
-    if not raw or not faces:
+    if len(geometry.verts) == 0 or not faces:
         return None
-    verts = [(raw[i], raw[i + 1], raw[i + 2]) for i in range(0, len(raw), 3)]
+    feet = frame(np.array(geometry.verts, dtype=float).reshape(-1, 3))
+    verts = [(float(x), float(y), float(z)) for x, y, z in feet]
     return verts, [(faces[k], faces[k + 1], faces[k + 2]) for k in range(0, len(faces), 3)]
 
 
@@ -136,6 +139,7 @@ def main(argv):
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     model = ifcopenshell.open(argv[2])
+    frame = site_frame(model)
     by_tag = {}
     for wall in model.by_type("IfcWall"):
         tag = getattr(wall, "Tag", None)
@@ -159,7 +163,7 @@ def main(argv):
         if wall is None:
             print(f"revit tag:{w['tag']} not in Revit's export")
             continue
-        mesh = wall_mesh(settings, wall)
+        mesh = wall_mesh(settings, wall, frame)
         if mesh is None:
             print(f"revit tag:{w['tag']} no body")
             continue
