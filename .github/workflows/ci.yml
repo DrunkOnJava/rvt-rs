@@ -264,10 +264,14 @@ jobs:
         if: runner.os == 'Windows'
         continue-on-error: true
         uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+        with:
+          version: v0.0.0-1572-timing # temporary: no sccache, to time the build without it
       - name: Set up sccache again (Windows)
         if: runner.os == 'Windows' && steps.sccache.outcome == 'failure'
         continue-on-error: true
         uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+        with:
+          version: v0.0.0-1572-timing # temporary: no sccache, to time the build without it
       # The cache backend can refuse sccache (2026-10-30: "ServerBusy: Egress
       # is over the account limit"), and then every rustc call through the
       # wrapper fails. So the server is started here, kept up for the job,
