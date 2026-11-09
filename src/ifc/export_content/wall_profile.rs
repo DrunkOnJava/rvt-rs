@@ -77,21 +77,31 @@
 //!
 //! RE-151's regions, each between a run of the profile's lines and the
 //! profile's bounding rectangle, make the wall's shape, but they are not what
-//! Revit's export writes as openings. Revit writes the wall's body as the profile
-//! (a tessellation) and an opening only for each pocket of the profile against
-//! its convex hull ([`crate::partition_schema_mvp::elevation_profile_pockets`]):
-//! none on a straight sloped top; on the terrain wall 1387731 the first three
-//! lines of its top closed by a chord; and on Core Interior's wall 55840 the
-//! stretch of its stepped top closed through the corner of the profile's
-//! rectangle that the hull's edge cuts off (301.65 ft2, not the 71.23 ft2 the
-//! stretch and the edge hold). [`cut_profiles_from_bodies`] runs
-//! after every pass that reads a wall's body or its openings. For a wall whose
-//! regions can all be made into solids it takes them out of the wall's body as a
-//! boolean difference, writes none of them as openings, and writes its pockets
-//! instead, so that the openings a wall carries are Revit's and its shape is
-//! the same. A wall it cannot do this for keeps the regions as its openings, as
-//! before, and its pockets are not written. The wall's `ProfileCutSource` says
-//! which it is.
+//! Revit's export writes as openings. Revit writes an opening only for each
+//! pocket of the profile against its convex hull
+//! ([`crate::partition_schema_mvp::elevation_profile_pockets`]): none on a
+//! straight sloped top; on the terrain wall 1387731 the first three lines of its
+//! top closed by a chord; and on Core Interior's wall 55840 the stretch of its
+//! stepped top closed through the corner of the profile's rectangle that the
+//! hull's edge cuts off (301.65 ft2, not the 71.23 ft2 the stretch and the edge
+//! hold). [`cut_profiles_from_bodies`] runs after every pass that reads a wall's
+//! body or its openings, and deals with each region by what Revit writes:
+//!
+//! - A region that a pocket equals (Core Interior's 55840 and 4 of the 7 walls
+//!   with pockets of Snowdon Towers, local only) is that pocket: the wall keeps
+//!   its box, and the pocket's opening is written in the region's place.
+//! - A region no pocket equals (the office's eight walls and the terrain's two,
+//!   and the regions of 5 of Snowdon's 9 walls with sketch lines) is taken out
+//!   of the wall's body as a boolean difference and written as no opening. The
+//!   wall's pockets are written as its openings, so that the openings a wall
+//!   carries are Revit's and its shape is the same. The wall's
+//!   `ProfileCutSource` says that a cut was made in the body.
+//!
+//! A wall it cannot do this for keeps the regions as its openings, as before,
+//! and its pockets are not written. A body that is cut and holds an opening that
+//! overlaps the cut is not evaluated whole by IfcOpenShell on one of Snowdon's
+//! walls (it gives the uncut box), which is why a region a pocket equals is not
+//! cut as well.
 
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_4};
 
@@ -665,10 +675,75 @@ fn cut_body(host: Option<&mut IfcEntity>, prisms: Vec<SolidShape>) -> bool {
     true
 }
 
+/// How far two corners of an outline may stand apart, feet, to be one corner.
+const OUTLINE_EPS_FEET: f64 = 1e-3;
+
+/// The corners of a closed outline: a point within the tolerance of the one
+/// before it, and one on the straight run between its neighbours, are no corner.
+fn outline_corners(points: &[(f64, f64)]) -> Vec<(f64, f64)> {
+    let near = |a: (f64, f64), b: (f64, f64)| {
+        (a.0 - b.0).abs() <= OUTLINE_EPS_FEET && (a.1 - b.1).abs() <= OUTLINE_EPS_FEET
+    };
+    let mut corners: Vec<(f64, f64)> = Vec::new();
+    for point in points {
+        if corners.last().is_none_or(|last| !near(*last, *point)) {
+            corners.push(*point);
+        }
+    }
+    while corners.len() > 1 && near(corners[0], corners[corners.len() - 1]) {
+        corners.pop();
+    }
+    loop {
+        let count = corners.len();
+        if count < 3 {
+            break;
+        }
+        let straight = (0..count).find(|index| {
+            let before = corners[(index + count - 1) % count];
+            let here = corners[*index];
+            let after = corners[(index + 1) % count];
+            let span = (after.0 - before.0).hypot(after.1 - before.1);
+            let cross = (here.0 - before.0) * (after.1 - before.1)
+                - (here.1 - before.1) * (after.0 - before.0);
+            span > 0.0 && cross.abs() / span <= OUTLINE_EPS_FEET
+        });
+        match straight {
+            Some(index) => {
+                corners.remove(index);
+            }
+            None => break,
+        }
+    }
+    corners
+}
+
+/// Whether two outlines, both counter-clockwise, are one polygon: the same
+/// corners in the same order from some corner on (see [`outline_corners`]).
+fn same_outline(a: &[(f64, f64)], b: &[(f64, f64)]) -> bool {
+    let (a, b) = (outline_corners(a), outline_corners(b));
+    let near = |p: (f64, f64), q: (f64, f64)| {
+        (p.0 - q.0).abs() <= OUTLINE_EPS_FEET && (p.1 - q.1).abs() <= OUTLINE_EPS_FEET
+    };
+    a.len() >= 3
+        && a.len() == b.len()
+        && (0..b.len()).any(|shift| (0..a.len()).all(|k| near(a[k], b[(k + shift) % b.len()])))
+}
+
+/// The outline of a region or a pocket.
+fn outline_of(entity: &IfcEntity) -> Option<&[(f64, f64)]> {
+    match entity {
+        IfcEntity::WallProfileOpening { outline_feet, .. }
+        | IfcEntity::WallProfilePocket { outline_feet, .. } => Some(outline_feet.as_slice()),
+        _ => None,
+    }
+}
+
 /// Make the cut of each wall's edited elevation profile in the wall's body and
 /// write the openings Revit's export writes for it (see the module
-/// documentation). A wall whose regions are not all solids, or whose entity is
-/// not a wall with a body of its own, is left with its regions as its openings.
+/// documentation). A region that a pocket equals is not cut in the body: the
+/// pocket's opening voids it, as the region did. A wall whose other regions are
+/// not all solids, or whose entity is not a wall with a body of its own, is left
+/// with its regions as its openings.
 pub(super) fn cut_profiles_from_bodies(entities: &mut [IfcEntity]) {
     let mut regions: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     let mut pockets: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
@@ -684,22 +759,34 @@ pub(super) fn cut_profiles_from_bodies(entities: &mut [IfcEntity]) {
         }
     }
     for (host, region_indices) in regions {
-        let Some(prisms) = region_indices
-            .iter()
-            .map(|index| cut_prism(&entities[*index]))
-            .collect::<Option<Vec<SolidShape>>>()
-        else {
-            continue;
-        };
-        if !cut_body(entities.get_mut(host), prisms) {
-            continue;
+        let pocket_indices = pockets.remove(&host).unwrap_or_default();
+        let (equalled, cut): (Vec<usize>, Vec<usize>) =
+            region_indices.iter().copied().partition(|region| {
+                outline_of(&entities[*region]).is_some_and(|outline| {
+                    pocket_indices.iter().any(|pocket| {
+                        outline_of(&entities[*pocket])
+                            .is_some_and(|other| same_outline(outline, other))
+                    })
+                })
+            });
+        if !cut.is_empty() {
+            let Some(prisms) = cut
+                .iter()
+                .map(|index| cut_prism(&entities[*index]))
+                .collect::<Option<Vec<SolidShape>>>()
+            else {
+                continue;
+            };
+            if !cut_body(entities.get_mut(host), prisms) {
+                continue;
+            }
         }
-        for index in region_indices {
-            if let IfcEntity::WallProfileOpening { outline_feet, .. } = &mut entities[index] {
+        for index in cut.iter().chain(&equalled) {
+            if let IfcEntity::WallProfileOpening { outline_feet, .. } = &mut entities[*index] {
                 outline_feet.clear();
             }
         }
-        for index in pockets.remove(&host).unwrap_or_default() {
+        for index in pocket_indices {
             let opening = match &entities[index] {
                 IfcEntity::WallProfilePocket {
                     host,
@@ -1054,5 +1141,55 @@ mod tests {
             top_at_profile((182.0866, 196.5223), nan_end, &terrain_wall()),
             None
         );
+    }
+
+    fn staircase() -> Vec<(f64, f64)> {
+        vec![
+            (3.0, 2.0),
+            (3.0, 4.0),
+            (1.5, 4.0),
+            (1.5, 3.0),
+            (-2.0, 3.0),
+            (-2.0, 2.0),
+        ]
+    }
+
+    #[test]
+    fn an_outline_is_the_same_from_any_corner_on() {
+        let rotated: Vec<(f64, f64)> = staircase().into_iter().cycle().skip(3).take(6).collect();
+        assert!(same_outline(&staircase(), &rotated));
+    }
+
+    #[test]
+    fn a_point_on_a_straight_run_and_a_repeated_first_point_are_no_corner() {
+        let mut padded = staircase();
+        padded.insert(5, (-2.0, 2.5));
+        padded.push(padded[0]);
+        assert!(same_outline(&staircase(), &padded));
+        assert_eq!(outline_corners(&padded).len(), 6);
+    }
+
+    #[test]
+    fn a_smaller_or_another_polygon_is_not_the_same() {
+        let mut lower = staircase();
+        lower[1] = (3.0, 3.5);
+        lower[2] = (1.5, 3.5);
+        assert!(!same_outline(&staircase(), &lower));
+        // A region that holds a pocket is not the pocket.
+        let pocket = vec![(1.5, 3.0), (3.0, 3.0), (3.0, 4.0), (1.5, 4.0)];
+        assert!(!same_outline(&staircase(), &pocket));
+    }
+
+    #[test]
+    fn fewer_than_three_corners_are_no_outline() {
+        let line = vec![(0.0, 0.0), (1.0, 0.0), (2.0, 0.0)];
+        assert!(!same_outline(&line, &line));
+        assert!(!same_outline(&[], &[]));
+    }
+
+    #[test]
+    fn the_same_polygon_walked_the_other_way_is_not_the_same() {
+        let reversed: Vec<(f64, f64)> = staircase().into_iter().rev().collect();
+        assert!(!same_outline(&staircase(), &reversed));
     }
 }

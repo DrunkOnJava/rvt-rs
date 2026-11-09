@@ -845,11 +845,14 @@ pub struct ExportedModelDiagnostics {
     #[serde(default)]
     pub wall_profile_top_sources: std::collections::BTreeMap<String, usize>,
     /// Of the exported walls whose edited elevation profile cuts the wall, how
-    /// many have that cut made in the wall's body and the openings Revit's export
-    /// writes for it (a pocket of the profile against its convex hull) written
+    /// many have a cut made in the wall's body (the regions RE-151 reads that no
+    /// pocket of the profile equals) and the openings Revit's export writes for
+    /// the profile (the pockets of the profile against its convex hull) written
     /// beside it, by the `ProfileCutSource` property of each (#1607, RE-380):
-    /// `wall_profile_cut_in_body`. A wall that is not is voided by the regions
-    /// RE-151 reads, as before. Empty when no wall is.
+    /// `wall_profile_cut_in_body`. A wall whose every region a pocket equals has
+    /// no cut (its body is its box and its pockets are its openings), and a wall
+    /// whose regions cannot be cut is voided by them, as before; neither is
+    /// counted. Empty when no wall has a cut.
     #[serde(default)]
     pub wall_profile_cuts: std::collections::BTreeMap<String, usize>,
     /// Of the exported walls, how many have their base cut at an element their

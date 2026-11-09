@@ -796,10 +796,11 @@ fn distance_to_segment(point: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
 /// stretch of the profile's loop between two corners of the hull that the
 /// hull's edge cuts off, as model-feet points in the profile's plane,
 /// counter-clockwise in its own along-and-up coordinates, tagged with the
-/// highest ElementId of the lines of the stretch. These are the openings
-/// Revit's export writes for a wall's profile (#1607, RE-380), and a profile
-/// whose region is convex, as a straight sloped top, has none, as Revit's
-/// export writes none for the terrain wall 1351524 and the office's eight.
+/// ElementId of the first line of the stretch in that walk. These are the
+/// openings Revit's export writes for a wall's profile (#1607, RE-380), and a
+/// profile whose region is convex, as a straight sloped top, has none, as
+/// Revit's export writes none for the terrain wall 1351524 and the office's
+/// eight.
 /// A stretch no further than the sketch's tolerance from its edge is not one.
 ///
 /// What closes the stretch depends on where the hull's edge ends, against the
@@ -913,9 +914,12 @@ pub fn elevation_profile_pockets(segments: &[SketchSegment]) -> Vec<(u32, Vec<[f
         if area < 0.0 {
             outline.reverse();
         }
-        let Some(tag) = (0..lines).map(|step| ids[(from + step) % count]).max() else {
-            continue;
-        };
+        // Tag: the line the stretch starts with. Revit's export names it on 12 of
+        // the 15 pockets measured (Core Interior's, the terrain wall's and 10 of
+        // Snowdon Towers' 13); the highest id of the stretch is right on 6, the
+        // lowest on 8, and the last line is Revit's on the 3 of Snowdon's wall
+        // 698364, which nothing read explains (RE-380 section 5).
+        let tag = ids[from % count];
         pockets.push((
             tag,
             outline
@@ -1612,8 +1616,9 @@ mod pocket_tests {
         let pockets = elevation_profile_pockets(&terrain_wall());
         assert_eq!(pockets.len(), 1);
         let (tag, outline) = &pockets[0];
-        // The highest id of its three lines, 1389018, and not the last line of
-        // the sketch's top, 1389150, which the hull's edge runs along.
+        // The line its stretch starts with, 1389018 (also the highest id of its
+        // three lines), and not the last line of the sketch's top, 1389150,
+        // which the hull's edge runs along.
         assert_eq!(*tag, 1389018);
         assert_eq!(
             corners(outline, 0, 2),
@@ -1693,7 +1698,8 @@ mod pocket_tests {
         let pockets = elevation_profile_pockets(&notched_wall());
         assert_eq!(pockets.len(), 1);
         let (tag, outline) = &pockets[0];
-        assert_eq!(*tag, 6);
+        // The line leaving the shoulder the stretch starts at, not the highest id.
+        assert_eq!(*tag, 4);
         assert_eq!(
             corners(outline, 0, 2),
             vec![(300, 600), (300, 800), (600, 600), (600, 800)]
@@ -1751,7 +1757,14 @@ mod pocket_tests {
             .collect();
         let pockets = elevation_profile_pockets(&backwards);
         assert_eq!(pockets.len(), 1);
-        assert_eq!(pockets[0].0, 1389018);
+        // The Tag is the line the walk starts with, and the walk follows the
+        // sketch's first line: listed backwards it starts at the stretch's other
+        // end. The shape is the same.
+        assert!(
+            matches!(pockets[0].0, 1389018 | 1388558),
+            "tag {}",
+            pockets[0].0
+        );
         assert_eq!(pockets[0].1.len(), 4);
     }
 

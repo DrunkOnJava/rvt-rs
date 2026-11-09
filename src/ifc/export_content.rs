@@ -4935,15 +4935,17 @@ pub const WALL_PROFILE_TOP_PROPERTY: &str = "ProfileTopSource";
 /// wall (RE-378).
 pub const WALL_PROFILE_TOP_AT_PROFILE: &str = "wall_top_at_profile_top";
 
-/// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says the cut its
-/// edited elevation profile makes is made in its body, and that the openings it
-/// carries are the pockets of the profile against its convex hull, as Revit's
-/// export writes them (#1607, RE-380): the one value [`WALL_PROFILE_CUT_IN_BODY`].
-/// Counted in `exported.wall_profile_cuts`.
+/// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says a cut its
+/// edited elevation profile makes (the regions no pocket of the profile equals)
+/// is made in its body, and that the openings it carries are the pockets of the
+/// profile against its convex hull, as Revit's export writes them (#1607,
+/// RE-380): the one value [`WALL_PROFILE_CUT_IN_BODY`]. Counted in
+/// `exported.wall_profile_cuts`.
 pub const WALL_PROFILE_CUT_PROPERTY: &str = "ProfileCutSource";
 
 /// [`WALL_PROFILE_CUT_PROPERTY`] of a wall whose body is its box less the regions
-/// RE-151 reads from the profile, as one boolean difference.
+/// RE-151 reads from the profile that no pocket equals, as one boolean
+/// difference.
 pub const WALL_PROFILE_CUT_IN_BODY: &str = "wall_profile_cut_in_body";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how its base
