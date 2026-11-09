@@ -238,7 +238,16 @@ fn write_ifc_with_quality_mode_and_limits(
         return Err(PyValueError::new_err(message));
     }
     mode.validate(&run.diagnostics).map_err(to_py_val)?;
-    Ok(ifc::write_step(&run.model))
+    // The streaming writer refuses a model holding a non-finite number, which
+    // the text-returning one would write into a file no IFC reader opens.
+    let mut out = Vec::new();
+    ifc::step_writer::write_step_to(
+        &run.model,
+        &ifc::step_writer::StepOptions::default(),
+        &mut out,
+    )
+    .map_err(to_py_val)?;
+    String::from_utf8(out).map_err(to_py_val)
 }
 
 fn unread_streams_to_list<'py>(

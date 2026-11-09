@@ -50,6 +50,9 @@ pub struct StepOptions {
 /// assert!(ifc.starts_with("ISO-10303-21;"));
 /// # Ok::<(), rvt::Error>(())
 /// ```
+///
+/// A model holding a non-finite number is written as given, which no IFC
+/// reader opens; [`write_step_to`] refuses it with an error instead.
 pub fn write_step(model: &IfcModel) -> String {
     write_step_with_options(model, &StepOptions::default())
 }
@@ -59,6 +62,9 @@ pub fn write_step(model: &IfcModel) -> String {
 /// When `options.timestamp = Some(t)`, the emitted STEP is a pure
 /// function of `(model, t)` — no wall-clock access. Use this in
 /// tests and regression fixtures.
+///
+/// A model holding a non-finite number is written as given, which no IFC
+/// reader opens; [`write_step_to`] refuses it with an error instead.
 pub fn write_step_with_options(model: &IfcModel, options: &StepOptions) -> String {
     write_step_string(model, options, false)
 }
@@ -68,6 +74,9 @@ pub fn write_step_with_options(model: &IfcModel, options: &StepOptions) -> Strin
 /// --revit-set-placement`). IFC4's `IfcRelAssociatesMaterial.AllowedElements`
 /// takes no `IfcSpace`, so this output breaks that rule, as Revit's does;
 /// [`write_step_with_options`] leaves those associations out (#1430).
+///
+/// A model holding a non-finite number is written as given, which no IFC
+/// reader opens; [`write_step_to`] refuses it with an error instead.
 pub fn write_step_with_space_materials(model: &IfcModel, options: &StepOptions) -> String {
     write_step_string(model, options, true)
 }
@@ -792,6 +801,10 @@ struct StepWriter<'a> {
     /// `IfcRelAssociatesMaterial.AllowedElements` does not allow and Revit's
     /// export writes (#1430): [`write_step_with_space_materials`].
     space_materials: bool,
+    /// The first entity whose attributes hold a non-finite number, which
+    /// ISO 10303-21's REAL cannot express: [`write_step_to`] refuses the
+    /// model rather than write a file no IFC reader opens.
+    non_finite: Option<usize>,
 }
 
 /// A writer [`write_step_to`] streams to, the bytes it took and its first
@@ -959,6 +972,7 @@ impl StepWriter<'_> {
             next_id: 1,
             timestamp,
             space_materials: false,
+            non_finite: None,
         }
     }
 
@@ -977,6 +991,9 @@ impl StepWriter<'_> {
     }
 
     fn emit_entity<S: AsRef<str>>(&mut self, id: usize, body: S) {
+        if self.non_finite.is_none() && holds_non_finite(body.as_ref()) {
+            self.non_finite = Some(id);
+        }
         self.out.push_str(&format!("#{id}={};\n", body.as_ref()));
         if self.out.len() >= SPILL_BYTES {
             self.spill();
@@ -4577,14 +4594,55 @@ impl StepWriter<'_> {
     fn finish_to_sink(mut self) -> std::io::Result<u64> {
         self.out.push_str("END-ISO-10303-21;\n");
         self.spill();
-        match self.sink {
+        let written = match self.sink {
             Some(Sink {
                 error: Some(error), ..
-            }) => Err(error),
-            Some(Sink { written, .. }) => Ok(written),
-            None => Ok(0),
+            }) => return Err(error),
+            Some(Sink { written, .. }) => written,
+            None => 0,
+        };
+        match self.non_finite {
+            Some(id) => Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "entity #{id} holds a number that is not finite (NaN or infinity), which an IFC file cannot hold"
+                ),
+            )),
+            None => Ok(written),
         }
     }
+}
+
+/// Whether `body`, an entity's attribute list, holds a number formatted from
+/// a non-finite `f64` (`NaN`, `inf`, `-inf`). ISO 10303-21's REAL has no such
+/// form, and IfcOpenShell refuses the file. Text inside a STEP string literal
+/// (single quotes, a quote doubled within) is skipped, so a name that reads
+/// `NaN` is not one.
+fn holds_non_finite(body: &str) -> bool {
+    let bad = |token: &str| matches!(token, "NaN" | "inf" | "-inf" | "+inf");
+    let mut in_string = false;
+    let mut start: Option<usize> = None;
+    for (at, byte) in body.bytes().enumerate() {
+        if in_string {
+            // A doubled quote ends the literal and opens it again at once.
+            in_string = byte != b'\'';
+            continue;
+        }
+        match byte {
+            b'\'' | b'(' | b')' | b',' | b' ' => {
+                if start.take().is_some_and(|from| bad(&body[from..at])) {
+                    return true;
+                }
+                in_string = byte == b'\'';
+            }
+            _ => {
+                if start.is_none() {
+                    start = Some(at);
+                }
+            }
+        }
+    }
+    start.is_some_and(|from| bad(&body[from..]))
 }
 
 /// STEP-style string escape per ISO-10303-21:
@@ -4921,4 +4979,57 @@ pub(crate) fn every_storey_holds_an_element(model: &IfcModel) -> bool {
         }
     }
     holding.iter().all(|held| *held)
+}
+
+// The pure-helper exception to the ban on unit tests: `holds_non_finite` reads
+// no file, and these are the ways it can be wrong, written before it.
+#[cfg(test)]
+mod tests {
+    use super::holds_non_finite;
+
+    #[test]
+    fn a_nan_attribute_is_found() {
+        assert!(holds_non_finite(
+            "IFCCARTESIANPOINT((0.000000,NaN,1.000000))"
+        ));
+    }
+
+    #[test]
+    fn an_infinity_of_either_sign_is_found() {
+        assert!(holds_non_finite("IFCCARTESIANPOINT((inf,0.,0.))"));
+        assert!(holds_non_finite("IFCCARTESIANPOINT((0.,-inf,0.))"));
+    }
+
+    #[test]
+    fn a_typed_value_holding_infinity_is_found() {
+        assert!(holds_non_finite(
+            "IFCPROPERTYSINGLEVALUE('Width',$,IFCLENGTHMEASURE(inf),$)"
+        ));
+    }
+
+    #[test]
+    fn the_last_attribute_with_no_delimiter_after_it_is_read() {
+        assert!(holds_non_finite("NaN"));
+    }
+
+    #[test]
+    fn a_name_that_reads_nan_is_not_a_number() {
+        assert!(!holds_non_finite(
+            "IFCWALL('2a',#5,'NaN',$,'inf wall',#7,#8,'1')"
+        ));
+    }
+
+    #[test]
+    fn a_doubled_quote_keeps_the_literal_open() {
+        assert!(!holds_non_finite("IFCWALL('2a',#5,'it''s NaN',$)"));
+        assert!(holds_non_finite("IFCWALL('2a',#5,'it''s',NaN)"));
+    }
+
+    #[test]
+    fn enumerations_and_finite_numbers_are_not_flagged() {
+        assert!(!holds_non_finite(
+            "IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.),IFCREAL(1.000000),#12,$,*,.INFORMATION."
+        ));
+        assert!(!holds_non_finite(""));
+    }
 }

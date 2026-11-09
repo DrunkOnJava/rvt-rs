@@ -1,6 +1,6 @@
 #![no_main]
 
-//! Fuzz target for [`rvt::ifc::step_writer::write_step_with_options`].
+//! Fuzz target for [`rvt::ifc::step_writer::write_step_to`].
 //!
 //! Unlike the other fuzz targets which feed raw bytes into a parser,
 //! the STEP writer takes a structured `IfcModel` and produces a string
@@ -61,7 +61,7 @@ use rvt::ifc::entities::{
     Classification, ClassificationItem, ClassificationSource, Extrusion, IfcEntity, Property,
     PropertySet, PropertyValue, UnitAssignment,
 };
-use rvt::ifc::step_writer::{StepOptions, write_step_with_options};
+use rvt::ifc::step_writer::{StepOptions, write_step_to};
 use rvt::ifc::{IfcModel, MaterialInfo, Storey};
 
 /// Tag used to pick an IFC element constructor. Keeps the fuzzed
@@ -250,7 +250,7 @@ fuzz_target!(|input: FuzzInput| {
         .take(MAX_STOREYS)
         .map(|s| Storey {
             name: truncate_string(s.name, MAX_STRING),
-            elevation_feet: sanitize_float(s.elevation_feet),
+            elevation_feet: s.elevation_feet,
         })
         .collect();
 
@@ -261,7 +261,7 @@ fuzz_target!(|input: FuzzInput| {
         .map(|m| MaterialInfo {
             name: truncate_string(m.name, MAX_STRING),
             color_packed: m.color_packed,
-            transparency: m.transparency.map(sanitize_float),
+            transparency: m.transparency,
         })
         .collect();
 
@@ -335,14 +335,12 @@ fuzz_target!(|input: FuzzInput| {
                 })
                 .collect(),
         });
-        let location_feet = fe.location_feet.map(|[x, y, z]| {
-            [sanitize_float(x), sanitize_float(y), sanitize_float(z)]
-        });
+        let location_feet = fe.location_feet;
         let rotation_radians = fe.rotation_radians.map(sanitize_angle);
         let extrusion = fe.extrusion.map(|e| Extrusion {
-            width_feet: sanitize_float(e.width_feet),
-            depth_feet: sanitize_float(e.depth_feet),
-            height_feet: sanitize_float(e.height_feet),
+            width_feet: e.width_feet,
+            depth_feet: e.depth_feet,
+            height_feet: e.height_feet,
             profile_override: None,
         });
 
@@ -381,7 +379,15 @@ fuzz_target!(|input: FuzzInput| {
     let opts = StepOptions {
         timestamp: input.timestamp,
     };
-    let out = write_step_with_options(&model, &opts);
+    // Floats reach the writer unchanged, NaN and infinities included: the
+    // writer refuses a model holding one, which is an accepted outcome here.
+    let mut bytes = Vec::new();
+    match write_step_to(&model, &opts, &mut bytes) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidData => return,
+        Err(error) => panic!("writing to a Vec failed: {error}"),
+    }
+    let out = String::from_utf8(bytes).expect("the writer writes UTF-8");
 
     // Lightweight shape check: the writer must always produce a
     // structurally-valid STEP envelope regardless of input. Any
@@ -412,23 +418,12 @@ fn truncate_string(mut s: String, max_chars: usize) -> String {
     s
 }
 
-/// Replace NaN / infinities with 0.0 so the writer's `format!` of
-/// `{v:.6}` never emits non-finite literals (the STEP spec
-/// technically allows them, but `IfcOpenShell` rejects NaN in most
-/// numeric slots). Keeping them bounded also guarantees the escape
-/// path reaches steady-state quickly. Finite values are passed
-/// through unchanged, including subnormals.
-fn sanitize_float(v: f64) -> f64 {
-    if v.is_finite() { v } else { 0.0 }
-}
-
 /// Angles get clamped to a comfortable range so `sin` / `cos` stay
 /// numerically well-behaved. Values outside this range are still
 /// finite but arguably nonsense for a Revit yaw — still exercise the
 /// code path, just wrapped.
 fn sanitize_angle(v: f64) -> f64 {
-    let sanitized = sanitize_float(v);
     // Wrap into [-2π, 2π] so the rotation axis emits a sane direction.
     let two_pi = std::f64::consts::TAU;
-    sanitized.rem_euclid(2.0 * two_pi) - two_pi
+    v.rem_euclid(2.0 * two_pi) - two_pi
 }

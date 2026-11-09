@@ -36,7 +36,7 @@ use rvt::ifc::{
         distinct_ifc_types, element_info_panel,
     },
     sheet::{SheetOptions, render_plan_svg},
-    step_writer::write_step,
+    step_writer::{StepOptions, write_step_to},
 };
 use rvt::reader::{OpenLimits, ProjectPhase};
 use rvt::research::native_document::{NATIVE_RELEASES, Options};
@@ -605,7 +605,11 @@ pub fn js_model_to_glb(model: JsValue) -> Result<Vec<u8>, JsValue> {
 pub fn js_model_to_ifc_step(model: JsValue) -> Result<String, JsValue> {
     install_panic_hook();
     let model: IfcModel = serde_wasm_bindgen::from_value(model).map_err(err_str)?;
-    Ok(write_step(&model))
+    // The model comes from JavaScript, whose numbers may be NaN or infinite:
+    // the streaming writer refuses those rather than write an unreadable file.
+    let mut out = Vec::new();
+    write_step_to(&model, &StepOptions::default(), &mut out).map_err(err_str)?;
+    String::from_utf8(out).map_err(err_str)
 }
 
 /// Render `model` as a 2D SVG plan view (sheet). Options control
