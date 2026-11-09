@@ -86,6 +86,8 @@ Snowdon Towers files among them, with `samples`), exports each with that commit'
 against Revit's own with the scorers under `tools/re/` where Revit's export is
 among the fetched files. The scores are in the run's summary and artifacts.
 
+The pages' numbers were last compared with this command on 2026-11-09 (`main` at `df44583f`, Measure run 42596736395): [the W10 re-run](w10-rerun.md) has the result, the three differences it found and what the command does not produce.
+
 What it covers: the figures that name Core Interior, Einhoven, RE1, BIM4LCA,
 puzzbobb and Autodesk's sample projects and are scored by those scorers with the
 default export flags, at the commit you name. Add `-f families=true` for the family corpus (read, scored
