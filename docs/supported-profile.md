@@ -4,7 +4,7 @@ What rvt-rs can be trusted with today, in the terms a BIM user would check.
 The evidence behind every line is in [`support-matrix.json`](support-matrix.json)
 (`rvt-capabilities --matrix -f text` prints it) and in the measured tables of the
 [evidence page](evidence.md#what-rvt-rs-reads-from-real-projects). This page
-describes `main`; the latest release is v0.15.0, and what has landed since
+describes `main`; the latest release is v0.16.1, and what has landed since
 is in the fragments under [`changelog.d/`](../changelog.d/README.md). Every number
 below names the model it was measured on, and says "local only" or "not shared"
 when nobody else can fetch that model, so nobody else can re-run it. The

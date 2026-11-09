@@ -119,7 +119,7 @@ Verify the release page the **Release binaries** job attached to the GitHub
 Release (fifteen files: five archives, the seven wheels, the sdist,
 `SHA256SUMS` and the provenance bundle; the job itself already smoke-tested
 four of the archives on native runners). `SHA256SUMS` lists every file but
-itself and the bundle from v0.16.0 on, and `--source-ref` keeps a manual run
+itself and the bundle from v0.16.1 on, and `--source-ref` keeps a manual run
 on a branch from passing for the tag:
 
 ```bash

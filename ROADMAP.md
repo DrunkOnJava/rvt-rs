@@ -187,11 +187,33 @@ the four levels a file can reach are in the
   IFC2X3 export (#1261); rooms take off the round columns their solids hold
   (#1354); floor voids tagged as Revit tags them (#1165); and the opt-in
   `rvt-ifc --family-extrusions`, measured on 2024 and 2025 (#156).
+- **0.16.1, 2026-11-09.** The first published release of 0.16: the `v0.16.0`
+  tag was made and never published, because its publish run stopped at the
+  viewer smoke test (#1569). Much more of Revit 2015 to 2023 and of Revit 2026
+  and 2027: beams along their location lines, walls joined by their join
+  lists, pipes as their cylinders with types, quantities and ports,
+  `Constraints` Level parameters, `Phase Created`, and a Revit 2015 file that
+  follows the export phase (#1190, #1332); on 2026 and 2027 beams, stair runs,
+  tread landings, sketch outlines, pipes, ports and door and window cuts as on
+  2024 and 2025 (#1190, #1440); Areas of Revit 2025 to 2027, all 25 of
+  `rac_advanced`'s on every save, and `SpaceKind` on every `IfcSpace` (#1261,
+  #1434, #1437); the rooms of the latest phase that holds any (#1359); doors
+  and windows placed on Revit's axes with both flips decoded (#1357, #1447);
+  the openings fire hose cabinets, doors and curtain walls cut in walls
+  (#1165); door types' `FireRating`, family types' `Manufacturer` and Furniture
+  Systems (#1185, #1444); the IFC4 EXPRESS rules checked and a number that is
+  not finite refused (#1430); the viewer's saved parameters (#35); and wheels
+  and the sdist attested on the release page (#1466). Since 0.16.0's notes: a
+  roof drawn as its record box leaves the walls under it whole (#1471), the two
+  `rac_basic` 2027 doors have their Width and Height (#1489), and a sealed
+  registry holds the 1.0 check's fresh held-out pairs (#1565). Most of the
+  Revit 2015 to 2023 and 2026 and 2027 reads are held to the same project's
+  2024 or 2025 save, not scored against a Revit export; the notes say which.
 
-### 0.16.0: IFC geometry and element data
+### 0.17.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.15.0, moved from the
-0.15.0 milestone when 0.15.0 shipped. Each
+The geometry and element-data work that continues after 0.16.1, moved from the
+0.16.0 milestone when 0.16.1 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall

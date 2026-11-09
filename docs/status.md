@@ -1454,12 +1454,40 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.15.0** (2026-11-05) is the latest release: crates.io (`rvt` and
-  `rvt-rs-mcp`, both published from the tag), the `rvt` wheels on PyPI,
-  GitHub Release archives for Linux, macOS and Windows, and the container
-  image, each checked from its published artifacts
-  ([`install.md`](install.md)); docs.rs had queued its builds when they were
-  checked. It says, on request, where each decoded element and the values
+- **v0.16.1** (2026-11-09) is the latest release: crates.io (`rvt` and
+  `rvt-rs-mcp`, both published from the tag), the `rvt` wheels and sdist on
+  PyPI, GitHub Release archives for Linux, macOS and Windows, and the
+  container image, each checked from its published artifacts
+  ([`install.md`](install.md)); docs.rs had built `rvt` when they were checked
+  (`rvt-rs-mcp` is a binary crate with no documentation there). It is the first
+  published release of 0.16: the `v0.16.0` tag was
+  made and never published, because its publish run stopped at the viewer
+  smoke test (#1569). It reads much more of Revit 2015 to 2023 projects, with
+  beams along their location lines, walls joined by their join lists (and a
+  wall at an angle along its line where its box closes on it), pipes drawn as
+  their cylinders with their types, quantities and ports, `Constraints` Level
+  parameters and `Phase Created`, and a Revit 2015 file that follows the export
+  phase; and of Revit 2026 and 2027, with beams, stair runs, tread landings,
+  sketch outlines, pipes, ports and door and window cuts read as on 2024 and
+  2025. Areas of Revit 2025 to 2027 are written (`area_plan_topology_unchecked`:
+  checked against no Revit export), every `IfcSpace` says whether it is a room,
+  an Area or a family instance (`SpaceKind`), and a project whose last phase
+  holds no room writes the rooms of the latest phase that holds any. A door or
+  window set in a plain wall is placed on Revit's axes with both flips decoded,
+  though its origin is still its record box's centre (RE-357). Exports hold the
+  IFC4 EXPRESS rules IfcOpenShell's default validation leaves out and refuse a
+  number that is not finite, the viewer's info panel lists an element's saved
+  parameters, and release pages list and attest the wheels and the sdist. Most
+  of the 2015 to 2023, 2026 and 2027 reads are held to the same Autodesk
+  project's 2024 or 2025 save, not scored against a Revit export, which cannot
+  catch an error that save shares. Since 0.16.0's notes: a roof drawn as its
+  record box leaves the walls under it whole, which is a smaller error and not
+  Revit's body (#1471); the two `rac_basic` 2027 doors have their Width and
+  Height (#1489); and a sealed registry holds the 1.0 check's fresh held-out
+  pairs (#1565). `[0.16.1]` and `[0.16.0]` in
+  [`CHANGELOG.md`](../CHANGELOG.md) give what each change measures and what it
+  does not.
+- **v0.15.0** (2026-11-05): it says, on request, where each decoded element and the values
   its body took were read from, down to the byte, and why each element,
   body, opening or outline was left out (`rvt-ifc --element-provenance`,
   `--export-decisions`): the offsets are confirmed on the Revit 2023 to 2025
@@ -1542,7 +1570,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.15.0 has, and is ahead of it by the fragments
+- `main` has everything v0.16.1 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
