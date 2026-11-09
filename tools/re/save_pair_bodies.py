@@ -3,7 +3,9 @@
 two Revit releases, element for element (RE-341).
 
 Elements are paired by `Tag` (their ElementId, which a project keeps
-across saves) and meshed in world coordinates. A pair is the same where
+across saves) and meshed in world coordinates: the mesh Revit saved for an
+element, which rvt-rs writes as an `IfcTriangulatedFaceSet`, is read from the
+file, and every other body is meshed by IfcOpenShell. A pair is the same where
 the world boxes agree to 3 mm on every side and the volumes to 0.1%. This
 is a box and volume check, not shape equality: a mirrored body, or one whose
 volume sits differently inside the same box, agrees. Openings are left out
@@ -31,11 +33,14 @@ Usage:
 
 import argparse
 import collections
+import os
 import sys
 
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.element
+import ifcopenshell.util.placement
+import ifcopenshell.util.unit
 import numpy as np
 
 BOX_TOLERANCE_M = 0.003
@@ -47,15 +52,21 @@ REPEATED_TAG = "share a Tag with another product"
 
 def bodies(path, only=None, openings=True):
     """(Tag -> (class, BodySource, volume, low corner, high corner),
-    Tag -> (why it was not scored, BodySource), products with no Tag)."""
+    Tag -> (why it was not scored, BodySource), products with no Tag).
+
+    A body that is one saved mesh is read from the file (`face_set_mesh`). The others are
+    meshed together by IfcOpenShell's iterator on every core, not by one `create_shape`
+    call each, which took 52 of the 55 seconds of a Revit 2026 save of `rac_advanced`
+    (5,527 bodies) when the gates mesh six saves of each of five projects (#1616). An
+    element the iterator does not return did not mesh."""
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     if not openings:
         settings.set("disable-opening-subtractions", True)
     model = ifcopenshell.open(path)
-    out = {}
     lost = {}
-    seen = set()
+    seen = {}
+    repeated = set()
     untagged = 0
     for element in model.by_type("IfcProduct"):
         if not element.Representation or element.is_a("IfcOpeningElement"):
@@ -69,25 +80,78 @@ def bodies(path, only=None, openings=True):
         source = None
         for pset in ifcopenshell.util.element.get_psets(element).values():
             source = pset.get("BodySource", source)
-        if tag in seen:
-            out.pop(tag, None)
+        if tag in seen or tag in repeated:
+            repeated.add(tag)
+            seen.pop(tag, None)
             lost[tag] = (REPEATED_TAG, source)
             continue
-        seen.add(tag)
-        try:
-            geometry = ifcopenshell.geom.create_shape(settings, element).geometry
-        except Exception:
+        seen[tag] = (element, source)
+    by_id = {element.id(): (tag, element, source) for tag, (element, source) in seen.items()}
+    unit_scale = ifcopenshell.util.unit.calculate_unit_scale(model)
+    meshed = {}
+    to_mesh = []
+    for step_id, (_, element, _) in by_id.items():
+        mesh = face_set_mesh(element, unit_scale)
+        if mesh is None:
+            to_mesh.append(element)
+        else:
+            meshed[step_id] = mesh
+    if to_mesh:
+        iterator = ifcopenshell.geom.iterator(settings, model, os.cpu_count() or 1, include=to_mesh)
+        if iterator.initialize():
+            while True:
+                shape = iterator.get()
+                meshed[shape.id] = (
+                    np.array(shape.geometry.verts).reshape(-1, 3),
+                    np.array(shape.geometry.faces).reshape(-1, 3),
+                )
+                if not iterator.next():
+                    break
+    out = {}
+    for step_id, (tag, element, source) in by_id.items():
+        mesh = meshed.get(step_id)
+        if mesh is None or len(mesh[1]) == 0:
             lost[tag] = (DID_NOT_MESH, source)
             continue
-        verts = np.array(geometry.verts).reshape(-1, 3)
-        faces = np.array(geometry.faces).reshape(-1, 3)
-        if len(faces) == 0:
-            lost[tag] = (DID_NOT_MESH, source)
-            continue
+        verts, faces = mesh
         a, b, c = verts[faces[:, 0]], verts[faces[:, 1]], verts[faces[:, 2]]
         volume = abs(np.einsum("ij,ij->i", a, np.cross(b, c)).sum() / 6.0)
-        out[tag] = (element.is_a(), source, volume, verts.min(0), verts.max(0))
+        # The box is that of the corners the triangles use: a point list can hold points
+        # no triangle indexes (the writer appends each saved primitive's whole vertex
+        # array, 155 of the office's 11,084 face sets hold some), and meshing by
+        # IfcOpenShell never sees them.
+        used = verts[np.unique(faces)]
+        out[tag] = (element.is_a(), source, volume, used.min(0), used.max(0))
     return out, lost, untagged
+
+
+def face_set_mesh(element, unit_scale):
+    """(vertices in world metres, triangles) of an element whose one body item is an
+    `IfcTriangulatedFaceSet` with no opening cut from it, which is how rvt-rs writes the
+    mesh Revit saved for an element; None for any other body. The triangles are the ones
+    the file holds: IfcOpenShell builds an OpenCASCADE face from each and meshes them
+    again, and two 163,040-triangle sanitary terminals took 40% of the time a Revit 2026
+    `rac_basic` save needed (#1616)."""
+    if getattr(element, "HasOpenings", None):
+        return None
+    representations = element.Representation.Representations
+    if (
+        len(representations) != 1
+        or representations[0].RepresentationIdentifier != "Body"
+        or len(representations[0].Items) != 1
+    ):
+        return None
+    item = representations[0].Items[0]
+    if not item.is_a("IfcTriangulatedFaceSet") or item.PnIndex is not None:
+        return None
+    if not item.Coordinates.is_a("IfcCartesianPointList3D"):
+        return None
+    points = np.array(item.Coordinates.CoordList, dtype=float).reshape(-1, 3)
+    faces = np.array(item.CoordIndex, dtype=np.int64).reshape(-1, 3) - 1
+    if len(faces) and (faces.min() < 0 or faces.max() >= len(points)):
+        return None
+    placement = ifcopenshell.util.placement.get_local_placement(element.ObjectPlacement)
+    return (points @ placement[:3, :3].T + placement[:3, 3]) * unit_scale, faces
 
 
 def same(body, reference):
