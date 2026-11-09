@@ -933,7 +933,7 @@ pub(super) fn attach_wall_layers(
             let (start, end) = (line.start(), line.end());
             let (dx, dy) = (end[0] - start[0], end[1] - start[1]);
             let length = dx.hypot(dy);
-            (dx / length).abs() <= 1e-9 || (dy / length).abs() <= 1e-9
+            (dx / length).abs() <= 1e-6 || (dy / length).abs() <= 1e-6
         });
         let centred = centreline_bodies
             && measured
