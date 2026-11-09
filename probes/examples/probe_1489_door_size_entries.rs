@@ -10,14 +10,29 @@
 //! elements, with two other symbols of the type (490150 and 235155), whose
 //! doors keep their quantities, as the control.
 //!
+//! Measure run 42555155286 (5a190e2f) found, on the 2027 save, three entries of
+//! another layout (Width 1.5 m, Height 2.7 m) 11,053 to 13,263 bytes past
+//! 431054's block mark with no mark between, which the 2026 save holds past
+//! 420952's block instead; and every Width entry, owned or not, outside the
+//! partition's record chain (RE-35), so the chain cannot bound a block. The
+//! `block` section below asks what lies between a block's mark and the next
+//! mark of any id: every length entry with the bytes before it, every declared
+//! ElementId of at least 100000 stored as a u32, and those ids' classes.
+//!
 //! Output, one entry per line:
 //!   entry <partition> <owner> width=<feet|-> height=<feet|->
+//!   declared <owner> <bool>
+//!   block <partition> <owner> @<mark> next=+<bytes> <next mark's id> declared=<bool>
+//!     length +<offset> parameter=<id> value=<feet> pre=<hex of the 32 bytes before the value>
+//!     id +<offset> <declared ElementId>            (first offset of each, at most 60)
+//!   class <ElementId> <class name>                 (each id the blocks listed)
+//!   held <partition> <owner> parameter=<id> value=<feet>
 //!   sizes <owner> <width,height|none>   (what `type_door_sizes` returns)
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_1489_door_size_entries -- MODEL.rvt
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
 use rvt::elem_table;
@@ -27,6 +42,15 @@ use rvt::research::partition_type_parameters::{
 };
 
 const OWNERS: [u32; 4] = [431054, 490150, 235155, 232780];
+/// The block the 2026 save holds the three 1.5 m entries past.
+const BLOCK_OWNERS: [u32; 5] = [431054, 490150, 235155, 232780, 420952];
+const MAX_LENGTHS: usize = 40;
+const MAX_IDS: usize = 60;
+const MIN_ID: u32 = 100_000;
+
+fn u64_at(bytes: &[u8], at: usize) -> Option<u64> {
+    Some(u64::from_le_bytes(bytes.get(at..at + 8)?.try_into().ok()?))
+}
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
@@ -59,109 +83,106 @@ fn main() -> anyhow::Result<()> {
     for owner in OWNERS {
         println!("declared {owner} {}", declared.contains(&owner));
     }
-    // Where each owner's id and the Width parameter sit in each partition,
-    // to tell an entry that is missing from one the scan does not attribute.
-    let width = WINDOW_WIDTH_PARAMETER.to_le_bytes();
+    // What lies between each owner's block mark and the next mark of any id.
+    let block_owners: BTreeSet<u64> = BLOCK_OWNERS.iter().map(|&id| u64::from(id)).collect();
+    let mut listed: BTreeSet<u64> = BTreeSet::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
         let bytes = inflated.bytes();
-        let widths: Vec<usize> = memchr::memmem::find_iter(bytes, &width).collect();
-        for owner in OWNERS {
-            for at in memchr::memmem::find_iter(bytes, &owner.to_le_bytes()) {
-                let next = widths.iter().find(|&&w| w > at).map(|&w| w - at);
-                if next.is_some_and(|gap| gap < 4096) {
-                    let gap = next.unwrap_or(0);
-                    println!("near {stream} {owner} id@{at} width+{gap}");
-                    // The bytes from just before the id to just past the
-                    // Width parameter's value, for the closest few, to see
-                    // what separates an attributed entry from one that is not.
-                    if gap < 400 {
-                        let from = at.saturating_sub(16);
-                        let to = (at + gap + 24).min(bytes.len());
-                        let hex: Vec<String> =
-                            bytes[from..to].iter().map(|b| format!("{b:02x}")).collect();
-                        println!("bytes {stream} {owner} @{from} {}", hex.join(""));
-                    }
+        let marks: Vec<usize> = memchr::memmem::find_iter(bytes, &VALUE_BLOCK_MARK)
+            .filter(|&at| at >= 8 && bytes[at - 1] != 0xff)
+            .collect();
+        for (index, &mark) in marks.iter().enumerate() {
+            let Some(owner) = u64_at(bytes, mark - 8).filter(|id| block_owners.contains(id)) else {
+                continue;
+            };
+            let end = marks.get(index + 1).copied().unwrap_or(bytes.len());
+            let next_id = marks
+                .get(index + 1)
+                .and_then(|&next| u64_at(bytes, next - 8))
+                .map_or("end".to_string(), |id| id.to_string());
+            let next_declared = marks
+                .get(index + 1)
+                .and_then(|&next| u64_at(bytes, next - 8))
+                .and_then(|id| u32::try_from(id).ok())
+                .is_some_and(|id| declared.contains(&id));
+            println!(
+                "block {stream} {owner} @{mark} next=+{} {next_id} declared={next_declared}",
+                end - mark
+            );
+            let stretch = &bytes[mark..end];
+            let mut lengths = 0;
+            for at in memchr::memmem::find_iter(stretch, &[0xff; 8]) {
+                if lengths == MAX_LENGTHS {
+                    break;
                 }
+                if at < 8 || stretch[at - 1] == 0xff || stretch.get(at + 8) == Some(&0xff) {
+                    continue;
+                }
+                let (Some(value), Some(parameter)) = (
+                    stretch
+                        .get(at - 8..at)
+                        .and_then(|b| b.try_into().ok())
+                        .map(f64::from_le_bytes),
+                    stretch
+                        .get(at + 8..at + 16)
+                        .and_then(|b| b.try_into().ok())
+                        .map(i64::from_le_bytes),
+                ) else {
+                    continue;
+                };
+                if !value.is_finite()
+                    || value.abs() > 1.0e4
+                    || !(-3_000_000..0).contains(&parameter)
+                {
+                    continue;
+                }
+                let from = (at - 8).saturating_sub(32);
+                let pre: String = stretch[from..at - 8]
+                    .iter()
+                    .map(|b| format!("{b:02x}"))
+                    .collect();
+                println!(
+                    "  length +{} parameter={parameter} value={value} pre={pre}",
+                    at - 8
+                );
+                lengths += 1;
+            }
+            let mut ids: BTreeMap<u32, usize> = BTreeMap::new();
+            for (at, window) in stretch.windows(4).enumerate() {
+                let id = u32::from_le_bytes([window[0], window[1], window[2], window[3]]);
+                if id >= MIN_ID && u64::from(id) != owner && declared.contains(&id) {
+                    ids.entry(id).or_insert(at);
+                }
+            }
+            let mut ids: Vec<(usize, u32)> = ids.into_iter().map(|(id, at)| (at, id)).collect();
+            ids.sort_unstable();
+            for &(at, id) in ids.iter().take(MAX_IDS) {
+                println!("  id +{at} {id}");
+                listed.insert(u64::from(id));
             }
         }
     }
-    // Every place a value entry holds the type's Width (a f64, eight 0xff and
-    // the parameter), and the owner the scan gives that place, if any: an entry
-    // that exists but is attributed to another owner, or to none, is the gap.
-    let widths: BTreeSet<i64> = BTreeSet::from([WINDOW_WIDTH_PARAMETER]);
-    for stream in rf.partition_stream_names() {
-        let Ok(inflated) = rf.inflated_partition(&stream) else {
-            continue;
+    // The classes of the ids the blocks listed.
+    if !listed.is_empty() {
+        let options = rvt::research::native_document::Options {
+            selected_ids: listed.clone(),
+            ..rvt::research::native_document::Options::default()
         };
-        let bytes = inflated.bytes();
-        let chain = rvt::research::partition_element_records::bbox_marker(version).map(|marker| {
-            rvt::research::partition_element_records::partition_record_chain(bytes, &marker)
-        });
-        let placed: Vec<(u32, usize)> =
-            rvt::research::partition_type_parameters::scan_partition_length_places(
-                bytes, &declared, &widths, true,
-            )
-            .into_iter()
-            .flat_map(|(owner, held)| held.into_values().map(move |(_, at)| (owner, at)))
-            .collect();
-        // The type's own Width, and the 1.5 m Width the 2027 save also gives
-        // the symbol's block.
-        let needles: Vec<Vec<u8>> = [2.624_671_916_010_498_8_f64, 4.921_259_842_519_685_f64]
-            .iter()
-            .map(|feet| {
-                let mut needle = feet.to_le_bytes().to_vec();
-                needle.extend_from_slice(&[0xff; 8]);
-                needle.extend_from_slice(&WINDOW_WIDTH_PARAMETER.to_le_bytes());
-                needle
-            })
-            .collect();
-        let hits: Vec<usize> = needles
-            .iter()
-            .flat_map(|needle| memchr::memmem::find_iter(bytes, needle).collect::<Vec<_>>())
-            .collect();
-        for at in hits {
-            let param_at = at + 16;
-            let owner = placed
-                .iter()
-                .find(|(_, place)| place.abs_diff(param_at) <= 16 || place.abs_diff(at) <= 16)
-                .map_or("none".to_string(), |(owner, _)| owner.to_string());
-            let from = at.saturating_sub(96);
-            let hex: Vec<String> = bytes[from..(at + 24).min(bytes.len())]
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect();
-            // The record of the partition's chain (RE-35) the entry sits in.
-            let record = chain
-                .as_ref()
-                .and_then(|chain| {
-                    rvt::research::partition_element_records::enclosing_record(chain, at)
-                })
-                .map_or("outside the chain".to_string(), |span| {
-                    format!("record {} @{}..{}", span.element_id, span.start, span.end)
-                });
-            println!(
-                "width {stream} @{at} owner={owner} in {record} {}",
-                hex.join("")
-            );
-            // The block marks before the entry, nearest first, with the u64 in
-            // the eight bytes before each and whether it is a declared id: the
-            // owner is the nearest mark with a declared id or a zero, and a
-            // mark of any other id is passed over.
-            let marks: Vec<usize> = memchr::memmem::find_iter(&bytes[..at], &VALUE_BLOCK_MARK)
-                .filter(|&mark| mark >= 8)
-                .collect();
-            for &mark in marks.iter().rev().take(4) {
-                let id = u64::from_le_bytes(bytes[mark - 8..mark].try_into().unwrap_or([0; 8]));
-                let is_declared = u32::try_from(id).is_ok_and(|id| declared.contains(&id));
-                println!(
-                    "  mark {stream} @{mark} back={} id={id} declared={is_declared} before=0x{:02x}",
-                    at - mark,
-                    bytes[mark - 1]
-                );
+        let mut classes: BTreeMap<u64, String> = BTreeMap::new();
+        let read = rvt::research::native_document::extract_graphs(&mut rf, &options, |record| {
+            if let Some(class) = record.class_name {
+                classes.insert(record.identity.element_id, class);
             }
+            Ok(())
+        });
+        if let Err(error) = read {
+            println!("class read failed: {error}");
+        }
+        for id in &listed {
+            println!("class {id} {}", classes.get(id).map_or("-", String::as_str));
         }
     }
     // Every Width and Height entry each owner's blocks hold, value by value: the
