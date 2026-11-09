@@ -270,10 +270,18 @@ timed() { # dir step command...
 # differ up to 1.7 times in speed, so the limit leaves twice that and more.
 STEP_TIMEOUT="${MEASURE_STEP_TIMEOUT:-2400}"
 score() { # name args...
-  local out="$1" dir step; shift
+  local out="$1" dir step status; shift
   dir=$(dirname "$out"); step=$(basename "$out" .txt)
   timed "$dir" "$step" timeout "$STEP_TIMEOUT" python "$@" > "$out" 2>&1
-  echo "exit $?" >> "$out"
+  status=$?
+  echo "exit $status" >> "$out"
+  # A run that names its scorers is run for their answer, and a crash left in
+  # the output file reads as a green run (#1541). In the default set a scorer
+  # may exit 1 for a finding, so only the named ones are raised, and a probe's
+  # scorer, which is always asked for by name.
+  if [ "$status" != 0 ] && { [[ "$step" == probe_score* ]] || { [ "${#STEPS[@]}" -gt 0 ] && wanted "$step"; }; }; then
+    echo "::error::$(basename "$dir"): the scorer $step, named in this run, exited $status (see its $step.txt)"
+  fi
 }
 
 # The score cache (tools/ci/measure-cache.py), on when MEASURE_CACHE_DIR names
