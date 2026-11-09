@@ -12,10 +12,7 @@ use rvt::{
     ifc::{
         ExportDiagnostics, ExportKind, ExportOptions, ExportQualityMode, SavedMeshChoice,
         run_export_with_limits,
-        step_writer::{
-            StepOptions, write_step_to, write_step_to_with_space_materials,
-            write_step_with_options, write_step_with_space_materials,
-        },
+        step_writer::{StepOptions, write_step_to, write_step_to_with_space_materials},
     },
     walker::WalkerLimits,
 };
@@ -322,11 +319,15 @@ fn run(args: Args) -> anyhow::Result<()> {
     let mut observed_step = None;
     drop(rf);
     let written = if args.observation.is_some() {
-        let step = if args.revit_set_placement {
-            write_step_with_space_materials(&model, &options)
+        // Built through the streaming writer, which refuses a model holding a
+        // non-finite number rather than write a file no IFC reader opens.
+        let mut bytes = Vec::new();
+        if args.revit_set_placement {
+            write_step_to_with_space_materials(&model, &options, &mut bytes)?;
         } else {
-            write_step_with_options(&model, &options)
-        };
+            write_step_to(&model, &options, &mut bytes)?;
+        }
+        let step = String::from_utf8(bytes)?;
         std::fs::write(&out_path, step.as_bytes())?;
         let written = step.len() as u64;
         observed_step = Some(step);
