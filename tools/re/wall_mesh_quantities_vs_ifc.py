@@ -63,6 +63,10 @@ def parse(path):
                 closed=m.group(2) == "1", open=int(m.group(3)), over=int(m.group(4)), shells=int(m.group(5))
             )
             continue
+        m = re.match(r"^wall tag:(\d+) shape up (\d+) down (\d+) sloped (\d+) curved (\d+)", line)
+        if m:
+            walls.setdefault(m.group(1), {}).update(up=int(m.group(2)), down=int(m.group(3)), sloped=int(m.group(4)), curved=int(m.group(5)))
+            continue
         m = re.match(r"^wall tag:(\d+) vface net (\S+) gross (\S+) normal (\S+) (\S+)", line)
         if m:
             walls.setdefault(m.group(1), {}).setdefault("faces", []).append((float(m.group(2)), float(m.group(3))))
@@ -139,6 +143,10 @@ def main(argv):
                 flags.append(f"{name}=DIFFERENT(Revit {theirs:.4f} mesh {candidate:.4f})")
                 if len(examples[name]) < 8:
                     examples[name].append((tag, group, theirs, candidate))
+        complete = revit.get((key, SET, "NetSideArea")) is not None
+        shape = (complete, wall.get("up"), wall.get("down"), wall.get("sloped"), wall.get("curved"))
+        if flags:
+            gates[("shape", shape)]["walls"] += 1
         if listing and flags:
             print(
                 f"wall tag:{tag} status {wall.get('status', '?')} closed {int(bool(wall.get('closed')))} open {wall.get('open', '?')} "
@@ -150,7 +158,10 @@ def main(argv):
             f"{name} ({group} meshes): Revit writes {row['revit']}; candidate equal {row['equal']}, "
             f"different {row['different']}, no candidate {row['no candidate']}"
         )
-    for (name, gate), row in sorted(gates.items()):
+    for (name, gate), row in sorted(gates.items(), key=lambda kv: str(kv[0])):
+        if name == "shape":
+            print(f"walls with Revit quantities by (Revit writes the side areas, up levels, down levels, sloped, curved faces) {gate}: {row['walls']}")
+            continue
         print(f"{name} by gate ({gate[0]} mesh, {gate[1]} faces): equal {row['equal']}, different {row['different']}")
     for name, items in sorted(examples.items()):
         for tag, group, theirs, candidate in items:

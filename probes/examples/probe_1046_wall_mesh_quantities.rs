@@ -15,6 +15,7 @@
 //!   wall tag:<id> status <status> primitives <n> triangles <n> unbounded <n> diagnostics <n>
 //!   wall tag:<id> volume <ft3> z <low> <high> vfaces <n>
 //!   wall tag:<id> closed <0|1> open <n> over <n> shells <n>
+//!   wall tag:<id> shape up <n> down <n> sloped <n> curved <n>
 //!   wall tag:<id> vface net <ft2> gross <ft2> normal <nx> <ny>
 //!
 //! `closed` says whether the mesh is a closed oriented surface (every directed edge
@@ -239,11 +240,18 @@ fn main() -> Result<()> {
         let (mut low, mut high) = (f64::INFINITY, f64::NEG_INFINITY);
         let mut faces: Vec<(f64, f64, [f64; 2])> = Vec::new();
         let mut every: Vec<(Vec3, Vec3, Vec3)> = Vec::new();
+        // Distinct heights of the flat faces that face up and down (to 1e-4 ft), the flat faces
+        // that are neither vertical nor horizontal, and the faces that are not flat.
+        let (mut up, mut down): (BTreeSet<i64>, BTreeSet<i64>) = (BTreeSet::new(), BTreeSet::new());
+        let (mut sloped, mut curved) = (0usize, 0usize);
         for primitive in &meshes.primitives {
             let mut flat: Vec<(Vec3, Vec3, Vec3)> = Vec::new();
             let mut net = 0.0;
             let mut direction: Option<Vec3> = None;
             let mut vertical = true;
+            let mut flat_face = true;
+            let mut height_sum = 0.0;
+            let mut corners = 0.0;
             for triangle in &primitive.triangles {
                 let Some((a, b, c, normal)) =
                     oriented(&primitive.vertices, &primitive.normals, triangle)
@@ -260,14 +268,35 @@ fn main() -> Result<()> {
                 let unit = [normal[0] / length, normal[1] / length, normal[2] / length];
                 match direction {
                     None => direction = Some(unit),
-                    Some(first) if dot(first, unit) < 1.0 - 1e-9 => vertical = false,
+                    Some(first) if dot(first, unit) < 1.0 - 1e-9 => {
+                        vertical = false;
+                        flat_face = false;
+                    }
                     Some(_) => {}
+                }
+                for p in [a, b, c] {
+                    height_sum += p[2];
+                    corners += 1.0;
                 }
                 if unit[2].abs() > 1e-6 {
                     vertical = false;
                 }
                 net += length / 2.0;
                 flat.push((a, b, c));
+            }
+            if let Some(unit) = direction.filter(|_| !flat.is_empty()) {
+                if !flat_face {
+                    curved += 1;
+                } else if unit[2].abs() >= 1.0 - 1e-9 {
+                    let level = (height_sum / corners / 1e-4).round() as i64;
+                    if unit[2] > 0.0 {
+                        up.insert(level);
+                    } else {
+                        down.insert(level);
+                    }
+                } else if unit[2].abs() > 1e-6 {
+                    sloped += 1;
+                }
             }
             let Some(unit) = direction.filter(|_| vertical && !flat.is_empty()) else {
                 continue;
@@ -288,6 +317,11 @@ fn main() -> Result<()> {
         println!(
             "wall tag:{id} closed {} open {open} over {over} shells {shells}",
             u8::from(open == 0 && over == 0)
+        );
+        println!(
+            "wall tag:{id} shape up {} down {} sloped {sloped} curved {curved}",
+            up.len(),
+            down.len()
         );
         faces.sort_by(|x, y| y.0.total_cmp(&x.0));
         for (net, gross, n) in faces.iter().take(SHOWN_FACES) {
