@@ -163,6 +163,17 @@ def main(argv):
     for key, mine in sorted(missing.items()):
         if key not in apart:
             print(f"  extra: {mine['cutter']} in {mine['host']}, Tag {key[0]} in {key[1]}")
+    # The openings Revit's export writes that rvt-rs's does not (#1600): kind, Tags and box.
+    only_revit = {key: theirs for key, theirs in revit.items() if key not in ours}
+    print(f"written by Revit's export, not by rvt-rs: {len(only_revit)}")
+    for key, theirs in sorted(only_revit.items())[:80]:
+        box = theirs["box"]
+        text = "no box" if box is None else " ".join(f"{v:.3f}" for v in (*box[0], *box[1]))
+        print(f"  revit only: {theirs['cutter']} in {theirs['host']}, Tag {key[0]} in {key[1]}, box {text}")
+    for key, mine in sorted(missing.items())[:80]:
+        box = mine["box"]
+        text = "no box" if box is None else " ".join(f"{v:.3f}" for v in (*box[0], *box[1]))
+        print(f"  rvt-rs only: {mine['cutter']} in {mine['host']}, Tag {key[0]} in {key[1]}, box {text}")
     return 0
 
 
