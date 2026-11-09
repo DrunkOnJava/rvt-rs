@@ -1843,6 +1843,13 @@ jobs:
       # grow beyond the 16 first pinned (RE-346).
       - name: The same-project gate names the same samples, years and pins everywhere
         run: python3 tools/ci/check_same_project_projects.py
+      # W5 (#408, #1565): a sealed held-out pair is first measured at the final
+      # 1.0 check, so no workflow or script may name its registry, and no file
+      # may hold its URLs or hashes.
+      - name: Sealed held-out pairs stay sealed
+        run: python3 tools/ci/check_sealed_holdout.py
+      - name: The sealed pairs check's pure judgement (failure-first)
+        run: python3 tools/ci/test_check_sealed_holdout.py
       - name: The semantic check's verdict failure modes
         run: python3 tools/ci/test_jev_check.py
       # The scheduled checks' pure parts (#1457): which NOT MEASURED streaks
