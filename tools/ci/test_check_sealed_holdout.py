@@ -147,6 +147,8 @@ class Files(unittest.TestCase):
             (".github/workflows/measure.yml", "gh release download sealed -R DrunkOnJava/rvt-rs-sealed\n"),
             ("tools/ci/fetch-holdout-models.sh", "repo=drunkonjava/RVT-RS-SEALED\n"),
             ("tools/re/x.py", "https://github.com/DrunkOnJava/rvt-rs-sealed/releases/download/sealed/x\n"),
+            # The bare name, under another owner or none, still points at the copies.
+            ("tools/ci/x.sh", 'gh release download sealed -R "$OWNER/rvt-rs-sealed"\n'),
         ):
             self.assertTrue(judge(self.REG, {path: text}), path)
 

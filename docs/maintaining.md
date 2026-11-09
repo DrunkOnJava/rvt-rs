@@ -668,12 +668,15 @@ before it.
   or an IFC2X3 view), and a row the check would fail, a link to a branch or a
   share page among them. The final check fetches the files again, maybe months
   on, from the row's links. Where a link no longer serves the file the row's
-  hash names, it takes the private copy instead (Griffin, 2026-11-08: a
+  hash names, it will take the private copy instead (Griffin, 2026-11-08: a
   contributor can delete the repository behind a pinned link). The copy is
-  uploaded and its size checked before the row is added, so no pair is listed
-  without one. Every sealed pair is under a licence that allows the copy, and
-  it is never made public or redistributed. The script needs `gh` signed in as
-  the maintainer. The release is read
+  uploaded, and each asset's digest checked against the hash it is named by,
+  before the row is added, so no pair is listed without one. The script
+  refuses to upload unless that repository is private: a pair's licence is the
+  contributor's declaration, which the check reads only as a label, and the
+  files embed Autodesk's template families, which no contributor's licence
+  covers, so the copies are never made public or redistributed. The script
+  needs `gh` signed in as the maintainer. The release is read
   from the IFC's exporter only: that the project was last saved by the same
   release is the contributor's word, since the `.rvt` is checked only as an
   OLE2 file. The registry takes no
@@ -691,7 +694,8 @@ before it.
   committed: a path built at run time, a glob over `research/` or a Measure run
   dispatched from an unreviewed branch are for review to catch.
 - **The final check** is the only reader still to come, of the registry and of
-  the private copies. It is added when W4, W6 and W7 pass on the reference
+  the private copies. A hosted runner cannot read a private repository without
+  a credential, so that pull request also decides which one it uses. It is added when W4, W6 and W7 pass on the reference
   models, in a pull request that adds its Measure input to the guard's
   `ALLOWED`. It measures each pair once, counts
   only, and moves the pairs it measured to `research/holdout-models.tsv`, used.
