@@ -5864,8 +5864,9 @@ fn production_walker_stats(
 /// Each element's type name, the `Reference` in any of its `Pset_` sets, by
 /// its index in `model.entities`: what an opening of the element's own
 /// geometry (a floor's sketch void, a face-hosted cut) carries as its
-/// `Pset_OpeningElementCommon.Reference`, as Revit's export writes it
-/// (RE-237).
+/// `Pset_OpeningElementCommon.Reference` and
+/// `Pset_EnvironmentalImpactIndicators.Reference`, as Revit's export writes
+/// them (RE-237, RE-382).
 pub(crate) fn host_references(model: &IfcModel) -> std::collections::HashMap<usize, String> {
     let mut out = std::collections::HashMap::new();
     for entity in &model.entities {
@@ -5917,7 +5918,7 @@ fn host_element_without_layers(entity: &entities::IfcEntity) -> bool {
 /// The property values `write_step` writes in `Pset_` sets, counted as it
 /// emits them: every building element's own set and further sets, then each
 /// storey's sets and the building's when the model has a storey, and an
-/// opening of its host's own geometry's `Reference` (RE-237). A piece the
+/// opening of its host's own geometry's `Reference` twice (RE-237, RE-382). A piece the
 /// writer folds into another element's body writes none (#1424): it is no
 /// element of the IFC, though it holds the sets of its owner.
 fn pset_property_value_count(model: &IfcModel) -> usize {
@@ -5956,7 +5957,10 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
         })
         .sum();
     let references = host_references(model);
-    let openings = model
+    // RE-237, RE-382: an opening of its host's own geometry holds the host's
+    // type name twice, in `Pset_OpeningElementCommon` and
+    // `Pset_EnvironmentalImpactIndicators`.
+    let openings = 2 * model
         .entities
         .iter()
         .filter(|entity| match entity {
