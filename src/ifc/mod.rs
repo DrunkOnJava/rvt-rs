@@ -837,6 +837,13 @@ pub struct ExportedModelDiagnostics {
     /// Empty when no wall is.
     #[serde(default)]
     pub wall_top_stubs_cut: std::collections::BTreeMap<String, usize>,
+    /// Of the exported walls whose edited elevation profile closes below the top
+    /// of their record box, how many have their top taken at the profile's
+    /// highest point, by the `ProfileTopSource` property of each (#1600,
+    /// RE-378): `wall_top_at_profile_top`. Revit's body ends there, and the
+    /// wall's `Height` is the profile's. Empty when no wall does.
+    #[serde(default)]
+    pub wall_profile_top_sources: std::collections::BTreeMap<String, usize>,
     /// Of the exported walls, how many have their base cut at an element their
     /// base join names, by the `BodyBaseSource` property of each (#1384,
     /// RE-336; #1411, RE-349): `wall_base_sloped_at_covering_floor`,
@@ -5069,6 +5076,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut wall_end_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_end_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_top_stubs_cut = std::collections::BTreeMap::<String, usize>::new();
+    let mut wall_profile_top_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_base_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_ends_order_dependent = 0usize;
     let mut wall_profile_sources = std::collections::BTreeMap::<String, usize>::new();
@@ -5139,6 +5147,10 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                         export_content::WALL_TOP_STUB_PROPERTY,
                         entities::PropertyValue::Text(text),
                     ) => *wall_top_stubs_cut.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_PROFILE_TOP_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *wall_profile_top_sources.entry(text.clone()).or_insert(0) += 1,
                     (
                         export_content::WALL_BASE_SOURCE_PROPERTY,
                         entities::PropertyValue::Text(text),
@@ -5263,6 +5275,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         wall_end_refusals,
         wall_end_sources,
         wall_top_stubs_cut,
+        wall_profile_top_sources,
         wall_base_sources,
         wall_ends_order_dependent,
         wall_profile_sources,

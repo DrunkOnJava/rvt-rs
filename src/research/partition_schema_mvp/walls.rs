@@ -286,6 +286,14 @@ const WALL_CENTRELINE_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=202
 /// end are read on [`WALL_END_JOIN_REVIT_VERSIONS`], which the rule asks for.
 const WALL_PROFILE_STUB_REVIT_VERSIONS: &[u32] = &[2024];
 
+/// Releases a wall's top is taken at the highest point of its edited elevation
+/// profile: the BIM4LCA office's terrain files (Revit 2024), whose wall 1387731
+/// is the wall it rests on (RE-378). Its own list, a decision of its own
+/// (#1600). The rule asks for the profile's extent ([`PROFILE_EXTENT_FIELD`]),
+/// which is attached on [`WALL_PROFILE_STUB_REVIT_VERSIONS`], so a release
+/// added here is added there too.
+const WALL_PROFILE_TOP_REVIT_VERSIONS: &[u32] = &[2024];
+
 /// Give each wall whose elevation profile was edited the openings that cuts
 /// (RE-151's 63rd opening).
 ///
@@ -369,6 +377,23 @@ pub(super) fn attach_wall_profile_openings(
                 ));
             }
         }
+        if !cuts.is_empty() && WALL_PROFILE_TOP_REVIT_VERSIONS.contains(&revit_version) {
+            if let Some((low, high)) = profile_heights(&segments) {
+                wall.fields.push((
+                    PROFILE_HEIGHT_FIELD.into(),
+                    InstanceField::Vector(vec![
+                        InstanceField::Float {
+                            value: low,
+                            size: 8,
+                        },
+                        InstanceField::Float {
+                            value: high,
+                            size: 8,
+                        },
+                    ]),
+                ));
+            }
+        }
         for (k, (tag, outline)) in cuts.into_iter().enumerate() {
             let points = outline.iter().map(point_field).collect();
             wall.fields.push((
@@ -395,6 +420,34 @@ fn point_field(point: &[f64; 3]) -> InstanceField {
             })
             .collect(),
     )
+}
+
+/// The lowest and highest height reached by an elevation profile's sketch
+/// lines, model feet. `None` where there are no lines or a height is not finite.
+// Tracker: B55.
+fn profile_heights(segments: &[SketchSegment]) -> Option<(f64, f64)> {
+    let mut heights = segments.iter().flat_map(|(_, a, b)| [a[2], b[2]]);
+    let first = heights.next()?;
+    let (low, high) = heights.fold((first, first), |(low, high), z| (low.min(z), high.max(z)));
+    (low.is_finite() && high.is_finite()).then_some((low, high))
+}
+
+/// The lowest and highest height of the elevation profile a wall's openings
+/// are cut from ([`PROFILE_HEIGHT_FIELD`]), model feet. `None` for a wall that
+/// has none.
+// Tracker: B55.
+pub fn profile_height_from_fields(fields: &[(String, InstanceField)]) -> Option<(f64, f64)> {
+    let values = fields.iter().find_map(|(name, value)| match value {
+        InstanceField::Vector(values) if name == PROFILE_HEIGHT_FIELD => Some(values),
+        _ => None,
+    })?;
+    match values.as_slice() {
+        [
+            InstanceField::Float { value: low, .. },
+            InstanceField::Float { value: high, .. },
+        ] => Some((*low, *high)),
+        _ => None,
+    }
 }
 
 /// The lowest and highest points of an elevation profile's sketch lines along

@@ -563,6 +563,14 @@ pub const PROFILE_OPENING_FIELD: &str = "m_profile_opening";
 // Tracker: B55.
 pub const PROFILE_EXTENT_FIELD: &str = "m_profile_extent";
 
+/// The field holding the lowest and highest height of the elevation profile the
+/// openings of [`PROFILE_OPENING_FIELD`] are cut from, as two floats in model
+/// feet. A profile edited down from the wall's unconnected height closes below
+/// the top of the wall's record box, and its highest point is then where Revit's
+/// body ends (#1600, RE-378).
+// Tracker: B55.
+pub const PROFILE_HEIGHT_FIELD: &str = "m_profile_height";
+
 /// How far apart two sketch points may lie and still meet, and how far off a
 /// plane or a side a point may lie and still be on it, feet.
 // Tracker: B55.

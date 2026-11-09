@@ -1140,6 +1140,16 @@ pub fn append_typed_production_elements(
             held_body = None;
             solid_shape = None;
         }
+        // #1600 (RE-378): a wall whose edited elevation profile closes below
+        // its record box ends at the profile's highest point. Before the
+        // quantities below, which take the body's height.
+        if policy.include_geometry && decoded.class == "Wall" && solid_shape.is_none() {
+            if let (Some(location), Some(body), Some(set)) =
+                (location_feet, extrusion.as_mut(), property_set.as_mut())
+            {
+                wall_profile::take_top_at_profile(&decoded, location, rotation_radians, body, set);
+            }
+        }
 
         let entity_index = entities.len();
         if let Some(id) = decoded.id {
@@ -4880,6 +4890,17 @@ pub const WALL_PROFILE_SOURCE_PROPERTY: &str = "ProfileStubSource";
 /// reason only, and a wall carried at one end and refused at the other has it
 /// and `ProfileStubSource` both.
 pub const WALL_PROFILE_REFUSAL_PROPERTY: &str = "ProfileStubRefusal";
+
+/// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says its top was
+/// taken at the highest point of its edited elevation profile, which closes
+/// below the top of its record box (#1600, RE-378): the one value
+/// [`WALL_PROFILE_TOP_AT_PROFILE`]. Counted in `exported.wall_profile_top_sources`.
+pub const WALL_PROFILE_TOP_PROPERTY: &str = "ProfileTopSource";
+
+/// [`WALL_PROFILE_TOP_PROPERTY`] of a wall whose profile spans the whole of it,
+/// from its base, and is the only thing that cuts it. The rule rests on one
+/// wall (RE-378).
+pub const WALL_PROFILE_TOP_AT_PROFILE: &str = "wall_top_at_profile_top";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how its base
 /// was cut (#1384, RE-336). It is not `BodyHeightSource`, which says how the
