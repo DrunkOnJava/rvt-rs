@@ -979,12 +979,13 @@ pub fn pipe_flow_directions_from_fields(fields: &[(String, InstanceField)]) -> B
 /// On 2024 to 2027 it runs from [`attach_pipe_axes`], before RE-130's and
 /// RE-134's type names, so every pipe takes its type from its record, as
 /// RE-240 measured against Revit's export; there it draws the pipes RE-131's
-/// connector entries do not place (on 2026 and 2027, which RE-131 does not
-/// read, every pipe). On 2015 to 2023 it types and draws every pipe. The cylinder is held to RE-131's own test: its record box must
+/// connector entries do not place, on 2026 and 2027 too since RE-346
+/// widened those entries to them. On 2015 to 2023 it types and draws every pipe. The cylinder is held to RE-131's own test: its record box must
 /// give the same radius and be the box the cylinder fills
 /// ([`crate::partition_pipe_axes::pipe_body`]). Its inner diameter is not
-/// given: a level pipe's invert, which needs it, is written on 2025 only, the
-/// release RE-157 measured it on. A pipe whose copies disagree, or whose
+/// given: a level pipe's invert, which needs it, comes from the curve fields,
+/// on 2025, the release RE-157 measured it on, and on 2026 and 2027 since
+/// RE-346. A pipe whose copies disagree, or whose
 /// record holds no line, more than one or no positive outer diameter, keeps
 /// its box.
 pub(super) fn attach_native_pipes(

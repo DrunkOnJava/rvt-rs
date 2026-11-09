@@ -310,7 +310,7 @@ PASS over a failure count, on spaces that have lost their `SpaceOutlineSource`
 in an export with geometry, and on a result that saw none of the export's
 spaces.
 
-## Bodies across saves (RE-341, RE-345)
+## Bodies, cuts, ports and properties across saves (RE-341, RE-345, RE-346)
 
 No Revit export of a 2025, 2026 or 2027 beam, tread landing, stair run or sketch
 outline of an Autodesk sample exists to score them against. `tools/re/bodies_across_saves.py` holds
@@ -319,24 +319,36 @@ the same project's earlier saves, matched by `Tag`: beams, landings and sketch
 outlines to the 2024 save, the 2026 and 2027 stair runs to the 2025 save. A 2025
 save is held to the 2024 save alone: its stair runs are the 2026 and 2027
 reference, so they are not compared, though the number it draws is still
-checked. A fifth group (RE-347) holds each door and window placed on Revit's
+checked. A further group (RE-347) holds each door and window placed on Revit's
 axes by the placement rule, whose axes nothing but the 2024 save can check on
 these releases, to the 2024 save's: class, GlobalId, placement axes and body.
 It prints how many it compared and how many are off the default axes, fails
 below `OPENINGS_LEAST` per class and above `OPENINGS_LEFT_OUT_MOST`, the doors
 and windows the 2024 save places by the rule that a later save leaves on the
-default axes (28 on the 2026 and 2027 saves of `rac_advanced`: the pass that
-takes a door's host from its native record (RE-245) is run on
-`CUT_LOOP_REVIT_VERSIONS`, 2024 and 2025, so on 2026 and 2027 a nearest wall
-that is not the door's own fails the along-the-wall test; the 2027 save had 14
-more until RE-360, set in 8 host walls whose record holds a previous location
-line beside the location curve, which `native_walls` now reads, #1475), which
-can only shrink: a count that drops
-moves the ceiling down in the change that drops it. It exercises two buildings
-(`rac_advanced` and `rac_basic`, each saved by each release); `rst_basic` holds
-none, and `rme_advanced` and `rme_basic` (107 placed doors per file, 59 with
-unequal flips) join it when their pipes pass, in whichever of #1454 and #1456
-lands second. Measure's script runs it beside each such sample, and the job
+default axes, which can only shrink: a count that drops moves the ceiling down in
+the change that drops it. #1456 set 28 on the 2026 and 42 on the 2027 save of
+`rac_advanced`: the pass that takes a door's host from its native record (RE-245)
+and reads its flips ran on `CUT_LOOP_REVIT_VERSIONS`, 2024 and 2025, so on 2026
+and 2027 a nearest wall that is not the door's own failed the along-the-wall
+test; and on 2027, 14 more, set in 8 host walls with no native straight-line row
+(#1475). That list now runs to 2027, so the ceilings are 0 and 15 (the 14 and one door whose frame is the same; RE-360, #1500, now reads those 14 doors' host walls, and the merged head's Measure run sets the 2027 ceiling to what remains) and each of
+`rme_advanced` and `rme_basic` (107 placed doors per file, 59 with unequal flips)
+is held with a floor of 107 doors and a ceiling of 0 left out, for each year; the
+Measure run of the merged head prints what each really is. It exercises four
+buildings, each saved by each release; `rst_basic` holds none. Since RE-346 the
+gate also holds the 2026 and 2027 saves of those and
+`rme_advanced` and `rme_basic` to the 2025 save for each pipe drawn from its axis
+(as a cylinder, below),
+each door and window cut in its host (the opening, and the volume the openings take
+out of the host), each port, the properties and quantities the release lists add,
+each door's and window's size and type, and a census of every body
+(`tools/re/readers_across_saves.py`, imported by the first), and prints how many of
+each it compared. A new sample or check has to be added in the scorers' `MINIMUMS`,
+`measure-reference-models.sh` (`saves_gate_keeps` and `bodies_across_saves`),
+`check-bodies-across-saves.sh` and `same_project_verdict.py` (`PROJECTS`), which
+`tools/ci/check_same_project_projects.py` checks against each other in CI, or the
+verdict does not see it. Measure's script runs it beside each such sample, scoring
+up to as many at once as the runner has CPUs, and the job
 `same-project-gates` turns the run red on a difference, a missing file, an
 unknown project, fewer bodies than the sample holds, or a check that compared
 nothing. That job also holds #1428's Areas gate (rac_advanced's Areas across its
@@ -366,18 +378,51 @@ not remove Compare's report.
   says in a notice that it compared nothing, so the run a gate judges has no
   `ifc_flags`. A whitespace-only value is no flag.
 - **What it cannot catch**: an error the earlier save shares with the 2025,
-  2026 or 2027 read. Nothing in it is a Revit export. It compares bodies, not
-  quantities or property sets. No 2026 or 2027 held-out model, and none of the
-  28 Revit 2025 models read (the R2025 models and the four RE1 models), holds an
-  `IfcBeam` or a tread landing, so the beam and landing readers have run only on
-  two Autodesk samples saved by earlier releases; and the 25 with Revit's own
-  2025 exports (the R2025 models and RE1 Architecture) hold no floor, ceiling or
-  roof with an arc, so no Revit
-  export checks the arc reading on 2025 either (RE-345). Shaft openings are cut
-  on 2024 only, for the same reason: the only two measured on 2025 cut nothing.
+  2026 or 2027 read, and a value Revit's exporter writes differently on 2026 or
+  2027 (hemanth1986's 2027 pair gives every door and window an Area that is not
+  its Width times its Height, which both saves of an Autodesk sample read alike,
+  RE-346). Nothing in it is a Revit export. It compares bodies, and the property
+  names `ADDED` lists, not the others. No 2026 or 2027 held-out model, and none of
+  the 28 Revit 2025 models read (the R2025 models and the four RE1 models), holds an
+  `IfcBeam` or a tread landing, so the beam and landing readers have run only on two
+  Autodesk samples saved by earlier releases; no held-out model holds a pipe, a duct
+  or a port; and the 25 with Revit's own 2025 exports (the R2025 models and RE1
+  Architecture) hold no floor, ceiling or roof with an arc, so no Revit export checks
+  the arc reading on 2025 either (RE-345).
+  Shaft openings are cut on 2024 only, for the same reason: the only two measured on
+  2025 cut nothing.
+- **Products that share a Tag** (a floor Revit writes as several, a stair once for each
+  storey) are paired by storey, then the volume and the centre of the body. All but
+  the first copy carry a GlobalId derived from the export, which differs between two
+  saves, so those are not compared; the two saves must share exactly one GlobalId
+  under such a Tag, and it must be on the two products paired by what they are, so an
+  identity swapped between two pieces fails (RE-346).
+- **Pipes are held as cylinders** (Griffin, 2026-11-05, "Compare the cylinder itself").
+  A pipe that is a circular extrusion in both saves is compared by the two ends of its
+  axis (in either order), its radius and its length, each to 0.001 ft, and not by the
+  vertices of the polygon its circle meshes to: Revit 2027's save writes the extrusion
+  of 115 of `rme_basic`'s 491 pipe segments from the other end or with the profile
+  turned about its axis (110 and 5), the same cylinder, and 15 of those polygons lay
+  0.0038 to 0.0063 ft from the 2025 save's. All pipes are held the same way, a pipe
+  that really moved still fails, no list was added, and the 15 stay drawn. A pipe that
+  is not a circular extrusion in both saves keeps the vertex check. The output counts
+  how many were compared by each (`CYLINDER_LEAST` holds the least).
 - **A difference** is a reader that is wrong or a project that really differs
   between saves. Narrow the reader until it is never wrong and let what it
-  leaves out stay a box, counted (`left as boxes`); do not allowlist.
+  leaves out stay a box, counted (`left as boxes`); do not allowlist. The one
+  exception (Griffin, 2026-11-05) is `PINNED_WALLS` in `readers_across_saves.py`:
+  16 walls of `rac_basic` that both saves draw from the same source, of another
+  extent, as on `main` (#1471 is the lane fixing them). It can only shrink and no
+  entry is ever added: `tools/ci/check_same_project_projects.py` (a CI step) holds the
+  16 tags and fails on a release with more than 16 or with a tag not among them. Each
+  wall is pinned for each release to its source pair, the volume of each body and the
+  world box of each body (1e-6), so a wall whose source, volume or box moves fails,
+  and one that heals fails too, which forces its pin out. A roof a save leaves as a
+  record box where the 2025 save draws it is counted, not scored, and exactly:
+  `ROOFS_LEFT_AS_BOXES` names `rac_advanced`'s 201262 and `rac_basic`'s 243274, and one
+  more or one fewer fails. Any other body that differs from the 2025 save fails; a
+  difference on a release or sample not pinned is the maintainer's decision, not a new
+  entry.
 - The output carries, for rac_advanced's ceiling 147534, floor 139803 and roof
   201262 and the other elements whose sketch holds an arc (`ARC_OWNERS`), the
   class, `BodySource`, `ProfileResolved`, volume and vertex count in every save,
