@@ -1,0 +1,244 @@
+//! RE-377 (#1593): which record of a Revit 2015 to 2023 save holds the material
+//! Revit's export gives a curtain panel.
+//!
+//! RE-367 reads a panel's material as its type's `m_renderStyleId`, the material
+//! RE-166 and RE-201 measured as Revit's on Snowdon Towers, and finds it is not
+//! Revit's on any of the 67 plates of Vitoria's `ALD26 Before`. This lists, for
+//! every curtain panel (an element record of `OST_CurtainWallPanels`), each
+//! field of the panel's own native record, of its type's record (the one id in
+//! its reference list that has a name entry and no record of its own, RE-367)
+//! and of the records its reference list names, that holds the ElementId of a
+//! material. `tools/re/panel_material_sources_vs_ifc.py` then says, source by
+//! source, how many plates have Revit's material from it.
+//!
+//! One JSON object per line:
+//!
+//! - `{"kind":"panel","id":P,"types":[T],"refs":[R...]}` for each panel;
+//! - `{"kind":"record","id":N,"class":"...","roles":["instance","type","ref"],
+//!   "sources":[{"path","material","name","context"}]}` for each native record
+//!   read that holds a material: `path` is the object's class and the field
+//!   path to the ElementId (`[]` for an array element), `context` the array
+//!   element's other fields where there is one, which says which parameter an
+//!   entry is;
+//! - `{"kind":"summary",...}`.
+//!
+//! The ElementIds and material names are the model's own, so a scorer prints
+//! counts and a digest of `context` and nothing else.
+//!
+//! ```bash
+//! cargo run --profile ci -p rvt-probes --example probe_re377_panel_material_sources -- \
+//!     samples/2023-racadvancedsampleproject.rvt
+//! ```
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use rvt::RevitFile;
+use rvt::elem_table::{declared_ids, parse_records};
+use rvt::research::native_document::{self, Options};
+use rvt::research::partition_element_records::OST_CURTAIN_WALL_PANELS;
+use rvt::research::partition_element_records_2023::{is_32bit_release, scan_records};
+use rvt::research::partition_materials::scan_materials_32;
+use rvt::research::partition_names::name_entries_2023;
+use serde_json::{Value, json};
+
+/// How much of an array element's other fields a source keeps.
+const CONTEXT_LIMIT: usize = 400;
+
+struct Source {
+    path: String,
+    material: u32,
+    name: String,
+    context: Option<String>,
+}
+
+/// An ElementId field as the schema saves it: `{"m_id":{"m_id64":n}}` from
+/// Revit 2024, `{"m_id":{"m_id":n}}` on 2015 to 2023.
+fn element_id(value: &Value) -> Option<i64> {
+    let identifier = value.get("m_id")?;
+    identifier
+        .get("m_id64")
+        .or_else(|| identifier.get("m_id"))
+        .and_then(Value::as_i64)
+}
+
+/// Every ElementId below `value` that is one of `materials`, with the path of
+/// fields that leads to it. `parent` and `key` are the object holding `value`
+/// and the field it is in.
+fn walk(
+    value: &Value,
+    path: &str,
+    parent: Option<(&Value, &str)>,
+    materials: &BTreeMap<u32, String>,
+    out: &mut Vec<Source>,
+) {
+    if let Some(id) = element_id(value) {
+        let Some((id, name)) = u32::try_from(id)
+            .ok()
+            .and_then(|id| materials.get(&id).map(|name| (id, name)))
+        else {
+            return;
+        };
+        let context = parent.filter(|_| path.contains("[]")).map(|(object, key)| {
+            let mut rest = object.clone();
+            if let Some(map) = rest.as_object_mut() {
+                map.remove(key);
+            }
+            rest.to_string()
+                .chars()
+                .take(CONTEXT_LIMIT)
+                .collect::<String>()
+        });
+        out.push(Source {
+            path: path.to_string(),
+            material: id,
+            name: name.clone(),
+            context,
+        });
+        return;
+    }
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map {
+                walk(
+                    child,
+                    &format!("{path}.{key}"),
+                    Some((value, key.as_str())),
+                    materials,
+                    out,
+                );
+            }
+        }
+        Value::Array(items) => {
+            for child in items {
+                walk(child, &format!("{path}[]"), parent, materials, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn main() -> anyhow::Result<()> {
+    let path = std::env::args()
+        .skip(1)
+        .find(|arg| !arg.starts_with("--"))
+        .ok_or_else(|| anyhow::anyhow!("usage: probe_re377_panel_material_sources <file.rvt>"))?;
+    let mut rf = RevitFile::open(&path)?;
+    let release = rf.layout_release()?;
+    if !is_32bit_release(release) {
+        println!(
+            "{}",
+            json!({"kind": "summary", "release": release, "note": "not a 32-bit release"})
+        );
+        return Ok(());
+    }
+    let records = scan_records(&mut rf, release);
+    let table = parse_records(&mut rf)?;
+    let declared = declared_ids(&table);
+    let type_names = name_entries_2023(&mut rf, &declared);
+    let (_, materials) = scan_materials_32(&mut rf, release, &declared);
+    let record_ids: BTreeSet<u32> = records.iter().map(|r| r.element_id).collect();
+
+    // Each panel's type candidates and the records its list names.
+    let mut panels: BTreeMap<u32, (Vec<u32>, Vec<u32>)> = BTreeMap::new();
+    for record in records
+        .iter()
+        .filter(|r| r.builtin_category == OST_CURTAIN_WALL_PANELS)
+    {
+        let mut types = Vec::new();
+        let mut refs = Vec::new();
+        for &reference in &record.references {
+            let Ok(id) = u32::try_from(reference) else {
+                continue;
+            };
+            if id == record.element_id {
+                continue;
+            }
+            if record_ids.contains(&id) {
+                refs.push(id);
+            } else if type_names.contains_key(&id) && !types.contains(&id) {
+                types.push(id);
+            }
+        }
+        panels.entry(record.element_id).or_insert((types, refs));
+    }
+
+    let mut roles: BTreeMap<u64, BTreeSet<&'static str>> = BTreeMap::new();
+    for (&panel, (types, refs)) in &panels {
+        println!(
+            "{}",
+            json!({"kind": "panel", "id": panel, "types": types, "refs": refs})
+        );
+        roles
+            .entry(u64::from(panel))
+            .or_default()
+            .insert("instance");
+        for &id in types {
+            roles.entry(u64::from(id)).or_default().insert("type");
+        }
+        for &id in refs {
+            if !panels.contains_key(&id) {
+                roles.entry(u64::from(id)).or_default().insert("ref");
+            }
+        }
+    }
+
+    let options = Options {
+        selected_ids: roles.keys().copied().collect(),
+        ..Options::default()
+    };
+    let (mut read, mut with_material) = (0usize, 0usize);
+    native_document::extract_graphs(&mut rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        read += 1;
+        let mut sources = Vec::new();
+        for object in &graph.objects {
+            walk(
+                &object.fields,
+                &object.class_name,
+                None,
+                &materials,
+                &mut sources,
+            );
+        }
+        if sources.is_empty() {
+            return Ok(());
+        }
+        with_material += 1;
+        let id = record.identity.element_id;
+        let class = graph.objects.first().map(|o| o.class_name.clone());
+        println!(
+            "{}",
+            json!({
+                "kind": "record",
+                "id": id,
+                "class": class,
+                "roles": roles.get(&id),
+                "sources": sources
+                    .iter()
+                    .map(|s| json!({
+                        "path": s.path,
+                        "material": s.material,
+                        "name": s.name,
+                        "context": s.context,
+                    }))
+                    .collect::<Vec<_>>(),
+            })
+        );
+        Ok(())
+    })?;
+    println!(
+        "{}",
+        json!({
+            "kind": "summary",
+            "release": release,
+            "panels": panels.len(),
+            "records_selected": roles.len(),
+            "records_read": read,
+            "records_with_a_material": with_material,
+            "materials_named": materials.len(),
+        })
+    );
+    Ok(())
+}
