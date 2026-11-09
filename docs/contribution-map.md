@@ -78,7 +78,7 @@ The requirements these serve, each with its bar, status and evidence, are in
 | [#1594](https://github.com/DrunkOnJava/rvt-rs/issues/1594) | research(ifc): a plate type's Tag is an instance's ElementId in Revit's export; rvt-rs writes the type's (follow-up of #1520, RE-367) |
 | [#1565](https://github.com/DrunkOnJava/rvt-rs/issues/1565) | W5: a sealed registry for fresh held-out pairs, read only by the final 1.0 check |
 | [#1444](https://github.com/DrunkOnJava/rvt-rs/issues/1444) | rvt-rs reads no reinforcing bars or element assemblies |
-| [#1209](https://github.com/DrunkOnJava/rvt-rs/issues/1209) | W7: coverings' `GrossArea` on ceilings in pieces and cut ceilings, and the roofing coverings (RE-297) |
+| [#1209](https://github.com/DrunkOnJava/rvt-rs/issues/1209) | W7: coverings' GrossArea on ceilings in pieces and cut ceilings, and the roofing coverings (RE-297) |
 | [#1208](https://github.com/DrunkOnJava/rvt-rs/issues/1208) | W7: single-layer slabs' Width and Length, sloped floors' Depth and the stair landings' volume (RE-295, RE-298) |
 | [#1207](https://github.com/DrunkOnJava/rvt-rs/issues/1207) | W7: spaces' GrossVolume, stepped rooms' NetVolume and Revit 25's area quantities (RE-296) |
 | [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203) | W7: the round column and the meshed columns' values, and the section check on box-drawn columns |
@@ -86,7 +86,7 @@ The requirements these serve, each with its bar, status and evidence, are in
 | [#1192](https://github.com/DrunkOnJava/rvt-rs/issues/1192) | W10: check that every number in the README and the supported profile names its model |
 | [#1191](https://github.com/DrunkOnJava/rvt-rs/issues/1191) | W6: draw family instances from their saved meshes by default (decode the remaining saved-graphics faces) |
 | [#1190](https://github.com/DrunkOnJava/rvt-rs/issues/1190) | W2, W6, W7: geometry and properties on Revit 2015 to 2023, 2026 and 2027 projects, beyond each element's box |
-| [#1189](https://github.com/DrunkOnJava/rvt-rs/issues/1189) | W3: read family (`.rfa`) and template (`.rte`, `.rft`) files like projects: types, parameters and geometry |
+| [#1189](https://github.com/DrunkOnJava/rvt-rs/issues/1189) | W3: read family (.rfa) and template (.rte, .rft) files like projects: types, parameters and geometry |
 | [#1158](https://github.com/DrunkOnJava/rvt-rs/issues/1158) | Native records on Revit 2015 to 2022: types, materials, stairs, cut loops, mullion hosts, connectors, family forms and saved meshes are read only from 2023 |
 | [#1075](https://github.com/DrunkOnJava/rvt-rs/issues/1075) | Bug: models with a partition stream over 256 MiB open empty, with no error |
 | [#1046](https://github.com/DrunkOnJava/rvt-rs/issues/1046) | W7: base quantities Revit computes from its joined geometry (wall areas and volumes, mullion surfaces) |
