@@ -20,9 +20,9 @@ After the solid's header (`u64` ElementId · `04 90 08 00`) comes its list of ob
 
 Bounded so, every edge names two of its solid's faces on all 2,952 room solids of the 51 models with rooms. Read up to the next solid's header instead, Snowdon Towers' room solids took the records of the element after them: 1,897 edges whose two faces disagree, which the list bound removes.
 
-**Where both faces are planes** each gives the edge's ends, and the two agree to 0.001 ft on 51,847 of 51,851 such edges. The other 4 are on the office as built (the probe names the rooms); a solid with any such edge is refused (`edge_faces_disagree`).
+**Where both faces are planes** each gives the edge's ends, and the two agree to 0.001 ft on 51,847 of 51,851 such edges. The other 4 are all on one solid of the office's room 1681182 as built, whose outline the span reads; a solid with any such edge is refused (`edge_faces_disagree`), and that solid was refused before for edges that do not close.
 
-**On a cylinder**, an edge along the axis stores the same angle at both points, one end of the face's angle (11,488 such sides). An edge round the cylinder stores two points that are not its ends: on Snowdon Towers, measured locally on all 114 such sides, they lie 1/k and 2/k of the face's angle in from one end, k a whole number from 3 to 20, and on the 27 where the face across the edge is a plane that was read, the plane gives the same two points. The reader therefore takes a curved wall's arc over the face's whole angle, from its uv box (RE-334), never from the edge. The run of §6 tallies that form on every model.
+**On a cylinder**, an edge along the axis stores the same angle at both points, one end of the face's angle (11,488 such sides). An edge round the cylinder stores two points that are not its ends: they lie 1/k and 2/k of the face's angle in from one end, k a whole number, on 11,419 of the 11,424 such sides (5,683 from the start, 5,736 from the end); the other 5, all on Snowdon Towers, are neither. On all 131 where the face across the edge is a plane that was read, the plane gives the same two points. The reader therefore takes a curved wall's arc over the face's whole angle, from its uv box (RE-334), never from the edge.
 
 ## 3. The rule
 
@@ -46,7 +46,7 @@ So the floor's outline is the room's area only where the solid does not change b
 
 ## 5. What it reads
 
-Measure run [42580514237](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42580514237) ran the probe at `dbe56298` on every Autodesk sample of 2015 to 2027, the office as built and at permit, the terrain offices, Core Interior, Einhoven, the RE1 models and the Revit 2025 models: 2,952 rooms with a solid on 51 models. It compares what the edges give with what `main` reads (`walk`, the span's `faces` or `approximate`, or the box). Two outlines agree where their areas are within 0.01 ft² and their extents within 0.001 ft.
+Measure run [42583042107](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42583042107) ran the probe at `b86fd83e`, the rule as it lands, on every Autodesk sample of 2015 to 2027, the office as built and at permit, the terrain offices, Core Interior, Einhoven, the RE1 models and the Revit 2025 models: 2,952 rooms with a solid on 51 models. It compares what the edges give with what `main` reads (`walk`, the span's `faces` or `approximate`, or the box). Two outlines agree where their areas are within 0.01 ft² and their extents within 0.001 ft.
 
 | `main` reads | edges agree | edges refuse | edges differ |
 |---|---:|---:|---:|
@@ -63,11 +63,17 @@ The edges never give an outline that differs from one `main` reads. The two they
 - **The office at building permit, room 3095831** (CORRIDOR 030): 1864.737 ft², against 1864.74 ft² for the same space in Revit's IFC4 export of that file (`space_profiles_vs_ifc.py`; the box was 6642.03).
 - **Snowdon Towers, room 830902**: 304.059 ft², against Revit's 304.058 (`Vim.Room.Area`, a later save, local only; the box was 808.665).
 
-Of the refusals, 564 are rooms whose solid has a point between its floor and 4 ft, 179 have a face whose record is not read and whose edges do not lie at one height, 28 have floor edges that do not close, and 2 have a sloped face. On the 2015 to 2023 and 2025 to 2027 releases the edges add no room on the models measured, so the rule is not read there.
+Of the refusals, 564 are rooms whose solid has a point between its floor and 4 ft, 179 have a face whose record is not read and whose edges do not lie at one height, 27 have floor edges that do not close, 2 have a sloped face and 1 an edge its planes place differently. Run [42580514237](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42580514237), at `dbe56298` before the plane check, gave the same comparison, the one room the check refuses having failed to close there. On the 2015 to 2023 and 2025 to 2027 releases the edges add no room on the models measured, so the rule is not read there.
 
 ## 6. The export
 
-[TODO: the unfiltered Measure run on the PR's head against `main`: the exports that move, the office at permit's space scores, and the probe's tally of the cylinder edges' two points and of the 4 plane edges.]
+Measure run [42583038481](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42583038481) exports every model at `b86fd83e` and at `main` (`58fd08f2`), with every scorer: Autodesk's samples of 2015 to 2027, the office as built and at permit, the terrain offices, Core Interior, Einhoven, the RE1 models and the Revit 2025 models.
+
+- **Byte identity.** 90 of the 92 exports are identical. The two that differ are the office at building permit and Snowdon Towers Architectural 2024, the two files whose rooms the edges add.
+- **Diagnostics.** On each, `exported.edge_outline_spaces` is 1 and `exported.bounding_box_spaces` falls by 1 (45 to 44 at permit, 5 to 4 on Snowdon Towers).
+- **The office at permit, against Revit's IFC4 export** (`space_profiles_vs_ifc.py`). Room 3095831's area is 1864.74 ft² against 1864.74 (0.00%), its top surface's boundary 0.000 ft from Revit's, and its lowest and highest vertex within 0.01 ft of Revit's. Its `outline` distance, which measures every vertex of either body's upward faces against the other's top surface, is 1.148 ft: the two top surfaces cover the same region (`space_overlaps_vs_ifc.py` gives upward faces, floor and every face 1864.74 ft² on both), so one body has a vertex of its upward faces off the other's boundary, which is not examined further. The space scores go from 262 to 263 rooms within 0.1% in area and within 0.01 ft in boundary, and stay at 255 within 0.01 ft in outline. The room overlaps no wall and no other room.
+- **The MCP server's answers.** At permit, 253 rooms have an area (252 on `main`), 249 within 0.1% of Revit's (248).
+- **Everything else.** No other scorer output moves on any model, the W7 census (`qtos_vs_ifc.py`, `psets_vs_ifc.py`) included: the room gains no quantity or property. Snowdon Towers' export moves with no scorer output, since its IFC4 export holds no `IfcSpace`.
 
 ## 7. Not measured, not read
 
@@ -82,6 +88,8 @@ Of the refusals, 564 are rooms whose solid has a point between its floor and 4 f
 tools/fetch-autodesk-samples.sh samples 2024
 cargo run --profile ci -p rvt-probes --example probe_re374_room_solid_edges -- \
     samples/2024-snowdon_towers_sample_architectural.rvt
-gh workflow run measure.yml --ref main -f ref=dbe56298 -f base=none -f samples=true \
-    -f nordic=true -f r2025=true -f probe=probe_re374_room_solid_edges -f probe_scorer=- -f scorers=none
+gh workflow run measure.yml --ref main -f ref=b86fd83e03c04e73122ab38801454edb04a04885 -f base=none \
+    -f samples=true -f nordic=true -f r2025=true -f probe=probe_re374_room_solid_edges -f probe_scorer=- -f scorers=none
+gh workflow run measure.yml --ref main -f ref=b86fd83e03c04e73122ab38801454edb04a04885 -f base=main \
+    -f samples=true -f nordic=true -f r2025=true -f holdout=true
 ```

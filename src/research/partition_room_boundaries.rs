@@ -1218,8 +1218,9 @@ pub struct SolidEdge {
     /// first point, the second's, the first's at the second point, the
     /// second's. On a straight edge the points are its ends. On an edge round
     /// a cylinder they are not: they lie 1/k and 2/k of the face's angle in
-    /// from one end, k a whole number (3 to 20 on Snowdon Towers), and a
-    /// plane across the edge gives the same two points.
+    /// from one end, k a whole number, on 11,419 of the 11,424 such sides
+    /// measured (RE-374), and a plane across the edge gives the same two
+    /// points.
     pub uv: [[f64; 2]; 4],
 }
 
