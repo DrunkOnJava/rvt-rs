@@ -27,8 +27,9 @@
 //!   how many records of each class hold its ElementId, its own record
 //!   excepted, so that a scorer that knows Revit's material can say which
 //!   classes of record name it;
-//! - `{"kind":"gstyle","id","byte_hits","root"}` for each graphics style (a
-//!   category's or subcategory's Object Styles row) whose body holds a material;
+//! - `{"kind":"gstyle","id","byte_hits","objects"}` for each graphics style (a
+//!   category's or subcategory's Object Styles row) whose body holds a material,
+//!   with every object of its decoded graph;
 //! - `{"kind":"summary",...}`.
 //!
 //! The ElementIds and material names are the model's own, so a scorer prints
@@ -46,7 +47,7 @@ use rvt::elem_table::{declared_ids, parse_records};
 use rvt::research::native_document::{self, Options};
 use rvt::research::partition_element_records::OST_CURTAIN_WALL_PANELS;
 use rvt::research::partition_element_records_2023::{is_32bit_release, scan_records};
-use rvt::research::partition_materials::scan_materials_32;
+use rvt::research::partition_materials::{scan_material_names, scan_materials_32};
 use rvt::research::partition_names::name_entries_2023;
 use serde_json::{Value, json};
 
@@ -164,28 +165,16 @@ fn walk(
     }
 }
 
-fn main() -> anyhow::Result<()> {
-    let path = std::env::args()
-        .skip(1)
-        .find(|arg| !arg.starts_with("--"))
-        .ok_or_else(|| anyhow::anyhow!("usage: probe_re377_panel_material_sources <file.rvt>"))?;
-    let mut rf = RevitFile::open(&path)?;
-    let release = rf.layout_release()?;
-    if !is_32bit_release(release) {
-        println!(
-            "{}",
-            json!({"kind": "summary", "release": release, "note": "not a 32-bit release"})
-        );
-        return Ok(());
-    }
-    let records = scan_records(&mut rf, release);
-    let table = parse_records(&mut rf)?;
-    let declared = declared_ids(&table);
-    let type_names = name_entries_2023(&mut rf, &declared);
-    let (_, materials) = scan_materials_32(&mut rf, release, &declared);
+/// The curtain panels of a 32-bit save with their type candidates and the
+/// records their lists name, keyed by the panel's ElementId.
+fn find_panels(
+    rf: &mut RevitFile,
+    release: u32,
+    declared: &BTreeSet<u32>,
+) -> BTreeMap<u32, (Vec<u32>, Vec<u32>)> {
+    let records = scan_records(rf, release);
+    let type_names = name_entries_2023(rf, declared);
     let record_ids: BTreeSet<u32> = records.iter().map(|r| r.element_id).collect();
-
-    // Each panel's type candidates and the records its list names.
     let mut panels: BTreeMap<u32, (Vec<u32>, Vec<u32>)> = BTreeMap::new();
     for record in records
         .iter()
@@ -208,7 +197,32 @@ fn main() -> anyhow::Result<()> {
         }
         panels.entry(record.element_id).or_insert((types, refs));
     }
+    panels
+}
 
+fn main() -> anyhow::Result<()> {
+    let path = std::env::args()
+        .skip(1)
+        .find(|arg| !arg.starts_with("--"))
+        .ok_or_else(|| anyhow::anyhow!("usage: probe_re377_panel_material_sources <file.rvt>"))?;
+    let mut rf = RevitFile::open(&path)?;
+    let release = rf.layout_release()?;
+    let table = parse_records(&mut rf)?;
+    let declared = declared_ids(&table);
+    let narrow = is_32bit_release(release);
+    let materials: BTreeMap<u32, String> = if narrow {
+        scan_materials_32(&mut rf, release, &declared).1
+    } else {
+        scan_material_names(&mut rf, release, &declared).unwrap_or_default()
+    };
+
+    // The panels of a 32-bit save: each one's type candidates and the records
+    // its list names. Other releases get the whole-file pass alone.
+    let panels = if narrow {
+        find_panels(&mut rf, release, &declared)
+    } else {
+        BTreeMap::new()
+    };
     let mut roles: BTreeMap<u64, BTreeSet<&'static str>> = BTreeMap::new();
     for (&panel, (types, refs)) in &panels {
         println!(
@@ -229,75 +243,78 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    let options = Options {
-        selected_ids: roles.keys().copied().collect(),
-        releases: native_document::NATIVE_RELEASES,
-        keep_body: true,
-        ..Options::default()
-    };
     let (mut read, mut with_material) = (0usize, 0usize);
-    native_document::extract_graphs(&mut rf, &options, |record| {
-        let Some(graph) = record.graph.as_ref() else {
-            return Ok(());
+    if !roles.is_empty() {
+        let options = Options {
+            selected_ids: roles.keys().copied().collect(),
+            releases: native_document::NATIVE_RELEASES,
+            keep_body: true,
+            ..Options::default()
         };
-        read += 1;
-        let mut sources = Vec::new();
-        for object in &graph.objects {
-            walk(
-                &object.fields,
-                &object.class_name,
-                None,
-                &materials,
-                &mut sources,
+        native_document::extract_graphs(&mut rf, &options, |record| {
+            let Some(graph) = record.graph.as_ref() else {
+                return Ok(());
+            };
+            read += 1;
+            let mut sources = Vec::new();
+            for object in &graph.objects {
+                walk(
+                    &object.fields,
+                    &object.class_name,
+                    None,
+                    &materials,
+                    &mut sources,
+                );
+            }
+            let hits = record
+                .body
+                .as_deref()
+                .map(|body| byte_hits(body, &materials))
+                .unwrap_or_default();
+            if sources.is_empty() && hits.is_empty() {
+                return Ok(());
+            }
+            with_material += 1;
+            let id = record.identity.element_id;
+            let class = graph.objects.first().map(|o| o.class_name.clone());
+            // A type's own fields, to read what else it holds beside a material.
+            let root = roles
+                .get(&id)
+                .filter(|roles| roles.contains("type"))
+                .and_then(|_| graph.objects.first())
+                .map(|object| {
+                    object
+                        .fields
+                        .to_string()
+                        .chars()
+                        .take(ROOT_LIMIT)
+                        .collect::<String>()
+                });
+            println!(
+                "{}",
+                json!({
+                    "kind": "record",
+                    "id": id,
+                    "class": class,
+                    "roles": roles.get(&id),
+                    "sources": sources
+                        .iter()
+                        .map(|s| json!({
+                            "path": s.path,
+                            "material": s.material,
+                            "name": s.name,
+                            "context": s.context,
+                        }))
+                        .collect::<Vec<_>>(),
+                    "root": root,
+                    "byte_hits": hits.iter().take(BYTE_HITS_LIMIT).collect::<Vec<_>>(),
+                    "byte_hits_total": hits.len(),
+                })
             );
-        }
-        let hits = record
-            .body
-            .as_deref()
-            .map(|body| byte_hits(body, &materials))
-            .unwrap_or_default();
-        if sources.is_empty() && hits.is_empty() {
-            return Ok(());
-        }
-        with_material += 1;
-        let id = record.identity.element_id;
-        let class = graph.objects.first().map(|o| o.class_name.clone());
-        // A type's own fields, to read what else it holds beside a material.
-        let root = roles
-            .get(&id)
-            .filter(|roles| roles.contains("type"))
-            .and_then(|_| graph.objects.first())
-            .map(|object| {
-                object
-                    .fields
-                    .to_string()
-                    .chars()
-                    .take(ROOT_LIMIT)
-                    .collect::<String>()
-            });
-        println!(
-            "{}",
-            json!({
-                "kind": "record",
-                "id": id,
-                "class": class,
-                "roles": roles.get(&id),
-                "sources": sources
-                    .iter()
-                    .map(|s| json!({
-                        "path": s.path,
-                        "material": s.material,
-                        "name": s.name,
-                        "context": s.context,
-                    }))
-                    .collect::<Vec<_>>(),
-                "root": root,
-                "byte_hits": hits.iter().take(BYTE_HITS_LIMIT).collect::<Vec<_>>(),
-                "byte_hits_total": hits.len(),
-            })
-        );
-        Ok(())
-    })?;
+            Ok(())
+        })?;
+    }
+
     // Which classes of record name each material anywhere in the file, so that
     // where a material no panel record names is held can be read from a scorer
     // that knows the material.
@@ -322,28 +339,38 @@ fn main() -> anyhow::Result<()> {
             }
         }
         // A graphics style (a category's or subcategory's Object Styles row)
-        // that holds a material: where, and what else it holds.
+        // that holds a material: where, and every object of its graph (the
+        // style data a pointer reaches holds the material field).
         if class == "GStyleElem" && !seen.is_empty() {
             let hits = byte_hits(body, &materials);
-            let root = record
+            let objects: Vec<Value> = record
                 .graph
                 .as_ref()
-                .and_then(|graph| graph.objects.first())
-                .map(|object| {
-                    object
-                        .fields
-                        .to_string()
-                        .chars()
-                        .take(ROOT_LIMIT)
-                        .collect::<String>()
-                });
+                .map(|graph| {
+                    graph
+                        .objects
+                        .iter()
+                        .map(|object| {
+                            json!({
+                                "class": object.class_name,
+                                "fields": object
+                                    .fields
+                                    .to_string()
+                                    .chars()
+                                    .take(ROOT_LIMIT)
+                                    .collect::<String>(),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
             println!(
                 "{}",
                 json!({
                     "kind": "gstyle",
                     "id": own,
                     "byte_hits": hits.iter().take(BYTE_HITS_LIMIT).collect::<Vec<_>>(),
-                    "root": root,
+                    "objects": objects,
                 })
             );
         }

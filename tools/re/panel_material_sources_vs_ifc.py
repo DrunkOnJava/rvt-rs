@@ -67,7 +67,7 @@ READ = {}
 
 def read_probe(path):
     panels, records, summary = {}, {}, {}
-    READ["materials"], READ["refs"] = set(), {}
+    READ["materials"], READ["refs"], READ["gstyles"] = set(), {}, []
     with open(path, encoding="utf-8", errors="replace") as handle:
         for line in handle:
             if not line.startswith("{"):
@@ -85,6 +85,8 @@ def read_probe(path):
                 READ["materials"] = set(row["names"])
             elif kind == "material_refs":
                 READ["refs"][row["name"]] = row["by_class"]
+            elif kind == "gstyle":
+                READ["gstyles"].append(row)
             elif kind == "summary":
                 summary = row
     return panels, records, summary
@@ -166,7 +168,7 @@ def main():
         "panel material sources: plates with a source giving exactly Revit's material %d of %d"
         % (any_equal, len(scored))
     )
-    targets = set().union(*scored.values()) if scored else set()
+    targets = set().union(*[names for names in revit.values() if names])
     print(
         "panel material references: Revit's plate materials %d, named in the file %d"
         % (len(targets), len(targets & READ["materials"]))
@@ -183,6 +185,22 @@ def main():
     )
     for cls, count in sorted(classes.items(), key=lambda item: (-item[1], item[0])):
         print("panel material references: class %s holds one in %d records" % (cls, count))
+    # The Curtain Panels category's own graphics styles (built-in category -2000170): which materials
+    # they hold, against the materials Revit's export gives the plates.
+    category = set()
+    styles = 0
+    for row in READ["gstyles"]:
+        fields = row["objects"][0]["fields"] if row.get("objects") else row.get("root") or ""
+        if '"m_categoryId":{"m_id":{"m_id":-2000170}}' in fields or '"m_categoryId":{"m_id":{"m_id64":-2000170}}' in fields:
+            styles += 1
+            category.update(hit["name"] for hit in row["byte_hits"])
+    with_material = [tag for tag, names in revit.items() if names]
+    in_category = sum(1 for tag in with_material if revit[tag] <= category)
+    print(
+        "panel material references: Curtain Panels category styles holding a material %d, "
+        "naming %d materials; Revit's plate material is one of them on %d of %d plates"
+        % (styles, len(category), in_category, len(with_material))
+    )
     for key in sorted(table, key=lambda k: (-table[k]["equal"], -table[k]["contains"], k)):
         role, cls, path, ctx = key
         counter = table[key]

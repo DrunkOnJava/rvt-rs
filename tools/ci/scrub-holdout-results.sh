@@ -118,6 +118,20 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^re363 [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^door flips: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" | grep -v -E '^door flips: field ' || true
       grep -E '^door flips: field [A-Za-z0-9_]+ values ((true|false|null|[0-9]{1,2})=[0-9]+(, )?)+$' "$f" || true
+      # tools/re/panel_material_sources_vs_ifc.py (RE-377, #1593): counts beside
+      # fixed words, schema class and field names and a digest of an entry's other
+      # fields, never a material name or an ElementId. Its `detail` lines show the
+      # bytes behind a digest and are dropped.
+      grep -E "^panel material sources: (plates in Revit's export [0-9]+, with a material [0-9]+, panels the probe lists [0-9]+, plates scored [0-9]+|records selected [0-9?]+, read [0-9?]+, holding a material [0-9?]+|plates with a source giving exactly Revit's material [0-9]+ of [0-9]+)$" "$f" || true
+      grep -E "^panel material references: (Revit's plate materials [0-9]+, named in the file [0-9]+|of those named, [0-9]+ held by no record's body|class [A-Za-z0-9_]+ holds one in [0-9]+ records|Curtain Panels category styles holding a material [0-9]+, naming [0-9]+ materials; Revit's plate material is one of them on [0-9]+ of [0-9]+ plates)$" "$f" || true
+      grep -E '^panel material source: (instance|type|ref) [A-Za-z0-9_]+ [][A-Za-z0-9_.]+ [0-9a-f-]+ present [0-9]+, equal [0-9]+, contains [0-9]+, different [0-9]+$' "$f" || true
+    done
+    # What Revit's material for each element is against rvt-rs's (RE-82): counts
+    # and IFC entity names only.
+    for f in "$dir"element_materials_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E "^(elements Revit gives materials: [0-9]+|of those, rvt-rs gives materials: [0-9]+, the same set: [0-9]+)$" "$f" | sed 's/^/materials: /' || true
+      grep -E "^(different sets by|no materials from rvt-rs, by) Revit entity: \{((')?Ifc[A-Za-z0-9]+(')?: [0-9]+(, )?)*\}$" "$f" | sed 's/^/materials: /' || true
     done
     for f in "$dir"psets_vs_ifc.txt; do
       [ -f "$f" ] || continue
