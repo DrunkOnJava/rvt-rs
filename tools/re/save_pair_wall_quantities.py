@@ -22,6 +22,11 @@ a body its own rule writes no quantity for.
 
 What this cannot catch: an error both saves share.
 
+Its `different:` and `unchecked:` lines name walls by Tag, so it is run on
+redistributable models only: never on a held-out model, whose ElementIds stay
+out of public text, and it is not wired into Measure's held-out run, whose
+scrub keeps count lines alone (tools/ci/scrub-holdout-results.sh).
+
 Usage:
 
     python3 tools/re/save_pair_wall_quantities.py <candidate.ifc> <reference.ifc>
