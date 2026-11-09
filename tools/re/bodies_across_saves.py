@@ -167,10 +167,15 @@ MINIMUMS = {
 }
 # At least this many sketch outlines compared, by candidate year (2026 and 2027:
 # Measure run 42010304828, head e56d31b5; 2025: run 42056599984, head 14a03c02,
-# the same code as this one).
+# the same code as this one). #1612 draws the roofs whose sketch outline was recovered
+# (rac_advanced's 142430, 165755, 167036 and 167158 on every save, rac_basic's 724430)
+# from their saved meshes, so they are no outline: rac_advanced 86 to 82 on 2025 and
+# 82 to 81 on 2026 and 2027 (the other three were meshes there already), rac_basic 13
+# to 12 on 2025. The census (readers_across_saves.py) holds the 2026 and 2027 saves'
+# roofs to the 2025 save's bodies instead.
 OUTLINE_LEAST = {
-    "racadvancedsampleproject": {2025: 86, 2026: 82, 2027: 82},
-    "racbasicsampleproject": {2025: 13, 2026: 12, 2027: 12},
+    "racadvancedsampleproject": {2025: 82, 2026: 81, 2027: 81},
+    "racbasicsampleproject": {2025: 12, 2026: 12, 2027: 12},
     "rstbasicsampleproject": {2025: 5, 2026: 5, 2027: 5},
     # The MEP samples, first held here (RE-346): 42 IfcCovering and 36 IfcSlab in each of
     # their 2025, 2026 and 2027 saves, scored with this script on the IFC files of run
