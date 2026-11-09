@@ -76,7 +76,7 @@ family instances' family and type names, with their IFC type objects
 floors' material layer sets (RE-114, RE-115), with each material's shading
 colour (RE-116). On Revit 2026 projects, experimentally since 0.5.0, it reads
 typed elements, storeys, rooms, doors and windows, type names and layer sets,
-measured on one project against Revit's own export (RE-124). On projects
+measured on one project against Revit's own export (RE-124), and on two held-out projects, counts only. On projects
 saved by Revit 2015 to 2022 and by Revit 2027, experimentally since 0.6.0, it
 exports their elements, measured against the same sample projects saved by
 Revit 2019 (for 2015 to 2018, RE-181), 2023 (for 2019 to 2022, RE-180) and
