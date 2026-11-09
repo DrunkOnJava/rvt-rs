@@ -1132,6 +1132,10 @@ pub fn append_typed_production_elements(
             solid_shape.is_some(),
             property_set.as_ref(),
         );
+        // RE-384: and a floor drawn along its shape-edited plane, whose body
+        // source a mode without geometry strips below, as `level_slab`'s
+        // body is.
+        let shaped_floor_pitch = shaped_floor_body(&ifc_type, property_set.as_ref());
         let opening_host = pending_host_id;
         if !policy.include_geometry {
             location_feet = None;
@@ -1326,15 +1330,8 @@ pub fn append_typed_production_elements(
         add_beam_roll(&mut reference_sets, &ifc_type, &decoded);
         // #1384: a floor drawn along the plane of its shape-edited corners
         // keeps the extrusion of its plan profile beside its solid.
-        let shaped_floor = ifc_type == "IFCSLAB"
-            && property_set.as_ref().is_some_and(|set| {
-                set.properties.iter().any(|property| {
-                    property.name == "BodySource"
-                        && matches!(&property.value, PropertyValue::Text(source)
-                        if source == FLOOR_SHAPE_BODY_SOURCE)
-                })
-            });
-        if shaped_floor {
+        let shaped_floor = shaped_floor_body(&ifc_type, property_set.as_ref());
+        if shaped_floor_pitch {
             add_shaped_floor_pitch(&mut reference_sets, &decoded);
         }
         add_slab_gross_area(
@@ -3011,6 +3008,19 @@ fn level_slab(
                 })
         });
     landing || layered
+}
+
+/// Whether a slab's body source says its body is drawn along the plane its
+/// shape-edited corners lie in (#1384).
+fn shaped_floor_body(ifc_type: &str, property_set: Option<&PropertySet>) -> bool {
+    ifc_type == "IFCSLAB"
+        && property_set.is_some_and(|set| {
+            set.properties.iter().any(|property| {
+                property.name == "BodySource"
+                    && matches!(&property.value, PropertyValue::Text(source)
+                    if source == FLOOR_SHAPE_BODY_SOURCE)
+            })
+        })
 }
 
 /// Add `PitchAngle` `angle` to the `Pset_SlabCommon` among `sets`, a new set
