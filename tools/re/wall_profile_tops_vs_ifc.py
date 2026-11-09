@@ -31,6 +31,7 @@ import ifcopenshell.geom
 import numpy as np
 
 from ifc_common import site_frame
+
 AT_END = 1e-4
 INSIDE = 0.002
 

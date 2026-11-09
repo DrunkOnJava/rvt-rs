@@ -32,7 +32,7 @@ Revit's body keeps the top line of the profile across the stretch the profile do
 
 - **A stretch longer than the wall is thick:** no wall of any file has one, so `profile_stub_longer_than_the_wall_is_thick` has no instance and its bound stays a stated heuristic (RE-358 section 7).
 - **The end RE-358 refuses on `rac_basic`'s wall 493612** (the line ends at the rectangle's top corner): no Revit export of it in CI, and the local Revit 2018 export of the project does not match the wall for reasons the rule does not touch (RE-358 section 5). The record's box is the line carried to the end there (3.529048 m, RE-358 section 1), which is the same fact from another side.
-- **The two angled Snowdon walls (698311, 698364)** and any wall whose profile plane is not along an axis: the scorer reads walls along x or y only.
+- **The four angled Snowdon walls (698311, 698364, 1343427, 1344065)** and any wall whose profile plane is not along an axis: the scorer reads walls along the model's x or y only.
 - **An arc or curved profile.**
 
 ## 5. Closing #1473
