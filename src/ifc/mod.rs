@@ -5977,6 +5977,19 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
             _ => false,
         })
         .count();
+    // RE-381: so does the opening of a wall's own elevation profile, where the
+    // wall has one and the opening is written (a region cut in the wall's body
+    // has no outline left).
+    let wall_profiles = 2 * model
+        .entities
+        .iter()
+        .filter(|entity| match entity {
+            entities::IfcEntity::WallProfileOpening {
+                host, outline_feet, ..
+            } => outline_feet.len() >= 3 && references.contains_key(host),
+            _ => false,
+        })
+        .count();
     let storeys: usize = (0..model.building_storeys.len())
         .flat_map(|index| {
             entities::PropertySet::storey_sets_for(model.storey_properties.get(&index))
@@ -5995,6 +6008,7 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
         + building
         + openings
         + wall_cuts
+        + wall_profiles
         + step_writer::type_object_pset_values(model)
 }
 
