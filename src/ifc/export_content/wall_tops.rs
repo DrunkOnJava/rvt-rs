@@ -55,12 +55,19 @@
 //! to it (RE-320 §5).
 //!
 //! A wall whose pieces pass [`MAX_RISERS`], whose plan does not break into
-//! convex pieces, whose several elements share a hole or opening that lies
-//! over it, or of which only a small stub lies outside the floor, inside
-//! another wall (see [`embedded`]), is left as it was. The wall's `extrusion`
-//! stays the full prism, which the passes that read a wall's plan and its
-//! record's box use; the writer, the glTF and the plan outline draw its
-//! `solid_shape`.
+//! convex pieces, or whose several elements share a hole or opening that lies
+//! over it is left as it was. The wall's `extrusion` stays the full prism,
+//! which the passes that read a wall's plan and its record's box use; the
+//! writer, the glTF and the plan outline draw its `solid_shape`.
+//!
+//! A wall of which all that lies outside the floor is a small stub inside
+//! another wall (see [`embedded`]) is cut whole, as Revit cuts it (RE-375): the
+//! one such wall measured, 3004978 of the BIM4LCA office as built, has Revit's
+//! top over its whole plan, the stub included. It carries
+//! [`WALL_TOP_STUB_PROPERTY`], and the rule rests on that one wall: nothing in
+//! the 225 pieces of Revit's wall plans outside a floor that RE-375 reads, in
+//! five buildings, is under the stub's size and inside other walls but the
+//! stub itself, and Revit keeps the wall's own height over most others.
 //!
 //! # A wall's base (#1384, RE-336)
 //!
@@ -116,7 +123,7 @@ use super::{
     WALL_BASE_SOURCE_PROPERTY, WALL_END_AT_JOINED_WALLS_BODY_END_SOURCE,
     WALL_END_NOT_MARKED_PROPERTY, WALL_END_ORDER_DEPENDENT_PROPERTY, WALL_END_REFUSAL_PROPERTY,
     WALL_END_SOURCE_PROPERTY, WALL_TOP_COVER_BODY_HEIGHT_SOURCE,
-    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE, WALL_TOP_STUB_INSIDE_WALL, WALL_TOP_STUB_PROPERTY,
 };
 use crate::ifc::body_geometry::{
     Body, Placement, PlanPlane, Point2, Ring, between_surfaces_mesh, extrusion_rings, plan_outline,
@@ -153,7 +160,9 @@ const MAX_RISERS: usize = 32;
 /// the plan of the wall it abuts, is cut by Revit with the rest of the wall.
 /// The walls whose small pieces inside other walls Revit keeps (2984235,
 /// 2984610, 2992096 and 1478932 on the BIM4LCA office as built) also have
-/// larger parts of their plans outside the floor (RE-320 §4).
+/// larger parts of their plans outside the floor (RE-320 §4). Of the 225
+/// pieces of Revit's wall plans outside a floor that RE-375 reads in five
+/// buildings, the stub is the one under it and inside other walls.
 const EMBEDDED_PIECE_SQUARE_FEET: f64 = 0.05;
 
 /// How much height two walls must share to be one beside the other, feet.
@@ -435,7 +444,7 @@ fn reach(cutter: &Cutter, wall: &Wall) -> f64 {
 /// rest of the wall (RE-320 §4). No width or area of a piece separates it from
 /// the pieces Revit keeps, some of them inside other walls too; only a plan
 /// with nothing else outside the floor does, so a wall of which that is all is
-/// left as it was.
+/// cut whole, by [`steps`] (RE-375: the rule rests on the one wall).
 fn embedded(pieces: &[Ring], neighbours: &[&Wall]) -> bool {
     let size: f64 = pieces.iter().map(|piece| area(piece)).sum();
     if pieces.is_empty() || size >= EMBEDDED_PIECE_SQUARE_FEET {
@@ -490,22 +499,28 @@ fn convex_pieces(plan: &[Point2]) -> Option<Vec<Ring>> {
 /// The elements a wall's top is stepped at, by underside, lowest first.
 type Levels<'a> = Vec<(f64, Vec<&'a Cutter>)>;
 
+/// What [`steps`] finds: the pieces of the plan above each underside, and
+/// whether the lowest underside's were a stub inside other walls, which is
+/// dropped (RE-375), so that the wall is cut whole at it.
+struct Stepped {
+    levels: Vec<(f64, Vec<Ring>)>,
+    stub: bool,
+}
+
 /// The convex pieces of the wall's plan that lie above each underside of
 /// `levels`: outside the outlines of the elements at that underside and the
 /// lower ones, and inside their holes and openings. Each is the part of the
 /// plan whose top is higher than that underside. `None` where there are more
 /// than [`MAX_RISERS`] pieces, where the plan does not break into convex
 /// pieces, or where several elements share a hole or opening the wall
-/// crosses.
-fn steps(
-    wall: &Wall,
-    levels: &[(f64, Vec<&Cutter>)],
-    neighbours: &[&Wall],
-) -> Option<Vec<(f64, Vec<Ring>)>> {
+/// crosses. What the lowest underside leaves is dropped where it is a stub
+/// inside other walls ([`embedded`]).
+fn steps(wall: &Wall, levels: &[(f64, Vec<&Cutter>)], neighbours: &[&Wall]) -> Option<Stepped> {
     let alone = levels.len() == 1 && levels[0].1.len() == 1;
     let base = convex_pieces(&wall.plan)?;
     let mut pieces = base.clone();
     let mut out = Vec::with_capacity(levels.len());
+    let mut stub = false;
     for (level, group) in levels {
         for cutter in group {
             for triangle in &cutter.outline {
@@ -549,16 +564,21 @@ fn steps(
                 }
             }
         }
-        let above: Vec<Ring> = join_pieces(pieces.iter().cloned().chain(held).map(tidy).collect())
-            .into_iter()
-            .filter(|piece| area(piece) >= STEP_TOLERANCE_SQUARE_FEET)
-            .collect();
-        if above.len() > MAX_RISERS || (out.is_empty() && embedded(&above, neighbours)) {
+        let mut above: Vec<Ring> =
+            join_pieces(pieces.iter().cloned().chain(held).map(tidy).collect())
+                .into_iter()
+                .filter(|piece| area(piece) >= STEP_TOLERANCE_SQUARE_FEET)
+                .collect();
+        if above.len() > MAX_RISERS {
             return None;
+        }
+        if out.is_empty() && embedded(&above, neighbours) {
+            above.clear();
+            stub = true;
         }
         out.push((*level, above));
     }
-    Some(out)
+    Some(Stepped { levels: out, stub })
 }
 
 /// The wall `entity` is, where it is one plain extrusion with a plan and no
@@ -721,10 +741,10 @@ fn build_cutter(
 /// How a wall's top is cut: at one underside across its plan, or at an
 /// underside over part of it and higher over the rest.
 enum Cut {
-    Whole {
-        level: f64,
-        id: u32,
-    },
+    /// At `level` over the whole plan, by the element `id`. With `stub`, the
+    /// element covers all of the plan but a stub inside other walls, which
+    /// Revit cuts with the rest (RE-375).
+    Whole { level: f64, id: u32, stub: bool },
     /// The undersides, lowest first, each with the pieces of the plan above
     /// it, and the ElementIds of the elements they are cut at.
     Stepped {
@@ -817,7 +837,14 @@ fn decide(entities: &[IfcEntity], pending: &[Pending], plates: &HashSet<u32>) ->
             }
         }
         if let Some((level, id)) = lowest {
-            cuts.push((*index, Cut::Whole { level, id }));
+            cuts.push((
+                *index,
+                Cut::Whole {
+                    level,
+                    id,
+                    stub: false,
+                },
+            ));
             continue;
         }
         if partial.is_empty() {
@@ -861,19 +888,24 @@ fn decide(entities: &[IfcEntity], pending: &[Pending], plates: &HashSet<u32>) ->
         let Some(lowest_id) = lowest_id else {
             continue;
         };
-        if found.first().is_some_and(|(_, above)| above.is_empty()) {
+        if found
+            .levels
+            .first()
+            .is_some_and(|(_, above)| above.is_empty())
+        {
             cuts.push((
                 *index,
                 Cut::Whole {
-                    level: found[0].0,
+                    level: found.levels[0].0,
                     id: lowest_id,
+                    stub: found.stub,
                 },
             ));
         } else {
             cuts.push((
                 *index,
                 Cut::Stepped {
-                    steps: found,
+                    steps: found.levels,
                     ids: ids.into_iter().flatten().collect(),
                 },
             ));
@@ -916,10 +948,10 @@ pub(super) fn cut_wall_tops(
         else {
             continue;
         };
-        let (named, source) = match cut {
-            Cut::Whole { level, id } => {
+        let (named, source, stub) = match cut {
+            Cut::Whole { level, id, stub } => {
                 body.height_feet = level - location[2];
-                (vec![id], WALL_TOP_COVER_BODY_HEIGHT_SOURCE)
+                (vec![id], WALL_TOP_COVER_BODY_HEIGHT_SOURCE, stub)
             }
             Cut::Stepped { steps, ids } => {
                 let placement = Placement::new(Some(*location), *rotation_radians);
@@ -945,7 +977,7 @@ pub(super) fn cut_wall_tops(
                     }));
                 }
                 *solid_shape = Some(SolidShape::Compound(items));
-                (ids, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE)
+                (ids, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE, false)
             }
         };
         if let Some(set) = property_set
@@ -970,6 +1002,13 @@ pub(super) fn cut_wall_tops(
                             .collect::<Vec<_>>()
                             .join(","),
                     ),
+                });
+            }
+            // RE-375: what the floor left of the plan was a stub, cut with the rest.
+            if stub {
+                set.properties.push(Property {
+                    name: WALL_TOP_STUB_PROPERTY.into(),
+                    value: PropertyValue::Text(WALL_TOP_STUB_INSIDE_WALL.into()),
                 });
             }
         }

@@ -5,7 +5,7 @@
 **Artefacts:** the BIM4LCA office as built (`ARK_NordicLCA_Office_Concrete_As-Built.rvt`, sha256 `747120005b4b35c7cb66ec61158aab50ded95e052e172cb387b86cd15b31d906`; Revit's export `b2f530eba8b4424c4542b98e9a2c7bbcc726367f21b2740f3074e4a6ce917382`) and at building permit (`1c12c2058128315edbd65a8bf97f60da971aee8625f21233b8477d9c6165c1d1`; `bc3bd3366a3c413ce74840300a590f59102b740118ef37898e906253b6b7c08d`), Revit 2024, CC BY-SA 4.0, as pinned in `research/bim4lca-measure.tsv`; puzzbobb's 24 Revit 2025 models, Core Interior, the four RE1 models and the two terrain offices as Measure fetches them; Autodesk's Snowdon Towers Architectural 2024 (sha256 `33271010919acb2a0d0d040851393a511d86ea7fd9a1f4c054797ae03e5e44a1`) with Revit's own IFC4 export of it, which is local only, so its results are counts here.
 **Oracles:** Revit's own IFC4 exports of those models.
 **Scorer:** `tools/re/wall_outside_floor_vs_ifc.py`.
-**Status:** negative for a rule that rests on more than one wall. Over 225 pieces of five buildings, Revit keeps the wall's own height on 191 and cuts it on 5 (the 2 pieces of the stub of 3004978, 2 on a wall under a sloped roof, and 1 on a wall of Snowdon Towers whose cutter is not attributed); the other 29 are walls whose finish layers end at another height. Three readings fit the stub and disagree with no other piece: a piece under 0.05 ft² and inside other walls is cut; a piece wholly past an end of Revit's Axis takes the cut of that end; an end piece from 0.05 to 0.2 ft wide is cut. Each holds one wall, or two with one under a sloped roof, and no feature the scorer reads (width, area, place along or across the wall, whether the piece lies inside another wall, where the Axis ends, how Revit draws the wall) separates the 5 from the 191 on more than that.
+**Status:** negative for a rule that rests on more than one wall. Over 225 pieces of five buildings, Revit keeps the wall's own height on 191 and cuts it on 5 (the 2 pieces of the stub of 3004978, 2 on a wall under a sloped roof, and 1 on a wall of Snowdon Towers whose cutter is not attributed); the other 29 are walls whose finish layers end at another height. Three readings fit the stub and disagree with no other piece: a piece under 0.05 ft² and inside other walls is cut; a piece wholly past an end of Revit's Axis takes the cut of that end; an end piece from 0.05 to 0.2 ft wide is cut. Each holds one wall, or two with one under a sloped roof, and no feature the scorer reads (width, area, place along or across the wall, whether the piece lies inside another wall, where the Axis ends, how Revit draws the wall) separates the 5 from the 191 on more than that. The first reading ships in #1596, labelled and counted apart (section 8).
 
 ## 1. The question
 
@@ -75,13 +75,29 @@ Three readings that would have made a rule hold one wall each:
 ## 7. Reproduce
 
 ```bash
-# Every model with a Revit export, and the two offices with the Axis read (the scorer is on the branch until this lands):
-gh workflow run measure.yml --ref re/1067-outside-floor -f ref=b042c61c4fb15f6628f6be17bc0d32557aa96d48 -f base=none \
+# Every model with a Revit export, and the two offices with the Axis read:
+gh workflow run measure.yml --ref main -f ref=b042c61c4fb15f6628f6be17bc0d32557aa96d48 -f base=none \
     -f nordic=true -f r2025=true -f scorers=wall_outside_floor_vs_ifc
-gh workflow run measure.yml --ref re/1067-outside-floor -f ref=b042c61c4fb15f6628f6be17bc0d32557aa96d48 -f base=none \
+gh workflow run measure.yml --ref main -f ref=b042c61c4fb15f6628f6be17bc0d32557aa96d48 -f base=none \
     -f nordic=true -f models="nordic-office-*" -f scorers=wall_outside_floor_vs_ifc
 # Snowdon Towers, local only: rvt-ifc built from main on the sample, then
 python3 tools/re/wall_outside_floor_vs_ifc.py <rvt-ifc export of the Architectural sample> <Revit's IFC4 export of it>
 ```
 
-Once this lands, `--ref main` carries the scorer. The saved mesh of section 4 needs RE-340's probe with the wall named (`probe_1385_wall_saved_mesh`), which is not landed.
+The saved mesh of section 4 needs RE-340's probe with the wall named (`probe_1385_wall_saved_mesh`), which is not landed. Section 8's run is in that section.
+
+## 8. The rule that ships
+
+#1596 applies the first reading of section 5 and nothing else. `wall_tops::steps` drops what the lowest underside leaves of a wall's plan where `wall_tops::embedded` says it is a stub (under 0.05 ft², 0.99 or more of it inside other walls' plans), so that the wall is cut whole at that underside, as Revit cuts it; the wall carries `TopCoverStub` (`inside_another_wall`) and `exported.wall_top_stubs_cut` counts it. Among the 225 pieces of section 3 the stub is the only one that meets both conditions, so the rule rests on one wall, as section 5 says of each reading; what a Measure adds is whether it disagrees with any other wall.
+
+Measure run [42598250689](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42598250689): the head `abc505ad4dbd7fed3c1bd46cf5ab8f4f5b8c5a54` against `main` at `4ad2ce90d1d79dacd680357db7b7331348c1ffe0`, `-f nordic=true -f r2025=true -f samples=true -f racadv=true -f bimcollab=true -f holdout=true`, every scorer, 118 models on each side.
+
+- The office as built: wall 3004978's top goes from 255.5446 to 246.3025 ft, which is Revit's, and `wall_heights_vs_ifc` gives base and top Revit's on 607 of 607 walls (606 before); the line for the wall whose top was not Revit's is gone. `wall rules: top stubs cut` reads `inside_another_wall=1`.
+- The other 117 models read `none`, the 18 held-out ones included (a held-out run keeps counts only). The 18 held-out exports are byte-identical to `main`'s.
+- Seven exports differ from `main`'s: the office, and six that the head's `earcut` re-splits. The head predates #1592, so its `Cargo.lock` holds `earcut` 0.4.11 against `main`'s 0.4.12, and the six are the ones that PR names: rac_advanced on 2023, 2024, 2025, 2026 and 2027, and Snowdon Towers Architectural 2024. Their `diagnostics.json` differ from `main`'s only by the new `exported.wall_top_stubs_cut`, empty on each (as on every other model that reads `none`), `top stubs cut` reads `none` on each, and no scorer output of theirs changes. The other 111 exports are byte-identical.
+- No other scorer output moves: the scorer diff holds the office's `wall_heights_vs_ifc.txt` and `wall_rules.txt`, and the two Areas gate results, which only the head side runs.
+- `same-project gates` passed on the head: 15 samples held to their earlier saves, and the Areas on 4 saves and on the 2021 save.
+
+What this does not show: that Revit cuts the stub for a reason the rule names. Section 6's last item stands, and a wall whose floor leaves a stub that is not under 0.05 ft² or not inside other walls is drawn as before. A second wall the rule cuts would show in `exported.wall_top_stubs_cut`, and Revit's export of that file would be the first test of the reading beyond this wall.
+
+To reproduce, from a commit that holds the rule: `gh workflow run measure.yml --ref main -f ref=abc505ad4dbd7fed3c1bd46cf5ab8f4f5b8c5a54 -f base=main -f nordic=true -f r2025=true -f samples=true -f racadv=true -f bimcollab=true -f holdout=true`. `base=main` is `main` on the day it runs, so a later run also shows what `main` has changed since `4ad2ce90`.
