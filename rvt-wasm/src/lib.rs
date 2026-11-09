@@ -105,10 +105,10 @@ pub fn open_rvt_bytes_with_diagnostics_mode(bytes: &[u8], mode: &str) -> Result<
 /// - `maxInflateBytes` caps one gzip member's inflated size; a stream's
 ///   members together may inflate to this or 1 GiB, whichever is larger.
 ///   A value past what a 32-bit `usize` holds saturates at 4 GiB minus 1.
-/// - `savedMeshes` (default `true`) draws the doors and windows of Revit 2023
-///   to 2027 files from the meshes Revit saved for them, as `rvt-ifc` does
-///   without `--no-saved-meshes`; `false` keeps their bounding boxes and
-///   skips the extra pass over the file's saved graphics.
+/// - `savedMeshes` (default `true`) draws every element of a Revit 2023 to
+///   2027 file that would be a bounding box from the mesh Revit saved for it,
+///   as `rvt-ifc` does without `--no-saved-meshes`; `false` keeps their
+///   bounding boxes and skips the extra pass over the file's saved graphics.
 /// - `phase` (a phase's name, matched exactly first, or its ElementId as a
 ///   number) exports that project phase, as `rvt-ifc --phase` does: an element
 ///   that does not exist in it, and a room whose own phase is not it, are left
@@ -268,9 +268,9 @@ fn export_with_control(
 ) -> Result<JsValue, JsValue> {
     let quality_mode = ExportQualityMode::parse(mode).map_err(err_str)?;
     let mut rf = RevitFile::open_bytes_with_limits(bytes.to_vec(), open_limits).map_err(err_str)?;
-    // The build `rvt-ifc` runs ([`run_export_with_limits_and_control`]), with doors and windows drawn
-    // from their saved meshes (Revit 2023 to 2027 only) unless `saved_meshes`
-    // is false.
+    // The build `rvt-ifc` runs ([`run_export_with_limits_and_control`]), with every boxed
+    // element drawn from its saved mesh (Revit 2023 to 2027 only) unless
+    // `saved_meshes` is false.
     let options = ExportOptions::default()
         .with_mode(quality_mode)
         .with_saved_meshes(if saved_meshes {
@@ -294,7 +294,7 @@ fn export_with_control(
     for note in &notes {
         if let ExportNote::SavedMeshesSkipped { error, .. } = note {
             diagnostics.warnings.push(format!(
-                "Saved graphics not read, door and window bodies unchanged: {error}"
+                "Saved graphics not read, bodies unchanged: {error}"
             ));
             warned = true;
         }

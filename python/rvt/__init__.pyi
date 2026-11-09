@@ -343,10 +343,10 @@ class RevitFile:
         ``allow_partial=True``; open the file with a larger
         ``max_stream_bytes`` / ``max_inflate_bytes`` to read it.
 
-        Doors and windows of Revit 2023 to 2027 files are drawn from the
-        meshes Revit saved for them where all of a mesh decodes, as
-        ``rvt-ifc`` draws them; ``saved_meshes=False`` keeps their
-        bounding boxes (``rvt-ifc --no-saved-meshes``). On Revit 2024 to
+        Every element of a Revit 2023 to 2027 file that would be a bounding
+        box is drawn from the mesh Revit saved for it where all of a mesh
+        decodes, as ``rvt-ifc`` draws them; ``saved_meshes=False`` keeps
+        their bounding boxes (``rvt-ifc --no-saved-meshes``). On Revit 2024 to
         2027 files a wall that embeds a curtain wall is drawn from its saved
         mesh too where Revit raised its base, and ``saved_meshes=False`` keeps
         its record's body. A ``RuntimeWarning`` says when the saved graphics

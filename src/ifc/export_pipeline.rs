@@ -41,19 +41,24 @@ pub enum ExportKind {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum SavedMeshChoice {
-    /// Doors and windows of Revit 2023 to 2027, the releases whose saved
-    /// graphics are read ([`default_scope`]), and the walls that embed a
-    /// curtain wall where Revit raised their base, on Revit 2024 to 2027, the
-    /// releases whose wall records name what embeds in them (RE-340): `rvt-ifc`
-    /// with no switch.
+    /// Every element whose body would be its record's bounding box, on Revit
+    /// 2023 to 2027, the releases whose saved graphics are read
+    /// ([`default_scope`]), and the walls that embed a curtain wall where
+    /// Revit raised their base, on Revit 2024 to 2027, the releases whose wall
+    /// records name what embeds in them (RE-340): `rvt-ifc` with no switch
+    /// (#1191; doors and windows alone until then).
     #[default]
     Default,
-    /// Every element whose body would be its record's bounding box
-    /// (`rvt-ifc --saved-meshes`). Slower.
+    /// Every element whose body would be its record's bounding box, on every
+    /// release, Revit 2015 to 2022 included (RE-342): `rvt-ifc --saved-meshes`.
     All,
-    /// None: doors and windows keep their record's box, and walls that embed
-    /// a curtain wall their record's body (`rvt-ifc --no-saved-meshes`).
+    /// None: every element keeps its record's box, and walls that embed a
+    /// curtain wall their record's body (`rvt-ifc --no-saved-meshes`).
     Off,
+    /// Doors and windows only, on Revit 2023 to 2027, and the walls that embed a
+    /// curtain wall as for [`Default`](Self::Default): what `Default` was until
+    /// #1191, reading less of the file. No `rvt-ifc` switch selects it.
+    DoorsAndWindows,
 }
 
 /// The `rvt-ifc` switches that change the model. [`Default`] is `rvt-ifc` with
@@ -648,8 +653,15 @@ pub fn run_export_with_limits_and_control(
     let scope = match (options.kind, options.saved_meshes) {
         (ExportKind::Placeholder, _) | (_, SavedMeshChoice::Off) => None,
         (_, SavedMeshChoice::All) => Some(SavedMeshScope::All),
-        (_, SavedMeshChoice::Default) if options.family_extrusions => Some(SavedMeshScope::All),
+        (_, SavedMeshChoice::Default | SavedMeshChoice::DoorsAndWindows)
+            if options.family_extrusions =>
+        {
+            Some(SavedMeshScope::All)
+        }
         (_, SavedMeshChoice::Default) => default_scope(rf),
+        (_, SavedMeshChoice::DoorsAndWindows) => {
+            default_scope(rf).map(|_| SavedMeshScope::DoorsAndWindows)
+        }
     };
     if let Some(scope) = scope {
         match attach_scoped_with_control(rf, &mut model, scope, control) {

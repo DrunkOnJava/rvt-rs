@@ -86,7 +86,7 @@ demo unavailable. Nothing is downloaded either way.
 The loading card shows the decoder's own progress, the stages `rvt-gltf
 --progress` prints: the bar fills with a stage's count while it has one
 (scanning for elements, decoding elements, reading partition streams, drawing
-doors and windows from saved meshes) and sweeps for the rest, and the card
+family instances from saved meshes) and sweeps for the rest, and the card
 names the stage and counts it. `src/worker.ts` passes a function to
 `openRvtBytesWithDiagnosticsModeAndOpenLimits` and posts each report from
 inside the wasm call; the page keeps the list on `#status` as
@@ -134,12 +134,14 @@ under those limits, so a small file reaches the same path. The browser test
 `tests/large-model-retry.spec.ts` opens the tier-1 fixture at
 `/?maxStreamBytes=200`, which stops its 236-byte BasicFileInfo, and retries.
 
-## Doors and windows from saved meshes
+## Family instances from saved meshes
 
-The doors and windows of Revit 2023 to 2027 files are drawn from the meshes
-Revit saved for them, where the whole mesh decodes, as `rvt-ifc` and
-`rvt-gltf` draw them by default; the others keep their bounding box. File
-status has a "Draw doors and windows from saved meshes" option, on by default.
+Every element of a Revit 2023 to 2027 file that would be a bounding box (doors,
+windows, furniture, fixtures, equipment and the rest) is drawn from the mesh
+Revit saved for it, where the whole mesh decodes, as `rvt-ifc` and `rvt-gltf`
+draw them by default (#1191; doors and windows alone before); the others keep
+their bounding box. File
+status has a "Draw family instances from saved meshes" option, on by default.
 Changing it reopens the open file with `savedMeshes` in the options of
 `openRvtBytesWithDiagnosticsModeAndOpenLimits`, and `?savedMeshes=0` in the
 address starts with it off (for every file, until the option is turned on).

@@ -19,8 +19,9 @@ them by Tag, and at most 400 vertices of each body are tested, so a file
 with thousands of mullions fits the time Measure allows. The bodies are
 scored one process each over the CPUs (RVT_MESH_WORKERS sets the count), by
 the same arithmetic wherever a body runs, so the output does not depend on
-it. Bodies only exist in an export made with `--saved-meshes`; without it
-this prints none.
+it. Bodies exist in the default export of a Revit 2023 to 2027 file (since
+#1191) and, on any release, in one made with `--saved-meshes`; an export made
+with `--no-saved-meshes` prints none.
 
 The bar (#1365, RE-331 section 8; Griffin, #1355): a body that both files
 write as true curves (true_curves.py: an extrusion of a circle or of an outline

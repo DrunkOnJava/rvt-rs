@@ -426,10 +426,12 @@ family files, the spatial scaffold. What each release
 recovers is in [`status.md`](status.md). Raises `ValueError` if the file
 can't be parsed far enough to build a model.
 
-Doors and windows of Revit 2023 to 2027 files are drawn from the meshes
-Revit saved for them where all of a mesh decodes, as `rvt-ifc` draws them
-by default; `saved_meshes=False` keeps their bounding boxes, as
-`rvt-ifc --no-saved-meshes` does; on Revit 2024 to 2027 files a wall that embeds a curtain wall is drawn from its saved mesh the same way where Revit has raised its base (RE-340), and `saved_meshes=False` keeps its record's body. When the saved graphics cannot be read,
+Every element of a Revit 2023 to 2027 file that would be a bounding box
+(doors, windows, furniture, fixtures, equipment and the rest) is drawn from
+the mesh Revit saved for it where all of a mesh decodes, as `rvt-ifc` draws
+them by default; `saved_meshes=False` keeps their bounding boxes, as
+`rvt-ifc --no-saved-meshes` does; reading every box's saved graphics takes
+1% to 17% more time and up to 59% more peak memory (#1191); on Revit 2024 to 2027 files a wall that embeds a curtain wall is drawn from its saved mesh the same way where Revit has raised its base (RE-340), and `saved_meshes=False` keeps its record's body. When the saved graphics cannot be read,
 the export keeps the bounding boxes and a `RuntimeWarning` says so.
 `export_diagnostics()`, `export_diagnostics_json()` and
 `rvt_to_ifc_diagnostics()` take the same `saved_meshes` and describe the

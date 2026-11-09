@@ -423,8 +423,9 @@ jobs:
           read -ra files <<<"${FILES}"
           pnpm exec playwright test --config playwright.config.ts "${files[@]}"
 
-      # The viewer draws doors and windows from their saved meshes by default,
-      # on the condition (Griffin, 2026-10-30) that its memory and load time
+      # The viewer draws every boxed element from its saved mesh by default
+      # (doors and windows alone until #1191), on the condition (Griffin,
+      # 2026-10-30 and 2026-11-09) that its memory and load time
       # are measured in Playwright on the reference models. Each is opened
       # with the option on and off; the spec asserts behaviour, not timings,
       # and writes the figures to viewer/measurements/ and the job summary.

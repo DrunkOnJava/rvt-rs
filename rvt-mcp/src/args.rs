@@ -140,12 +140,16 @@ impl From<ModeArg> for ExportQualityMode {
 #[derive(Debug, Default, Clone, Copy, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MeshesArg {
-    /// Doors and windows on Revit 2023 to 2027 (the default).
+    /// Every element that would be its record's bounding box, on Revit 2023 to
+    /// 2027 (the default).
     #[default]
+    Default,
+    /// Doors and windows only, on Revit 2023 to 2027: the default before #1191,
+    /// and cheaper in time and memory.
     DoorsAndWindows,
-    /// Every element that would be its record's bounding box. Slower.
+    /// Every element that would be its record's bounding box, on every release.
     All,
-    /// None: doors and windows keep their record's box.
+    /// None: every element keeps its record's box.
     Off,
 }
 
@@ -183,7 +187,8 @@ impl IfcOptions {
         ExportOptions::default()
             .with_mode(self.mode.into())
             .with_saved_meshes(match self.saved_meshes {
-                MeshesArg::DoorsAndWindows => SavedMeshChoice::Default,
+                MeshesArg::Default => SavedMeshChoice::Default,
+                MeshesArg::DoorsAndWindows => SavedMeshChoice::DoorsAndWindows,
                 MeshesArg::All => SavedMeshChoice::All,
                 MeshesArg::Off => SavedMeshChoice::Off,
             })
