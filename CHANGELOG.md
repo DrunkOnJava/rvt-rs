@@ -11,12 +11,24 @@ fragments a release moves into this file.
 ## [0.16.1] — 2026-11-09
 
 0.16.1 is the first published release of 0.16. The `v0.16.0` tag was made
-but never published. Its publish run stopped at the viewer load smoke test,
-which runs `rvt-elements` and found no such program on its `PATH`, so nothing
-reached crates.io, PyPI, the release page or ghcr.io (#1569). A tag cannot be
-moved, so 0.16.1 replaces it. Everything listed under [0.16.0] below ships in
-0.16.1, with the changes listed here. A user of 0.15 should read "Upgrading
-from 0.15" under [0.16.0], since nothing in 0.16.1 changes it.
+but never published. Its publish run passed the tag's signature, branch and
+`CI passed` checks and stopped at the viewer load smoke test, which runs
+`rvt-elements` and found no such program on its `PATH`. Nothing reached
+crates.io, PyPI, the release page or ghcr.io, and the page's `upload` and
+`page` jobs run for the first time on `v0.16.1` (#1569). A tag cannot be
+moved, so 0.16.1 replaces it.
+
+Everything in
+[0.16.0](https://github.com/DrunkOnJava/rvt-rs/blob/v0.16.1/CHANGELOG.md#0160--2026-11-08)
+ships in 0.16.1, with the changes listed here, and where the two differ these
+entries hold. The doors of `rac_basic`'s 2027 save now write their Width and
+Height (#1489). The measurement in 0.16.0's notes is of `main` at 9c66e9bd,
+before these changes: the two entries under Fixed give their own, and the
+others change no export. A user of 0.15 should read
+[Upgrading from 0.15](https://github.com/DrunkOnJava/rvt-rs/blob/v0.16.1/CHANGELOG.md#upgrading-from-015)
+with 0.16.1 where it says 0.16.0: an export's IFC header names rvt-rs 0.16.1,
+and the release page's files are checked with
+`gh attestation verify <file> -R DrunkOnJava/rvt-rs --source-ref refs/tags/v0.16.1`.
 
 ### Added
 
