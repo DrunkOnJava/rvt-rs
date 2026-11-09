@@ -5,7 +5,7 @@
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, `research/bim4lca-measure.tsv`), Core Interior, RE1 Architecture, puzzbobb's 24 Revit 2025 models, Autodesk's sample projects and the held-out files, as Measure fetches them; Snowdon Towers Architectural and its Revit IFC4 export (local only, section 2)
 **Probe, tools:** `probes/examples/probe_1067_native_dump.rs` (its `wall <id> step VWallDriver`, `step JoinEndGStep` and `step GLine` lines), `tools/re/wall_heights_vs_ifc.py`, `tools/re/wall_top_cover_vs_ifc.py`, `tools/re/wall_quantities_vs_ifc.py`
 **Runs:** Measure [41980282001](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41980282001) (both offices, Core Interior, RE1 Architecture), [41980285452](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41980285452) (the 24 R2025 models, Autodesk's sample projects) and [41980288900](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41980288900) (held-out, counts only), each at `1b3a6bd7` against `main` at `b36477f1` (which includes #1401, RE-340). Before that merge, at `b47a9a00` against `main` at `f55a95a7`: [41978479893](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41978479893), [41978482673](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41978482673) and [41978485557](https://github.com/DrunkOnJava/rvt-rs/actions/runs/41978485557). The merges of `main` after `1b3a6bd7` (#1420) change documents only.
-**Superseded in part (2026-11-05):** RE-348 reads the order of the joins that this report says is not read, draws the steps above the wall beneath, and retires the labelled approximation below (`BodyEndSource` `wall_end_to_base_wall_upper_step_omitted`) and the reasons `wall_beneath_not_one_rectangle` and `walls_beneath_reach_the_end_at_different_faces`; RE-349 reads a base covered in part. What follows is the state at `1b3a6bd7`.
+**Superseded in part (2026-11-05):** RE-348 reads the order of the joins that this report says is not read, draws the steps above the wall beneath, and retires the labelled approximation below (`BodyEndSource` `wall_end_to_base_wall_upper_step_omitted`) and the reasons `wall_beneath_not_one_rectangle` and `walls_beneath_reach_the_end_at_different_faces`; RE-349 reads a base covered in part. What follows is the state at `1b3a6bd7`, except section 6 (2026-11-09, #1418), which says where the paths section 5 lists as not measured stand on `main` after RE-348.
 **Status:** ships as a labelled approximation (Griffin, 2026-11-05 at about 12:30 AM EST, answering a question asked with the question tool: ship it, labelled): positive for walls 2057668 and 2057670 on both office files; walls 2058499 and 2058501 keep their ends, as built because their base is not cut over the longer plan and at permit because the wall beneath them is not one rectangle (section 5); they no longer do since RE-349 (the base cut over the part a footing covers) and RE-348 (the wall beneath read).
 
 ## 1. What the bytes say
@@ -88,3 +88,49 @@ Compare `ifc.sha256` per model between `measure-base` and `measure-head`; `BodyE
 - a beneath wall whose top a floor cut in steps over only part of its plan: its pieces above the lowest underside are not read, so the block is stopped at the lowest underside (180.6102 ft for 1493966), under-drawn where the pieces rise (Revit's 182.087 ft on 2057668 at permit, where the block stops at 180.610 ft: 0.0807 ft2 of Revit's step is not drawn);
 - a beneath wall drawn as another kind of solid (a base or top cut that is not RE-320's), which the pass neither reaches nor refuses: an uncounted skip;
 - a wall standing in the added end that the pass does not read (turned off a quarter turn, or a solid of another kind): it does not stop the block, which would be drawn through it.
+
+## 6. Where these paths stand after RE-348 (2026-11-09, #1418)
+
+#1418 asked for the wall beneath drawn as a solid to be a counted reason, and for the paths no model had exercised (that skip, `finish_wall_ends`, `base_cut_lost_on_extended_plan` and `walls_beneath_reach_the_end_at_different_faces`) to be exercised on a real model or a synthetic fixture, or stated here as unmeasured. This section reads them against `src/ifc/export_content/wall_tops.rs` as RE-348 (#1410) left it, and measures them on the base side of Measure run [42567326561](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42567326561), which is `main` at `83417fde`. Since then `main` has changed `src/` only through #1578, which adds Heights to Revit 2015 to 2023 walls; the end rule reads Revit 2024 only, so #1578 does not reach it.
+
+- **A joined wall drawn as a solid is counted, under RE-348's reason.** The end no longer follows one wall beneath. It follows the walls the record joins there, in the record's order (RE-348). `followed_wall` reads a joined wall only as its plan's prism or as RE-320's stepped body. These are not read:
+  - a wall drawn as any other solid: tapered, a layered joint, a saved mesh, or a base or top cut that is not RE-320's;
+  - a wall whose base join names elements;
+  - a wall whose ElementId more than one entity holds;
+  - a joined element that is not exported as a wall.
+
+  Where the list reaches such a wall while part of the wall's height is still to be read, the end is kept with `joined_wall_not_read`. That one reason covers all four cases; a solid has no reason of its own. Where the refusal is counted depends on the list's order:
+  - where a joined wall read earlier showed the end short of its face, it is counted in `exported.wall_end_refusals`, and in the decisions log as `wall_end_extension_refused` with that detail;
+  - otherwise it is counted in `exported.wall_end_reads_unmarked`, which the decisions log does not hold (RE-348's marker policy).
+
+  Take the office's lists (RE-348 section 1) as an example, with the wall beneath drawn as a solid:
+  - on 2057670, 2058499 and 2058501 as built, it comes after 3490093, whose face lies 0.115 ft off the end, so it would be marked;
+  - on 2057668 as built, and on all four walls at permit, it comes before any wall whose face is off the end, so it would be counted unmarked.
+- **Still not counted: a wall in the way that the pass does not read.** A wall the record does not join is found in a strip only among the walls the pass reads, because `in_the_way` searches `followed_walls`. A wall of any kind the list above leaves unread is not found, and a strip would be drawn through it, with no marker and no count. This is section 5's last item, now without its quarter-turn case: `followed_wall` reads a prism at any angle.
+- **`walls_beneath_reach_the_end_at_different_faces` is gone (RE-348).** The end follows each joined wall over that wall's own heights. Where two walls standing at one height have faces that differ, the end depends on the order and is counted in `EndOrderDependent` and `exported.wall_ends_order_dependent`; it is not refused.
+- **`base_cut_lost_on_extended_plan` is still a reason, and still has no instance.** It is reachable: the cut of the base resolves on the plan the record gives but not on the longer plan. Two ways that can happen:
+  - the strips reach a second element that covers part of the longer plan, so `decide_base` finds two covers (`several_elements_cover_the_wall`);
+  - the strips carry the plan's corners to where a sloped top crosses the wall's base or top.
+- **`finish_wall_ends` has made no body.** It still makes the body of a wall when three things hold: its end is drawn, a strip stops below its top, and the base pass made no solid of it (its base join names nothing). On every export, the 8 walls whose end is drawn (4 on each office file) all have their base cut (`BodyBaseSource`), so their bodies come from `cut_wall_bases`. The `BodyEndSource` arm of `is_stepped` in `src/ifc/wall_cut_openings.rs`, which only such a body reaches, is also unreached.
+
+**Measured.** The run's 111 exports are 93 openly licensed and 18 held-out (counts only).
+- 15 of the 93 are Revit 2024 saves, the only release whose end lists the rule reads (`WALL_END_JOIN_REVIT_VERSIONS`).
+- At most 8 of those 15 have a wall with an edited elevation profile: Core Interior 1, the office 106 as built and 98 at permit, its two terrain files 2 each, `rac_advanced` 2024 1, `rac_basic` 2024 7 and Snowdon Towers Architectural 18. These are counted in each `model.ifc` as walls voided by an unfilled opening named for the wall's own family and type, which is how rvt-rs names the opening of an edited profile. Another unfilled opening named that way would also be counted, so these are upper bounds.
+- From each export's `wall_rules.txt` (`tools/re/wall_rule_counts.py`), the rule draws, keeps or counts an end on 3 of the 15:
+  - the office as built: 4 ends drawn, and `end_join_curve_not_at_the_box_end` on 2, unmarked;
+  - at permit: 4 ends drawn, and `joined_wall_face_inside_the_wall` on 2, marked;
+  - Snowdon Towers Architectural: `joined_walls_do_not_reach_the_wall_height` on 2, unmarked.
+- The 18 held-out exports have no wall-rule count.
+- `joined_wall_not_read` and `base_cut_lost_on_extended_plan` appear on no export.
+- Every wall with `BodyEndSource` also has `BodyBaseSource` (4 of 4 on each office file).
+
+**Why no synthetic fixture.** The pass runs inside `append_typed_production_elements`. Its inputs come from a Revit 2024 file's element records and native wall records: the openings of an edited profile, from its `GLine`s; the join trims; and the lists, from `JoinEndGStep`. The synthetic files `gen-fixture` writes carry no element records; they decode as a scaffold only. The pass is also private to the exporter. The only way to drive it on constructed entities would be a unit test of a geometry transform, checked against the code itself rather than against a Revit export. CONTRIBUTING.md does not accept such tests. So the three paths stay unmeasured until a Revit 2024 model exercises them. No Revit export has checked them.
+
+Reproduce:
+
+```bash
+gh workflow run measure.yml --ref main -f ref=83417fde026c4e1a02359a0ce89b1841e3916db5 -f base=none \
+  -f nordic=true -f r2025=true -f samples=true -f holdout=true -f keep_ifc=true
+```
+
+Each model's `wall_rules.txt` gives the counts and its `info.json` the release (`document.revit_version`). Each kept `model.ifc` gives the `BodyEndSource` and `BodyBaseSource` of every wall, and the openings that void it.
