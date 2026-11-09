@@ -497,8 +497,6 @@ pub fn recover_partition_schema_mvp(
     attach_curtain_axes(rf, revit_version, &mut out.products);
     // --- Each door's and window's facing, for its type's flip (B72) ---
     attach_opening_facings(rf, revit_version, [&mut out.doors, &mut out.windows]);
-    // --- Each door's and window's hand flip and facing flip (RE-343) ---
-    attach_opening_flips(rf, revit_version, [&mut out.doors, &mut out.windows]);
     // --- Each family instance's original symbol, whose GlobalId Revit's
     // export gives its type (RE-167, B60) ---
     attach_original_symbols(
