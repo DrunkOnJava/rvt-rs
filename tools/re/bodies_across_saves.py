@@ -22,7 +22,10 @@ lists change:
 
   beams and landings   `BodySource` is partition_beam_axis,
                        partition_beam_box_along_axis, native_landing_tread or
-                       partition_landing_slab; held to the 2024 save
+                       partition_landing_slab, or an IfcBeam drawn from its saved
+                       mesh (#1191: the default draws the beams RE-328 drew as
+                       boxes along their lines from their saved meshes); held to
+                       the 2024 save
   stair runs           `BodySource` is partition_stair_run_sketch; held to the
                        2025 save, which reads runs from their native records as
                        these releases do (the 2024 save's byte-anchor reader
@@ -125,6 +128,7 @@ SOURCE_GROUP = {
     "partition_stair_run_sketch": STAIR_RUNS,
     "partition_pipe_axis": PIPES,
 }
+SAVED_MESH = "saved_graphics_mesh"
 OUTLINE_CLASSES = {"IfcSlab", "IfcCovering", "IfcRoof"}
 REFERENCE_YEAR = {
     BEAMS_AND_LANDINGS: 2024,
@@ -140,12 +144,15 @@ READERS_YEAR = 2025
 
 # Bodies the sample is known to draw by BodySource (Measure run 41988011289,
 # head 1d5bbf03, exported diagnostics; the MEP samples' pipes, run 42063046730,
-# head 3149973f), and outlines by group.
+# head 3149973f), and outlines by group. rac_advanced's 8 beams RE-328 drew as boxes
+# along their lines are IfcBeams drawn from their saved meshes since #1191 made the
+# saved mesh the default of every class: 8 on every save of 2025 to 2027 (Measure
+# run 42638677373, the 2025 and 2026 saves).
 MINIMUMS = {
     "racadvancedsampleproject": {
         BEAMS_AND_LANDINGS: {
             "partition_beam_axis": 29,
-            "partition_beam_box_along_axis": 8,
+            SAVED_MESH: 8,
             "native_landing_tread": 5,
         },
         STAIR_RUNS: {"partition_stair_run_sketch": 10},
@@ -303,6 +310,8 @@ def group_of(element, source, resolved, named=False):
         return NAMED_ELEMENTS
     if source in SOURCE_GROUP:
         return SOURCE_GROUP[source]
+    if source == SAVED_MESH and element.is_a() == "IfcBeam":
+        return BEAMS_AND_LANDINGS
     if element.is_a() in OUTLINE_CLASSES and resolved:
         return SKETCH_OUTLINES
     if element.is_a() in OPENING_CLASSES and placement_source(element):
