@@ -627,6 +627,14 @@
           },
           "description": "Of the exported walls, how many have an end drawn to the walls their record joins there, by the RvtElementRecordGeometry.BodyEndSource of each (RE-348): wall_end_stepped_to_joined_walls. Empty when no wall does."
         },
+        "wall_top_stubs_cut": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Of the exported walls cut whole at the floor, roof or footing that covers all of their plan but a stub, how many, by where the stub lies, by the RvtElementRecordGeometry.TopCoverStub of each (RE-375, #1067): inside_another_wall. Revit cuts such a stub with the rest of the wall. Empty when no wall is."
+        },
         "wall_base_sources": {
           "type": "object",
           "additionalProperties": {

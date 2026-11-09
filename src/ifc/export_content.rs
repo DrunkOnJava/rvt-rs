@@ -4889,6 +4889,18 @@ pub const WALL_TOP_COVER_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_at_covering_fl
 /// of the plan outside the element from there to the top (#1067, RE-320).
 pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_covering_floor";
 
+/// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] on a wall cut whole
+/// (`BodyHeightSource` [`WALL_TOP_COVER_BODY_HEIGHT_SOURCE`]) by a floor that
+/// does not cover all of its plan: what the floor leaves is a stub, which Revit
+/// cuts with the rest of the wall (#1067, RE-375). Its value says where the
+/// stub lies, [`WALL_TOP_STUB_INSIDE_WALL`]. Counted in
+/// `exported.wall_top_stubs_cut`.
+pub const WALL_TOP_STUB_PROPERTY: &str = "TopCoverStub";
+
+/// [`WALL_TOP_STUB_PROPERTY`] of a wall whose stub lies wholly inside the plan
+/// of another wall (RE-375).
+pub const WALL_TOP_STUB_INSIDE_WALL: &str = "inside_another_wall";
+
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how an end
 /// of it was drawn where it is not the end its record's joins give (#1396,
 /// RE-337). The wall's `EndCoverElementId` is the wall it reaches.

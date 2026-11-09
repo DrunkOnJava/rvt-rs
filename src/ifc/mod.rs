@@ -830,6 +830,13 @@ pub struct ExportedModelDiagnostics {
     /// RE-348): `wall_end_stepped_to_joined_walls`. Empty when no wall does.
     #[serde(default)]
     pub wall_end_sources: std::collections::BTreeMap<String, usize>,
+    /// Of the exported walls cut whole at the floor, roof or footing that
+    /// covers all of their plan but a stub, how many, by where the stub lies:
+    /// the `TopCoverStub` property of each (#1067, RE-375),
+    /// `inside_another_wall`. Revit cuts such a stub with the rest of the wall.
+    /// Empty when no wall is.
+    #[serde(default)]
+    pub wall_top_stubs_cut: std::collections::BTreeMap<String, usize>,
     /// Of the exported walls, how many have their base cut at an element their
     /// base join names, by the `BodyBaseSource` property of each (#1384,
     /// RE-336; #1411, RE-349): `wall_base_sloped_at_covering_floor`,
@@ -5061,6 +5068,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut wall_base_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_end_refusals = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_end_sources = std::collections::BTreeMap::<String, usize>::new();
+    let mut wall_top_stubs_cut = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_base_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_ends_order_dependent = 0usize;
     let mut wall_profile_sources = std::collections::BTreeMap::<String, usize>::new();
@@ -5127,6 +5135,10 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                         export_content::WALL_END_SOURCE_PROPERTY,
                         entities::PropertyValue::Text(text),
                     ) => *wall_end_sources.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_TOP_STUB_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *wall_top_stubs_cut.entry(text.clone()).or_insert(0) += 1,
                     (
                         export_content::WALL_BASE_SOURCE_PROPERTY,
                         entities::PropertyValue::Text(text),
@@ -5250,6 +5262,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         wall_base_refusals,
         wall_end_refusals,
         wall_end_sources,
+        wall_top_stubs_cut,
         wall_base_sources,
         wall_ends_order_dependent,
         wall_profile_sources,

@@ -5,9 +5,9 @@ RE-349 and RE-348, from the export's `diagnostics.json` (`rvt-ifc --diagnostics`
 Reads `exported.wall_base_sources`, `exported.wall_end_sources`,
 `exported.wall_ends_order_dependent`, `exported.wall_base_refusals` and
 `exported.wall_end_refusals`, `exported.wall_end_reads_unmarked`,
-`exported.wall_profile_sources`, `exported.wall_profile_refusals` and
-`exported.wall_profile_height_checks` (RE-358),
-and prints one line each, in the restricted
+`exported.wall_profile_sources`, `exported.wall_profile_refusals`,
+`exported.wall_profile_height_checks` (RE-358) and `exported.wall_top_stubs_cut`
+(RE-375), and prints one line each, in the restricted
 alphabet that tools/ci/scrub-holdout-results.sh keeps for a model without a
 licence to redistribute it (counts beside fixed words, never an ElementId):
 
@@ -20,6 +20,7 @@ licence to redistribute it (counts beside fixed words, never an ElementId):
     wall rules: profile sources G=1
     wall rules: profile refusals H=1
     wall rules: profile height checks I=1
+    wall rules: top stubs cut J=1
 
 A row with no count prints `none`. A diagnostics file without the counters (an
 older rvt-ifc) prints `wall rules: not measured`.
@@ -62,6 +63,7 @@ def main(path):
     print(counts("profile sources", exported.get("wall_profile_sources", {})))
     print(counts("profile refusals", exported.get("wall_profile_refusals", {})))
     print(counts("profile height checks", exported.get("wall_profile_height_checks", {})))
+    print(counts("top stubs cut", exported.get("wall_top_stubs_cut", {})))
 
 
 if __name__ == "__main__":
