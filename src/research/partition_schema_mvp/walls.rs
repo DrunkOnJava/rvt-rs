@@ -1660,12 +1660,18 @@ mod pocket_tests {
                 (7742, 7600),
             ]
         );
+        // The wall runs toward -y, so counter-clockwise along the wall's axis
+        // and up is clockwise in (y, z).
         let area: f64 = outline
             .iter()
             .zip(outline.iter().cycle().skip(1))
             .map(|(a, b)| a[1] * b[2] - b[1] * a[2])
             .sum();
-        assert!((area / 2.0 - 301.65).abs() < 0.01, "area {}", area / 2.0);
+        assert!(
+            (area.abs() / 2.0 - 301.65).abs() < 0.01,
+            "area {}",
+            area / 2.0
+        );
     }
 
     /// A 10 by 8 ft wall with a notch 3 ft wide and 2 ft deep cut in its top.

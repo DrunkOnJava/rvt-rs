@@ -690,6 +690,14 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
         },
     ),
     (
+        "ProfileTopSource",
+        "*",
+        Sourced {
+            all: &[],
+            any: &["sketch_lines", "sketch_list"],
+        },
+    ),
+    (
         "ProfileCutSource",
         "*",
         Sourced {
