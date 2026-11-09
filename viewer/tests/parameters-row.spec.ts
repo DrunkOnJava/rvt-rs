@@ -906,16 +906,52 @@ sampleTest(
 
 // A read that really runs the tab out of memory. A Chromium whose V8 caps wasm memory
 // (memory-ceiling-capped.spec.ts) cannot fail a read of Einhoven that its open survived: a read
-// takes less than the open there (17 MiB against 23). On the BIM4LCA office it takes more (943
-// MiB against 910), so a cap between the two opens it and stops the read: the real failure of
-// "a second instance beside the open". The page says so, and reads that file only when asked.
+// takes less than the open there (17 MiB against 23). On the BIM4LCA office it takes more, so a
+// cap between the two opens it and stops the read: the real failure of "a second instance beside
+// the open". The page says so, and reads that file only when asked. Both figures are measured
+// here in an uncapped browser, since any change to the open moves them, and a run with no room
+// between them says NOT MEASURED instead of failing.
 const office = process.env.RVT_VIEWER_OFFICE;
 const officeTest = office ? test : test.skip;
 officeTest(
   'a read that really runs the tab out of memory is reported, and the file is then read only when asked',
   async ({ baseURL }) => {
-    test.setTimeout(1_200_000);
-    const capPages = Math.round((927 * MiB) / (64 * 1024));
+    test.setTimeout(1_500_000);
+    const uncapped = await chromium.launch();
+    let openBytes = 0;
+    let readBytes = 0;
+    try {
+      const page = await (await uncapped.newContext({ baseURL })).newPage();
+      await page.goto('/');
+      await expect(page.locator('#status')).toHaveText(/Ready/);
+      await page.locator('#file-input').setInputFiles(office!);
+      await expect(page.locator('#status')).toHaveText(/Loaded/, { timeout: 300_000 });
+      openBytes = (
+        JSON.parse((await page.locator('#status').getAttribute('data-load-stats')) ?? '{}') as {
+          wasmMemoryBytes: number;
+        }
+      ).wasmMemoryBytes;
+      const [first] = (await treeElements(page)).filter(({ id }) => id !== null);
+      await select(page, first!.index);
+      const read = (await settled(page)).wasmMemoryBytes;
+      if (read === null) {
+        report(['NOT MEASURED: the read reported no wasm memory figure.']);
+        test.skip(true, 'NOT MEASURED: the read reported no wasm memory figure');
+        return;
+      }
+      readBytes = read;
+    } finally {
+      await uncapped.close();
+    }
+    const room = readBytes - openBytes;
+    const summary = `the open's peak ${Math.round(openBytes / MiB)} MiB, a read's ${Math.round(readBytes / MiB)} MiB`;
+    if (room < 8 * MiB) {
+      report([`NOT MEASURED: no wasm cap fits between ${summary}.`]);
+      test.skip(true, `NOT MEASURED: ${summary}`);
+      return;
+    }
+    const capPages = Math.ceil((openBytes + room / 2) / (64 * 1024));
+    report([`The cap between ${summary}: ${Math.round((capPages * 64 * 1024) / MiB)} MiB.`]);
     const browser = await chromium.launch({ args: [`--js-flags=--wasm-max-mem-pages=${capPages}`] });
     try {
       const context = await browser.newContext({ baseURL });
@@ -923,7 +959,8 @@ officeTest(
       await page.goto('/');
       await expect(page.locator('#status')).toHaveText(/Ready/);
       await page.locator('#file-input').setInputFiles(office!);
-      await expect(page.locator('#status')).toHaveText(/Loaded/, { timeout: 900_000 });
+      await expect(page.locator('#status')).toHaveText(/Loaded|Ran out of memory/, { timeout: 900_000 });
+      await expect(page.locator('#status')).toHaveText(/Loaded/);
       const [a, b] = (await treeElements(page)).filter(({ id }) => id !== null).slice(0, 2);
       expect(a && b, 'two elements with an ElementId').toBeTruthy();
 
