@@ -801,6 +801,7 @@ fn distance_to_segment(point: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
 /// profile whose region is convex, as a straight sloped top, has none, as
 /// Revit's export writes none for the terrain wall 1351524 and the office's
 /// eight.
+///
 /// A stretch no further than the sketch's tolerance from its edge is not one.
 ///
 /// What closes the stretch depends on where the hull's edge ends, against the

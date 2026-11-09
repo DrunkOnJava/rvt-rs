@@ -3702,6 +3702,63 @@ impl StepWriter<'_> {
                     escape(tag),
                 ),
             );
+            // As Revit's export writes the opening of a wall's own geometry,
+            // its Reference is the wall's type name, in both sets, and none
+            // where the wall has none (RE-381).
+            if let Some(reference) = host_references.get(host) {
+                for set_name in [
+                    "Pset_OpeningElementCommon",
+                    "Pset_EnvironmentalImpactIndicators",
+                ] {
+                    let set = PropertySet {
+                        name: set_name.into(),
+                        properties: vec![super::entities::Property {
+                            name: "Reference".into(),
+                            value: super::entities::PropertyValue::Identifier(reference.clone()),
+                        }],
+                    };
+                    self.emit_property_set(
+                        owner_hist,
+                        opening_id,
+                        &set,
+                        &gid(&["property-set", opening_gid.as_str(), set_name]),
+                        &gid(&["defines-by-properties", opening_gid.as_str(), set_name]),
+                    );
+                }
+            }
+            // Where the wall has base quantities, its `Area` is the profile's
+            // (Revit's export writes no other quantity on it, RE-381).
+            let profile_area = outline_feet
+                .iter()
+                .zip(outline_feet.iter().cycle().skip(1))
+                .map(|(a, b)| a.0 * b.1 - b.0 * a.1)
+                .sum::<f64>()
+                .abs()
+                / 2.0;
+            if profile_area > 0.0 && wall_widths.contains_key(host) {
+                let quantities = PropertySet {
+                    name: "Qto_OpeningElementBaseQuantities".into(),
+                    properties: vec![super::entities::Property {
+                        name: "Area".into(),
+                        value: super::entities::PropertyValue::AreaSquareFeet(profile_area),
+                    }],
+                };
+                self.emit_property_set(
+                    owner_hist,
+                    opening_id,
+                    &quantities,
+                    &gid(&[
+                        "property-set",
+                        opening_gid.as_str(),
+                        "Qto_OpeningElementBaseQuantities",
+                    ]),
+                    &gid(&[
+                        "defines-by-properties",
+                        opening_gid.as_str(),
+                        "Qto_OpeningElementBaseQuantities",
+                    ]),
+                );
+            }
             void_fill_triples.push((*host, opening_id, None, opening_gid));
         }
 
