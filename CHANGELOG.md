@@ -217,8 +217,8 @@ replace this paragraph before the release lands.
   project's later save, which cannot catch an error that save shares. One
   held-out Revit 2021 project's IFC2X3 export (counts only) scores 3 of its 10
   beams' `Pset_BeamCommon.Span` and `Slope` equal, none different and 7
-  missing (Measure run 42518199499, head e05db36a, before the change was
-  rebuilt on `main`).
+  missing (Measure run 42548058739, head e853e731, the change as it landed;
+  its 3 `Roll` values, which IFC2X3 does not define, are counted apart).
 
 - **Revit 2015 to 2023 elements have their `Constraints` Level parameters (#1190, RE-369).**
   `Level`, `Base Constraint`, `Base Level`, `Top Constraint`, `Top Level` and
