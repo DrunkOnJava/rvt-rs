@@ -354,8 +354,12 @@ pub(super) fn attach_curtain_materials(
     };
     // A part's type's own material replaces what its map gave, which on Autodesk's
     // `rac_advanced` 2024 is one wrong material on every part (RE-367), as it
-    // does `<Unnamed>` (RE-201).
-    for element in products.iter_mut().filter(|element| is_part(element)) {
+    // does `<Unnamed>` (RE-201). A panel of 2015 to 2023 takes none: of the 67
+    // plates of the one Revit export of a curtain wall's panels on these
+    // releases, none has the material this reads (RE-367).
+    for element in products.iter_mut().filter(|element| {
+        is_part(element) && !(narrow && element.class == CURTAIN_WALL_PANEL_CLASS)
+    }) {
         let type_id = element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
             _ => None,

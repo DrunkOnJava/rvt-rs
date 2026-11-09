@@ -76,6 +76,10 @@ pub const CURTAIN_AXES_FIELDS: [&str; 9] = [
 /// Classes whose turned or tilted instances carry [`CURTAIN_AXES_FIELDS`] (RE-106).
 pub const CURTAIN_AXES_CLASSES: [&str; 2] = ["CurtainWallMullion", "CurtainWallPanel"];
 
+/// The class of a curtain wall panel, whose material is not read on
+/// Revit 2015 to 2023 (RE-367).
+pub const CURTAIN_WALL_PANEL_CLASS: &str = "CurtainWallPanel";
+
 /// Field holding the model axis (0 for X, 1 for Y, 2 for Z) a curtain
 /// mullion on the model's axes runs along: the one its transform's Z axis
 /// lies on (RE-226). A turned or tilted mullion carries
