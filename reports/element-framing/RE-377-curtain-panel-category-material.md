@@ -42,7 +42,18 @@ A curtain panel of Revit 2015 to 2023 has the material the Object Styles give th
 
 ## 5. Result
 
-RESULTS
+Measure run [42610822894](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42610822894) (the rule at `5fd97f7a` against `main` at `b969296e`, every flag, every scorer, 118 models a side), scored by `tools/re/element_materials_vs_ifc.py` against Revit's own exports:
+
+| model | plates Revit gives a material | before | now |
+|---|---:|---:|---:|
+| `ALD26 Before` (IFC2X3) | 67 | 0 of 67 | 67 of 67 |
+| `ALD26 Project` (held out, counts) | 67 | 0 of 67 | 67 of 67 |
+| `rac_advanced` 2015 to 2020, each save against the three.js IFC2X3 export (counts) | 1,349 | 0 of 1,349 | 1,349 of 1,349 |
+| hemanth1986's office of 2022 (held out, counts) | 1 | 0 of 1 | 1 of 1 |
+
+On each, the elements whose material set equals Revit's rise by exactly the plates (`ALD26 Before` 375 to 442, `ALD26 Project` 481 to 548, `rac_advanced` 3,903 to 5,252 on every save, the 2022 office 31 to 32), no set is different, and the plates leave the list of elements Revit gives a material and rvt-rs none. The 1,349 `rac_advanced` plates are the ones the type's render style gives (Glass, Stone - Granite), as before RE-367 narrowed them; the 67 and 67 are the category's.
+
+What else moves: 31 of the 118 exports, all of Revit 2015 to 2023 saves with curtain panels (the three Vitoria and 2022 files, `racadv-2015` to `racadv-2020`, and 22 of Autodesk's sample saves: `rac_advanced` and `rac_basic` of every year 2015 to 2023, `rme_advanced` and `rme_basic` of 2015 and 2019), by the panels' materials alone. No scorer output but `element_materials_vs_ifc` and the held-out counts moves, apart from one: `glb_material_colours_vs_ifc` counts 67 more `('revit', 'no colour')` on `ALD26 Before`, the plates, which the GLB now draws in a model material where it drew a category colour, and for which the scorer finds no colour on Revit's side of an IFC2X3 export. `diagnostics.json` is identical on all 118, no file of Revit 2024 or later moves, and `same-project gates` pass.
 
 ## 6. Not shown
 
