@@ -96,10 +96,13 @@ shafts it did not cut (`shaft_opening_not_cut`); RE-341 had turned the cut on
 for 2026 and 2027, which this turns off again.
 Stair runs on 2026 and 2027 are drawn as their steps and treads from their
 native records as on 2025, with the stair property sets and quantities read
-from them. A roof on 2026 and 2027 keeps the record-box
-solve alone, as on `main` (RE-341 section 5): without its slope, so a sloped
-roof can still be drawn as its outline at the box's full height, a level
-block, which no 2026 or 2027 scorer checks. Such a roof no longer cuts the top
+from them. A roof on 2026 and 2027 is drawn from its saved mesh where that
+decodes whole (#1191), and keeps the record-box solve alone where it does not
+(RE-341 section 5): without its slope, so a sloped roof can still be drawn as its
+outline at the box's full height, a level block. No roof's saved mesh is scored
+against a Revit export, and on Autodesk's samples the meshes of four roofs of the
+2026 and 2027 saves are not the 2025 save's bodies, which the same-project gate
+names (`ROOFS_NOT_THE_2025_BODY`, Griffin 2026-11-09). Such a roof no longer cuts the top
 of the walls under it unless its record box is exactly its type's layers and
 its outline is read (RE-351): the walls of `rac_basic` that its 2024 (15),
 2026 and 2027 (16) saves cut at roof 243274, up to 3.1865 m lower than its
@@ -189,10 +192,11 @@ built-in IFC4 export setups do, and `--no-base-quantities` leaves them out,
 as Revit's exporter does with "Export base quantities" off (RE-242).
 
 It is not a converter for arbitrary models: most parameters, family
-geometry (doors and windows are drawn from the mesh Revit saved for their
-display by default, and so, on Revit 2024 to 2027, are the walls that embed a
-curtain wall where Revit raised their base, RE-340; any other family instance
-with the experimental `--saved-meshes` option, RE-78), hip roofs over a T or U footprint, roofs sloped by several slope arrows of the configuration of puzzbobb's U, where Revit slopes the two long outer walls along the arms only (RE-307; no other roof of the configuration is measured), and roofs by extrusion outside Revit 2025, the top of
+geometry (every family instance is drawn from the mesh Revit saved for its
+display by default on Revit 2023 to 2027, where the whole mesh decodes, and so,
+on Revit 2024 to 2027, are the walls that embed a curtain wall where Revit
+raised their base, RE-340; a mesh with a face that does not decode keeps its
+box, RE-224, and a mesh is not always Revit's whole body, RE-78), hip roofs over a T or U footprint, roofs sloped by several slope arrows of the configuration of puzzbobb's U, where Revit slopes the two long outer walls along the arms only (RE-307; no other roof of the configuration is measured), and roofs by extrusion outside Revit 2025, the top of
 walls whose layers Revit ends at different heights or cuts at a height no join names (#1067), the boundaries of
 the rooms whose stored solid still does not close (RE-316 §4) and opening
 profiles are not decoded, and rvt-rs does not edit Revit model data.

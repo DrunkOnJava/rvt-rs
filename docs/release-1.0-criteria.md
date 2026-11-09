@@ -57,21 +57,21 @@ only in a pull request that links the new evidence.
 
 Exact where the element's data is decoded, the record's box elsewhere;
 the diagnostics count each ([#409](https://github.com/DrunkOnJava/rvt-rs/issues/409)).
-Doors and windows are drawn by default from the mesh Revit saved, where all of it decodes (the maintainer,
-2026-10-29), and on Revit 2024 to 2027 so are the walls that embed a curtain wall where Revit raised their base
+Every element that would be a box is drawn by default from the mesh Revit saved, where all of it decodes (the maintainer, 2026-11-09 for every class, 2026-10-29 for doors and windows), and on Revit 2024 to 2027 so are the walls that embed a curtain wall where Revit raised their base
 (RE-340: the mesh's lowest vertex is Revit's lowest point on 113 of 113 such walls of the BIM4LCA office);
-other loadable families are boxes unless `--saved-meshes` draws theirs, which is Revit's own shape where it is complete (every vertex within 0.001 ft on all 138 of Core Interior's doors and windows and 1,554 of 1,650 bodies scored on the BIM4LCA office as built and 1,638 of 1,738 at building permit, in IfcOpenShell's default tessellation, where a saved mesh is judged, Measure run 41850769925 at `e024f03c`; a body both files write as true curves is judged in the fine one, RE-331 section 8) but part of the body elsewhere (RE-78).
+a saved mesh is Revit's own shape where it is complete (every vertex within 0.001 ft on all 138 of Core Interior's doors and windows and 1,554 of 1,650 bodies scored on the BIM4LCA office as built and 1,638 of 1,738 at building permit, in IfcOpenShell's default tessellation, where a saved mesh is judged, Measure run 41850769925 at `e024f03c`; a body both files write as true curves is judged in the fine one, RE-331 section 8) but part of the body elsewhere (RE-78).
 `--family-extrusions` (opt-in) draws an instance from its family's own extrusions where they reproduce its mesh, every arc as an arc whatever its radius (#1366): at `34750454` 335 bodies are replaced on Core Interior, RE1 and the BIM4LCA office files (the 0.12 ft rule of #1352 replaced 66), 251 of them scored against Revit's export and all 251 holding the bar, 187 judged in the fine tessellation as bodies both files write as true curves and 64 in the default one, 6 of 53 exports moving against `main`'s and none of them held-out (runs 41884078892 and 41884639625, RE-331 section 9.1).
 A face the saved graphics do not decode marks a partial mesh, which keeps its box since RE-224.
-Some partial meshes record nothing, so every class but doors and windows stays opt-in;
+Some partial meshes record nothing, so a mesh that is drawn is not always Revit's whole body: of the bodies scored on 31 models (Measure run 42612357300) 17 classes are exact, and doors are 675 of 681, sanitary terminals 68 of 94, flow fittings 71 of 89, flow terminals 30 of 35 and walls 14 of 18;
 since RE-304 all 269 of the office's doors are drawn from their saved meshes, 265 of them exact (run 41850758987, RE-331 section 4.1).
+Reading every box's saved graphics costs the BIM4LCA office as built 24.4 s against 21.2 s and 1,423 MiB of peak memory against 913 (Measure run 42614230465).
 Walls: 360 of 360 with Revit's ends on Core Interior, 516 of 607 on the office as built and 439 of 589 at permit (Measure run 42530216655 at `1e2d3de4`; RE-222,
 RE-223, RE-322).
 Wall tops: a wall whose top join or cut pair names a floor, roof or footing that covers its whole plan is cut at its underside, which is Revit's top on 64 of the office's 65 cut tops as built and 70 of 70 at permit (RE-267);
 a wall such an element covers in part is drawn stepped (RE-320): 49 walls as built and 46 at permit, and rvt-rs's top is Revit's over the whole plan on 583 of 607 walls as built (544 before) and 571 of 589 at permit (530 before). The one wall as built that Revit cuts although 0.0243 ft² of its plan lies outside the floor, inside an abutting wall, keeps its full height, as do the walls whose layers Revit ends at different heights.
 Per-category results are in the [supported profile](supported-profile.md#geometry-on-revit-2024-and-2025-projects);
 the residuals are the issues under the 0.18.0 milestone, and `tools/re/box_bodies_vs_ifc.py` counts in Measure, per class, the bodies still drawn as their box and how much of it Revit's body fills
-Open: family instances other than doors and windows drawn from their saved meshes by default ([#1191](https://github.com/DrunkOnJava/rvt-rs/issues/1191)),
+Open: the saved-graphics faces that do not decode, which keep 124 of the BIM4LCA office as built's boxed bodies as boxes, and the meshes of the classes above that are not all Revit's ([#1191](https://github.com/DrunkOnJava/rvt-rs/issues/1191)),
 and geometry on releases other than 2024 and 2025 ([#1190](https://github.com/DrunkOnJava/rvt-rs/issues/1190)).
 
 ### W7 as last measured

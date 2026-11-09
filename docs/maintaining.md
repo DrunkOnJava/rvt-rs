@@ -418,12 +418,17 @@ not remove Compare's report.
   16 walls of `rac_basic` that both saves drew from the same source, of another
   extent; #1471 (RE-351) healed all 16 and the list is empty. No entry is ever
   added: `tools/ci/check_same_project_projects.py` (a CI step) holds `PINNED_MOST` at
-  0 and fails on any tag beyond the 16 first pinned. A roof a save leaves as a
-  record box where the 2025 save draws it is counted, not scored, and exactly:
-  `ROOFS_LEFT_AS_BOXES` names `rac_advanced`'s 201262 and `rac_basic`'s 243274, and one
-  more or one fewer fails. Any other body that differs from the 2025 save fails; a
-  difference on a release or sample not pinned is the maintainer's decision, not a new
-  entry.
+  0 and fails on any tag beyond the 16 first pinned. A roof the 2025 save draws
+  otherwise, as its record box or its saved mesh, is counted, not scored, and exactly:
+  `ROOFS_NOT_THE_2025_BODY` names `rac_advanced`'s 201262 (its record box, as the 2025
+  save draws its slope) and 165755, 167036 and 167158 (their saved meshes, where the
+  2025 save draws a level block of their sketch outline) and `rac_basic`'s 243274 (its
+  saved mesh against the 2025 save's roof extrusion), a mesh counting only where its box
+  contains the 2025 body's, and one more, one fewer or one of another kind fails
+  (Griffin, 2026-11-05 for the first and last, 2026-11-09 for the three, with #1191's
+  saved-mesh default). That list only shrinks too: the same CI step holds it to those
+  five. Any other body that differs from the 2025 save fails; a difference on a release
+  or sample not pinned is the maintainer's decision, not a new entry.
 - The output carries, for rac_advanced's ceiling 147534, floor 139803 and roof
   201262 and the other elements whose sketch holds an arc (`ARC_OWNERS`), the
   class, `BodySource`, `ProfileResolved`, volume and vertex count in every save,

@@ -591,7 +591,7 @@ const DECODE_STAGES: Record<string, { label: string; count: (done: number, total
   },
   'saved-graphics': { label: 'Reading saved graphics', count: () => '' },
   'saved-meshes': {
-    label: 'Drawing doors and windows from saved meshes',
+    label: 'Drawing family instances from saved meshes',
     count: (done, total) => `${done.toLocaleString('en-US')} of ${total.toLocaleString('en-US')} elements`,
   },
 };
@@ -1076,8 +1076,8 @@ function selectedExportMode(): string {
  * The options of one open, as the wasm binding
  * `openRvtBytesWithDiagnosticsModeAndOpenLimits` takes them: absent fields
  * keep the defaults, `largeModel` is `rvt-ifc --large-model`, an explicit
- * byte limit wins over it, and `savedMeshes` draws doors and windows from the
- * meshes Revit saved for them. The limits are the file's own, kept in
+ * byte limit wins over it, and `savedMeshes` draws every element that would be
+ * a box from the mesh Revit saved for it. The limits are the file's own, kept in
  * `currentOpenLimits`; `savedMeshes` follows the toggle on every open, so
  * `loadBytes` adds it.
  */
@@ -1123,7 +1123,7 @@ let firstOpenLimits: OpenLimitsOptions | undefined = limitsFromQuery();
 
 /**
  * `?savedMeshes=0` (or `false`) starts the toggle off, so every open draws
- * doors and windows as their boxes until the toggle is turned on. Unlike the
+ * family instances as their boxes until the toggle is turned on. Unlike the
  * limits it is not for the first open only: the toggle shows what applies, so
  * it must not turn itself back on after one file.
  */

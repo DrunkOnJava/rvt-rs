@@ -159,7 +159,7 @@ that says to call `open_model` again. The tool descriptions say the same.
 | `list_rooms` | The spaces the export writes as `IfcSpace`: ElementId, number, name, `space_kind`, level, area and provenance. `space_kind` says what each is (`room`, `area`, `mep_space` or `family_instance`), from the Revit class of its record (#1437): ask it, not `space_outline_source`, which says only where the outline came from and changes with the rules that read outlines. No `mep_space` is written today: rvt-rs reads no Revit Space from a file's partition records, which says what it writes and not what the files hold. The area is present only where the outline was read exactly. |
 | `list_levels` | Storeys with elevation (feet and metres) and element count. |
 | `get_diagnostics` | The export diagnostics, as `rvt-ifc --diagnostics` writes them ([`export-diagnostics.schema.json`](schemas/export-diagnostics.schema.json)): what was decoded, exported, skipped, approximated and left unread, and why. |
-| `export_ifc` | Writes IFC4 to `out_path` and returns a summary and a `resource_link` to the file. `options` takes `rvt-ifc`'s switches: `mode`, `saved_meshes` (`doors_and_windows`, `all`, `off`), `revit_property_sets`, `revit_set_placement`, `no_base_quantities`, `allow_partial`. |
+| `export_ifc` | Writes IFC4 to `out_path` and returns a summary and a `resource_link` to the file. `options` takes `rvt-ifc`'s switches: `mode`, `saved_meshes` (`default`: every boxed element on Revit 2023 to 2027; `doors_and_windows`, `all`, `off`), `revit_property_sets`, `revit_set_placement`, `no_base_quantities`, `allow_partial`. |
 | `export_gltf` | Writes binary glTF to `out_path` and returns the same kind of summary and link. |
 
 ### Elements and levels as the export writes them

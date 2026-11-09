@@ -67,7 +67,7 @@ interface OpenLimitsOptions {
   largeModel?: boolean;
   maxStreamBytes?: number;
   maxInflateBytes?: number;
-  /** Draw doors and windows from their saved meshes; the binding's default is true. */
+  /** Draw every boxed element from its saved mesh; the binding's default is true. */
   savedMeshes?: boolean;
   /** The project phase to export, by name or ElementId; the binding's default is the last. */
   phase?: string | number;
@@ -202,7 +202,7 @@ self.addEventListener('message', async (ev: MessageEvent<ParseMsg>) => {
 
     const qualityMode = (msg.mode ?? 'scaffold').trim() || 'scaffold';
     const limitsNote = msg.limits?.largeModel ? ' · large-model limits' : '';
-    const meshesNote = msg.limits?.savedMeshes === false ? ' · door and window boxes' : '';
+    const meshesNote = msg.limits?.savedMeshes === false ? ' · boxes kept' : '';
     step(`Parsing container · IFC bar ${qualityMode}${limitsNote}${meshesNote}`);
     const openStartedAt = performance.now();
     const onStage = (stage: string, done: number, total: number | null): void => {

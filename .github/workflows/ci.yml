@@ -1034,10 +1034,11 @@ jobs:
           total verdict-says-pass 1 'FAIL, a model failed' core=/tmp/kinds-lie.txt,/tmp/core-interior.diagnostics.json
           total saw-nothing 1 "FAIL, a model's spaces are not the number the export itself counted" \
             core=/tmp/kinds-einhoven.txt,/tmp/core-interior.diagnostics.json
-      # #908: doors and windows are drawn from their saved graphics by
-      # default (2026-10-29); every other class only with --saved-meshes, so
-      # no other job reads theirs. Export both real projects with it, fail
-      # unless each draws some body from them, and validate both exports.
+      # #908: every boxed element is drawn from its saved graphics by default
+      # (doors and windows since 2026-10-29, every other class since #1191).
+      # Export both real projects with --saved-meshes, which names it on any
+      # release, fail unless each draws some body from them, and validate both
+      # exports.
       - name: Export and validate real projects with their saved meshes
         env:
           RVT_PROJECT_CORPUS_DIR: ${{ github.workspace }}/_project_corpus/Revit
