@@ -1094,6 +1094,12 @@ fn property_readers(name: &str, value: &str) -> &'static [&'static str] {
             ec::OPENING_PLACEMENT_AXES_SOURCE => PLACEMENT_READERS,
             _ => &[],
         },
+        // RE-361: a door set in no wall is placed at its stored transform's
+        // origin, which the transform scan notes.
+        ec::PLACEMENT_ORIGIN_SOURCE_PROPERTY => match value {
+            ec::NO_OPENING_PLACEMENT_ORIGIN_SOURCE => &["instance_transform"],
+            _ => &[],
+        },
         "ThicknessSource" => match value {
             ec::WALL_TYPE_THICKNESS_SOURCE => &["wall_type_layers"],
             crate::element_record_wall_joins::WALL_THICKNESS_SOURCE
