@@ -432,8 +432,16 @@ jobs:
       - name: Install viewer dependencies
         working-directory: viewer
         run: pnpm install --frozen-lockfile
-      - name: Build gen-fixture for the synthetic demo
-        run: cargo build --release --bin gen-fixture
+      # rvt-elements is built in the same invocation and put on PATH, as in
+      # viewer-test.yml: tests/parameters-row.spec.ts runs it on the sample and
+      # holds the panel's saved parameters to what it prints (#35). Without it
+      # v0.16.0's tag run failed here, so that tag was never published.
+      - name: Build gen-fixture for the synthetic demo, and rvt-elements
+        run: |
+          set -euo pipefail
+          cargo build --release --bin gen-fixture --bin rvt-elements
+          echo "${GITHUB_WORKSPACE}/target/release" >> "$GITHUB_PATH"
+          "${GITHUB_WORKSPACE}/target/release/rvt-elements" --help >/dev/null
       - name: Stage redistributable demos
         working-directory: viewer
         run: pnpm run stage:demos
