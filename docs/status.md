@@ -1458,8 +1458,9 @@ prints it from any installed build.
   `rvt-rs-mcp`, both published from the tag), the `rvt` wheels and sdist on
   PyPI, GitHub Release archives for Linux, macOS and Windows, and the
   container image, each checked from its published artifacts
-  ([`install.md`](install.md)); docs.rs had built both crates when they were
-  checked. It is the first published release of 0.16: the `v0.16.0` tag was
+  ([`install.md`](install.md)); docs.rs had built `rvt` when they were checked
+  (`rvt-rs-mcp` is a binary crate with no documentation there). It is the first
+  published release of 0.16: the `v0.16.0` tag was
   made and never published, because its publish run stopped at the viewer
   smoke test (#1569). It reads much more of Revit 2015 to 2023 projects, with
   beams along their location lines, walls joined by their join lists (and a
