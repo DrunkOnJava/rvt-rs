@@ -82,6 +82,42 @@ env:
 # times their longest run) are what covers one. tools/ci/check-workflows.py
 # fails on a job that runs steps without a limit.
 jobs:
+  # What the change could affect, so that work it cannot affect is not done
+  # again. A pull request of nothing but prose runs no Rust job: only reports,
+  # changelog fragments and documentation pages that no test reads. A push to
+  # main of the tree a pull request just passed `full / CI passed` on runs only
+  # what a pull request does not (the wheels of the other platforms), since it
+  # has already been tested, unless it changes the build's dependencies or CI
+  # itself, which refreshes the caches that only main saves. Any doubt, or any
+  # answer that does not come, runs everything.
+  scope:
+    name: what the change can affect
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: read
+    outputs:
+      skip: ${{ steps.scope.outputs.skip }}
+      prose: ${{ steps.scope.outputs.prose }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: What the change can affect
+        id: scope
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+        run: tools/ci/change-scope.sh >> "$GITHUB_OUTPUT"
+
   fmt:
     name: cargo fmt
     runs-on: ubuntu-24.04
@@ -97,7 +133,9 @@ jobs:
       - run: cargo fmt --all -- --check
 
   clippy:
+    needs: scope
     name: cargo clippy
+    if: needs.scope.outputs.skip != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -146,6 +184,7 @@ jobs:
       - run: cargo clippy -p rvt-probes --examples --no-deps -- -D warnings
 
   test:
+    needs: scope
     # Unit tests are banned (maintainer directive, 2026-09-23), except a few
     # failure-first tests of a pure helper with no file, network, process or
     # clock I/O (the `--lib` step below). Apart from those, this job builds
@@ -157,6 +196,7 @@ jobs:
     # contract checks still run. The MSRV entry is labelled `msrv`, so its
     # check name does not change when `rust-version` does.
     name: build + real files / ${{ matrix.os }} / ${{ matrix.label || matrix.rust }}
+    if: needs.scope.outputs.skip != 'true'
     runs-on: ${{ matrix.os }}
     # The longest leg took 8.9 minutes (Windows), Ubuntu 4.4. The family
     # corpus fetch took 2 s on Linux and 10 s on Windows on main's first run
@@ -359,8 +399,9 @@ jobs:
   # the fuzz regressions among them, on i686 with overflow checks on: a
   # wrap panics there instead of passing.
   i686-overflow:
+    needs: scope
     name: 32-bit overflow checks (i686)
-    if: inputs.fast != true
+    if: inputs.fast != true && needs.scope.outputs.skip != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -433,11 +474,15 @@ jobs:
         run: tools/ci/verify-real-files.sh --profile ci --no-fail-fast --target i686-unknown-linux-gnu
 
   corpus-tier2:
+    needs: scope
     # M2-03 Tier 2: optional external project corpus. Clones the MIT
     # magnetar-io/revit-test-datasets tree (not Autodesk-owned samples)
     # and runs lightweight health + known-count checks. Local runs skip
     # when RVT_PROJECT_CORPUS_DIR is unset.
     name: Corpus health (tier 2 — external)
+    # Run on main even over a tree already tested: it is the job that saves the
+    # office and R2025 models' caches, which pull requests restore.
+    if: needs.scope.outputs.prose != 'true'
     runs-on: ubuntu-24.04
     # Median 5.6 minutes, longest 10.2. The BIM4LCA and R2025 fetches end
     # as NOT MEASURED, a warning, when their host is down, and a host that drops
@@ -611,12 +656,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
   corpus-mcp:
+    needs: scope
     # The MCP server's end-to-end test on Einhoven, a job of its own beside
     # Corpus health rather than a step after its tier-two gates: run after
     # them it made Corpus health, already the slowest job on every pull
     # request, about 3 minutes longer (8.1 to 10.2 minutes on main,
     # 2026-11-04).
     name: MCP server on Einhoven (tier 2 — external)
+    if: needs.scope.outputs.skip != 'true'
     runs-on: ubuntu-24.04
     # Longest 4.1 minutes.
     timeout-minutes: 30
@@ -670,12 +717,13 @@ jobs:
           retention-days: 14
 
   writer-patch-corpus:
+    needs: scope
     # M9-01: stream-level writer coverage for real family + project
     # fixtures. Keeps grow/shrink/multi-stream/missing-stream cases
     # from silently regressing while semantic editing remains out of
     # scope.
     name: Writer patch corpus
-    if: inputs.fast != true
+    if: inputs.fast != true && needs.scope.outputs.skip != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -730,6 +778,7 @@ jobs:
           test "$rows" -gt 0 || { echo "::error::basics_export wrote an empty schedule for Einhoven"; exit 1; }
 
   ifcopenshell-validate:
+    needs: scope
     # IFC-41 / C9: the independent-validator gate. IfcOpenShell parses what
     # the exporter writes through the full IFC4 schema, so errors a
     # substring count can't see (dangling refs, wrong attribute arity,
@@ -742,7 +791,7 @@ jobs:
     # exports are small (24 instances each); the real projects carry most of
     # what this job validates.
     name: IfcOpenShell validates exports
-    if: inputs.fast != true
+    if: inputs.fast != true && needs.scope.outputs.skip != 'true'
     runs-on: ubuntu-24.04
     # Longest 22.9 minutes (run 42034472131, every step slow), median 4.0:
     # 3 times the longest. The EXPRESS rules step has a 25 minute limit of its
@@ -1156,7 +1205,9 @@ jobs:
           if-no-files-found: ignore
 
   doc:
+    needs: scope
     name: cargo doc
+    if: needs.scope.outputs.skip != 'true'
     runs-on: ubuntu-24.04
     # Longest 2.9 minutes.
     timeout-minutes: 30
@@ -1190,8 +1241,9 @@ jobs:
   # cargo-public-api 0.52 reads the rustdoc JSON of nightlies from
   # 2025-11-22, so its nightly is pinned near its release.
   semver:
+    needs: scope
     name: semver checks
-    if: github.event_name == 'pull_request' && inputs.fast != true
+    if: github.event_name == 'pull_request' && inputs.fast != true && needs.scope.outputs.skip != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -1242,8 +1294,9 @@ jobs:
   # tolerances to avoid false positives. Compile-gate is the
   # high-value, low-noise version we can enforce on every push.
   bench-build:
+    needs: scope
     name: cargo bench --no-run
-    if: inputs.fast != true
+    if: inputs.fast != true && needs.scope.outputs.skip != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -1274,8 +1327,9 @@ jobs:
   # catching it in CI means every PR validates that rvt-rs will render
   # properly on docs.rs before the release cut.
   docs-rs-preview:
+    needs: scope
     name: docs.rs build preview
-    if: inputs.fast != true
+    if: inputs.fast != true && needs.scope.outputs.skip != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -1310,8 +1364,9 @@ jobs:
   # so a field added to a type a target constructs broke the nightly run
   # after merge, twice (#236 -> #259, #934 -> #965).
   fuzz-check:
+    needs: scope
     name: fuzz targets build
-    if: inputs.fast != true
+    if: inputs.fast != true && needs.scope.outputs.skip != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -1331,8 +1386,9 @@ jobs:
       - run: cargo +nightly-2026-10-01 check --manifest-path fuzz/Cargo.toml --bins
 
   python-wheel:
+    needs: scope
     name: Python wheel / ${{ matrix.os }}
-    if: inputs.fast != true
+    if: inputs.fast != true && needs.scope.outputs.prose != 'true'
     runs-on: ${{ matrix.os }}
     # Longest 11.6 minutes (Windows), 8.7 macOS, 7.2 Ubuntu, in 100 runs on main,
     # before the smoke wheel was built without LTO; the limit is kept.
@@ -1664,8 +1720,8 @@ jobs:
 
   viewer:
     name: viewer tests
-    needs: viewer-paths
-    if: inputs.fast != true && needs.viewer-paths.outputs.run == 'true'
+    needs: [viewer-paths, scope]
+    if: inputs.fast != true && needs.viewer-paths.outputs.run == 'true' && needs.scope.outputs.skip != 'true'
     uses: $/.github/workflows/viewer-test.yml
     permissions:
       contents: read
@@ -1930,6 +1986,7 @@ jobs:
     name: CI passed
     if: always()
     needs:
+      - scope
       - fmt
       - clippy
       - test
