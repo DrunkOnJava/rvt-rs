@@ -82,9 +82,13 @@ Every `vX.Y.Z` release:
 
 1.0.0 is tagged only when every requirement in
 [`docs/release-1.0-criteria.md`](docs/release-1.0-criteria.md) has passed,
-each with its evidence linked. It supports every Revit release from 2015 to
-2027 and ships with no limitations. The stability commitment covers the
-surfaces that page names (its S1, #873), and each of them has a check that
+each with its evidence linked. It supports every Revit release from 2024 to
+2027 and ships with no limitations (the maintainer narrowed the range from 2015
+to 2027 on 2026-11-08). Revit 2015 to 2023 stay readable, 2015 to 2022
+labelled experimental and 2023 partial; a 1.x release adds one of those years
+once it has a same-release Revit export to develop on and two held out. The
+stability commitment covers the surfaces that page names (its S1, #873), and
+each of them has a check that
 fails on an unannounced breaking change (S2). A milestone's completion
 percentage is not part of the gate.
 
