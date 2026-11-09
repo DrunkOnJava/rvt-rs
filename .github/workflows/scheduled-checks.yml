@@ -75,7 +75,7 @@ jobs:
         uses: $/.github/actions/setup-rust
       # The versions ci.yml pins for the same two checks.
       - name: Install cargo-audit and cargo-deny
-        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
+        uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: cargo-audit@0.22.2,cargo-deny@0.20.2
       # Through tools/ci/advisory_check.py: an advisory (or any other failure)
