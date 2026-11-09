@@ -10,9 +10,10 @@ list in several places, which must agree or the verdict does not see a sample (R
   readers_across_saves.py            the keys of MINIMUMS (and a year-keyed PROPERTIES), PINNED_WALLS and
                                      ROOFS_LEFT_AS_BOXES
 
-PINNED_WALLS is the one list of bodies allowed to differ from the 2025 save (Griffin, 2026-11-05). It can only
-shrink: no project has more than the walls ORIGINAL_PINNED_TAGS holds, at most PINNED_MOST of them for a year, and no
-entry is ever added. Raising ORIGINAL_PINNED_TAGS or PINNED_MOST here is adding to it.
+PINNED_WALLS was the one list of bodies allowed to differ from the 2025 save (Griffin, 2026-11-05). It could only
+shrink, and it is empty since #1471 healed its 16 walls: PINNED_MOST is 0, no project has more than the walls
+ORIGINAL_PINNED_TAGS holds, and no entry is ever added. Raising ORIGINAL_PINNED_TAGS or PINNED_MOST here is adding to
+it.
 
 Run from the repository root; exits 1 and says which file differs.
 """
@@ -26,7 +27,7 @@ sys.path.insert(0, str(ROOT / "tools" / "ci"))
 
 import same_project_verdict  # noqa: E402
 
-PINNED_MOST = 16
+PINNED_MOST = 0
 ORIGINAL_PINNED_TAGS = {
     "racbasicsampleproject": frozenset(
         {

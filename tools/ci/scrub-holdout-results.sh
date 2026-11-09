@@ -93,7 +93,11 @@
 # ElementId) with its `probe: exit N` line, the `wall rules:` count lines of
 # tools/re/wall_rule_counts.py (RE-348, RE-349: how many walls take the wall base
 # and end rules and why the others do not, as numbers beside fixed words and
-# reason names, never an ElementId), and
+# reason names, never an ElementId), the `wall heights:` count lines of
+# tools/re/wall_heights_vs_ifc.py (RE-257, RE-351: how many walls stand at
+# Revit's base and top, and how many floors, roofs and footings cut them, as
+# numbers beside the scorer's fixed words, never a Tag, a height or the files'
+# offset), and
 # ifc.sha256, the hash of rvt-rs's own export; every other file is deleted.
 set -euo pipefail
 
@@ -253,6 +257,17 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
              if (section == "rules") rules_counted = 1
              print "schema " section ": not read" }
            END { if (rules_seen && !rules_counted) print "schema rules: not read" }' "$f"
+    done
+    # How many walls stand at Revit's base and top (tools/re/wall_heights_vs_ifc.py,
+    # RE-257, RE-351): counts beside the scorer's fixed group words. The offset
+    # between the two files' heights, and the `tag:`, `wall`, `cutter`,
+    # `crossed`, `over` and `slab` lines, which carry a Tag or a height, are
+    # dropped. Its `exit N` line stays, as a `wall heights:` line.
+    for f in "$dir"wall_heights_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      sed -nE 's/^walls in both files: ([0-9]+) \(rvt-rs ([0-9]+), Revit ([0-9]+)\); offset -?[0-9.]+ ft$/wall heights: walls in both files \1 (rvt-rs \2, Revit \3)/p' "$f"
+      grep -E "^(no wall in both files|cut by the [0-9]+ floors, roofs and footings whose plan box overlaps the wall:|exit [0-9]+)$" "$f" | sed 's/^/wall heights: /' || true
+      grep -E "^  (base and top Revit's|base Revit's, top not|top Revit's, base not|neither Revit's|misses in the (same|other) storey|floors, roofs and footings with base (Revit|not Revit)'s and top (Revit|not Revit)'s|(base|top): (cut and Revit's|cut, not Revit's|uncut, Revit cuts|uncut and Revit's)): [0-9]+$" "$f" | sed 's/^  /wall heights: /' || true
     done
     # The wall bodies against Revit's export, per class of wall (#1534): the
     # scorer's summary rows, which are counts and distances.

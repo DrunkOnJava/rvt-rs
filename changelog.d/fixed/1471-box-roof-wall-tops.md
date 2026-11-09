@@ -21,5 +21,12 @@
   area, and keeps `Length` and `Width` as the 2025 save does (the 2025 and 2026
   exports of Measure run 42063046730). Only roof 243274 exercises the roof-cover
   path anywhere, and no wall is cut by a plate roof, so the branch that keeps a
-  plate roof as a cutter is unmeasured. Not yet measured on this head: the
-  walls after the change, and which walls of the other models change.
+  plate roof as a cutter is unmeasured. In the unfiltered Measure run
+  42554270370 (head 584c8a89 against `main` at fc29acbf, 118 exports) four
+  exports move: `rac_basic` 2024, 2026 and 2027, and the held-out AA house
+  (Revit 2026), whose walls' heights its counts did not score. The other 114,
+  the BIM4LCA office's among them, are byte for byte `main`'s. On the 2026 and
+  2027 saves the 16 walls are the 2025 save's bodies, and only roof 243274,
+  still a record box, differs among 441 bodies. So the same-project check
+  pins no wall any more (#1471, the exception of 2026-11-05 closed), and
+  held-out models now keep counts of the walls at Revit's base and top.
