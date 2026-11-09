@@ -3775,10 +3775,8 @@ impl StepWriter<'_> {
         // of an opening (a door's `FireExit`), which revit-ifc's
         // `OpeningUtil.CreateOpening` hands the opening as it hands the
         // cutter its own.
-        let mut cutter_properties: std::collections::BTreeMap<
-            (usize, &str),
-            Vec<super::entities::Property>,
-        > = Default::default();
+        let mut cutter_properties: BTreeMap<(usize, &str), Vec<super::entities::Property>> =
+            Default::default();
         for entity in &model.entities {
             if let super::entities::IfcEntity::CutterOpeningSet { element, set } = entity {
                 cutter_properties
