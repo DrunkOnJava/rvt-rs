@@ -142,8 +142,8 @@ pub struct ElementProvenance {
     pub profile_source: Option<String>,
     /// For a room or space, where its outline came from: `record_box`
     /// (the area of its box, not of the room), `stored_solid`,
-    /// `stored_solid_faces`, `stored_solid_approximate`, `saved_mesh`,
-    /// `family_body`, and for an Area `area_plan_topology`,
+    /// `stored_solid_faces`, `stored_solid_approximate`, `stored_solid_edges`,
+    /// `saved_mesh`, `family_body`, and for an Area `area_plan_topology`,
     /// `area_plan_topology_unchecked` (which nothing outside the file checks:
     /// Revit 2025 to 2027, and an Area drawn from lines whose partition copies
     /// disagree), `area_boundary`, `area_boundary_joined` or `none`.
@@ -522,9 +522,10 @@ pub struct RoomOut {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub level_elevation_feet: Option<f64>,
     /// The plan area of the room's outline, where the outline is one read
-    /// exactly (`space_outline_source` is `stored_solid`, `stored_solid_faces`
-    /// or, for an Area, `area_plan_topology`, `area_plan_topology_unchecked`,
-    /// `area_boundary` or `area_boundary_joined`). Absent for
+    /// exactly (`space_outline_source` is `stored_solid`, `stored_solid_faces`,
+    /// `stored_solid_edges` or, for an Area, `area_plan_topology`,
+    /// `area_plan_topology_unchecked`, `area_boundary` or
+    /// `area_boundary_joined`). Absent for
     /// `record_box`, where the area of a box is not the area of a room, and for
     /// `stored_solid_approximate`.
     #[serde(skip_serializing_if = "Option::is_none")]

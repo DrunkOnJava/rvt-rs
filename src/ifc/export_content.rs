@@ -4927,6 +4927,22 @@ pub const SPACE_OUTLINE_STORED_SOLID_FACES: &str = "stored_solid_faces";
 /// Revit's floor area (four rooms, 1671995 in both files) and 10 are equal.
 pub const SPACE_OUTLINE_STORED_SOLID_APPROXIMATE: &str = "stored_solid_approximate";
 
+/// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a room whose outline was read from the
+/// edges of its stored solid, where neither the walk of RE-101 nor the span of
+/// RE-316 reads one (#90, RE-374): the outline of the solid's floor, which
+/// closes as the walk reads it and spans the record box, where the solid holds
+/// no face that is neither vertical nor horizontal, no edge its two planes
+/// place differently and no point between its floor and 4 ft above it but on
+/// a vertical edge. It reads two rooms of the
+/// models measured: the BIM4LCA office's room 3095831 at building permit,
+/// 1864.737 ft² against the 1864.74 of Revit's IFC4 export, and Snowdon
+/// Towers' room 830902, 304.059 ft² against Revit's 304.058 (`Vim.Room.Area`
+/// of the model's 2027 edition, a later save). On every room of Autodesk's
+/// samples, the office and the Revit 2025 models that the walk or the span
+/// reads and this rule accepts, it gives the same outline, to 0.01 ft² in
+/// area and 0.001 ft on its extent.
+pub const SPACE_OUTLINE_STORED_SOLID_EDGES: &str = "stored_solid_edges";
+
 /// [`SPACE_OUTLINE_SOURCE_PROPERTY`] of a space drawn as its record's bounding
 /// box (a room whose outline was not read, a Revit Space or a family instance
 /// written as a space): placed and sized by the box, its plan area the box's,
@@ -7641,6 +7657,9 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             }
             Some(crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE_APPROXIMATE) => {
                 SPACE_OUTLINE_STORED_SOLID_APPROXIMATE
+            }
+            Some(crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE_EDGES) => {
+                SPACE_OUTLINE_STORED_SOLID_EDGES
             }
             _ => SPACE_OUTLINE_RECORD_BOX,
         };

@@ -95,12 +95,23 @@ pub const ROOM_OUTLINE_SOURCE_FACES: &str = "partition_room_solid_faces_resolved
 /// take the column off.
 pub const ROOM_OUTLINE_SOURCE_APPROXIMATE: &str = "partition_room_solid_faces_approximate";
 
+/// Value of the same field on a room outline read from the edges of its stored
+/// solid, where neither the walk nor the span reads one (#90, RE-374): the
+/// outline of the solid's floor, where the solid is a prism of it up to
+/// [`ROOM_PRISM_HEIGHT_FEET`] ([`edge_outline_at`]).
+pub const ROOM_OUTLINE_SOURCE_EDGES: &str = "partition_room_solid_edges";
+
+/// Releases on which a room's outline is read from its solid's edges (RE-374):
+/// those on which the edge layout is measured.
+pub const ROOM_SOLID_EDGES_REVIT_VERSIONS: &[u32] = &[2024];
+
 /// Whether `source` is a value of the profile source field that a room's
 /// outline from its stored solid carries.
 pub fn is_room_outline_source(source: &str) -> bool {
     source == ROOM_OUTLINE_SOURCE
         || source == ROOM_OUTLINE_SOURCE_FACES
         || source == ROOM_OUTLINE_SOURCE_APPROXIMATE
+        || source == ROOM_OUTLINE_SOURCE_EDGES
 }
 
 /// Releases this layout is measured on. On Revit 2026 and 2027 it is the
@@ -1203,10 +1214,12 @@ pub const ROOM_PRISM_HEIGHT_FEET: f64 = 4.0;
 pub struct SolidEdge {
     /// The indices of the two faces it bounds.
     pub faces: [u32; 2],
-    /// Each face's (u, v) at the edge's ends: the first face's at the start,
-    /// the second's, the first's at the end, the second's. Where an edge runs
-    /// round a cylinder, the cylinder's two values are not its ends: they lie
-    /// a tenth and a fifth of the face's angle in from one end.
+    /// Each face's (u, v) at two points of the edge: the first face's at the
+    /// first point, the second's, the first's at the second point, the
+    /// second's. On a straight edge the points are its ends. On an edge round
+    /// a cylinder they are not: they lie 1/k and 2/k of the face's angle in
+    /// from one end, k a whole number (3 to 20 on Snowdon Towers), and a
+    /// plane across the edge gives the same two points.
     pub uv: [[f64; 2]; 4],
 }
 
@@ -1382,7 +1395,8 @@ impl SolidTopology {
 /// with no edge crossing another, and span `bbox` to [`BOX_TOLERANCE_FEET`].
 /// It is refused where the solid holds a face that is neither vertical nor
 /// horizontal (a face whose record is not read counts as horizontal only where
-/// all its edges lie at one height), a wall the floor meets that was not read,
+/// all its edges lie at one height), an edge whose two planes give it different
+/// ends, a wall the floor meets that was not read,
 /// or any point, other than along a vertical edge, between its floor and
 /// [`ROOM_PRISM_HEIGHT_FEET`] above it: a raised floor, a step, a pocket or a
 /// bulkhead below that height, where the floor's outline is not the room's
@@ -1404,6 +1418,17 @@ pub fn edge_outline_at(
         };
         if !upright {
             return Err("face_neither_vertical_nor_horizontal");
+        }
+    }
+    // Where both faces of an edge are planes, each gives the edge's ends; on 4
+    // of the BIM4LCA office's 5,094 such edges they do not agree, and the
+    // edges are then not read as one solid's (RE-374).
+    for edge in &topology.edges {
+        if let (Some(a), Some(b)) = (topology.plane_ends(edge, 0), topology.plane_ends(edge, 1)) {
+            let apart = (0..2).any(|end| (0..3).any(|i| !near(a[end][i], b[end][i])));
+            if apart {
+                return Err("edge_faces_disagree");
+            }
         }
     }
     // The heights of each face's edges, read through the face across each.

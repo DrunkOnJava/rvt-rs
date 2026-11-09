@@ -175,6 +175,24 @@ pub(super) fn attach_room_outlines(
                         prb::ResolvedKind::Approximate => prb::ROOM_OUTLINE_SOURCE_APPROXIMATE,
                     };
                     (profile, source, false, used)
+                })
+                // RE-374 (#90): a room neither reads is read from its solid's
+                // edges, where the solid is a prism of its floor.
+                .or_else(|| {
+                    prb::ROOM_SOLID_EDGES_REVIT_VERSIONS
+                        .contains(&revit_version)
+                        .then(|| {
+                            prb::edge_outline_of_solids_at(
+                                inflated.bytes(),
+                                headers,
+                                bbox,
+                                recording,
+                            )
+                        })
+                        .flatten()
+                        .map(|(profile, used)| {
+                            (profile, prb::ROOM_OUTLINE_SOURCE_EDGES, false, used)
+                        })
                 }),
         };
         if let Some((profile, source, walk, used)) = outline {
