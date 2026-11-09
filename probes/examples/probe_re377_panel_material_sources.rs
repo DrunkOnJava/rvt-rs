@@ -22,6 +22,11 @@
 //!   there is one, which says which parameter an entry is. `byte_hits` lists
 //!   where its body holds a `u32` that is a material's ElementId whatever field
 //!   it is in: the offset and the bytes around it;
+//! - `{"kind":"materials","names":[...]}` and, for each material that some
+//!   record of the file names, `{"kind":"material_refs","id","name","by_class"}`:
+//!   how many records of each class hold its ElementId, its own record
+//!   excepted, so that a scorer that knows Revit's material can say which
+//!   classes of record name it;
 //! - `{"kind":"summary",...}`.
 //!
 //! The ElementIds and material names are the model's own, so a scorer prints
@@ -274,6 +279,53 @@ fn main() -> anyhow::Result<()> {
         );
         Ok(())
     })?;
+    // Which classes of record name each material anywhere in the file, so that
+    // where a material no panel record names is held can be read from a scorer
+    // that knows the material.
+    let mut named_by: BTreeMap<u32, BTreeMap<String, usize>> = BTreeMap::new();
+    let everything = Options {
+        releases: native_document::NATIVE_RELEASES,
+        keep_body: true,
+        graph_classes: Some(BTreeSet::new()),
+        ..Options::default()
+    };
+    native_document::extract_graphs(&mut rf, &everything, |record| {
+        let Some(body) = record.body.as_deref() else {
+            return Ok(());
+        };
+        let own = record.identity.element_id;
+        let class = record.class_name.clone().unwrap_or_else(|| "?".into());
+        let mut seen = BTreeSet::new();
+        for window in body.windows(4) {
+            let word = u32::from_le_bytes([window[0], window[1], window[2], window[3]]);
+            if u64::from(word) != own && materials.contains_key(&word) {
+                seen.insert(word);
+            }
+        }
+        for material in seen {
+            *named_by
+                .entry(material)
+                .or_default()
+                .entry(class.clone())
+                .or_default() += 1;
+        }
+        Ok(())
+    })?;
+    println!(
+        "{}",
+        json!({"kind": "materials", "names": materials.values().collect::<Vec<_>>()})
+    );
+    for (material, classes) in &named_by {
+        println!(
+            "{}",
+            json!({
+                "kind": "material_refs",
+                "id": material,
+                "name": materials.get(material),
+                "by_class": classes,
+            })
+        );
+    }
     println!(
         "{}",
         json!({

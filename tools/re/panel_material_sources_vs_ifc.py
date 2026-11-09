@@ -62,8 +62,12 @@ def revit_plates(path):
     return out
 
 
+READ = {}
+
+
 def read_probe(path):
     panels, records, summary = {}, {}, {}
+    READ["materials"], READ["refs"] = set(), {}
     with open(path, encoding="utf-8", errors="replace") as handle:
         for line in handle:
             if not line.startswith("{"):
@@ -77,6 +81,10 @@ def read_probe(path):
                 panels[row["id"]] = row
             elif kind == "record":
                 records[row["id"]] = row
+            elif kind == "materials":
+                READ["materials"] = set(row["names"])
+            elif kind == "material_refs":
+                READ["refs"][row["name"]] = row["by_class"]
             elif kind == "summary":
                 summary = row
     return panels, records, summary
@@ -158,6 +166,23 @@ def main():
         "panel material sources: plates with a source giving exactly Revit's material %d of %d"
         % (any_equal, len(scored))
     )
+    targets = set().union(*scored.values()) if scored else set()
+    print(
+        "panel material references: Revit's plate materials %d, named in the file %d"
+        % (len(targets), len(targets & READ["materials"]))
+    )
+    classes = collections.Counter()
+    unreferenced = 0
+    for name in targets & READ["materials"]:
+        if name in READ["refs"]:
+            classes.update(READ["refs"][name])
+        else:
+            unreferenced += 1
+    print(
+        "panel material references: of those named, %d held by no record's body" % unreferenced
+    )
+    for cls, count in sorted(classes.items(), key=lambda item: (-item[1], item[0])):
+        print("panel material references: class %s holds one in %d records" % (cls, count))
     for key in sorted(table, key=lambda k: (-table[k]["equal"], -table[k]["contains"], k)):
         role, cls, path, ctx = key
         counter = table[key]
