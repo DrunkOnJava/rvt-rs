@@ -5,8 +5,10 @@ whole Revit's own IFC export of the same file aggregates it under.
 Research tool for `reports/element-framing/RE-72-curtain-grids.md` (and
 RE-46, RE-62). A part's whole is the `RelatingObject` of the
 `IfcRelAggregates` that lists it; elements are matched by `Tag`, the Revit
-ElementId. Only curtain-wall parts are counted: `IfcMember`, `IfcPlate` and
-`IfcCurtainWall` (a nested curtain wall is itself a part).
+ElementId. Only the parts of curtain walls and stairs are counted:
+`IfcMember` (a mullion or a stringer), `IfcPlate`, `IfcCurtainWall` (a nested
+curtain wall is itself a part), `IfcStairFlight` and `IfcRailing` (a stair's
+railing is aggregated under it, #1624).
 
 Usage:
 
@@ -21,7 +23,7 @@ import sys
 
 import ifcopenshell
 
-KINDS = ("IfcMember", "IfcPlate", "IfcCurtainWall")
+KINDS = ("IfcMember", "IfcPlate", "IfcCurtainWall", "IfcStairFlight", "IfcRailing")
 
 
 def tag(entity):
