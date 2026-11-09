@@ -22,7 +22,7 @@
   and 6,650; 36 walls differed on `main`, uncut by their doors and windows),
   every pipe (488 and 491) is the 2025 save's cylinder, as it already was since
   RE-370, and the placed ports are the 2025 save's, 6,967 and 7,054 of them
-  against 1,944 on `main`. `rac_advanced`'s 2027 save compares its 83 doors and
+  against 1,944 and 1,956 on `main`. `rac_advanced`'s 2027 save compares its 83 doors and
   24 windows and leaves none out. Only 2026 and 2027 exports move (15 of 118),
   and on the held-out 2026 and 2027 pairs every value added is equal, with
   "different" and the values Revit does not write unchanged.

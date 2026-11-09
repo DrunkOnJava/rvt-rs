@@ -137,7 +137,7 @@ that cannot catch an error the 2025 save shares. In Measure run 42545885153
 (against `main` at 1c088750, unfiltered, the same-project gates passing on 15
 samples) no body of the MEP samples' 2026 and 2027 saves differs from the 2025
 save's (36 walls on each did on `main`), and their placed ports are the 2025 save's
-(6,967 and 7,054, against 1,944 on `main`); two doors of `rac_basic` 2027 write no
+(6,967 and 7,054, against 1,944 and 1,956 on `main`); two doors of `rac_basic` 2027 write no
 Width and Height (#1489). Only 2026 and 2027 exports move, and on the held-out 2026
 and 2027 pairs every value added is equal. Sloped
 roofs, spiral runs, a wall's profile openings, `IsExternal` on walls, curtain
