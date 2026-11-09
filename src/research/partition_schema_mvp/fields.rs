@@ -340,6 +340,10 @@ pub const AGGREGATE_WHOLE_CLASSES: &[&str] = &["Stair", CURTAIN_WALL_CLASS];
 /// mullion names in its reference list.
 pub const CURTAIN_WALL_CLASS: &str = "CurtainWall";
 
+/// Releases a curtain wall is told by its parts in the 32-bit records, against
+/// the same Autodesk samples saved by Revit 2024 (RE-366).
+pub const CURTAIN_32BIT_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2023;
+
 /// Classes that are parts of a curtain wall when their reference list names
 /// exactly one (RE-46).
 ///

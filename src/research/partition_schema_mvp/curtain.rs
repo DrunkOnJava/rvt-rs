@@ -271,7 +271,7 @@ pub(super) fn attach_curtain_axes(
         return;
     }
     let Ok(transforms) =
-        crate::partition_instance_transforms::scan_instance_transforms(rf, revit_version, &ids)
+        crate::partition_instance_transforms::scan_transforms_in_layout(rf, revit_version, &ids)
     else {
         return;
     };
@@ -344,7 +344,12 @@ pub(super) fn attach_curtain_walls(
     walls: &mut [DecodedElement],
     products: &mut [DecodedElement],
     openings: [&mut Vec<DecodedElement>; 2],
+    narrow_references: Option<&BTreeMap<u32, Vec<u64>>>,
 ) {
+    let read_references = |rf: &mut RevitFile, element: &DecodedElement| match narrow_references {
+        Some(lists) => element.id.and_then(|id| lists.get(&id)).cloned(),
+        None => record_references(rf, element).map(|(list, _)| list),
+    };
     let wall_ids: BTreeSet<u32> = walls.iter().filter_map(|wall| wall.id).collect();
     if wall_ids.is_empty() {
         return;
@@ -356,7 +361,7 @@ pub(super) fn attach_curtain_walls(
             references.push(None);
             continue;
         }
-        let list = record_references(rf, product).map(|(list, _)| list);
+        let list = read_references(rf, product);
         if product.class == "CurtainWallMullion" {
             for id in list.iter().flatten() {
                 if let Ok(id) = u32::try_from(*id) {
@@ -373,7 +378,7 @@ pub(super) fn attach_curtain_walls(
         .map(|elements| {
             elements
                 .iter()
-                .map(|element| record_references(rf, element).map(|(list, _)| list))
+                .map(|element| read_references(rf, element))
                 .collect()
         })
         .collect();
