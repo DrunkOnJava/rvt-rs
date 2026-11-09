@@ -677,6 +677,11 @@
           "minimum": 0,
           "description": "Exported IfcSpaces that are rooms whose outline was read from the faces their stored solid lists, up to the solid's own end, where the walk of RE-101 did not close them (SpaceOutlineSource stored_solid_faces, RE-316): equal to Revit's area on every such room measured, bounded by the solid's list of objects and a gap, so a closed loop of another element's faces inside the room's box would be read as the room's."
         },
+        "edge_outline_spaces": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exported IfcSpaces that are rooms whose outline was read from the edges of their stored solid, where neither the walk of RE-101 nor the span of RE-316 reads one (SpaceOutlineSource stored_solid_edges, #90, RE-374): the outline of the solid's floor, read only where the solid is a prism of it up to 4 ft above the floor."
+        },
         "approximate_outline_spaces": {
           "type": "integer",
           "minimum": 0,

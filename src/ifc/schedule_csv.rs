@@ -401,6 +401,8 @@ pub fn room_rows(model: &IfcModel) -> Vec<RoomRow> {
             == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE
             || property("ProfileSource")
                 == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE_FACES
+            || property("ProfileSource")
+                == crate::partition_room_boundaries::ROOM_OUTLINE_SOURCE_EDGES
             || property("ProfileSource") == crate::partition_area_records::AREA_BOUNDARY_SOURCE
             || property("ProfileSource") == crate::partition_area_records::AREA_TOPOLOGY_SOURCE)
             .then(|| extrusion.as_ref().and_then(outline_area_square_feet))

@@ -134,9 +134,9 @@ use rvt::research::partition_roof_slopes::{
     EDGE_SLOPE_WINDOW, arrow_heights, edge_slope_in, fascia_depth, scan_rafter_cuts,
 };
 use rvt::research::partition_room_boundaries::{
-    ROOM_OUTLINE_SOURCE, ROOM_OUTLINE_SOURCE_APPROXIMATE, ROOM_OUTLINE_SOURCE_FACES,
-    ROOM_SOLID_TAG, ResolvedKind, is_room_outline_source, resolved_outline_of_solids,
-    room_outline_at,
+    ROOM_OUTLINE_SOURCE, ROOM_OUTLINE_SOURCE_APPROXIMATE, ROOM_OUTLINE_SOURCE_EDGES,
+    ROOM_OUTLINE_SOURCE_FACES, ROOM_SOLID_TAG, ResolvedKind, edge_outline_at,
+    is_room_outline_source, resolved_outline_of_solids, room_outline_at,
 };
 use rvt::research::partition_room_parameters::{DATA_OBJECT_HEADER, verified_data_object};
 use rvt::research::partition_type_parameters::{
@@ -574,6 +574,11 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
         "partition_room_solid_faces_approximate",
         BY_PROFILE_CHECK,
     ),
+    (
+        "ProfileSource",
+        "partition_room_solid_edges",
+        BY_PROFILE_CHECK,
+    ),
     ("ProfileSource", "partition_landing_lines", BY_COVERAGE),
     (
         "ProfileSource",
@@ -705,6 +710,14 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
     (
         "SpaceOutlineSource",
         "stored_solid_approximate",
+        Sourced {
+            all: &["room_solid_faces"],
+            any: &[],
+        },
+    ),
+    (
+        "SpaceOutlineSource",
+        "stored_solid_edges",
         Sourced {
             all: &["room_solid_faces"],
             any: &[],
@@ -2099,6 +2112,8 @@ fn check_model_with(base: &str, path: &Path, family_extrusions: bool) -> BTreeSe
                                         Some((Some(profile), Some(vertices))) => {
                                             let outline = if profile == ROOM_OUTLINE_SOURCE {
                                                 room_outline_at(bytes, part.offset, bbox)
+                                            } else if profile == ROOM_OUTLINE_SOURCE_EDGES {
+                                                edge_outline_at(bytes, part.offset, bbox).ok()
                                             } else {
                                                 resolved_outline_of_solids(
                                                     bytes,

@@ -3,19 +3,21 @@
 //! FACT under test: a room solid's faces take the indices 4 to 4 + n - 1, n
 //! the count of its list of objects, and its edges lie between that list and
 //! its first face. Each edge names its two faces at +4 and +8 and gives each
-//! face's (u, v) at its ends from +32; where both faces are planes the two
-//! give the same points. On a cylinder an edge that runs round it stores
-//! values a tenth and a fifth of the face's angle in, not its ends. The floor
-//! outline drawn from the edges (`edge_outline_at`) equals the outline the
-//! walk of RE-101 or the span of RE-316 reads wherever they read one, and is
-//! refused where the solid is not a prism of its floor up to
+//! face's (u, v) at two of its points from +32; where both faces are planes
+//! the two give the same points, the edge's ends. An edge round a cylinder
+//! stores two points at 1/k and 2/k of the face's angle in from one end, k a
+//! whole number, not its ends, and a plane across it gives the same two
+//! points. The floor outline drawn from the edges (`edge_outline_at`) equals
+//! the outline the walk of RE-101 or the span of RE-316 reads wherever they
+//! read one, and is refused where the solid is not a prism of its floor up to
 //! `ROOM_PRISM_HEIGHT_FEET`.
 //!
 //! Output: one `room` line for each room with a solid. It gives what `main`
 //! reads (`walk`, `faces`, `approximate` or `box`), what the edges give (an
-//! area, or why not) and whether the two agree. Then `layout` lines tally
-//! the checks of the layout over every room's first solid, and a `compare`
-//! line tallies the outlines.
+//! area, or why not) and whether the two agree. A `planes apart` line names
+//! each room whose first solid has an edge its two planes place differently.
+//! Then `layout` lines tally the checks of the layout over every room's first
+//! solid, and a `compare` line tallies the outlines.
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_re374_room_solid_edges -- MODEL.rvt
@@ -25,8 +27,8 @@ use std::collections::BTreeMap;
 use rvt::RevitFile;
 use rvt::research::element_record_plan_profiles::PlanProfile;
 use rvt::research::partition_room_boundaries::{
-    ResolvedKind, SolidTopology, edge_outline_at, edge_outline_of_solids_at, outline_of_solids,
-    resolved_outline_of_solids, solid_headers, solid_topology,
+    ResolvedKind, RoomFace, SolidTopology, edge_outline_at, edge_outline_of_solids_at,
+    outline_of_solids, resolved_outline_of_solids, solid_headers, solid_topology,
 };
 use rvt::walker::InstanceField;
 
@@ -54,8 +56,34 @@ fn area(profile: &PlanProfile) -> f64 {
             .sum::<f64>()
 }
 
-/// Tally the layout checks of one solid into `tally`.
-fn check_layout(topology: &SolidTopology, tally: &mut BTreeMap<&'static str, usize>) {
+/// The point of a cylindrical face at (angle, distance along its axis).
+fn cylinder_point(face: &RoomFace, uv: [f64; 2]) -> Option<[f64; 3]> {
+    let cylinder = face.cylinder?;
+    let (sin, cos) = uv[0].sin_cos();
+    Some([0, 1, 2].map(|i| {
+        face.origin[i]
+            + cylinder.radius * (cos * face.u[i] + sin * face.v[i])
+            + uv[1] * cylinder.axis[i]
+    }))
+}
+
+/// Whether `first` and `second` lie 1/k and 2/k of `span` past `from`, k a
+/// whole number from 2 to 64, toward `sign`.
+fn at_kth(first: f64, second: f64, from: f64, span: f64, sign: f64) -> bool {
+    let step = sign * (first - from);
+    if step <= 1e-9 || span <= 0.0 {
+        return false;
+    }
+    let k = (span / step).round();
+    (2.0..=64.0).contains(&k)
+        && (step - span / k).abs() <= 1e-6
+        && (sign * (second - from) - 2.0 * span / k).abs() <= 1e-6
+}
+
+/// Tally the layout checks of one solid into `tally`; the number of edges
+/// whose two planes place them differently.
+fn check_layout(topology: &SolidTopology, tally: &mut BTreeMap<&'static str, usize>) -> usize {
+    let mut planes_apart = 0;
     let face = |index: u32| topology.faces.get(&index).and_then(Option::as_ref);
     *tally.entry("faces").or_default() += topology.faces.len();
     *tally.entry("faces read").or_default() +=
@@ -70,6 +98,7 @@ fn check_layout(topology: &SolidTopology, tally: &mut BTreeMap<&'static str, usi
             let far = |p: [f64; 3], q: [f64; 3]| (0..3).any(|i| (p[i] - q[i]).abs() > 1e-3);
             let differ = far(a.plane_point(edge.uv[0]), b.plane_point(edge.uv[1]))
                 || far(a.plane_point(edge.uv[2]), b.plane_point(edge.uv[3]));
+            planes_apart += usize::from(differ);
             *tally
                 .entry(if differ {
                     "plane pairs DIFFER"
@@ -86,18 +115,37 @@ fn check_layout(topology: &SolidTopology, tally: &mut BTreeMap<&'static str, usi
             let span = hi - lo;
             let (u0, u1) = (edge.uv[side][0], edge.uv[side + 2][0]);
             let at = |x: f64, y: f64| (x - y).abs() <= 1e-6;
-            let class = if at(u0, u1) && (at(u0, lo) || at(u0, hi)) {
+            let round = !at(u0, u1);
+            let class = if !round && (at(u0, lo) || at(u0, hi)) {
                 "cylinder edges along the axis, at an end of the angle"
-            } else if at(u0, lo + 0.1 * span) && at(u1, lo + 0.2 * span) {
-                "cylinder edges round it, a tenth and a fifth in from the start"
-            } else if at(u0, hi - 0.1 * span) && at(u1, hi - 0.2 * span) {
-                "cylinder edges round it, a tenth and a fifth in from the end"
+            } else if round && at_kth(u0, u1, lo, span, 1.0) {
+                "cylinder edges round it, at 1/k and 2/k of the angle from the start"
+            } else if round && at_kth(u0, u1, hi, span, -1.0) {
+                "cylinder edges round it, at 1/k and 2/k of the angle from the end"
             } else {
                 "cylinder edges OTHER"
             };
             *tally.entry(class).or_default() += 1;
+            // A plane across a round edge: the same two points.
+            let across = [a, b][1 - side].filter(|g| g.cylinder.is_none());
+            if let (true, Some(g)) = (round, across) {
+                let ours = [edge.uv[side], edge.uv[side + 2]].map(|uv| cylinder_point(f, uv));
+                let theirs = [edge.uv[1 - side], edge.uv[3 - side]].map(|uv| g.plane_point(uv));
+                let same = ours
+                    .iter()
+                    .zip(&theirs)
+                    .all(|(p, q)| p.is_some_and(|p| (0..3).all(|i| (p[i] - q[i]).abs() <= 1e-3)));
+                *tally
+                    .entry(if same {
+                        "round cylinder edges, the plane across gives the same points"
+                    } else {
+                        "round cylinder edges, the plane across gives OTHER points"
+                    })
+                    .or_default() += 1;
+            }
         }
     }
+    planes_apart
 }
 
 fn main() -> anyhow::Result<()> {
@@ -157,7 +205,10 @@ fn main() -> anyhow::Result<()> {
         match solid_topology(buf, first) {
             Some(topology) => {
                 *layout.entry("solids read").or_default() += 1;
-                check_layout(&topology, &mut layout);
+                let apart = check_layout(&topology, &mut layout);
+                if apart > 0 {
+                    println!("planes apart: room {id} {stream}, {apart} edges");
+                }
             }
             None => *layout.entry("solids not read").or_default() += 1,
         }
