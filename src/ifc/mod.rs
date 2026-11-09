@@ -94,6 +94,7 @@ pub mod family_extrusions;
 pub mod from_decoded;
 pub mod gltf;
 mod mesh_volume;
+mod mesh_wall_quantities;
 pub mod pbr;
 pub mod revit_property_sets;
 pub mod revit_set_placement;
