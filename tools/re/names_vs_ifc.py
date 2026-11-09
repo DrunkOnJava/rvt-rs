@@ -56,6 +56,41 @@ def tag(entity):
         return None
 
 
+def spacing_free(text):
+    return "".join(ch for ch in text.casefold() if ch.isalnum())
+
+
+def object_type_pattern(ours, theirs):
+    """How two differing ObjectType values relate, in fixed words (#1472).
+
+    The words say nothing of the values, so a held-out model's census can leave the runner.
+    """
+    if not ours:
+        return "rvt-rs writes none"
+    if not theirs:
+        return "Revit writes none"
+    if ours.casefold() == theirs.casefold():
+        return "case only"
+    if spacing_free(ours) == spacing_free(theirs):
+        return "spacing or punctuation only"
+    ours_family, _, ours_type = ours.partition(":")
+    theirs_family, _, theirs_type = theirs.partition(":")
+    if ":" not in theirs and theirs == ours_type:
+        return "Revit's is the type part of rvt-rs's"
+    if ":" not in ours and ours == theirs_type:
+        return "rvt-rs's is the type part of Revit's"
+    if theirs.startswith(ours):
+        return "Revit's extends rvt-rs's"
+    if ours.startswith(theirs):
+        return "rvt-rs's extends Revit's"
+    if ":" in ours and ":" in theirs:
+        if ours_family == theirs_family:
+            return "same family, other type"
+        if ours_type == theirs_type:
+            return "other family, same type"
+    return "other"
+
+
 def main():
     args = [a for a in sys.argv[1:] if a not in ("-v", "--any-copy")]
     verbose = "-v" in sys.argv[1:]
@@ -72,6 +107,7 @@ def main():
             theirs[tag(e)] = e
             copies[tag(e)].append(e)
     counts = collections.Counter()
+    patterns = collections.Counter()
     for element in ours_file.by_type("IfcElement"):
         if element.is_a("IfcOpeningElement"):
             continue
@@ -95,9 +131,16 @@ def main():
             else "ObjectType differs"
         )
         counts[(kind, element.is_a(), name, object_type)] += 1
+        if object_type == "ObjectType differs":
+            pattern = object_type_pattern(
+                getattr(element, "ObjectType", None), getattr(revit, "ObjectType", None)
+            )
+            patterns[(kind, element.is_a(), "ObjectType pattern: " + pattern)] += 1
         if verbose and kind == "system family" and name == "Name differs":
             print(f"    {tag(element)} {element.is_a()}: {element.Name} vs Revit's {revit.Name}")
     for key, count in sorted(counts.items(), key=lambda kv: -kv[1]):
+        print(f"  {count:>5}  {' | '.join(key)}")
+    for key, count in sorted(patterns.items(), key=lambda kv: (-kv[1], kv[0])):
         print(f"  {count:>5}  {' | '.join(key)}")
 
 

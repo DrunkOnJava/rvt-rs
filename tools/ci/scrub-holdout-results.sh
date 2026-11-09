@@ -161,6 +161,8 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     for f in "$dir"names_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E '^ +[0-9]+  (system family|family instance|[a-z ]+) \| Ifc[A-Za-z]+ \| Name (equal|differs) \| ObjectType (equal|differs)$' "$f" | sed 's/^/names: /' || true
+      # How an ObjectType that differs relates to Revit's (#1472), in fixed words.
+      grep -E "^ +[0-9]+  (system family|family instance|[a-z ]+) \\| Ifc[A-Za-z]+ \\| ObjectType pattern: (rvt-rs writes none|Revit writes none|case only|spacing or punctuation only|Revit's is the type part of rvt-rs's|rvt-rs's is the type part of Revit's|Revit's extends rvt-rs's|rvt-rs's extends Revit's|same family, other type|other family, same type|other)$" "$f" | sed 's/^/names: /' || true
     done
     for f in "$dir"layer_sets_vs_ifc.txt; do
       [ -f "$f" ] || continue
