@@ -25,9 +25,10 @@ profile's highest point with the profile's `Height`. A Revit 2026 or 2027 save i
 written without an `ObjectType`, as Revit's own export of those releases writes
 none. Two claims the export made on every file are now made only where they hold:
 the missing host join of the 2024 opening index, whose rows were never
-openings, and the compound layers that host elements were said to lack (#1598).
-puzzbobb wrote the Revit 2015 to 2023 curtain walls, parts and beam sections and
-the duct and port reads (#1518, #1519, #1520, #1524); thanks.
+openings, and the compound layers that host elements were said to lack.
+puzzbobb wrote the Revit 2015 to 2023 curtain walls, parts and beam sections, the
+duct and port reads (#1518, #1519, #1520, #1524) and the correction of those two
+claims (#1598); thanks.
 
 Not measured, and said in each entry: no curtain wall, curtain part, steel beam,
 duct or wall `Height` of Revit 2015 to 2023 on Autodesk's samples is scored
@@ -87,6 +88,17 @@ and version strings to it):
   equal quantities (the walls' `Height` on 2015 to 2023, #1535; 5 different as
   before), Revit 2023's `modelo_bim` from 7 to 8, and the Revit 2022 office
   pair's property values from 105 to 107.
+- Time and peak memory of `rvt-ifc` against 0.16.1 (Measure run
+  [42636959116](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42636959116),
+  both builds of a file in turn on one runner, three rounds): on the reference
+  models and the Revit 2024 to 2027 sample projects (35 files) the time is 0.94
+  to 1.05 times 0.16.1's, but for Einhoven, a 0.1 s file (106 to 123 ms), and the
+  peak memory 0.98 to 1.07 times (the largest rise is Snowdon Towers' HVAC model,
+  215 to 230 MiB). On the 33 sample projects of Revit 2015 to 2023, whose curtain
+  wall, beam, duct and port reads the release widens, the time is 1.00 to 1.65
+  times (`rac_advanced` 1.19 to 1.42, the 2015 and 2019 MEP samples 1.54 to 1.65,
+  the 2015 `rme_advanced` from 1.96 s to 3.08 s) and the peak memory 1.00 to 1.12
+  times (the 2015 `rme_advanced` from 329 to 370 MiB).
 - No property value or quantity goes from equal to different or missing on any
   model, and "different" rises only by those 11. The IFC4 rules check finds
   nothing on any of the 93 exports that keep it, and the same-project gates pass
