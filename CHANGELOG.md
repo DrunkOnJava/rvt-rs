@@ -44,15 +44,16 @@ saved-graphics findings (discussion #112) and mahach666's RvtIO findings
 reports led to the `rac_advanced` Areas (#1261), the door flips (#1357) and the
 room phase fallback (#1359). Thanks to all four.
 
-Not measured, and said in each entry: no wall line, pipe, Level parameter,
-`Phase Created`, stair run, landing or sketch outline of Revit 2015 to 2023,
-2026 or 2027 is scored against a Revit export, and no beam of them but 3 of 10
-on one held-out Revit 2021 export (`Span` and `Slope` equal, none different,
-counts only); each is held to the same Autodesk project's 2024 or 2025 save
-instead, which cannot catch an error that save shares. On 2025 to 2027 that
-check compares each element's class, GlobalId, storey, placement and body, and
-on 2026 and 2027 also the cuts, ports, door and window sizes and types and the
-properties RE-346 adds; on 2015 to 2023 it compares the values each entry
+Not measured, and said in each entry: no Level parameter or `Phase Created` of
+Revit 2015 to 2023, and no beam, pipe, landing or sketch outline of Revit 2026
+or 2027, is scored against a Revit export, and of the 2026 and 2027 stair runs
+only one flight on each of two held-out models. The Revit 2015 to 2023 wall
+lines, pipes and beams are scored on held-out projects only, as counts (below).
+Every one of these readers is held to the same Autodesk project's 2024 or 2025
+save instead, which cannot catch an error that save shares. On 2025 to 2027
+that check compares each element's class, GlobalId, storey, placement and body,
+and on 2026 and 2027 also the cuts, ports, door and window sizes and types and
+the properties RE-346 adds; on 2015 to 2023 it compares the values each entry
 names. Among the files Measure fetches outside the held-out pairs, the 2015 to
 2023 beam rule reaches Autodesk's samples only: BIMcollab's 91 beams hold no
 line it reads (#1514). Two doors of `rac_basic`'s 2027 save still write no
@@ -67,9 +68,52 @@ still its record box's centre, more than 0.5 ft from Revit's on almost all
 (RE-357). The release workflow's signature, branch and `CI passed` checks and
 the page's `upload` and `page` jobs run for the first time on this tag.
 
-Measured against 0.15.0: Measure run 42555357168 (`main` at 9c66e9bd, every
-model, sample and held-out pair, with timing) is still running; its figures
-replace this paragraph before the release lands.
+Measured against 0.15.0 on the reference models, the BIM4LCA office, the
+Revit 2025 models, Autodesk's sample projects of every release, the held-out
+models, `rac_advanced`'s IFC2X3 pairs and BIMcollab's model (Measure run
+42555357168, `main` at 9c66e9bd, 118 exports; the release adds only its notes,
+witness files and version strings to it):
+
+- 97 of the 118 exports move. The 21 that do not are 18 of the 24 Revit 2025
+  models, Snowdon Towers' electrical and HVAC models and one held-out Revit
+  2025 model.
+- On the BIM4LCA office the property values equal to Revit's go from 44,231 to
+  44,428 as built and from 44,394 to 44,577 at permit, and the quantities from
+  29,562 to 29,761 and from 29,849 to 30,037; "different" stays 1 on each, and
+  the values rvt-rs writes that Revit's export does not fall from 2 to 1 and
+  from 7 to 6.
+- On RE1 (IFC2X3) the equal property values go from 127 to 138 on Electrical,
+  from 182 to 185 on Mechanical and from 313 to 318 on Plumbing, whose values
+  Revit's export does not write fall from 2 to 0 (the water closet tank,
+  #1496); Architecture is unchanged.
+- On the held-out models, counts only: the Revit 2026 and 2027 pairs go from
+  209 to 289 equal property values each and the 2026 and 2027 office pairs from
+  186 to 230, and their equal quantities from 21 to 89, 17 to 74, 14 to 74 and
+  10 to 60; the AA house goes from 378 to 427 and from 135 to 200. On three
+  Revit 2020 and 2021 projects the angled walls whose faces lie within 0.001 ft
+  of Revit's go from 0 to 262 of 474, and those whose ends do from 0 to 124.
+  On one Revit 2021 project's IFC2X3 export 3 of its 10 beams' `Span` and
+  `Slope` are equal, from none, and none is different.
+- On Revit 2018's IFC2X3 exports of the two Vitoria projects, counts only, the
+  pipe quantities equal go from 0 to 149 of 149 and from 0 to 140 of 140, and
+  the values rvt-rs writes that those exports do not from 18 to 62 and from 20
+  to 65: the pipes' `InvertElevation`, which they do not hold. An IFC2X3 export
+  is counted apart and removes no value. On BIMcollab's Revit 2015 model the 3
+  air terminals its export leaves out are gone (#1332), and its 241 elements
+  pair with the export's 241.
+- No property value or quantity goes from equal to different or missing on any
+  model, and "different" is unchanged everywhere. The IFC4 rules check finds
+  nothing on any of the 118 exports, and the same-project gates pass (15
+  samples held to their earlier saves, and the Areas).
+- Export time is 0.82 to 1.36 times 0.15.0's on the 68 timed files, 1.015 in
+  total (243.9 s to 247.5 s). The 2026 and 2027 MEP samples take 1.32 to 1.36
+  times as long, the cost of reading their pipes, ports and cuts (RE-346), and
+  `rac_advanced`'s 2026 and 2027 saves 1.12. Peak memory is 0.54 to 1.29 times
+  0.15.0's. It rises most on RE1 Architecture (93 to 120 MiB, 1.29), on
+  `rac_basic`'s 2024 to 2027 saves (1.11 to 1.20; 222 to 266 MiB on 2024) and
+  by 1.08 to 1.09 on `rac_advanced`'s 2016 to 2022 saves and `rme_basic`'s 2019
+  save, and the highest peak is Snowdon Towers Architectural's 1,073 MiB. Each
+  file's two sides were timed on one runner.
 
 ### Upgrading from 0.15
 
@@ -246,7 +290,12 @@ replace this paragraph before the release lands.
   RE1 Plumbing, RE1 Mechanical and the BIM4LCA office. On Autodesk's twelve
   MEP sample saves of 2015 to 2027, 93,987 pipe values equal the 2024 save's
   and 3, all of one pipe edited between the saves, differ. **No pipe of 2015
-  to 2023, 2026 or 2027 is scored against a Revit export.**
+  to 2023, 2026 or 2027 is scored against a Revit IFC4 export.** Revit 2018's
+  IFC2X3 exports of the two held-out Vitoria projects (counts only) hold 149 of
+  149 and 140 of 140 `Qto_PipeSegmentBaseQuantities.Length` equal, none
+  different, and no `Pset_PipeSegmentOccurrence.InvertElevation`, so the values
+  rvt-rs writes that they do not go from 18 to 62 and from 20 to 65; an IFC2X3
+  export is counted apart and removes no value (Measure run 42555357168).
 
 - **Revit 2015 to 2023 walls are joined by their join lists, and a wall at an angle can
   follow its line (#1190, RE-364).** The join lists' 32-bit layout is read, and every
