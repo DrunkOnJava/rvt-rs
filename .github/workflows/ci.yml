@@ -1938,7 +1938,7 @@ jobs:
           archive="$RUNNER_TEMP/actionlint.tar.gz"
           mkdir -p "$dest"
           if curl -sSfL --retry 5 --retry-all-errors -o "$archive" \
-            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}-tmp-1574/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"; then
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"; then
             echo "${ACTIONLINT_SHA256}  ${archive}" | sha256sum -c -
             tar -xzf "$archive" -C "$dest" actionlint
           else
