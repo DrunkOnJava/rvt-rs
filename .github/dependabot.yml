@@ -15,6 +15,9 @@ updates:
     # moves by hand, never by Dependabot.
     ignore:
       - dependency-name: ifc-lite-core
+      # earcut 0.4.12 moves the triangulation of six exports (#1553): it moves
+      # by hand once that issue shows they draw the same surfaces.
+      - dependency-name: earcut
     schedule:
       interval: weekly
     open-pull-requests-limit: 5

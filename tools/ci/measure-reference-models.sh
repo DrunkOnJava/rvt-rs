@@ -270,10 +270,18 @@ timed() { # dir step command...
 # differ up to 1.7 times in speed, so the limit leaves twice that and more.
 STEP_TIMEOUT="${MEASURE_STEP_TIMEOUT:-2400}"
 score() { # name args...
-  local out="$1" dir step; shift
+  local out="$1" dir step status; shift
   dir=$(dirname "$out"); step=$(basename "$out" .txt)
   timed "$dir" "$step" timeout "$STEP_TIMEOUT" python "$@" > "$out" 2>&1
-  echo "exit $?" >> "$out"
+  status=$?
+  echo "exit $status" >> "$out"
+  # A run that names its scorers is run for their answer, and a crash left in
+  # the output file reads as a green run (#1541). In the default set a scorer
+  # may exit 1 for a finding, so only the named ones are raised, and a probe's
+  # scorer, which is always asked for by name.
+  if [ "$status" != 0 ] && { [[ "$step" == probe_score* ]] || { [ "${#STEPS[@]}" -gt 0 ] && wanted "$step"; }; }; then
+    echo "::error::$(basename "$dir"): the scorer $step, named in this run, exited $status (see its $step.txt)"
+  fi
 }
 
 # The score cache (tools/ci/measure-cache.py), on when MEASURE_CACHE_DIR names
@@ -599,10 +607,10 @@ measure_sample() { # sample
   # C9: the IFC4 schema's view of the export, so a writer path only the
   # samples reach (I-shape profiles and profile set usages on the
   # structural samples) is checked somewhere. Attribute counts on every
-  # export; IfcOpenShell's full validation on exports up to 30 MB, the
-  # rest marked as skipped.
+  # export; IfcOpenShell's full validation on exports up to 120 MB, as
+  # for a reference model, the rest marked as skipped.
   if [ -s "$dir/model.ifc" ]; then
-    schema "$dir" 31457280
+    schema "$dir" 125829120
     grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
     # #1437: every space of the sample's export says what it is.
     wanted space_kinds_vs_ifc && score "$dir/space_kinds_vs_ifc.txt" "$SCORERS/space_kinds_vs_ifc.py" "$dir/model.ifc"
@@ -700,6 +708,16 @@ areas_across_saves() {
 # 2x, so a probe would stop sooner than it always has.
 read -ra PROBES <<< "${PROBE:-}"
 read -ra PROBE_SCORERS <<< "${PROBE_SCORER:-}"
+# A scorer that reads a probe's output, named in MEASURE_SCORERS, would be given
+# the IFC as that output, find nothing in it and report zeros with success (#1505).
+for s in "${STEPS[@]:-}"; do
+  [ -n "$s" ] && [ -f "$SCORERS/$s.py" ] || continue
+  listed "$s" && continue
+  if grep -qE '\.py +<probe[- ._a-z0-9]*>' "$SCORERS/$s.py"; then
+    echo "::error::$s reads a probe's output: dispatch it with -f probe=<probe> -f probe_scorer=$s, not in scorers" >&2
+    exit 2
+  fi
+done
 # A run of one probe writes probe.txt (probe_score.txt, probe-pair.txt), a
 # run of several probe-<probe>.txt (probe_score-<probe>.txt, ...).
 probe_out() { # dir stem probe

@@ -978,6 +978,8 @@ fn extract_records(
     if let Some(records) = indexed {
         file.remember_native_record_index(RecordIndex { records });
     }
+    // The class plans of the pass's decodes, made once for each class (#1335).
+    let mut plans = native_parameters::PlanCache::default();
     let mut seen = BTreeSet::new();
     let mut seen_ids = BTreeSet::new();
     let mut definition_owners: BTreeMap<u16, bool> = BTreeMap::new();
@@ -1154,21 +1156,14 @@ fn extract_records(
                     let projected = options
                         .graph_fields
                         .and_then(|fields| fields(class_name.as_deref()?));
-                    let decoded = match projected {
-                        Some(keep) => native_parameters::decode_graph_projected(
-                            body,
-                            registry,
-                            &limits,
-                            summary.extensible_storage_catalog.as_ref(),
-                            keep,
-                        ),
-                        None => native_parameters::decode_graph_with_catalog_usage(
-                            body,
-                            registry,
-                            &limits,
-                            summary.extensible_storage_catalog.as_ref(),
-                        ),
-                    };
+                    let decoded = native_parameters::decode_graph_cached(
+                        body,
+                        registry,
+                        &limits,
+                        summary.extensible_storage_catalog.as_ref(),
+                        projected,
+                        &mut plans,
+                    );
                     let decoded = decoded.and_then(|(graph, usage)| {
                         if source.channel == 102 {
                             let root = graph

@@ -258,6 +258,10 @@ pub struct RevitFile {
     /// Doors and windows written as such though their type's record was not
     /// read (#1247).
     unread_type_doors_windows: BTreeSet<u32>,
+    /// Types and text parameters (Fire Rating, Manufacturer) left out because
+    /// the copies of a family type table's entry, or an entry and RE-77's,
+    /// disagree (RE-354).
+    disagreeing_type_texts: BTreeSet<(u32, &'static str)>,
     /// Memoised steps of the walls' native records that name a cutting element
     /// (`research::native_wall_cuts::wall_cut_steps`), by wall, and the walls
     /// whose record was looked for, found or not: the openings the walls
@@ -502,6 +506,7 @@ impl RevitFile {
             category_style_materials: None,
             unread_streams: Vec::new(),
             unread_type_doors_windows: BTreeSet::new(),
+            disagreeing_type_texts: BTreeSet::new(),
             wall_cut_steps_memo: BTreeMap::new(),
             wall_cut_steps_asked: BTreeSet::new(),
             bodiless_family_spaces: BTreeMap::new(),
@@ -528,6 +533,18 @@ impl RevitFile {
 
     pub(crate) fn note_unread_type_doors_windows(&mut self, ids: impl IntoIterator<Item = u32>) {
         self.unread_type_doors_windows.extend(ids);
+    }
+
+    /// The type text parameters left out for want of agreeing copies (RE-354).
+    pub(crate) fn disagreeing_type_texts(&self) -> &BTreeSet<(u32, &'static str)> {
+        &self.disagreeing_type_texts
+    }
+
+    pub(crate) fn note_disagreeing_type_texts(
+        &mut self,
+        keys: impl IntoIterator<Item = (u32, &'static str)>,
+    ) {
+        self.disagreeing_type_texts.extend(keys);
     }
 
     /// What became of each frame at the markers of this Revit 2008 to 2023
@@ -601,6 +618,7 @@ impl RevitFile {
         self.bodiless_family_spaces.clear();
         self.bodiless_family_space_error = None;
         self.unread_type_doors_windows.clear();
+        self.disagreeing_type_texts.clear();
         if let Some(noted) = self.value_sources.as_mut() {
             noted.clear();
         }
@@ -1169,12 +1187,12 @@ impl RevitFile {
     /// The project's phases in order, the last being the one an export shows
     /// unless [`Self::set_export_phase`] chooses another. Empty where the
     /// export applies no phase: a family, a release whose phases are not read
-    /// (Revit 2015 and earlier), or a file whose phases could not be read.
+    /// (Revit 2014 and earlier), or a file whose phases could not be read.
     /// Reads nothing the export does not.
     pub fn project_phases(&mut self) -> Vec<ProjectPhase> {
         if let Ok(release) = self.layout_release() {
             if crate::partition_element_records_2023::is_32bit_release(release)
-                && !crate::partition_element_records_2023::applies_export_filters(release)
+                && !crate::partition_element_records_2023::applies_phase_filter(release)
             {
                 return Vec::new();
             }
@@ -1205,7 +1223,7 @@ impl RevitFile {
     pub fn room_phase_fallback(&mut self) -> Option<ProjectPhase> {
         if let Ok(release) = self.layout_release() {
             if crate::partition_element_records_2023::is_32bit_release(release)
-                && !crate::partition_element_records_2023::applies_export_filters(release)
+                && !crate::partition_element_records_2023::applies_phase_filter(release)
             {
                 return None;
             }
@@ -1248,10 +1266,10 @@ impl RevitFile {
     pub fn set_export_phase(&mut self, phase: &str) -> Result<()> {
         if let Ok(release) = self.layout_release() {
             if crate::partition_element_records_2023::is_32bit_release(release)
-                && !crate::partition_element_records_2023::applies_export_filters(release)
+                && !crate::partition_element_records_2023::applies_phase_filter(release)
             {
                 return Err(Error::InvalidInput(format!(
-                    "the export phase is applied to Revit 2016 and later, and this file is \
+                    "the export phase is applied to Revit 2015 and later, and this file is \
                      Revit {release}: it writes every element and room whatever its phase"
                 )));
             }

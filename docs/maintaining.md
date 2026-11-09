@@ -52,8 +52,13 @@ when a release ships.
   the maintainer included: a bypass let an admin merge without `CI passed`
   (2026-10-05). An emergency change goes through a pull request like any other,
   or the ruleset is edited deliberately and the edit committed.
-  Merges are **squash only**, commits must be **signed**, history is linear, and
-  the branch must be up to date with `main`. The one required check is
+  Merges are **squash only**, commits must be **signed**, and history is linear.
+  A branch need not be up to date with `main` (the maintainer, 2026-11-08):
+  that rule held landings to one at a time, and its 57 forced updates on
+  2026-11-05 all passed. A merge whose tree differs from the tree its pull
+  request tested runs the full set on `main` (`tools/ci/change-scope.sh`),
+  which is where two changes that conflict in meaning show, and a red `main`
+  is fixed before anything else lands. The one required check is
   `full / CI passed`, CI's summary job as a ready pull request runs it
   (`ci-pr.yml` calls `ci.yml`), which passes only when every CI job (macOS
   and Windows, corpus tier 2, the writer corpus, IfcOpenShell validation,
@@ -80,8 +85,7 @@ when a release ships.
   reviewer, not a person), approves the maintainer's and a contributor's, and the
   maintainer approves only the App's own, so no pull request lands on the approval of
   the session that lands it. A push dismisses an approval, so the formal
-  approval comes last, on the up-to-date head with its CI green: only the next
-  pull request in line needs one. Its findings are the review itself, and no
+  approval comes last, on the head with its CI green. Its findings are the review itself, and no
   separate summary comment is posted.
 - One full Measure is run per code state for a change that moves an export, and
   a clean merge of `main` needs none of its own. As a maintainer's practice, not
@@ -763,8 +767,22 @@ beside the one function that reads the projected graph
 `native_es_catalog::from_graph`), and a field that function comes to read must be
 added to its list, because a field left out reads as absent without an error.
 `probes/examples/probe_1335_projected_graphs.rs` imports the constants, decodes every
-record both ways and runs those functions on both graphs; run it
-(`-f probe=probe_1335_projected_graphs`) after any change to a list or a reader.
+record both ways and runs those functions on both graphs.
+
+A pass keeps the class plans of its decodes in a `native_parameters::PlanCache`, made
+once for each class instead of once for each record. The cache holds at most
+`PLAN_CACHE_COST` of plan cost (a unit for each field of a plan's chain and each field
+kept, and 8 for each entry) and empties itself or keeps nothing past it, so what a
+schema or a caller's field lists can make it hold is bounded, and since a decode with
+no plan makes its own, what it holds cannot change a graph. The same probe decodes
+every record through a shared cache and through one that holds almost nothing, and
+compares each with the decode that makes its own plans; it also prints the most a file
+makes the shared cache hold. That shows a shared cache equals a fresh one; that a decode
+without a cache equals the one before the cache existed rests on the exports' byte
+identity in Measure.
+
+Run the probe (`-f probe=probe_1335_projected_graphs`) after any change to a list, to a
+reader or to the plan cache: it exits 1 where anything it compares differs.
 
 ## Dependencies and the MSRV
 
@@ -823,7 +841,8 @@ a version file, or on a commit whose `CI passed` is red or that CI never ran on
 (RELEASE.md, step 10). Then it
 builds and verifies the wheels and, through the
 release-binaries workflow, the CLI archives and the container image, and
-publishes them with build-provenance attestations. Pushing the tag is the
+publishes them with build-provenance attestations (the release page's wheels
+and sdist are checksummed and attested with the archives, #1466). Pushing the tag is the
 release decision, so the run asks for no approval: the `crates-io` and `pypi`
 environments accept only `v*` tags, with no administrator bypass, and the PyPI
 job and the release binaries wait for the crates.io job, so no channel ships

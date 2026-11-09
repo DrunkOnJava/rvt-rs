@@ -207,6 +207,7 @@ pub fn instance_cuts_and_symbols(
     let options = native_document::Options {
         selected_ids: instances.clone(),
         selected_classes: BTreeSet::from(["FamilySymbol".to_string()]),
+        value_source: Some("native_opening"),
         ..native_document::Options::default()
     };
     native_document::extract_graphs(rf, &options, |record| {

@@ -53,6 +53,7 @@ mod mep;
 mod mullion_ends;
 mod openings;
 mod parameters;
+mod placement_origins;
 mod records;
 mod records_2023;
 mod roofs;
@@ -74,6 +75,7 @@ pub use mep::*;
 pub use mullion_ends::*;
 pub use openings::*;
 use parameters::*;
+pub use placement_origins::*;
 pub use records::*;
 use records_2023::*;
 pub use roofs::*;
@@ -892,6 +894,9 @@ pub fn recover_partition_schema_mvp(
         &out.walls,
         [&mut out.doors, &mut out.windows],
     );
+    // --- The origin of the placement Revit gives a door set in no wall
+    // (RE-361), after the host is final ---
+    attach_opening_placement_origins(rf, revit_version, &mut out.doors);
     // --- Steel beams' and columns' I sections from their type (RE-103, RE-104) ---
     attach_beam_sections(rf, revit_version, &mut out.products);
     // --- Hollow structural sections from their type's family parameters (W6) ---

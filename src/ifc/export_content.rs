@@ -2570,6 +2570,9 @@ fn add_load_bearing(
 #[derive(Clone, PartialEq)]
 struct TypeCommon {
     fire_rating: Option<String>,
+    /// The type's Manufacturer, which Revit's export writes in
+    /// `Pset_ManufacturerTypeInformation` on the type object alone (RE-354).
+    manufacturer: Option<String>,
     load_bearing: Option<bool>,
     /// A stair type of a stair whose data is read: revit-ifc's stair
     /// calculators, run on the type itself, give 0 (RE-286).
@@ -2644,6 +2647,21 @@ impl TypeCommon {
                 });
             }
         }
+        if let Some(manufacturer) = self.manufacturer.filter(|_| {
+            super::standard_property_sets::applies_to(
+                "Pset_ManufacturerTypeInformation",
+                occurrence,
+                None,
+            )
+        }) {
+            sets.push(PropertySet {
+                name: "Pset_ManufacturerTypeInformation".into(),
+                properties: vec![Property {
+                    name: "Manufacturer".into(),
+                    value: PropertyValue::Label(manufacturer),
+                }],
+            });
+        }
         if let (true, Some(nosing)) = (occurrence == "IFCSTAIRFLIGHT", self.nosing_feet) {
             sets.push(PropertySet {
                 name: "Pset_StairFlightCommon".into(),
@@ -2694,7 +2712,24 @@ fn record_type_common(
 ) {
     use crate::partition_schema_mvp as mvp;
     let upper = ifc_type.to_ascii_uppercase();
-    if !TYPE_COMMON_ENTITIES.contains(&upper.as_str()) {
+    let type_text = |wanted: &str| {
+        decoded
+            .fields
+            .iter()
+            .find_map(|(field, value)| match value {
+                InstanceField::String(text)
+                    if field.strip_prefix(mvp::TYPE_PARAMETER_FIELD_PREFIX) == Some(wanted)
+                        && !text.is_empty() =>
+                {
+                    Some(text.clone())
+                }
+                _ => None,
+            })
+    };
+    let manufacturer = type_text("Manufacturer");
+    // An entity outside the list is here for its Manufacturer alone.
+    let common = TYPE_COMMON_ENTITIES.contains(&upper.as_str());
+    if !common && manufacturer.is_none() {
         return;
     }
     let Some(type_id) = decoded.fields.iter().find_map(|(name, value)| match value {
@@ -2703,36 +2738,30 @@ fn record_type_common(
     }) else {
         return;
     };
-    let fire_rating = decoded
-        .fields
-        .iter()
-        .find_map(|(field, value)| match value {
-            InstanceField::String(text)
-                if field.strip_prefix(mvp::TYPE_PARAMETER_FIELD_PREFIX) == Some("Fire Rating")
-                    && !text.is_empty() =>
-            {
-                Some(text.clone())
-            }
-            _ => None,
-        });
+    let fire_rating = type_text("Fire Rating").filter(|_| common);
     let found = TypeCommon {
         fire_rating,
-        load_bearing: LOAD_BEARING_TYPE_CLASSES
-            .contains(&decoded.class.as_str())
+        manufacturer,
+        load_bearing: (common && LOAD_BEARING_TYPE_CLASSES.contains(&decoded.class.as_str()))
             .then_some(true),
-        stair_type: decoded.class == "Stair"
+        stair_type: common
+            && decoded.class == "Stair"
             && decoded
                 .fields
                 .iter()
                 .any(|(name, _)| name == mvp::STAIR_RISER_COUNT_FIELD),
-        nosing_feet: decoded.fields.iter().find_map(|(name, value)| match value {
-            InstanceField::Float { value, .. }
-                if decoded.class == "StairsRun" && name == mvp::STAIR_NOSING_LENGTH_FIELD =>
-            {
-                Some(*value)
-            }
-            _ => None,
-        }),
+        nosing_feet: decoded
+            .fields
+            .iter()
+            .find_map(|(name, value)| match value {
+                InstanceField::Float { value, .. }
+                    if decoded.class == "StairsRun" && name == mvp::STAIR_NOSING_LENGTH_FIELD =>
+                {
+                    Some(*value)
+                }
+                _ => None,
+            })
+            .filter(|_| common),
     };
     commons
         .entry((type_id, format!("{upper}TYPE")))
@@ -4961,6 +4990,19 @@ fn oriented_box_solid(axes: [[f64; 3]; 3], half: [f64; 3], height: f64) -> entit
 /// turned family instance's plan origin from its transform, model feet (RE-87,
 /// RE-89).
 pub const INSTANCE_ORIGIN_PROPERTIES: [&str; 2] = ["InstanceOriginX", "InstanceOriginY"];
+
+/// The name of each hand-off holding the stored origin of a door set in no
+/// wall, model feet (RE-361): the origin Revit's export gives its placement.
+pub const PLACEMENT_ORIGIN_PROPERTIES: [&str; 3] =
+    ["PlacementOriginX", "PlacementOriginY", "PlacementOriginZ"];
+
+/// The name of the property in [`ELEMENT_RECORD_PROPERTY_SET`] that says a
+/// door's placement origin is its stored one (RE-361).
+pub const PLACEMENT_ORIGIN_SOURCE_PROPERTY: &str = "PlacementOriginSource";
+
+/// The [`PLACEMENT_ORIGIN_SOURCE_PROPERTY`] of a door set in no wall, which
+/// Revit's export gives no opening and places at its stored origin.
+pub const NO_OPENING_PLACEMENT_ORIGIN_SOURCE: &str = "stored_origin_no_opening";
 
 /// The name of each hand-off holding a window's opening from its type and
 /// transform (RE-93, `crate::partition_schema_mvp::FillerOpening`): the plan
@@ -7283,6 +7325,20 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             crate::partition_schema_mvp::instance_origin_from_fields(&decoded.fields)
         {
             for (name, value) in INSTANCE_ORIGIN_PROPERTIES.iter().zip(origin) {
+                handoffs.push(Property {
+                    name: (*name).into(),
+                    value: PropertyValue::LengthFeet(value),
+                });
+            }
+        }
+    }
+    // RE-361: a door set in no wall reports its stored origin, which Revit's
+    // export gives its placement.
+    if class == "Door" {
+        if let Some(origin) =
+            crate::partition_schema_mvp::opening_placement_origin_from_fields(&decoded.fields)
+        {
+            for (name, value) in PLACEMENT_ORIGIN_PROPERTIES.iter().zip(origin) {
                 handoffs.push(Property {
                     name: (*name).into(),
                     value: PropertyValue::LengthFeet(value),

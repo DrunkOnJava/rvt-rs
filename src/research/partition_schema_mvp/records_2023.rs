@@ -27,8 +27,9 @@ pub(super) fn recover_2023_records(
     // Revit's export leaves out an element in a non-primary design option and
     // one that does not exist in the export phase, as on 2024 (RE-40, RE-184).
     // A room is left out by its own phase (RE-326). Applied on the releases
-    // measured only (RE-315).
-    if crate::partition_element_records_2023::applies_export_filters(revit_version) {
+    // measured only (RE-315, RE-372); on 2015 no design option set is read,
+    // so `options` excludes nothing there.
+    if crate::partition_element_records_2023::applies_phase_filter(revit_version) {
         let options = rf.memoised_design_options();
         let phases = rf.memoised_phase_filter();
         selected.retain(|_, record| {
