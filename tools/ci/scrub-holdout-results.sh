@@ -124,7 +124,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # bytes behind a digest and are dropped.
       grep -E "^panel material sources: (plates in Revit's export [0-9]+, with a material [0-9]+, panels the probe lists [0-9]+, plates scored [0-9]+|records selected [0-9?]+, read [0-9?]+, holding a material [0-9?]+|plates with a source giving exactly Revit's material [0-9]+ of [0-9]+)$" "$f" || true
       grep -E "^panel material references: (Revit's plate materials [0-9]+, named in the file [0-9]+|of those named, [0-9]+ held by no record's body|class [A-Za-z0-9_]+ holds one in [0-9]+ records|Curtain Panels category styles holding a material [0-9]+, naming [0-9]+ materials; Revit's plate material is one of them on [0-9]+ of [0-9]+ plates)$" "$f" || true
-      grep -E '^panel material source: (instance|type|ref) [A-Za-z0-9_]+ [][A-Za-z0-9_.]+ [0-9a-f-]+ present [0-9]+, equal [0-9]+, contains [0-9]+, different [0-9]+$' "$f" || true
+      grep -E '^panel material source: (instance|type|ref) [A-Za-z0-9_]+ [][A-Za-z0-9_.]+ ([0-9a-f]{8}|-) present [0-9]+, equal [0-9]+, contains [0-9]+, different [0-9]+$' "$f" || true
     done
     # What Revit's material for each element is against rvt-rs's (RE-82): counts
     # and IFC entity names only.
