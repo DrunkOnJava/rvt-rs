@@ -322,7 +322,9 @@ pub(super) fn attach_unnamed_materials(
 /// Give each curtain wall mullion and panel ([`CURTAIN_AXES_CLASSES`]) the
 /// material its type holds ([`crate::partition_curtain_materials`], RE-166),
 /// by name, as Revit's export associates it, in place of what a type map gave
-/// (RE-367). A panel of Revit 2015 to 2023 is given none.
+/// (RE-367). A panel of Revit 2015 to 2023 is given the material the Object
+/// Styles give the Curtain Panels category where they give one, as Revit's
+/// export does, and its type's otherwise (RE-377).
 pub(super) fn attach_curtain_materials(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -352,22 +354,40 @@ pub(super) fn attach_curtain_materials(
     let Ok(type_materials) = pcm::scan_curtain_type_materials(rf, revit_version, &materials) else {
         return;
     };
+    // Revit's export gives the 67 plates of the one Revit 2018 project whose
+    // Curtain Panels category holds a material, in the category's two graphics
+    // styles, that material, where their type's `m_renderStyleId` is another; on
+    // every other model with plates the category holds none and Revit gives the
+    // type's (RE-377). Measured on Revit 2015 to 2023 only: no model of 2024 or
+    // later has a category that holds one, so those panels keep their type's.
+    let panel_category_material = if narrow {
+        pcm::category_material(
+            rf,
+            &materials,
+            crate::partition_element_records::OST_CURTAIN_WALL_PANELS,
+        )
+        .ok()
+        .flatten()
+        .and_then(|material| names.get(&material))
+    } else {
+        None
+    };
     // A part's type's own material replaces what its map gave, which on Autodesk's
     // `rac_advanced` 2024 is one wrong material on every part (RE-367), as it
-    // does `<Unnamed>` (RE-201). A panel of 2015 to 2023 takes none: of the 67
-    // plates of the one Revit export of a curtain wall's panels on these
-    // releases, none has the material this reads (RE-367).
-    for element in products.iter_mut().filter(|element| {
-        is_part(element) && !(narrow && element.class == CURTAIN_WALL_PANEL_CLASS)
-    }) {
+    // does `<Unnamed>` (RE-201).
+    for element in products.iter_mut().filter(|element| is_part(element)) {
         let type_id = element.fields.iter().find_map(|(name, value)| match value {
             InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
             _ => None,
         });
-        let Some(name) = type_id
-            .and_then(|id| type_materials.get(&id))
-            .and_then(|material| names.get(material))
-        else {
+        let from_category = (element.class == CURTAIN_WALL_PANEL_CLASS)
+            .then_some(panel_category_material)
+            .flatten();
+        let Some(name) = from_category.or_else(|| {
+            type_id
+                .and_then(|id| type_materials.get(&id))
+                .and_then(|material| names.get(material))
+        }) else {
             continue;
         };
         element
