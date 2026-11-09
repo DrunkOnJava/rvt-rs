@@ -106,16 +106,15 @@ RECORD_BOX = "partition_element_record_bbox"
 SAVED_MESH = "saved_graphics_mesh"
 # The roofs a 2026 or 2027 save may draw otherwise than the 2025 save does, each as
 # pinned and exactly these, in the saves of those two projects and none other. The roof
-# readers read 2025 and earlier, so a roof of 2026 or 2027 is its record box (201262, whose
-# saved mesh does not decode whole; the roof is cut by walls, #1471; Griffin, 2026-11-05)
-# or its saved mesh, the default of every class since #1191 (Griffin, 2026-11-09: "Allow
-# these 4 as meshes"): 165755, 167036 and 167158 are 15 degree gables the 2025 save draws
-# as a level block, their sketch outline over the record box (10.3 m3), and 243274 is
-# the 2025 save's roof extrusion (35.4236 m3) against a mesh of 34.9741 m3 in the same
-# box. A mesh counts only where its box contains the 2025 body's, to the census's 3 mm.
-# Counted, not scored; one more, or one fewer, or one of another kind, fails. The list
-# only shrinks (#1612 takes the three gables off it): tools/ci/check_same_project_projects.py
-# holds it to these five.
+# readers read 2025 and earlier, so a roof of 2026 or 2027 is its record box (201262; the
+# roof is cut by walls, #1471; Griffin, 2026-11-05) or its saved mesh, the default of
+# every class since #1191 (Griffin, 2026-11-09: "Allow these 4 as meshes"): 165755,
+# 167036 and 167158 are 15 degree gables the 2025 save draws as a level block, their
+# sketch outline over the record box (10.3 m3), and 243274 is the 2025 save's roof
+# extrusion (35.4236 m3) against a mesh of 34.9741 m3 in the same box. A mesh counts only
+# where its box contains the 2025 body's, to the census's 3 mm. Counted, not scored; one
+# more, one fewer, or one of another kind fails. The list only shrinks (#1612 takes the
+# three gables off it): tools/ci/check_same_project_projects.py holds it to these five.
 ROOFS_NOT_THE_2025_BODY = {
     "racadvancedsampleproject": {"201262": RECORD_BOX, "165755": SAVED_MESH, "167036": SAVED_MESH, "167158": SAVED_MESH},
     "racbasicsampleproject": {"243274": SAVED_MESH},
