@@ -398,7 +398,7 @@ jobs:
     name: Viewer artifact load smoke
     needs: [preflight]
     runs-on: ubuntu-24.04
-    # Longest 14.7 minutes.
+    # Longest 15.8 minutes (v0.16.0's tag run, 42559733687).
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

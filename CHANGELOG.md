@@ -8,7 +8,106 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.16.1] — 2026-11-09
+
+0.16.1 is the first published release of 0.16. The `v0.16.0` tag was made
+but never published. Its publish run stopped at the viewer load smoke test,
+which runs `rvt-elements` and found no such program on its `PATH`, so nothing
+reached crates.io, PyPI, the release page or ghcr.io (#1569). A tag cannot be
+moved, so 0.16.1 replaces it. Everything listed under [0.16.0] below ships in
+0.16.1, with the changes listed here. A user of 0.15 should read "Upgrading
+from 0.15" under [0.16.0], since nothing in 0.16.1 changes it.
+
+### Added
+
+- **Fresh held-out pairs for the 1.0 check are sealed in a registry that no
+  committed workflow or script may name (#1565).** W5 counts a held-out pair
+  only when its first measurement meets W4, W6 and W7, so a pair that arrives
+  first is sealed until the final 1.0 check. `tools/ci/seal-holdout-pair.sh`
+  downloads a pair, hashes and counts it, deletes it and adds its row to
+  `research/sealed-holdout-models.tsv`. It refuses, from the first 64 KiB of
+  each file alone, a project that is not an OLE2 file and an IFC that is not
+  that release's own IFC4 or IFC4X3 export, and it refuses a row the check
+  would fail, among them a link that names no fixed version (a file at a
+  commit, a release asset or a Zenodo record), since the final check fetches
+  the files again. `tools/ci/check_sealed_holdout.py`, a step of the PII guard job,
+  fails on a malformed row, on any other tracked file holding a sealed URL or
+  hash, and on any committed file that is not Markdown and names the registry.
+  It cannot see a path built at run time or a run dispatched from an
+  unreviewed branch. Its failure-first tests run beside it, and each of 16
+  mutations of the check fails them. The registry is empty; the final check's
+  Measure input is added when W4, W6 and W7 pass on the reference models.
+
+### Fixed
+
+- **A roof drawn as its record box no longer cuts the top of the walls under it,
+  unless the box is exactly the roof's layers and its outline is read (#1471,
+  RE-351).** Autodesk's `rac_basic` draws 16 walls up to their record boxes on
+  its 2025 save and cut at 5.7265 m on its 2026 and 2027 saves (15 of them on
+  2024), up to 3.1865 m lower, from the same record box, base and top Levels,
+  joins and top-join element on all 13 of its saves (Measure run 42106436497 at
+  b2b5716e). The element is roof 243274, a roof by extrusion on every save: the
+  2025 reader draws it as a solid, which the wall-top pass leaves out, and the
+  other readers, which read no roof by extrusion, draw it as its record box,
+  which the pass took for a roof with a level underside though the box's
+  underside is its lowest point. The pass now takes a roof only where
+  `attach_slab_layers` gave it its layers, which it does where they add up to
+  the box's height (the proof that the underside is level), and where its plan
+  outline is read (an L-shaped roof drawn over its box's rectangle would cover a
+  wall it does not reach); a slab or footing is cut at as before. **This is a
+  smaller error, not Revit's body:** Revit's walls attach to the roof's sloped
+  underside, and the box-height prism restored here is still not it (the second
+  read of #1476 estimates about 5.1 m3 over across the 16 against about 13.5 m3
+  under with the flat cut; not reproduced). Wall 506386 loses the five values
+  the roof's box let it carry, `Height` and its net and gross volume and side
+  area, and keeps `Length` and `Width` as the 2025 save does (the 2025 and 2026
+  exports of Measure run 42063046730). Only roof 243274 exercises the roof-cover
+  path anywhere, and no wall is cut by a plate roof, so the branch that keeps a
+  plate roof as a cutter is unmeasured. In the unfiltered Measure run
+  42554270370 (head 584c8a89 against `main` at fc29acbf, 118 exports) four
+  exports move: `rac_basic` 2024, 2026 and 2027, and the held-out AA house
+  (Revit 2026, IFC4X3, counts only), whose walls with Revit's base and top go
+  from 43 to 56 of 59, the other 3 on Revit's storey (Measure run 42556745265,
+  once the held-out counts keep wall heights). The other 114, the BIM4LCA
+  office's among them, are byte for byte `main`'s. On the 2026 and
+  2027 saves the 16 walls are the 2025 save's bodies, and only roof 243274,
+  still a record box, differs among 441 bodies. So the same-project check
+  pins no wall any more (#1471, the exception of 2026-11-05 closed), and
+  held-out models now keep counts of the walls at Revit's base and top.
+
+- **A type's value block ends where the next native record starts, so the
+  doors of `rac_basic`'s 2027 save have their Width and Height (#1489,
+  RE-373).** Three family instances' own Width, Height, Rough Width and Rough
+  Height are stored right after a door symbol's record, with no value block
+  mark between. The length scans gave them to the symbol, which then held two
+  of each and wrote neither, so two doors lost their `Qto_DoorBaseQuantities`
+  Width and Height. Each block now also ends at the first native record after
+  its mark, from the handle's record index. Since records do not nest, that
+  drops only entries outside the owner's record. In a Measure run of 111
+  exports (42558908204, without the racadv and BIMcollab models) 2 move. One
+  is that save, now 418 compared values like its 2026 save. The other is the
+  held-out AA house (Revit 26.4, IFC4X3, counts only), whose door Width,
+  Height and Area each go from 11 to 13 of 13 equal. No value goes from equal to different or missing anywhere,
+  and export time is 0.98 to 1.01 times as before. The family type table's
+  text form (`FireRating`, `Manufacturer`) keeps its own bounds.
+
+### Research
+
+- **Revit 2015 to 2020 angled walls keep their record box: Revit stops seven
+  of the eight walls that a line body makes worse about 0.28 ft inside their
+  lines' ends (#1535, RE-364).** On the spent Vitoria `ALD26 Before` (Revit
+  2018, IFC2X3), drawing an angled wall's faces from its line takes 33 of 48 to
+  Revit's faces within 0.001 ft, from 1. Of those walls, 8 are worse than
+  their box at their ends alone. A scorer that signs each end's difference
+  shows that seven run 0.275 to 0.279 ft past Revit's end with the line, and
+  0.163 to 0.186 ft with the box, at one or both ends. That fits a join trim
+  or a rule for their one wall type, and neither is tested. No angled wall
+  has a join reach on these releases, so they stay boxes. No export changes.
+
 ## [0.16.0] — 2026-11-08
+
+Tagged as `v0.16.0` and never published: its publish run stopped at the
+viewer load smoke test, and 0.16.1 ships everything below (#1569).
 
 0.16.0 reads much more of Revit 2015 to 2023 and of Revit 2026 and 2027, and
 says what each space is. On Revit 2015 to 2023 projects beams are drawn along
