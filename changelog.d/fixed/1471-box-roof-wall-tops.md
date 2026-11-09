@@ -24,8 +24,10 @@
   plate roof as a cutter is unmeasured. In the unfiltered Measure run
   42554270370 (head 584c8a89 against `main` at fc29acbf, 118 exports) four
   exports move: `rac_basic` 2024, 2026 and 2027, and the held-out AA house
-  (Revit 2026), whose walls' heights its counts did not score. The other 114,
-  the BIM4LCA office's among them, are byte for byte `main`'s. On the 2026 and
+  (Revit 2026, IFC4X3, counts only), whose walls with Revit's base and top go
+  from 43 to 56 of 59, the other 3 on Revit's storey (Measure run 42556745265,
+  once the held-out counts keep wall heights). The other 114, the BIM4LCA
+  office's among them, are byte for byte `main`'s. On the 2026 and
   2027 saves the 16 walls are the 2025 save's bodies, and only roof 243274,
   still a record box, differs among 441 bodies. So the same-project check
   pins no wall any more (#1471, the exception of 2026-11-05 closed), and

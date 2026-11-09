@@ -105,7 +105,9 @@ its outline is read (RE-351): the walls of `rac_basic` that its 2024 (15),
 2026 and 2027 (16) saves cut at roof 243274, up to 3.1865 m lower than its
 2025 save draws them (Measure run 42106436497), are drawn to their record
 boxes as the 2025 save draws them (on the 2026 and 2027 saves all 16 are the
-2025 save's bodies, Measure run 42554270370), which is a
+2025 save's bodies, Measure run 42554270370, and on the held-out AA house, Revit
+26.4's IFC4X3 export and the one Revit export the rule changes, the walls with
+Revit's base and top go from 43 to 56 of 59, counts only, run 42556745265), which is a
 smaller error and not Revit's body: Revit's walls attach to the gable's sloped
 underside. Only roof 243274 exercises the roof-cover path anywhere, and no
 wall is cut by a plate roof, so the branch that keeps a plate roof as a cutter
