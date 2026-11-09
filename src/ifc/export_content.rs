@@ -6854,6 +6854,12 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
     let wall_axis = wall_axis.filter(|_| {
         wall_taper.is_some() || !crate::partition_schema_mvp::wall_is_tapered(&decoded.fields)
     });
+    if let Some(a) = wall_axis {
+        eprintln!(
+            "RE1535 {:?} {} {} {} {} {} {} {} {} {} {:?}",
+            decoded.id, a.thickness_feet, a.start[0], a.start[1], a.end[0], a.end[1], x, y, width, depth, a.join_reach_feet
+        );
+    }
     // RE-71: a wall whose layered butt joins end each layer on its own line
     // is the staircase they make.
     let layer_ends = wall_axis
