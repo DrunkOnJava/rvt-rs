@@ -4962,6 +4962,19 @@ fn oriented_box_solid(axes: [[f64; 3]; 3], half: [f64; 3], height: f64) -> entit
 /// RE-89).
 pub const INSTANCE_ORIGIN_PROPERTIES: [&str; 2] = ["InstanceOriginX", "InstanceOriginY"];
 
+/// The name of each hand-off holding the stored origin of a door set in no
+/// wall, model feet (RE-361): the origin Revit's export gives its placement.
+pub const PLACEMENT_ORIGIN_PROPERTIES: [&str; 3] =
+    ["PlacementOriginX", "PlacementOriginY", "PlacementOriginZ"];
+
+/// The name of the property in [`ELEMENT_RECORD_PROPERTY_SET`] that says a
+/// door's placement origin is its stored one (RE-361).
+pub const PLACEMENT_ORIGIN_SOURCE_PROPERTY: &str = "PlacementOriginSource";
+
+/// The [`PLACEMENT_ORIGIN_SOURCE_PROPERTY`] of a door set in no wall, which
+/// Revit's export gives no opening and places at its stored origin.
+pub const NO_OPENING_PLACEMENT_ORIGIN_SOURCE: &str = "stored_origin_no_opening";
+
 /// The name of each hand-off holding a window's opening from its type and
 /// transform (RE-93, `crate::partition_schema_mvp::FillerOpening`): the plan
 /// point it is centred on and the direction of its width, model feet and a
@@ -7283,6 +7296,20 @@ fn element_record_geometry_from_decoded(decoded: &DecodedElement) -> Option<Reco
             crate::partition_schema_mvp::instance_origin_from_fields(&decoded.fields)
         {
             for (name, value) in INSTANCE_ORIGIN_PROPERTIES.iter().zip(origin) {
+                handoffs.push(Property {
+                    name: (*name).into(),
+                    value: PropertyValue::LengthFeet(value),
+                });
+            }
+        }
+    }
+    // RE-361: a door set in no wall reports its stored origin, which Revit's
+    // export gives its placement.
+    if class == "Door" {
+        if let Some(origin) =
+            crate::partition_schema_mvp::opening_placement_origin_from_fields(&decoded.fields)
+        {
+            for (name, value) in PLACEMENT_ORIGIN_PROPERTIES.iter().zip(origin) {
                 handoffs.push(Property {
                     name: (*name).into(),
                     value: PropertyValue::LengthFeet(value),

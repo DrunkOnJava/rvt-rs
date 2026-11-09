@@ -1637,6 +1637,10 @@ fn export_rvt_doc_reporting(
         }
     }
 
+    if policy.include_geometry {
+        apply_placement_origins(&mut entities, &record_handoffs, &opening_cuts);
+    }
+
     Ok(IfcModel {
         project_name,
         description,
@@ -1663,6 +1667,71 @@ fn export_rvt_doc_reporting(
         wall_cut_openings_left_out,
         wall_end_reads_unmarked,
     })
+}
+
+/// RE-361 (#1494): a door set in no wall is placed at its stored origin, as
+/// Revit's export places it, where its hand-offs hold one
+/// ([`export_content::PLACEMENT_ORIGIN_PROPERTIES`]). Its record box stays where
+/// it is in the world: the body becomes the box's rectangle placed at the old
+/// centre, turned with the element, so a saved mesh, which is taken in the
+/// element's frame after this, is in the new frame. Run last, after the
+/// storeys are bound by the element's base and the openings are cut, which
+/// read the box's centre and base. A door that has gained a host, an opening,
+/// a shape of its own or a representation map keeps its placement.
+fn apply_placement_origins(
+    entities: &mut [entities::IfcEntity],
+    record_handoffs: &std::collections::BTreeMap<usize, Vec<entities::Property>>,
+    opening_cuts: &std::collections::BTreeMap<usize, entities::OpeningCut>,
+) {
+    for (&index, handoffs) in record_handoffs {
+        let [Some(ox), Some(oy), Some(oz)] =
+            export_content::PLACEMENT_ORIGIN_PROPERTIES.map(|name| handoff_length(handoffs, name))
+        else {
+            continue;
+        };
+        if opening_cuts.contains_key(&index) {
+            continue;
+        }
+        let Some(entities::IfcEntity::BuildingElement {
+            ifc_type,
+            location_feet: Some(location),
+            rotation_radians,
+            extrusion: Some(body),
+            solid_shape,
+            host_element_index: None,
+            representation_map_index: None,
+            property_set: Some(set),
+            ..
+        }) = entities.get_mut(index)
+        else {
+            continue;
+        };
+        if !ifc_type.eq_ignore_ascii_case("IfcDoor")
+            || solid_shape.is_some()
+            || body.profile_override.is_some()
+        {
+            continue;
+        }
+        let (sin, cos) = rotation_radians.unwrap_or(0.0).sin_cos();
+        let (dx, dy) = (location[0] - ox, location[1] - oy);
+        *solid_shape = Some(entities::SolidShape::PlacedExtrusion {
+            profile: entities::ProfileDef::Rectangle {
+                width_feet: body.width_feet,
+                depth_feet: body.depth_feet,
+            },
+            origin_feet: [dx * cos + dy * sin, dy * cos - dx * sin, location[2] - oz],
+            axis: [0.0, 0.0, 1.0],
+            ref_direction: [1.0, 0.0, 0.0],
+            depth_feet: body.height_feet,
+        });
+        *location = [ox, oy, oz];
+        set.properties.push(entities::Property {
+            name: export_content::PLACEMENT_ORIGIN_SOURCE_PROPERTY.into(),
+            value: entities::PropertyValue::Text(
+                export_content::NO_OPENING_PLACEMENT_ORIGIN_SOURCE.into(),
+            ),
+        });
+    }
 }
 
 /// #227: each door or window whose body is a plain rectangular extrusion
