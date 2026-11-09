@@ -328,6 +328,17 @@ pub enum IfcEntity {
         plane_offset_feet: f64,
         thickness_feet: f64,
     },
+    /// The properties of `set`, a set IFC4 gives an `IfcOpeningElement`
+    /// (`Pset_OpeningElementCommon`), that the parameters of the building
+    /// element at `element` (an index into `IfcModel::entities`) name: a
+    /// door's `FireExit`. Revit's export gives each opening an element cuts
+    /// in a wall besides the one it fills the properties of its cutter's own
+    /// sets, as revit-ifc's `OpeningUtil.CreateOpening` hands the cutter to
+    /// the opening's property sets (CLEANROOM.md source 5; RE-386). The writer
+    /// adds these to the set of the same name of each
+    /// [`IfcEntity::WallCutOpening`] whose `reference_from` is `element`, and
+    /// writes them nowhere else.
+    CutterOpeningSet { element: usize, set: PropertySet },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1684,7 +1684,9 @@ fn export_rvt_doc_reporting(
         .include_geometry
         .then(|| opening_cuts_through_hosts(&entities, &record_handoffs));
     let wall_cut_openings_left_out = match &early_opening_cuts {
-        Some(cuts) => wall_cut_openings::attach_wall_cut_openings(rf, &mut entities, cuts),
+        Some(cuts) => {
+            wall_cut_openings::attach_wall_cut_openings(rf, &mut entities, cuts, &record_handoffs)
+        }
         None => Default::default(),
     };
 
@@ -5966,17 +5968,25 @@ fn pset_property_value_count(model: &IfcModel) -> usize {
         })
         .count();
     // RE-321: a wall's cut opening holds its cutter's type name twice, in
-    // `Pset_OpeningElementCommon` and `Pset_EnvironmentalImpactIndicators`.
-    let wall_cuts = 2 * model
+    // `Pset_OpeningElementCommon` and `Pset_EnvironmentalImpactIndicators`,
+    // and (RE-386) each property its cutter's parameters name in its set.
+    let mut cutter_values = std::collections::BTreeMap::<usize, usize>::new();
+    for entity in &model.entities {
+        if let entities::IfcEntity::CutterOpeningSet { element, set } = entity {
+            *cutter_values.entry(*element).or_default() += values(set);
+        }
+    }
+    let wall_cuts: usize = model
         .entities
         .iter()
-        .filter(|entity| match entity {
+        .map(|entity| match entity {
             entities::IfcEntity::WallCutOpening { reference_from, .. } => {
-                references.contains_key(reference_from)
+                2 * usize::from(references.contains_key(reference_from))
+                    + cutter_values.get(reference_from).copied().unwrap_or(0)
             }
-            _ => false,
+            _ => 0,
         })
-        .count();
+        .sum();
     // RE-381: so does the opening of a wall's own elevation profile, where the
     // wall has one and the opening is written (a region cut in the wall's body
     // has no outline left).
