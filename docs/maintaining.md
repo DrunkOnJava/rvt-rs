@@ -52,8 +52,13 @@ when a release ships.
   the maintainer included: a bypass let an admin merge without `CI passed`
   (2026-10-05). An emergency change goes through a pull request like any other,
   or the ruleset is edited deliberately and the edit committed.
-  Merges are **squash only**, commits must be **signed**, history is linear, and
-  the branch must be up to date with `main`. The one required check is
+  Merges are **squash only**, commits must be **signed**, and history is linear.
+  A branch need not be up to date with `main` (the maintainer, 2026-11-08):
+  that rule held landings to one at a time, and its 57 forced updates on
+  2026-11-05 all passed. A merge whose tree differs from the tree its pull
+  request tested runs the full set on `main` (`tools/ci/change-scope.sh`),
+  which is where two changes that conflict in meaning show, and a red `main`
+  is fixed before anything else lands. The one required check is
   `full / CI passed`, CI's summary job as a ready pull request runs it
   (`ci-pr.yml` calls `ci.yml`), which passes only when every CI job (macOS
   and Windows, corpus tier 2, the writer corpus, IfcOpenShell validation,
@@ -80,8 +85,7 @@ when a release ships.
   reviewer, not a person), approves the maintainer's and a contributor's, and the
   maintainer approves only the App's own, so no pull request lands on the approval of
   the session that lands it. A push dismisses an approval, so the formal
-  approval comes last, on the up-to-date head with its CI green: only the next
-  pull request in line needs one. Its findings are the review itself, and no
+  approval comes last, on the head with its CI green. Its findings are the review itself, and no
   separate summary comment is posted.
 - One full Measure is run per code state for a change that moves an export, and
   a clean merge of `main` needs none of its own. As a maintainer's practice, not
