@@ -21,25 +21,26 @@ solved carrier: the reports under `reports/element-framing/` say what each
 negative result ruled out, and [`ROADMAP.md`](../ROADMAP.md) says what each
 milestone is for.
 
-### 0.17.0: IFC geometry and element data
+### 0.18.0: IFC geometry and element data
 
 | Issue | Remainder |
 |---|---|
-| [#1535](https://github.com/DrunkOnJava/rvt-rs/issues/1535) | Score Revit 2015 to 2020 angled walls wall by wall, and restore their line bodies if none is worse than its box |
+| [#1612](https://github.com/DrunkOnJava/rvt-rs/issues/1612) | Revit 2023 to 2025: roofs drawn as their sketch outline's level block are not drawn from their saved meshes, so one project's saves disagree |
+| [#1603](https://github.com/DrunkOnJava/rvt-rs/issues/1603) | Revit 2015 to 2023: family instances' materials: 70 windows and 14 railings lack Revit's, the default material is written on 72 elements Revit gives none (Vitoria) |
+| [#1589](https://github.com/DrunkOnJava/rvt-rs/issues/1589) | research(rooms): read the height a room's area is taken at, so stepped rooms get their section's outline (follow-up of #90, RE-374) |
+| [#1584](https://github.com/DrunkOnJava/rvt-rs/issues/1584) | Revit 2015 to 2023 walls: a record's control joins read empty, so Length, side areas, footprint, volumes and angled walls' line bodies stay out (RE-364 section 6, from #1535) |
+| [#1583](https://github.com/DrunkOnJava/rvt-rs/issues/1583) | Wall-end rule: a wall in a strip that the pass does not read is found by nothing, so the end is drawn through it with no count (RE-337 section 6) |
 | [#1507](https://github.com/DrunkOnJava/rvt-rs/issues/1507) | W7: windows' Pset_WindowCommon.FireRating is read from family-parameter table entries (R2025 models 12 to 17, held-out models) |
 | [#1498](https://github.com/DrunkOnJava/rvt-rs/issues/1498) | Value sources: wall rules, door placement, joins and cut loops have none yet, and nothing fails when a new value lands without one |
 | [#1495](https://github.com/DrunkOnJava/rvt-rs/issues/1495) | Snowdon wall 1996083 ends 1.03 ft short of Revit's export, and nothing marks it |
 | [#1494](https://github.com/DrunkOnJava/rvt-rs/issues/1494) | Doors bound to no plain wall: 49 inverted relative to the axes rule, by IfcDoorType (RE-347 follow-up) |
-| [#1493](https://github.com/DrunkOnJava/rvt-rs/issues/1493) | Revit 2027 saves: 21 members' LevelElementId and one curtain wall Length differ from the 2025 save |
 | [#1480](https://github.com/DrunkOnJava/rvt-rs/issues/1480) | Wall base and top passes: a cutter drawn as a box, or whose level is not read, cuts nothing (RE-351 follow-up) |
 | [#1479](https://github.com/DrunkOnJava/rvt-rs/issues/1479) | Roofs by extrusion are solids only on Revit 2025: read them on 2024, 2026 and 2027, held to the 2025 save |
 | [#1478](https://github.com/DrunkOnJava/rvt-rs/issues/1478) | Walls under a read roof: cut along its sloped underside, as Revit does (RE-351 follow-up) |
 | [#1474](https://github.com/DrunkOnJava/rvt-rs/issues/1474) | Walls 2056705 and 2056770: Revit cuts their ends back above 182.087 ft and steps them, and neither office file draws that |
 | [#1473](https://github.com/DrunkOnJava/rvt-rs/issues/1473) | A profile-edited wall's sloped top stops at the profile's end: a 0.41 ft stub stays flat, 0.65 ft too high |
 | [#1427](https://github.com/DrunkOnJava/rvt-rs/issues/1427) | Semantic check: recalibrate on real pull requests, and settle fails that noise can cross (#1334 follow-up) |
-| [#1418](https://github.com/DrunkOnJava/rvt-rs/issues/1418) | Wall-end rule: count the solid-beneath skip and exercise the unmeasured paths (RE-337 follow-up) |
 | [#1407](https://github.com/DrunkOnJava/rvt-rs/issues/1407) | Wall 2177212: its saved mesh is 0.114 ft shorter than Revit's IFC body (RE-340 follow-up) |
-| [#1359](https://github.com/DrunkOnJava/rvt-rs/issues/1359) | 0.14.0: no rooms in rac_basic and other projects that 0.13.0 reads |
 | [#1357](https://github.com/DrunkOnJava/rvt-rs/issues/1357) | Doors and windows: decode hand flip and facing flip |
 | [#1335](https://github.com/DrunkOnJava/rvt-rs/issues/1335) | Revit 2015 to 2023 exports: the remaining time against 0.11.0 after #1237 |
 | [#1261](https://github.com/DrunkOnJava/rvt-rs/issues/1261) | Revit 2018 and 2021 projects decode with no rooms (Revit's IFC has 73 and 8) |
@@ -74,8 +75,8 @@ The requirements these serve, each with its bar, status and evidence, are in
 
 | Issue | Remainder |
 |---|---|
+| [#1594](https://github.com/DrunkOnJava/rvt-rs/issues/1594) | research(ifc): a plate type's Tag is an instance's ElementId in Revit's export; rvt-rs writes the type's (follow-up of #1520, RE-367) |
 | [#1565](https://github.com/DrunkOnJava/rvt-rs/issues/1565) | W5: a sealed registry for fresh held-out pairs, read only by the final 1.0 check |
-| [#1555](https://github.com/DrunkOnJava/rvt-rs/issues/1555) | W10: re-run the pages' numbers from the documented command and compare them |
 | [#1444](https://github.com/DrunkOnJava/rvt-rs/issues/1444) | rvt-rs reads no reinforcing bars or element assemblies |
 | [#1209](https://github.com/DrunkOnJava/rvt-rs/issues/1209) | W7: coverings' `GrossArea` on ceilings in pieces and cut ceilings, and the roofing coverings (RE-297) |
 | [#1208](https://github.com/DrunkOnJava/rvt-rs/issues/1208) | W7: single-layer slabs' `Width` and `Length`, sloped floors' `Depth` and the stair landings' volume (RE-295) |

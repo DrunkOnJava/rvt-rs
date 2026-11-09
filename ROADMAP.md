@@ -209,11 +209,27 @@ the four levels a file can reach are in the
   registry holds the 1.0 check's fresh held-out pairs (#1565). Most of the
   Revit 2015 to 2023 and 2026 and 2027 reads are held to the same project's
   2024 or 2025 save, not scored against a Revit export; the notes say which.
+- **0.17.0, 2026-11-09.** More of Revit 2015 to 2023: curtain walls as
+  `IfcCurtainWall` with their mullions and panels under them, along their own
+  axes, with their type, family, material, `Span`, `Length` and `IsExternal`
+  (#1190); steel beams of 2017 to 2023 as their type's I section (#1190); walls'
+  `Height` where their record names nothing joined to or cutting them (#1535);
+  and ducts of Revit 2015 to 2027 from their native records, with their ports'
+  `SystemType` and joins (#96, #834, #869). On Revit 2024 a room whose stored
+  solid does not close takes its floor's outline from the solid's edges (#90), a
+  wall whose floor covers all of its plan but a stub inside another wall is cut
+  whole (#1067), and a wall whose edited profile closes below its record box
+  ends at the profile's highest point (#1600). A Revit 2026 or 2027 save is
+  written without an `ObjectType`, as Revit's export of those releases writes
+  none (#1472), and two claims every export made are made only where they hold
+  (#1598). The two wall rules rest on one wall each, and no 2015 to 2023 curtain
+  wall, curtain part, steel beam, duct or wall `Height` of Autodesk's samples is
+  scored against a Revit IFC4 export; the notes say which.
 
-### 0.17.0: IFC geometry and element data
+### 0.18.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.16.1, moved from the
-0.16.0 milestone when 0.16.1 shipped. Each
+The geometry and element-data work that continues after 0.17.0, moved from the
+0.17.0 milestone when 0.17.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
