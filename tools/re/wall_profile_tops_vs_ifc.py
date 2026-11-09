@@ -126,9 +126,12 @@ def extension_at(lines, axis, end, s):
 
 
 def main(argv):
-    if len(argv) != 3:
+    # Measure passes `--list` after the two paths; it changes nothing here.
+    paths = [a for a in argv[1:] if not a.startswith("--")]
+    if len(paths) != 2:
         print(__doc__, file=sys.stderr)
         return 2
+    argv = [argv[0]] + paths
     walls = parse_probe(argv[1])
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
