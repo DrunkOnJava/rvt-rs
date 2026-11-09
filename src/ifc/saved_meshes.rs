@@ -30,6 +30,13 @@
 //! against 68, and 1.01 times the time and the same peak on Core Interior
 //! (Measure run 42614230465, median of 3 on one runner).
 //!
+//! A roof drawn as the level block of its sketch outline at its record box's
+//! full height is replaced too (#1612): the record box holds the roof's
+//! reference surface, not its slope or its thickness, and its saved mesh is
+//! what Revit drew. The outline's own properties (`ProfileSource`,
+//! `ProfileVertexCount`, `ProfileVoidCount`) and the `SlabShapeRefusal` of
+//! any body replaced go with the body they described.
+//!
 //! One kind of wall is drawn from its saved mesh in every scope that reads
 //! graphics, on Revit 2024 to 2027, the releases whose wall records name what
 //! embeds in them: a wall that embeds a curtain wall (`WallEmbedWallGStep`,
@@ -46,8 +53,9 @@
 use super::IfcModel;
 use super::entities::{BrepTriangle, IfcEntity, Property, PropertySet, PropertyValue, SolidShape};
 use super::export_content::{
-    BEAM_BOX_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE, SPACE_OUTLINE_SAVED_MESH,
-    SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    BEAM_BOX_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE, SLAB_SHAPE_REFUSAL_PROPERTY,
+    SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY,
+    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
 use crate::native_wall_cuts::WallCutKind;
@@ -226,11 +234,14 @@ pub fn attach_scoped_with_control(
             p.name == "ProfileResolved" && matches!(p.value, PropertyValue::Boolean(true))
         });
         // A beam RE-328 draws as its box along its line is a stand-in for
-        // its saved mesh, as the record box is.
+        // its saved mesh, as the record box is, and so is the level block of
+        // a roof's sketch outline: the record box holds the roof's reference
+        // surface, not its slope or its thickness (#1612). A resolved outline
+        // is the body of any other class (a floor's plan, a ceiling's).
         if !matches!(
             text("BodySource"),
             Some(RECORD_BBOX_BODY_SOURCE | BEAM_BOX_BODY_SOURCE)
-        ) || profile_resolved
+        ) || (profile_resolved && ifc_type != "IFCROOF")
         {
             continue;
         }
@@ -316,8 +327,21 @@ pub fn attach_scoped_with_control(
                     property.value = PropertyValue::Text(SAVED_MESH_BODY_SOURCE.into());
                 } else if property.name == SPACE_OUTLINE_SOURCE_PROPERTY {
                     property.value = PropertyValue::Text(SPACE_OUTLINE_SAVED_MESH.into());
+                } else if property.name == "ProfileResolved" {
+                    property.value = PropertyValue::Boolean(false);
                 }
             }
+            // What describes a body that is no longer the outline block or the
+            // box: where its outline came from and why its shape was not drawn.
+            set.properties.retain(|property| {
+                !matches!(
+                    property.name.as_str(),
+                    "ProfileSource"
+                        | "ProfileVertexCount"
+                        | "ProfileVoidCount"
+                        | SLAB_SHAPE_REFUSAL_PROPERTY
+                )
+            });
             Ok(())
         },
     )?;

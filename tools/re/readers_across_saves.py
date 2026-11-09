@@ -108,15 +108,16 @@ SAVED_MESH = "saved_graphics_mesh"
 # pinned and exactly these, in the saves of those two projects and none other. The roof
 # readers read 2025 and earlier, so a roof of 2026 or 2027 is its record box (201262; the
 # roof is cut by walls, #1471; Griffin, 2026-11-05) or its saved mesh, the default of
-# every class since #1191 (Griffin, 2026-11-09: "Allow these 4 as meshes"): 165755,
-# 167036 and 167158 are 15 degree gables the 2025 save draws as a level block, their
-# sketch outline over the record box (10.3 m3), and 243274 is the 2025 save's roof
-# extrusion (35.4236 m3) against a mesh of 34.9741 m3 in the same box. A mesh counts only
-# where its box contains the 2025 body's, to the census's 3 mm. Counted, not scored; one
-# more, one fewer, or one of another kind fails. The list only shrinks (#1612 takes the
-# three gables off it): tools/ci/check_same_project_projects.py holds it to these five.
+# every class since #1191 (Griffin, 2026-11-09): 243274 is the 2025 save's roof
+# extrusion (35.4236 m3) against a mesh of 34.9741 m3 in the same box. 165755, 167036
+# and 167158, 15 degree gables the 2025 save drew as a level block, their sketch outline
+# over the record box (10.3 m3), were on this list until #1612 drew them from their saved
+# meshes on 2023 to 2025 too. A mesh counts only where its box contains the 2025 body's,
+# to the census's 3 mm. Counted, not scored; one more, one fewer, or one of another kind
+# fails. The list only shrinks: tools/ci/check_same_project_projects.py holds it to
+# these five or fewer.
 ROOFS_NOT_THE_2025_BODY = {
-    "racadvancedsampleproject": {"201262": RECORD_BOX, "165755": SAVED_MESH, "167036": SAVED_MESH, "167158": SAVED_MESH},
+    "racadvancedsampleproject": {"201262": RECORD_BOX},
     "racbasicsampleproject": {"243274": SAVED_MESH},
 }
 

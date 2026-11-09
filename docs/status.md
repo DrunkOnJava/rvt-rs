@@ -96,13 +96,15 @@ shafts it did not cut (`shaft_opening_not_cut`); RE-341 had turned the cut on
 for 2026 and 2027, which this turns off again.
 Stair runs on 2026 and 2027 are drawn as their steps and treads from their
 native records as on 2025, with the stair property sets and quantities read
-from them. A roof on 2026 and 2027 is drawn from its saved mesh where that
-decodes whole (#1191), and keeps the record-box solve alone where it does not
+from them. A roof on 2023 to 2027 is drawn from its saved mesh where that
+decodes whole (#1191, and #1612 for one drawn as the level block of its sketch
+outline), and keeps the record-box solve alone where it does not
 (RE-341 section 5): without its slope, so a sloped roof can still be drawn as its
 outline at the box's full height, a level block. No roof's saved mesh is scored
-against a Revit export, and on Autodesk's samples the meshes of four roofs of the
-2026 and 2027 saves are not the 2025 save's bodies, which the same-project gate
-names (`ROOFS_NOT_THE_2025_BODY`, Griffin 2026-11-09). Such a roof no longer cuts the top
+against a Revit export, and on Autodesk's samples the mesh of one roof of the
+2026 and 2027 saves is not the 2025 save's body and another keeps its box, which
+the same-project gate names (`ROOFS_NOT_THE_2025_BODY`, Griffin 2026-11-05 and
+2026-11-09). Such a roof no longer cuts the top
 of the walls under it unless its record box is exactly its type's layers and
 its outline is read (RE-351): the walls of `rac_basic` that its 2024 (15),
 2026 and 2027 (16) saves cut at roof 243274, up to 3.1865 m lower than its
