@@ -8,12 +8,16 @@ list in several places, which must agree or the verdict does not see a sample (R
                                      the year case of saves_gate_keeps and the `202[...]` globs of bodies_across_saves
   bodies_across_saves.py             the keys of MINIMUMS, OUTLINE_LEAST, REQUIRED and CYLINDER_LEAST
   readers_across_saves.py            the keys of MINIMUMS (and a year-keyed PROPERTIES), PINNED_WALLS and
-                                     ROOFS_LEFT_AS_BOXES
+                                     ROOFS_NOT_THE_2025_BODY
 
 PINNED_WALLS was the one list of bodies allowed to differ from the 2025 save (Griffin, 2026-11-05). It could only
 shrink, and it is empty since #1471 healed its 16 walls: PINNED_MOST is 0, no project has more than the walls
 ORIGINAL_PINNED_TAGS holds, and no entry is ever added. Raising ORIGINAL_PINNED_TAGS or PINNED_MOST here is adding to
 it.
+
+ROOFS_NOT_THE_2025_BODY is the other list: the roofs a 2026 or 2027 save may draw otherwise than the 2025 save
+does. Griffin approved 201262 and 243274 on 2026-11-05 and 165755, 167036 and 167158 on 2026-11-09 (#1610, "Allow
+these 4 as meshes"). It can only shrink: no project has a tag ORIGINAL_ROOF_TAGS does not hold, and none is added.
 
 Run from the repository root; exits 1 and says which file differs.
 """
@@ -49,6 +53,10 @@ ORIGINAL_PINNED_TAGS = {
             "939084",
         }
     )
+}
+ORIGINAL_ROOF_TAGS = {
+    "racadvancedsampleproject": frozenset({"201262", "165755", "167036", "167158"}),
+    "racbasicsampleproject": frozenset({"243274"}),
 }
 REFERENCE_YEAR = 2025
 FIRST_YEAR = 2024
@@ -167,9 +175,15 @@ def main():
     pinned_most = ast.literal_eval(readers["PINNED_MOST"])
     if pinned_most != PINNED_MOST:
         problems.append(f"tools/re/readers_across_saves.py, PINNED_MOST is {pinned_most}, not {PINNED_MOST}")
-    roofs = constant_keys(readers["ROOFS_LEFT_AS_BOXES"], readers)
-    if not roofs <= projects:
-        problems.append(f"tools/re/readers_across_saves.py, ROOFS_LEFT_AS_BOXES: {sorted(roofs - projects)} are not projects")
+    for project, value in dict_items(readers["ROOFS_NOT_THE_2025_BODY"], readers):
+        if project not in projects:
+            problems.append(f"tools/re/readers_across_saves.py, ROOFS_NOT_THE_2025_BODY: {project} is not one of the projects")
+        tags = {resolve(key, readers).value for key in resolve(value, readers).keys}
+        extra = tags - ORIGINAL_ROOF_TAGS.get(project, frozenset())
+        if extra:
+            problems.append(
+                f"tools/re/readers_across_saves.py, ROOFS_NOT_THE_2025_BODY[{project}]: {sorted(extra)} were never approved, and none is added"
+            )
 
     bad = bool(problems)
     for where, held in sorted(found.items()):
