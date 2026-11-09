@@ -652,6 +652,10 @@ measurement meets W4, W6 and W7, so a pair that arrives before those pass on the
 reference models is sealed until the final 1.0 check, never fetched or opened
 before it.
 
+- **Before any pair is sealed**, every GitHub App installed on the maintainer
+  account is limited to the repositories it needs: one installed on all
+  repositories can read the private copies as well. The same holds for each
+  App installed later.
 - **When a pair arrives** (a contributor's `.rvt` and its release's own IFC4 or
   IFC4X3 export, of Revit 2024 to 2027, under Apache-2.0, MIT, CC BY 4.0 or
   CC0, written `CC-BY-4.0` and `CC0-1.0`, each at a link that names a fixed
