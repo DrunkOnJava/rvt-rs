@@ -56,7 +56,7 @@ fn u64_at(buf: &[u8], at: usize) -> Option<u64> {
 }
 
 /// The reasons whose entries are frames of the element-record partitions.
-const FRAME_REASONS: [&str; 7] = [
+const FRAME_REASONS: [&str; 8] = [
     "element_record_without_element_id",
     "element_record_without_volume",
     "element_record_in_non_primary_design_option",
@@ -64,6 +64,7 @@ const FRAME_REASONS: [&str; 7] = [
     "room_not_in_export_phase",
     "element_record_empty_curtain_panel",
     "element_record_family_space_without_body",
+    "element_record_family_type_draws_nothing",
 ];
 
 /// One export of a model, and what its log must show.

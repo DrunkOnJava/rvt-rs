@@ -162,8 +162,8 @@ fn revit_2025_product_categories_match_revits_export() {
 /// fittings exactly its `IfcFlowFitting`s (IFC2x3 references; rvt-rs writes
 /// the IFC4 entities). Most of them sit in second-prologue frames whose
 /// ElementId is their enclosing record's. Plumbing fixtures are every
-/// `IfcFlowTerminal` Revit wrote on the Plumbing model plus one, 442378, a
-/// floor-level fixture Revit's export leaves out (RE-35 §5).
+/// `IfcFlowTerminal` Revit wrote on the Plumbing model; 442378, which its type's
+/// graphics draw nothing visible for, is left out as Revit's export leaves it (RE-363).
 #[test]
 fn revit_2025_ducts_and_pipes_are_revits_own() {
     let mut checked = 0;
@@ -205,11 +205,7 @@ fn revit_2025_ducts_and_pipes_are_revits_own() {
         if model == "Plumbing" {
             let terminals = tags(&reference, &["IFCFLOWTERMINAL"]);
             let fixtures = tags(&step, &["IFCSANITARYTERMINAL"]);
-            assert!(fixtures.is_superset(&terminals), "plumbing fixtures");
-            assert_eq!(
-                fixtures.difference(&terminals).copied().collect::<Vec<_>>(),
-                vec![442378]
-            );
+            assert_eq!(fixtures, terminals, "plumbing fixtures");
         }
         checked += 1;
     }
