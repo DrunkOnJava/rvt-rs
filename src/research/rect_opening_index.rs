@@ -1,4 +1,13 @@
-//! Version-gated decoder for Revit 2024 ArcWallRectOpening 60 B index records (RE-15, #89).
+//! Version-gated decoder for the Revit 2024 60 B rows RE-15 (#89) read as
+//! an `ArcWallRectOpening` index.
+//!
+//! They are not wall openings (RE-376). On 2024 Core Interior every one of
+//! the 4,917 rows names two system elements (`ConceptualConstructionType`,
+//! `ConceptualSurfaceType`, `GStyleElem`, `FillPatternElem`,
+//! `LinePatternElem`, `MaterialElem`), and none of the 192 elements that
+//! cut its walls. Autodesk's 2024 `rac_basic` sample, whose walls hold two
+//! `SWallRectOpening`s, gives no row. Nothing in the export reads them;
+//! wall openings are written from the walls' own records (RE-321, RE-338).
 use crate::{Error, Result};
 
 pub const ARC_WALL_RECT_OPENING_TAG_2024: u16 = 0x01a7;

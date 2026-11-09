@@ -136,14 +136,13 @@ const CASES: [Case; 5] = [
 
 /// The reasons made from the model, whose evidence the log reads from the
 /// provenance table.
-const MODEL_REASONS: [&str; 13] = [
+const MODEL_REASONS: [&str; 12] = [
     "unsupported_geometry_curve",
     "unsupported_geometry_profile",
     "unsupported_geometry_unresolved_host",
     "unsupported_geometry_missing_level",
     "unsupported_geometry_missing_dimensions",
     "floor_boundary_annotation_only",
-    "opening_index_without_host_geometry",
     "body_is_record_box",
     "space_outline_is_record_box",
     "area_body_refused",

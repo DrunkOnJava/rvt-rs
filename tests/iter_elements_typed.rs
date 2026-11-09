@@ -3,8 +3,9 @@
 //! - Tier1 synthetics: fail-closed honesty (no invented ArcWalls /
 //!   Levels / Materials / Floors / openings; HostObjAttr never on
 //!   production path).
-//! - Optional magnetar project corpus: ArcWalls, Levels, Materials, and
-//!   (2024) ArcWallRectOpening rows when `RVT_PROJECT_CORPUS_DIR` is set.
+//! - Optional magnetar project corpus: ArcWalls, Levels and Materials
+//!   when `RVT_PROJECT_CORPUS_DIR` is set, and no 2024 opening-index rows,
+//!   which name system elements, not openings (RE-376).
 //!   Floors and rooms come from element records only, so a 2023 file
 //!   yields none.
 
@@ -310,17 +311,6 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
     let mvp =
         rvt::research::partition_schema_mvp::recover_partition_schema_mvp(&mut rf, version, limits)
             .expect("mvp");
-    assert!(
-        mvp.rect_openings.len() >= 50,
-        "expected ≥50 ArcWallRectOpening index rows on 2024 Core Interior, got {}",
-        mvp.rect_openings.len()
-    );
-    assert!(
-        mvp.rect_openings
-            .iter()
-            .all(|e| e.class == "ArcWallRectOpening"),
-        "opening index must not be relabeled as Door/Window"
-    );
     // Typed Wall / Door / Window come from the partition element-record
     // carrier (#211), never from the opening index or a schema-field
     // decode — RE-19's negative stands and is asserted by provenance
@@ -346,41 +336,16 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
             );
         }
     }
-    assert!(
+    // RE-376: the 2024 rows RE-15 read as an opening index name system
+    // elements (ConceptualConstructionType, GStyleElem, ...), none of the
+    // elements that cut this file's walls, so none is an element.
+    assert_eq!(
         decoded
             .iter()
             .filter(|e| e.class == "ArcWallRectOpening")
-            .count()
-            >= 50,
-        "RE-19: openings must remain class ArcWallRectOpening in production iter_elements"
-    );
-    let mut elem_confirmed = 0usize;
-    for opening in &mvp.rect_openings {
-        let a_ok = opening.fields.iter().any(|(n, v)| {
-            matches!(
-                (n.as_str(), v),
-                (
-                    "m_related_id_a_in_elem_table",
-                    walker::InstanceField::Bool(true)
-                )
-            )
-        });
-        let b_ok = opening.fields.iter().any(|(n, v)| {
-            matches!(
-                (n.as_str(), v),
-                (
-                    "m_related_id_b_in_elem_table",
-                    walker::InstanceField::Bool(true)
-                )
-            )
-        });
-        if a_ok && b_ok {
-            elem_confirmed += 1;
-        }
-    }
-    assert!(
-        elem_confirmed >= 50,
-        "expected ≥50 openings with both related ids in ElemTable, got {elem_confirmed}"
+            .count(),
+        0,
+        "RE-376: the opening-index rows are not openings"
     );
     // Materials still surface from strings even when ArcWall standard
     // decode is version-gated off.
@@ -391,9 +356,7 @@ fn core_interior_2024_rect_openings_not_fake_doors() {
     );
 
     eprintln!(
-        "2024 Core Interior MVP ok · openings={} · elem_confirmed={} · materials={} · levels={} · slabs={} · rooms={}",
-        mvp.rect_openings.len(),
-        elem_confirmed,
+        "2024 Core Interior MVP ok · materials={} · levels={} · slabs={} · rooms={}",
         mvp.materials.len(),
         mvp.levels.len(),
         mvp.slabs.len(),

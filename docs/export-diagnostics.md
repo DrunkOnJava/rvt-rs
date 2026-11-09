@@ -194,7 +194,7 @@ value with neither a source nor a stated gap. A row is one of
 - `Gap`: the bytes the value was drawn from are not noted by any reader. The
   reason is in the row.
 
-The declared gaps are 20 values in four kinds. Only one is a value of a body: a
+The declared gaps are 19 values in four kinds. Only one is a value of a body: a
 column's height. The elements are those of the 92 models of Measure run
 42136996423 (the probe at 92a7e926: Core Interior, Einhoven, the four RE1
 models, the four BIM4LCA office files, the 24 Revit 2025 models of puzzbobb's
@@ -205,7 +205,7 @@ archives and Autodesk's 58 samples):
 | A binding to a Level or a storey | `LevelBindSource`: `partition_element_record_reference_list`, `..._base_constraint`, `..._host`, `..._level_object`, `..._plumbing_level_object`, `..._base_at_level`, `..._same_class_host`, `..._base_elevation` and `structural_framing_top_level` (9); `StoreyBindSource`: `record_base_elevation`, `record_top_elevation`, `record_level_reference` (3) | 211,687 and 207,049 | The Level is read from the reference list of the element's own record and the elevations it is compared with from the Levels' blocks, and no reader notes either for the element. A binding is not a value of the body or the placement, which `value_sources` is about. |
 | A name chosen by a table | `FamilyNameSource`: `system_family_by_category`, `system_family_by_type_kind` (2) | 19,449 | The family name is chosen from the element's category or the kind of its type record; no bytes of the file hold it. |
 | A column's height after its joins | `BodyHeightSource` `partition_geometry_node_after_joins` (1) | 85 | The height is the box at id-48 of the column's geometry node (RE-178), a record beside its frame that `element_record_column_cuts` reads and does not note. |
-| Schema-walker values | `Source` `partition_rect_opening_index`, `LocationCurveSource` `ArcWallPartition` and `SchemaEndpoints`, `BoundarySource` `SchemaSketch` and `PartitionPlanLoop` (5) | 0 | The schema-driven wall, floor and opening paths, which no element of those 92 models takes: the walker notes no value source. |
+| Schema-walker values | `LocationCurveSource` `ArcWallPartition` and `SchemaEndpoints`, `BoundarySource` `SchemaSketch` and `PartitionPlanLoop` (4) | 0 | The schema-driven wall and floor paths, which no element of those 92 models takes: the walker notes no value source. |
 
 The test reads the models of the CI gate (Core Interior, the RE1 models,
 Einhoven, the BIM4LCA office as built and at building permit, and puzzbobb's
@@ -382,7 +382,7 @@ for each, so an empty log cannot pass.
 |---|---|---|---|
 | `element_skipped` | `below_min_element_confidence`, `low_confidence_schema_scan_candidate`, `element_record_without_element_id`, `element_record_frame_stopped` (`class`: the stage), `element_record_without_volume`, `element_record_in_non_primary_design_option`, `element_record_not_in_export_phase`, `room_not_in_export_phase`, `element_record_empty_curtain_panel`, `element_record_family_space_without_body`, `area_without_proven_body`, `shaft_opening_not_cut` (`class`: `ShaftOpening`) | The element is not in the export. A shaft opening is no element of the IFC: it is counted because its cut from the floors, ceilings and roofs it passes through is read on Revit 2024 only (RE-345), so on a 2025 to 2027 file they stay whole. | the `skipped` item of the same reason |
 | `body_not_drawn` | `unsupported_geometry_curve`, `unsupported_geometry_profile`, `unsupported_geometry_missing_dimensions` | The element is written with no body. | the `skipped` item |
-| `opening_not_cut` | `unsupported_geometry_unresolved_host`, `opening_index_without_host_geometry` | A door or window has no host to cut, or an opening index row has no host geometry. | the `skipped` item |
+| `opening_not_cut` | `unsupported_geometry_unresolved_host` | A door or window has no host to cut. | the `skipped` item |
 | `storey_not_bound` | `unsupported_geometry_missing_level` | The element is written outside any storey. | the `skipped` item |
 | `outline_not_read` | `floor_boundary_annotation_only` | A floor keeps its boundary annotation alone. | the `skipped` item |
 | `outline_not_read` | `space_outline_is_record_box` | A room or space is its record's box. | `exported.bounding_box_spaces` |
@@ -755,6 +755,14 @@ into an IFC common property set (`Pset_*`), and
 those sets from element parameters, and rvt-rs writes the ones it reads, such as
 `Reference`, `SerialNumber`, a door's `IsExternal` and a pipe's
 `InvertElevation`. The rest of an element's saved parameters are read (RE-207) and listed by `rvt-elements`, Python and the viewer's info panel, but written to IFC only by `rvt-ifc --revit-property-sets` (RE-210).
+
+It carries `revit_compound_assemblies_and_walltype_widths` only when a wall, a
+slab other than a stair landing, a roof or a ceiling is written with no
+`IfcMaterialLayerSetUsage`. Where one is written, its layers, materials and
+widths are read from the host type's compound structure (RE-53, RE-112). RE-58
+scored the sets against Revit's bodies: whole sets within 0.001 ft on 88 of 88
+on Core Interior, 15 of 15 on RE1 Architecture and 1,196 of 1,207 on Snowdon
+Towers.
 
 Important nested fields:
 

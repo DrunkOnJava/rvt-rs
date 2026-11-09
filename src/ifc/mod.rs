@@ -5367,10 +5367,6 @@ fn geometry_gap_skipped_items(
         "floor_boundary_annotation_only",
         DecisionStage::OutlineNotRead,
     );
-    let mut opening_index_only = GeometryGapBucket::new(
-        "opening_index_without_host_geometry",
-        DecisionStage::OpeningNotCut,
-    );
 
     let placements = step_writer::placements(model);
     for (index, entity) in model.entities.iter().enumerate() {
@@ -5403,18 +5399,11 @@ fn geometry_gap_skipped_items(
         let floor_annotation = property_set
             .as_ref()
             .is_some_and(|p| p.name == "RvtFloorGeometry");
-        let opening_annotation = property_set
-            .as_ref()
-            .is_some_and(|p| p.name == "RvtArcWallRectOpening");
 
         // Honest partial recovers: do not dump them into the hard
         // "unsupported_geometry_*" buckets used for walls missing curves.
         if floor_annotation && !has_body_shape {
             floor_boundary_only.add(ifc_type, name, id);
-            continue;
-        }
-        if opening_annotation {
-            opening_index_only.add(ifc_type, name, id);
             continue;
         }
 
@@ -5444,7 +5433,6 @@ fn geometry_gap_skipped_items(
         missing_level,
         missing_dimensions,
         floor_boundary_only,
-        opening_index_only,
     ] {
         let (item, made) = bucket.into_parts();
         items.extend(item);
@@ -5691,9 +5679,14 @@ fn unsupported_export_features(model: &IfcModel) -> Vec<String> {
         // landed IFCCOLUMN bodies while Floors/Rooms stay annotations).
         features.push("partial_element_geometry".into());
     }
-    // Compound assemblies (layer widths) remain open even when display
-    // Material names are recovered into IfcMaterial.
-    features.push("revit_compound_assemblies_and_walltype_widths".into());
+    // A host element's layers, each with its material and width, are read
+    // from its type's compound structure (RE-53, RE-112) and written as an
+    // `IfcMaterialLayerSetUsage` (RE-58: Revit's on 88 of 88 sets on Core
+    // Interior and 15 of 15 on RE1 Architecture). The gap is a host element
+    // written without them.
+    if model.entities.iter().any(host_element_without_layers) {
+        features.push("revit_compound_assemblies_and_walltype_widths".into());
+    }
     if model.materials.is_empty() {
         features.push("revit_material_display_names".into());
     }
@@ -5725,9 +5718,6 @@ fn unsupported_export_features(model: &IfcModel) -> Vec<String> {
         // closed, the host-binding half is not.
         features.push("door_window_host_wall_binding".into());
     }
-    // Opening-index rows may be present in production_class_counts without
-    // IFC emission until host Wall ElementIds join.
-    features.push("opening_index_to_ifc_openingelement_host_join".into());
     // RE-19 stands: an `IFCWALL` recovered from a partition element record
     // (#211) is not a schema-field wall decode. Only a wall carrying a
     // non-element-record body clears this feature.
@@ -5868,6 +5858,28 @@ pub(crate) fn host_references(model: &IfcModel) -> std::collections::HashMap<usi
         }
     }
     out
+}
+
+/// A wall, a slab other than a stair landing, a roof or a ceiling written
+/// with no material layer set: an element of a host type, whose layers the
+/// type's compound structure holds, whose layers were not read.
+fn host_element_without_layers(entity: &entities::IfcEntity) -> bool {
+    let entities::IfcEntity::BuildingElement {
+        ifc_type,
+        predefined_type,
+        material_layer_set_index: None,
+        ..
+    } = entity
+    else {
+        return false;
+    };
+    let predefined = predefined_type.as_deref();
+    match ifc_type.to_ascii_uppercase().as_str() {
+        "IFCWALL" | "IFCWALLSTANDARDCASE" | "IFCROOF" => true,
+        "IFCSLAB" => predefined != Some("LANDING"),
+        "IFCCOVERING" => predefined == Some("CEILING"),
+        _ => false,
+    }
 }
 
 /// The property values `write_step` writes in `Pset_` sets, counted as it
