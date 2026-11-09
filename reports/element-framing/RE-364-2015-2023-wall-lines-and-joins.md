@@ -131,3 +131,41 @@ On 2015 to 2020 an angled wall keeps its record box unless the box closes on its
 On 7 of them Revit's wall stops 0.275 to 0.279 ft (about 85 mm) short of the line's end, at one or both ends, and short of the box's end as well. That fits a trim at a join, and it fits a rule for the one wall type as well. All 8 are `LKS_T9 10cm`, and the 58 ends of that type's 29 angled walls under the line body fall on a few values: 12 about 0.28 ft past Revit's, 12 about 0.17 ft past, 4 about 0.39 ft short, 4 0.037 ft short and 26 within 0.02 ft. No step compared Revit's end with a neighbouring wall's face, so neither reading is tested. None of the 48 angled walls has a join reach on these releases. Four other explanations were tried and are ruled out: the wall type's thickness, the wall lying within 5° of a model axis, the run estimate (taking it from the dominant axis left the same 8 worse by the same amounts, run 42541485876) and how the box's run estimates differ. Of the 25 walls the trial improves, only 5 have both ends within 0.01 ft of Revit's. The other 20 have 28 ends beyond 0.01 ft: 16 of them are about 0.17 or 0.39 ft, and the rest are between 0.02 and 0.28 ft.
 
 **Result.** By the second case of #1535's done-when, these walls set the limit. An angled wall of Revit 2015 to 2020 whose box does not close on its line's rectangle stays its box, as on `main`. Which rule gives its ends is not known. If it is a join trim, it needs the control joins these releases' records do not yet give (section 6, #1158). The decision holds either way. The wall quantities the first head wrote on 2015 to 2023 remain separate work under #1535.
+
+## 9. Addendum, 2026-11-09: a wall's `Height` on Revit 2015 to 2023, and why its areas stay out (#1535)
+
+The narrowing above left out a wall's `Height`, areas and volumes on 2015 to 2023 because a record there is read without its control joins, "so what reads as uncut is not known to be". The flags these quantities need do not come from the control joins. `Height` needs the record's `uncut` flag, and the side areas, footprint and volumes need `whole` as well and a body that is the record box cut back at its joins (RE-266, RE-270, RE-292). Both flags come from the `*Step` classes of the wall's native record, which `native_walls_and_top_joins_into` reads on these releases (section 3).
+
+**The steps read as on the later save.** `probe_1535_wall_steps` lists each wall record's step classes and both flags (Measure run 42562621272, probe at `29a382b9`, on Autodesk's samples of every year). Compared wall by wall with the same project's 2024 save (`rac_basic` 2015 to 2022 with its 2023 save): 2,894 of 2,896 walls hold the same step classes, and all 2,896 the same `uncut` and `whole`. The two that differ are `rac_basic` 2015's, with one `JoinEndGStep` where 2023 has two and a `WallEmbedWallGStep`, and three where 2023 has two. Neither changes a flag. `rst_basic` 2015's four walls are not in its 2024 save, and `rst_advanced` has no later save.
+
+**A trial head writes both** (`748eff38`, archived at `refs/archive/2026-11-09/1535-areas-trial-head`; Measure run 42564158277 with `keep_ifc`). Each 2015 to 2023 save against the same project's 2024 save with `tools/re/save_pair_wall_quantities.py`, summed over the 31 saves that have one:
+
+| quantity | equal | different | only the old save, wall in 2024 | only the old save, wall not in 2024 | only 2024 |
+|---|---:|---:|---:|---:|---:|
+| `Height` | 781 | 0 | 0 | 7 | 10 |
+| `GrossSideArea`, `NetSideArea` (each) | 462 | 0 | 203 | 2 | 5 |
+| `GrossVolume`, `NetVolume` (each) | 461 | 1 | 203 | 2 | 5 |
+| `GrossFootprintArea` | 461 | 1 | 203 | 2 | 1 |
+
+`main` writes none of these on 2015 to 2023. All 31 of those saves' exports move, and none of the 25 sample exports of 2024 to 2027.
+
+**`Height` holds.** No value differs. The 7 on walls the 2024 save lacks are `rac_basic` 2023's 704275, 708088 and 709245 and `rst_basic` 2015's four (another model, RE-181), checked against nothing. Of the 10 only the 2024 save writes, 8 are walls 573660 and 573664 of `rme_basic` and `rme_advanced` 2015 and 2019, which hold curtain grid steps and read `uncut` on both saves, and for which the old save writes no quantity at all; why is not decoded. The other 2 are `rac_basic` 2023's (below). Each is a value left out, not a wrong one.
+
+**The areas and volumes do not.** On 25 walls, 203 wall saves in all, the old save writes all five and the 2024 save, which holds the wall, none. There the 2024 save draws the wall from its centreline, with its layers' joins on 170 of the 203 (`partition_wall_centreline_layer_joins`, RE-71) and without on 33 (`partition_wall_centreline`, RE-54), bodies the area rule does not take, while the old save, which reads neither, draws and measures the record box cut back at its joins. The old save's `GrossVolume` differs from the volume of the 2024 save's body, meshed without its openings, on all 203, by 0.003 to 3.55 m3. The one value that differs where both write it is wall 418079 of `rac_basic` 2015, whose box is 0.28 m thick where 2024's is 0.202 m, so its volumes and footprint differ and its side areas do not. Nothing a 2015 to 2023 record gives tells these walls apart: their step classes fall on 3 signatures, and each is also held by walls whose areas equal the 2024 save's (158 walls). So `whole` is still not set on these releases, and the areas and volumes stay out, as on `main`. These figures supersede section 5's, which were of the contributor's first head.
+
+**`rac_basic`'s 2023 save writes no `Qto_WallBaseQuantities` at all on walls 418079 and 845266**, which its 2022 and 2024 saves write, `Width` included; why is not decoded. It is why the counts above hold each save to the 2024 save, not to 2023 as section 4 does.
+
+**The landing head** (`8817a762`) sets `uncut` and not `whole` on 2015 to 2023. In Measure run 42567326561 (against `main` at `83417fde`, unfiltered, with the samples of every year, the BIM4LCA office, the Revit 2025 models, the held-out models, `racadv` and BIMcollab), 45 of 118 exports move, all of Revit 2015 to 2023: the 31 sample saves of those years that hold such a wall, the six `racadv` pairs, BIMcollab's 2015 model and seven held-out models of 2018 to 2023. The other 73, every 2024 to 2027 export among them, are byte for byte `main`'s, and `same-project gates` passes. The scorers change only where a `Height` is added:
+
+- `modelo_bim` (Revit 2023, IFC4, held out, counts only): 1 equal, none different, 3 missing.
+- BIMcollab's Revit 2015 model (IFC2X3, through Solibri) and bim-whale's Revit 2021 project (IFC2X3, held out): 88 and 151 that Revit's export does not write. Vitoria `ALD26 Before`'s export has base quantities off, and its 97 are counted apart.
+- Warmond (Revit 2021, held out, counts only; its export went through another tool): 91 equal and 45 different, as on the contributor's first head, and 40 of the 45 that the scrubbed output lists are exactly twice Revit's. Revit's export gives 84 walls' Tags to more than one object, which reads as walls split at their storeys (an export option) and is not tested further, since a held-out file is not opened. The quantity scorer keyed each such Tag to one of its pieces, so `tools/re/qtos_vs_ifc.py` now also counts the values on such Tags (Measure run 42569616611, head `a8d3fdd5`): on them `Height` is 0 equal, 45 different and 39 missing, and `Width` 84 equal. So all 45 differences sit on walls Revit's export writes as several pieces, and on the walls it writes once, rvt-rs's `Height` is 91 equal and none different. Counting such values apart in W7, rather than as different, is a change to the scorer of its own (#1576).
+
+**Reproduce:**
+
+```bash
+gh workflow run measure.yml --ref main -f ref=748eff38ecdeb0fc22e15259826453eea48570df -f base=main -f samples=true -f keep_ifc=true
+# then, for each sample save of 2015 to 2023 in the run's measure-head-samples-2008-2023 artifact:
+python3 tools/re/save_pair_wall_quantities.py sample-2023-racadvancedsampleproject/model.ifc \
+  ../measure-head-samples-2024-2099/sample-2024-racadvancedsampleproject/model.ifc
+```

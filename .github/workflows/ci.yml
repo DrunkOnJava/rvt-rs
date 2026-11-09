@@ -256,8 +256,17 @@ jobs:
       # its RUSTC_WRAPPER changed rust-cache's key, so the jobs sharing
       # `ci-release` never restored it. It is set through GITHUB_ENV so the
       # variable does not exist at all off Windows.
+      # A failed download (2026-11-09: HTTP 504 from GitHub's release CDN,
+      # #1572) is tried once more and then left behind, since the next step
+      # builds without sccache when it is not there.
       - name: Set up sccache (Windows)
+        id: sccache
         if: runner.os == 'Windows'
+        continue-on-error: true
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+      - name: Set up sccache again (Windows)
+        if: runner.os == 'Windows' && steps.sccache.outcome == 'failure'
+        continue-on-error: true
         uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
       # The cache backend can refuse sccache (2026-10-30: "ServerBusy: Egress
       # is over the account limit"), and then every rustc call through the
@@ -269,14 +278,14 @@ jobs:
         shell: bash
         run: |
           export SCCACHE_GHA_ENABLED=true SCCACHE_IDLE_TIMEOUT=0
-          if sccache --start-server; then
+          if command -v sccache > /dev/null && sccache --start-server; then
             {
               echo "SCCACHE_GHA_ENABLED=true"
               echo "SCCACHE_IGNORE_SERVER_IO_ERROR=1"
               echo "RUSTC_WRAPPER=sccache"
             } >> "$GITHUB_ENV"
           else
-            echo "::warning::sccache did not start (its Actions cache backend refused it); building without it"
+            echo "::warning::sccache is not installed (#1572) or did not start (its Actions cache backend refused it); building without it"
           fi
       # The platform test matrix owns the shared release caches. Compatible
       # fan-out jobs restore them without racing to save partial targets.

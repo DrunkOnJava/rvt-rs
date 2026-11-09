@@ -380,6 +380,12 @@ def main(argv):
     # In a file whose length unit is the foot, a perimeter in feet is right.
     feet_file = abs(their_length_scale - FOOT_METRES) <= 1e-9
     our_types, their_types = wall_types(args[0]), wall_types(args[1])
+    # A key Revit's export gives several objects (a wall split at its storeys
+    # can keep its ElementId as each piece's Tag) holds one piece's quantities
+    # only, so the values on such keys are counted again below (#1535).
+    their_keys = collections.Counter(property_key_of(p) for p in open_ifc(args[1]).by_type("IfcObject"))
+    repeated = {key for key, n in their_keys.items() if key and n > 1}
+    on_repeated = collections.defaultdict(lambda: [0, 0, 0])
     other_types = 0
     unconfirmed_types = 0
     for (key, qset, name), value in sorted(theirs.items()):
@@ -418,13 +424,17 @@ def main(argv):
         row = rows[(qset, name)]
         row[0] += 1
         mine = ours.get((key, qset, name))
+        shared = on_repeated[(qset, name)] if key in repeated else [0, 0, 0]
         if mine is None:
             row[3] += 1
+            shared[2] += 1
             missing_classes[(qset, name)][their_entities.get(key, "-")] += 1
         elif same(mine, value):
             row[1] += 1
+            shared[0] += 1
         else:
             row[2] += 1
+            shared[1] += 1
             differences.append((relative(mine, value), key, qset, name, mine, value))
     totals = [sum(r[i] for r in rows.values()) for i in range(4)]
     extra = collections.Counter(
@@ -467,6 +477,9 @@ def main(argv):
         print(f"quantities with their own unit, not scored: rvt-rs {our_own}, Revit {their_own}")
     for (qset, name), (n, equal, different, missing) in sorted(rows.items()):
         print(f"  {qset}.{name}: {n}, equal {equal}, different {different}, missing {missing}")
+    print(f"of those, on a Tag Revit's export gives more than one object (scored against one of them): {len(repeated)} such Tags")
+    for (qset, name), (equal, different, missing) in sorted(on_repeated.items()):
+        print(f"  on a repeated Tag, {qset}.{name}: equal {equal}, different {different}, missing {missing}")
     print("entities Revit writes each missing quantity on:")
     for (qset, name), classes in sorted(missing_classes.items(), key=lambda kv: -sum(kv[1].values())):
         on = ", ".join(f"{c} x{k}" for c, k in classes.most_common(4))
