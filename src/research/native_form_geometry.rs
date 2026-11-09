@@ -106,6 +106,13 @@ pub struct Entry<'a> {
     pub id: u64,
     pub channel: u64,
     pub stream: &'a str,
+    /// Body start in the inflated partition, when the group is a contiguous
+    /// span of it. Reassembled noncontiguous groups have no such offset.
+    pub body_offset: Option<usize>,
+    /// The group's first marker in the checksum-prepared partition.
+    pub group_marker_offset: usize,
+    /// Body start relative to the reassembled group, including its framing.
+    pub group_body_offset: usize,
     /// The class its body's tag names in the file's schema.
     pub class: Option<&'a str>,
     pub body: &'a [u8],
@@ -207,6 +214,11 @@ pub fn walk(
                         id,
                         channel: source.channel,
                         stream: name.as_str(),
+                        body_offset: source
+                            .inflated_offset
+                            .and_then(|offset| offset.checked_add(start)),
+                        group_marker_offset: source.first_marker_offset,
+                        group_body_offset: start,
                         class,
                         body,
                     })?;
