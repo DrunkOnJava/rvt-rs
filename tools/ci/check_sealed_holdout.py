@@ -7,7 +7,7 @@ check. This fails when:
   - a row is malformed: not 11 tab-separated fields, a release outside 2024
     to 2027, a name that is not [A-Za-z0-9._-], a URL that is not https, a
     sha256 that is not 64 hex digits, a byte count that is not a positive
-    integer, a licence other than Apache-2.0, MIT or CC-BY-4.0, a
+    integer, a licence other than Apache-2.0, MIT, CC-BY-4.0 or CC0-1.0, a
     contributor that is not a GitHub login, a received date that is not
     YYYY-MM-DD, or a name, URL or hash used twice;
   - any tracked file other than the registry holds one of its URLs or hashes
@@ -38,7 +38,7 @@ import sys
 REGISTRY = "research/sealed-holdout-models.tsv"
 ALLOWED = frozenset({"tools/ci/seal-holdout-pair.sh", "tools/ci/check_sealed_holdout.py", "tools/ci/test_check_sealed_holdout.py"})
 RELEASES = frozenset({"2024", "2025", "2026", "2027"})
-LICENCES = frozenset({"Apache-2.0", "MIT", "CC-BY-4.0"})
+LICENCES = frozenset({"Apache-2.0", "MIT", "CC-BY-4.0", "CC0-1.0"})
 FIELDS = ("release", "name", "rvt_url", "rvt_sha256", "rvt_bytes", "ifc_url", "ifc_sha256", "ifc_bytes", "licence", "contributor", "received")
 NAME = re.compile(r"[A-Za-z0-9._-]+")
 SHA = re.compile(r"[0-9a-f]{64}")
@@ -67,7 +67,7 @@ def row_problems(text):
         checks = [
             (row["release"] in RELEASES, f"release {row['release']!r} is not one of 2024 to 2027"),
             (NAME.fullmatch(row["name"]), f"name {row['name']!r} is not [A-Za-z0-9._-]"),
-            (row["licence"] in LICENCES, f"licence {row['licence']!r} is not Apache-2.0, MIT or CC-BY-4.0"),
+            (row["licence"] in LICENCES, f"licence {row['licence']!r} is not Apache-2.0, MIT, CC-BY-4.0 or CC0-1.0"),
             (LOGIN.fullmatch(row["contributor"]), f"contributor {row['contributor']!r} is not a GitHub login"),
             (DATE.fullmatch(row["received"]), f"received {row['received']!r} is not YYYY-MM-DD"),
         ]
@@ -153,14 +153,20 @@ def tracked_texts():
 
 
 def main():
-    if sys.argv[1:2] == ["--rows"] and len(sys.argv) == 3:
-        problems, _ = row_problems(pathlib.Path(sys.argv[2]).read_text())
-        print("\n".join(problems))
-        return 1 if problems else 0
-    if sys.argv[1:2] == ["--pair"] and len(sys.argv) == 5:
-        rvt, ifc, release = sys.argv[2:]
+    args = sys.argv[1:]
+    if args[:1] == ["--rows"] and len(args) == 2:
+        problems, _ = row_problems(pathlib.Path(args[1]).read_text())
+    elif args[:1] == ["--pair"] and len(args) == 4:
+        rvt, ifc, release = args[1:]
         problems = pair_problems(pathlib.Path(rvt).read_bytes(), pathlib.Path(ifc).read_bytes(), release)
-        print("\n".join(problems))
+    elif args:
+        print("usage: check_sealed_holdout.py [--rows FILE | --pair RVT_HEAD IFC_HEAD RELEASE]", file=sys.stderr)
+        return 2
+    else:
+        problems = None
+    if problems is not None:
+        for problem in problems:
+            print(problem)
         return 1 if problems else 0
     registry = pathlib.Path(REGISTRY)
     registry_text = registry.read_text() if registry.is_file() else None

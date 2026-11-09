@@ -60,6 +60,10 @@ class Rows(unittest.TestCase):
         for size in ("0", "-5", "12kB", ""):
             self.assertTrue(judge(row(rvt_bytes=size)), size)
 
+    def test_each_accepted_licence_passes(self):
+        for licence in ("Apache-2.0", "MIT", "CC-BY-4.0", "CC0-1.0"):
+            self.assertEqual(judge(row(licence=licence)), [], licence)
+
     def test_another_licence_fails(self):
         for licence in ("GPL-3.0", "CC BY 4.0", "none"):
             self.assertTrue(judge(row(licence=licence)), licence)

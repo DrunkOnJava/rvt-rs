@@ -7,4 +7,4 @@
 # a line when a pair arrives: it downloads both files, hashes and counts them, deletes them and
 # reads nothing else from them.
 # Columns, tab-separated: release, name, rvt_url, rvt_sha256, rvt_bytes, ifc_url, ifc_sha256,
-# ifc_bytes, licence (Apache-2.0, MIT or CC-BY-4.0), contributor (GitHub login), received (date).
+# ifc_bytes, licence (Apache-2.0, MIT, CC-BY-4.0 or CC0-1.0), contributor (GitHub login), received (date).

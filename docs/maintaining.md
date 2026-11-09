@@ -656,17 +656,20 @@ reference models is sealed until the final 1.0 check, never fetched or opened
 before it.
 
 - **When a pair arrives** (a contributor's `.rvt` and its release's own IFC4 or
-  IFC4X3 export, of Revit 2024 to 2027, under Apache-2.0, MIT or CC BY 4.0,
-  written `CC-BY-4.0`), seal it:
+  IFC4X3 export, of Revit 2024 to 2027, under Apache-2.0, MIT, CC BY 4.0 or
+  CC0, written `CC-BY-4.0` and `CC0-1.0`), seal it:
   `tools/ci/seal-holdout-pair.sh RELEASE NAME RVT_URL IFC_URL LICENCE CONTRIBUTOR`.
   It downloads both files to a temporary directory, hashes and counts them,
   deletes them and adds a row to `research/sealed-holdout-models.tsv`. It looks
   only at the first 64 KiB of each, to refuse what is not a pair: a project that
   is not an OLE2 file, an IFC that is not ISO 10303-21 of IFC4 or IFC4X3 naming
   Autodesk Revit of that release (a share page, a zip, another release's export
-  or an IFC2X3 view), and a row the check would fail. The registry takes
-  neither CC0 nor an unlicensed model, which the counts-only held-out lists do:
-  a pair sealed for 1.0 must be one CI may fetch at the final check. Do not
+  or an IFC2X3 view), and a row the check would fail. The release is read
+  from the IFC's exporter only: that the project was last saved by the same
+  release is the contributor's word, since the `.rvt` is checked only as an
+  OLE2 file. The registry takes no
+  model without a stated licence, which the counts-only held-out lists do: a
+  pair sealed for 1.0 must be one CI may fetch at the final check. Do not
   open either file, run a probe on it or read its IFC, here or on a runner.
   Commit the row in a pull request of its own and thank the contributor without
   quoting anything from the files.

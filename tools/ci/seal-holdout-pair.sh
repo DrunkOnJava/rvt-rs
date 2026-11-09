@@ -5,14 +5,15 @@
 # 64 KiB of each are looked at, and only to refuse what is not a pair: a project
 # that is not an OLE2 file, an IFC that is not ISO 10303-21 of IFC4 or IFC4X3,
 # or one that does not name Autodesk Revit RELEASE there (a share page, a zip,
-# another release's export). Nothing is printed from them, so the pair stays
+# another release's export). The project's own release is the contributor's
+# word: only its OLE2 magic is checked. Nothing is printed from them, so the pair stays
 # unmeasured until that check. The row is judged by tools/ci/check_sealed_holdout.py
 # before it is added, so a duplicate or a bad field never reaches the registry.
 #
 # Usage, from the repository root:
 #   tools/ci/seal-holdout-pair.sh RELEASE NAME RVT_URL IFC_URL LICENCE CONTRIBUTOR
 #
-# RELEASE is 2024 to 2027, LICENCE Apache-2.0, MIT or CC-BY-4.0, CONTRIBUTOR the
+# RELEASE is 2024 to 2027, LICENCE Apache-2.0, MIT, CC-BY-4.0 or CC0-1.0, CONTRIBUTOR the
 # GitHub login that offered the pair. Run tools/ci/check_sealed_holdout.py after
 # it; the row it adds must pass.
 set -euo pipefail
@@ -26,7 +27,7 @@ licence="${5:?licence}"
 contributor="${6:?contributor}"
 
 case "$release" in 2024|2025|2026|2027) ;; *) echo "release $release is not one of 2024 to 2027" >&2; exit 1 ;; esac
-case "$licence" in Apache-2.0|MIT|CC-BY-4.0) ;; *) echo "licence $licence is not Apache-2.0, MIT or CC-BY-4.0" >&2; exit 1 ;; esac
+case "$licence" in Apache-2.0|MIT|CC-BY-4.0|CC0-1.0) ;; *) echo "licence $licence is not Apache-2.0, MIT, CC-BY-4.0 or CC0-1.0" >&2; exit 1 ;; esac
 [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "name $name is not [A-Za-z0-9._-]" >&2; exit 1; }
 for url in "$rvt_url" "$ifc_url"; do
   [[ "$url" =~ ^https://[^[:space:]]+$ ]] || { echo "$url is not an https URL" >&2; exit 1; }
