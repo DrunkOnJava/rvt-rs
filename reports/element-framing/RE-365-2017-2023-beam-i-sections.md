@@ -43,7 +43,7 @@ The 14 left on `rst_basic` 2017 and 2018, and the 38 on 2016, are RE-362's: the 
 
 - **Across all 38 sample saves of 2015 to 2024,** 83 beams change, on `rst_basic` 2017 to 2023 (11 each) and `rst_advanced` 2019 (6). Each goes from `IfcRectangleProfileDef` to `IfcIShapeProfileDef`, and gains `SectionShape`, `SectionWebThickness` and `SectionFlangeThickness`. No other property, storey, GlobalId or element changes.
 - **Column cuts stay.** `rst_basic` 2023 draws 11 I sections where 2024 draws 18: RE-122 keeps the other 7 as cut boxes.
-- **Byte identity.** Of 206 local project files of 2008 to 2027, 200 export IFC and diagnostics byte for byte as RE-362's head does (`SOURCE_DATE_EPOCH=1700000000`). The 6 that change are Autodesk's `rst_basic` of 2019 to 2023 and `rst_advanced` of 2019.
+- **Byte identity.** [Measure run 42521217353](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42521217353) hashes the IFC of 118 models and samples, this change against RE-362's head: 110 are identical, and the 8 that differ are Autodesk's `rst_basic` of 2017 to 2023 and `rst_advanced` of 2019, the 8 files that hold the 83 beams above.
 - **Cost.** About 0.1 s on a 1.4 s export (`rst_basic` 2023) and on a 1.9 s export (`rst_advanced` 2019), three runs each: the value blocks' scan.
 
 ## 6. Not measured, not read
