@@ -35,10 +35,11 @@ shares with this one cannot be caught.
   windows       type object it is typed by (its GlobalId, class and Name).
   census        every body of the save with the 2025 save's, as
                 `save_pair_bodies.py` does it (world box to 3 mm, volume to
-                0.1%). A body that differs fails, except a roof left as a record
-                box where the 2025 save draws it (ROOFS_LEFT_AS_BOXES, counted,
-                exactly those). The PINNED_WALLS, 16 walls of rac_basic pinned
-                until #1471 healed them, are empty, and no entry joins them.
+                0.1%). A body that differs fails, except a roof the 2025 save
+                draws otherwise (ROOFS_NOT_THE_2025_BODY, counted, exactly those,
+                each as pinned: its record box, or its saved mesh whose box
+                contains the 2025 body's). The PINNED_WALLS, 16 walls of rac_basic
+                pinned until #1471 healed them, are empty, and no entry joins them.
 
 Every check prints how many it compared, and a check whose least number is
 not reached fails (MINIMUMS), so one that compared nothing is never a pass.
@@ -91,7 +92,7 @@ ADDED = [
 ]
 ADDED = [tuple(re.compile(part) for part in rule) for rule in ADDED]
 
-# No body may differ from the 2025 save's but the ROOFS_LEFT_AS_BOXES. The 16
+# No body may differ from the 2025 save's but the ROOFS_NOT_THE_2025_BODY. The 16
 # walls of rac_basic pinned here on 2026-11-05 (Griffin; their source pair,
 # volumes and world boxes, at most PINNED_MOST) all became the 2025 save's with
 # #1471 (RE-351), and left the list, which no entry ever joins:
@@ -101,12 +102,23 @@ ADDED = [tuple(re.compile(part) for part in rule) for rule in ADDED]
 PINNED_WALLS = {}
 PINNED_MOST = 0
 PIN_TOLERANCE = 1e-6
-# The roofs a save may leave as a record box where the 2025 save draws them (the
-# roof is cut by walls, #1471; Griffin, 2026-11-05), exactly: one in each of
-# rac_advanced's and rac_basic's 2026 and 2027 saves and none in any other.
-# Counted, not scored; one more, or one fewer, fails.
-ROOFS_LEFT_AS_BOXES = {"racadvancedsampleproject": frozenset({"201262"}), "racbasicsampleproject": frozenset({"243274"})}
 RECORD_BOX = "partition_element_record_bbox"
+SAVED_MESH = "saved_graphics_mesh"
+# The roofs a 2026 or 2027 save may draw otherwise than the 2025 save does, each as
+# pinned and exactly these, in the saves of those two projects and none other. The roof
+# readers read 2025 and earlier, so a roof of 2026 or 2027 is its record box (201262, whose
+# saved mesh does not decode whole; the roof is cut by walls, #1471; Griffin, 2026-11-05)
+# or its saved mesh, the default of every class since #1191 (Griffin, 2026-11-09: "Allow
+# these 4 as meshes"): 165755, 167036 and 167158 are 15 degree gables the 2025 save draws
+# as a level block, their sketch outline over the record box (10.3 m3), and 243274 is
+# the 2025 save's roof extrusion (35.4236 m3) against a mesh of 34.9741 m3 in the same
+# box. A mesh counts only where its box contains the 2025 body's, to the census's 3 mm.
+# Counted, not scored; one more, or one fewer, or one of another kind, fails. The list
+# only shrinks: tools/ci/check_same_project_projects.py holds it to these five.
+ROOFS_NOT_THE_2025_BODY = {
+    "racadvancedsampleproject": {"201262": RECORD_BOX, "165755": SAVED_MESH, "167036": SAVED_MESH, "167158": SAVED_MESH},
+    "racbasicsampleproject": {"243274": SAVED_MESH},
+}
 
 # A door's or window's Area, which a 2027 save leaves out because Revit 2027's own
 # export gives it a value that is not Width times Height (RE-346): it must be
@@ -441,19 +453,33 @@ def pin_off(body, reference, pin):
     )
 
 
+def roof_otherwise(body, reference, kind):
+    """Whether a roof differs from the reference's as its pin says: its record box
+    where the reference draws something else, or its saved mesh, whose box contains
+    the reference body's (to the census's 3 mm)."""
+    if body[1] != kind or reference[1] == kind:
+        return False
+    if kind == RECORD_BOX:
+        return True
+    slack = census.BOX_TOLERANCE_M
+    return bool((body[3] <= reference[3] + slack).all() and (body[4] >= reference[4] - slack).all())
+
+
 def check_census(candidate_path, reference_path, year, project, fail, own_year):
     """Every body of the candidate against the reference's. A body that differs
-    fails, unless it is one of the ROOFS_LEFT_AS_BOXES (a roof the candidate leaves
-    as a record box where the reference draws it, counted, exactly those), or one of
-    the PINNED_WALLS, which must differ exactly as pinned: one whose source, volume
-    or box moves, or that heals, fails."""
+    fails, unless it is one of the ROOFS_NOT_THE_2025_BODY (a roof the candidate
+    draws as its record box or its saved mesh, as pinned, where the reference draws
+    another body, counted, exactly those), or one of the PINNED_WALLS, which must
+    differ exactly as pinned: one whose source, volume or box moves, or that heals,
+    fails."""
     pinned = PINNED_WALLS.get(project, {}).get(own_year, {})
     if len(pinned) > PINNED_MOST:
         fail(f"census: {len(pinned)} pinned walls, more than the {PINNED_MOST} the list may hold")
     here, here_lost, _ = census.bodies(candidate_path)
     there, there_lost, _ = census.bodies(reference_path)
     same = differ = absent = pinned_held = 0
-    left_boxes = set()
+    expected_roofs = ROOFS_NOT_THE_2025_BODY.get(project, {}) if own_year > REFERENCE_YEAR else {}
+    roofs_otherwise = set()
     by_kind = collections.Counter()
     lines = []
     for tag in sorted(here, key=census.tag_order):
@@ -472,15 +498,18 @@ def check_census(candidate_path, reference_path, year, project, fail, own_year):
         differ += 1
         by_kind[(body[0], body[1], there[tag][1])] += 1
         lines.append(f"  {body[0]} {tag} {body[1]} here, {there[tag][1]} in the {year} save: box off {box:.4f} m, volume {body[2]:.6f} here, {there[tag][2]:.6f} there")
-        if body[0] == "IfcRoof" and body[1] == RECORD_BOX and there[tag][1] != RECORD_BOX:
-            left_boxes.add(tag)
+        if body[0] == "IfcRoof" and tag in expected_roofs and roof_otherwise(body, there[tag], expected_roofs[tag]):
+            roofs_otherwise.add(tag)
         else:
-            fail(f"census: {body[0]} {tag} ({body[1]} here, {there[tag][1]} in the {year} save) differs from the {year} save's and is not a pinned wall")
-    expected_boxes = ROOFS_LEFT_AS_BOXES.get(project, frozenset()) if own_year > REFERENCE_YEAR else frozenset()
-    if left_boxes != expected_boxes:
+            fail(
+                f"census: {body[0]} {tag} ({body[1]} here, {there[tag][1]} in the {year} save) differs from the {year} save's "
+                "and is neither a pinned wall nor a roof pinned as drawn otherwise"
+            )
+    if roofs_otherwise != set(expected_roofs):
+        pinned_as = ", ".join(f"{tag} {expected_roofs[tag]}" for tag in sorted(expected_roofs, key=census.tag_order))
         fail(
-            f"census: roofs left as record boxes where the {year} save draws them: {sorted(left_boxes, key=census.tag_order)} here, "
-            f"{sorted(expected_boxes, key=census.tag_order)} expected, and exactly those"
+            f"census: roofs the {year} save draws otherwise: {sorted(roofs_otherwise, key=census.tag_order)} here, "
+            f"{sorted(expected_roofs, key=census.tag_order)} expected as pinned ({pinned_as}), and exactly those"
         )
     for tag, pin in sorted(pinned.items(), key=lambda item: census.tag_order(item[0])):
         body, reference = here.get(tag), there.get(tag)
@@ -498,7 +527,7 @@ def check_census(candidate_path, reference_path, year, project, fail, own_year):
             differ += 1
     print(
         f"census: {len(here)} bodies paired by Tag with the {year} save's: same {same}, differ {differ} "
-        f"(pinned walls as pinned, source, volume and box, {pinned_held} of {len(pinned)}; roofs left as record boxes {len(left_boxes)} of {len(expected_boxes)} expected), "
+        f"(pinned walls as pinned, source, volume and box, {pinned_held} of {len(pinned)}; roofs drawn otherwise as pinned {len(roofs_otherwise)} of {len(expected_roofs)} expected), "
         f"not in the {year} save {absent}; did not mesh here {len(here_lost)}, there {len(there_lost)}"
     )
     for (cls, mine, theirs), count in sorted(by_kind.items(), key=lambda item: (-item[1], item[0])):
