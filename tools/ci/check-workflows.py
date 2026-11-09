@@ -22,6 +22,10 @@ Exits 1 with an `::error` line for each of:
   workflow names a file that exists, and its `with:` names only inputs that file declares and
   gives those it requires. actionlint does not know the `$/` form (.github/actionlint.yaml
   ignores that message), so without this a typo in one would go unreported.
+* The viewer tests' legs. The default `legs` of viewer-test.yml and the `legs` of every job that
+  calls it are a JSON list, written out, of at least one leg that has a name and either spec files
+  or the measurement. The workflow has no job after its legs to fail on a `test` job that was
+  skipped for want of a leg, and a call whose `test` is skipped passes.
 * The MSRV in prose. README.md, CONTRIBUTING.md, .cursor/install.sh, AGENTS.md, docs/python.md,
   RELEASE.md and docs/install.md each state it and each must state Cargo.toml's `rust-version`.
   docs/install.md also states the MCP server's minimum, which must be rvt-mcp's `rust-version`.
@@ -353,6 +357,46 @@ def local_use_problems(workflows, read):
     return problems
 
 
+def legs_problems(where, text):
+    """Why a `legs` input of viewer-test.yml might yield no leg, or why a leg of it cannot run. An
+    empty or computed list would skip the `test` job, and a call whose `test` is skipped passes."""
+    if not isinstance(text, str):
+        return [f"{where}: legs is not a string"]
+    if "${{" in text:
+        return [f"{where}: legs is computed, not a JSON list written out: an empty one would skip every leg and let the call pass"]
+    try:
+        legs = json.loads(text)
+    except ValueError:
+        return [f"{where}: legs is not JSON"]
+    if not isinstance(legs, list) or not legs:
+        return [f"{where}: legs is not a non-empty JSON list"]
+    problems = []
+    for number, leg in enumerate(legs, 1):
+        name = leg.get("name") if isinstance(leg, dict) else None
+        if not isinstance(name, str) or not name:
+            problems.append(f"{where}: leg {number} has no name")
+        elif not (isinstance(leg.get("files"), str) and leg["files"]) and leg.get("measure") is not True:
+            problems.append(f"{where}: leg {name!r} names no spec files and is not the measurement")
+    return problems
+
+
+def viewer_legs_sources(workflows):
+    """Every `legs` the viewer tests can be started with, as (where, text): the defaults of
+    viewer-test.yml and the `with: legs:` of each job that calls it."""
+    sources = []
+    viewer = workflow_on(workflows.get("viewer-test.yml") or {})
+    for trigger in ("workflow_call", "workflow_dispatch"):
+        legs = (((viewer.get(trigger) or {}).get("inputs") or {}).get("legs") or {})
+        sources.append((f"viewer-test.yml: the {trigger} default of legs", legs.get("default")))
+    for name, doc in sorted(workflows.items()):
+        for job_id, job in sorted(((doc or {}).get("jobs") or {}).items()):
+            target = job.get("uses")
+            match = LOCAL_USE.fullmatch(target) if isinstance(target, str) else None
+            if match and match[1] == ".github/workflows/viewer-test.yml" and "legs" in (job.get("with") or {}):
+                sources.append((f"{name}: job '{job_id}'", job["with"]["legs"]))
+    return sources
+
+
 PROSE_MSRV_FILES = (
     "README.md", "CONTRIBUTING.md", ".cursor/install.sh", "AGENTS.md", "docs/python.md", "RELEASE.md", "docs/install.md",
 )
@@ -484,6 +528,10 @@ def main():
         return yaml.safe_load(file.read_text()) or {} if file.is_file() else None
 
     errors += local_use_problems(workflows, read)
+    sources = viewer_legs_sources(workflows)
+    for where, text in sources:
+        errors += legs_problems(where, text)
+    print(f"viewer test legs: {len(sources)} lists (the defaults and every caller's), each written out and non-empty")
     local = sum(1 for d in workflows.values() for j in (d.get("jobs") or {}).values()
                 for u in [j.get("uses")] + [s.get("uses") for s in j.get("steps") or []]
                 if isinstance(u, str) and LOCAL_USE.fullmatch(u))

@@ -24,9 +24,15 @@ name: Viewer tests
 # A skipped leg must never read as a pass: `CI passed` counts a skipped job as
 # passing, and a workflow call whose jobs were all skipped is skipped itself.
 # The legs run whenever the run is not cancelled, and their first step fails
-# when `build` did not succeed (or was skipped with no `wasm_artifact`). The
-# `result` job then fails unless every leg succeeded, so a skipped `test` job,
-# or a matrix that yields no leg, fails the call instead of passing.
+# when `build` did not succeed (or was skipped with no `wasm_artifact`), so
+# every leg either runs its tests or fails the call, and the call's own result
+# (what `CI passed` and Deploy viewer read) already aggregates them. There is
+# no job after the legs to say so again: it was a job of its own that waited
+# for a runner (4.6 minutes of #1481's landing run) to guard only against a
+# `legs` list that yields no leg, which would skip `test` and let the call
+# pass. tools/ci/check-workflows.py checks that instead, in the env config job:
+# the default `legs` and the `legs` of every caller are a non-empty JSON list of
+# legs, written out, not computed.
 #
 # `legs` is the list of jobs that run at once, each testing that build: for
 # ci.yml, the suite in three groups of spec files; for Deploy viewer, the
@@ -466,26 +472,3 @@ jobs:
           if-no-files-found: ignore
           overwrite: true
           retention-days: 14
-
-  # `CI passed` counts a skipped job as passing, and a workflow call whose jobs
-  # were all skipped is skipped. This job fails unless every leg succeeded, so
-  # a `test` that was skipped, or a `legs` list that yields no leg, fails the
-  # call. It runs whatever happened before it; only a cancelled run skips it,
-  # and `CI passed` reads that as cancelled.
-  result:
-    name: legs passed
-    needs: test
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - name: Every leg succeeded
-        shell: bash
-        env:
-          LEGS: ${{ needs.test.result }}
-        run: |
-          echo "legs: ${LEGS}"
-          if [ "${LEGS}" != success ]; then
-            echo "::error::the legs of the viewer tests ended ${LEGS}, not success"
-            exit 1
-          fi
