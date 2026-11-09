@@ -174,9 +174,9 @@ project treats a silent skipped step the same as an untested change.
    checks what the tag run does before it publishes (the wheels installed and
    opening a model, `cargo install` with the CLI sample, the docs.rs preview
    and the viewer load smoke) and publishes nothing. It passes the tag,
-   signature, branch and CI checks by design, since it has no tag. A tag run
-   that fails in those builds cannot be fixed by a re-run, since it runs the
-   workflow as tagged: v0.16.0's stopped at the viewer smoke, which needed
+   signature, branch and CI checks by design, since it has no tag. A defect
+   in the workflow cannot be fixed by re-running a tag run, since a re-run
+   uses the workflow as tagged: v0.16.0's stopped at the viewer smoke, which needed
    `rvt-elements` on its PATH, so that tag was never published and is
    replaced by 0.16.1.
 8. **Confirm the registries' trusted publishers.** crates.io and PyPI
