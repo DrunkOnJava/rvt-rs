@@ -102,8 +102,9 @@ What it does not cover:
   file, its export or both are not available to a run.
 - A figure made with `-f ifc_flags=`: the saved-mesh and family-extrusion
   figures use `--saved-meshes` and `--family-extrusions` (runs 41850769925 and
-  41884639625), and the default dispatch exports without them, drawing only
-  doors and windows from saved meshes.
+  41884639625), and the default dispatch exports without `--family-extrusions`,
+  drawing every boxed instance of a Revit 2023 to 2027 file from its saved mesh
+  since #1191 (those runs were made when it drew doors and windows alone).
 - A figure made by a probe (`-f probe=`, with its `-f probe_scorer=`) or by a
   comparison with another commit (`-f base=main`, the byte-identity counts): the
   report that gives it has the dispatch with those inputs in its Reproduce

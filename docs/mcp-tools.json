@@ -765,18 +765,23 @@
           "description": "Which bodies are drawn from the mesh Revit saved for display.",
           "oneOf": [
             {
+              "const": "default",
+              "description": "Every element that would be its record's bounding box, on Revit 2023 to\n2027 (the default).",
+              "type": "string"
+            },
+            {
               "const": "doors_and_windows",
-              "description": "Doors and windows on Revit 2023 to 2027 (the default).",
+              "description": "Doors and windows only, on Revit 2023 to 2027: the default before #1191,\nand cheaper in time and memory.",
               "type": "string"
             },
             {
               "const": "all",
-              "description": "Every element that would be its record's bounding box. Slower.",
+              "description": "Every element that would be its record's bounding box, on every release.",
               "type": "string"
             },
             {
               "const": "off",
-              "description": "None: doors and windows keep their record's box.",
+              "description": "None: every element keeps its record's box.",
               "type": "string"
             }
           ]
