@@ -104,10 +104,22 @@ fn main() -> anyhow::Result<()> {
             .into_iter()
             .flat_map(|(owner, held)| held.into_values().map(move |(_, at)| (owner, at)))
             .collect();
-        let mut needle = 2.624_671_916_010_498_8_f64.to_le_bytes().to_vec();
-        needle.extend_from_slice(&[0xff; 8]);
-        needle.extend_from_slice(&WINDOW_WIDTH_PARAMETER.to_le_bytes());
-        for at in memchr::memmem::find_iter(bytes, &needle) {
+        // The type's own Width, and the 1.5 m Width the 2027 save also gives
+        // the symbol's block.
+        let needles: Vec<Vec<u8>> = [2.624_671_916_010_498_8_f64, 4.921_259_842_519_685_f64]
+            .iter()
+            .map(|feet| {
+                let mut needle = feet.to_le_bytes().to_vec();
+                needle.extend_from_slice(&[0xff; 8]);
+                needle.extend_from_slice(&WINDOW_WIDTH_PARAMETER.to_le_bytes());
+                needle
+            })
+            .collect();
+        let hits: Vec<usize> = needles
+            .iter()
+            .flat_map(|needle| memchr::memmem::find_iter(bytes, needle).collect::<Vec<_>>())
+            .collect();
+        for at in hits {
             let param_at = at + 16;
             let owner = placed
                 .iter()
