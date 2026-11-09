@@ -79,7 +79,8 @@ def body_sources(element):
 
 
 def world_boxes(path, tags=None, transform=None, wanted=None, frame=True, settings=None, curves=None, detect=None):
-    """Tag -> (class, box in feet, BodySource) for elements with a body: in
+    """Tag -> (class, box in feet, BodySource) for elements with a body, the
+    box of the union of the bodies where several carry one Tag: in
     the file's internal feet through its site placement (`frame`), else in
     its world feet, moved by `transform` when given. With `wanted`, only the
     elements with one of those BodySources are meshed. With `detect` (True for
@@ -120,6 +121,12 @@ def world_boxes(path, tags=None, transform=None, wanted=None, frame=True, settin
                 if transform:
                     points = np.array([transform(p) for p in points])
             box = [float(v) for v in points.min(axis=0)] + [float(v) for v in points.max(axis=0)]
+            if element.Tag in out:
+                # Revit writes the parts of a roof as slabs that carry the roof's own
+                # Tag, and the element rvt-rs draws whole is all of them: the box of
+                # the Tag is the union, not the last part's.
+                before = out[element.Tag][1]
+                box = [min(a, b) for a, b in zip(before[:3], box[:3])] + [max(a, b) for a, b in zip(before[3:], box[3:])]
             out[element.Tag] = (element.is_a(), box, sources.get(element.Tag))
             if curves is not None and detect and (detect is True or element.Tag in detect):
                 curves[element.Tag] = curves.get(element.Tag, True) and true_curves.is_true_curve_body(element)
