@@ -308,6 +308,11 @@ def ifc2x3_holds(pset, prop):
     return template is not None and any(t.Name == prop for t in template.HasPropertyTemplates or ())
 
 
+# The keys that more than one object of a file holds, by the path `properties`
+# read (#1576); `main` prints how many values sit on them.
+REPEATED_KEYS = {}
+
+
 def properties(path):
     """(object key, set, property) -> value, the keys of every object, each
     object's entity by key, and whether the file is IFC2X3. An IFC2X3 file's
@@ -321,11 +326,15 @@ def properties(path):
     out = {}
     objects = set()
     entities = {}
+    holders = collections.Counter()
     for product in f.by_type("IfcObject"):
         key = property_key_of(product)
         if key:
             objects.add(key)
             entities[key] = product.is_a()
+            holders[key] += 1
+    REPEATED_KEYS[path] = {key for key, n in holders.items() if n > 1}
+
     def add(key, pset):
         for prop in pset.HasProperties or ():
             name = pset.Name
@@ -406,6 +415,13 @@ def main(argv):
             for (key, pset, prop), value in theirs.items()
         }
     rows = collections.defaultdict(lambda: [0, 0, 0, 0])
+    # A key Revit's export gives several objects (a wall split at its storeys
+    # keeps its ElementId as each piece's Tag) holds one piece's properties,
+    # which an element-level value shares with the others. These values are
+    # scored in the totals as before; what they come to is printed beside
+    # them, so a value that differs only on such keys shows (#1576).
+    repeated = REPEATED_KEYS.get(args[1], set())
+    on_repeated = [0, 0, 0]
     missing_values = collections.defaultdict(collections.Counter)
     missing_classes = collections.defaultdict(collections.Counter)
     worst = []
@@ -444,12 +460,18 @@ def main(argv):
         mine = ours.get((key, pset, prop), "missing")
         if same(mine, value):
             row[1] += 1
+            if key in repeated:
+                on_repeated[0] += 1
         elif mine == "missing":
             row[3] += 1
+            if key in repeated:
+                on_repeated[2] += 1
             missing_values[(pset, prop)][repr(value)[:60]] += 1
             missing_classes[(pset, prop)][their_entities.get(key, "-")] += 1
         else:
             row[2] += 1
+            if key in repeated:
+                on_repeated[1] += 1
             if len(worst) < listing:
                 worst.append(f"  {key} {pset}.{prop}: rvt-rs {mine}, Revit {value}")
     totals = [sum(r[i] for r in rows.values()) for i in range(4)]
@@ -480,6 +502,11 @@ def main(argv):
     print(
         f"Revit values on objects rvt-rs writes: {totals[0]}; equal: {totals[1]}; "
         f"different: {totals[2]}; missing: {totals[3]}; rvt-rs values Revit does not write: {extra}"
+    )
+    print(
+        "values on a Tag Revit's export gives more than one object, scored against the piece held, in the totals above "
+        f"(#1576): {sum(on_repeated)} on {len(repeated)} such Tags; equal {on_repeated[0]}, "
+        f"different {on_repeated[1]}, missing {on_repeated[2]}"
     )
     if apart_objects:
         print(

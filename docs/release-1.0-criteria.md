@@ -112,7 +112,9 @@ curtain walls and coverings,
 rooms' `OccupancyType` and the value type of their `OccupancyNumber`,
 the `FI_` sets), out of scope;
 no other reference model has one (RE-239).
-Quantities are measured by `tools/re/qtos_vs_ifc.py` ([#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016));
+Quantities are measured by `tools/re/qtos_vs_ifc.py` ([#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016)),
+which counts apart, and scores as neither equal, different nor missing, a value on a Tag Revit's export gives more than
+one object (a wall it splits at its storeys: rvt-rs writes one value for the whole element, [#1576](https://github.com/DrunkOnJava/rvt-rs/issues/1576));
 those Revit's export computes from its joined geometry, which the file does not store (walls' side areas and volumes,
 and the `NetSurfaceArea` of the mullions whose ends the boxes do not say Revit keeps,
 RE-248,
