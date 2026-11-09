@@ -41,6 +41,8 @@ RE-238: revit-ifc's `PitchAngleCalculator` is its `SlopeCalculator` (CLEANROOM.m
 
 The 8 values missing before are the 8 of section 1, each now equal within the census's tolerance of 1e-5 (rvt-rs's value is Revit's to 2e-7 rad, section 2), and the 54 zeros are unchanged.
 
+**The mode without geometry (#1627).** `rvt-ifc --mode typed-no-geometry` takes a body and its `BodySource` off an element after the typed pass, and the rule read the source after that, so the mode left the 8 floors without their angle while a level slab kept its 0. The test of whether a floor is drawn along its plane is now made before the mode strips the source, as `level_slab`'s is. Measure [42669538230](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42669538230) (`ifc_flags=--mode typed-no-geometry`, the office as built and at permit, the census with Revit's set placement, on the commit this one replays): `Pset_SlabCommon.PitchAngle` equal 54 to 62 of 62 and missing 8 to 0 on both files, different and the values Revit does not write unchanged. The unfiltered Measure [42675371568](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42675371568) of the change against `main` at `5247e7ba` moves none of the 118 exports (every export is byte-identical: the default modes are untouched), and its same-project gates pass.
+
 ## 4. Not shown
 
 - **The sloped floors' `Depth` and `GrossVolume`** (RE-298: the layers' thickness times the cosine of the slope on a floor of one layer, which the four `AP-3` floors are) are not written here; the angle is the input they need, and Revit's values for them are not listed by the census.
@@ -57,6 +59,12 @@ gh workflow run measure.yml --ref main -f ref=main -f base=none -f nordic=true \
 # rvt-rs's export, whose bodies' angles RE-384 compares (the angle of the largest upward face of each listed slab is the check of section 2):
 gh workflow run measure.yml --ref main -f ref=main -f base=none -f nordic=true \
     -f models="nordic-office-as-built nordic-office-permit" -f scorers=none -f keep_ifc=true
+# The mode without geometry (#1627), on the commit that fixes it, the census of the office with Revit's set placement:
+gh workflow run measure.yml --ref main -f ref=4cbedcb41a0162b8bf11e00fbda86995d1875d73 -f base=none -f nordic=true \
+    -f models="nordic-office-as-built nordic-office-permit" -f scorers=psets_vs_ifc -f ifc_flags="--mode typed-no-geometry"
+# The unfiltered run of #1627 (every export byte-identical):
+gh workflow run measure.yml --ref main -f ref=4cbedcb41a0162b8bf11e00fbda86995d1875d73 -f base=5247e7ba107add935c3cc3ed60bb9ee95dbeeb8e \
+    -f nordic=true -f r2025=true -f samples=true -f racadv=true -f bimcollab=true -f holdout=true
 # The unfiltered run of section 3 (the code commit against the main it branched from):
 gh workflow run measure.yml --ref main -f ref=dbf00dbc0cf75570a41173fea9ae5d8f697c2a4f \
     -f base=8b8892df -f nordic=true -f r2025=true -f samples=true -f racadv=true -f bimcollab=true -f holdout=true
