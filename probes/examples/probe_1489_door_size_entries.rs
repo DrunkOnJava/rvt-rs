@@ -1,0 +1,66 @@
+//! #1489: why two `Single-Flush` doors of `rac_basic`'s 2027 save write no
+//! `Qto_DoorBaseQuantities` Width and Height.
+//!
+//! FACT under test: the quantities are written where the symbol that draws an
+//! instance and the instance's type hold the same Width and Height
+//! (`type_door_sizes` needs every copy of an entry to agree). RE-318's probe
+//! shows doors 431064 and 485679 are drawn by symbol 431054 of type 232780 on
+//! the 2025, 2026 and 2027 saves alike, so the symbol is not re-resolved on
+//! 2027. This prints every partition's Width and Height entries for those
+//! elements, with two other symbols of the type (490150 and 235155), whose
+//! doors keep their quantities, as the control.
+//!
+//! Output, one entry per line:
+//!   entry <partition> <owner> width=<feet|-> height=<feet|->
+//!   sizes <owner> <width,height|none>   (what `type_door_sizes` returns)
+//!
+//! Usage:
+//!   cargo run --profile ci -p rvt-probes --example probe_1489_door_size_entries -- MODEL.rvt
+
+use std::collections::BTreeSet;
+
+use rvt::RevitFile;
+use rvt::elem_table;
+use rvt::research::partition_type_parameters::{
+    WINDOW_HEIGHT_PARAMETER, WINDOW_WIDTH_PARAMETER, scan_partition_lengths, type_door_sizes,
+};
+
+const OWNERS: [u32; 4] = [431054, 490150, 235155, 232780];
+
+fn main() -> anyhow::Result<()> {
+    let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
+    let mut rf = RevitFile::open(&path)?;
+    let records = elem_table::parse_records(&mut rf)?;
+    let declared = elem_table::declared_ids(&records);
+    let parameters = BTreeSet::from([WINDOW_WIDTH_PARAMETER, WINDOW_HEIGHT_PARAMETER]);
+    let owners: BTreeSet<u32> = OWNERS.into_iter().collect();
+    let version = rf.basic_file_info().map(|i| i.version).unwrap_or(0);
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            println!("unread {stream}");
+            continue;
+        };
+        for (owner, held) in scan_partition_lengths(inflated.bytes(), &declared, &parameters) {
+            if !owners.contains(&owner) {
+                continue;
+            }
+            let value = |parameter: i64| {
+                held.get(&parameter)
+                    .map_or("-".to_string(), |feet| format!("{feet}"))
+            };
+            println!(
+                "entry {stream} {owner} width={} height={}",
+                value(WINDOW_WIDTH_PARAMETER),
+                value(WINDOW_HEIGHT_PARAMETER)
+            );
+        }
+    }
+    let sizes = type_door_sizes(&mut rf, version, &owners);
+    for owner in OWNERS {
+        match sizes.get(&owner) {
+            Some(size) => println!("sizes {owner} {},{}", size.width_feet, size.height_feet),
+            None => println!("sizes {owner} none"),
+        }
+    }
+    Ok(())
+}
