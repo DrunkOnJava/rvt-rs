@@ -121,7 +121,8 @@ the 19 held-out and spent models changes. That check cannot catch an error the
 2024 saves share (Measure run 42091457764, head 830a4d94). The floor of
 rac_advanced, drawn with chords on the 2025 save before (24 vertices), has the
 170 vertices of the 2024, 2026 and 2027 saves. One stair flight is scored against Revit's own 2026 and 2027
-exports. Since RE-346 pipes are drawn as their cylinders there, family
+exports. Since RE-346 a pipe there is placed by RE-131's connector entries
+first, as on 2025 (RE-370 draws the rest from its record), family
 instances' ports are placed, walls are cut to their doors' and windows'
 outlines, and `IsExternal`, railing heights and lengths, stair names, rooms'
 height and net volume and the pipe and duct quantities are written, as on 2025,

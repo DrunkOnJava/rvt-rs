@@ -1,5 +1,6 @@
-- **Revit 2026 and 2027 projects draw pipes as their cylinders, place family
-  instances' ports, cut walls to their doors' and windows' outlines, and write
+- **Revit 2026 and 2027 projects place a pipe by RE-131's connector entries
+  first, as 2025 projects do (RE-370 already drew every pipe as its cylinder
+  from its record), place family instances' ports, cut walls to their doors' and windows' outlines, and write
   `IsExternal`, railing heights and lengths, stair names, rooms' height and net
   volume and the pipe and duct quantities, as 2025 projects do (#1190,
   RE-346).** Ten readers read the 2025 records these releases write; their
