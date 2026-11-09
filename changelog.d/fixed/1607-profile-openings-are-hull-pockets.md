@@ -8,7 +8,10 @@
   of which, 1387731, has an opening in Revit's export that is the first three
   lines of its top closed by a chord. Revit writes the body as the profile and an
   opening only where the profile has a pocket against its convex hull, tagged with
-  the highest ElementId of the pocket's lines, none on a straight sloped top. The
+  the highest ElementId of the pocket's lines, none on a straight sloped top. A
+  pocket is closed by the hull's edge, or through the profile rectangle's corner
+  where the edge cuts it off, as on Core Interior's wall 55840 (301.65 ft2); a
+  pocket whose edge ends otherwise is not written. The
   wall's body is now its box less the profile's regions as one boolean difference
   (`ProfileCutSource` `wall_profile_cut_in_body`, counted in
   `exported.wall_profile_cuts`), the shape it had, and its openings are the pockets.

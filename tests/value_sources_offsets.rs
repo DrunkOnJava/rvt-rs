@@ -690,6 +690,14 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
         },
     ),
     (
+        "ProfileCutSource",
+        "*",
+        Sourced {
+            all: &[],
+            any: &["sketch_lines", "sketch_list"],
+        },
+    ),
+    (
         "ThicknessSource",
         "wall_type_compound_structure",
         Sourced {

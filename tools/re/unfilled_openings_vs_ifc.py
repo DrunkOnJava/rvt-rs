@@ -15,7 +15,9 @@ site placement.
 By kind (the class of the element the Tag names in Revit's export, `none`
 where it names none, and the class of the host) it reports how many openings
 Revit writes, how many rvt-rs writes, and of those in both how many agree on
-the box (within 0.01 ft), the GlobalId, the Name, the PredefinedType, the
+the box (within 0.01 ft), the volume of the opening's mesh (within 0.01 %, which
+tells an outline closed through a corner from one closed by a chord that has the
+same box, RE-380), the GlobalId, the Name, the PredefinedType, the
 `Reference` of `Pset_OpeningElementCommon` and
 `Pset_EnvironmentalImpactIndicators`, and the `Depth` quantity; then the
 openings rvt-rs writes that Revit's export does not, by kind, apart from those
@@ -43,6 +45,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ifc_common import siblings, site_frame  # noqa: E402
 
 BOX_TOLERANCE_FEET = 0.01
+VOLUME_TOLERANCE = 1e-4
 
 
 def unfilled(path, boxes=True):
@@ -63,6 +66,7 @@ def unfilled(path, boxes=True):
         if opening.HasFillings or not opening.Tag:
             continue
         box = None
+        volume = None
         try:
             if not boxes:
                 raise ValueError("no box wanted")
@@ -71,6 +75,10 @@ def unfilled(path, boxes=True):
             if len(verts):
                 moved = frame(verts)
                 box = (moved.min(axis=0), moved.max(axis=0))
+                triangles = moved[np.array(shape.geometry.faces, dtype=int).reshape(-1, 3)]
+                volume = abs(
+                    float(np.einsum("ij,ij->i", triangles[:, 0], np.cross(triangles[:, 1], triangles[:, 2])).sum())
+                ) / 6.0
         except Exception:
             pass
         psets = ifcopenshell.util.element.get_psets(opening)
@@ -82,6 +90,7 @@ def unfilled(path, boxes=True):
             "name": opening.Name,
             "predefined": getattr(opening, "PredefinedType", None),
             "box": box,
+            "volume": volume,
             "host": host.is_a(),
             "cutter": cutters.get(opening.Tag, "none"),
             "common": common.get("Reference"),
@@ -101,6 +110,7 @@ def main(argv):
     print(f"unfilled openings in Revit's export: {len(revit)}; in rvt-rs's: {len(ours)}; both: {len(both)}")
     rows = collections.defaultdict(collections.Counter)
     worst = []
+    volume_worst = []
     for key, theirs in revit.items():
         kind = f"{theirs['cutter']} in {theirs['host']}"
         row = rows[kind]
@@ -121,6 +131,13 @@ def main(argv):
                 row["box within 0.01 ft"] += 1
             else:
                 worst.append((diff, key, kind))
+        if theirs["volume"] and mine["volume"] is not None:
+            row["volume compared"] += 1
+            error = abs(mine["volume"] - theirs["volume"]) / theirs["volume"]
+            if error <= VOLUME_TOLERANCE:
+                row[f"volume within {VOLUME_TOLERANCE * 100:.2f} %"] += 1
+            else:
+                volume_worst.append((error, key, kind))
         for label, field in (
             ("GlobalId equal", "guid"),
             ("Name equal", "name"),
@@ -160,6 +177,8 @@ def main(argv):
         print(f"  {mine['cutter']} in {mine['host']}, Tag {key[0]} in {key[1]}: {sibling_keys[key]}")
     for diff, key, kind in sorted(worst, reverse=True)[:60]:
         print(f"  box differs by {diff:.3f} ft: {kind}, Tag {key[0]} in {key[1]}")
+    for error, key, kind in sorted(volume_worst, reverse=True)[:60]:
+        print(f"  volume differs by {error * 100:.3f} %: {kind}, Tag {key[0]} in {key[1]}")
     for key, mine in sorted(missing.items()):
         if key not in apart:
             print(f"  extra: {mine['cutter']} in {mine['host']}, Tag {key[0]} in {key[1]}")
