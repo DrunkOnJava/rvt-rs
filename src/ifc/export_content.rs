@@ -1334,6 +1334,9 @@ pub fn append_typed_production_elements(
                         if source == FLOOR_SHAPE_BODY_SOURCE)
                 })
             });
+        if shaped_floor {
+            add_shaped_floor_pitch(&mut reference_sets, &decoded);
+        }
         add_slab_gross_area(
             &mut reference_sets,
             &ifc_type,
@@ -3010,13 +3013,12 @@ fn level_slab(
     landing || layered
 }
 
-/// Add `PitchAngle` 0 to the `Pset_SlabCommon` among `sets` of a slab
-/// [`level_slab`] finds level, read before a mode without geometry strips
-/// its body.
-fn add_level_slab_pitch(sets: &mut Vec<PropertySet>) {
+/// Add `PitchAngle` `angle` to the `Pset_SlabCommon` among `sets`, a new set
+/// where there is none.
+fn add_slab_pitch(sets: &mut Vec<PropertySet>, angle: f64) {
     let property = Property {
         name: "PitchAngle".into(),
-        value: PropertyValue::AngleRadians(0.0),
+        value: PropertyValue::AngleRadians(angle),
     };
     match sets.iter_mut().find(|set| set.name == "Pset_SlabCommon") {
         Some(set) => set.properties.push(property),
@@ -3024,6 +3026,32 @@ fn add_level_slab_pitch(sets: &mut Vec<PropertySet>) {
             name: "Pset_SlabCommon".into(),
             properties: vec![property],
         }),
+    }
+}
+
+/// Add `PitchAngle` 0 to the `Pset_SlabCommon` among `sets` of a slab
+/// [`level_slab`] finds level, read before a mode without geometry strips
+/// its body.
+fn add_level_slab_pitch(sets: &mut Vec<PropertySet>) {
+    add_slab_pitch(sets, 0.0);
+}
+
+/// Add the `PitchAngle` of a floor drawn along the plane its shape-edited
+/// corners lie in (#1384): revit-ifc's `SlopeCalculator` (CLEANROOM.md
+/// source 5) gives a slab with no location curve the slope of its largest
+/// upward face (RE-238), which for a floor whose top is the plane
+/// `z = a·x + b·y + c` is the angle of that plane from the horizontal, the
+/// arctangent of the length of its gradient (RE-384). The floor's body is
+/// drawn from the same plane, so a floor whose body is not (the plane read
+/// but not reproducing the record box) gets none.
+fn add_shaped_floor_pitch(sets: &mut Vec<PropertySet>, decoded: &DecodedElement) {
+    let Some([a, b, _]) = crate::partition_schema_mvp::slab_top_plane_from_fields(&decoded.fields)
+    else {
+        return;
+    };
+    let angle = a.hypot(b).atan();
+    if angle.is_finite() && angle > 0.0 {
+        add_slab_pitch(sets, angle);
     }
 }
 

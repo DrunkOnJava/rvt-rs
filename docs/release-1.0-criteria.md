@@ -99,7 +99,7 @@ door types' `FireRating` and family types' `Manufacturer`, read from a family ty
 walls' `ExtendToStructure` on Revit 2015 to 2023 (RE-284),
 structural columns' and framing's `LoadBearing` from their category, and on Revit 2015 to 2023 their `IsExternal` (RE-285),
 railings' `Height` (RE-231),
-level slabs' `PitchAngle` (RE-238),
+level slabs' `PitchAngle` (RE-238) and the sloped floors' drawn along their shape-edited plane (RE-384),
 pipes' `InvertElevation` (RE-157),
 storeys' `Reference` and `EntranceLevel` (RE-275),
 stairs' `TreadLengthAtInnerSide` and, with `--revit-set-placement`, their `Pset_StairFlightCommon` from their flights (RE-287, [#1186](https://github.com/DrunkOnJava/rvt-rs/issues/1186)),
