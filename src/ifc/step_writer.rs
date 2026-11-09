@@ -3612,6 +3612,11 @@ impl StepWriter<'_> {
             else {
                 continue;
             };
+            // #1607: a region whose cut is made in its wall's body has no
+            // outline left, and is not written.
+            if outline_feet.len() < 3 {
+                continue;
+            }
             let (Some(Some(host_el_id)), Some(Some(host_placement))) = (
                 entity_index_to_el_id.get(*host),
                 entity_index_to_placement.get(*host),

@@ -844,6 +844,14 @@ pub struct ExportedModelDiagnostics {
     /// wall's `Height` is the profile's. Empty when no wall does.
     #[serde(default)]
     pub wall_profile_top_sources: std::collections::BTreeMap<String, usize>,
+    /// Of the exported walls whose edited elevation profile cuts the wall, how
+    /// many have that cut made in the wall's body and the openings Revit's export
+    /// writes for it (a pocket of the profile against its convex hull) written
+    /// beside it, by the `ProfileCutSource` property of each (#1607, RE-380):
+    /// `wall_profile_cut_in_body`. A wall that is not is voided by the regions
+    /// RE-151 reads, as before. Empty when no wall is.
+    #[serde(default)]
+    pub wall_profile_cuts: std::collections::BTreeMap<String, usize>,
     /// Of the exported walls, how many have their base cut at an element their
     /// base join names, by the `BodyBaseSource` property of each (#1384,
     /// RE-336; #1411, RE-349): `wall_base_sloped_at_covering_floor`,
@@ -1718,6 +1726,8 @@ fn export_rvt_doc_reporting(
 
     if policy.include_geometry {
         apply_placement_origins(&mut entities, &record_handoffs, &opening_cuts);
+        // #1607: after everything that reads a wall's body or its openings.
+        export_content::cut_wall_profiles(&mut entities);
     }
     let mut wall_profile_height_checks = std::collections::BTreeMap::<String, usize>::new();
     for property in record_handoffs.values().flatten() {
@@ -5077,6 +5087,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut wall_end_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_top_stubs_cut = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_profile_top_sources = std::collections::BTreeMap::<String, usize>::new();
+    let mut wall_profile_cuts = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_base_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut wall_ends_order_dependent = 0usize;
     let mut wall_profile_sources = std::collections::BTreeMap::<String, usize>::new();
@@ -5151,6 +5162,10 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
                         export_content::WALL_PROFILE_TOP_PROPERTY,
                         entities::PropertyValue::Text(text),
                     ) => *wall_profile_top_sources.entry(text.clone()).or_insert(0) += 1,
+                    (
+                        export_content::WALL_PROFILE_CUT_PROPERTY,
+                        entities::PropertyValue::Text(text),
+                    ) => *wall_profile_cuts.entry(text.clone()).or_insert(0) += 1,
                     (
                         export_content::WALL_BASE_SOURCE_PROPERTY,
                         entities::PropertyValue::Text(text),
@@ -5276,6 +5291,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
         wall_end_sources,
         wall_top_stubs_cut,
         wall_profile_top_sources,
+        wall_profile_cuts,
         wall_base_sources,
         wall_ends_order_dependent,
         wall_profile_sources,
