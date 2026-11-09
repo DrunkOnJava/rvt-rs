@@ -35,7 +35,19 @@ A wall of which any of this is not known keeps the box's top, as before, and is 
 
 ## 4. Result
 
-To be filled with the Measure's results: the filtered run [42614195315](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42614195315) on the two terrain files, and an unfiltered run of the final head.
+Measure run [42614195315](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42614195315) (the rule at `8a5b2225` against `main` at `b969296e`, the two terrain files only, `wall_heights_vs_ifc`, `qtos_vs_ifc`, `wall_quantities_vs_ifc`, `unfilled_openings_vs_ifc` and `wall_bodies_vs_ifc`), on each of the two files:
+
+| | before | now |
+|---|---:|---:|
+| walls whose base and top are Revit's (`wall_heights_vs_ifc`) | 1 of 2 | 2 of 2 |
+| wall 1387731's highest point | 200.1988 ft | 196.5223 ft, Revit's |
+| `Qto_WallBaseQuantities.Height`, equal / different (`qtos_vs_ifc`) | 1 / 1 | 2 / 0 |
+| walls whose body volume equals Revit's (`wall_quantities_vs_ifc`, NetVolume and GrossVolume candidates) | 1 of 2 | 2 of 2 |
+| walls whose side areas and footprint equal Revit's (the same scorer) | 1 of 2 | 2 of 2 |
+
+Wall 1387731's body volume is now Revit's, 755.389 ft³, and its `Height` is 14.4357 ft, Revit's 4.4 m. That is the whole shape, not only the highest point: the profile's openings cut the region under the top as before, and the strip above the profile is gone. In `qtos_vs_ifc` the quantities equal rise from 15 to 16 and the different fall by one (from 1 to 0 on the concrete file, from 2 to 1 on the timber file, whose remaining different value is a space's `NetVolume`, which does not move). `unfilled_openings_vs_ifc` and `wall_bodies_vs_ifc` do not move, so the two openings rvt-rs writes are as before. `diagnostics.json` differs only by `exported.wall_profile_top_sources`, `wall_top_at_profile_top` 1 on each file, and `wall rules: profile top sources` says the same.
+
+UNFILTERED
 
 ## 5. Not shown
 
