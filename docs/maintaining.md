@@ -931,6 +931,23 @@ into its key. A different default toolchain or a different variable in a job
 that restores a cache starts that job from an empty cache. A change to either
 action is judged by the key the job's rust-cache step logs before and after.
 
+### The cargo tools CI installs
+
+`ci.yml` installs `cargo-nextest`, `cargo-semver-checks`, `cargo-public-api`,
+`cargo-deny` and `cargo-audit` through `.github/actions/install-cargo-tool`
+(`crate` and one `version`, as `MAJOR.MINOR.PATCH`). It runs
+`taiki-e/install-action` and, if that fails, builds the same version from
+crates.io with `cargo install --locked --force`: on 2026-11-09 GitHub's release
+host answered 504 for hours and `install-action`, whose own fallback
+(`cargo-binstall`) fetches from the same host, failed `cargo-nextest` on
+macos-26 with nothing tested (#1585). The source build runs only then, and a
+version that does not exist, or a crate that does not build, still fails the
+job. To add a cargo tool, call the action with its pinned version; a tool that
+is not a crate (shellcheck) or that a workflow other than `ci.yml` installs
+(`scheduled-checks.yml`, `fuzz.yml`, `release-binaries.yml`, the `wasm-tools`
+action) still uses `install-action` alone, and a long outage fails those jobs:
+rerun them with `gh run rerun --failed` once the host answers again.
+
 ## Releases
 
 Tags `v*` are protected by the `release-tags` ruleset: only a maintainer can
