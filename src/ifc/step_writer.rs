@@ -3479,7 +3479,9 @@ impl StepWriter<'_> {
         // contained in a storey. #824: so is the opening a face-hosted door
         // or window cuts in its host, numbered among the host's openings.
         // RE-237: either is the host's own geometry, so, as Revit's export
-        // writes it, its Pset_OpeningElementCommon.Reference is the host's.
+        // writes it, its Pset_OpeningElementCommon.Reference is the host's, and
+        // RE-382: so is its Pset_EnvironmentalImpactIndicators.Reference, as on
+        // every other opening Revit's export holds.
         for entity in &model.entities {
             let (host, tag, name, outline_feet, depth_feet, number) = match entity {
                 super::entities::IfcEntity::VoidOpening {
@@ -3570,28 +3572,25 @@ impl StepWriter<'_> {
                 ),
             );
             if let Some(reference) = host_references.get(host) {
-                let set = PropertySet {
-                    name: "Pset_OpeningElementCommon".into(),
-                    properties: vec![super::entities::Property {
-                        name: "Reference".into(),
-                        value: super::entities::PropertyValue::Identifier(reference.clone()),
-                    }],
-                };
-                self.emit_property_set(
-                    owner_hist,
-                    opening_id,
-                    &set,
-                    &gid(&[
-                        "property-set",
-                        opening_gid.as_str(),
-                        "Pset_OpeningElementCommon",
-                    ]),
-                    &gid(&[
-                        "defines-by-properties",
-                        opening_gid.as_str(),
-                        "Pset_OpeningElementCommon",
-                    ]),
-                );
+                for set_name in [
+                    "Pset_OpeningElementCommon",
+                    "Pset_EnvironmentalImpactIndicators",
+                ] {
+                    let set = PropertySet {
+                        name: set_name.into(),
+                        properties: vec![super::entities::Property {
+                            name: "Reference".into(),
+                            value: super::entities::PropertyValue::Identifier(reference.clone()),
+                        }],
+                    };
+                    self.emit_property_set(
+                        owner_hist,
+                        opening_id,
+                        &set,
+                        &gid(&["property-set", opening_gid.as_str(), set_name]),
+                        &gid(&["defines-by-properties", opening_gid.as_str(), set_name]),
+                    );
+                }
             }
             void_fill_triples.push((*host, opening_id, None, opening_gid));
         }
