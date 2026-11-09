@@ -114,7 +114,8 @@ SAVED_MESH = "saved_graphics_mesh"
 # the 2025 save's roof extrusion (35.4236 m3) against a mesh of 34.9741 m3 in the same
 # box. A mesh counts only where its box contains the 2025 body's, to the census's 3 mm.
 # Counted, not scored; one more, or one fewer, or one of another kind, fails. The list
-# only shrinks: tools/ci/check_same_project_projects.py holds it to these five.
+# only shrinks (#1612 takes the three gables off it): tools/ci/check_same_project_projects.py
+# holds it to these five.
 ROOFS_NOT_THE_2025_BODY = {
     "racadvancedsampleproject": {"201262": RECORD_BOX, "165755": SAVED_MESH, "167036": SAVED_MESH, "167158": SAVED_MESH},
     "racbasicsampleproject": {"243274": SAVED_MESH},
