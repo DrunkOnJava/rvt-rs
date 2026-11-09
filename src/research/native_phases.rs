@@ -267,14 +267,13 @@ fn is_placed(
 }
 
 /// The ElementIds of the placed rooms of the file, by the scan of its release
-/// (Revit 2016 to 2023 as `scan_phase_excluded_instances` scans them, and the
+/// (Revit 2015 to 2023 as `scan_phase_excluded_instances` scans them, and the
 /// releases whose element records are supported). `None` where the release's
 /// records cannot be scanned for placement or the scan fails: the room
 /// fallback then does not apply, and the export is what it was.
 fn placed_room_ids(rf: &mut RevitFile, revit_version: u32) -> Option<BTreeSet<u32>> {
     use crate::partition_element_records::{scan_category_records_multi, supports_revit_version};
-    let filtered_32bit =
-        crate::partition_element_records_2023::applies_export_filters(revit_version);
+    let filtered_32bit = crate::partition_element_records_2023::applies_phase_filter(revit_version);
     if !filtered_32bit && !supports_revit_version(revit_version) {
         return None;
     }
@@ -507,8 +506,7 @@ pub fn scan_phase_excluded_instances(
         supports_revit_version,
     };
     let mut counted = PhaseExcluded::default();
-    let filtered_32bit =
-        crate::partition_element_records_2023::applies_export_filters(revit_version);
+    let filtered_32bit = crate::partition_element_records_2023::applies_phase_filter(revit_version);
     if !filtered_32bit && !supports_revit_version(revit_version) {
         return Ok(counted);
     }

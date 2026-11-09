@@ -4354,20 +4354,26 @@ pub(crate) fn build_export_diagnostics_and_decisions(
         layout.filter(|&version| crate::partition_element_records_2023::is_32bit_release(version))
     {
         // RE-81, RE-102, RE-107, RE-109, RE-111 to RE-115, RE-180: what a
-        // 2008 to 2023 export carries, and what it does not (RE-181). The
-        // export phase and design options are applied on 2016 to 2023 only
-        // (RE-315).
+        // 2008 to 2023 export carries, and what it does not (RE-181). Design
+        // options are applied on 2016 to 2023 (RE-315), the export phase on
+        // 2015 to 2023 (RE-372).
         let filters = if crate::partition_element_records_2023::applies_export_filters(version) {
             format!(
                 "The export phase and design options are applied for {version}: elements that \
                  do not exist in the last phase or are in a non-primary design option are left \
                  out."
             )
+        } else if crate::partition_element_records_2023::applies_phase_filter(version) {
+            format!(
+                "The export phase is applied for {version}: elements that do not exist in the \
+                 last phase are left out. Design options are not (they are on 2016 to 2023): \
+                 an element in a non-primary design option is written."
+            )
         } else {
             format!(
-                "Neither the export phase nor design options are applied for {version} (they \
-                 are on 2016 to 2023): elements outside the last phase or in a non-primary \
-                 design option are written."
+                "Neither the export phase nor design options are applied for {version} (the \
+                 phase is from 2015, design options from 2016): elements outside the last \
+                 phase or in a non-primary design option are written."
             )
         };
         // RE-364: a wall at an angle can follow its line from 2015, but nothing on

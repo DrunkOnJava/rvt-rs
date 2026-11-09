@@ -659,10 +659,11 @@ and they do not count toward `unexported_element_records`. `rvt-ifc --phase`
 names another export phase, by its name or ElementId. A room is not counted
 here: Revit's exporter skips it by its own phase, not by its status. On
 Snowdon Towers Architectural (2024) the count is 6 (Floor), the slabs of #328,
-which are created and demolished in the Legends phase (RE-184). On Revit 2016
-to 2023 the same filter applies (RE-315); no Autodesk sample has an element
-outside its last phase, and the held-out Vitoria Project's counts are the only
-evidence that it is right on a 32-bit file. A read of the phases that fails on
+which are created and demolished in the Legends phase (RE-184). On Revit 2015
+to 2023 the same filter applies (RE-315, RE-372); no Autodesk sample has an element
+outside its last phase, and the counts of the held-out Vitoria Project (Revit 2018)
+and of BIMcollab's Revit 2015 example are the only evidence that it is right on a
+32-bit file. A read of the phases that fails on
 a Revit 2015 to 2027 file is reported in `warnings` ("The project's phases
 could not be read"), and the export then writes every element.
 
