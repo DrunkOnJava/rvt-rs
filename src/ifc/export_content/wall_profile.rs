@@ -72,14 +72,35 @@
 //!   top of the box.
 //!
 //! A wall of which any of this is not known keeps the box's top, as before.
+//!
+//! # The profile's cut in the wall's body (#1607, RE-380)
+//!
+//! RE-151's regions, each between a run of the profile's lines and the
+//! profile's bounding rectangle, make the wall's shape, but they are not what
+//! Revit's export writes as openings. Revit writes the wall's body as the profile
+//! (a tessellation) and an opening only for each pocket of the profile against
+//! its convex hull ([`crate::partition_schema_mvp::elevation_profile_pockets`]):
+//! none on a straight sloped top, and on the terrain wall 1387731 the first
+//! three lines of its top closed by a chord. [`cut_profiles_from_bodies`] runs
+//! after every pass that reads a wall's body or its openings. For a wall whose
+//! regions can all be made into solids it takes them out of the wall's body as a
+//! boolean difference, writes none of them as openings, and writes its pockets
+//! instead, so that the openings a wall carries are Revit's and its shape is
+//! the same. A wall it cannot do this for keeps the regions as its openings, as
+//! before, and its pockets are not written. The wall's `ProfileCutSource` says
+//! which it is.
 
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_4};
 
 use super::{
-    ELEMENT_RECORD_PROPERTY_SET, WALL_PROFILE_CHECK_PROPERTY, WALL_PROFILE_REFUSAL_PROPERTY,
-    WALL_PROFILE_SOURCE_PROPERTY, WALL_PROFILE_TOP_AT_PROFILE, WALL_PROFILE_TOP_PROPERTY,
+    ELEMENT_RECORD_PROPERTY_SET, WALL_PROFILE_CHECK_PROPERTY, WALL_PROFILE_CUT_IN_BODY,
+    WALL_PROFILE_CUT_PROPERTY, WALL_PROFILE_REFUSAL_PROPERTY, WALL_PROFILE_SOURCE_PROPERTY,
+    WALL_PROFILE_TOP_AT_PROFILE, WALL_PROFILE_TOP_PROPERTY,
 };
-use crate::ifc::entities::{Extrusion, IfcEntity, Property, PropertySet, PropertyValue};
+use crate::ifc::entities::{
+    Extrusion, IfcBooleanOp, IfcEntity, ProfileDef, Property, PropertySet, PropertyValue,
+    SolidShape,
+};
 use crate::walker::{DecodedElement, InstanceField};
 use std::collections::{BTreeMap, HashMap};
 
@@ -552,6 +573,152 @@ pub(super) fn take_top_at_profile(
             name: WALL_PROFILE_TOP_PROPERTY.into(),
             value: PropertyValue::Text(WALL_PROFILE_TOP_AT_PROFILE.into()),
         });
+    }
+}
+
+/// How far the prism that makes a profile's cut reaches beyond the wall's two
+/// faces, feet, so that its faces lie in none of the wall's.
+const CUT_MARGIN_FEET: f64 = 0.01;
+
+/// The solid of a region RE-151 reads from a wall's profile: its outline in the
+/// wall's vertical plane, extruded through the wall and placed as the opening it
+/// is written as is. `None` where the entity is not one, or is not a solid.
+fn cut_prism(entity: &IfcEntity) -> Option<SolidShape> {
+    let IfcEntity::WallProfileOpening {
+        outline_feet,
+        axis_turn_radians,
+        plane_offset_feet,
+        thickness_feet,
+        ..
+    } = entity
+    else {
+        return None;
+    };
+    let finite = outline_feet
+        .iter()
+        .flat_map(|point| [point.0, point.1])
+        .chain([*axis_turn_radians, *plane_offset_feet, *thickness_feet])
+        .all(f64::is_finite);
+    if outline_feet.len() < 3 || !finite || *thickness_feet <= 0.0 {
+        return None;
+    }
+    let (sin, cos) = axis_turn_radians.sin_cos();
+    let start = plane_offset_feet + thickness_feet / 2.0 + CUT_MARGIN_FEET;
+    Some(SolidShape::PlacedExtrusion {
+        profile: ProfileDef::ArbitraryClosed {
+            points: outline_feet.clone(),
+        },
+        origin_feet: [-sin * start, cos * start, 0.0],
+        axis: [sin, -cos, 0.0],
+        ref_direction: [cos, sin, 0.0],
+        depth_feet: thickness_feet + 2.0 * CUT_MARGIN_FEET,
+    })
+}
+
+/// Take the solids `prisms` out of the body of the wall `host` as a boolean
+/// difference and say so in the wall's record property set. `false`, with the
+/// wall as it was, where the entity is not a wall with a body of its own.
+fn cut_body(host: Option<&mut IfcEntity>, prisms: Vec<SolidShape>) -> bool {
+    let Some(IfcEntity::BuildingElement {
+        ifc_type,
+        extrusion,
+        solid_shape,
+        representation_map_index: None,
+        property_set,
+        ..
+    }) = host
+    else {
+        return false;
+    };
+    if !matches!(
+        ifc_type.to_ascii_uppercase().as_str(),
+        "IFCWALL" | "IFCWALLSTANDARDCASE"
+    ) {
+        return false;
+    }
+    let Some(body) = solid_shape
+        .clone()
+        .or_else(|| extrusion.clone().map(SolidShape::ExtrudedArea))
+    else {
+        return false;
+    };
+    *solid_shape = Some(
+        prisms
+            .into_iter()
+            .fold(body, |whole, prism| SolidShape::BooleanResult {
+                op: IfcBooleanOp::Difference,
+                operand_a: Box::new(whole),
+                operand_b: Box::new(prism),
+            }),
+    );
+    if let Some(set) = property_set {
+        if set.name == ELEMENT_RECORD_PROPERTY_SET {
+            set.properties.push(Property {
+                name: WALL_PROFILE_CUT_PROPERTY.into(),
+                value: PropertyValue::Text(WALL_PROFILE_CUT_IN_BODY.into()),
+            });
+        }
+    }
+    true
+}
+
+/// Make the cut of each wall's edited elevation profile in the wall's body and
+/// write the openings Revit's export writes for it (see the module
+/// documentation). A wall whose regions are not all solids, or whose entity is
+/// not a wall with a body of its own, is left with its regions as its openings.
+pub(super) fn cut_profiles_from_bodies(entities: &mut [IfcEntity]) {
+    let mut regions: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    let mut pockets: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for (index, entity) in entities.iter().enumerate() {
+        match entity {
+            IfcEntity::WallProfileOpening { host, .. } => {
+                regions.entry(*host).or_default().push(index);
+            }
+            IfcEntity::WallProfilePocket { host, .. } => {
+                pockets.entry(*host).or_default().push(index);
+            }
+            _ => {}
+        }
+    }
+    for (host, region_indices) in regions {
+        let Some(prisms) = region_indices
+            .iter()
+            .map(|index| cut_prism(&entities[*index]))
+            .collect::<Option<Vec<SolidShape>>>()
+        else {
+            continue;
+        };
+        if !cut_body(entities.get_mut(host), prisms) {
+            continue;
+        }
+        for index in region_indices {
+            if let IfcEntity::WallProfileOpening { outline_feet, .. } = &mut entities[index] {
+                outline_feet.clear();
+            }
+        }
+        for index in pockets.remove(&host).unwrap_or_default() {
+            let opening = match &entities[index] {
+                IfcEntity::WallProfilePocket {
+                    host,
+                    tag,
+                    name,
+                    outline_feet,
+                    axis_turn_radians,
+                    plane_offset_feet,
+                    thickness_feet,
+                } => IfcEntity::WallProfileOpening {
+                    host: *host,
+                    tag: tag.clone(),
+                    name: name.clone(),
+                    outline_feet: outline_feet.clone(),
+                    axis_turn_radians: *axis_turn_radians,
+                    plane_offset_feet: *plane_offset_feet,
+                    thickness_feet: *thickness_feet,
+                },
+                _ => continue,
+            };
+            entities[index] = opening;
+        }
     }
 }
 

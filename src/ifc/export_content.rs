@@ -637,6 +637,13 @@ fn area_property_set(decoded: &DecodedElement, drawn: Option<&AreaDrawn>) -> Pro
     }
 }
 
+/// #1607 (RE-380): make the cut of each wall's edited elevation profile in the
+/// wall's body, and leave the wall the openings Revit's export writes for it.
+/// Run after every pass that reads the wall's body or its openings.
+pub fn cut_wall_profiles(entities: &mut [entities::IfcEntity]) {
+    wall_profile::cut_profiles_from_bodies(entities);
+}
+
 /// Strip placement / body / host claims so an export cannot over-claim geometry.
 pub fn strip_building_element_geometry(entities: &mut [entities::IfcEntity]) {
     for entity in entities.iter_mut() {
@@ -1361,6 +1368,8 @@ pub fn append_typed_production_elements(
         // B55: the openings a wall's edited elevation profile cuts, in the
         // wall's plane relative to its placement.
         let mut profile_openings: Vec<ProfileOpening> = Vec::new();
+        // #1607: the pockets of the profile against its hull, placed the same way.
+        let mut profile_pockets: Vec<ProfileOpening> = Vec::new();
         if let (Some(location), Some(body)) = (location_feet, extrusion.as_ref()) {
             let local_turn = if body.width_feet >= body.depth_feet {
                 0.0
@@ -1372,31 +1381,40 @@ pub fn append_typed_production_elements(
             let offset = |p: &[f64; 3], direction: [f64; 2]| {
                 (p[0] - location[0]) * direction[0] + (p[1] - location[1]) * direction[1]
             };
-            for (tag, outline) in
-                crate::partition_schema_mvp::profile_openings_from_fields(&decoded.fields)
-            {
-                let Some(plane) = outline.first().map(|p| offset(p, left)) else {
-                    continue;
-                };
-                let mut uv: Vec<(f64, f64)> = outline
-                    .iter()
-                    .map(|p| (offset(p, axis), p[2] - location[2]))
-                    .collect();
-                let area: f64 = uv
-                    .iter()
-                    .zip(uv.iter().cycle().skip(1))
-                    .map(|(a, b)| a.0 * b.1 - b.0 * a.1)
-                    .sum();
-                if area < 0.0 {
-                    uv.reverse();
+            for (found, placed) in [
+                (
+                    crate::partition_schema_mvp::profile_openings_from_fields(&decoded.fields),
+                    &mut profile_openings,
+                ),
+                (
+                    crate::partition_schema_mvp::profile_pockets_from_fields(&decoded.fields),
+                    &mut profile_pockets,
+                ),
+            ] {
+                for (tag, outline) in found {
+                    let Some(plane) = outline.first().map(|p| offset(p, left)) else {
+                        continue;
+                    };
+                    let mut uv: Vec<(f64, f64)> = outline
+                        .iter()
+                        .map(|p| (offset(p, axis), p[2] - location[2]))
+                        .collect();
+                    let area: f64 = uv
+                        .iter()
+                        .zip(uv.iter().cycle().skip(1))
+                        .map(|(a, b)| a.0 * b.1 - b.0 * a.1)
+                        .sum();
+                    if area < 0.0 {
+                        uv.reverse();
+                    }
+                    placed.push((
+                        tag,
+                        uv,
+                        local_turn,
+                        plane,
+                        body.width_feet.min(body.depth_feet),
+                    ));
                 }
-                profile_openings.push((
-                    tag,
-                    uv,
-                    local_turn,
-                    plane,
-                    body.width_feet.min(body.depth_feet),
-                ));
             }
         }
         let opening_name = (!void_bodies.is_empty() || !profile_openings.is_empty()).then(|| {
@@ -1623,6 +1641,21 @@ pub fn append_typed_production_elements(
                 profile_openings
             {
                 entities.push(entities::IfcEntity::WallProfileOpening {
+                    host: entity_index,
+                    tag: tag.to_string(),
+                    name: opening_name.clone(),
+                    outline_feet,
+                    axis_turn_radians,
+                    plane_offset_feet,
+                    thickness_feet,
+                });
+            }
+            // #1607: what Revit's export writes of them, once the profile's cut
+            // is in the wall's body (see `cut_profiles_from_bodies`).
+            for (tag, outline_feet, axis_turn_radians, plane_offset_feet, thickness_feet) in
+                profile_pockets
+            {
+                entities.push(entities::IfcEntity::WallProfilePocket {
                     host: entity_index,
                     tag: tag.to_string(),
                     name: opening_name.clone(),
@@ -4901,6 +4934,17 @@ pub const WALL_PROFILE_TOP_PROPERTY: &str = "ProfileTopSource";
 /// from its base, and is the only thing that cuts it. The rule rests on one
 /// wall (RE-378).
 pub const WALL_PROFILE_TOP_AT_PROFILE: &str = "wall_top_at_profile_top";
+
+/// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says the cut its
+/// edited elevation profile makes is made in its body, and that the openings it
+/// carries are the pockets of the profile against its convex hull, as Revit's
+/// export writes them (#1607, RE-380): the one value [`WALL_PROFILE_CUT_IN_BODY`].
+/// Counted in `exported.wall_profile_cuts`.
+pub const WALL_PROFILE_CUT_PROPERTY: &str = "ProfileCutSource";
+
+/// [`WALL_PROFILE_CUT_PROPERTY`] of a wall whose body is its box less the regions
+/// RE-151 reads from the profile, as one boolean difference.
+pub const WALL_PROFILE_CUT_IN_BODY: &str = "wall_profile_cut_in_body";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says how its base
 /// was cut (#1384, RE-336). It is not `BodyHeightSource`, which says how the
