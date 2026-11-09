@@ -828,9 +828,10 @@ pub(super) fn attach_wall_layers(
             wall.fields
                 .push((WALL_TOP_JOINED_FIELD.into(), InstanceField::Bool(*joined)));
         }
-        // RE-364: a 2015 to 2023 record is read without its control joins, so
-        // what reads as uncut or whole there is not known to be.
-        if !narrow && wall.id.is_some_and(|id| uncut.contains(&u64::from(id))) {
+        // RE-364 section 9: on 2015 to 2023 a record's control joins read
+        // empty, but its steps do not. Every wall of Autodesk's samples holds
+        // the step classes, and so the uncut and whole flags, of its later save.
+        if wall.id.is_some_and(|id| uncut.contains(&u64::from(id))) {
             wall.fields
                 .push((WALL_UNCUT_FIELD.into(), InstanceField::Bool(true)));
         }
@@ -917,7 +918,7 @@ pub(super) fn attach_wall_layers(
                 ));
             }
         }
-        if !narrow && wall.id.is_some_and(|id| whole.contains(&u64::from(id))) {
+        if wall.id.is_some_and(|id| whole.contains(&u64::from(id))) {
             wall.fields
                 .push((WALL_WHOLE_FIELD.into(), InstanceField::Bool(true)));
         }
