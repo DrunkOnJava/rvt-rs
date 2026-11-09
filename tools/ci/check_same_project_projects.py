@@ -17,7 +17,8 @@ it.
 
 ROOFS_NOT_THE_2025_BODY is the other list: the roofs a 2026 or 2027 save may draw otherwise than the 2025 save
 does. Griffin approved 201262 and 243274 on 2026-11-05 and 165755, 167036 and 167158 on 2026-11-09 (#1610, "Allow
-these 4 as meshes"). It can only shrink: no project has a tag ORIGINAL_ROOF_TAGS does not hold, and none is added.
+these 4 as meshes"); #1612 drew the 2025 save's three from their meshes too and they left the list. It can only
+shrink: no project has a tag ORIGINAL_ROOF_TAGS does not hold, and none is added.
 
 Run from the repository root; exits 1 and says which file differs.
 """

@@ -21,8 +21,8 @@
   of the mesh, but doors are 675 of 681, sanitary terminals 68 of 94, flow
   fittings 71 of 89, flow terminals 30 of 35 and walls 14 of 18. No roof, beam,
   slab, footing or stair flight mesh is among the bodies scored on those 31
-  models: on Autodesk's samples the meshes of four roofs of the 2026 and 2027
-  saves are not the 2025 save's bodies (the same-project gate names them), and
+  models: on Autodesk's samples the mesh of one roof of the 2026 and 2027 saves
+  is not the 2025 save's body (the same-project gate names it; RE-389), and
   `rac_advanced`'s eight beams are held to its 2024 save. A mesh with a face
   that does not decode still keeps its box. **A very large file may need
   more memory than before:** it depends on how many boxed elements the file
