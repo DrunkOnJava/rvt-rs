@@ -258,6 +258,10 @@ pub struct RevitFile {
     /// Doors and windows written as such though their type's record was not
     /// read (#1247).
     unread_type_doors_windows: BTreeSet<u32>,
+    /// Types and text parameters (Fire Rating, Manufacturer) left out because
+    /// the copies of a family type table's entry, or an entry and RE-77's,
+    /// disagree (RE-354).
+    disagreeing_type_texts: BTreeSet<(u32, &'static str)>,
     /// Memoised steps of the walls' native records that name a cutting element
     /// (`research::native_wall_cuts::wall_cut_steps`), by wall, and the walls
     /// whose record was looked for, found or not: the openings the walls
@@ -502,6 +506,7 @@ impl RevitFile {
             category_style_materials: None,
             unread_streams: Vec::new(),
             unread_type_doors_windows: BTreeSet::new(),
+            disagreeing_type_texts: BTreeSet::new(),
             wall_cut_steps_memo: BTreeMap::new(),
             wall_cut_steps_asked: BTreeSet::new(),
             bodiless_family_spaces: BTreeMap::new(),
@@ -528,6 +533,18 @@ impl RevitFile {
 
     pub(crate) fn note_unread_type_doors_windows(&mut self, ids: impl IntoIterator<Item = u32>) {
         self.unread_type_doors_windows.extend(ids);
+    }
+
+    /// The type text parameters left out for want of agreeing copies (RE-354).
+    pub(crate) fn disagreeing_type_texts(&self) -> &BTreeSet<(u32, &'static str)> {
+        &self.disagreeing_type_texts
+    }
+
+    pub(crate) fn note_disagreeing_type_texts(
+        &mut self,
+        keys: impl IntoIterator<Item = (u32, &'static str)>,
+    ) {
+        self.disagreeing_type_texts.extend(keys);
     }
 
     /// What became of each frame at the markers of this Revit 2008 to 2023
@@ -601,6 +618,7 @@ impl RevitFile {
         self.bodiless_family_spaces.clear();
         self.bodiless_family_space_error = None;
         self.unread_type_doors_windows.clear();
+        self.disagreeing_type_texts.clear();
         if let Some(noted) = self.value_sources.as_mut() {
             noted.clear();
         }
