@@ -21,7 +21,7 @@ solved carrier: the reports under `reports/element-framing/` say what each
 negative result ruled out, and [`ROADMAP.md`](../ROADMAP.md) says what each
 milestone is for.
 
-### 0.16.0: IFC geometry and element data
+### 0.17.0: IFC geometry and element data
 
 | Issue | Remainder |
 |---|---|

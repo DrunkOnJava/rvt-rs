@@ -187,11 +187,28 @@ the four levels a file can reach are in the
   IFC2X3 export (#1261); rooms take off the round columns their solids hold
   (#1354); floor voids tagged as Revit tags them (#1165); and the opt-in
   `rvt-ifc --family-extrusions`, measured on 2024 and 2025 (#156).
+- **0.16.0, 2026-11-08.** Revit 2015 to 2023 beams along their location lines,
+  walls joined by their join lists and angled walls along their lines, pipes
+  with their types, cylinders and ports, `Constraints` Level parameters and
+  `Phase Created`, and Revit 2015 files following the export phase (#1190,
+  #1332); Revit 2026 and 2027 beams, stair runs, tread landings, sketch
+  outlines, pipes, ports, door and window cuts and the 2025 properties, and
+  Revit 2025 beams, landings and sketch arcs (#1190, #869); Areas of Revit
+  2025 to 2027 and every `IfcSpace` saying what it is (`SpaceKind`, #1437);
+  the room phase fallback (#1359); doors and windows on Revit's axes, a door
+  in no wall at its stored origin, both flips decoded (#1447, #1494, #1357);
+  wall-cut openings, door types' `FireRating`, family types' `Manufacturer`,
+  cut column quantities and Furniture Systems as Revit's export writes them
+  (#1165, #1185, #1203, #1444); IFC4's EXPRESS rules held and non-finite
+  numbers refused (#1430, #1559); the viewer's saved parameters panel (#35);
+  and attested wheels on the release page (#1466). The 2015 to 2023 and 2026
+  and 2027 readers are held to the same project's other save, and scored on
+  held-out projects only, as counts.
 
-### 0.16.0: IFC geometry and element data
+### 0.17.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.15.0, moved from the
-0.15.0 milestone when 0.15.0 shipped. Each
+The geometry and element-data work that continues after 0.16.0, moved from the
+0.16.0 milestone when 0.16.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
@@ -201,7 +218,8 @@ ends at different heights (#1067), stair flights
 with no oracle (#884, #885), the openings on releases other than 2024 and 2025
 (#227), room boundaries whose solid does not
 close (#90), beams (#94), MEP equipment and routes (#96) and ports and pipes outside
-Revit 2024 and 2025 (#869), the sketch-to-solid pipeline (#156), and the Snowdon slab
+Revit 2024 and 2025 (#869), geometry and properties on Revit 2015 to 2023, 2026 and 2027
+beyond what 0.16.0 reads (#1190), the sketch-to-solid pipeline (#156), and the Snowdon slab
 that is not in Revit's export (#309); and the export time on Revit 2015 to 2023
 (#1335). Element data: instance and type parameters with units and precedence
 (#35, #155) and the element-record fields that carry them (#223), written to

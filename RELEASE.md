@@ -282,7 +282,14 @@ project treats a silent skipped step the same as an untested change.
     this version's `CHANGELOG.md` section, verbatim, followed by
     `User guide: https://github.com/DrunkOnJava/rvt-rs/blob/vX.Y.Z/docs/user-guide.md`
     with the real tag substituted
-    (`gh release edit vX.Y.Z --notes-file <file>`).
+    (`gh release edit vX.Y.Z --notes-file <file>`). A release page holds at
+    most 125,000 characters. When the section is longer (0.16.0's is 140,174),
+    the page carries the section up to its first `###` entry heading
+    verbatim: the introduction, "Not measured", the measured paragraph and
+    "Upgrading from". Then each entry heading with its entries' bold
+    headlines, one line each and every entry kept, and a link to the full
+    section at the tag (`CHANGELOG.md` at `vX.Y.Z`), before the user-guide
+    line.
 12. **Announce (optional).** If the release is worth calling out,
     drafts live under `docs/launch/` — currently `hn-show-hn.md` and
     `reddit-r-rust.md`, with further channels (buildingSMART forum,

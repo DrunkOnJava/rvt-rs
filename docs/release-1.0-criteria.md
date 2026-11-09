@@ -70,7 +70,7 @@ RE-223, RE-322).
 Wall tops: a wall whose top join or cut pair names a floor, roof or footing that covers its whole plan is cut at its underside, which is Revit's top on 64 of the office's 65 cut tops as built and 70 of 70 at permit (RE-267);
 a wall such an element covers in part is drawn stepped (RE-320): 49 walls as built and 46 at permit, and rvt-rs's top is Revit's over the whole plan on 583 of 607 walls as built (544 before) and 571 of 589 at permit (530 before). The one wall as built that Revit cuts although 0.0243 ft² of its plan lies outside the floor, inside an abutting wall, keeps its full height, as do the walls whose layers Revit ends at different heights.
 Per-category results are in the [supported profile](supported-profile.md#geometry-on-revit-2024-and-2025-projects);
-the residuals are the issues under the 0.16.0 milestone, and `tools/re/box_bodies_vs_ifc.py` counts in Measure, per class, the bodies still drawn as their box and how much of it Revit's body fills
+the residuals are the issues under the 0.17.0 milestone, and `tools/re/box_bodies_vs_ifc.py` counts in Measure, per class, the bodies still drawn as their box and how much of it Revit's body fills
 Open: family instances other than doors and windows drawn from their saved meshes by default ([#1191](https://github.com/DrunkOnJava/rvt-rs/issues/1191)),
 and geometry on releases other than 2024 and 2025 ([#1190](https://github.com/DrunkOnJava/rvt-rs/issues/1190)).
 
@@ -210,8 +210,8 @@ Before the curtain members' `IsExternal` was counted apart, 12,672 of 57,773 wer
 The held-out and BIMcollab runs keep quantity counts only, so no property census of them is published.
 Most instance and type parameters are not ([#35](https://github.com/DrunkOnJava/rvt-rs/issues/35),
 [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155),
-the 0.16.0 milestone)
-Open: windows' `Pset_WindowCommon.FireRating`, whose R2025 values sit under family-parameter ids ([#1507](https://github.com/DrunkOnJava/rvt-rs/issues/1507)), the RE1 Plumbing water closet tank and its type, written where Revit's export holds neither ([#1496](https://github.com/DrunkOnJava/rvt-rs/issues/1496)), the office's one type-object value Revit's export omits, `Pset_SanitaryTerminalTypeCommon.Reference` ([#792](https://github.com/DrunkOnJava/rvt-rs/issues/792)),
+the 0.17.0 milestone)
+Open: windows' `Pset_WindowCommon.FireRating`, whose R2025 values sit under family-parameter ids ([#1507](https://github.com/DrunkOnJava/rvt-rs/issues/1507)), the office's one type-object value Revit's export omits, `Pset_SanitaryTerminalTypeCommon.Reference` ([#792](https://github.com/DrunkOnJava/rvt-rs/issues/792)),
 the round column's `CrossSectionArea`, `GrossVolume` and `NetVolume`, which are not the circle's, and the one meshed column a cut wall touches (RE-353, [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)),
 and the remaining values with no rule yet ([#1193](https://github.com/DrunkOnJava/rvt-rs/issues/1193)).
 Closed: [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185) (RE-354), with its two declared leave-outs: type objects' `IsExternal`, left out by the maintainer's decision, and a door type's `ThermalTransmittance`, left out as Revit's exporters disagree.
@@ -236,7 +236,7 @@ Closed: [#1185](https://github.com/DrunkOnJava/rvt-rs/issues/1185) (RE-354), wit
 None. The maintainer decided on 2026-10-21 that 1.0 ships with no gaps or
 limitations, so every row of the [supported profile](supported-profile.md)
 has to read as exact before the tag. The work that blocks this is the set of
-issues open under the 0.16.0 (geometry and element data) and 1.0.0
+issues open under the 0.17.0 (geometry and element data) and 1.0.0
 milestones.
 
 Out of scope, and so not counted as limitations: Revit 2023 and earlier (2015 to 2022 read experimentally and 2023 at partial, until a 1.x release adds each year),
