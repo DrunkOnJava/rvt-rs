@@ -57,6 +57,7 @@ use super::export_content::{
     SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY,
     WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
+use super::mesh_volume::{all_faces_flat, closed_mesh_volume};
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
 use crate::native_wall_cuts::WallCutKind;
 use std::collections::{BTreeMap, BTreeSet};
@@ -273,6 +274,8 @@ pub fn attach_scoped_with_control(
         value_source: Some("saved_graphics"),
         ..Default::default()
     };
+    // RE-387: the volume of each body drawn from a mesh of flat faces.
+    let mut volumes: Vec<(usize, f64)> = Vec::new();
     // Each element is taken as it is meshed and its decoded graphs freed with
     // its batch of shared symbols, rather than all held until the last one is
     // meshed (#1075).
@@ -316,12 +319,18 @@ pub fn attach_scoped_with_control(
             if triangles.is_empty() {
                 return Ok(());
             }
+            let volume = all_faces_flat(primitives)
+                .then(|| closed_mesh_volume(&vertices, &triangles))
+                .flatten();
             report.replaced += 1;
             report.triangles += triangles.len();
             *solid_shape = Some(SolidShape::TriangulatedFaceSet {
                 vertices_feet: vertices,
                 triangles,
             });
+            if let Some(volume) = volume {
+                volumes.push((*index, volume));
+            }
             for property in &mut set.properties {
                 if property.name == "BodySource" {
                     property.value = PropertyValue::Text(SAVED_MESH_BODY_SOURCE.into());
@@ -345,7 +354,72 @@ pub fn attach_scoped_with_control(
             Ok(())
         },
     )?;
+    add_mesh_volumes(model, &volumes);
     Ok(report)
+}
+
+/// Give each element of `volumes` (an index into the entities and the volume,
+/// cubic feet, of the closed mesh of flat faces its body was drawn from) the
+/// `NetVolume` that Revit's export writes for it, in the base quantity set of
+/// its entity, where it holds none (RE-387): revit-ifc's `NetVolumeCalculator`
+/// takes the volume of the solid it writes (CLEANROOM.md source 5, RE-243),
+/// and the mesh is that solid, which a body of flat faces gives exactly. A
+/// column gets no `GrossVolume`: Revit's export omits it on the 18 columns of
+/// the BIM4LCA office at building permit that it draws as a cut mesh, and
+/// writes it on 6 that nothing tells from them. A curtain mullion, a curtain
+/// panel and a column are the entities measured equal to Revit's on every
+/// element (RE-387); a body of another entity gets none.
+fn add_mesh_volumes(model: &mut IfcModel, volumes: &[(usize, f64)]) {
+    if volumes.is_empty() {
+        return;
+    }
+    let mut held: BTreeMap<(usize, String), usize> = BTreeMap::new();
+    for (position, entity) in model.entities.iter().enumerate() {
+        if let IfcEntity::ElementPropertySet { element, set } = entity {
+            if set.name.starts_with("Qto_") {
+                held.entry((*element, set.name.clone())).or_insert(position);
+            }
+        }
+    }
+    for &(index, volume) in volumes {
+        let Some(IfcEntity::BuildingElement { ifc_type, .. }) = model.entities.get(index) else {
+            continue;
+        };
+        let (set_name, names): (&str, &[&str]) = match ifc_type.to_ascii_uppercase().as_str() {
+            "IFCMEMBER" => ("Qto_MemberBaseQuantities", &["NetVolume"]),
+            "IFCPLATE" => ("Qto_PlateBaseQuantities", &["NetVolume"]),
+            "IFCCOLUMN" => ("Qto_ColumnBaseQuantities", &["NetVolume"]),
+            _ => continue,
+        };
+        let volume_property = |name: &str| Property {
+            name: name.into(),
+            value: PropertyValue::VolumeCubicFeet(volume),
+        };
+        let key = (index, set_name.to_string());
+        match held.get(&key) {
+            Some(&position) => {
+                if let Some(IfcEntity::ElementPropertySet { set, .. }) =
+                    model.entities.get_mut(position)
+                {
+                    for &name in names {
+                        if !has_property(set, name) {
+                            set.properties.push(volume_property(name));
+                        }
+                    }
+                }
+            }
+            None => {
+                held.insert(key, model.entities.len());
+                model.entities.push(IfcEntity::ElementPropertySet {
+                    element: index,
+                    set: PropertySet {
+                        name: set_name.into(),
+                        properties: names.iter().map(|&name| volume_property(name)).collect(),
+                    },
+                });
+            }
+        }
+    }
 }
 
 /// Whether `set` has a property called `name`.
