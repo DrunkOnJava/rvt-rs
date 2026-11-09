@@ -13,6 +13,14 @@
 //! `from_graph` (`CATALOG_FIELDS`). The lists are the readers' own constants,
 //! imported, not copied.
 //!
+//! And a decode through a `PlanCache` shared by every decode of the file gives
+//! exactly the graph, usage and refusal of the same decode that makes its own
+//! plans, whatever the lists and the order, and also through a cache whose limit
+//! is so small that it empties itself or keeps nothing. What this proves is that
+//! a shared cache equals a fresh one. That a decode without a cache equals the
+//! one before the cache existed rests on the byte identity of the exports,
+//! which Measure shows; this probe does not run the earlier code.
+//!
 //! Every record of the file's native partitions is decoded in full and
 //! projected under each of the readers' lists, whatever its class, and under
 //! the identity alone and the empty list (every field left out). The graph the
@@ -28,7 +36,17 @@
 //!   binding-context family-categories <n> symbol-families <n> same <bool>
 //!     ingest-refusals <n> same-refusals <bool>
 //!   wall-facts compared <n> same <bool>
+//!   plan-cache compared <n> mismatches <n>
+//!     (every decode through one cache shared by the whole file and every
+//!     list, against the same decode with its own plans)
+//!   plan-cache limited compared <n> mismatches <n>
+//!     (the same through a cache that holds at most 48 of cost)
+//!   plan-cache size peak-entries <n> peak-cost <n> clears <n>
+//!     (the most the shared cache held after any decode, across the seven
+//!     decodes of each record; a pass shares a cache among at most three)
 //!   mismatch <kind> <Class> (the first few)
+//!
+//! The exit status is 1 where anything above differs.
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_1335_projected_graphs -- FILE
@@ -40,7 +58,8 @@ use rvt::research::native_parameter_definitions::{
     FAMILY_BINDING_FIELDS, Registry as Definitions, SYMBOL_BINDING_FIELDS,
 };
 use rvt::research::native_parameters::{
-    GraphLimits, ObjectGraph, decode_graph_projected, decode_graph_with_catalog_usage,
+    GraphLimits, GraphUsage, ObjectGraph, PlanCache, decode_graph_cached, decode_graph_projected,
+    decode_graph_with_catalog_usage,
 };
 use rvt::research::native_walls::{WALL_READ_FIELDS, wall_facts};
 use rvt::research::schema_registry;
@@ -50,6 +69,9 @@ use std::time::{Duration, Instant};
 
 const BUDGET: Duration = Duration::from_secs(12 * 60);
 const SHOWN: usize = 12;
+/// The limit of the cache that is made to empty itself (a plan of a class with
+/// no field of its own costs 8).
+const LIMITED_COST: usize = 48;
 
 /// The readers' lists, then two that stress the mechanism: the identity alone
 /// and no field at all.
@@ -97,6 +119,42 @@ fn ingest(definitions: &mut Definitions, graph: &ObjectGraph, id: u64) -> Result
     definitions
         .ingest_binding_context(graph)
         .map_err(|error| error.to_string())
+}
+
+/// Whether two decodes of one body gave the same graph in every field.
+fn same_graph(a: &ObjectGraph, b: &ObjectGraph) -> bool {
+    a.consumed_bytes == b.consumed_bytes
+        && a.objects.len() == b.objects.len()
+        && a.objects.iter().zip(&b.objects).all(|(x, y)| {
+            x.class_tag == y.class_tag
+                && x.class_name == y.class_name
+                && x.token == y.token
+                && x.start == y.start
+                && x.fields_end == y.fields_end
+                && x.fields == y.fields
+        })
+        && a.edges.len() == b.edges.len()
+        && a.edges.iter().zip(&b.edges).all(|(x, y)| {
+            x.source_object_index == y.source_object_index
+                && x.pointer_offset == y.pointer_offset
+                && x.pointer_token == y.pointer_token
+                && x.target_object_index == y.target_object_index
+                && x.target_class_tag == y.target_class_tag
+        })
+}
+
+type Decoded = Result<(ObjectGraph, GraphUsage)>;
+
+/// Whether two decodes of one body agree: the same refusal, or the same graph
+/// and usage.
+fn same_outcome(a: &Decoded, b: &Decoded) -> bool {
+    match (a, b) {
+        (Ok((x, u)), Ok((y, v))) => {
+            u.values == v.values && u.objects == v.objects && same_graph(x, y)
+        }
+        (Err(x), Err(y)) => x.to_string() == y.to_string(),
+        _ => false,
+    }
 }
 
 fn differences(full: &ObjectGraph, projected: &ObjectGraph, keep: &[&str]) -> Vec<&'static str> {
@@ -195,7 +253,8 @@ fn main() -> Result<()> {
     }
     let formats = native_document::read_single(&mut rf, "Formats/Latest")?;
     let registry = schema_registry::parse(&formats)?;
-    println!("global-catalog {}", global_catalog(&mut rf, &registry));
+    let catalog_verdict = global_catalog(&mut rf, &registry);
+    println!("global-catalog {catalog_verdict}");
     let catalog = native_document::read_single(&mut rf, "Global/Latest")
         .and_then(|bytes| native_es_catalog::decode(&bytes, &registry))
         .ok()
@@ -229,6 +288,19 @@ fn main() -> Result<()> {
     let mut walls = 0usize;
     let mut same_walls = true;
     let mut shown = 0usize;
+    // One cache for every decode of the file, under every list, as a pass
+    // shares one: each decode is compared with the same decode that makes its
+    // own plans.
+    let mut cache = PlanCache::default();
+    let mut cached = 0usize;
+    let mut cached_wrong = 0usize;
+    // And one that empties itself or keeps nothing, so that the bound is
+    // exercised on every file.
+    let mut limited = PlanCache::with_limit(LIMITED_COST);
+    let mut limited_compared = 0usize;
+    let mut limited_wrong = 0usize;
+    let mut peak_entries = 0usize;
+    let mut peak_cost = 0usize;
     let result = native_document::extract_graphs(&mut rf, &options, |record| {
         if started.elapsed() > BUDGET {
             stopped = true;
@@ -247,11 +319,49 @@ fn main() -> Result<()> {
                 *refused.entry(class.clone()).or_default() += 1;
             }
         }
+        let full_cached =
+            decode_graph_cached(body, &registry, &limits, catalog.as_ref(), None, &mut cache);
+        cached += 1;
+        cached_wrong += usize::from(!same_outcome(&full, &full_cached));
+        let full_limited = decode_graph_cached(
+            body,
+            &registry,
+            &limits,
+            catalog.as_ref(),
+            None,
+            &mut limited,
+        );
+        limited_compared += 1;
+        limited_wrong += usize::from(!same_outcome(&full, &full_limited));
+        peak_entries = peak_entries.max(cache.entries());
+        peak_cost = peak_cost.max(cache.cost());
         for (index, keep) in KEEPS.iter().enumerate() {
             let projected =
                 decode_graph_projected(body, &registry, &limits, catalog.as_ref(), keep);
             decodes += 1;
             per_keep[index].0 += 1;
+            let projected_cached = decode_graph_cached(
+                body,
+                &registry,
+                &limits,
+                catalog.as_ref(),
+                Some(keep),
+                &mut cache,
+            );
+            cached += 1;
+            cached_wrong += usize::from(!same_outcome(&projected, &projected_cached));
+            let projected_limited = decode_graph_cached(
+                body,
+                &registry,
+                &limits,
+                catalog.as_ref(),
+                Some(keep),
+                &mut limited,
+            );
+            limited_compared += 1;
+            limited_wrong += usize::from(!same_outcome(&projected, &projected_limited));
+            peak_entries = peak_entries.max(cache.entries());
+            peak_cost = peak_cost.max(cache.cost());
             let kind = match (&full, &projected) {
                 (Ok((graph, usage)), Ok((other, other_usage))) => {
                     if usage.values != other_usage.values || usage.objects != other_usage.objects {
@@ -336,5 +446,33 @@ fn main() -> Result<()> {
         full_definitions.symbol_families.len(),
     );
     println!("wall-facts compared {walls} same {same_walls}");
+    println!("plan-cache compared {cached} mismatches {cached_wrong}");
+    println!("plan-cache limited compared {limited_compared} mismatches {limited_wrong}");
+    println!(
+        "plan-cache size peak-entries {peak_entries} peak-cost {peak_cost} clears {}",
+        cache.clears()
+    );
+    let mut failures = Vec::new();
+    if mismatches > 0 {
+        failures.push("a projected decode differs from the full one");
+    }
+    if cached_wrong > 0 {
+        failures.push("a decode through the shared cache differs from one with its own plans");
+    }
+    if limited_wrong > 0 {
+        failures.push("a decode through the limited cache differs from one with its own plans");
+    }
+    if !same || !same_refusals {
+        failures.push("the binding context or its refusals differ");
+    }
+    if !same_walls {
+        failures.push("wall_facts differs between the full and the projected graph");
+    }
+    if !matches!(catalog_verdict.as_str(), "same" | "same-refusal" | "absent") {
+        failures.push("the catalog differs between the full and the projected document");
+    }
+    if !failures.is_empty() {
+        anyhow::bail!("{}", failures.join("; "));
+    }
     Ok(())
 }

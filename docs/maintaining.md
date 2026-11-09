@@ -767,8 +767,22 @@ beside the one function that reads the projected graph
 `native_es_catalog::from_graph`), and a field that function comes to read must be
 added to its list, because a field left out reads as absent without an error.
 `probes/examples/probe_1335_projected_graphs.rs` imports the constants, decodes every
-record both ways and runs those functions on both graphs; run it
-(`-f probe=probe_1335_projected_graphs`) after any change to a list or a reader.
+record both ways and runs those functions on both graphs.
+
+A pass keeps the class plans of its decodes in a `native_parameters::PlanCache`, made
+once for each class instead of once for each record. The cache holds at most
+`PLAN_CACHE_COST` of plan cost (a unit for each field of a plan's chain and each field
+kept, and 8 for each entry) and empties itself or keeps nothing past it, so what a
+schema or a caller's field lists can make it hold is bounded, and since a decode with
+no plan makes its own, what it holds cannot change a graph. The same probe decodes
+every record through a shared cache and through one that holds almost nothing, and
+compares each with the decode that makes its own plans; it also prints the most a file
+makes the shared cache hold. That shows a shared cache equals a fresh one; that a decode
+without a cache equals the one before the cache existed rests on the exports' byte
+identity in Measure.
+
+Run the probe (`-f probe=probe_1335_projected_graphs`) after any change to a list, to a
+reader or to the plan cache: it exits 1 where anything it compares differs.
 
 ## Dependencies and the MSRV
 
