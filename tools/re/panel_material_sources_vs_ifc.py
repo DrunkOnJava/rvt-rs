@@ -14,9 +14,10 @@ parameter entry it sits in), how many plates
 - have it giving several materials of which Revit's is one (`contains`),
 - have it giving other materials only (`different`).
 
-It prints counts, fixed words, schema class and field names and a digest, never a
-material name, an ElementId or a `Tag`, so a held-out model's lines can leave the
-runner.
+Its `panel material source` lines are counts, fixed words, schema class and field
+names and a digest, never a material name, an ElementId or a `Tag`; the `detail` lines
+after them show the bytes behind a digest and are for the models whose results leave the
+runner in full.
 
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 
@@ -87,8 +88,15 @@ def digest(context):
     return hashlib.sha1(context.encode("utf-8")).hexdigest()[:8]
 
 
+BYTES_BEFORE = {}
+
+
 def sources_of(panel, records):
-    """(role, class, path, context digest) -> the material names the panel's records give there."""
+    """(role, class, path, context digest) -> the material names the panel's records give there.
+
+    A byte hit, a material's `u32` ElementId found in a record's body whatever field it is in, is a
+    source of path `bytes`, told apart by a digest of the six bytes before it.
+    """
     out = collections.defaultdict(set)
     wanted = [(panel["id"], "instance")]
     wanted += [(t, "type") for t in panel["types"]]
@@ -100,6 +108,10 @@ def sources_of(panel, records):
         for source in record["sources"]:
             key = (role, record["class"], source["path"], digest(source["context"]))
             out[key].add(source["name"])
+        for hit in record.get("byte_hits", []):
+            before = " ".join(hit["before"].split()[-6:])
+            BYTES_BEFORE[digest(before)] = before
+            out[(role, record["class"], "bytes", digest(before))].add(hit["name"])
     return out
 
 
@@ -162,6 +174,12 @@ def main():
                 counter["different"],
             )
         )
+
+
+    # The bytes behind each digest can be another ElementId of the model, so these lines are for the
+    # models whose results leave the runner in full; the scrub of the others drops them.
+    for key in sorted(BYTES_BEFORE):
+        print("panel material source detail: bytes %s = %s" % (key, BYTES_BEFORE[key]))
 
 
 if __name__ == "__main__":

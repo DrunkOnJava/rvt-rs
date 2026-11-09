@@ -15,11 +15,13 @@
 //!
 //! - `{"kind":"panel","id":P,"types":[T],"refs":[R...]}` for each panel;
 //! - `{"kind":"record","id":N,"class":"...","roles":["instance","type","ref"],
-//!   "sources":[{"path","material","name","context"}]}` for each native record
-//!   read that holds a material: `path` is the object's class and the field
-//!   path to the ElementId (`[]` for an array element), `context` the array
-//!   element's other fields where there is one, which says which parameter an
-//!   entry is;
+//!   "sources":[...],"byte_hits":[...]}` for each native record read that holds
+//!   a material. `sources` lists the fields of its graph that hold one:
+//!   `path` is the object's class and the field path to the ElementId (`[]`
+//!   for an array element) and `context` the array element's other fields where
+//!   there is one, which says which parameter an entry is. `byte_hits` lists
+//!   where its body holds a `u32` that is a material's ElementId whatever field
+//!   it is in: the offset and the bytes around it;
 //! - `{"kind":"summary",...}`.
 //!
 //! The ElementIds and material names are the model's own, so a scorer prints
@@ -44,6 +46,9 @@ use serde_json::{Value, json};
 /// How much of an array element's other fields a source keeps.
 const CONTEXT_LIMIT: usize = 400;
 
+/// How many byte hits a record's line lists.
+const BYTE_HITS_LIMIT: usize = 24;
+
 struct Source {
     path: String,
     material: u32,
@@ -59,6 +64,38 @@ fn element_id(value: &Value) -> Option<i64> {
         .get("m_id64")
         .or_else(|| identifier.get("m_id"))
         .and_then(Value::as_i64)
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Where a record's body holds a little-endian `u32` that is the ElementId of
+/// a material, whatever field it is in: the offset, the eight bytes before it
+/// and the four after. A coincidence is possible and a decoded field is not
+/// needed, so this finds a material the graph does not show.
+fn byte_hits(body: &[u8], materials: &BTreeMap<u32, String>) -> Vec<Value> {
+    let mut hits = Vec::new();
+    for (offset, window) in body.windows(4).enumerate() {
+        let word = u32::from_le_bytes([window[0], window[1], window[2], window[3]]);
+        let Some(name) = materials.get(&word) else {
+            continue;
+        };
+        let before = &body[offset.saturating_sub(8)..offset];
+        let after = &body[offset + 4..(offset + 8).min(body.len())];
+        hits.push(json!({
+            "offset": offset,
+            "material": word,
+            "name": name,
+            "before": hex(before),
+            "after": hex(after),
+        }));
+    }
+    hits
 }
 
 /// Every ElementId below `value` that is one of `materials`, with the path of
@@ -184,6 +221,8 @@ fn main() -> anyhow::Result<()> {
 
     let options = Options {
         selected_ids: roles.keys().copied().collect(),
+        releases: native_document::NATIVE_RELEASES,
+        keep_body: true,
         ..Options::default()
     };
     let (mut read, mut with_material) = (0usize, 0usize);
@@ -202,7 +241,12 @@ fn main() -> anyhow::Result<()> {
                 &mut sources,
             );
         }
-        if sources.is_empty() {
+        let hits = record
+            .body
+            .as_deref()
+            .map(|body| byte_hits(body, &materials))
+            .unwrap_or_default();
+        if sources.is_empty() && hits.is_empty() {
             return Ok(());
         }
         with_material += 1;
@@ -224,6 +268,8 @@ fn main() -> anyhow::Result<()> {
                         "context": s.context,
                     }))
                     .collect::<Vec<_>>(),
+                "byte_hits": hits.iter().take(BYTE_HITS_LIMIT).collect::<Vec<_>>(),
+                "byte_hits_total": hits.len(),
             })
         );
         Ok(())
