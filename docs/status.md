@@ -141,7 +141,10 @@ height and net volume and the pipe and duct quantities are written, as on 2025,
 except a door's or window's Area on 2027 and, on 2026 and 2027, the `ObjectType`
 of every class, which Revit's own exports of those releases do not write (418
 typed elements of nine classes on the five held-out pairs, counts only, and
-Revit writes none on any of them; #1472). Each
+Revit writes none on any of them; #1472; Griffin, 2026-11-09, chose to leave it out
+from 2026 saves only). A save of an earlier release that Revit 2026 or later
+exports has no `ObjectType` in Revit's export either, and rvt-rs writes it there:
+nothing in the file says which exporter will read it. Each
 is held to the same Autodesk project's 2025 save, on the MEP samples too
 (`tools/re/bodies_across_saves.py`, which Measure fails on a difference), and
 not to a Revit export: no held-out model holds a pipe, a duct or a port, and
