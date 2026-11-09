@@ -10,12 +10,12 @@
   42614230465, median of 3): the office as built 24.4 s and 1,423 MiB against
   21.2 s and 913 MiB, RE1 Electrical 1.94 s and 264 MiB against 1.75 s and 166
   MiB, and Core Interior 4.28 s and 305 MiB against 4.23 s and 305 MiB. In the
-  viewer's Playwright measurement (viewer tests run 42629395076, one open
+  viewer's Playwright measurement (viewer tests run 42631322761, one open
   each) the wasm memory with the meshes on is the boxes' on Einhoven (17 MiB),
   RE1 Mechanical (68) and Plumbing (54), 16 MiB more on Core Interior (308 to
   324, as with doors and windows alone), 22 MiB more on RE1 Architecture (96 to
   118) and 52 MiB more on RE1 Electrical (161 to 213), and no open is more than
-  0.3 s slower. **Not every
+  0.5 s slower. **Not every
   mesh is Revit's:** of the bodies scored on 31 models (Measure run
   42612357300) 17 classes have every vertex of Revit's export within 0.001 ft
   of the mesh, but doors are 675 of 681, sanitary terminals 68 of 94, flow
