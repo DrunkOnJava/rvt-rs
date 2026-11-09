@@ -291,6 +291,7 @@ fn synthetic_structural_ifc_has_expected_entity_counts() {
         wall_cut_openings_left_out: Default::default(),
         wall_end_reads_unmarked: Default::default(),
         wall_profile_height_checks: Default::default(),
+        port_joins_left_out: Default::default(),
     };
 
     let step = write_step(&model);

@@ -92,6 +92,11 @@ pub struct TypedProductionAppend {
     /// [`CUT_LOOP_SIZE_PROPERTIES`], [`CUT_SOLID_SIZE_PROPERTIES`],
     /// [`INSTANCE_BOX_SIZE_PROPERTIES`] and [`SYMBOL_WIRE_WIDTH_PROPERTY`].
     pub record_handoffs: BTreeMap<usize, Vec<Property>>,
+    /// The joins between two connectors that the writer leaves out because a
+    /// connector of either end is named with two partners and the two sides'
+    /// lists do not settle which is real, by reason (RE-371, #1524). Counted
+    /// in `exported.port_joins_left_out`.
+    pub port_joins_left_out: BTreeMap<String, usize>,
 }
 
 /// What a quality mode allows the document exporter to emit.
@@ -1891,8 +1896,19 @@ pub fn append_typed_production_elements(
             )
     };
     let mut connections: std::collections::BTreeSet<[(usize, u32, u32); 2]> = Default::default();
+    let mut conflicting: std::collections::BTreeSet<[(usize, u32, u32); 2]> = Default::default();
     // #847: each connector's joins, read from either side's list.
     let mut joined: HashMap<(u32, u32), Vec<(u32, u32)>> = HashMap::new();
+    // RE-371: each connector's partners, with how many of the two sides' lists
+    // name each (2 where both do). A connector has one physical partner, so a
+    // connector that two partners are named for has at least one that is not
+    // real: on the MEP samples of 2015 and 2019, each of five chains of three
+    // joins holds one that the 2024 save does not, a join of one element's
+    // connector to the other connector of an element it is joined to at its
+    // first. The partner both sides name is kept where there is exactly one;
+    // otherwise none is, and a join is written only where each of its ends
+    // keeps the other, so a join this cannot settle is counted, not guessed.
+    let mut named: BTreeMap<(u32, u32), BTreeMap<(u32, u32), usize>> = BTreeMap::new();
     for (_, id, joins) in &pending_joins {
         for &(index, other_id, other_index) in joins {
             joined
@@ -1903,8 +1919,32 @@ pub fn append_typed_production_elements(
                 .entry((other_id, other_index))
                 .or_default()
                 .push((*id, index));
+            *named
+                .entry((*id, index))
+                .or_default()
+                .entry((other_id, other_index))
+                .or_default() += 1;
+            *named
+                .entry((other_id, other_index))
+                .or_default()
+                .entry((*id, index))
+                .or_default() += 1;
         }
     }
+    let kept = |connector: (u32, u32)| -> Option<(u32, u32)> {
+        let partners = named.get(&connector)?;
+        if partners.len() == 1 {
+            return partners.keys().next().copied();
+        }
+        let mut both = partners
+            .iter()
+            .filter(|(_, sides)| **sides > 1)
+            .map(|(partner, _)| *partner);
+        match (both.next(), both.next()) {
+            (Some(partner), None) => Some(partner),
+            _ => None,
+        }
+    };
     for (entity, id, joins) in pending_joins {
         for (index, other_id, other_index) in joins {
             let Some(&other) = out.id_to_entity.get(&other_id) else {
@@ -1915,8 +1955,20 @@ pub fn append_typed_production_elements(
             }
             let mut ends = [(entity, id, index), (other, other_id, other_index)];
             ends.sort();
-            connections.insert(ends);
+            if kept((id, index)) == Some((other_id, other_index))
+                && kept((other_id, other_index)) == Some((id, index))
+            {
+                connections.insert(ends);
+            } else {
+                conflicting.insert(ends);
+            }
         }
+    }
+    if !conflicting.is_empty() {
+        out.port_joins_left_out.insert(
+            "connector_named_with_conflicting_partners".to_string(),
+            conflicting.len(),
+        );
     }
     let curve_ends: Vec<(usize, u32, &'static str)> = curve_ends
         .into_iter()

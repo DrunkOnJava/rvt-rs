@@ -322,9 +322,16 @@ pub(super) fn attach_levels_32(
         };
         let mut push = |field: &str, level: u32| {
             if let Some(name) = names.get(&level) {
-                element
-                    .fields
-                    .push((field.into(), InstanceField::String((*name).into())));
+                // A duct's own record named its reference level (RE-371): the
+                // same name is not pushed a second time.
+                let held = element.fields.iter().any(|(key, value)| {
+                    key == field && matches!(value, InstanceField::String(held) if held == *name)
+                });
+                if !held {
+                    element
+                        .fields
+                        .push((field.into(), InstanceField::String((*name).into())));
+                }
             }
         };
         if !base_unrecovered {
