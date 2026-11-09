@@ -51,6 +51,13 @@ bucket does not hold is scored against it, and so are RE1 Architecture's
 counted apart: rvt-rs writes none on a member type, a later exporter's
 IsElementExternal returning null for an element type.
 
+A key Revit's export gives several objects (a wall it splits at its storeys keeps
+its ElementId as each piece's Tag) holds one piece's properties. A property is an
+element-level value that the pieces share, so where they hold one value it is scored
+against the piece held, in the totals, and a line beside the totals says how many
+values that is. Where the pieces hold different values no piece stands for the
+element: those are counted apart, in none of equal, different and missing (#1576).
+
 What a project's own user-defined property set file places is out of W7's
 scope (the maintainer, 2026-10-26, RE-239) and counted apart: in an IFC4
 Reference View export, the glazing set on an element that is not a door or a
@@ -309,8 +316,10 @@ def ifc2x3_holds(pset, prop):
 
 
 # The keys that more than one object of a file holds, by the path `properties`
-# read (#1576); `main` prints how many values sit on them.
+# read (#1576), and, of the values on them, those whose pieces hold different
+# values: no one piece stands for them, so `main` counts them apart.
 REPEATED_KEYS = {}
+PIECES_DISAGREE = {}
 
 
 def properties(path):
@@ -333,7 +342,13 @@ def properties(path):
             objects.add(key)
             entities[key] = product.is_a()
             holders[key] += 1
-    REPEATED_KEYS[path] = {key for key, n in holders.items() if n > 1}
+    repeated = REPEATED_KEYS[path] = {key for key, n in holders.items() if n > 1}
+    pieces = collections.defaultdict(list)
+
+    def put(key, name, prop, value):
+        out[(key, name, prop)] = value
+        if key in repeated:
+            pieces[(key, name, prop)].append(value)
 
     def add(key, pset):
         for prop in pset.HasProperties or ():
@@ -351,15 +366,15 @@ def properties(path):
             if ifc2x3 and (name, prop.Name) in IFC2X3_OWN_SET:
                 name = "own:" + name
             if prop.is_a("IfcPropertySingleValue"):
-                out[(key, name, prop.Name)] = value_of(prop.NominalValue, metres_per_unit, radians_per_unit)
+                put(key, name, prop.Name, value_of(prop.NominalValue, metres_per_unit, radians_per_unit))
             elif prop.is_a("IfcPropertyEnumeratedValue"):
                 values = tuple(
                     value_of(v, metres_per_unit, radians_per_unit) for v in prop.EnumerationValues or ()
                 )
-                out[(key, name, prop.Name)] = ("enumerated", values)
+                put(key, name, prop.Name, ("enumerated", values))
             elif prop.is_a("IfcPropertyListValue"):
                 values = tuple(value_of(v, metres_per_unit, radians_per_unit) for v in prop.ListValues or ())
-                out[(key, name, prop.Name)] = ("list", values)
+                put(key, name, prop.Name, ("list", values))
 
     def standard(pset):
         return pset.is_a("IfcPropertySet") and (pset.Name or "").startswith("Pset_")
@@ -384,6 +399,9 @@ def properties(path):
         for pset in kind.HasPropertySets or ():
             if standard(pset):
                 add(key, pset)
+    PIECES_DISAGREE[path] = {
+        triple for triple, values in pieces.items() if any(not same(values[0], v) for v in values[1:])
+    }
     return out, objects, entities, ifc2x3, curtain_cache_values(f, out), export_file_values(f, out, entities)
 
 
@@ -401,27 +419,28 @@ def main(argv):
         properties(args[0]),
         properties(args[1]),
     )
+    disagree = set(PIECES_DISAGREE.get(args[1], ()))
     if their_ifc2x3:
         # A distribution element's IFC2X3 Reference is compared with the one
         # in the IFC4 type set of the entity rvt-rs writes it as.
-        theirs = {
-            (
-                (key, IFC4_TYPE_SETS[our_entities[key]], prop)
-                if pset == IFC2X3_FLOW_ELEMENT_COMMON
-                and prop == "Reference"
-                and our_entities.get(key) in IFC4_TYPE_SETS
-                else (key, pset, prop)
-            ): value
-            for (key, pset, prop), value in theirs.items()
-        }
+        def remapped(key, pset, prop):
+            if pset == IFC2X3_FLOW_ELEMENT_COMMON and prop == "Reference" and our_entities.get(key) in IFC4_TYPE_SETS:
+                return (key, IFC4_TYPE_SETS[our_entities[key]], prop)
+            return (key, pset, prop)
+
+        theirs = {remapped(*triple): value for triple, value in theirs.items()}
+        disagree = {remapped(*triple) for triple in disagree}
     rows = collections.defaultdict(lambda: [0, 0, 0, 0])
     # A key Revit's export gives several objects (a wall split at its storeys
     # keeps its ElementId as each piece's Tag) holds one piece's properties,
-    # which an element-level value shares with the others. These values are
-    # scored in the totals as before; what they come to is printed beside
-    # them, so a value that differs only on such keys shows (#1576).
+    # which an element-level value shares with the others. Where the pieces
+    # hold one value it is scored in the totals as before, and what these
+    # come to is printed beside them. Where they hold different values no
+    # piece stands for the element, so those are counted apart (#1576).
     repeated = REPEATED_KEYS.get(args[1], set())
     on_repeated = [0, 0, 0]
+    pieces_apart = collections.Counter()
+    pieces_apart_keys = set()
     missing_values = collections.defaultdict(collections.Counter)
     missing_classes = collections.defaultdict(collections.Counter)
     worst = []
@@ -436,6 +455,10 @@ def main(argv):
         if key not in our_objects:
             if key.startswith("opening:"):
                 unwritten_openings[(pset, prop)] += 1
+            continue
+        if (key, pset, prop) in disagree:
+            pieces_apart[(pset, prop)] += 1
+            pieces_apart_keys.add(key)
             continue
         if (key, pset, prop) in their_file:
             from_file[(pset, prop)] += 1
@@ -508,6 +531,12 @@ def main(argv):
         f"(#1576): {sum(on_repeated)} on {len(repeated)} such Tags; equal {on_repeated[0]}, "
         f"different {on_repeated[1]}, missing {on_repeated[2]}"
     )
+    print(
+        "values on a Tag Revit's export gives more than one object, whose pieces hold different values, counted apart "
+        f"(#1576): {sum(pieces_apart.values())} on {len(pieces_apart_keys)} such Tags"
+    )
+    for (pset, prop), n in sorted(pieces_apart.items()):
+        print(f"  on a repeated Tag, {pset}.{prop}: {n} counted apart")
     if apart_objects:
         print(
             f"rvt-rs values on openings Revit's export of this file lacks but its export of a sibling file"
