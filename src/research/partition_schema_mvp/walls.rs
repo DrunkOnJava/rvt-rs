@@ -829,8 +829,9 @@ pub(super) fn attach_wall_layers(
                 .push((WALL_TOP_JOINED_FIELD.into(), InstanceField::Bool(*joined)));
         }
         // RE-364 section 9: on 2015 to 2023 a record's control joins read
-        // empty, but its steps do not. Every wall of Autodesk's samples holds
-        // the step classes, and so the uncut and whole flags, of its later save.
+        // empty, but its steps do not, and every wall of Autodesk's samples
+        // holds the step classes, so the uncut flag, of its later save. Its
+        // Height is that save's on every wall both saves hold.
         if wall.id.is_some_and(|id| uncut.contains(&u64::from(id))) {
             wall.fields
                 .push((WALL_UNCUT_FIELD.into(), InstanceField::Bool(true)));
@@ -918,7 +919,12 @@ pub(super) fn attach_wall_layers(
                 ));
             }
         }
-        if wall.id.is_some_and(|id| whole.contains(&u64::from(id))) {
+        // RE-364 section 9: the whole flag also reads as on the later save,
+        // but that save draws 28 of these walls with their layers' joins and
+        // writes them no areas. This save reads no layer joins, so it would
+        // write their record boxes' areas and volumes, which on 156 of their
+        // 163 old saves are not the layered body's volume.
+        if !narrow && wall.id.is_some_and(|id| whole.contains(&u64::from(id))) {
             wall.fields
                 .push((WALL_WHOLE_FIELD.into(), InstanceField::Bool(true)));
         }
