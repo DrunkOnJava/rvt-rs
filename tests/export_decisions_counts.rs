@@ -110,16 +110,19 @@ const CASES: [Case; 5] = [
         reasons: &["room_not_in_export_phase"],
         frames: true,
     },
+    // Einhoven keeps no box: every boxed element of a Revit 2023 file is drawn
+    // from its saved mesh by default (#1191), so `body_is_record_box` is not one.
     Case {
         model: "Revit_IFC5_Einhoven",
         phase: None,
         reasons: &[
-            "body_is_record_box",
             "low_confidence_schema_scan_candidate",
             "unsupported_geometry_missing_level",
         ],
         frames: false,
     },
+    // The office has no family-instance space left as a box for the same
+    // reason, so `space_outline_is_record_box` is not one either (#1191).
     Case {
         model: "nordic-office-as-built",
         phase: None,
@@ -127,7 +130,6 @@ const CASES: [Case; 5] = [
             "body_is_record_box",
             "element_record_empty_curtain_panel",
             "element_record_without_volume",
-            "space_outline_is_record_box",
             "unsupported_geometry_unresolved_host",
         ],
         frames: true,
