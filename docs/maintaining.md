@@ -655,19 +655,28 @@ measurement meets W4, W6 and W7, so a pair that arrives before those pass on the
 reference models is sealed until the final 1.0 check, never fetched or opened
 before it.
 
-- **When a pair arrives** (a contributor's `.rvt` and its release's own IFC4
-  export, of Revit 2024 to 2027, under Apache-2.0, MIT or CC BY 4.0), seal it:
+- **When a pair arrives** (a contributor's `.rvt` and its release's own IFC4 or
+  IFC4X3 export, of Revit 2024 to 2027, under Apache-2.0, MIT or CC BY 4.0,
+  written `CC-BY-4.0`), seal it:
   `tools/ci/seal-holdout-pair.sh RELEASE NAME RVT_URL IFC_URL LICENCE CONTRIBUTOR`.
   It downloads both files to a temporary directory, hashes and counts them,
-  deletes them and adds a row to `research/sealed-holdout-models.tsv`. Do not
+  deletes them and adds a row to `research/sealed-holdout-models.tsv`. It looks
+  only at the first 64 KiB of each, to refuse what is not a pair: a project that
+  is not an OLE2 file, an IFC that is not ISO 10303-21 of IFC4 or IFC4X3 naming
+  Autodesk Revit of that release (a share page, a zip, another release's export
+  or an IFC2X3 view), and a row the check would fail. The registry takes
+  neither CC0 nor an unlicensed model, which the counts-only held-out lists do:
+  a pair sealed for 1.0 must be one CI may fetch at the final check. Do not
   open either file, run a probe on it or read its IFC, here or on a runner.
   Commit the row in a pull request of its own and thank the contributor without
   quoting anything from the files.
 - **The guard** is the PII guard job's `tools/ci/check_sealed_holdout.py`. It
   fails on a malformed row, on any tracked file other than the registry that
-  holds one of its URLs or hashes, and on any workflow, script or code that
-  names the registry, so no Measure run can fetch a sealed pair. Docs may name
-  the registry; they may not hold its URLs.
+  holds one of its URLs or hashes, and on any tracked file that is not Markdown
+  and names the registry, other than the seal script and the check. Docs may
+  name the registry; they may not hold its URLs. It sees only what is
+  committed: a path built at run time, a glob over `research/` or a Measure run
+  dispatched from an unreviewed branch are for review to catch.
 - **The final check** is the registry's only reader still to come. It is added
   when W4, W6 and W7 pass on the reference models, in a pull request that adds
   its Measure input to the guard's `ALLOWED`. It measures each pair once, counts

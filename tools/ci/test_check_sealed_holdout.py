@@ -7,7 +7,7 @@ import check_sealed_holdout as c
 RVT_SHA = "a" * 64
 IFC_SHA = "b" * 64
 RVT_URL = "https://example.org/pairs/house-2026.rvt"
-IFC_URL = "https://example.org/pairs/house-2026.ifc"
+IFC_URL = "https://example.org/Owner/Pairs/House-2026.ifc"
 HEADER = "# sealed pairs\n"
 
 
@@ -37,6 +37,13 @@ class Rows(unittest.TestCase):
 
     def test_a_short_row_fails(self):
         self.assertTrue(judge(HEADER + row().rsplit("\t", 1)[0] + "\n"))
+
+    def test_a_row_with_a_twelfth_field_fails(self):
+        self.assertTrue(judge(HEADER + row() + "\textra\n"))
+
+    def test_a_name_outside_the_pattern_fails(self):
+        for name in ("house 2026", "house/2026", "house;rm"):
+            self.assertTrue(judge(row(name=name)), name)
 
     def test_a_release_outside_1_0_fails(self):
         for release in ("2023", "2028", "26"):
@@ -85,6 +92,13 @@ class Files(unittest.TestCase):
         for path in ("research/holdout-models.tsv", "docs/reference-models.md", ".github/workflows/measure.yml"):
             self.assertTrue(judge(self.REG, {path: f"x\t{IFC_URL}\n"}), path)
 
+    def test_a_mixed_case_url_in_another_case_fails(self):
+        self.assertTrue(judge(self.REG, {"research/holdout-models.tsv": IFC_URL.lower()}))
+
+    def test_a_data_or_text_file_naming_it_fails(self):
+        for path in ("research/holdout-models.tsv", "docs/schemas/x.json", "tools/ci/test-targets.txt"):
+            self.assertTrue(judge(self.REG, {path: "sealed-holdout-models.tsv"}), path)
+
     def test_a_sealed_hash_in_any_case_fails(self):
         self.assertTrue(judge(self.REG, {"research/holdout-models.tsv": RVT_SHA.upper()}))
 
@@ -98,6 +112,40 @@ class Files(unittest.TestCase):
 
     def test_a_doc_may_not_hold_a_sealed_url(self):
         self.assertTrue(judge(self.REG, {"docs/maintaining.md": f"see {RVT_URL}"}))
+
+
+OLE = bytes.fromhex("d0cf11e0a1b11ae1") + b"\0" * 24
+STEP = (
+    b"ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('ViewDefinition [ReferenceView]'),'2;1');\n"
+    b"FILE_NAME('house.ifc','2026-11-09T10:00:00',(''),(''),'ODA SDAI 24.12','Autodesk Revit 2026 (ENU)','');\n"
+    b"FILE_SCHEMA(('IFC4'));\nENDSEC;\nDATA;\n"
+)
+
+
+class Pair(unittest.TestCase):
+    def test_a_project_and_its_own_ifc4_export_pass(self):
+        self.assertEqual(c.pair_problems(OLE, STEP, "2026"), [])
+
+    def test_an_ifc4x3_export_passes(self):
+        self.assertEqual(c.pair_problems(OLE, STEP.replace(b"'IFC4'", b"'IFC4X3_ADD2'"), "2026"), [])
+
+    def test_a_share_page_or_zip_as_the_project_fails(self):
+        for head in (b"<!DOCTYPE html><html>", b"PK\x03\x04" + b"\0" * 20, b""):
+            self.assertTrue(c.pair_problems(head, STEP, "2026"), head[:8])
+
+    def test_an_ifc_that_is_not_step_fails(self):
+        for head in (b"<!DOCTYPE html>", b"PK\x03\x04", b"\xef\xbb\xbfISO-10303-21;"):
+            self.assertTrue(c.pair_problems(OLE, head, "2026"), head[:8])
+
+    def test_an_ifc2x3_view_fails(self):
+        self.assertTrue(c.pair_problems(OLE, STEP.replace(b"'IFC4'", b"'IFC2X3'"), "2026"))
+
+    def test_another_releases_export_fails(self):
+        self.assertTrue(c.pair_problems(OLE, STEP, "2025"))
+        self.assertTrue(c.pair_problems(OLE, STEP.replace(b"Autodesk Revit 2026", b"Autodesk Revit 2027"), "2026"))
+
+    def test_an_export_that_names_no_revit_fails(self):
+        self.assertTrue(c.pair_problems(OLE, STEP.replace(b"Autodesk Revit 2026 (ENU)", b"ArchiCAD 27"), "2026"))
 
 
 if __name__ == "__main__":

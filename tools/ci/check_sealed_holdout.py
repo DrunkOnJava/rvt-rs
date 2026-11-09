@@ -18,11 +18,17 @@ check. This fails when:
     name it; code may not, so no workflow or script can read it.
   - the registry itself is missing.
 
+What it cannot see: a path built at run time, a glob over research/, or a
+Measure run dispatched from a branch that has not been reviewed. It holds what
+is committed, which review reads.
+
 The final 1.0 check is the one reader still to come: when W4, W6 and W7 pass
 on the reference models, its Measure input is added to ALLOWED in the same
 pull request that adds it, where review sees it.
 
-Run from the repository root.
+Run from the repository root. The seal script also calls it with `--rows FILE`
+(judge a candidate registry's rows alone) and `--pair RVT_HEAD IFC_HEAD
+RELEASE` (judge the first bytes of a pair before it is sealed).
 """
 import pathlib
 import re
@@ -39,6 +45,8 @@ SHA = re.compile(r"[0-9a-f]{64}")
 URL = re.compile(r"https://[^\s\t]+")
 LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})")
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+OLE2 = bytes.fromhex("d0cf11e0a1b11ae1")
+SCHEMA = re.compile(rb"FILE_SCHEMA\s*\(\s*\(\s*'([A-Za-z0-9_]+)'")
 
 
 def rows(text):
@@ -96,6 +104,27 @@ def file_problems(path, text, sealed):
     return problems
 
 
+def pair_problems(rvt_head, ifc_head, release):
+    """What is wrong with a pair, from the first bytes of each file only: the
+    project must be an OLE2 compound file, and the IFC an ISO 10303-21 file of
+    IFC4 or IFC4X3 that names `Autodesk Revit <release>` within those bytes
+    (Revit's export names itself in the header or the first entities). A share
+    link that answers with an HTML page, a zip, another release's export or an
+    IFC2X3 view fails here, before the pair is sealed and spent."""
+    problems = []
+    if not rvt_head.startswith(OLE2):
+        problems.append("the .rvt is not an OLE2 compound file")
+    if not ifc_head.startswith(b"ISO-10303-21;"):
+        problems.append("the IFC is not an ISO 10303-21 file")
+    else:
+        schema = SCHEMA.search(ifc_head)
+        if not schema or not schema.group(1).upper().startswith(b"IFC4"):
+            problems.append("the IFC's schema is not IFC4 or IFC4X3")
+        if f"Autodesk Revit {release}".encode() not in ifc_head:
+            problems.append(f"the IFC does not name Autodesk Revit {release} in its first bytes")
+    return problems
+
+
 def judge(registry_text, files):
     """Every problem with `registry_text` (None when the file is missing) and `files` (path -> text)."""
     if registry_text is None:
@@ -124,6 +153,15 @@ def tracked_texts():
 
 
 def main():
+    if sys.argv[1:2] == ["--rows"] and len(sys.argv) == 3:
+        problems, _ = row_problems(pathlib.Path(sys.argv[2]).read_text())
+        print("\n".join(problems))
+        return 1 if problems else 0
+    if sys.argv[1:2] == ["--pair"] and len(sys.argv) == 5:
+        rvt, ifc, release = sys.argv[2:]
+        problems = pair_problems(pathlib.Path(rvt).read_bytes(), pathlib.Path(ifc).read_bytes(), release)
+        print("\n".join(problems))
+        return 1 if problems else 0
     registry = pathlib.Path(REGISTRY)
     registry_text = registry.read_text() if registry.is_file() else None
     files = tracked_texts()
