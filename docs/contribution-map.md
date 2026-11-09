@@ -42,16 +42,16 @@ milestone is for.
 | [#1427](https://github.com/DrunkOnJava/rvt-rs/issues/1427) | Semantic check: recalibrate on real pull requests, and settle fails that noise can cross (#1334 follow-up) |
 | [#1407](https://github.com/DrunkOnJava/rvt-rs/issues/1407) | Wall 2177212: its saved mesh is 0.114 ft shorter than Revit's IFC body (RE-340 follow-up) |
 | [#1357](https://github.com/DrunkOnJava/rvt-rs/issues/1357) | Doors and windows: decode hand flip and facing flip |
-| [#1335](https://github.com/DrunkOnJava/rvt-rs/issues/1335) | Revit 2015 to 2023 exports: the remaining time against 0.11.0 after #1237 |
+| [#1335](https://github.com/DrunkOnJava/rvt-rs/issues/1335) | Revit 2015–2023 exports: the remaining time against 0.11.0 after #1237 |
 | [#1261](https://github.com/DrunkOnJava/rvt-rs/issues/1261) | Revit 2018 and 2021 projects decode with no rooms (Revit's IFC has 73 and 8) |
 | [#1247](https://github.com/DrunkOnJava/rvt-rs/issues/1247) | v0.12.0 vs v0.6.1: some meshes export as bounding boxes; some doors as IfcOpeningElement |
 | [#1197](https://github.com/DrunkOnJava/rvt-rs/issues/1197) | Help wanted: outputs only Revit can produce (a DWG export for the second witness edge, API fixtures for extensible storage) |
 | [#1195](https://github.com/DrunkOnJava/rvt-rs/issues/1195) | Viewer: show real decode progress, and say clearly when a model is too large for the browser |
-| [#1194](https://github.com/DrunkOnJava/rvt-rs/issues/1194) | Geometry and element remainders on Revit 2024 and 2025: wall corners (a corner of three or more walls is read from the join order since RE-322; left open are layered corners of two walls, a layered wall at layered walls and the corners a column cuts), landing undersides, column sections, Areas, room phases |
-| [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165) | Unfilled openings Revit's export writes and rvt-rs does not: rectangular wall openings are written since RE-321 and fire hose cabinets, a door's cut in a second wall that runs across its wall and a curtain wall's where nothing trims its box since RE-338 (BIM4LCA office only measured); left open are a door's 10 ft cut in a wall along its own, the curtain walls that reach a wall's end or have another wall beside them, a door's cut in itself and a wall's own profile |
-| [#1117](https://github.com/DrunkOnJava/rvt-rs/issues/1117) | Viewports and their centres on sheets (a contributor's request) |
-| [#1067](https://github.com/DrunkOnJava/rvt-rs/issues/1067) | BIM4LCA office: walls a floor covers in part are drawn stepped since RE-320 (49 as built, 46 at permit); left open are the walls whose layers Revit ends at different heights or cuts at a height no join names, the openings that reach a wall's top, and one wall as built whose 0.0243 ft² stub inside an abutting wall Revit cuts (RE-257, RE-267, RE-320); the Basement walls on sloped footings are #1384 (RE-336) and the walls that embed a curtain wall RE-335 |
-| [#885](https://github.com/DrunkOnJava/rvt-rs/issues/885) | Roof cases with no oracle: 2024 gables and hips, a slope arrow stopping short; of puzzbobb's T and U roofs, each sloped by six slope arrows, the T is drawn as its planes and the U, whose long outer walls Revit slopes along the arms only, as its record box (RE-307) |
+| [#1194](https://github.com/DrunkOnJava/rvt-rs/issues/1194) | Geometry and element remainders on Revit 2024 and 2025: wall corners, landing undersides, column sections, Areas, room phases |
+| [#1165](https://github.com/DrunkOnJava/rvt-rs/issues/1165) | Unfilled openings Revit's export writes and rvt-rs does not: a door's further cuts, curtain-wall cuts and fire hose cabinets (591 values on the office) |
+| [#1117](https://github.com/DrunkOnJava/rvt-rs/issues/1117) | Feature: extract viewports and viewport centers placed on sheets. |
+| [#1067](https://github.com/DrunkOnJava/rvt-rs/issues/1067) | Walls drawn taller than Revit's body on 78 of the BIM4LCA office's walls (RE-257) |
+| [#885](https://github.com/DrunkOnJava/rvt-rs/issues/885) | Roof cases with no oracle: 2024 gables and hips, a square two-cut with a fascia, a slope arrow stopping short (RE-199 follow-up) |
 | [#884](https://github.com/DrunkOnJava/rvt-rs/issues/884) | Hip roofs over T and U footprints stay level blocks: straight-skeleton split events (RE-199 follow-up) |
 | [#869](https://github.com/DrunkOnJava/rvt-rs/issues/869) | MEP ports and pipe cylinders outside Revit 2024 and 2025: no 2026 or 2027 MEP model has a Revit export to measure against |
 | [#834](https://github.com/DrunkOnJava/rvt-rs/issues/834) | A port's SystemType (its connector's system classification) and an electrical port's Flow=Source/Sink description are not written (RE-212 follow-up) |
@@ -60,7 +60,7 @@ milestone is for.
 | [#323](https://github.com/DrunkOnJava/rvt-rs/issues/323) | Roofs Revit's export decomposes into IfcSlab .ROOF. parts (7 of Snowdon's 20) are written whole |
 | [#309](https://github.com/DrunkOnJava/rvt-rs/issues/309) | Snowdon: one record-backed slab (ElementId 2062318) is not in Revit's export |
 | [#227](https://github.com/DrunkOnJava/rvt-rs/issues/227) | Opening geometry from the symbol's cut loop on releases other than 2024 and 2025: no Revit export of another release's openings is in CI |
-| [#223](https://github.com/DrunkOnJava/rvt-rs/issues/223) | Element record +0x46: the flag word is unread (+0x4a is the schema class, RE-76) |
+| [#223](https://github.com/DrunkOnJava/rvt-rs/issues/223) | Element record +0x46: the flag word's bits no Revit export has tested (RE-261) |
 | [#156](https://github.com/DrunkOnJava/rvt-rs/issues/156) | RE: Reproduce sketch-to-solid geometry reconstruction pipeline |
 | [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155) | RE: Decode parameter-store wire formats and exact Revit unit encodings |
 | [#96](https://github.com/DrunkOnJava/rvt-rs/issues/96) | CLASS-16: MEP: the duct family, sloped runs, fittings and route geometry left after pipes and ducts |
@@ -79,22 +79,22 @@ The requirements these serve, each with its bar, status and evidence, are in
 | [#1565](https://github.com/DrunkOnJava/rvt-rs/issues/1565) | W5: a sealed registry for fresh held-out pairs, read only by the final 1.0 check |
 | [#1444](https://github.com/DrunkOnJava/rvt-rs/issues/1444) | rvt-rs reads no reinforcing bars or element assemblies |
 | [#1209](https://github.com/DrunkOnJava/rvt-rs/issues/1209) | W7: coverings' `GrossArea` on ceilings in pieces and cut ceilings, and the roofing coverings (RE-297) |
-| [#1208](https://github.com/DrunkOnJava/rvt-rs/issues/1208) | W7: single-layer slabs' `Width` and `Length`, sloped floors' `Depth` and the stair landings' volume (RE-295) |
-| [#1207](https://github.com/DrunkOnJava/rvt-rs/issues/1207) | W7: spaces' `GrossVolume`, stepped rooms' `NetVolume` and Revit 25's area quantities |
-| [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203) | W7: the round column's `CrossSectionArea`, `GrossVolume` and `NetVolume` (not the circle's), the one meshed column a cut wall touches and the cut columns on releases other than Revit 2024; its `OuterSurfaceArea`, the meshed columns' two quantities and a joined column's `Length` are written (RE-353, RE-291) |
+| [#1208](https://github.com/DrunkOnJava/rvt-rs/issues/1208) | W7: single-layer slabs' Width and Length, sloped floors' Depth and the stair landings' volume (RE-295, RE-298) |
+| [#1207](https://github.com/DrunkOnJava/rvt-rs/issues/1207) | W7: spaces' GrossVolume, stepped rooms' NetVolume and Revit 25's area quantities (RE-296) |
+| [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203) | W7: the round column and the meshed columns' values, and the section check on box-drawn columns |
 | [#1193](https://github.com/DrunkOnJava/rvt-rs/issues/1193) | W7: the BIM4LCA office's remaining property values without a rule (column Slope, opening Reference, mullion Span, sloped slab PitchAngle) |
 | [#1192](https://github.com/DrunkOnJava/rvt-rs/issues/1192) | W10: check that every number in the README and the supported profile names its model |
 | [#1191](https://github.com/DrunkOnJava/rvt-rs/issues/1191) | W6: draw family instances from their saved meshes by default (decode the remaining saved-graphics faces) |
 | [#1190](https://github.com/DrunkOnJava/rvt-rs/issues/1190) | W2, W6, W7: geometry and properties on Revit 2015 to 2023, 2026 and 2027 projects, beyond each element's box |
 | [#1189](https://github.com/DrunkOnJava/rvt-rs/issues/1189) | W3: read family (`.rfa`) and template (`.rte`, `.rft`) files like projects: types, parameters and geometry |
-| [#1158](https://github.com/DrunkOnJava/rvt-rs/issues/1158) | Native records on Revit 2015 to 2022: saved parameters and the phase order are read there since RE-281, experimentally; the other readers built on them (types, stairs, symbol cuts, mullion hosts, ports, saved meshes) stay on 2023 to 2027 until each is measured on a 4-byte ElementId (RE-280, RE-281). RE-342 reads the saved graphics of the sample projects of 2015 to 2022 as research (an `InstanceInfo` with no `m_GRepId` is the default representation: 5,459 to 5,756 of each release's 6,241 to 6,433 family instances are meshed, and the same projects' Revit 2023 downloads give the same triangle count, box and area on 11,482 of 11,482 of those of 2021 and 2022, with 3,662 of 45,349 elements of the 2015 to 2022 pairs differing; deferred history episodes, `FacetedTopology9` under normal binding 2 where the stored normals follow the winding, and a set `m_bHasScale` with a rotation matrix are read too, on research routes no export takes, on STE1200's own run of the probe on a Revit 2020 family, a file CI cannot fetch), with no export reading them yet; the probe `probe_re342_saved_graphics_pre2023` runs on your own file |
-| [#1075](https://github.com/DrunkOnJava/rvt-rs/issues/1075) | Models with a partition stream over 256 MiB opened empty: reported since 0.11.0, with `--large-model`, not yet measured on a model over the limits |
+| [#1158](https://github.com/DrunkOnJava/rvt-rs/issues/1158) | Native records on Revit 2015 to 2022: types, materials, stairs, cut loops, mullion hosts, connectors, family forms and saved meshes are read only from 2023 |
+| [#1075](https://github.com/DrunkOnJava/rvt-rs/issues/1075) | Bug: models with a partition stream over 256 MiB open empty, with no error |
 | [#1046](https://github.com/DrunkOnJava/rvt-rs/issues/1046) | W7: base quantities Revit computes from its joined geometry (wall areas and volumes, mullion surfaces) |
-| [#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016) | W7: Revit's base quantities are not measured (52,038 Qto_ values on the BIM4LCA office) |
-| [#879](https://github.com/DrunkOnJava/rvt-rs/issues/879) | Revit 2015 BIMcollab example: 3 air terminals Revit's export leaves out, and 16 footings on no storey (their saved Level is unset, RE-281) |
+| [#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016) | W7: Revit's base quantities: the census runs, and what is left is on #1046, #1165, #1203, #1207, #1208 and #1209 |
+| [#879](https://github.com/DrunkOnJava/rvt-rs/issues/879) | Revit 2015 BIMcollab example: 3 air terminals Revit's export leaves out, and 16 footings on no storey |
 | [#878](https://github.com/DrunkOnJava/rvt-rs/issues/878) | Revit 2015: the elements' own GlobalIds are not rebuilt (0 of 241 on BIMcollab's structural example; project, site, building and storeys are) |
 | [#874](https://github.com/DrunkOnJava/rvt-rs/issues/874) | 1.0: practitioner workflow reports folded into the supported profile |
-| [#792](https://github.com/DrunkOnJava/rvt-rs/issues/792) | BIM4LCA office: fixture 3095244 is IfcSanitaryTerminal where Revit writes IfcFlowTerminal, and the permit model writes a column Revit's export leaves out; it also carries the office's one type-object value Revit's export omits, `Pset_SanitaryTerminalTypeCommon.Reference` (when #1185 closed) |
+| [#792](https://github.com/DrunkOnJava/rvt-rs/issues/792) | BIM4LCA office: fixture 3095244 is IfcSanitaryTerminal where Revit writes IfcFlowTerminal, and the permit model writes a column Revit's export leaves out |
 | [#421](https://github.com/DrunkOnJava/rvt-rs/issues/421) | Element records beyond 2024/2025: derive the marker from the schema and measure the older envelope (RE-80 follow-up) |
 | [#408](https://github.com/DrunkOnJava/rvt-rs/issues/408) | Held-out validation: measure on licensed models not used to develop the decoder |
 
