@@ -168,7 +168,17 @@ project treats a silent skipped step the same as an untested change.
    `tests/fixtures/synthetic-project.ifc` and `synthetic-structural.ifc`,
    the samples the viewer offers for download; CI validates that output
    on every run, and no check compares it with the committed copies.
-   Merging this pull request is not the release.
+   Merging this pull request is not the release. Before merging, run
+   `publish.yml` on the pull request's branch,
+   `gh workflow run publish.yml --ref <branch>`: a dispatched run builds and
+   checks what the tag run does before it publishes (the wheels installed and
+   opening a model, `cargo install` with the CLI sample, the docs.rs preview
+   and the viewer load smoke) and publishes nothing. It passes the tag,
+   signature, branch and CI checks by design, since it has no tag. A defect
+   in the workflow cannot be fixed by re-running a tag run, since a re-run
+   uses the workflow as tagged: v0.16.0's stopped at the viewer smoke, which needed
+   `rvt-elements` on its PATH, so that tag was never published and is
+   replaced by 0.16.1.
 8. **Confirm the registries' trusted publishers.** crates.io and PyPI
    each need one for repository DrunkOnJava/rvt-rs, workflow
    `publish.yml`, environment `crates-io` or `pypi` (see
