@@ -1456,15 +1456,34 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.16.1** (2026-11-09) is the latest release: crates.io (`rvt` and
+- **v0.17.0** (2026-11-09) is the latest release: crates.io (`rvt` and
   `rvt-rs-mcp`, both published from the tag), the `rvt` wheels and sdist on
   PyPI, GitHub Release archives for Linux, macOS and Windows, and the
   container image, each checked from its published artifacts
   ([`install.md`](install.md)); docs.rs had built `rvt` when they were checked
-  (`rvt-rs-mcp` is a binary crate with no documentation there). It is the first
-  published release of 0.16: the `v0.16.0` tag was
-  made and never published, because its publish run stopped at the viewer
-  smoke test (#1569). It reads much more of Revit 2015 to 2023 projects, with
+  (`rvt-rs-mcp` is a binary crate with no documentation there). It reads more
+  of Revit 2015 to 2023 projects: curtain walls are `IfcCurtainWall` with their
+  mullions and panels under them, along their own axes, with their type,
+  family, material, `Span`, `Length` and `IsExternal`; steel beams of 2017 to
+  2023 are drawn as their type's I section; walls write their `Height` where
+  their record names nothing joined to or cutting them; and ducts of Revit 2015
+  to 2027 take their type, section, line and ports from their native records,
+  with a port's `SystemType` and its joins. On Revit 2024 a room whose stored
+  solid neither the walk nor the span closes takes its floor's outline from
+  the solid's edges, a wall whose floor covers all of its plan but a stub
+  inside another wall is cut whole, and a wall whose edited profile closes
+  below its record box ends at the profile's highest point with the profile's
+  `Height`; each of the last two rests on one wall. A Revit 2026 or 2027 save is
+  written without an `ObjectType`, as Revit's own export of those releases
+  writes none, and two claims every export made are now made only where they
+  hold (#1598). No 2015 to 2023 curtain wall, curtain part, steel beam, duct or
+  wall `Height` is scored against a Revit IFC4 export: they are held to the
+  same Autodesk projects' 2024 saves, which cannot catch an error those saves
+  share. `[0.17.0]` in [`CHANGELOG.md`](../CHANGELOG.md) gives what each change
+  measures and what it does not.
+- **v0.16.1** (2026-11-09): the first published release of 0.16: the
+  `v0.16.0` tag was made and never published, because its publish run stopped
+  at the viewer smoke test (#1569). It reads much more of Revit 2015 to 2023 projects, with
   beams along their location lines, walls joined by their join lists (and a
   wall at an angle along its line where its box closes on it), pipes drawn as
   their cylinders with their types, quantities and ports, `Constraints` Level
@@ -1572,7 +1591,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.16.1 has, and is ahead of it by the fragments
+- `main` has everything v0.17.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
