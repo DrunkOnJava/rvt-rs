@@ -4334,6 +4334,29 @@ pub(crate) fn build_export_diagnostics_and_decisions(
              no model form (RE-312)."
         ));
     }
+    // RE-363: a plumbing fixture whose type draws nothing visible has no body
+    // for Revit's exporter to write. A check that could not run keeps them all.
+    let invisible_types: Vec<crate::partition_element_records::LeftOutElement> = rf
+        .invisible_type_instances()
+        .values()
+        .flatten()
+        .cloned()
+        .collect();
+    record_left_out(
+        &mut skipped,
+        &mut decisions,
+        "element_record_family_type_draws_nothing",
+        None,
+        invisible_types,
+        ClassesBy::Class,
+    );
+    if let Some((checked, error)) = rf.invisible_type_error() {
+        warnings.push(format!(
+            "{checked} plumbing fixture type(s) could not be checked for visible geometry \
+             ({error}); their instances are written, though Revit's export leaves out one whose \
+             type draws nothing visible (RE-363)."
+        ));
+    }
     if !empty_panels.types_with_material.is_empty() {
         warnings.push(format!(
             "{} empty curtain panel type(s) carry a material, which an empty panel should not: {:?}",
