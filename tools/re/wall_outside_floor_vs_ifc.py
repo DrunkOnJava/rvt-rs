@@ -32,7 +32,7 @@ Output, one record per line (lengths in feet, areas in square feet):
                                  a wall that has a piece
   piece tag:<Tag> floors <Tags> area <A> width <W> along <s0> <s1> of <L>
        across <t0> <t1> of <T> in other walls <share> kept <share>
-       | <class> | form <Revit's Body> | joins <...>
+       | <class> | axis <beyond|straddle|within|none> | form <Revit's Body> | joins <...>
                                  a piece: its extent along the wall's long axis
                                  from its start and across it from one face, the
                                  share of it inside the plan of another of
@@ -41,9 +41,13 @@ Output, one record per line (lengths in feet, areas in square feet):
                                  Revit's body is at the wall's own height
                                  (`kept`; 0 where it is cut)
   axis tag:<Tag> <s0> <s1> inside the elements <share>
-                                 Revit's Axis of a wall that has a piece: where it
-                                 starts and ends along the same axis and the share
-                                 of its length inside the plans of the elements
+                                 Revit's Axis of a wall that has a piece (a straight
+                                 polyline, indexed poly curve or trimmed line): where
+                                 it starts and ends along the same axis and the share
+                                 of its length inside the plans of the elements. A
+                                 piece's `axis` says whether it lies wholly past one
+                                 end of the Axis (`beyond`), across one (`straddle`)
+                                 or wholly between them (`within`)
   census <class> along <span|end|inner> across <span|end|inner> embedded <0|1> small <0|1>: <n>
                                  pieces by the class of Revit's top there (kept
                                  at 0.99 or more, cut at 0.01 or less, mixed);
@@ -54,6 +58,7 @@ Output, one record per line (lengths in feet, areas in square feet):
                                  more of it lies inside other walls; and whether
                                  it has under 0.05 ft2
   census <class> form <Revit's Body>: <n>
+  census <class> axis <beyond|straddle|within|none>: <n>
 
 Usage:
 
@@ -85,9 +90,35 @@ SMALL = 0.05
 SHARED_HEIGHT = 0.5
 
 
+def line_ends(item):
+    """A straight axis item's two plan end points in local coordinates, or
+    None where the item is not a straight line (as wall_length_vs_ends.py)."""
+    if item.is_a("IfcPolyline") and len(item.Points) >= 2:
+        return [tuple(p.Coordinates[:2]) for p in (item.Points[0], item.Points[-1])]
+    if item.is_a("IfcIndexedPolyCurve") and len(item.Points.CoordList) >= 2:
+        return [tuple(item.Points.CoordList[k][:2]) for k in (0, -1)]
+    if item.is_a("IfcTrimmedCurve") and item.BasisCurve.is_a("IfcLine"):
+        line = item.BasisCurve
+        (px, py), v = line.Pnt.Coordinates[:2], line.Dir
+        dx, dy = v.Orientation.DirectionRatios[:2]
+        norm = math.hypot(dx, dy)
+        dx, dy = dx / norm * v.Magnitude, dy / norm * v.Magnitude
+        ends = []
+        for trim in (item.Trim1, item.Trim2):
+            for point in trim:
+                if point.is_a("IfcCartesianPoint"):
+                    ends.append(tuple(point.Coordinates[:2]))
+                    break
+            else:
+                value = next(point for point in trim if point.is_a("IfcParameterValue")).wrappedValue
+                ends.append((px + value * dx, py + value * dy))
+        return ends
+    return None
+
+
 def revit_axes(path, offset, fit):
-    """Tag -> the two ends (x, y) of the wall's Axis in rvt-rs's frame, for the
-    walls whose Axis is a polyline. Empty where the file has none."""
+    """Tag -> the two ends (x, y) of the wall's straight Axis in rvt-rs's
+    frame. Empty where the file has none."""
     out = {}
     try:
         f = ifcopenshell.open(path)
@@ -98,16 +129,15 @@ def revit_axes(path, offset, fit):
             if not wall.Tag or wall.Representation is None or wall.ObjectPlacement is None:
                 continue
             axis = next((r for r in wall.Representation.Representations if r.RepresentationIdentifier == "Axis"), None)
-            if axis is None or not axis.Items or not axis.Items[0].is_a("IfcPolyline"):
+            if axis is None or not axis.Items:
                 continue
-            points = axis.Items[0].Points
-            if len(points) < 2:
+            local = line_ends(axis.Items[0])
+            if local is None:
                 continue
             matrix = ifcopenshell.util.placement.get_local_placement(wall.ObjectPlacement)
             ends = []
-            for p in (points[0], points[-1]):
-                c = list(p.Coordinates) + [0.0] * (3 - len(p.Coordinates))
-                world = matrix @ np.array([c[0], c[1], c[2], 1.0])
+            for lx, ly in local:
+                world = matrix @ np.array([lx, ly, 0.0, 1.0])
                 x = world[0] * scale / base.FOOT - revit_middle[0]
                 y = world[1] * scale / base.FOOT - revit_middle[1]
                 ends.append((ours_middle[0] + cos_t * x + sin_t * y, ours_middle[1] - sin_t * x + cos_t * y))
@@ -148,6 +178,20 @@ def reach(low, high, size):
     return "span" if first and last else ("end" if first or last else "inner")
 
 
+def against(axis_ends, low, high):
+    """Where the piece [low, high] along the wall lies against the Axis'
+    ends: `beyond` if wholly past one, `straddle` if it crosses one, `within`
+    if wholly between them, `none` where the wall has no Axis."""
+    if axis_ends is None:
+        return "none"
+    first, last = sorted(axis_ends)
+    if low >= last - EDGE or high <= first + EDGE:
+        return "beyond"
+    if low < first - EDGE or high > last + EDGE:
+        return "straddle"
+    return "within"
+
+
 def class_of(share):
     return "kept" if share >= KEPT else ("cut" if share <= CUT else "mixed")
 
@@ -172,6 +216,7 @@ def census_wall(tag, plan, high, floors, other_plans, form, linked, axis, tally,
     origin_t = float(center @ normal) - thickness / 2
     full = shapes(high)
     beside = shapely.union_all(other_plans) if other_plans else None
+    axis_ends = None if axis is None else [float(np.array(p) @ direction - origin_s) for p in axis]
     lines = []
     for piece in pieces:
         points = np.array(piece.exterior.coords)
@@ -183,18 +228,20 @@ def census_wall(tag, plan, high, floors, other_plans, form, linked, axis, tally,
         embedded = int(inside >= KEPT)
         small = int(piece.area < SMALL)
         label = class_of(kept)
+        position = against(axis_ends, float(s.min()), float(s.max()))
         tally[(label, lengthwise, crosswise, embedded, small)] += 1
         tally[(label, form)] += 1
+        tally[(label, position)] += 1
         lines.append(
             f"piece tag:{tag} floors {','.join(sorted(floors))} area {piece.area:.4f} width {top.least_width(piece):.4f} "
             f"along {s.min():.4f} {s.max():.4f} of {length:.4f} across {t.min():.4f} {t.max():.4f} of {thickness:.4f} "
-            f"in other walls {inside:.4f} kept {kept:.4f} | {label} | form {form} | joins {' '.join(linked) if linked else '-'}"
+            f"in other walls {inside:.4f} kept {kept:.4f} | {label} | axis {position} | form {form} "
+            f"| joins {' '.join(linked) if linked else '-'}"
         )
     if axis is not None:
         line = shapely.LineString(axis)
         share = line.intersection(covered).length / line.length if line.length > 1e-9 else 0.0
-        a0, a1 = (float(np.array(p) @ direction - origin_s) for p in axis)
-        lines.append(f"axis tag:{tag} {a0:.4f} {a1:.4f} inside the elements {share:.4f}")
+        lines.append(f"axis tag:{tag} {axis_ends[0]:.4f} {axis_ends[1]:.4f} inside the elements {share:.4f}")
     return lines
 
 
@@ -279,7 +326,8 @@ def main():
             f"census {label} along {lengthwise} across {crosswise} embedded {embedded} small {small}: {tally[key]}"
         )
     for key in sorted(k for k in tally if len(k) == 2):
-        print(f"census {key[0]} form {key[1]}: {tally[key]}")
+        word = "axis" if key[1] in ("beyond", "straddle", "within", "none") else "form"
+        print(f"census {key[0]} {word} {key[1]}: {tally[key]}")
     return 0
 
 
