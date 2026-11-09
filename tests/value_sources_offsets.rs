@@ -874,13 +874,6 @@ const SOURCE_VALUES: &[(&str, &str, Row)] = &[
         },
     ),
     (
-        "Source",
-        "partition_rect_opening_index",
-        Gap {
-            reason: "the opening index of the schema-driven opening path, which no element of the gate models takes: its rows carry no ElementId in the table",
-        },
-    ),
-    (
         "LocationCurveSource",
         "ArcWallPartition",
         Gap {
