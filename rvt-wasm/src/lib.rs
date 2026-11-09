@@ -36,7 +36,7 @@ use rvt::ifc::{
         distinct_ifc_types, element_info_panel,
     },
     sheet::{SheetOptions, render_plan_svg},
-    step_writer::write_step,
+    step_writer::{StepOptions, write_step_to},
 };
 use rvt::reader::{OpenLimits, ProjectPhase};
 use rvt::research::native_document::{NATIVE_RELEASES, Options};
