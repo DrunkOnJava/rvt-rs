@@ -32,7 +32,7 @@ The 24 Revit 2025 models draw 6 members from a mesh (their only mesh-drawn quant
 
 ## 3. What rvt-rs writes
 
-`saved_meshes::attach_scoped_with_control` takes the volume of each body it draws from a mesh (`mesh_volume::closed_mesh_volume`) where every face of the mesh is flat (`all_faces_flat`: one normal on all the vertices of each face the mesh was cut from, which a saved planar face has and a curved one does not) and the triangles, their vertices welded, close a surface wound one way, and gives it to the element as `NetVolume` in the base quantity set of its entity: `Qto_MemberBaseQuantities` for an `IfcMember`, `Qto_PlateBaseQuantities` for an `IfcPlate`, `Qto_ColumnBaseQuantities` for an `IfcColumn`, which also gets its `GrossVolume`; only where the element holds none, so RE-243's values and RE-291's stay. `--no-base-quantities` leaves them out with the rest.
+`saved_meshes::attach_scoped_with_control` takes the volume of each body it draws from a mesh (`mesh_volume::closed_mesh_volume`) where every face of the mesh is flat (`all_faces_flat`: one normal on all the vertices of each face the mesh was cut from, which a saved planar face has and a curved one does not) and the triangles, their vertices welded, close a surface wound one way, and gives it to the element as `NetVolume` in the base quantity set of its entity: `Qto_MemberBaseQuantities` for an `IfcMember`, `Qto_PlateBaseQuantities` for an `IfcPlate`, `Qto_ColumnBaseQuantities` for an `IfcColumn`; only where the element holds none, so RE-243's values and RE-291's stay. `--no-base-quantities` leaves them out with the rest.
 
 @@MEASURE@@
 
@@ -42,6 +42,7 @@ The 24 Revit 2025 models draw 6 members from a mesh (their only mesh-drawn quant
 - **A body with a curved face.** Its mesh is a tessellation (section 2), and nothing in the file says how close; it gets no volume, and a mullion on a curved curtain wall whose body is such a mesh stays without one.
 - **Other entities.** A box drawn from a mesh of an entity the quantity census has no value for (furniture, fixtures) gets none: Revit writes no base quantity set on them. Only the entities of section 2 are given a volume.
 - **`NetSurfaceArea` of the 3,397 mullions without one**, and every quantity that is not a volume (section 2), stay as RE-268 left them.
+- **A column's `GrossVolume`.** The mesh's volume equals it where Revit writes it, but at permit Revit's export omits it (with `Length` and `OuterSurfaceArea`) on the 18 columns it draws as a cut mesh, which are 18 of the 24 columns rvt-rs has no `GrossVolume` for: 289 columns have a mesh, 271 carry the quantity, 265 have it written. Nothing in the file tells the 6 it writes from the 18 it omits, so a column gets its `NetVolume` only (Revit writes that on all 289).
 - **Revit 2025's `GrossVolume`, `GrossSurfaceArea` and `NetSurfaceArea` of a member** (the 6 above) are not written.
 
 ## 5. Reproduce

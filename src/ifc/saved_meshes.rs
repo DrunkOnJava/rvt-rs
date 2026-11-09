@@ -340,10 +340,11 @@ pub fn attach_scoped_with_control(
 /// its entity, where it holds none (RE-387): revit-ifc's `NetVolumeCalculator`
 /// takes the volume of the solid it writes (CLEANROOM.md source 5, RE-243),
 /// and the mesh is that solid, which a body of flat faces gives exactly. A
-/// column also gets its `GrossVolume`, the same on a column whose body is that
-/// solid. A curtain mullion, a curtain panel and a column are the entities
-/// measured equal to Revit's on every element (RE-387); a body of another
-/// entity gets none.
+/// column gets no `GrossVolume`: Revit's export omits it on the 18 columns of
+/// the BIM4LCA office at building permit that it draws as a cut mesh, and
+/// writes it on 6 that nothing tells from them. A curtain mullion, a curtain
+/// panel and a column are the entities measured equal to Revit's on every
+/// element (RE-387); a body of another entity gets none.
 fn add_mesh_volumes(model: &mut IfcModel, volumes: &[(usize, f64)]) {
     if volumes.is_empty() {
         return;
@@ -363,7 +364,7 @@ fn add_mesh_volumes(model: &mut IfcModel, volumes: &[(usize, f64)]) {
         let (set_name, names): (&str, &[&str]) = match ifc_type.to_ascii_uppercase().as_str() {
             "IFCMEMBER" => ("Qto_MemberBaseQuantities", &["NetVolume"]),
             "IFCPLATE" => ("Qto_PlateBaseQuantities", &["NetVolume"]),
-            "IFCCOLUMN" => ("Qto_ColumnBaseQuantities", &["NetVolume", "GrossVolume"]),
+            "IFCCOLUMN" => ("Qto_ColumnBaseQuantities", &["NetVolume"]),
             _ => continue,
         };
         let volume_property = |name: &str| Property {
