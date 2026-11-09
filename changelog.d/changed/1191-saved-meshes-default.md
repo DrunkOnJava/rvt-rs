@@ -13,16 +13,21 @@
   viewer's Playwright measurement (viewer tests run 42631322761, one open
   each) the wasm memory with the meshes on is the boxes' on Einhoven (17 MiB),
   RE1 Mechanical (68) and Plumbing (54), 16 MiB more on Core Interior (308 to
-  324, as with doors and windows alone), 22 MiB more on RE1 Architecture (96 to
-  118) and 52 MiB more on RE1 Electrical (161 to 213), and no open is more than
-  0.5 s slower. **Not every
+  324, as with doors and windows alone), 21 MiB more on RE1 Architecture (96 to
+  118) and 52 MiB more on RE1 Electrical (161 to 213), and the wasm open call
+  takes at most 0.52 s longer (RE1 Electrical). **Not every
   mesh is Revit's:** of the bodies scored on 31 models (Measure run
   42612357300) 17 classes have every vertex of Revit's export within 0.001 ft
   of the mesh, but doors are 675 of 681, sanitary terminals 68 of 94, flow
   fittings 71 of 89, flow terminals 30 of 35 and walls 14 of 18. A mesh with a
   face that does not decode still keeps its box. **A very large file may need
   more memory than before:** it depends on how many boxed elements the file
-  holds, and none over 1.4 GiB has been measured, so `--no-saved-meshes`
-  (`saved_meshes=False` in Python, `saved_meshes: "off"` in the MCP server,
-  the viewer's option) returns the previous memory, and
-  `saved_meshes: "doors_and_windows"` the previous default.
+  holds, and none over 1.4 GiB has been measured. The opt-out in each interface
+  returns the previous memory: `--no-saved-meshes` in `rvt-ifc` and `rvt-gltf`,
+  `saved_meshes=False` in Python, `saved_meshes: "off"` in the MCP server,
+  `ExportOptions::with_saved_meshes(SavedMeshChoice::Off)` in the Rust library,
+  `savedMeshes: false` in the wasm binding, and the viewer's option or
+  `?savedMeshes=0`. `SavedMeshChoice::DoorsAndWindows` (new) and the MCP's
+  `saved_meshes: "doors_and_windows"` give the previous default. **For library
+  callers** `SavedMeshChoice::Default` and `saved_meshes::default_scope` now mean
+  every boxed element, not doors and windows alone.
