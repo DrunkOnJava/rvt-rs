@@ -70,4 +70,4 @@ gh workflow run measure.yml --ref main -f ref=8a5b22257522a38d426d3449fa5b46aa94
     -f racadv=true -f bimcollab=true -f holdout=true
 ```
 
-`base=main` is `main` on the day it runs, so a later run also shows what `main` has changed since `b969296e`; the commit names the same side. The probe of section 1 is `probe_1067_native_dump` with `-f models="nordic-office-terrain-*"`.
+`base=main` is `main` on the day it runs, so a later run also shows what `main` has changed since `b969296e`; the commit names the same side. The measured commit is archived under `refs/archive/2026-11-09/cited/8a5b22257522` because this pull request is squashed. The probe of section 1 is `probe_1067_native_dump` with `-f models="nordic-office-terrain-*"`.
