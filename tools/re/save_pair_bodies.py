@@ -116,7 +116,12 @@ def bodies(path, only=None, openings=True):
         verts, faces = mesh
         a, b, c = verts[faces[:, 0]], verts[faces[:, 1]], verts[faces[:, 2]]
         volume = abs(np.einsum("ij,ij->i", a, np.cross(b, c)).sum() / 6.0)
-        out[tag] = (element.is_a(), source, volume, verts.min(0), verts.max(0))
+        # The box is that of the corners the triangles use: a point list can hold points
+        # no triangle indexes (the writer appends each saved primitive's whole vertex
+        # array, 155 of the office's 11,084 face sets hold some), and meshing by
+        # IfcOpenShell never sees them.
+        used = verts[np.unique(faces)]
+        out[tag] = (element.is_a(), source, volume, used.min(0), used.max(0))
     return out, lost, untagged
 
 
