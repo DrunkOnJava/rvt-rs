@@ -317,7 +317,19 @@ pub fn scan_partition_length_places(
     parameters: &BTreeSet<i64>,
     want_places: bool,
 ) -> BTreeMap<u32, BTreeMap<i64, (f64, usize)>> {
-    let blocks = value_blocks(buf, declared_ids);
+    length_places_within(buf, declared_ids, parameters, want_places, None)
+}
+
+/// [`scan_partition_length_places`], each block also ending where the next
+/// native record of the partition starts (`record_starts`, sorted; #1489).
+fn length_places_within(
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+    parameters: &BTreeSet<i64>,
+    want_places: bool,
+    record_starts: Option<&[usize]>,
+) -> BTreeMap<u32, BTreeMap<i64, (f64, usize)>> {
+    let blocks = bounded_value_blocks(buf, declared_ids, record_starts);
     let mut first_at: BTreeMap<(u32, i64), usize> = BTreeMap::new();
     let mut values: BTreeMap<(u32, i64), Option<f64>> = BTreeMap::new();
     for &parameter in parameters {
@@ -642,7 +654,7 @@ pub fn partition_length_entries(
     buf: &[u8],
     declared_ids: &BTreeSet<u32>,
 ) -> BTreeMap<u32, Vec<(i64, f64)>> {
-    length_entries_at(buf, declared_ids)
+    length_entries_at(buf, declared_ids, None)
         .into_iter()
         .map(|(owner, entries)| {
             let entries = entries
@@ -658,8 +670,9 @@ pub fn partition_length_entries(
 fn length_entries_at(
     buf: &[u8],
     declared_ids: &BTreeSet<u32>,
+    record_starts: Option<&[usize]>,
 ) -> BTreeMap<u32, Vec<(i64, f64, usize)>> {
-    let blocks = value_blocks(buf, declared_ids);
+    let blocks = bounded_value_blocks(buf, declared_ids, record_starts);
     let mut out: BTreeMap<u32, Vec<(i64, f64, usize)>> = BTreeMap::new();
     for at in memchr::memmem::find_iter(buf, &[0xff; 8]) {
         if at < 8 || buf[at - 1] == 0xff {
@@ -731,11 +744,13 @@ pub fn type_named_lengths_at(
     let declared = crate::elem_table::declared_ids(&records);
     let mut values: BTreeMap<(u32, i64), Option<f64>> = BTreeMap::new();
     let mut first_at: BTreeMap<(u32, i64), (String, usize)> = BTreeMap::new();
+    let starts = record_starts(rf);
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        for (owner, entries) in length_entries_at(inflated.bytes(), &declared) {
+        let within = starts_of(starts.as_ref(), &stream);
+        for (owner, entries) in length_entries_at(inflated.bytes(), &declared, within) {
             if !types.contains(&owner) {
                 continue;
             }
@@ -901,12 +916,14 @@ fn type_lengths_at(
 ) -> (BTreeMap<u32, BTreeMap<i64, f64>>, ParameterPlaces<i64>) {
     let mut values: BTreeMap<u32, BTreeMap<i64, Option<f64>>> = BTreeMap::new();
     let mut places = ParameterPlaces::new();
+    let starts = record_starts(rf);
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
+        let within = starts_of(starts.as_ref(), &stream);
         for (owner, found) in
-            scan_partition_length_places(inflated.bytes(), declared, parameters, want_places)
+            length_places_within(inflated.bytes(), declared, parameters, want_places, within)
         {
             if !types.contains(&owner) {
                 continue;
@@ -951,6 +968,78 @@ fn type_lengths_at(
 /// type took the next block's `Type Mark`.)
 fn value_blocks(buf: &[u8], declared_ids: &BTreeSet<u32>) -> Vec<(usize, Option<u32>)> {
     owned_blocks(buf, &block_marks(buf), declared_ids)
+}
+
+/// [`value_blocks`], each owned block also ending at the first native record
+/// that starts after its mark, where that comes before the next mark (#1489).
+/// A type's value block lies inside its own record (the mark 68 bytes past
+/// the record's start on `rac_basic`), and records do not nest, so the cut
+/// can drop only entries outside the owner's record: on `rac_basic`'s 2027
+/// save three family instances' own Width, Height, Rough Width and Rough
+/// Height follow symbol 431054's record, inside their own records, with no
+/// mark between. With no `record_starts` the blocks end at marks alone.
+fn bounded_value_blocks(
+    buf: &[u8],
+    declared_ids: &BTreeSet<u32>,
+    record_starts: Option<&[usize]>,
+) -> Vec<(usize, Option<u32>)> {
+    let blocks = value_blocks(buf, declared_ids);
+    let Some(starts) = record_starts else {
+        return blocks;
+    };
+    let mut bounded = Vec::with_capacity(blocks.len() * 2);
+    for (index, &(at, owner)) in blocks.iter().enumerate() {
+        bounded.push((at, owner));
+        if owner.is_none() {
+            continue;
+        }
+        let next_mark = blocks.get(index + 1).map_or(usize::MAX, |&(next, _)| next);
+        let next_record = starts.get(starts.partition_point(|&start| start <= at));
+        if let Some(&cut) = next_record.filter(|&&start| start < next_mark) {
+            bounded.push((cut, None));
+        }
+    }
+    bounded
+}
+
+/// Where each native record starts in its partition's inflated bytes, by
+/// partition number, sorted (#1489), from the handle's record index, which
+/// this builds if no native pass has (a pass that selects no element decodes
+/// nothing). `None` where the file's records cannot be indexed: a release or
+/// history the native reader refuses, or a partition over the stream limit.
+/// Whether it is `None` depends on the file alone, never on which reader ran
+/// first, so the export does not depend on the order of its reads.
+fn record_starts(rf: &mut RevitFile) -> Option<BTreeMap<u32, Vec<usize>>> {
+    if rf.native_record_index().is_none() {
+        let options = crate::native_document::Options {
+            selected_ids: BTreeSet::from([u64::MAX]),
+            graph_classes: Some(BTreeSet::new()),
+            ..crate::native_document::Options::default()
+        };
+        // A refused pass leaves no index, which is the answer.
+        let _ = crate::native_document::extract_graphs(rf, &options, |_| Ok(()));
+    }
+    let index = rf.native_record_index()?;
+    let mut starts: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
+    for &(_, _, partition, _, at) in index.records() {
+        if let Some(at) = at {
+            starts.entry(partition).or_default().push(at);
+        }
+    }
+    for list in starts.values_mut() {
+        list.sort_unstable();
+        list.dedup();
+    }
+    Some(starts)
+}
+
+/// The record starts of the partition `stream` (`Partitions/NN`) names.
+fn starts_of<'a>(
+    starts: Option<&'a BTreeMap<u32, Vec<usize>>>,
+    stream: &str,
+) -> Option<&'a [usize]> {
+    let partition: u32 = stream.strip_prefix("Partitions/")?.parse().ok()?;
+    starts?.get(&partition).map(Vec::as_slice)
 }
 
 /// Every value block mark in `buf` that is not preceded by a further 0xff,
