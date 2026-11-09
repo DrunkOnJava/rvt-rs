@@ -1477,9 +1477,9 @@ prints it from any installed build.
   written without an `ObjectType`, as Revit's own export of those releases
   writes none, and two claims every export made are now made only where they
   hold (#1598). No 2015 to 2023 curtain wall, curtain part, steel beam, duct or
-  wall `Height` is scored against a Revit IFC4 export: they are held to the
-  same Autodesk projects' 2024 saves, which cannot catch an error those saves
-  share. `[0.17.0]` in [`CHANGELOG.md`](../CHANGELOG.md) gives what each change
+  wall `Height` of Autodesk's samples is scored against a Revit IFC4 export:
+  they are held to the same projects' 2024 saves, which cannot catch an error
+  those saves share. `[0.17.0]` in [`CHANGELOG.md`](../CHANGELOG.md) gives what each change
   measures and what it does not.
 - **v0.16.1** (2026-11-09): the first published release of 0.16: the
   `v0.16.0` tag was made and never published, because its publish run stopped

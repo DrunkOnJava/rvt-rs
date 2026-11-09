@@ -223,8 +223,8 @@ the four levels a file can reach are in the
   written without an `ObjectType`, as Revit's export of those releases writes
   none (#1472), and two claims every export made are made only where they hold
   (#1598). The two wall rules rest on one wall each, and no 2015 to 2023 curtain
-  wall, curtain part, steel beam, duct or wall `Height` is scored against a
-  Revit IFC4 export; the notes say which.
+  wall, curtain part, steel beam, duct or wall `Height` of Autodesk's samples is
+  scored against a Revit IFC4 export; the notes say which.
 
 ### 0.18.0: IFC geometry and element data
 
