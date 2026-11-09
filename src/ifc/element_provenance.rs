@@ -1096,7 +1096,11 @@ fn property_readers(name: &str, value: &str) -> &'static [&'static str] {
         },
         // RE-358: a wall's elevation profile carried on to its end is drawn
         // from the profile's sketch, its lines and its Sketch's curve list.
-        ec::WALL_PROFILE_SOURCE_PROPERTY => &["sketch_lines", "sketch_list"],
+        // So are the wall's top at the profile's highest point (RE-378) and
+        // the profile's cut in its body (RE-380).
+        ec::WALL_PROFILE_SOURCE_PROPERTY
+        | ec::WALL_PROFILE_TOP_PROPERTY
+        | ec::WALL_PROFILE_CUT_PROPERTY => &["sketch_lines", "sketch_list"],
         ec::PLACEMENT_AXES_SOURCE_PROPERTY => match value {
             ec::OPENING_PLACEMENT_AXES_SOURCE => PLACEMENT_READERS,
             _ => &[],
