@@ -635,6 +635,14 @@
           },
           "description": "Of the exported walls cut whole at the floor, roof or footing that covers all of their plan but a stub, how many, by where the stub lies, by the RvtElementRecordGeometry.TopCoverStub of each (RE-375, #1067): inside_another_wall. Revit cuts such a stub with the rest of the wall. Empty when no wall is."
         },
+        "wall_profile_top_sources": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Of the exported walls whose edited elevation profile closes below the top of their record box, how many have their top taken at the profile's highest point, by the RvtElementRecordGeometry.ProfileTopSource of each (RE-378, #1600): wall_top_at_profile_top. Revit's body ends there and the wall's Height is the profile's. Empty when no wall does."
+        },
         "wall_base_sources": {
           "type": "object",
           "additionalProperties": {
