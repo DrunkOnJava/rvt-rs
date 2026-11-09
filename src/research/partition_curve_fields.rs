@@ -28,8 +28,9 @@ use crate::partition_pipe_axes::{BoxGrid, holds};
 use crate::{Result, RevitFile};
 use std::collections::BTreeMap;
 
-/// Releases where this layout is measured: the RE1 models.
-pub const CURVE_FIELDS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2025];
+/// Releases where this layout is measured: the RE1 models, and 2026 and 2027
+/// (RE-346), as Autodesk's MEP samples saved by 2025 read it.
+pub const CURVE_FIELDS_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2025, 2026, 2027];
 
 /// Whether `revit_version` is a release this layout is measured on.
 pub fn supports_revit_version(revit_version: u32) -> bool {

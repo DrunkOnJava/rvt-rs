@@ -36,70 +36,6 @@ pub(super) fn attach_opening_facings(
     }
 }
 
-/// Give each door and window the hand flip and facing flip of its current
-/// native `FamilyInstance` record ([`OPENING_FLIP_FIELDS`], RE-343):
-/// `m_flippedX` and `m_flippedY`, a boolean each. An element with no such
-/// record, or whose record lacks either boolean, gets neither field. On
-/// Revit 2024 and 2025 `attach_cut_loop_sizes` gives them in the pass it
-/// makes for the doors' and windows' symbols (`CUT_LOOP_REVIT_VERSIONS`);
-/// this makes one pass of its own on 2026 and 2027, the other releases whose
-/// doors and windows are decoded as Door and Window records (measured on
-/// 2024 to 2027), and none on any other.
-pub(super) fn attach_opening_flips(
-    rf: &mut RevitFile,
-    revit_version: u32,
-    groups: [&mut Vec<DecodedElement>; 2],
-) {
-    if !matches!(revit_version, 2026 | 2027) {
-        return;
-    }
-    let ids: BTreeSet<u64> = groups
-        .iter()
-        .flat_map(|elements| elements.iter())
-        .filter_map(|element| element.id.map(u64::from))
-        .collect();
-    if ids.is_empty() {
-        return;
-    }
-    let options = crate::native_document::Options {
-        selected_ids: ids,
-        graph_classes: Some(BTreeSet::from(["FamilyInstance".to_string()])),
-        ..crate::native_document::Options::default()
-    };
-    // Each element's flips, from its one current record.
-    let mut read: BTreeMap<u64, [bool; 2]> = BTreeMap::new();
-    let pass = crate::native_document::extract_graphs(rf, &options, |record| {
-        if record.class_name.as_deref() != Some("FamilyInstance") {
-            return Ok(());
-        }
-        let Some(root) = record
-            .graph
-            .as_ref()
-            .and_then(|graph| graph.objects.first())
-        else {
-            return Ok(());
-        };
-        let flag = |name: &str| root.fields.get(name).and_then(serde_json::Value::as_bool);
-        if let Some((x, y)) = flag("m_flippedX").zip(flag("m_flippedY")) {
-            read.insert(record.identity.element_id, [x, y]);
-        }
-        Ok(())
-    });
-    if pass.is_err() {
-        return;
-    }
-    for element in groups.into_iter().flat_map(|elements| elements.iter_mut()) {
-        let Some(flips) = element.id.and_then(|id| read.get(&u64::from(id))) else {
-            continue;
-        };
-        for (name, value) in OPENING_FLIP_FIELDS.iter().zip(*flips) {
-            element
-                .fields
-                .push(((*name).into(), InstanceField::Bool(value)));
-        }
-    }
-}
-
 /// The plan facing [`OPENING_FACING_FIELDS`] record.
 pub fn opening_facing_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64; 2]> {
     let float = |wanted: &str| {
@@ -178,8 +114,8 @@ type WallAndFlip = ([f64; 2], bool);
 /// - whose X is within [`INSTANCE_TURN_MIN_RADIANS`] of one of the model's
 ///   axes (one turned further keeps its turned box, RE-87).
 ///
-/// Run after `attach_cut_loop_sizes`, which gives the flips on Revit 2024 and
-/// 2025 and may rebind the host (RE-245).
+/// Run after `attach_cut_loop_sizes`, which gives the flips on Revit 2024 to
+/// 2027 (`CUT_LOOP_REVIT_VERSIONS`) and may rebind the host (RE-245).
 pub(super) fn attach_opening_placement_axes(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -566,6 +502,14 @@ pub fn drawn_size_from_fields(fields: &[(String, InstanceField)]) -> Option<[f64
     Some([width?, height?])
 }
 
+/// Whether the fields mark the door or window's `Area` as left out
+/// ([`DOOR_WINDOW_AREA_REVIT_VERSIONS`]).
+pub fn drawn_area_left_out(fields: &[(String, InstanceField)]) -> bool {
+    fields.iter().any(|(name, value)| {
+        name == DRAWN_AREA_LEFT_OUT_FIELD && matches!(value, InstanceField::Bool(true))
+    })
+}
+
 /// The size [`DOOR_TYPE_SIZE_FIELDS`] record.
 pub fn door_type_size_from_fields(
     fields: &[(String, InstanceField)],
@@ -832,6 +776,11 @@ pub(super) fn attach_cut_loop_sizes(
             element
                 .fields
                 .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+        if !DOOR_WINDOW_AREA_REVIT_VERSIONS.contains(&revit_version) {
+            element
+                .fields
+                .push((DRAWN_AREA_LEFT_OUT_FIELD.into(), InstanceField::Bool(true)));
         }
     }
     // #227: where no opening is read yet, the opening is the loop, carried
