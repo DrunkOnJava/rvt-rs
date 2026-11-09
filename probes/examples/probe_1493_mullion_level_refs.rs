@@ -5,8 +5,9 @@
 //! than on the 2025 save (311 against 515270 on 11, and against 245423 on 10).
 //! The id is the one Level the record's counted reference list names
 //! (`element_record_level_refs`, RE-27). This prints the file's Levels, then for
-//! each mullion record its reference list's length, the Levels it names and its
-//! first references, so the two saves' lists can be set side by side.
+//! each mullion record its reference list's length, the Levels it names, its
+//! box and its first references, then the same for every wall record, so the
+//! two saves' lists can be set side by side.
 //!
 //! ```bash
 //! cargo run --profile ci -p rvt-probes --example probe_1493_mullion_level_refs -- \
@@ -68,6 +69,28 @@ fn main() -> rvt::Result<()> {
                 "id": record.element_id,
                 "references": record.references.len(),
                 "levels_named": named,
+                "bbox": record.bbox_feet,
+                "first": record.references.iter().take(14).collect::<Vec<_>>(),
+            })
+        );
+    }
+    // The walls' own lists: a mullion's Level is its host curtain wall's, so the
+    // host's list says whether the two saves differ in the wall or in the mullion.
+    let walls = per::scan_category_records(&mut rf, version, per::OST_WALLS, &declared)?;
+    for record in walls.iter().filter(|r| r.is_placed_instance()) {
+        let named: Vec<u32> = record
+            .references
+            .iter()
+            .filter_map(|v| u32::try_from(*v).ok())
+            .filter(|v| by_id.contains_key(v))
+            .collect();
+        println!(
+            "{}",
+            json!({
+                "wall": record.element_id,
+                "references": record.references.len(),
+                "levels_named": named,
+                "bbox": record.bbox_feet,
                 "first": record.references.iter().take(14).collect::<Vec<_>>(),
             })
         );
