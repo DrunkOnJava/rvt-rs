@@ -380,13 +380,15 @@ def main(argv):
     # In a file whose length unit is the foot, a perimeter in feet is right.
     feet_file = abs(their_length_scale - FOOT_METRES) <= 1e-9
     our_types, their_types = wall_types(args[0]), wall_types(args[1])
-    # A key Revit's export gives several objects (a wall split at its storeys
-    # keeps its ElementId as each piece's Tag) holds one piece's quantities
-    # only, and a piece's Height, areas and volumes are not the whole wall's,
-    # which is all rvt-rs writes for the element: a value on such a key is
-    # counted apart, and scored as neither equal, different nor missing
-    # (#1576). What it would have scored against the one piece it holds is
-    # printed beside the count, not in the totals.
+    # A key that more than one object of Revit's export holds keeps one
+    # object's quantities only. A wall it splits at its storeys keeps its
+    # ElementId as each piece's Tag, and a piece's Height, areas and volumes are
+    # not the whole wall's, which is all rvt-rs writes for the element; two
+    # spaces with one Name share the key spaces are matched by, and the dict
+    # kept the last. A value on such a key is counted apart, and scored as
+    # neither equal, different nor missing (#1576). What it would have scored
+    # against the one object it holds is printed beside the count, not in the
+    # totals.
     their_keys = collections.Counter(property_key_of(p) for p in open_ifc(args[1]).by_type("IfcObject"))
     repeated = {key for key, n in their_keys.items() if key and n > 1}
     apart = collections.Counter()
@@ -454,7 +456,7 @@ def main(argv):
         for key, qset, name in ours
         if key in their_objects and key not in repeated and (key, qset, name) not in theirs
     )
-    # The same, on a repeated Tag: the one piece held lacks it, which says
+    # The same, on a repeated key: the one object held lacks it, which says
     # nothing about the others.
     extra_apart = sum(
         1 for key, qset, name in ours if key in repeated and key in their_objects and (key, qset, name) not in theirs
@@ -497,12 +499,12 @@ def main(argv):
     for (qset, name), (n, equal, different, missing) in sorted(rows.items()):
         print(f"  {qset}.{name}: {n}, equal {equal}, different {different}, missing {missing}")
     print(
-        "values on a Tag Revit's export gives more than one object, counted apart (#1576): "
-        f"{sum(apart.values())} of Revit's on {len(repeated)} such Tags, and {extra_apart} of rvt-rs's with none in the piece held"
+        "values on a key that more than one object of Revit's export holds, counted apart (#1576): "
+        f"{sum(apart.values())} of Revit's on {len(repeated)} such keys, and {extra_apart} of rvt-rs's with none in the object held"
     )
     for (qset, name), n in sorted(apart.items()):
         equal, different, missing = against_one[(qset, name)]
-        print(f"  on a repeated Tag, {qset}.{name}: {n}; against the piece held: equal {equal}, different {different}, missing {missing}")
+        print(f"  on a repeated key, {qset}.{name}: {n}; against the object held: equal {equal}, different {different}, missing {missing}")
     print("entities Revit writes each missing quantity on:")
     for (qset, name), classes in sorted(missing_classes.items(), key=lambda kv: -sum(kv[1].values())):
         on = ", ".join(f"{c} x{k}" for c, k in classes.most_common(4))
