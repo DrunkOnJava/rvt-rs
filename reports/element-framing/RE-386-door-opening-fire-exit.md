@@ -21,7 +21,14 @@
 
 The office defines a Yes/No project parameter `FireExit` on its doors, windows and ramps (RE-194), and every one of the 266 doors holds `false` (the 232 windows and 5 ramps too), which Revit's export writes as `Pset_DoorCommon.FireExit` (266 of 266 equal).
 
-revit-ifc's `OpeningUtil.CreateOpening` (CLEANROOM.md source 5; read in `IFC_v24.3.40`, no code copied) builds each opening an element cuts with `elementForProperties` set to the cutting element when the opening's GUID is the one made for that host, insert and place, and hands it to the product wrapper (`AddElement`), which gives the opening the property sets of that element as it gives the element its own. So an opening's `Pset_OpeningElementCommon` holds what the cutter's parameters name in it: the entry's value comes from the element's parameter `Pset_OpeningElementCommon.FireExit` before its plain name `FireExit` (`PropertySetEntryMap.CreatePropertyFromElementOrSymbol`, RE-194), and a cabinet and a curtain wall hold no such parameter. The door's `FireExit` is the cutter's, and the opening's value is that parameter's.
+revit-ifc (CLEANROOM.md source 5, read and cited, no code copied) was read at the tags `IFC_v24.1.0` and `IFC_v24.3.40`, which agree on every line cited here; none was taken from the default branch, and the office's exporter 24.0.5 has no tag of its own (as RE-270 notes). The chain is:
+
+1. `OpeningUtil.CreateOpening`, in both its overloads, sets `elementForProperties` to the cutting element where the opening's GUID is the one made for that host, insert, range and indices (`GUIDUtil.IsGUIDFor`), sets `registerAsOpening` with it, and calls `ProductWrapper.AddElement` with that element and the opening's handle.
+2. `AddElement`, with `register` set, calls `RegisterHandleWithElement`, which puts the handle among the element's (`PropertySetsToCreate`) and records which element the handle belongs to (`HandleToElementCache.Register(handle, element.Id)`).
+3. `ExporterUtil.ExportRelatedProperties` runs for the element with its wrapper, and `ExportElementProperties` takes every handle the wrapper holds (`GetAllObjects`), the opening's among them: the common sets that apply to that handle's entity (`GetCurrPSetsToCreate`, here `IfcOpeningElement`, so `Pset_OpeningElementCommon`) are evaluated for the element registered for the handle (`HandleToElementCache.Find`), the cutter, not for the host.
+4. Each entry's value is read by `PropertySetEntryMap.CreatePropertyFromElementOrSymbol` from that element's parameter named `<set>.<property>` first and then its plain name (the lookup RE-194 measured). The openings of a cabinet and a curtain wall carry no `FireExit`, as the office defines the parameter on doors, windows and ramps (RE-194) and not on them.
+
+So the door's `FireExit` is the cutter's, and the opening's value is that parameter's.
 
 Every door holds `false`, so the 43 and 45 values cannot tell the door's parameter from a fixed `false`; the rule below is the one the source gives.
 
