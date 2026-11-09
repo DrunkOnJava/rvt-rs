@@ -253,8 +253,10 @@ fn end_join_type(wall: u64, controls: &[Value], end: u32) -> Option<i64> {
 /// The curve, word, flip, end joins and type shells of each of `walls` from
 /// its native `SWall` record and its type's `BasicWallType` record, read in
 /// one pass: the current copy, the one the document routes to (RE-216),
-/// whatever the partition data's copies say. A wall whose record has not
-/// exactly one curve, or whose curve is not a level line, is left out.
+/// whatever the partition data's copies say. A wall whose record holds the one
+/// level `GLine`, or a level `GLine` that `VWallDriver.m_pCrv` names and a
+/// previous location line (`WallRunTimeData.m_prevLocLine`, RE-360), is read;
+/// any other wall is left out.
 pub fn native_walls(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
@@ -373,10 +375,10 @@ pub struct EndJoins {
     pub real: [Option<Vec<u64>>; 2],
 }
 
-/// The curve `VWallDriver.m_pCrv` of the record names, where it is one level
-/// `GLine`: a wall with an edited elevation profile holds more than one, and
-/// the pointer says which is its location curve (#1410).
-fn location_curve(graph: &crate::native_parameters::ObjectGraph) -> Option<([f64; 2], [f64; 2])> {
+/// The index of the object `VWallDriver.m_pCrv` of the record names, where it
+/// is one `GLine`: a wall with an edited elevation profile holds more than one
+/// curve, and the pointer says which is its location curve (#1410).
+fn location_curve_index(graph: &crate::native_parameters::ObjectGraph) -> Option<usize> {
     let token = graph
         .objects
         .iter()
@@ -387,12 +389,89 @@ fn location_curve(graph: &crate::native_parameters::ObjectGraph) -> Option<([f64
     let mut named = graph
         .objects
         .iter()
-        .filter(|object| u64::from(object.token) == token);
-    let curve = named.next()?;
+        .enumerate()
+        .filter(|(_, object)| u64::from(object.token) == token);
+    let (index, curve) = named.next()?;
     if named.next().is_some() || curve.class_name != "GLine" {
         return None;
     }
-    line_ends(&curve.fields)
+    Some(index)
+}
+
+/// The curve `VWallDriver.m_pCrv` of the record names, where it is one level
+/// `GLine` (#1410).
+fn location_curve(graph: &crate::native_parameters::ObjectGraph) -> Option<([f64; 2], [f64; 2])> {
+    line_ends(&graph.objects.get(location_curve_index(graph)?)?.fields)
+}
+
+/// Whether the object at `index` is a `GLine` that only
+/// `WallRunTimeData.m_prevLocLine` names: every pointer to it, and there is at
+/// least one, is that member of a `WallRunTimeData` object (RE-360).
+fn is_previous_location_line(graph: &crate::native_parameters::ObjectGraph, index: usize) -> bool {
+    if graph
+        .objects
+        .get(index)
+        .is_none_or(|object| object.class_name != "GLine")
+    {
+        return false;
+    }
+    let owners: Vec<_> = graph
+        .edges
+        .iter()
+        .filter(|edge| edge.target_object_index == index)
+        .collect();
+    !owners.is_empty()
+        && owners.iter().all(|edge| {
+            graph
+                .objects
+                .get(edge.source_object_index)
+                .is_some_and(|source| {
+                    source.class_name == "WallRunTimeData"
+                        && source
+                            .fields
+                            .pointer("/m_prevLocLine/offset")
+                            .and_then(Value::as_u64)
+                            == u64::try_from(edge.pointer_offset).ok()
+                })
+        })
+}
+
+/// The plan start and end of a wall's location line from its record: the one
+/// level `GLine` it holds; or, where it holds a second curve that only
+/// `WallRunTimeData.m_prevLocLine` names, the level `GLine` that
+/// `VWallDriver.m_pCrv` names, which Revit 2027's save stores beside it on 18
+/// of `rac_advanced`'s 180 walls (RE-360). A record that holds any other set of
+/// curves is not read.
+fn record_line(graph: &crate::native_parameters::ObjectGraph) -> Option<([f64; 2], [f64; 2])> {
+    let curves: Vec<usize> = graph
+        .objects
+        .iter()
+        .enumerate()
+        .filter(|(_, object)| matches!(object.class_name.as_str(), "GLine" | "GArc"))
+        .map(|(index, _)| index)
+        .collect();
+    match curves.as_slice() {
+        [only] => {
+            let curve = graph.objects.get(*only)?;
+            (curve.class_name == "GLine")
+                .then(|| line_ends(&curve.fields))
+                .flatten()
+        }
+        [first, second] => {
+            let located = location_curve_index(graph)?;
+            let other = if located == *first {
+                *second
+            } else if located == *second {
+                *first
+            } else {
+                return None;
+            };
+            is_previous_location_line(graph, other)
+                .then(|| line_ends(&graph.objects.get(located)?.fields))
+                .flatten()
+        }
+        _ => None,
+    }
 }
 
 /// `m_realJoined` of the one `JoinEndGStep` of the curve's start and of its end
@@ -782,16 +861,7 @@ pub fn native_walls_and_top_joins_into(
                 );
             }
         }
-        let curves: Vec<_> = graph
-            .objects
-            .iter()
-            .filter(|object| matches!(object.class_name.as_str(), "GLine" | "GArc"))
-            .collect();
-        let read = match curves.as_slice() {
-            [curve] if curve.class_name == "GLine" => line_ends(&curve.fields),
-            _ => None,
-        }
-        .map(|(start, end)| {
+        let read = record_line(graph).map(|(start, end)| {
             let controls: Vec<Value> = graph
                 .objects
                 .iter()
