@@ -16,7 +16,8 @@
 //!   where the end only butts against it;
 //! - lying over it (the same way, its end at `p` and its body on the same
 //!   side, or its box holding `p` elsewhere): the end is overlapped, and the
-//!   mullion that lies over it counts for nothing at `p` (RE-400);
+//!   mullion that lies over it counts for nothing at `p` (RE-400), when it is
+//!   of the mullion's own type, whose section is then the same (RE-403);
 //! - neither along nor across it (oblique): the end's join is not read.
 //!
 //! An end is hidden when it has a partner and nothing across covers `p`, or
@@ -24,7 +25,10 @@
 //! axis is not known, or one of whose ends has a mullion across it that holds
 //! `p` inside its box or one that is oblique to it, is left out. So is a mullion
 //! with an end that meets, within `NEAR_FEET`, a mullion that is left out or
-//! overlapped, unless it is overlapped itself. A mullion shorter than its
+//! overlapped, unless it is overlapped itself, and a mullion with another of a
+//! different or unknown type lying over one of its ends: on the BIM4LCA timber
+//! office at permit the overlaps of one type are Revit's on 140 of 140 and
+//! those of another section on 0 of 20 (RE-403). A mullion shorter than its
 //! section is read like any other and is not a reason to leave its neighbours
 //! out (RE-400).
 
@@ -48,6 +52,8 @@ const MAX_GROUP: usize = 4096;
 #[derive(Debug, Clone, PartialEq)]
 pub struct MullionBox {
     pub id: u32,
+    /// The mullion's type, 0 where it is not known.
+    pub kind: u64,
     pub centre: [f64; 3],
     pub axes: [[f64; 3]; 3],
     pub half: [f64; 3],
@@ -63,6 +69,9 @@ struct Neighbours {
     inside: bool,
     parallel_in: bool,
     oblique: bool,
+    /// A mullion lies over the end that is not of the mullion's own, known,
+    /// type (RE-403).
+    other_kind: bool,
 }
 
 impl Neighbours {
@@ -80,6 +89,11 @@ impl Neighbours {
     fn hidden(&self) -> bool {
         self.partner != (self.centre || self.inside)
     }
+}
+
+/// Whether two mullions are of one type, which is then known.
+fn same_kind(a: &MullionBox, b: &MullionBox) -> bool {
+    a.kind != 0 && a.kind == b.kind
 }
 
 fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
@@ -145,9 +159,13 @@ fn neighbours(
                         found.partner = true;
                     } else {
                         found.same = true;
+                        found.other_kind |= !same_kind(m, o);
                     }
                 }
-                None => found.parallel_in = true,
+                None => {
+                    found.parallel_in = true;
+                    found.other_kind |= !same_kind(m, o);
+                }
             }
         } else if cosine < ACROSS {
             let offset = dot(sub(p, o.centre), axis).abs();
@@ -186,7 +204,11 @@ pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
         if ends.iter().any(|end| end.unread()) {
             left_out.insert(m.id);
         } else if ends.iter().any(|end| end.overlapped()) {
-            overlapped.insert(m.id);
+            if ends.iter().any(|end| end.other_kind) {
+                left_out.insert(m.id);
+            } else {
+                overlapped.insert(m.id);
+            }
         }
         found.insert(m.id, (along, ends));
     }
@@ -198,9 +220,9 @@ pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
         if left_out.contains(&m.id) {
             continue;
         }
-        // An overlapped mullion is read on its own: its count is Revit's on
-        // all 159 of the office's. A neighbour of one, or of a mullion left
-        // out, is not read (RE-400).
+        // An overlapped mullion is read on its own where what lies over it is
+        // of its type: its count is Revit's on all 159 of the office's. A
+        // neighbour of one, or of a mullion left out, is not read (RE-400).
         let meets_one_not_read = !overlapped.contains(&m.id)
             && end_points(m, *along).iter().any(|(p, _)| {
                 group.iter().any(|o| {

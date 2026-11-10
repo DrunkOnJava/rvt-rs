@@ -29,9 +29,13 @@ claimed, when an end is PERP_IN or OBLIQUE, when its axis is not known (no
 rvt-rs `Length` equal to a side of its box), or when an end meets, within
 NEAR, a mullion that is left out or overlapped (an end is PAR_SAME or PAR_IN:
 another mullion lies over it), unless it is overlapped itself. An overlapped
-mullion is read on its own, and a mullion shorter than its section is read
-like any other and leaves its neighbours alone (RE-400; RE-268 left out an
-overlapped mullion and the neighbours of a short one).
+mullion is read on its own where the mullion over it is of its own type, and a
+mullion shorter than its section is read like any other and leaves its
+neighbours alone (RE-400; RE-268 left out an overlapped mullion and the
+neighbours of a short one). A mullion with another of a different or unknown
+type over an end is left out: on the BIM4LCA timber office at permit the
+overlaps of one type were Revit's on 140 of 140 and those of another section
+on 0 of 20 (RE-403).
 
 It prints the boxes read, the mullions left out by cause, the confusion table
 of the count against the one Revit's NetSurfaceArea implies, and, for the
@@ -190,6 +194,16 @@ def labels(m, p, out, others):
     return found
 
 
+def over_other_type(m, p, out, group):
+    """Whether a mullion lies over the end at `p` that is not of `m`'s own, known, type (RE-403)."""
+    for o in group:
+        if o is m or o["axis"] is None:
+            continue
+        if set(OVERLAPPED) & labels(m, p, out, [o]) and not (m["type"] != "-" and m["type"] == o["type"]):
+            return True
+    return False
+
+
 def hidden(found):
     covered = "PERP_CENTER" in found or "PERP_IN" in found
     return ("PARTNER" in found) != covered
@@ -227,7 +241,10 @@ def main(argv):
             if set(UNREAD) & seen:
                 cause[m["tag"]] = "an end is " + "/".join(sorted(set(UNREAD) & seen))
             elif set(OVERLAPPED) & seen:
-                overlapped.add(m["tag"])
+                if any(over_other_type(m, p, out, group) for p, out in ends):
+                    cause[m["tag"]] = "an end has a mullion of another type lying over it"
+                else:
+                    overlapped.add(m["tag"])
             if 2 * m["half"][0] < 2 * min(m["half"][1], m["half"][2]) - 1e-3:
                 short.add(m["tag"])
     # A mullion with an end that meets one left out or overlapped is left out,
