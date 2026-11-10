@@ -211,8 +211,10 @@ The housing is a second project, a different design from the office, and the
 timber office is a structural variant of the concrete office (a further state
 of one project, as built and at building permit are). All of them are
 development reference models, scored like the others against W4, W6 and W7
-(#1636): none is a W5 candidate, since tier-two tests read their `.rvt` files
-and the columns' cut bodies were fixed against them (RE-178). Which one-project
+(#1636): none is a W5 candidate. Tier-two tests read three of the housing's
+`.rvt` files (the two large permit files and the small concrete terrain one) and
+the columns' cut bodies were fixed against them (RE-178), and the timber office
+is the concrete office's project, which the rules were developed on. Which one-project
 rules the housing exercises, and whether they hold there, is
 [#1636](https://github.com/DrunkOnJava/rvt-rs/issues/1636)'s measurement.
 
