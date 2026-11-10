@@ -66,6 +66,7 @@ fn main() -> anyhow::Result<()> {
     let ids: Vec<i64> = definitions.values().map(|&id| i64::from(id)).collect();
     let found = scan_integer_parameters(&mut rf, version, &owners, &ids);
     let mut tally: BTreeMap<(String, bool), usize> = BTreeMap::new();
+    let mut own_by_class: BTreeMap<String, usize> = BTreeMap::new();
     for element in &elements {
         let (Some(id), Some(type_id)) = (element.id, type_of(element)) else {
             continue;
@@ -86,7 +87,12 @@ fn main() -> anyhow::Result<()> {
             .iter()
             .filter(|(name, _)| name != IS_EXTERNAL_PARAMETER_NAME)
             .collect();
-        if set_specific.is_empty() {
+        // The ladder of the BIM4LCA housing (tag 1857214) is listed whatever it holds,
+        // and every element that holds a value of its own is counted by class.
+        if !own.is_empty() {
+            *own_by_class.entry(element.class.clone()).or_default() += 1;
+        }
+        if set_specific.is_empty() && id != 1_857_214 {
             continue;
         }
         let same = set_specific
@@ -113,6 +119,15 @@ fn main() -> anyhow::Result<()> {
             element.class
         );
     }
+    if !elements.iter().any(|element| element.id == Some(1_857_214)) {
+        println!("element 1857214 is not among the partition elements");
+    }
+    for (class, count) in &own_by_class {
+        println!(
+            "tally {version}: {class} holds a value of its own for an IsExternal parameter: {count}"
+        );
+    }
+    println!("tally {version}: elements {}", elements.len());
     for ((class, same), count) in &tally {
         println!(
             "tally {version}: {class} type holds a set-specific value, element holds the same parameter {same}: {count}"
