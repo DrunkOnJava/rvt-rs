@@ -3,8 +3,8 @@
 **Date:** 2026-11-10
 **Issues:** #1046 (base quantities Revit computes from its joined geometry, W7), #1016 (quantities); follows RE-243, RE-268, RE-387, RE-400 and RE-402 section 8
 **Artefacts:** the BIM4LCA housing (concrete as built, timber at permit) and timber office (as built and at permit), and the concrete office (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, as Measure fetches them); revit-ifc is not read again here
-**Runs:** Measure [42898163164](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42898163164), [42900917460](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42900917460), [42901978537](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42901978537), [42902864917](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42902864917) and [42903713917](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42903713917) (scratch scorers `mullion_wrong_detail.py` and `mullion_profile_probe.py`, commits `7b5bdc87e6ae` and `f2202acccac3`, saved meshes off; sections 2 and 3), [42909452814](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42909452814) (`probe_1046_mullion_joins`, the types of the timber office at permit) and [42910979704](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42910979704) (its export with `--no-saved-meshes`, kept), [42904014676](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42904014676) (the first form of this change, section 5), and the unfiltered run of the change as it stands (section 5)
-**Status:** In progress: sections 1 to 4 are measured on the files named; the unfiltered Measure of the change as it stands is running and section 5 is written when it reads.
+**Runs:** Measure [42898163164](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42898163164), [42900917460](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42900917460), [42901978537](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42901978537), [42902864917](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42902864917) and [42903713917](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42903713917) (scratch scorers `mullion_wrong_detail.py` and `mullion_profile_probe.py`, commits `7b5bdc87e6ae` and `f2202acccac3`, saved meshes off; sections 2 and 3), [42909452814](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42909452814) (`probe_1046_mullion_joins`, the types of the timber office at permit) and [42910979704](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42910979704) (its export with `--no-saved-meshes`, kept), [42904014676](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42904014676) (the first form of this change, section 5), and [42912466047](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42912466047) (the change as it stands, section 5)
+**Status:** Positive, measured as pre-registered: the mesh guard and the odd-box overlap rule take every wrong mullion `NetVolume` of the BIM4LCA housing and timber office to equal and every wrong `NetSurfaceArea` of the housing to missing, and leave 5 of the timber office's 49 wrong at permit; the concrete office and every other model with a Revit export are byte-identical (section 5).
 
 ## 1. What RE-402 left open
 
@@ -50,7 +50,21 @@ A type has one section, so a box with another is not the mullion's solid: sectio
 
 ## 5. Measured
 
-The first form of this change (42904014676, `c4ee0f30`) left the overlapped mullions out where a mullion of another type lay over an end, which on the timber office at permit changed nothing: the rule had no case. It moved 14 exports of 126 (the four large housing files, the timber office at permit and nine of Autodesk's samples) and left 112 byte-identical; the mesh guard took every `NetVolume` that differed to equal on all five files (233 values: 48, 40, 48, 48 and 49) and every `NetSurfaceArea` that differed on the four housing files to missing (48, 40, 48 and 48), and the timber office's `NetSurfaceArea` from 49 different to 21. The unfiltered run of the change as it stands against `main` is dispatched from `main`, whose workflow holds the housing and the timber office; its readings go here when it finishes.
+The first form of this change (42904014676, `c4ee0f30`) left an overlapped mullion out where a mullion of another type lay over an end, which on the timber office at permit changed nothing: the rule had no case (section 3). Its mesh guard took every `NetVolume` that differed to equal on all five files (233 values: 48, 40, 48, 48 and 49) and every `NetSurfaceArea` that differed on the four housing files to missing (48, 40, 48 and 48), and left the timber office's 49 different `NetSurfaceArea` at 21.
+
+The change as it stands (unfiltered Measure 42912466047, head `ab062938` against `main` at `fcdc9de8`, 126 models on each side; the same-project gates pass on the head): 14 exports move and 112 are byte-identical, the concrete office in both states, its terrain files, the timber office as built, Core Interior, RE1, the 24 Revit 2025 models and the held-out models among them. Of the 14, 5 are the files with a Revit export that holds a wrong mullion value, and 9 are Autodesk's samples (the 2024 to 2027 `rac_basic` and `rac_advanced` and Snowdon Towers Architectural 2024), which no Revit export scores. Each cell is `equal / different / missing`, before and after:
+
+| file | `NetVolume` | `NetSurfaceArea` |
+|---|---|---|
+| housing, concrete as built | 308 / 48 / 0 to 356 / 0 / 0 | 306 / 48 / 2 to 306 / 0 / 50 |
+| housing, concrete at permit | 316 / 40 / 0 to 356 / 0 / 0 | 314 / 40 / 2 to 314 / 0 / 42 |
+| housing, timber as built | 404 / 48 / 0 to 452 / 0 / 0 | 396 / 48 / 8 to 396 / 0 / 56 |
+| housing, timber at permit | 404 / 48 / 0 to 452 / 0 / 0 | 396 / 48 / 8 to 396 / 0 / 56 |
+| timber office at permit | 7,496 / 49 / 327 to 7,545 / 0 / 327 | 5,292 / 49 / 2,531 to 5,292 / 5 / 2,575 |
+
+The five files' census totals go from 131, 169, 170, 109 and 169 different values to 35, 89, 74, 13 and 76: 461 wrong mullion values in all, 233 of them now equal and 228 missing. The pre-registered row (#1636, comment 6780710066) holds on every clause: `NetVolume` reads `different 0` on all eight BIM4LCA models, `NetSurfaceArea` reads `different 0` on the four large housing files and 5 on the timber office at permit (6 or fewer was the bar), and the concrete office, its terrain files and the timber office as built are byte-identical.
+
+The 5 that stay wrong at permit are the ones section 3 and section 6 keep: values RE-268 wrote on a mullion whose box is the solid and over whose ends nothing with an odd box lies.
 
 ## 6. Not shown
 
