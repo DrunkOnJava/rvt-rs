@@ -568,7 +568,7 @@ The type object an element is typed by.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `element_id` | string | yes | The type object's `Tag`: the type's Revit ElementId, or the ElementId of the room an `IfcSpaceType` is made for. |
+| `element_id` | string | yes | The type's Revit ElementId, or the ElementId of the room an `IfcSpaceType` is made for. The export writes it as the type object's `Tag`, except on an `IfcPlateType`, which it writes with none: Revit's is a plate's ElementId, in an order no record holds. |
 | `ifc_type` | string | yes | The type object's IFC entity, such as `IFCWALLTYPE`. |
 | `name` | string | yes | The type object's `Name`. |
 | `property_sets` | array of [PropertySetOut](#propertysetout) | yes | The sets the export writes on the type object, `Other` and `Identity Data` among them. |

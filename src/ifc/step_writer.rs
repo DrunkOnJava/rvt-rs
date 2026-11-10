@@ -427,8 +427,9 @@ pub struct TypeObject {
     pub entity: String,
     /// Its `Name`.
     pub name: String,
-    /// Its `Tag`: the ElementId of the type, or of the room an `IfcSpaceType`
-    /// is made for.
+    /// The ElementId of the type, or of the room an `IfcSpaceType` is made for.
+    /// It is the type object's `Tag` as written, except on an `IFCPLATETYPE`,
+    /// which is written with none (#1594).
     pub tag: String,
     /// The property sets it holds, in the order the writer writes them:
     /// `Other` (the category and the family name), `Identity Data` (the type

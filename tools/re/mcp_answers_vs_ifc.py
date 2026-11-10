@@ -28,8 +28,9 @@ default decode does not take):
   is, equal to `RvtElementRecordGeometry.SpaceKind`), and an area equal to that of its body's plan
   outline (an `IfcIndexedPolyCurve`'s arcs counted as themselves, not as their chords, #1443);
 - `get_element` on the sampled elements: the property and quantity sets, the trust markers, the
-  type object (entity, Name, Tag and sets), the placement (the translation, not the rotation), the
-  host, and whether the body is none or mapped, each equal to the IFC's;
+  type object (entity, Name, Tag and sets; an `IfcPlateType` is written with no Tag, #1594, so the
+  id the server answers for it is counted and not compared), the placement (the translation, not
+  the rotation), the host, and whether the body is none or mapped, each equal to the IFC's;
 - the diagnostics' `decoded.parameter_value_count` equals the number of property values in the `Pset_`
   sets of the IFC (#1424: a piece the writer folds into another element's body writes none), and
   its `exported` counts are the elements the IFC holds, with `exported.body_pieces_folded` equal to
@@ -854,6 +855,7 @@ def check_details(report, answers, written):
     type_presence = []
     compared = 0
     typed = 0
+    plate_types_untagged = 0
     sets_compared = 0
     for element_id in sorted(answers["details"], key=lambda text: mcp.id_key({"id": text})):
         detail = answers["details"][element_id]
@@ -908,10 +910,14 @@ def check_details(report, answers, written):
                 type_presence.append(f"{label}: type entity {answered_type.get('ifc_type')!r} vs {kind.is_a().upper()!r}")
             if answered_type.get("name") != kind.Name:
                 type_presence.append(f"{label}: type name {answered_type.get('name')!r} vs {kind.Name!r}")
-            if getattr(kind, "Tag", None) != answered_type["element_id"]:
-                type_presence.append(
-                    f"{label}: type id {answered_type['element_id']!r} vs Tag {getattr(kind, 'Tag', None)!r}"
-                )
+            tag = getattr(kind, "Tag", None)
+            if tag is None and kind.is_a() == "IfcPlateType":
+                # The export writes an IfcPlateType with no Tag (#1594) and the
+                # server still answers the type's own ElementId, so there is
+                # nothing to compare it with. Counted, so it is not silent.
+                plate_types_untagged += 1
+            elif tag != answered_type["element_id"]:
+                type_presence.append(f"{label}: type id {answered_type['element_id']!r} vs Tag {tag!r}")
             sets_compared += compare_sets(
                 f"{label} type",
                 answered_type["property_sets"],
@@ -942,6 +948,7 @@ def check_details(report, answers, written):
             differences.append(f"{label}: host {detail.get('host_id')!r} vs {host!r}")
     report.check(W("details"), compared, differences)
     report.check(W("type objects"), typed, type_presence)
+    report.line(W("type objects: plate types the export writes with no Tag, whose id is not compared: {}"), plate_types_untagged)
     report.check(W("type object sets"), typed, type_differences)
     report.line(W("get_element property and quantity sets compared: {}"), sets_compared)
     return first
