@@ -9,3 +9,5 @@
   `curtain_wall_within_half_foot_of_wall_end` 41 to 42 and
   `door_opening_box_not_read` 1 to 2). No export changes: the opening in a
   shadow's wall is not written until the mirrored step's own rule writes it.
+  The link between a shadow step and the step it mirrors was reported by mahach666
+  (RvtIO, discussion #1241).
