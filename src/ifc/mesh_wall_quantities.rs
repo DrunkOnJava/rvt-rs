@@ -50,6 +50,11 @@ pub(super) struct WallMeshQuantities {
     pub net_volume: f64,
     /// The areas of its sides, where it has no more than four vertical faces.
     pub sides: Option<WallSideAreas>,
+    /// The vertical span of the mesh, from its lowest corner to its highest,
+    /// feet. It is the `Height` Revit's export writes, to the single
+    /// precision of the saved corners, which is too coarse to write (RE-388),
+    /// so it only confirms a height read elsewhere (RE-405).
+    pub height_feet: f64,
 }
 
 /// The areas of a wall's sides, square feet.
@@ -304,9 +309,16 @@ pub(super) fn wall_mesh_quantities(primitives: &[Primitive]) -> Option<WallMeshQ
         every.extend(triangles);
     }
     let net_volume = one_piece_volume(&every)?;
+    let (low, high) = every
+        .iter()
+        .flat_map(|(a, b, c)| [a[2], b[2], c[2]])
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(low, high), z| {
+            (low.min(z), high.max(z))
+        });
     Some(WallMeshQuantities {
         net_volume,
         sides: side_areas(&mut sides),
+        height_feet: high - low,
     })
 }
 
@@ -367,6 +379,7 @@ mod tests {
     fn a_plain_wall_gives_its_volume_and_its_sides() {
         let found = wall_mesh_quantities(&wall([100.0, 200.0, 190.0], 10.0, 1.0, 8.0)).unwrap();
         assert!((found.net_volume - 80.0).abs() < 1e-9);
+        assert!((found.height_feet - 8.0).abs() < 1e-9);
         let sides = found.sides.unwrap();
         assert!((sides.net - 80.0).abs() < 1e-9);
         assert!((sides.gross.unwrap() - 80.0).abs() < 1e-9);
