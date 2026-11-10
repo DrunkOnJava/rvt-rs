@@ -216,7 +216,9 @@ development reference models, scored like the others against W4, W6 and W7
 the columns' cut bodies were fixed against them (RE-178), and the timber office
 is the concrete office's project, which the rules were developed on. Which one-project
 rules the housing exercises, and whether they hold there, is
-[#1636](https://github.com/DrunkOnJava/rvt-rs/issues/1636)'s measurement.
+[#1636](https://github.com/DrunkOnJava/rvt-rs/issues/1636)'s measurement, first
+recorded in
+[RE-402](../reports/element-framing/RE-402-second-project-first-measurement.md).
 
 ## Revit 2025 models made for one feature each, fetched for a run
 
