@@ -102,6 +102,7 @@ def main(argv):
                 cause[m["tag"]] = "meets one left out or overlapped"
 
     verdict = collections.Counter()
+    near_short_table = collections.Counter()
     features = collections.Counter()
     wrong = []
     for host, group in by_host.items():
@@ -135,12 +136,25 @@ def main(argv):
                                     "same type" if row["type"] == m["type"] else "other type",
                                 )
                             ] += 1
+            if kind == "near_short":
+                touching = []
+                for p, _ in M.end_points(m):
+                    near = [o for o in group if o is not m and o["tag"] in short and M.box_distance(o, p) < M.NEAR]
+                    touching.append(
+                        "touch" if any(M.box_distance(o, p) <= M.TOL for o in near) else ("gap" if near else "no short")
+                    )
+                labels_per_end = tuple("+".join(sorted(f)) or "nothing" for f in found[tag])
+                key = ("right" if ok else "WRONG", labels_per_end, tuple(touching), predicted)
+                near_short_table[key] += 1
             if not ok:
                 wrong.append((tag, host, kind, m, found[tag], predicted, written, nsa, ends, group))
     print("written by the rule, by what it read:", dict(sorted(verdict.items())))
     print("overlapped mullions' PAR neighbours, by feature (end, verdict, label, section, face cover, type): count")
     for k, n in sorted(features.items()):
         print(f"  {k}: {n}")
+    print("mullions that meet a mullion shorter than their section, by verdict, labels at each end, whether the short one touches, ends counted: mullions")
+    for key, n in sorted(near_short_table.items(), key=lambda kv: (kv[0][0], -kv[1])):
+        print(f"  {key}: {n}")
     print(f"different: {len(wrong)}")
     for tag, host, kind, m, fnd, predicted, written, nsa, ends, group in wrong:
         sec = sorted(round(2 * h * MM, 1) for h in m["half"][1:])
