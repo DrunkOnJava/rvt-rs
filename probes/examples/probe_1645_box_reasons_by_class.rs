@@ -18,15 +18,15 @@
 use std::collections::BTreeMap;
 
 use rvt::RevitFile;
-use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::{IfcEntity, PropertyValue};
+use rvt::ifc::{ExportOptions, run_export};
 
 const REFUSAL: &str = "SavedMeshRefusal";
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
-    let model = RvtDocExporter.export_with_diagnostics(&mut rf)?.model;
+    let model = run_export(&mut rf, &ExportOptions::default())?.model;
     let mut groups: BTreeMap<(String, String), (usize, Vec<String>)> = BTreeMap::new();
     let mut classes: BTreeMap<String, usize> = BTreeMap::new();
     for entity in &model.entities {
