@@ -1,5 +1,5 @@
 //! Which end faces of a curtain mullion Revit's solid keeps, from where the
-//! boxes of the mullions of its curtain wall meet (#1046, RE-268).
+//! boxes of the mullions of its curtain wall meet (#1046, RE-268, RE-400).
 //!
 //! A curtain mullion's `Qto_MemberBaseQuantities.NetSurfaceArea` is its
 //! section's perimeter times its length plus 0, 1 or 2 times its section's
@@ -15,14 +15,18 @@
 //!   faces (inside), where it covers `p`; or across it with `p` on a side face,
 //!   where the end only butts against it;
 //! - lying over it (the same way, its end at `p` and its body on the same
-//!   side, or its box holding `p` elsewhere), or neither along nor across it
-//!   (oblique): the end's join is not read.
+//!   side, or its box holding `p` elsewhere): the end is overlapped, and the
+//!   mullion that lies over it counts for nothing at `p` (RE-400);
+//! - neither along nor across it (oblique): the end's join is not read.
 //!
 //! An end is hidden when it has a partner and nothing across covers `p`, or
 //! when a mullion across covers `p` and it has no partner. A mullion whose
-//! axis is not known, or one of whose ends is not read, is left out, and so
-//! is one with an end that meets, within `NEAR_FEET`, a mullion that is left
-//! out or is shorter than its own section.
+//! axis is not known, or one of whose ends has a mullion across it that holds
+//! `p` inside its box or one that is oblique to it, is left out. So is a mullion
+//! with an end that meets, within `NEAR_FEET`, a mullion that is left out or
+//! overlapped, unless it is overlapped itself. A mullion shorter than its
+//! section is read like any other and is not a reason to leave its neighbours
+//! out (RE-400).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -34,8 +38,6 @@ const NEAR_FEET: f64 = 0.2;
 const PARALLEL: f64 = 0.999;
 /// Two axes whose cosine is below this run across each other.
 const ACROSS: f64 = 0.01;
-/// A mullion shorter than its section by more than this is shorter than it.
-const SHORT_MARGIN_FEET: f64 = 0.001;
 /// A curtain wall with more mullions than this is left unread: the ends of each
 /// are compared with every other mullion of the wall.
 const MAX_GROUP: usize = 4096;
@@ -64,8 +66,15 @@ struct Neighbours {
 }
 
 impl Neighbours {
-    fn unsure(&self) -> bool {
-        self.same || self.inside || self.parallel_in || self.oblique
+    /// An end whose join is not read: a mullion across it holds `p` inside its
+    /// box, or one runs oblique to it.
+    fn unread(&self) -> bool {
+        self.inside || self.oblique
+    }
+
+    /// An end with a mullion lying over it, which counts for nothing at `p`.
+    fn overlapped(&self) -> bool {
+        self.same || self.parallel_in
     }
 
     fn hidden(&self) -> bool {
@@ -159,28 +168,25 @@ fn neighbours(
 }
 
 /// For each mullion of `group`, the mullions of one curtain wall, how many of
-/// its two end faces its Revit solid keeps (0, 1 or 2); a mullion left out
-/// has none.
+/// its two end faces its Revit solid keeps (0, 1 or 2); a mullion left out has
+/// none.
 pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
     if group.len() > MAX_GROUP {
         return BTreeMap::new();
     }
     let mut found: BTreeMap<u32, (usize, [Neighbours; 2])> = BTreeMap::new();
     let mut left_out: BTreeSet<u32> = BTreeSet::new();
-    let mut sources: BTreeSet<u32> = BTreeSet::new();
+    let mut overlapped: BTreeSet<u32> = BTreeSet::new();
     for m in group {
         let Some(along) = m.along.filter(|a| *a < 3) else {
             left_out.insert(m.id);
-            sources.insert(m.id);
             continue;
         };
         let ends = end_points(m, along).map(|(p, out)| neighbours(m, along, p, out, group));
-        let section = 2.0 * m.half[(along + 1) % 3].min(m.half[(along + 2) % 3]);
-        if ends.iter().any(|end| end.unsure()) {
+        if ends.iter().any(|end| end.unread()) {
             left_out.insert(m.id);
-            sources.insert(m.id);
-        } else if 2.0 * m.half[along] < section - SHORT_MARGIN_FEET {
-            sources.insert(m.id);
+        } else if ends.iter().any(|end| end.overlapped()) {
+            overlapped.insert(m.id);
         }
         found.insert(m.id, (along, ends));
     }
@@ -192,12 +198,18 @@ pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
         if left_out.contains(&m.id) {
             continue;
         }
-        let meets_one_left_out = end_points(m, *along).iter().any(|(p, _)| {
-            group.iter().any(|o| {
-                o.id != m.id && sources.contains(&o.id) && distance_to_box(o, *p) < NEAR_FEET
-            })
-        });
-        if meets_one_left_out {
+        // An overlapped mullion is read on its own: its count is Revit's on
+        // all 159 of the office's. A neighbour of one, or of a mullion left
+        // out, is not read (RE-400).
+        let meets_one_not_read = !overlapped.contains(&m.id)
+            && end_points(m, *along).iter().any(|(p, _)| {
+                group.iter().any(|o| {
+                    o.id != m.id
+                        && (left_out.contains(&o.id) || overlapped.contains(&o.id))
+                        && distance_to_box(o, *p) < NEAR_FEET
+                })
+            });
+        if meets_one_not_read {
             continue;
         }
         let count = ends.iter().filter(|end| !end.hidden()).count();

@@ -25,16 +25,24 @@ An end is not counted (hidden) when it has a PARTNER and nothing across
 covers `p`, or when a mullion across covers `p` (PERP_CENTER or PERP_IN) and
 there is no PARTNER; PERP_FACE (the end butts against a side face) and no
 neighbour at all leave it counted. A mullion is left out, its count not
-claimed, when an end is PERP_IN, PAR_SAME, PAR_IN or OBLIQUE, when its axis is
-not known (no rvt-rs `Length` equal to a side of its box), or when an end
-meets, within NEAR, a mullion that is one of those or is shorter than its own
-section (a mullion shorter than its section keeps its own count).
+claimed, when an end is PERP_IN or OBLIQUE, when its axis is not known (no
+rvt-rs `Length` equal to a side of its box), or when an end meets, within
+NEAR, a mullion that is left out or overlapped (an end is PAR_SAME or PAR_IN:
+another mullion lies over it), unless it is overlapped itself. An overlapped
+mullion is read on its own, and a mullion shorter than its section is read
+like any other and leaves its neighbours alone (RE-400; RE-268 left out an
+overlapped mullion and the neighbours of a short one).
 
 It prints the boxes read, the mullions left out by cause, the confusion table
 of the count against the one Revit's NetSurfaceArea implies, and, for the
 mullions rvt-rs writes a `NetVolume` on (the ones drawn as an extrusion of
 their box section, RE-243) and the rule does not leave out, whether
-`perimeter x length + ends x area` of rvt-rs's box is Revit's value.
+`perimeter x length + ends x area` of rvt-rs's box is Revit's value, with how
+many of them the rule of RE-268 left out and on how many curtain walls.
+
+Run it on an export made with `--no-saved-meshes`: the boxes are read from the
+mullions drawn as an extruded rectangle, and since #1191 a mullion is drawn
+from its saved mesh by default.
 
 Usage:
 
@@ -60,7 +68,8 @@ NEAR = 0.2
 PARALLEL = 0.999
 ACROSS = 0.01
 AXIS_MATCH = 1e-3 * FEET_PER_METRE
-UNSURE = ("PERP_IN", "PAR_SAME", "PAR_IN", "OBLIQUE")
+UNREAD = ("PERP_IN", "OBLIQUE")
+OVERLAPPED = ("PAR_SAME", "PAR_IN")
 
 
 def key_of(member):
@@ -204,6 +213,7 @@ def main(argv):
 
     # Per mullion: its ends' labels, and why it is left out.
     cause = {}
+    overlapped = set()
     short = set()
     found = {}
     for host, group in by_host.items():
@@ -213,24 +223,38 @@ def main(argv):
                 continue
             ends = end_points(m)
             found[m["tag"]] = [labels(m, p, out, group) for p, out in ends]
-            if any(set(UNSURE) & f for f in found[m["tag"]]):
-                cause[m["tag"]] = "an end is " + "/".join(sorted(set(UNSURE) & set().union(*found[m["tag"]])))
-            elif 2 * m["half"][0] < 2 * min(m["half"][1], m["half"][2]) - 1e-3:
+            seen = set().union(*found[m["tag"]])
+            if set(UNREAD) & seen:
+                cause[m["tag"]] = "an end is " + "/".join(sorted(set(UNREAD) & seen))
+            elif set(OVERLAPPED) & seen:
+                overlapped.add(m["tag"])
+            if 2 * m["half"][0] < 2 * min(m["half"][1], m["half"][2]) - 1e-3:
                 short.add(m["tag"])
-    # A mullion shorter than its section keeps its own count; one whose end
-    # meets it, or a mullion left out, is left out as well.
-    sources = set(cause) | short
+    # A mullion with an end that meets one left out or overlapped is left out,
+    # unless it is overlapped itself; one that meets only a mullion shorter than
+    # its section is read (RE-268 left both out).
+    sources = set(cause) | overlapped
+    first = dict(cause)
+    near_short = set()
     for host, group in by_host.items():
         for m in group:
-            if m["tag"] in cause or m["axis"] is None:
+            if m["axis"] is None or m["tag"] in first:
                 continue
+            kinds = set()
             for p, _ in end_points(m):
-                if any(o["tag"] in sources and o is not m and box_distance(o, p) < NEAR for o in group):
-                    cause[m["tag"]] = "an end meets one left out or shorter than its section"
-                    break
+                for o in group:
+                    if o is m or box_distance(o, p) >= NEAR:
+                        continue
+                    if o["tag"] in sources:
+                        kinds.add(first.get(o["tag"], "overlapped"))
+                    elif o["tag"] in short:
+                        near_short.add(m["tag"])
+            if kinds and m["tag"] not in overlapped:
+                cause[m["tag"]] = "an end meets one left out or overlapped: " + " + ".join(sorted(kinds))
     print(f"IfcMembers: {len(ours.by_type('IfcMember'))}, boxes: {len(boxes)}, not read: {dict(skipped)}")
     print(f"in a curtain wall: {sum(len(g) for g in by_host.values())}, hosts: {len(by_host)}")
-    print(f"shorter than their section (kept unless an end meets one left out): {len(short)}")
+    print(f"shorter than their section (read like any other): {len(short)}")
+    print(f"overlapped, read on their own: {len(overlapped)}")
     print("left out, by cause: mullions")
     for name, n in sorted(collections.Counter(cause.values()).items(), key=lambda kv: -kv[1]):
         print(f"  {name}: {n}")
@@ -241,6 +265,8 @@ def main(argv):
     left_out = collections.Counter()
     by_labels = collections.Counter()
     different = []
+    new_claims = collections.Counter()
+    new_hosts = collections.defaultdict(set)
     for host, group in by_host.items():
         for m in group:
             r = revit.get(f"tag:{m['tag']}", {})
@@ -265,7 +291,11 @@ def main(argv):
                         continue
                     written = perimeter * span + predicted * area
                     tolerance = max(1e-5 * abs(nsa), 1e-6)
-                    if abs(written - nsa) <= tolerance:
+                    kind = "overlapped" if m["tag"] in overlapped else ("meets a mullion shorter than its section" if m["tag"] in near_short else "read as RE-268 read it")
+                    ok = abs(written - nsa) <= tolerance
+                    new_claims[(kind, "equal" if ok else "different")] += 1
+                    new_hosts[kind].add(host)
+                    if ok:
                         values["equal"] += 1
                         by_class[(m["type"], "upright" if abs(m["u"][0][2]) > 0.999 else "not", predicted)] += 1
                     else:
@@ -288,6 +318,9 @@ def main(argv):
     print("left out among them, by cause, and the value the rule would have given: mullions")
     for (name, verdict), n in sorted(left_out.items()):
         print(f"  {name}, {verdict}: {n}")
+    print("written, by what the rule read (RE-268 left out the first two kinds): mullions, curtain walls")
+    for kind in ("read as RE-268 read it", "overlapped", "meets a mullion shorter than its section"):
+        print(f"  {kind}: equal {new_claims[(kind, 'equal')]}, different {new_claims[(kind, 'different')]}, on {len(new_hosts[kind])} curtain walls")
     print("type, upright or not, ends written: equal")
     for (t, u, e), n in sorted(by_class.items()):
         print(f"  {t} {u} {e}: {n}")
