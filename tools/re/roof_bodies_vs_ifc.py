@@ -4,7 +4,11 @@
 Research tool for `reports/element-framing/RE-199-roof-planes.md`. For every
 `IfcRoof` both exports hold (same `Tag`, the ElementId), this meshes the roof's
 body in world space with IfcOpenShell, the roof's own representation and its
-aggregated parts' together, and compares, in feet:
+aggregated parts' together, and compares, in feet, in Revit's internal frame:
+each file's IfcSite placement is undone (`ifc_common.site_frame`), because
+Revit's export rotates a project that sits at an angle to true north (the
+BIM4LCA housing, 60.6 degrees) and rvt-rs's writes no rotation, so the raw
+world vertices of one roof stood up to 213 ft from the other's (RE-402).
 
 - the volume of the two meshes;
 - how far each vertex of Revit's body lies from the nearest vertex of
@@ -33,7 +37,8 @@ import ifcopenshell
 import ifcopenshell.geom
 import numpy
 
-FT = 0.3048
+from ifc_common import site_frame
+
 VERTEX_TOLERANCE_FT = 0.001
 VOLUME_TOLERANCE = 1e-4
 
@@ -49,6 +54,7 @@ def shapes_of(element):
 def roof_bodies(path):
     """Tag -> (unique vertices, volume, triangles), in feet and cubic feet."""
     model = ifcopenshell.open(path)
+    frame = site_frame(model)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     out = {}
@@ -66,7 +72,7 @@ def roof_bodies(path):
                 continue
             verts = shape.geometry.verts
             faces = shape.geometry.faces
-            points = [(verts[i] / FT, verts[i + 1] / FT, verts[i + 2] / FT) for i in range(0, len(verts), 3)]
+            points = [tuple(float(c) for c in p) for p in frame(numpy.array(verts, dtype=float).reshape(-1, 3))]
             if not points:
                 continue
             meshed = True
