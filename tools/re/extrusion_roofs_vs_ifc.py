@@ -4,7 +4,8 @@
 
 Takes the output of `probes/examples/probe_re211_extrusion_roofs.rs` and Revit's
 IFC export. For every roof the probe lists that Revit's export holds (same
-Tag), this meshes Revit's body in world space with IfcOpenShell and reports:
+Tag), this meshes Revit's body with IfcOpenShell, in Revit's internal frame (the
+IfcSite placement undone, as the stair and wall scorers do: RE-402), and reports:
 
 - the body's vertices: how many, their box, and how many distinct values
   each axis takes (an extrusion along a model axis takes two along it);
@@ -37,10 +38,11 @@ import struct
 
 import ifcopenshell
 import ifcopenshell.geom
+import numpy
 
+from ifc_common import site_frame
 from roof_bodies_vs_ifc import shapes_of
 
-FT = 0.3048
 MATCH_FT = 1e-4
 
 
@@ -83,14 +85,15 @@ def read_probe(path):
 
 
 def body_mesh(model, element):
-    """Revit's body in world feet: its vertices and its triangles' volume."""
+    """Revit's body in feet, in Revit's internal frame: its vertices and its triangles' volume."""
+    frame = site_frame(model)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     out, volume = [], 0.0
     for shape_of in shapes_of(element):
         shape = ifcopenshell.geom.create_shape(settings, shape_of)
         v = shape.geometry.verts
-        points = [tuple(v[i + k] / FT for k in range(3)) for i in range(0, len(v), 3)]
+        points = [tuple(float(c) for c in p) for p in frame(numpy.array(v, dtype=float).reshape(-1, 3))]
         f = shape.geometry.faces
         for i in range(0, len(f), 3):
             a, b, c = (points[f[i + k]] for k in range(3))
