@@ -85,13 +85,14 @@ pub fn wall_cut_steps(
         .collect())
 }
 
-/// Reads each `WallShadowCutoutGStep` as the step of the other wall it
-/// mirrors (#1165): the wall it names (`m_otherWallId`) holds an embed or a
-/// cutout step of the same cutter whose `m_id` is the shadow's `m_ggId`: all
-/// 124 shadow steps of the BIM4LCA office, `rac_advanced` and Snowdon Towers
-/// Architectural name one (RE-398). Revit's export writes the cutter's opening
-/// in the shadow's wall as it does in the other wall on both of the office's
-/// shadow steps as built. A shadow whose other wall holds no such step stays a
+/// Reads each `WallShadowCutoutGStep` as the kind of the step of the other
+/// wall it mirrors (#1165): the wall it names (`m_otherWallId`) holds an embed
+/// or a cutout step of the same cutter whose `m_id` is the shadow's `m_ggId`:
+/// all 124 shadow steps of the BIM4LCA office, `rac_advanced` and Snowdon
+/// Towers Architectural name one (RE-398). Revit's export writes the cutter's
+/// opening in the shadow's wall as it does in the other wall on all 3 of the
+/// office's shadow steps. The shadow keeps its own `m_bCutSomething`, which is
+/// about its own wall. A shadow whose other wall holds no such step stays a
 /// shadow.
 pub fn resolve_shadow_steps(steps: &mut BTreeMap<u64, Vec<WallCutStep>>) {
     let mut resolved: Vec<(u64, usize, WallCutStep)> = Vec::new();
@@ -109,9 +110,12 @@ pub fn resolve_shadow_steps(steps: &mut BTreeMap<u64, Vec<WallCutStep>>) {
                 resolved.push((
                     *wall,
                     position,
+                    // Only the kind is the mirrored step's: the shadow's own
+                    // `m_bCutSomething` is about its own wall (false on 85 of the
+                    // 124, where the cutter is not hosted in it) and the other
+                    // step's about the other wall (RE-398).
                     WallCutStep {
                         kind: mirrored.kind,
-                        cuts_something: mirrored.cuts_something,
                         ..*step
                     },
                 ));

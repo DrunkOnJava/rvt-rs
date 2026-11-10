@@ -518,8 +518,8 @@ pub(super) fn attach_wall_cut_openings(
         return left_out;
     };
     // #1165: a shadow cutout step stands for the cut of the other wall it
-    // names; it is read as that step, so its wall's opening is written by the
-    // same rule.
+    // names; it is read as that kind of step, with its own flag, so its wall's
+    // opening is written by the same rule as any other wall the cutter reaches.
     native_wall_cuts::resolve_shadow_steps(&mut steps);
     let mut framed: BTreeSet<u64> = BTreeSet::new();
     let mut rects: BTreeSet<u64> = BTreeSet::new();
