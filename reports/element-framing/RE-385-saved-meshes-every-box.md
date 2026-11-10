@@ -48,6 +48,8 @@ The end caps of 28 conduits are trim rings whose last sample repeats their first
 
 Each of the 16 drops of the cascading art-glass pendants nests a `GInstance` whose `m_forbiddenTarget.m_targets` is 10, placed at the ceiling, where the drop's mesh starts. The traversal refuses any value other than 0, and this report leaves it so. Drawn as 0 is drawn, each such pendant's mesh fits inside its record box, but fitting the box cannot exclude geometry a view would leave out inside it, and what the bits name is not read. A reader keeps the box for what it does not understand (RE-224). What would decide it: a file whose Revit export shows a nested instance with these targets drawn or left out, or two saves of one file, by two releases, in which the value changes.
 
+RE-408 (2026-11-10) measured it: with the instance drawn, the 16 art-glass pendants and 316 other bodies of Snowdon Towers Architectural come from their saved meshes and match Revit's export (the pendants at 1.04 to 1.10 of its volume with every vertex within 0.0093 ft; RE-408 section 5), and so do the 16 drops of this file, which no export scores, so the mask 10 is part of Revit's body and the traversal now draws it.
+
 ### 3.6 Detail-family filters
 
 On the 2025 edition the 131 elements reporting `nested detail-family filter requires view semantics` also report one of the causes above, or decode whole (3 of the 116 turned instances). That message comes from a filter the traversal leaves out at detail level 3, and it does not keep a mesh from being whole (RE-224). With the four changes none of them is left.
