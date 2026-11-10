@@ -12,7 +12,8 @@ ElementId) where Revit's export gives both sizes, it reads
   element's own frame (the placement left out), along X (the width) and along Z
   (the height): equal to Revit's sizes within 0.001 ft, or different.
 
-and counts the elements by those two readings per class. A cell whose first
+and counts the elements by those two readings per class, then by the class of the
+element each fills an opening in, in each export. A cell whose first
 reading differs and whose second is equal is a size the body would have
 given; a cell whose first is equal and second differs is one it would have
 broken. It then lists up to 40 elements of each cell that is not equal on
@@ -69,6 +70,15 @@ def body_extents(element, settings, metres):
     return float(span[0]), float(span[2])
 
 
+def host_class(element):
+    """The class of the element `element` fills an opening in, or `-`."""
+    for fills in getattr(element, "FillsVoids", None) or ():
+        opening = fills.RelatingOpeningElement
+        for voids in getattr(opening, "VoidsElements", None) or ():
+            return voids.RelatingBuildingElement.is_a()
+    return "-"
+
+
 def fmt(pair):
     """`width x height` of a pair of feet, `none` where there is none."""
     return "none" if pair is None else " x ".join("-" if v is None else f"{v:.4f}" for v in pair)
@@ -84,12 +94,20 @@ def main(argv):
         print(__doc__, file=sys.stderr)
         return 2
     ours = ifcopenshell.open(args[0])
-    revit = sizes(ifcopenshell.open(args[1]))
+    revit_model = ifcopenshell.open(args[1])
+    revit = sizes(revit_model)
+    revit_hosts = {
+        (entity, str(element.Tag)): host_class(element)
+        for entity in ("IfcDoor", "IfcWindow")
+        for element in revit_model.by_type(entity)
+        if element.Tag
+    }
     written = sizes(ours)
     metres = ifcopenshell.util.unit.calculate_unit_scale(ours)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", False)
     tally = collections.Counter()
+    hosts = collections.Counter()
     rows = collections.defaultdict(list)
     for entity in ("IfcDoor", "IfcWindow"):
         for element in ours.by_type(entity):
@@ -110,10 +128,17 @@ def main(argv):
             else:
                 body = "equal" if equal(extents[0], width) and equal(extents[1], height) else "differs"
             tally[(entity, current, body)] += 1
+            hosts[(entity, current, body, host_class(element), revit_hosts.get(key, "-"))] += 1
             if (current, body) != ("equal", "equal"):
                 rows[(entity, current, body)].append((element.Tag, (width, height), own, extents))
     for (entity, current, body), count in sorted(tally.items()):
         print(f"{entity}: size written {current}, body extents {body}: {count}")
+    for (entity, current, body, ours_host, revit_host), count in sorted(hosts.items()):
+        if (current, body) != ("equal", "equal"):
+            print(
+                f"{entity}: size written {current}, body extents {body}, hosted in rvt-rs's {ours_host}"
+                f" and Revit's {revit_host}: {count}"
+            )
     for (entity, current, body), items in sorted(rows.items()):
         print(f"{entity} {current} / {body}:")
         for tag, revit_size, own, extents in items[:LIST_LIMIT]:
