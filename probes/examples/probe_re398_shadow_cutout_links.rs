@@ -68,9 +68,7 @@ fn main() -> anyhow::Result<()> {
             if step.kind != WallCutKind::ShadowCutout {
                 continue;
             }
-            let class = classes
-                .get(&step.cutter)
-                .map_or("none", std::string::String::as_str);
+            let class = classes.get(&step.cutter).map_or("none", String::as_str);
             let Some((other, gg)) = step.mirrors else {
                 ids_missing += 1;
                 println!(
