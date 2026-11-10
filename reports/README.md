@@ -17,7 +17,7 @@ issues cite them by id.
 
 `RE-NN` ids are assigned in order and never reused; CI fails a pull request
 whose new report takes an id that `main` or an earlier open pull request has
-(`tools/ci/re-id-reuse.py`). Some have no report.
+(`tools/ci/check_re_id_reuse.py`). Some have no report.
 The first ones, to RE-23, began as a planned task list
 (`RE-01-synthesis.md`), and a few of those tasks were folded into other
 reports or dropped, though early reports still mention them; a later id

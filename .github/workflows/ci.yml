@@ -1836,7 +1836,9 @@ jobs:
         timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python3 tools/ci/re-id-reuse.py
+        run: python3 tools/ci/check_re_id_reuse.py
+      - name: The RE id check's pure judgement (failure-first)
+        run: python3 tools/ci/test_check_re_id_reuse.py
       - name: Reports cite only commits the repository has
         timeout-minutes: 5
         env:
