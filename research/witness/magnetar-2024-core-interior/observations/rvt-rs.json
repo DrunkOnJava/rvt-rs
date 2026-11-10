@@ -44,7 +44,7 @@
       "IFCPROPERTYSET": 6578,
       "IFCPROPERTYSINGLEVALUE": 28130,
       "IFCQUANTITYAREA": 885,
-      "IFCQUANTITYLENGTH": 1346,
+      "IFCQUANTITYLENGTH": 1369,
       "IFCQUANTITYVOLUME": 893,
       "IFCRECTANGLEPROFILEDEF": 754,
       "IFCRELAGGREGATES": 13,
@@ -705,7 +705,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "f17f84016a1d792305512ae7d55ba16467a358faca2d4ff092085020e32d0f01",
+  "observation_hash_sha256": "54a4b880cc605a92ef18e5e9271fbe8b2a0cd5dd2ef94ed16934a28998ee869d",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",
@@ -718,7 +718,6 @@
     "partial_revit_element_parameters"
   ],
   "warnings": [
-    "1 type text parameter(s) (Fire Rating or Manufacturer) are left out because the copies of a family type table's entry, or an entry and the id-first form, give different values (RE-354).",
     "Unmapped Revit unit identifiers were preserved in diagnostics: autodesk.unit.unit:amperes-1.0.0, autodesk.unit.unit:britishThermalUnits-1.0.1, autodesk.unit.unit:britishThermalUnitsPerDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHour-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourCubicFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourFootDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFootDegreeFahrenheit-1.0.1",
     "15 building storey name(s) came from partition Level records; 970 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match."
   ],
