@@ -56,7 +56,7 @@ Autodesk's six 2015 sample projects, where previews and PartAtom are not
 measured. On Revit 2024 and 2025 project files it reads
 the building: each element's ElementId, category, name, type (written as
 an IFC type object of its Revit type, RE-110), storey, materials, layers,
-GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226) and, where the boxes of their wall's mullions say which ends Revit's solid keeps, `NetSurfaceArea` (RE-268, RE-400), walls'
+GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226) and, where the boxes of their wall's mullions say which ends Revit's solid keeps, `NetSurfaceArea` (RE-268, RE-400, RE-403), walls'
 `ExtendToStructure` (RE-228), railings' `Height` (RE-231), stair flights' treads, nosing and run type
 and landings' type (RE-92) and the parameters named for a standard property
 set's property (RE-194), and a body that is exact where the element's
@@ -101,10 +101,10 @@ decodes whole (#1191, and #1612 for one drawn as the level block of its sketch
 outline), and keeps the record-box solve alone where it does not
 (RE-341 section 5): without its slope, so a sloped roof can still be drawn as its
 outline at the box's full height, a level block. A roof's saved mesh is scored
-against Revit's export on 11 roofs that #1612 draws from it, each within 0.4% of
-Revit's volume (Snowdon Towers Architectural's 10, local only, and the T/U roof of
-puzzbobb's Revit 2025 models, RE-389), where the level blocks of 8 of them were 40%
-or more too large. On Autodesk's samples, which have no Revit export, the mesh of
+against Revit's export on 15 roofs that #1612 and RE-401 draw from it, each within 0.4% of
+Revit's volume (Snowdon Towers Architectural's 14, local only, 4 of them Revit's to 1e-6 since a
+`GGTag` is walked as a group, and the T/U roof of puzzbobb's Revit 2025 models, RE-389,
+RE-401), where the level blocks of 8 of them were 40% or more too large. On Autodesk's samples, which have no Revit export, the mesh of
 one roof of the 2026 and 2027 saves is not the 2025 save's body and another keeps
 its box, which the same-project gate names (`ROOFS_NOT_THE_2025_BODY`, Griffin
 2026-11-05 and 2026-11-09). Such a roof no longer cuts the top

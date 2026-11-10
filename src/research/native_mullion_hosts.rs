@@ -43,6 +43,9 @@ pub struct MullionHosts {
     /// A mullion's host: the `m_hostId` of its native record, where every
     /// copy of the record agrees on it and on its type.
     pub host: BTreeMap<u64, u64>,
+    /// A mullion's type: the `m_masterSymbolId` of its native record, read
+    /// with its host (RE-403).
+    pub kind: BTreeMap<u64, u64>,
     /// The mullions whose host, the curtain wall their native
     /// record names, is a straight wall (`SWall`) whose record holds neither an
     /// `ArcWall` nor an `ExtrusionGStep`, and whose type's record
@@ -109,6 +112,7 @@ pub fn mullion_hosts(rf: &mut RevitFile, mullions: &BTreeSet<u64>) -> anyhow::Re
             continue;
         };
         out.host.insert(mullion, host);
+        out.kind.insert(mullion, mullion_type);
         if is_plain(&host) && is_plain(&mullion_type) {
             out.plain.insert(mullion);
         }
