@@ -223,6 +223,8 @@ GROUPS = [
     ("BIM4LCA office, as built", re.compile(r"^nordic-office-as-built$")),
     ("BIM4LCA office, at permit", re.compile(r"^nordic-office-permit$")),
     ("office terrain pair", re.compile(r"^nordic-office-terrain-")),
+    ("BIM4LCA office, timber", re.compile(r"^nordic-office-timber-")),
+    ("BIM4LCA housing", re.compile(r"^nordic-housing-")),
     ("Core Interior", re.compile(r"^core-interior$")),
     ("Einhoven", re.compile(r"^einhoven$")),
     ("RE1", re.compile(r"^re1-")),

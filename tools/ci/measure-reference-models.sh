@@ -142,6 +142,14 @@ nordic-office-as-built|ARK_NordicLCA_Office_Concrete_As-Built.rvt|ARK_NordicLCA_
 nordic-office-permit|ARK_NordicLCA_Office_Concrete_BuildingPermit.rvt|ARK_NordicLCA_Office_Concrete_BuildingPermit_Revit.ifc
 nordic-office-terrain-concrete|ARK_NordicLCA_Office_Terrain_Concrete_BuildingPermit.rvt|ARK_NordicLCA_Office_Terrain_Concrete_BuildingPermit_Revit.ifc
 nordic-office-terrain-timber|ARK_NordicLCA_Office_Terrain_Timber_BuildingPermit.rvt|ARK_NordicLCA_Office_Terrain_Timber_BuildingPermit_Revit.ifc
+nordic-office-timber-as-built|ARK_NordicLCA_Office_Timber_As-Built.rvt|ARK_NordicLCA_Office_Timber_As-Built_Revit.ifc
+nordic-office-timber-permit|ARK_NordicLCA_Office_Timber_BuildingPermit.rvt|ARK_NordicLCA_Office_Timber_BuildingPermit_Revit.ifc
+nordic-housing-concrete-as-built|ARK_NordicLCA_Housing_Concrete_As-Built.rvt|ARK_NordicLCA_Housing_Concrete_As-Built_Revit.ifc
+nordic-housing-concrete-permit|ARK_NordicLCA_Housing_Concrete_BuildingPermit.rvt|ARK_NordicLCA_Housing_Concrete_BuildingPermit_Revit.ifc
+nordic-housing-timber-as-built|ARK_NordicLCA_Housing_Timber_As-Built.rvt|ARK_NordicLCA_Housing_Timber_As-Built_Revit.ifc
+nordic-housing-timber-permit|ARK_NordicLCA_Housing_Timber_BuildingPermit.rvt|ARK_NordicLCA_Housing_Timber_BuildingPermit_Revit.ifc
+nordic-housing-terrain-concrete|ARK_NordicLCA_Housing_Terrain-Concrete_BuildingPermit.rvt|ARK_NordicLCA_Housing_Terrain-Concrete_BuildingPermit_Revit.ifc
+nordic-housing-terrain-timber|ARK_NordicLCA_Housing_Terrain-Timber_BuildingPermit.rvt|ARK_NordicLCA_Housing_Terrain-Timber_BuildingPermit_Revit.ifc
 "
 # puzzbobb's Revit 2025 models (research/r2025-models.tsv), in MODELS_DIR/r2025
 # only with `-f r2025=true`, each scored against Revit's export beside it.
@@ -502,7 +510,7 @@ model_task() { # name rvt ref task
       # BIMcollab or rac_advanced ones, nor a model added later).
       dump=()
       case "$name" in
-        core-interior | einhoven | re1-* | nordic-office-* | r2025-*)
+        core-interior | einhoven | re1-* | nordic-office-as-built | nordic-office-permit | nordic-office-terrain-* | r2025-*)
           dump=(--dump "$dir/mcp-dump.json")
           ;;
       esac
