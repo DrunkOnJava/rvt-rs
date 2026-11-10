@@ -3,7 +3,7 @@
 **Date:** 2026-11-10
 **Issues:** #1165 (unfilled openings Revit's export writes and rvt-rs does not); follows RE-321 and RE-338 (what a wall's native record says cuts it)
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024; Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, as Measure fetches them); Autodesk's `rac_advanced` sample project of Revit 2024 to 2027 and Snowdon Towers Architectural 2024, which Measure fetches for a run and never stores
-**Runs:** Measure [42882469082](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42882469082) and [42886617099](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42886617099) (`probe_re398_shadow_cutout_links`, before and after it printed a shadow step's own flag; the second is the one section 2 reads); Measure [42897187670](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42897187670) for the change (unfiltered: `nordic`, `r2025`, `samples`, `racadv`, `bimcollab`, `holdout`; head `05ab584d` against `main` at `9066e124`, 118 models on each side)
+**Runs:** Measure [42903375939](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42903375939) (the BIM4LCA housing and the timber office, head against `main`; section 4.1), [42882469082](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42882469082) and [42886617099](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42886617099) (`probe_re398_shadow_cutout_links`, before and after it printed a shadow step's own flag; the second is the one section 2 reads); Measure [42897187670](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42897187670) for the change (unfiltered: `nordic`, `r2025`, `samples`, `racadv`, `bimcollab`, `holdout`; head `05ab584d` against `main` at `9066e124`, 118 models on each side)
 **Status:** Positive, as attribution only. All 124 `WallShadowCutoutGStep`s of the office, `rac_advanced` and Snowdon Towers Architectural name a wall that holds the step they mirror, an embed or a cutout of the same cutter. They are read as that step's kind, and the export counts the cut it leaves out under that step's reason rather than as `shadow_cutout_step_not_read`. No export changes on any of the 118 models, so no opening is written that was not, and no scorer output moves: only the left-out counts in seven files' `diagnostics.json`.
 
 ## 1. The question
@@ -41,10 +41,22 @@ Run 42897187670, `-f nordic=true -f r2025=true -f samples=true -f racadv=true -f
 
 On Snowdon the 54 land on the reasons that already stood for the same cutters' other steps, and the largest, `door_second_wall_parallel_to_door_wall` (Revit cuts the opening ten feet across, about the plane the door's symbol cuts in), is now the blocker of 38 openings that were counted under no reason of their own.
 
+### 4.1 The second project
+
+A row pre-registered on #1636 ([comment](https://github.com/DrunkOnJava/rvt-rs/issues/1636#issuecomment-6779306666), 2026-11-10 21:08 UTC, before any run of this rule on these models) held the rule to the BIM4LCA housing and the timber office: no export changes, `shadow_cutout_step_not_read` falls to 0 and its count reappears under the reasons of the steps the shadows mirror. Measure run [42903375939](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42903375939) (head `ec33f36a` against `main` at `0bb8067f`, the eight models, every default scorer):
+
+| file | exercised by | exports | counters |
+|---|---|---|---|
+| timber office as built | 5 shadow steps | equal | `shadow_cutout_step_not_read` 5 to 0, `cabinet_cut_flag_not_set` 0 to 3, `curtain_wall_within_half_foot_of_wall_end` 46 to 47, `door_opening_box_not_read` 0 to 1 |
+| timber office at permit | 4 shadow steps | equal | `shadow_cutout_step_not_read` 4 to 0, `cabinet_cut_flag_not_set` 0 to 2, `curtain_wall_record_copies_disagree` 53 to 54, `door_opening_box_not_read` 0 to 1 |
+| the six housing files | none | equal | none move |
+
+It holds on the timber office, the concrete office's project in other states, where the 5 and 4 steps move to the reasons of the steps they mirror and no export changes. The housing holds no shadow step: not exercised, which is not holding.
+
 ## 5. Not shown
 
 - **No opening is written by this change.** A shadow's opening is written where the mirrored step's own rule writes it, and none of the 124 passes that rule on these files; the change only says why. Revit's IFC4 exports of the office hold, on all 3 of its shadow steps (2 as built and 1 at permit), an `IfcOpeningElement` whose `Tag` is the cutter's ElementId in the shadow's wall as well as in the other wall; the other 121 have no export to check.
-- **The housing.** A pre-registered row on #1636 holds the rule to the BIM4LCA housing and the timber office before any run reads it there: the exports must not move and the counters must move as above.
+- **The housing.** It holds no shadow step, so the rule is not exercised on it (section 4.1).
 - **#1165 stays open.** The next decoder is the one that now has most of the openings: the door's second wall, `door_second_wall_parallel_to_door_wall`.
 
 ## 6. Reproduce
@@ -54,6 +66,8 @@ The probe comes from `-f ref`, the commit of this change; the scorers from `--re
 ```bash
 gh workflow run measure.yml --ref main -f ref=05ab584d1a7f4531406d929e9ed266e3c354f732 -f base=main \
     -f nordic=true -f r2025=true -f samples=true -f racadv=true -f bimcollab=true -f holdout=true
+gh workflow run measure.yml --ref main -f ref=ec33f36a42703d87c9be48ddf082ce4ec97cc97a -f base=0bb8067f5399071878e34c0718a2db371846adfb \
+    -f nordic=true -f models="nordic-housing-* nordic-office-timber-*"
 gh workflow run measure.yml --ref main -f ref=05ab584d1a7f4531406d929e9ed266e3c354f732 -f base=none \
     -f nordic=true -f models="nordic-office-as-built nordic-office-permit" -f scorers=none \
     -f probe=probe_re398_shadow_cutout_links -f probe_scorer=-
