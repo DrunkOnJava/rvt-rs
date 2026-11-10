@@ -33,6 +33,16 @@ pub fn wall_layers_width_from_fields(fields: &[(String, InstanceField)]) -> Opti
     (width.is_finite() && width > 0.0).then_some(width)
 }
 
+/// How many layers [`WALL_LAYERS_FIELD`] records on a wall, its type's, 0 where
+/// it records none (RE-406).
+pub fn wall_layer_count_from_fields(fields: &[(String, InstanceField)]) -> usize {
+    fields
+        .iter()
+        .find_map(|(name, value)| (name == WALL_LAYERS_FIELD).then_some(value))
+        .and_then(layer_bands_from_field)
+        .map_or(0, |bands| bands.len())
+}
+
 /// The layers of a [`WALL_LAYERS_FIELD`] or [`SLAB_LAYERS_FIELD`] value.
 pub(super) fn layer_bands_from_field(value: &InstanceField) -> Option<Vec<crate::ifc::LayerBand>> {
     let InstanceField::Vector(items) = value else {

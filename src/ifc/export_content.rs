@@ -3957,7 +3957,10 @@ fn add_wall_height(
 /// (CLEANROOM.md source 5) hands `CreateWallBaseQuantities` the area of its
 /// footprint loop, which becomes `GrossFootprintArea`: its length times its
 /// thickness, Revit's on every one of those walls but the shortest, which is
-/// as long as it is thick and which Revit's export gives none (RE-292).
+/// as long as it is thick and which Revit's export gives none (RE-292), and
+/// those whose type has several layers, which it gives none either: on the
+/// BIM4LCA housing as built, none of its 153 walls with a quantity per layer
+/// carries one and all 204 walls of one layer with a `Height` do (RE-406).
 fn add_wall_areas_and_volumes(
     sets: &mut [PropertySet],
     ifc_type: &str,
@@ -4011,7 +4014,9 @@ fn add_wall_areas_and_volumes(
     };
     set.properties.extend(quantities);
     let along = body.width_feet.max(body.depth_feet);
-    if along > FOOTPRINT_MIN_LENGTH_FACTOR * width {
+    if along > FOOTPRINT_MIN_LENGTH_FACTOR * width
+        && crate::partition_schema_mvp::wall_layer_count_from_fields(&decoded.fields) < 2
+    {
         set.properties.push(Property {
             name: "GrossFootprintArea".into(),
             value: PropertyValue::AreaSquareFeet(along * width),
