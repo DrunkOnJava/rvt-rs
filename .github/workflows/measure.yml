@@ -1158,6 +1158,7 @@ jobs:
             tools/re/space_kinds_vs_ifc.py
             tools/re/cmp_measure.py
             tools/re/counted_apart.py
+            tools/re/box_reasons.py
           sparse-checkout-cone-mode: false
       # Each side's shards hold disjoint models; merged, they are the
       # measure-head and measure-base directories one runner used to write.
@@ -1287,6 +1288,16 @@ jobs:
               echo
               python3 -I tools/re/counted_apart.py measure-head > counted-apart.txt 2>&1 || echo "counted_apart.py failed (exit $?)" >> counted-apart.txt
               head -c 30000 counted-apart.txt
+              echo
+              echo "### Why bodies are still a record box (base → head)"
+              echo
+              echo "How many bodies are only their element record's box, by the reason the saved-mesh pass gives for not using the element's saved mesh (exported.saved_mesh_refusals, #1645), summed over the models and samples whose diagnostics the run kept. The next decoder to write is the one whose reason clears the most."
+              echo
+              python3 -I tools/re/box_reasons.py measure-head measure-base > box-reasons.txt 2>&1 || echo "box_reasons.py failed (exit $?)" >> box-reasons.txt
+              echo '```'
+              head -c 30000 box-reasons.txt
+              echo
+              echo '```'
               echo
               echo "### Scorer differences (base → head)"
               echo
