@@ -1156,6 +1156,7 @@ jobs:
           sparse-checkout: |
             tools/re/semantic_diff.py
             tools/re/space_kinds_vs_ifc.py
+            tools/re/cmp_measure.py
           sparse-checkout-cone-mode: false
       # Each side's shards hold disjoint models; merged, they are the
       # measure-head and measure-base directories one runner used to write.
@@ -1268,6 +1269,16 @@ jobs:
               echo "### Times"
               echo
               echo "These jobs check what the exports hold. They run exports and scorers several at once, on several runners whose speed alone differs by up to about 1.7x, so their times are not benchmarks. Dispatch with \`timing\` to time both refs' exports of each file on one runner (tools/ci/measure-timing.sh)."
+              echo
+              echo "### What the scorers show got worse (advisory)"
+              echo
+              echo "The property and quantity censuses miss a body that moved away from Revit's (an element's volume, a coverage count, the rows on a different storey); this lists them next to the census's own count."
+              echo
+              python3 -I tools/re/cmp_measure.py measure-base measure-head > regressions.txt 2>&1 || echo "cmp_measure.py failed (exit $?)" >> regressions.txt
+              echo '```'
+              head -c 60000 regressions.txt
+              echo
+              echo '```'
               echo
               echo "### Scorer differences (base → head)"
               echo
