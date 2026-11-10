@@ -79,7 +79,10 @@
 # When FAMILY_DIR names the Autodesk family corpus, each of its .rfa files gets
 # OUT_DIR/family-<file>/ with the same info.json and info.exit (a family
 # carries its Atom entry in a PartAtom stream) and, when PROBE is built, the
-# same probe.txt. A family has no Revit export, so nothing else is measured on it.
+# same probe.txt, and its default export hashed as a model's is (ifc.sha256,
+# beside the export's diagnostics.json and rvt-ifc.log), so a change that moves
+# what a family writes shows in the comparison of the two sides. A family has no
+# Revit export, so nothing else is measured on it.
 # When AREAS_ACROSS_SAVES is set and SAMPLE_DIR holds Autodesk's rac_advanced
 # samples of 2024, 2025, 2026 and 2027, OUT_DIR/areas_across_saves.txt is the
 # gate of #1261 and #1194 (Griffin, 2026-11-05, "Same-project gate"): the 25
@@ -557,6 +560,14 @@ measure_family() { # family
   item_started=$(date +%s%N)
   dir=$(family_dir "$1"); mkdir -p "$dir"
   timed "$dir" rvt-info info "$1" "$dir"
+  # The default export of the family (a standalone revolution's body, a family's
+  # type table), hashed as a model's is, so the comparison of the two sides lists
+  # a family whose export moved.
+  timed "$dir" rvt-ifc export_ifc "$1" "$dir"
+  if [ -s "$dir/model.ifc" ]; then
+    grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
+  fi
+  [ -n "${KEEP_IFC:-}" ] || rm -f "$dir/model.ifc"
   finished "$dir" "$(basename "$1")" "$item_started"
 }
 

@@ -52,7 +52,10 @@ when:
   a model that has them fails, and a run of models with none, such as a filtered
   one, does not;
 - the run saw no `IfcSpace` and some model had no count of its own to check
-  against, or no model was checked.
+  against, or no model was checked;
+- a family's export (`family-<name>`, a `.rfa`: it has no rooms and no result
+  file) holds an `IfcSpace` by its own diagnostics. A family is otherwise left
+  out of the count of models.
 
 It prints how many of each kind the run saw.
 
@@ -231,6 +234,8 @@ def check_file(path):
     return 1 if bad else 0
 
 
+# The directory name tools/ci/measure-reference-models.sh gives a family's export.
+FAMILY_PREFIX = "family-"
 LINE = re.compile(r"^" + re.escape(PREFIX) + r"(?P<words>.+?) (?P<n>[0-9]+)$")
 MCP_ROOMS = re.compile(r"^mcp answers: rooms: (?P<n>[0-9]+)$")
 
@@ -284,6 +289,13 @@ def check_total(results):
         directory = os.path.join(results, entry)
         # A model or a sample that was exported has the hash of its IFC.
         if not os.path.isfile(os.path.join(directory, "ifc.sha256")):
+            continue
+        # A family's export (family-<name>, from a .rfa) is hashed the same way
+        # so the two sides of a run can be compared, but nothing scores its
+        # spaces: it is held to its own count, which must be none.
+        if entry.startswith(FAMILY_PREFIX):
+            if read_diagnostics(directory)[0]:
+                problems.append("a family's export holds IfcSpaces that nothing scored")
             continue
         models += 1
         own = os.path.join(directory, "space_kinds_vs_ifc.txt")
