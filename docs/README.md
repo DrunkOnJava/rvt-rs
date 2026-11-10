@@ -10,6 +10,7 @@ The pages under `docs/` are of three kinds. The user pages say what rvt-rs does 
 - [Status](status.md) and [compatibility](compatibility.md): what each Revit release, file type and element class gives, with the evidence. The [support matrix](support-matrix.json) is the machine-readable ceiling.
 - [Supported profile](supported-profile.md): the inputs rvt-rs is measured on.
 - [Evidence](evidence.md): the measured figures behind the README, by input, by element category and by known gap.
+- [Counted apart](counted-apart.md): the values the W7 censuses set aside instead of scoring, the decision behind each, and their counts per model.
 - [Library and tools](library.md): the command-line tools, the Rust modules, the research probes and the browser viewer in more detail.
 - [Format research](format.md): the Revit file format, the state of the reverse engineering and the first reconnaissance's findings.
 - [Export diagnostics](export-diagnostics.md) and [diagnostic semantics](diagnostic-semantics.md): what an export says it approximated or left out.
