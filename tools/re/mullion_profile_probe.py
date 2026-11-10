@@ -55,7 +55,7 @@ def body_items(member):
 def main(argv):
     ours = ifcopenshell.open(argv[1])
     revit = ifcopenshell.open(argv[2])
-    needles = [argv[3]] if len(argv) > 3 else ["yläprofiil", "120 x 30", "150 x 50", "50 x 150"]
+    needles = [argv[3]] if len(argv) > 3 else ["yläprofiil", "120 x 30", "150 x 50", "50 x 150", "50 x 50"]
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     mine = {str(m.Tag): m for m in ours.by_type("IfcMember") if m.Tag}
@@ -93,7 +93,7 @@ def probe_one(ours, revit, mine, settings, needle):
         onsa, onv = oq.get("NetSurfaceArea"), oq.get("NetVolume")
         verdict = "no value" if nsa is None or onsa is None else ("equal" if abs(nsa - onsa) <= max(1e-5 * abs(nsa), 1e-6) else "different")
         kinds[(verdict, tuple(body_items(m)))] += 1
-        if verdict in shown and shown[verdict] < (14 if verdict == "different" else 6):
+        if verdict in shown and shown[verdict] < (60 if verdict == "different" else 4):
             shown[verdict] += 1
             stats = mesh_stats(settings, m)
             print(f"tag {tag} {verdict}: ObjectType {m.ObjectType!r} Revit Length {length} NetVolume {nv} NetSurfaceArea {nsa} | ours NetVolume {onv} NetSurfaceArea {onsa}")
