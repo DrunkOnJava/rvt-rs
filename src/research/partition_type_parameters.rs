@@ -155,7 +155,9 @@ pub fn scan_partition(buf: &[u8], declared_ids: &BTreeSet<u32>) -> PartitionText
 /// release whose element records are not decoded. RE-77's entries take a later
 /// partition's copy over an earlier one's; a table entry's copies must agree
 /// across partitions and with the id-first value, or the type gets neither
-/// and the handle notes it for the diagnostics.
+/// and the handle notes it for the diagnostics. A table entry in a `Family`
+/// element's block is a row of its family type table, no type's value, and
+/// is left out (RE-395).
 pub fn type_text_parameters(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -188,6 +190,14 @@ pub fn type_text_parameters(
                 .or_insert(value);
         }
     }
+    // A `Family` element's block holds its family type table, a row for
+    // each of its types (Core Interior's `I_Single-Flush`, 17235: `2HR`,
+    // `2HR` and `1HR`), so its table entries are no type's value, and rows
+    // that differ are not a disagreement. Each type holds its own row in its
+    // own block. Where the owners' classes cannot be read, every owner is
+    // kept, as before.
+    let families = family_owners(rf, table.keys().map(|(owner, _)| *owner).collect());
+    table.retain(|(owner, _), _| !families.contains(owner));
     let mut disagreeing: BTreeSet<(u32, &'static str)> = BTreeSet::new();
     for ((owner, name), value) in table {
         let held = out.get(&owner).and_then(|parameters| parameters.get(name));
@@ -207,6 +217,34 @@ pub fn type_text_parameters(
     out.retain(|_, parameters| !parameters.is_empty());
     rf.note_disagreeing_type_texts(disagreeing);
     out
+}
+
+/// The ids among `owners` whose element record is a `Family`, read from
+/// each record's class alone, no graph decoded. Empty when the records do
+/// not read.
+fn family_owners(rf: &mut RevitFile, owners: BTreeSet<u32>) -> BTreeSet<u32> {
+    if owners.is_empty() {
+        return BTreeSet::new();
+    }
+    let options = crate::native_document::Options {
+        selected_ids: owners.into_iter().map(u64::from).collect(),
+        graph_classes: Some(BTreeSet::new()),
+        releases: crate::native_document::NATIVE_RELEASES,
+        ..crate::native_document::Options::default()
+    };
+    let mut families = BTreeSet::new();
+    let read = crate::native_document::extract_graphs(rf, &options, |record| {
+        if record.class_name.as_deref() == Some("Family") {
+            if let Ok(id) = u32::try_from(record.identity.element_id) {
+                families.insert(id);
+            }
+        }
+        Ok(())
+    });
+    if read.is_err() {
+        return BTreeSet::new();
+    }
+    families
 }
 
 /// The text of the table entry whose element id (`-1`) is at `at`: the
