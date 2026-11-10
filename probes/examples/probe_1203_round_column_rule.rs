@@ -25,6 +25,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
+use rvt::ifc::entities::{IfcEntity, PropertyValue};
+use rvt::ifc::{ExportOptions, run_export};
 use rvt::research::native_document::Options;
 use rvt::research::native_saved_mesh::Primitive;
 use rvt::research::native_saved_scene::extract_at_detail;
@@ -281,6 +283,47 @@ fn rvtio_rule(faces: &[&Primitive]) -> Result<Round, String> {
     })
 }
 
+/// The `Qto_ColumnBaseQuantities` rvt-rs writes for each column of its export, by ElementId:
+/// each quantity's name and value in feet, square feet or cubic feet.
+fn written_quantities(rf: &mut RevitFile) -> BTreeMap<u64, Vec<(String, f64)>> {
+    let mut written = BTreeMap::new();
+    let Ok(export) = run_export(rf, &ExportOptions::default()) else {
+        return written;
+    };
+    let entities = &export.model.entities;
+    for entity in entities {
+        let IfcEntity::ElementPropertySet { element, set } = entity else {
+            continue;
+        };
+        if set.name != "Qto_ColumnBaseQuantities" {
+            continue;
+        }
+        let Some(IfcEntity::BuildingElement {
+            type_guid: Some(tag),
+            ..
+        }) = entities.get(*element)
+        else {
+            continue;
+        };
+        let Ok(id) = tag.parse::<u64>() else {
+            continue;
+        };
+        let values = set
+            .properties
+            .iter()
+            .filter_map(|property| match &property.value {
+                PropertyValue::AreaSquareFeet(value)
+                | PropertyValue::VolumeCubicFeet(value)
+                | PropertyValue::LengthFeet(value)
+                | PropertyValue::PositiveLengthFeet(value) => Some((property.name.clone(), *value)),
+                _ => None,
+            })
+            .collect();
+        written.insert(id, values);
+    }
+    written
+}
+
 fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
     let mut rf = RevitFile::open(&path)?;
@@ -333,6 +376,7 @@ fn main() -> anyhow::Result<()> {
             );
         }
     }
+    let written = written_quantities(&mut rf);
     let mut tally: BTreeMap<&'static str, usize> = BTreeMap::new();
     // For each column type: its columns, those RE-353 takes as round, those RvtIO's rule does.
     let mut per_type: BTreeMap<u32, [usize; 3]> = BTreeMap::new();
@@ -345,13 +389,16 @@ fn main() -> anyhow::Result<()> {
                 Ok(round) => (
                     "round".to_string(),
                     format!(
-                        " r {:.5} height {:.5} cap points {}/{} cap area ratio {:.5}/{:.5}",
+                        " r {:.5} height {:.5} cap points {}/{} cap area ratio {:.5}/{:.5} circle area {:.5} lateral {:.5} qto {:?}",
                         round.radius,
                         round.height,
                         round.cap_points[0],
                         round.cap_points[1],
                         round.cap_area_ratio[0],
-                        round.cap_area_ratio[1]
+                        round.cap_area_ratio[1],
+                        std::f64::consts::PI * round.radius * round.radius,
+                        std::f64::consts::TAU * round.radius * round.height,
+                        written.get(id)
                     ),
                 ),
                 Err(why) => (format!("no: {why}"), String::new()),
