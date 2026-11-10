@@ -55,7 +55,7 @@ def category(id, scorer, title, what, decided, markers, pattern, example, holdou
 CATEGORIES = [
     category(
         "qto-setup-off", "qtos", "Base quantities left off in Revit's export",
-        "Revit's export of the model was made with \"Export base quantities\" off, so it holds no base quantity set to score against. "
+        "Revit's export of the model holds no base quantity set, as one made with \"Export base quantities\" off does, so there is nothing to score against. "
         "The quantities rvt-rs writes beside it are counted (`rvt-ifc --no-base-quantities` leaves them out).",
         "RE-242; base quantities on by default, as in Revit's built-in IFC4 setups",
         ["Export base quantities off, RE-242", "which rvt-ifc --no-base-quantities leaves out"],
@@ -151,7 +151,8 @@ CATEGORIES = [
         True),
     category(
         "pset-cache-defects", "psets", "Curtain members' IsExternal in an export made from the exporter's own cache",
-        "The exporter that made the BIM4LCA office's exports (24.0.5.432) sets a curtain mullion's and panel's `IsExternal`, and their types', from its cache of element types, not from the model. "
+        "In the exports of an exporter that caches element types (Revit 24.0's, which made the BIM4LCA office's exports, 24.0.5.432), a curtain mullion's or panel's `IsExternal`, and their type's, "
+        "is the cache's value, not the model's; the scorer takes an export to be one when a curtain member's type object holds the property itself. "
         "rvt-rs writes the members' by their curtain wall's value, as later exporters do, and none on the types.",
         "the maintainer, 2026-10-30; RE-269",
         ["Revit values known to be wrong, left out (RE-235 §5, RE-269): "],

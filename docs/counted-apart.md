@@ -11,7 +11,7 @@ A value rvt-rs leaves out on purpose (a type object's `IsExternal`, a value Revi
 <!-- counted-apart:categories -->
 | Category | What is counted apart, and why | Decided | Scorer |
 |---|---|---|---|
-| `qto-setup-off`: Base quantities left off in Revit's export | Revit's export of the model was made with "Export base quantities" off, so it holds no base quantity set to score against. The quantities rvt-rs writes beside it are counted (`rvt-ifc --no-base-quantities` leaves them out). | RE-242; base quantities on by default, as in Revit's built-in IFC4 setups | `qtos_vs_ifc` |
+| `qto-setup-off`: Base quantities left off in Revit's export | Revit's export of the model holds no base quantity set, as one made with "Export base quantities" off does, so there is nothing to score against. The quantities rvt-rs writes beside it are counted (`rvt-ifc --no-base-quantities` leaves them out). | RE-242; base quantities on by default, as in Revit's built-in IFC4 setups | `qtos_vs_ifc` |
 | `qto-known-wrong`: Quantities Revit writes that are known to be wrong | Mullions' `CrossSectionArea`, door openings' `Width` and `Height` (which Revit swaps) and a floor's `Perimeter` where its outline is read as feet. Revit's export writes them and rvt-rs leaves them out, so they are scored as neither missing nor different. | RE-235 §5 | `qtos_vs_ifc` |
 | `qto-openings-unwritten`: Quantities on openings rvt-rs does not write | The openings a door or a wall cuts in a further host, and a curtain wall's or a cabinet's cut, which Revit's export writes and rvt-rs does not (RE-338 counts them by reason). | #1165; RE-338 | `qtos_vs_ifc` |
 | `wall-two-lengths`: A wall's Length, where Revit's export may write either of two | Revit's export writes a wall's `Length` as its curve's length or as that of its curve cut back at its joins, by how it draws the wall. Where the two differ nothing in the model says which, so a missing `Length` there is counted apart. | the maintainer, 2026-10-26; RE-252 | `qtos_vs_ifc` |
@@ -22,7 +22,7 @@ A value rvt-rs leaves out on purpose (a type object's `IsExternal`, a value Revi
 | `pset-repeated-key`: Property values on a key several objects hold, which differ | The same keys as above: where the objects of Revit's export hold different values, none stands for the key, so those values are counted apart. Where they agree the value is scored against the object held. | #1576 | `psets_vs_ifc` |
 | `pset-sibling-openings`: Openings of a pair of exports that disagree | An unfilled opening rvt-rs writes that Revit's export of this file lacks and its export of a sibling file (the same building in another state) holds is a pair inconsistency, counted apart and never scored as a match. | the maintainer, 2026-11-03 and 2026-11-04; RE-321 §4, RE-338 | `psets_vs_ifc` |
 | `pset-known-wrong`: Property values Revit writes that are known to be wrong | The stair `WalkingLineOffset` values and the others listed in RE-235 §5: Revit's export writes them and rvt-rs leaves them out. | RE-235 §5 | `psets_vs_ifc` |
-| `pset-cache-defects`: Curtain members' IsExternal in an export made from the exporter's own cache | The exporter that made the BIM4LCA office's exports (24.0.5.432) sets a curtain mullion's and panel's `IsExternal`, and their types', from its cache of element types, not from the model. rvt-rs writes the members' by their curtain wall's value, as later exporters do, and none on the types. | the maintainer, 2026-10-30; RE-269 | `psets_vs_ifc` |
+| `pset-cache-defects`: Curtain members' IsExternal in an export made from the exporter's own cache | In the exports of an exporter that caches element types (Revit 24.0's, which made the BIM4LCA office's exports, 24.0.5.432), a curtain mullion's or panel's `IsExternal`, and their type's, is the cache's value, not the model's; the scorer takes an export to be one when a curtain member's type object holds the property itself. rvt-rs writes the members' by their curtain wall's value, as later exporters do, and none on the types. | the maintainer, 2026-10-30; RE-269 | `psets_vs_ifc` |
 | `pset-property-set-file`: Values the export's own property set file places | Where the export's user-defined property set file maps a value into a set (glazing on walls, occupancy on rooms, the `FI_` sets), the model does not store the file, so the value is out of scope. | the maintainer, 2026-10-26; RE-239 | `psets_vs_ifc` |
 | `pset-openings-unwritten`: Property values on openings rvt-rs does not write | The same openings as for quantities: those a door or a wall cuts in a further host, and a curtain wall's or a cabinet's cut. | RE-338 | `psets_vs_ifc` |
 | `pset-no-standard-sets`: Revit's export written with no standard property set | Core Interior's export was made with no property sets, so the values rvt-rs writes beside it cannot be scored against it. | the maintainer, 2026-10-29; #1115, RE-239 §5 | `psets_vs_ifc` |
@@ -35,25 +35,25 @@ A value rvt-rs leaves out on purpose (a type object's `IsExternal`, a value Revi
 ## Counts in a Measure run
 
 <!-- counted-apart:counts -->
-Counts from Measure run [42864169952](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42864169952) on `376035fb6a907b15e850ac91e8d725b0542512f0`, the quantity and property census of each model summed over its group (`-`: the scorer did not run on that group; `not kept`: the held-out count files keep no line of that category).
+Counts from Measure run [42874116446](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42874116446) on `f7c0118d3b4d0f1b87b845d74ba329070910588b`, the quantity and property census of each model summed over its group (`-`: the scorer did not run on that group; `not kept`: the held-out count files keep no line of that category).
 
 | Category | BIM4LCA office, as built | BIM4LCA office, at permit | office terrain pair | Core Interior | Einhoven | RE1 | Revit 2025 models | IFC2X3 files (counts only) | held-out models (counts only) |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| `qto-setup-off` | 0 | 0 | 0 | 3,124 | - | 251 | 0 | not kept | not kept |
-| `qto-known-wrong` | 10,390 | 10,418 | 0 | 0 | - | 0 | 12 | not kept | not kept |
-| `qto-openings-unwritten` | 188 | 217 | 0 | 0 | - | 0 | 0 | not kept | not kept |
+| `qto-setup-off` | 0 | 0 | 0 | 3,124 | - | 251 | 0 | 20,814 | 1,173 |
+| `qto-known-wrong` | 10,390 | 10,418 | 0 | 0 | - | 0 | 12 | 0 | 362 |
+| `qto-openings-unwritten` | 188 | 217 | 0 | 0 | - | 0 | 0 | 0 | 132 |
 | `wall-two-lengths` | 463 | 388 | 0 | 0 | - | 0 | 82 | 0 | 83 |
 | `wall-width-other-type` | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 1 |
 | `wall-quantities-other-type` | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 2 |
-| `qto-own-unit` | 0 | 0 | 0 | 0 | - | 0 | 0 | not kept | not kept |
+| `qto-own-unit` | 0 | 0 | 0 | 0 | - | 0 | 0 | 0 | 0 |
 | `qto-repeated-key` | 10 | 10 | 20 | 0 | - | 0 | 104 | 0 | 587 |
 | `pset-repeated-key` | 12 | 12 | 0 | 0 | - | 0 | 0 | 0 | 30 |
-| `pset-sibling-openings` | 6 | 9 | 0 | 0 | - | 0 | 0 | not kept | not kept |
-| `pset-known-wrong` | 63 | 63 | 0 | 0 | - | 0 | 15 | not kept | not kept |
-| `pset-cache-defects` | 10,267 | 10,304 | 0 | 0 | - | 0 | 0 | not kept | not kept |
-| `pset-property-set-file` | 2,085 | 1,999 | 28 | 0 | - | 0 | 0 | not kept | not kept |
-| `pset-openings-unwritten` | 266 | 300 | 0 | 0 | - | 4 | 0 | not kept | not kept |
-| `pset-no-standard-sets` | 0 | 0 | 0 | 4,241 | - | 0 | 0 | not kept | not kept |
+| `pset-sibling-openings` | 6 | 9 | 0 | 0 | - | 0 | 0 | 0 | 0 |
+| `pset-known-wrong` | 63 | 63 | 0 | 0 | - | 0 | 15 | 30 | 22 |
+| `pset-cache-defects` | 10,267 | 10,304 | 0 | 0 | - | 0 | 0 | 26,790 | 275 |
+| `pset-property-set-file` | 2,085 | 1,999 | 28 | 0 | - | 0 | 0 | 0 | 0 |
+| `pset-openings-unwritten` | 266 | 300 | 0 | 0 | - | 4 | 0 | 162 | 187 |
+| `pset-no-standard-sets` | 0 | 0 | 0 | 4,241 | - | 0 | 0 | 0 | 0 |
 | `pset-beyond-ifc2x3` | 0 | 0 | 0 | 0 | - | 88 | 0 | 774 | 410 |
 | `ifc2x3-lengths-as-quantities` | 0 | 0 | 0 | 0 | - | 219 | 0 | 0 | 502 |
 | `ifc2x3-values-twice` | 0 | 0 | 0 | 0 | - | 19 | 0 | 0 | 24 |
