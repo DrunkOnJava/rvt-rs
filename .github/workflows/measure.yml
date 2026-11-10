@@ -1157,6 +1157,7 @@ jobs:
             tools/re/semantic_diff.py
             tools/re/space_kinds_vs_ifc.py
             tools/re/cmp_measure.py
+            tools/re/counted_apart.py
           sparse-checkout-cone-mode: false
       # Each side's shards hold disjoint models; merged, they are the
       # measure-head and measure-base directories one runner used to write.
@@ -1279,6 +1280,13 @@ jobs:
               head -c 60000 regressions.txt
               echo
               echo '```'
+              echo
+              echo "### What the censuses counted apart (head)"
+              echo
+              echo "The values the property and quantity censuses set aside instead of scoring, summed over each group of models. docs/counted-apart.md says what each category is and who decided it; a category with a count here is a value that \"different 0\" does not cover."
+              echo
+              python3 -I tools/re/counted_apart.py measure-head > counted-apart.txt 2>&1 || echo "counted_apart.py failed (exit $?)" >> counted-apart.txt
+              head -c 30000 counted-apart.txt
               echo
               echo "### Scorer differences (base → head)"
               echo

@@ -1839,6 +1839,13 @@ jobs:
         run: python3 tools/ci/check_re_id_reuse.py
       - name: The RE id check's pure judgement (failure-first)
         run: python3 tools/ci/test_check_re_id_reuse.py
+      # Every way the W7 censuses set a value aside has a category on
+      # docs/counted-apart.md, with the decision behind it, and the held-out
+      # models' count files keep its line (tools/re/counted_apart.py).
+      - name: The counted-apart ledger lists every category the censuses set aside
+        run: python3 tools/re/counted_apart.py --check
+      - name: The ledger's pure judgement (failure-first)
+        run: python3 tools/ci/test_counted_apart.py
       - name: Reports cite only commits the repository has
         timeout-minutes: 5
         env:

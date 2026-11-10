@@ -113,6 +113,7 @@ curtain walls and coverings,
 rooms' `OccupancyType` and the value type of their `OccupancyNumber`,
 the `FI_` sets), out of scope;
 no other reference model has one (RE-239).
+Every value the censuses set aside instead of scoring it, the decision behind each and its count on each group of models are listed in [counted-apart.md](counted-apart.md).
 Quantities are measured by `tools/re/qtos_vs_ifc.py` ([#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016)),
 which counts apart, and scores as neither equal, different nor missing, a value on a key that more than one object of Revit's export holds
 (a wall it splits at its storeys, whose pieces keep its ElementId as their Tag, so rvt-rs's one value for the whole element is not a piece's, or two spaces with one Name, the key spaces are matched by, [#1576](https://github.com/DrunkOnJava/rvt-rs/issues/1576)), and `tools/re/psets_vs_ifc.py` counts apart a property value on such a key whose objects hold different values, scoring the others against the object held and printing how many that is beside its totals;
