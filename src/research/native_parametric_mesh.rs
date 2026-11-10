@@ -352,9 +352,11 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                     };
                     let steps = match c {
                         Curve::Line { .. } => length(chord).ceil(),
-                        Curve::Arc { radius, .. } => ((r[1] - r[0]) / angular(*radius)).ceil(),
+                        Curve::Arc { radius, .. } => {
+                            ((r[1] - r[0]).abs() / angular(*radius)).ceil()
+                        }
                         Curve::Ellipse { x_len, y_len, .. } => {
-                            ((r[1] - r[0]) / angular(x_len.max(*y_len))).ceil()
+                            ((r[1] - r[0]).abs() / angular(x_len.max(*y_len))).ceil()
                         }
                     };
                     (chord, steps)
