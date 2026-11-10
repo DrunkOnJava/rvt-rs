@@ -15,12 +15,12 @@ ElementId) where Revit's export gives both sizes, it reads
 and counts the elements by those two readings per class. A cell whose first
 reading differs and whose second is equal is a size the body would have
 given; a cell whose first is equal and second differs is one it would have
-broken. `--list` prints up to 40 elements of each cell that is not equal on
+broken. It then lists up to 40 elements of each cell that is not equal on
 both, with the sizes.
 
 Usage:
 
-    python3 tools/re/door_window_mesh_extents_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc> [--list]
+    python3 tools/re/door_window_mesh_extents_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc>
 
 Needs IfcOpenShell and numpy (the versions tools/ci/requirements-ifc.txt pins).
 """
@@ -69,13 +69,17 @@ def body_extents(element, settings, metres):
     return float(span[0]), float(span[2])
 
 
+def fmt(pair):
+    """`width x height` of a pair of feet, `none` where there is none."""
+    return "none" if pair is None else " x ".join("-" if v is None else f"{v:.4f}" for v in pair)
+
+
 def equal(a, b):
     return a is not None and b is not None and abs(a - b) <= TOLERANCE_FEET
 
 
 def main(argv):
-    args = [a for a in argv[1:] if a != "--list"]
-    listing = "--list" in argv[1:]
+    args = argv[1:]
     if len(args) != 2:
         print(__doc__, file=sys.stderr)
         return 2
@@ -110,12 +114,10 @@ def main(argv):
                 rows[(entity, current, body)].append((element.Tag, (width, height), own, extents))
     for (entity, current, body), count in sorted(tally.items()):
         print(f"{entity}: size written {current}, body extents {body}: {count}")
-    if listing:
-        for (entity, current, body), items in sorted(rows.items()):
-            print(f"{entity} {current} / {body}:")
-            for tag, revit_size, own, extents in items[:LIST_LIMIT]:
-                fmt = lambda pair: "none" if pair is None else " x ".join("-" if v is None else f"{v:.4f}" for v in pair)  # noqa: E731
-                print(f"  {tag}: Revit {fmt(revit_size)}, written {fmt(own)}, body {fmt(extents)} ft")
+    for (entity, current, body), items in sorted(rows.items()):
+        print(f"{entity} {current} / {body}:")
+        for tag, revit_size, own, extents in items[:LIST_LIMIT]:
+            print(f"  {tag}: Revit {fmt(revit_size)}, written {fmt(own)}, body {fmt(extents)} ft")
     return 0
 
 
