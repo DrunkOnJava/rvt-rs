@@ -1828,6 +1828,17 @@ jobs:
       # docs.
       - name: API docs cite only reported RE findings and no planning labels
         run: python3 tools/ci/api-doc-ids.py
+      # One RE id names one report. A pull request whose new report takes an id
+      # that main, or an earlier open pull request, already has fails here, so
+      # the later one is renumbered before two reports carry one number
+      # (docs/maintaining.md). NOT MEASURED, not red, when the API cannot be read.
+      - name: A new report's RE id is not one main or an earlier open pull request has
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/ci/check_re_id_reuse.py
+      - name: The RE id check's pure judgement (failure-first)
+        run: python3 tools/ci/test_check_re_id_reuse.py
       - name: Reports cite only commits the repository has
         timeout-minutes: 5
         env:
