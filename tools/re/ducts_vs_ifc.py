@@ -10,7 +10,8 @@ record gives Revit's:
 - section (`Dimensions` `Diameter`, or `Width` and `Height`, where written);
 - body: the world box of the record's section swept along its line, a round
   type's as its circle (where the type's name holds no `Rect`), against the
-  world box of Revit's body, within 0.01 ft;
+  box of Revit's body in the same frame (its IfcSite placement undone, as the
+  stair and wall scorers do: RE-402), within 0.01 ft;
 - `Constraints` values (where written, as in an export with Revit's own
   property sets): Start, End and Middle Elevation, the Lower and Upper End
   Centerline, Bottom and Top Elevation, `Slope`, and the justification, by
@@ -39,6 +40,9 @@ import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.element as element
 import ifcopenshell.util.unit as unit
+import numpy
+
+from ifc_common import site_frame
 
 FT = 0.3048
 LENGTH_FT = 1e-3
@@ -93,12 +97,10 @@ def swept_box(duct, round_section):
     ]
 
 
-def revit_box(shape):
-    vertices = shape.geometry.verts
-    points = [vertices[i : i + 3] for i in range(0, len(vertices), 3)]
-    return [min(p[i] for p in points) / FT for i in range(3)] + [
-        max(p[i] for p in points) / FT for i in range(3)
-    ]
+def revit_box(shape, frame):
+    """The box of Revit's body, in feet in Revit's internal frame."""
+    points = frame(numpy.array(shape.geometry.verts, dtype=float).reshape(-1, 3))
+    return list(points.min(axis=0)) + list(points.max(axis=0))
 
 
 def constraint_values(duct):
@@ -136,6 +138,7 @@ def main():
     args = parser.parse_args()
     ducts, ports = read_probe(args.probe)
     model = ifcopenshell.open(args.ifc)
+    frame = site_frame(model)
     scale = unit.calculate_unit_scale(model) / FT
     entity = "IfcFlowSegment" if model.schema == "IFC2X3" else "IfcDuctSegment"
     settings = ifcopenshell.geom.settings()
@@ -187,7 +190,7 @@ def main():
                 shape = None
             if shape is not None:
                 ours = swept_box(duct, round_section)
-                theirs = revit_box(shape)
+                theirs = revit_box(shape, frame)
                 score(
                     segment.Tag,
                     "body box",
