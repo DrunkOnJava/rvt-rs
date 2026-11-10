@@ -237,6 +237,10 @@ impl ExportOptions {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ExportNote {
+    /// Standalone family revolutions reconstructed from their saved records.
+    FamilyRevolutions { added: usize },
+    /// An unsupported standalone family was left unchanged.
+    FamilyRevolutionsSkipped { error: String },
     /// Bodies drawn from the saved graphics of `candidates` boxed elements.
     #[non_exhaustive]
     SavedMeshes {
@@ -396,6 +400,7 @@ impl ExportNote {
     pub fn skipped(&self) -> Option<&str> {
         match self {
             Self::SavedMeshesSkipped { error }
+            | Self::FamilyRevolutionsSkipped { error }
             | Self::FamilyExtrusionsSkipped { error }
             | Self::RevitPropertySetsSkipped { error }
             | Self::RevitSetPlacementSkipped { error }
@@ -408,6 +413,13 @@ impl ExportNote {
 impl fmt::Display for ExportNote {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::FamilyRevolutions { added } => write!(
+                f,
+                "{added} standalone family revolution bodies decoded from native records"
+            ),
+            Self::FamilyRevolutionsSkipped { error } => {
+                write!(f, "family revolution bodies unchanged: {error}")
+            }
             Self::SavedMeshes {
                 scope,
                 candidates,
@@ -719,6 +731,35 @@ pub fn run_export_with_limits_and_control(
             Err(error) => {
                 control.check()?;
                 notes.push(ExportNote::FamilyExtrusionsSkipped {
+                    error: format!("{error:#}"),
+                });
+            }
+        }
+    }
+
+    // The standalone form has validated geometry but no measured IFC product
+    // category. Modes requiring mapped types must not gain a proxy here.
+    if options.kind == ExportKind::Document && options.mode == ExportQualityMode::Scaffold {
+        match super::family_revolutions::attach(rf, &mut model, control) {
+            Ok(0) => {}
+            Ok(added) => {
+                recount_exported(&mut diagnostics, &model);
+                diagnostics.warnings.retain(|warning| {
+                    warning != "No building elements were exported; output is scaffold-only."
+                });
+                diagnostics.confidence = super::export_confidence_summary(
+                    diagnostics.mode,
+                    &diagnostics.exported,
+                    diagnostics.confidence.has_project_metadata,
+                    0,
+                    diagnostics.warnings.len(),
+                    diagnostics.confidence.unexported_element_records,
+                );
+                notes.push(ExportNote::FamilyRevolutions { added });
+            }
+            Err(error) => {
+                control.check()?;
+                notes.push(ExportNote::FamilyRevolutionsSkipped {
                     error: format!("{error:#}"),
                 });
             }

@@ -22,97 +22,13 @@ from mesh_bodies_vs_ifc import surface_distance
 import fine_mesh
 
 
-def require(condition, message):
-    if not condition:
-        raise ValueError(message)
-
-
-def identifier(value):
-    while isinstance(value, dict):
-        value = value.get("m_id", value.get("m_id64"))
-    return value
-
-
-def one_object(record, name):
-    found = [o for o in record["objects"] if o["class"] == name]
-    require(len(found) == 1, "expected exactly one " + name)
-    return found[0]
+from revolution_evidence import require, identifier, one_object, sketch_evidence
 
 
 def descriptor(doc):
-    require(
-        doc.get("schema") == "family-revolution-evidence-v1", "unsupported probe schema"
-    )
-    require(doc["status"] == "observed", "incomplete decode")
-    records = {}
-    for record in doc["records"]:
-        require(
-            record.get("decode_status") == "decoded"
-            and record.get("graph_consumed_bytes") == record["body_bytes"],
-            "incomplete record decode",
-        )
-        key = (record["class"], record["element_id"])
-        require(
-            key not in records, "repeated saved records require explicit resolution"
-        )
-        records[key] = record
-    forms = [r for r in records.values() if r["class"] == "RevolutionElem"]
-    require(len(forms) == 1, "expected exactly one revolution")
-    form = forms[0]
-    fields = one_object(form, "RevolutionElem")["fields"]
-    require(fields["m_cutting"] is False, "void revolution unsupported")
-    sketch_id = identifier(fields["m_sketchId"])
-    sketch = records["VarSketch", sketch_id]
-    sketch_fields = one_object(sketch, "VarSketch")["fields"]
-    require(
-        sketch_fields["m_flipXY"] is False and sketch_fields["m_flipZ"] is False,
-        "flipped sketch unsupported",
-    )
-    plane_id = identifier(sketch_fields["m_sketchPlaneId"])
-    plane = records["SketchPlane", plane_id]
-    require(
-        one_object(plane, "SketchPlane")["fields"]["m_flipZ"] is False,
-        "flipped plane unsupported",
-    )
-    params = form["angle_parameter_values"]
-    require(len(params) == 2, "ambiguous angle parameters")
-    angles = {p["parameter_id"]: p["value"] for p in params}
-    require(set(angles) == {-1001802, -1001803}, "missing or duplicate angle parameter")
-    saved_angles = one_object(form, "ParamValueSetDouble")["fields"]["m_paramSet"]
-    require(
-        len(saved_angles) == 2
-        and {identifier(p["m_paramId"]): p["m_value"] for p in saved_angles} == angles,
-        "angle summary disagrees with decoded fields",
-    )
-    start, end = angles[-1001802], angles[-1001803]
-    require(
-        math.isfinite(start)
-        and math.isfinite(end)
-        and 0 <= start < end <= 2 * math.pi + 1e-12,
-        "unsupported angular range",
-    )
-    curves, used = [], [form, sketch, plane]
-    for r in records.values():
-        if r["class"] != "CurveElem":
-            continue
-        membership = [o for o in r["objects"] if o["class"] == "SketchMembership"]
-        if not any(
-            identifier(o["fields"]["m_groupId"]) == sketch_id for o in membership
-        ):
-            continue
-        require(len(membership) == 1, "ambiguous sketch membership")
-        require(
-            identifier(one_object(r, "CurveElem")["fields"]["m_sketchPlaneId"])
-            == plane_id,
-            "curve plane mismatch",
-        )
-        require(
-            one_object(r, "CurveElemDriver")["fields"]["m_flip"] is False,
-            "flipped curve unsupported",
-        )
-        data = one_object(r, "RevolutionCurveData")["fields"]
-        require(type(data["m_axis"]) is bool, "invalid axis marker")
-        require(data["m_bOldAxis"] is False, "old-axis flag unsupported")
+    common = sketch_evidence(doc)
+    curves = []
+    for is_axis, r in common["curves"]:
         line = one_object(r, "GLine")["fields"]
         origin, direction = np.array(line["m_origin"]) * 0.3048, np.array(
             line["m_dirVec"]
@@ -134,13 +50,12 @@ def descriptor(doc):
         )
         curves.append(
             (
-                data["m_axis"],
+                is_axis,
                 origin + t[0] * direction,
                 origin + t[1] * direction,
                 r["element_id"],
             )
         )
-        used.append(r)
     axes = [c for c in curves if c[0]]
     profile = [c for c in curves if c[0] is False]
     require(
@@ -198,15 +113,15 @@ def descriptor(doc):
         direction=direction,
         x=x,
         polygon=polygon,
-        start=start,
-        end=end,
+        start=common["start"],
+        end=common["end"],
         r0=r0,
         r1=r1,
         z0=z0,
         z1=z1,
-        used=used,
-        form_id=form["element_id"],
-        sketch_id=sketch_id,
+        used=common["used"],
+        form_id=common["form_id"],
+        sketch_id=common["sketch_id"],
         axis_curve_id=axes[0][3],
     )
 
@@ -270,6 +185,14 @@ def evidence(doc, records):
         "m_paramId",
         "m_paramSet",
         "m_endParams",
+        "m_center",
+        "m_xVec",
+        "m_yVec",
+        "m_radius",
+        "m_bFilled",
+        "m_pCrv",
+        "m_oArcCntr",
+        "m_pCurveDriver",
         "m_origin",
         "m_dirVec",
         "m_3x3",
@@ -288,6 +211,7 @@ def evidence(doc, records):
                 "SketchMembership",
                 "RevolutionCurveData",
                 "GLine",
+                "GArc",
                 "Trf",
                 "ParamValueSetDouble",
                 "VarSketch",
@@ -319,51 +243,102 @@ def evidence(doc, records):
     return rows
 
 
-def measure(probe_path, ifc_path, output):
-    doc = json.loads(probe_path.read_text(encoding="utf-8-sig"))
-    d = descriptor(doc)
-    ours, faces = rebuild(d)
-    model = ifcopenshell.open(str(ifc_path))
-    products = [p for p in model.by_type("IfcProduct") if p.Representation]
-    require(
-        len(products) == 1 and products[0].is_a("IfcBuildingElementProxy"),
-        "expected exactly one represented product, a reference proxy",
-    )
-    shape = ifcopenshell.geom.create_shape(fine_mesh.settings(), products[0])
-    reference = np.array(shape.geometry.verts).reshape(-1, 3)
-    ref_faces = np.array(shape.geometry.faces).reshape(-1, 3)
-    require(len(reference) > 0 and len(ref_faces) > 0, "empty IFC geometry")
-    require(np.isfinite(reference).all(), "nonfinite IFC geometry")
-    # Existing repository scorer expects feet; convert both meshes consistently.
-    forward = surface_distance(reference / 0.3048, ours[faces] / 0.3048) * 0.3048
-    backward = surface_distance(ours / 0.3048, reference[ref_faces] / 0.3048) * 0.3048
-    centre_distance = (
-        surface_distance(
-            ours[faces].mean(axis=1) / 0.3048, reference[ref_faces] / 0.3048
-        )
-        * 0.3048
-    )
-    analytic = (
+def rectangular_volume(d):
+    return (
         (d["end"] - d["start"])
         * 0.5
         * (d["r1"] ** 2 - d["r0"] ** 2)
         * (d["z1"] - d["z0"])
     )
+
+
+def measure(probe_path, ifc_path, output):
+    return measure_reconstruction(
+        probe_path,
+        ifc_path,
+        output,
+        descriptor,
+        rebuild,
+        rectangular_volume,
+        "one rectangular positive revolution; research proof; no exporter changes",
+    )
+
+
+def measure_reconstruction(
+    probe_path,
+    ifc_path,
+    output,
+    read,
+    build,
+    volume,
+    scope,
+    control_point_limit=None,
+    sample_limit=None,
+    geometry_settings=None,
+    tessellation_label=None,
+    mesh_loader=None,
+):
+    doc = json.loads(probe_path.read_text(encoding="utf-8-sig"))
+    d = read(doc)
+    ours, faces = build(d)
+    if mesh_loader is None:
+        model = ifcopenshell.open(str(ifc_path))
+        products = [p for p in model.by_type("IfcProduct") if p.Representation]
+        require(
+            len(products) == 1 and products[0].is_a("IfcBuildingElementProxy"),
+            "expected exactly one represented product, a reference proxy",
+        )
+        shape = ifcopenshell.geom.create_shape(
+            fine_mesh.settings() if geometry_settings is None else geometry_settings,
+            products[0],
+        )
+        reference = np.array(shape.geometry.verts).reshape(-1, 3)
+        ref_faces = np.array(shape.geometry.faces).reshape(-1, 3)
+    else:
+        reference, ref_faces = mesh_loader(ifc_path)
+    require(len(reference) > 0 and len(ref_faces) > 0, "empty IFC geometry")
+    require(np.isfinite(reference).all(), "nonfinite IFC geometry")
+
+    # Existing repository scorer expects feet; convert both meshes consistently.
+    def sample(points):
+        if sample_limit is None or len(points) <= sample_limit:
+            return points
+        return points[np.linspace(0, len(points) - 1, sample_limit, dtype=int)]
+
+    reference_points, rebuilt_points = sample(reference), sample(ours)
+    centres = sample(ours[faces].mean(axis=1))
+    forward = surface_distance(reference_points / 0.3048, ours[faces] / 0.3048) * 0.3048
+    backward = (
+        surface_distance(rebuilt_points / 0.3048, reference[ref_faces] / 0.3048)
+        * 0.3048
+    )
+    centre_distance = (
+        surface_distance(centres / 0.3048, reference[ref_faces] / 0.3048) * 0.3048
+    )
+    analytic = volume(d)
     native_volume = abs(signed_volume(reference, ref_faces))
     relative_volume = abs(native_volume - analytic) / analytic
     rebuilt_volume = signed_volume(ours, faces)
     rebuilt_relative_volume = abs(rebuilt_volume - analytic) / analytic
     wrong_sense = None
+    control_count = 0
     if abs(d["end"] - d["start"] - 2 * math.pi) > 1e-10:
-        wrong, wrong_faces = rebuild(d, True)
+        wrong, wrong_faces = build(d, True)
+        control = reference
+        if control_point_limit is not None and len(control) > control_point_limit:
+            control = reference[
+                np.linspace(0, len(reference) - 1, control_point_limit, dtype=int)
+            ]
+        control_count = len(control)
         wrong_sense = (
-            surface_distance(reference / 0.3048, wrong[wrong_faces] / 0.3048) * 0.3048
+            surface_distance(control / 0.3048, wrong[wrong_faces] / 0.3048) * 0.3048
         )
     report = dict(
+        comparison_completed=True,
         file=doc["file"],
         sha256=doc["file_sha256"],
         ifc_sha256=hashlib.sha256(ifc_path.read_bytes()).hexdigest(),
-        scope="one rectangular positive revolution; research proof; no exporter changes",
+        scope=scope,
         units="m",
         form_id=d["form_id"],
         sketch_id=d["sketch_id"],
@@ -382,10 +357,20 @@ def measure(probe_path, ifc_path, output):
         rebuild_vertices_to_ifc_m=backward,
         rebuild_triangle_centres_to_ifc_m=centre_distance,
         opposite_sense_ifc_to_rebuild_m=wrong_sense,
-        vertices_tested=dict(ifc=len(reference), rebuild=len(ours)),
+        opposite_sense_vertices_tested=control_count,
+        vertices_tested=dict(ifc=len(reference_points), rebuild=len(rebuilt_points)),
+        triangle_centres_tested=len(centres),
+        total_vertices=dict(ifc=len(reference), rebuild=len(ours)),
+        sampling=(
+            "all points"
+            if sample_limit is None
+            else "even index stride, cap %d" % sample_limit
+        ),
         triangles=dict(ifc=len(ref_faces), rebuild=len(faces)),
         ifcopenshell_version=ifcopenshell.version,
-        tessellation=fine_mesh.LABEL,
+        tessellation=(
+            fine_mesh.LABEL if tessellation_label is None else tessellation_label
+        ),
         evidence=evidence(doc, d["used"]),
     )
     # Fixed, explicit research bar. Sampling is not a full Hausdorff proof.

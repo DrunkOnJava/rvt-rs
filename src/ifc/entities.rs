@@ -571,6 +571,19 @@ pub enum SolidShape {
         /// turned column / sphere-of-revolution).
         angle_radians: f64,
     },
+    /// An analytic revolution of a radial/axial profile in its own frame.
+    /// Profile X is radius, profile Y is distance along `axis_direction`.
+    /// IFC places that XY plane at `origin_feet`, with X along
+    /// `radial_direction`, and revolves about local +Y. A nonzero starting
+    /// angle is represented by rotating `radial_direction` before construction.
+    PlacedRevolvedArea {
+        profile: ProfileDef,
+        origin_feet: [f64; 3],
+        axis_direction: [f64; 3],
+        radial_direction: [f64; 3],
+        /// Positive sweep, at most one full turn, in radians.
+        angle_radians: f64,
+    },
     /// CSG combination of two nested solids. Emits
     /// `IfcBooleanResult(op, a, b)` with operand_a / operand_b
     /// recursively emitted by the same dispatcher. Use `Difference`

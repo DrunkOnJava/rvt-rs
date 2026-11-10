@@ -1620,3 +1620,24 @@ The first broadly useful release should let a non-technical AEC user:
 Until those five conditions hold, rvt-rs should present itself as an
 open-source Revit inspection and reverse-engineering toolkit, not as a complete
 replacement for production Revit export workflows.
+
+## Standalone family revolutions (experimental)
+
+The default exporter reads one visible positive revolution in a standalone
+Revit 2020 RFA and writes an analytic `IfcRevolvedAreaSolid` from its saved
+line/arc profile, directed axis and start/end angles. Four fixtures are supported:
+REV-A, REV-B and REV-BT (line profiles, including partial and tilted sweeps),
+and ARC-A (full torus), each confirmed by Revit's own IFC
+(RE-391 through [RE-394](../reports/element-framing/RE-394-analytic-family-revolutions.md)).
+The cleaned six-file fixture package has an offline replay in
+[the runner README](../tools/oracle/runner/revolutions/README.md) and a pinned
+archive entry in `research/family-revolutions-measure.tsv`.
+The IFC Tag retains the source ElementId; the body
+is unclassified and does not bypass mapped-type quality modes.
+
+This is not general family support: project instances, nested/combined forms,
+voids, other releases and unmeasured profile families remain outside this
+coverage. The existing family-extrusion option is unchanged. Profiles containing
+arcs are refused for partial sweeps: ARC-B contradicts Revit's IFC and ARC-BT
+has no native IFC verdict. Their face captures remain research leads only. The fixed
+acceptance limits are 0.3048 mm sampled distance and 0.01% volume error.

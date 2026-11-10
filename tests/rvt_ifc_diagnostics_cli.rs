@@ -19,6 +19,134 @@ fn temp_diagnostics_dir(prefix: &str) -> std::path::PathBuf {
     dir
 }
 
+/// Real saved-file contract for the default CLI path. The rectangular files
+/// and curved files are in the pinned family-revolutions fixture package.
+/// A configured but incomplete fixture folder is an error, never a skip.
+#[test]
+fn standalone_revolutions_reach_the_default_ifc_export() {
+    let mut checked = 0;
+    for (variable, prefix) in [
+        ("RVT_RECTANGULAR_REVOLUTIONS_DIR", "REV"),
+        ("RVT_CURVED_REVOLUTIONS_DIR", "ARC"),
+    ] {
+        let Some(folder) = std::env::var_os(variable).map(std::path::PathBuf::from) else {
+            eprintln!("skipping {prefix} export fixtures: {variable} unset");
+            continue;
+        };
+        for suffix in ["A", "B", "BT"] {
+            let source = folder.join(format!("{prefix}-{suffix}.rfa"));
+            assert!(source.is_file(), "missing fixture {}", source.display());
+            let original = std::fs::read(&source).unwrap();
+            let dir = temp_diagnostics_dir("rvt-native-revolution");
+            let output = dir.join("body.ifc");
+            let diagnostics = dir.join("body.json");
+            let run = Command::new(env!("CARGO_BIN_EXE_rvt-ifc"))
+                .args([
+                    source.as_os_str(),
+                    "-o".as_ref(),
+                    output.as_os_str(),
+                    "--diagnostics".as_ref(),
+                    diagnostics.as_os_str(),
+                ])
+                .env("SOURCE_DATE_EPOCH", "0")
+                .output()
+                .unwrap();
+            assert!(
+                run.status.success(),
+                "{}",
+                String::from_utf8_lossy(&run.stderr)
+            );
+            let step = std::fs::read_to_string(&output).unwrap();
+            if prefix == "ARC" && suffix != "A" {
+                let report: Value =
+                    serde_json::from_slice(&std::fs::read(&diagnostics).unwrap()).unwrap();
+                assert!(!step.contains("IFCREVOLVEDAREASOLID"));
+                assert_eq!(report["exported"]["building_elements_with_geometry"], 0);
+                assert_eq!(report["confidence"]["has_geometry"], false);
+                assert!(String::from_utf8_lossy(&run.stderr).contains(
+                    "partial revolution with an arc profile lacks native export confirmation"
+                ));
+                assert_eq!(std::fs::read(&source).unwrap(), original, "source modified");
+                std::fs::remove_dir_all(dir).unwrap();
+                checked += 1;
+                continue;
+            }
+            assert_eq!(step.matches("=IFCREVOLVEDAREASOLID(").count(), 1);
+            assert!(!step.contains("IFCTRIANGULATEDFACESET"));
+            assert!(step.len() < 100_000, "analytic solid unexpectedly large");
+            if prefix == "ARC" {
+                assert_eq!(step.matches("IFCARCINDEX(").count(), 2);
+            }
+            let report: Value =
+                serde_json::from_slice(&std::fs::read(&diagnostics).unwrap()).unwrap();
+            assert_eq!(report["exported"]["building_elements_with_geometry"], 1);
+            assert_eq!(report["exported"]["body_sources"]["family_revolution"], 1);
+            assert_eq!(report["confidence"]["has_geometry"], true);
+            assert_eq!(report["confidence"]["has_typed_elements"], false);
+            assert!(
+                report["warnings"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|warning| {
+                        warning != "No building elements were exported; output is scaffold-only."
+                    })
+            );
+            // The geometry-only finding must not bypass mapped-type quality
+            // modes, nor add bodies to an explicitly requested placeholder.
+            for mode in ["typed-no-geometry", "geometry", "strict"] {
+                let path = dir.join(format!("{mode}.ifc"));
+                let run = Command::new(env!("CARGO_BIN_EXE_rvt-ifc"))
+                    .arg(&source)
+                    .arg("-o")
+                    .arg(&path)
+                    .args(["--mode", mode])
+                    .output()
+                    .unwrap();
+                assert!(!run.status.success(), "unclassified form passed {mode}");
+                assert!(!path.exists(), "quality refusal wrote an IFC");
+            }
+            let placeholder = dir.join("placeholder.ifc");
+            let run = Command::new(env!("CARGO_BIN_EXE_rvt-ifc"))
+                .arg(&source)
+                .arg("-o")
+                .arg(&placeholder)
+                .arg("--placeholder")
+                .output()
+                .unwrap();
+            assert!(run.status.success());
+            assert!(
+                !std::fs::read_to_string(placeholder)
+                    .unwrap()
+                    .contains("IFCREVOLVEDAREASOLID")
+            );
+            let mut file = rvt::RevitFile::open(&source).unwrap();
+            let export =
+                rvt::ifc::run_export(&mut file, &rvt::ifc::ExportOptions::default()).unwrap();
+            let shape = export
+                .model
+                .entities
+                .iter()
+                .find_map(|entity| match entity {
+                    rvt::ifc::entities::IfcEntity::BuildingElement {
+                        solid_shape: Some(shape),
+                        ..
+                    } => Some(shape),
+                    _ => None,
+                })
+                .unwrap();
+            let display = rvt::ifc::body_geometry::solid_mesh(shape)
+                .expect("analytic solid needs a display mesh");
+            assert!(!display.triangles.is_empty());
+            assert!(display.vertices.iter().flatten().all(|v| v.is_finite()));
+            assert_eq!(std::fs::read(source).unwrap(), original, "source modified");
+            std::fs::remove_dir_all(dir).unwrap();
+            checked += 1;
+        }
+    }
+    eprintln!("checked {checked} native revolution exports and their mode refusals");
+}
+
 #[test]
 fn rvt_ifc_cli_writes_diagnostics_sidecar() {
     if !corpus_available() {

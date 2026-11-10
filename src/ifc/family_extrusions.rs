@@ -281,7 +281,11 @@ fn to_element_frame(
 /// frame IFC builds from the placement's axis and reference direction
 /// (`handed` is -1 where the solid's frame is left-handed, which mirrors the
 /// profile's y). Counter-clockwise for an outline, clockwise for a hole.
-fn indexed_curve(source: &Loop, counter_clockwise: bool, handed: f64) -> Option<IndexedCurve> {
+pub(super) fn indexed_curve(
+    source: &Loop,
+    counter_clockwise: bool,
+    handed: f64,
+) -> Option<IndexedCurve> {
     let oriented = if (source.signed_area() * handed > 0.0) == counter_clockwise {
         source.clone()
     } else {

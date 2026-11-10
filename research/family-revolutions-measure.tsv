@@ -1,0 +1,18 @@
+# MIT synthetic Revit 2020 families and native references (RE-391 through RE-394).
+# Four supported exports: REV-A, REV-B, REV-BT, ARC-A.
+# ARC-B and ARC-BT are refusal fixtures; their IFCs are not acceptance oracles.
+# Measure integration is supplied separately; this pins the unchanged public package.
+# kind	path	sha256	bytes
+archive	https://github.com/BIM4GIB/rvt-rs/releases/download/fixtures-revolutions-2020-v2/family-revolutions-revit2020-v2.zip	6d68bedd29224158c2783fd66ae3072d7f4d931a68540db68856ee12587912c7	2164564
+entry	curved/ARC-A-native.ifc	3844a5d70fe64cd3ced4732423188a5480ea2b155cbc3848c432344d5721e3cf	16549
+entry	curved/ARC-A.rfa	aeb7b55ba14f82765bac982f155c97c74442662494eebdeb00520c7287ea81c9	368640
+entry	curved/ARC-B-native.ifc	6b3211d923b15ae5546dfeee55fb4be65429f25b0ac65326730929222fbedcf9	13410
+entry	curved/ARC-B.rfa	bb951c9194e73310f53530809345a48052f1a323748fa068172a15ce3f0c0dbd	368640
+entry	curved/ARC-BT-native.ifc	510fb0ebddca6aa7b7ffc8f9e4460dabda2da111688649128641ed380b903be3	13569
+entry	curved/ARC-BT.rfa	02a9c03966aaeb3035afa9603ca3bc32096b251e1d252f82c301a8a84449faf8	368640
+entry	rectangular/REV-A-native.ifc	394625b16266506b2830ea4b0ce37ca3a43fc64587fb1f40bcaa9edbe338205e	18291
+entry	rectangular/REV-A.rfa	7c7031c9e0528b96b33b1e930a768924f498ed6259f4fcd735b559eacf81f1e1	368640
+entry	rectangular/REV-B-native.ifc	7e20d7fdaf6961f0f649cc591a27833e3f2985b1289ff086a5810708ba843724	14084
+entry	rectangular/REV-B.rfa	3e3c90bfa89c820bb9889e911087d7359864445e707951ac69a0fff94ac4a10f	368640
+entry	rectangular/REV-BT-native.ifc	aade1714d12a165c3a808969117a8e17915ff1c243996f3f48537bb8a1da1514	14264
+entry	rectangular/REV-BT.rfa	12cf08e5b59b5a3c9826ea0313e39ae5823a60259ce58d7094896655292b018c	368640

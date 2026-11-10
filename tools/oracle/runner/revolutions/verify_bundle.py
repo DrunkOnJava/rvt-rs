@@ -68,7 +68,7 @@ def check_bytes(doc, folder):
     return dict(bodies=bodies, field_spans=fields)
 
 
-def refusals(base):
+def refusals(base, read=descriptor):
     results = []
     for case in [
         "duplicate_record",
@@ -82,7 +82,7 @@ def refusals(base):
         "inconsistent_angle_summary",
     ]:
         doc = copy.deepcopy(base)
-        d = descriptor(doc)
+        d = read(doc)
         form = next(r for r in doc["records"] if r["element_id"] == d["form_id"])
         axis = next(r for r in doc["records"] if r["element_id"] == d["axis_curve_id"])
         profile = next(
@@ -112,7 +112,7 @@ def refusals(base):
             for p in one_object(form, "ParamValueSetDouble")["fields"]["m_paramSet"]:
                 p["m_value"] = 0 if identifier(p["m_paramId"]) == -1001803 else 2
         try:
-            descriptor(doc)
+            read(doc)
         except (ValueError, KeyError) as error:
             results.append(dict(case=case, refusal=str(error)))
         else:

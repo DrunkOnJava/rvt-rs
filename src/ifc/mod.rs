@@ -91,6 +91,7 @@ pub mod export_content;
 pub mod export_decisions;
 mod export_pipeline;
 pub mod family_extrusions;
+mod family_revolutions;
 pub mod from_decoded;
 pub mod gltf;
 mod mesh_volume;
