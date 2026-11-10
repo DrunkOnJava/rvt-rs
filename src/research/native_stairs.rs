@@ -880,23 +880,43 @@ fn sketch_line(fields: &Value) -> Option<([f64; 2], f64)> {
 /// (RE-346) as Autodesk's samples saved by 2025 read them.
 pub const RAILING_LENGTH_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
-/// The `Length` Revit's export writes on each railing in `railings` that
-/// belongs to a stair (`BaseRailing.m_stairsId`) and whose path, the sketch
-/// its record names (`m_sketchId`), is one straight line along one or more
-/// of that stair's runs, feet (RE-254). The line climbs at the stair's
-/// riser height over its tread depth (its `StairsElement`'s actual counts)
-/// for as long as the longest of those runs climbs, its risers less one
-/// times the tread depth (`m_topRiserIndex` less `m_baseRiserIndex`, less
-/// one), and runs level for the rest: Revit's `Length` on every such railing
-/// of the BIM4LCA office and the R2025 stair models. A railing whose path
-/// has more lines, or an arc, is left out: over a stair well with landings
-/// the climb is not read yet.
-pub fn railing_lengths(
+/// What the native records of stair railings say (RE-254, #1624).
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct RailingRecords {
+    /// The stair each railing in the selection belongs to
+    /// (`BaseRailing.m_stairsId`), ElementId to ElementId. Revit's export
+    /// aggregates such a railing under its stair, as it does the stair's runs
+    /// and stringers (#1624).
+    pub stairs: BTreeMap<u64, u64>,
+    /// The railings among them whose record names a component of their
+    /// stair (`BaseRailing.m_stairsComponentId`, a run). Revit's export
+    /// leaves such a railing out of the stair's aggregate, a plain element of
+    /// its own storey (RE-390).
+    pub on_components: BTreeSet<u64>,
+    /// The `Length` Revit's export writes on each railing whose path is one
+    /// straight line along its stair's runs, feet; see [`railing_records`].
+    pub lengths: BTreeMap<u64, f64>,
+}
+
+/// The stair of each railing in `railings` that belongs to one
+/// (`BaseRailing.m_stairsId`), the railings among them that sit on a component
+/// of it (`m_stairsComponentId`), and the `Length` Revit's export writes on each
+/// whose path, the sketch its record names (`m_sketchId`), is one straight
+/// line along one or more of that stair's runs, feet (RE-254). The line
+/// climbs at the stair's riser height over its tread depth (its
+/// `StairsElement`'s actual counts) for as long as the longest of those runs
+/// climbs, its risers less one times the tread depth (`m_topRiserIndex` less
+/// `m_baseRiserIndex`, less one), and runs level for the rest: Revit's
+/// `Length` on every such railing of the BIM4LCA office and the R2025 stair
+/// models. A railing whose path has more lines, or an arc, is left out of the
+/// lengths: over a stair well with landings the climb is not read yet.
+pub fn railing_records(
     rf: &mut RevitFile,
     railings: &BTreeSet<u64>,
-) -> anyhow::Result<BTreeMap<u64, f64>> {
+) -> anyhow::Result<RailingRecords> {
+    let mut records = RailingRecords::default();
     if railings.is_empty() {
-        return Ok(BTreeMap::new());
+        return Ok(records);
     }
     let mut held: BTreeMap<u64, (u64, u64)> = BTreeMap::new();
     let options = Options {
@@ -908,18 +928,22 @@ pub fn railing_lengths(
             .graph
             .as_ref()
             .and_then(|graph| graph.objects.iter().find(|o| o.class_name == "BaseRailing"));
-        if let Some((sketch, stair)) = root.and_then(|root| {
-            Some((
-                element_id(&root.fields, "m_sketchId")?,
-                element_id(&root.fields, "m_stairsId")?,
-            ))
-        }) {
-            held.insert(record.identity.element_id, (sketch, stair));
+        let id = record.identity.element_id;
+        let stair = root.and_then(|root| element_id(&root.fields, "m_stairsId"));
+        if let Some(stair) = stair {
+            records.stairs.insert(id, stair);
+        }
+        if root.is_some_and(|root| element_id(&root.fields, "m_stairsComponentId").is_some()) {
+            records.on_components.insert(id);
+        }
+        let sketch = root.and_then(|root| element_id(&root.fields, "m_sketchId"));
+        if let (Some(sketch), Some(stair)) = (sketch, stair) {
+            held.insert(id, (sketch, stair));
         }
         Ok(())
     })?;
     if held.is_empty() {
-        return Ok(BTreeMap::new());
+        return Ok(records);
     }
     let sketches: BTreeSet<u64> = held.values().map(|(sketch, _)| *sketch).collect();
     let stairs: BTreeSet<u64> = held.values().map(|(_, stair)| *stair).collect();
@@ -1025,7 +1049,6 @@ pub fn railing_lengths(
         }
         Ok(())
     })?;
-    let mut out = BTreeMap::new();
     for (railing, (sketch, stair)) in held {
         let (Some(Some(path)), Some(&(riser, tread))) = (paths.get(&sketch), slopes.get(&stair))
         else {
@@ -1041,10 +1064,12 @@ pub fn railing_lengths(
             .fold(0.0_f64, f64::max);
         if longest > 0.0 && *span > 0.0 {
             let climb = span.min(longest);
-            out.insert(railing, span + climb * ((riser / tread).hypot(1.0) - 1.0));
+            records
+                .lengths
+                .insert(railing, span + climb * ((riser / tread).hypot(1.0) - 1.0));
         }
     }
-    Ok(out)
+    Ok(records)
 }
 
 /// Releases a stair's and its parts' names are read from their native

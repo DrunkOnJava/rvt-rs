@@ -525,7 +525,15 @@ pub(super) fn attach_stair_dimensions(
 }
 
 /// Give each railing of a stair whose path is one line along that stair's
-/// runs its `Length` ([`crate::native_stairs::railing_lengths`], RE-254).
+/// runs its `Length` ([`crate::native_stairs::railing_records`], RE-254), and
+/// each railing that belongs to a stair the stair as its whole, as Revit's
+/// export aggregates it (#1624), except a railing that sits on one of the
+/// stair's components (`BaseRailing.m_stairsComponentId`, RE-390), which
+/// Revit's export leaves a plain element of its storey: the office's railing
+/// 2598405, on a run of a stair of the Basement and itself on Level_01. Only a
+/// stair that one of its runs, landings or stringers already names is a whole
+/// here: a stair carried by its parts has no body of its own, and a railing
+/// alone must not take the stair's away.
 pub(super) fn attach_railing_lengths(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -539,24 +547,46 @@ pub(super) fn attach_railing_lengths(
         .filter(|element| element.class == "Railing")
         .filter_map(|element| element.id.map(u64::from))
         .collect();
-    let Ok(lengths) = crate::native_stairs::railing_lengths(rf, &railings) else {
+    let Ok(records) = crate::native_stairs::railing_records(rf, &railings) else {
         return;
     };
+    let whole_of = |element: &DecodedElement| {
+        element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == AGGREGATE_WHOLE_FIELD => Some(*id),
+            _ => None,
+        })
+    };
+    let carried_stairs: BTreeSet<u32> = products
+        .iter()
+        .filter(|element| STAIR_PART_CLASSES.contains(&element.class.as_str()))
+        .filter_map(whole_of)
+        .collect();
     for element in products
         .iter_mut()
         .filter(|element| element.class == "Railing")
     {
-        if let Some(length) = element
-            .id
-            .and_then(|id| lengths.get(&u64::from(id)))
-            .copied()
-        {
+        let Some(id) = element.id.map(u64::from) else {
+            continue;
+        };
+        if let Some(length) = records.lengths.get(&id).copied() {
             element.fields.push((
                 RAILING_LENGTH_FIELD.into(),
                 InstanceField::Float {
                     value: length,
                     size: 8,
                 },
+            ));
+        }
+        let stair = records
+            .stairs
+            .get(&id)
+            .filter(|_| !records.on_components.contains(&id))
+            .and_then(|stair| u32::try_from(*stair).ok())
+            .filter(|stair| carried_stairs.contains(stair));
+        if let Some(stair) = stair {
+            element.fields.push((
+                AGGREGATE_WHOLE_FIELD.into(),
+                InstanceField::ElementId { tag: 0, id: stair },
             ));
         }
     }
