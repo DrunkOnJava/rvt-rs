@@ -588,8 +588,8 @@ fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities
 /// How far, feet, a door's mesh may differ in height from the size it has and
 /// still be the door's height (RE-409): on the BIM4LCA timber office at permit
 /// the 65 doors whose written height is wrong are 0.049 or 0.148 ft too high, and
-/// the doors whose written height is Revit's that the mesh does not have are
-/// hatches, 1.6 ft or more off.
+/// the doors whose written height is Revit's and whose mesh is not are 1.64 ft or
+/// more short of it (4 and 4 on each office file, and the housing's hatches).
 const DOOR_HEIGHT_REACH_FEET: f64 = 0.2;
 
 /// The extent of `vertices` along Z, feet, where it is some.
@@ -604,31 +604,19 @@ fn mesh_height(vertices: &[[f64; 3]]) -> Option<f64> {
 }
 
 /// Give each door of `heights` (an index into the entities and the height, feet,
-/// of the mesh its body was drawn from) that as its `OverallHeight`, where it is
-/// hosted by a wall, the size it has was not read from the outline its symbol cuts
-/// and the two are within [`DOOR_HEIGHT_REACH_FEET`] (RE-409). revit-ifc sizes a
-/// door or window from its symbol, along Z where a wall hosts it
-/// (`FamilyInstanceExporter.GetDoorWindowDimensionFromSymbol`, CLEANROOM.md source
-/// 5), and the mesh's height is Revit's on the 65 doors of the BIM4LCA timber
-/// office at permit whose size the opening or the type gives 15 or 45 mm too high.
-/// A width stays as it is (the mesh's X is not always the door's width), and a
-/// door with no size is given none.
+/// of the mesh its body was drawn from) that as its `OverallHeight`, where the
+/// size it has was not read from the outline its symbol cuts and the two are
+/// within [`DOOR_HEIGHT_REACH_FEET`] (RE-409). revit-ifc sizes a door or window
+/// from its symbol (`FamilyInstanceExporter.GetDoorWindowDimensionFromSymbol`,
+/// CLEANROOM.md source 5), and the mesh's height is Revit's on the 65 doors of the
+/// BIM4LCA timber office at permit whose size the opening or the type gives 15 or
+/// 45 mm too high, and on every door of that project whose size is Revit's and whose
+/// mesh is Revit's height. A width stays as it is (the mesh's X is not always the
+/// door's width), a door whose mesh is far from its height (a hatch, the 1.6 and
+/// 4.4 ft short ones of the office) is left as it is, and a door with no size is
+/// given none.
 fn add_door_heights(model: &mut IfcModel, heights: &[(usize, f64)]) {
     for &(index, height) in heights {
-        let on_wall = match model.entities.get(index) {
-            Some(IfcEntity::BuildingElement {
-                host_element_index: Some(host),
-                ..
-            }) => matches!(
-                model.entities.get(*host),
-                Some(IfcEntity::BuildingElement { ifc_type, .. })
-                    if matches!(ifc_type.as_str(), "IFCWALL" | "IFCWALLSTANDARDCASE")
-            ),
-            _ => false,
-        };
-        if !on_wall {
-            continue;
-        }
         if let Some(size) = model.filler_sizes.get_mut(&index) {
             if !size.cut_loop && (size.height_feet - height).abs() <= DOOR_HEIGHT_REACH_FEET {
                 size.height_feet = height;
