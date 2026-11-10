@@ -309,6 +309,8 @@ pub fn attach_scoped_with_control(
     let mut wall_quantities: Vec<(usize, WallMeshQuantities)> = Vec::new();
     // RE-396: the width of each curtain panel drawn from a mesh that is a vertical box.
     let mut plate_widths: Vec<(usize, f64)> = Vec::new();
+    // RE-409: the extents along X and Z of each door's and window's mesh.
+    let mut filler_extents: Vec<(usize, f64, f64)> = Vec::new();
     // Each element is taken as it is meshed and its decoded graphs freed with
     // its batch of shared symbols, rather than all held until the last one is
     // meshed (#1075).
@@ -364,6 +366,10 @@ pub fn attach_scoped_with_control(
             let plate_width = volume
                 .filter(|_| ifc_type.eq_ignore_ascii_case("IFCPLATE"))
                 .and_then(|volume| box_plan_width(&vertices, &triangles, volume));
+            let filler_extent = (ifc_type.eq_ignore_ascii_case("IFCDOOR")
+                || ifc_type.eq_ignore_ascii_case("IFCWINDOW"))
+            .then(|| local_extents(&vertices))
+            .flatten();
             report.replaced += 1;
             report.triangles += triangles.len();
             *solid_shape = Some(SolidShape::TriangulatedFaceSet {
@@ -372,6 +378,9 @@ pub fn attach_scoped_with_control(
             });
             if let Some(volume) = volume {
                 volumes.push((*index, volume));
+            }
+            if let Some((width, height)) = filler_extent {
+                filler_extents.push((*index, width, height));
             }
             if let Some(width) = plate_width {
                 plate_widths.push((*index, width));
@@ -402,6 +411,7 @@ pub fn attach_scoped_with_control(
     add_mesh_volumes(model, &volumes);
     add_wall_quantities(model, &wall_quantities);
     add_plate_widths(model, &plate_widths);
+    add_filler_sizes(model, &filler_extents);
     Ok(report)
 }
 
@@ -527,6 +537,39 @@ fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities
             add("GrossSideArea", PropertyValue::AreaSquareFeet(gross));
             if let Some(width) = width {
                 add("GrossVolume", PropertyValue::VolumeCubicFeet(width * gross));
+            }
+        }
+    }
+}
+
+/// The extents of `vertices` along X and along Z, feet, where they have some.
+fn local_extents(vertices: &[[f64; 3]]) -> Option<(f64, f64)> {
+    let low = vertices.iter().fold([f64::INFINITY; 3], |low, v| {
+        [low[0].min(v[0]), low[1].min(v[1]), low[2].min(v[2])]
+    });
+    let high = vertices.iter().fold([f64::NEG_INFINITY; 3], |high, v| {
+        [high[0].max(v[0]), high[1].max(v[1]), high[2].max(v[2])]
+    });
+    let (width, height) = (high[0] - low[0], high[2] - low[2]);
+    (width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0)
+        .then_some((width, height))
+}
+
+/// Give each door and window of `extents` (an index into the entities and the
+/// extents, feet, of the mesh its body was drawn from along its own X and Z) those
+/// as its `OverallWidth` and `OverallHeight`, where the size it has was not read
+/// from the outline its symbol cuts (RE-409). revit-ifc sizes a door or window from
+/// its symbol (`FamilyInstanceExporter.GetDoorWindowDimensionFromSymbol`, CLEANROOM.md
+/// source 5): where the symbol cuts an outline that is what RE-215 reads, and where it
+/// does not, the sizes the opening, the record box or the type give (RE-93, RE-187,
+/// #810) are Revit's on 47 of the 64 windows of the BIM4LCA housing as built, and the
+/// extents of the body on 60. Nothing is given a size it has none of.
+fn add_filler_sizes(model: &mut IfcModel, extents: &[(usize, f64, f64)]) {
+    for &(index, width, height) in extents {
+        if let Some(size) = model.filler_sizes.get_mut(&index) {
+            if !size.cut_loop {
+                size.width_feet = width;
+                size.height_feet = height;
             }
         }
     }
