@@ -55,6 +55,7 @@ The unfiltered Measure of the change (every model against `main`) is dispatched;
 
 ## 5. Not shown
 
-- **Why Revit takes a floor's holes off and not a roof's.** The rule rests on 2 roofs and 8 floors of one project's concrete as built; section 4 reads the other three housing files and the office.
+- **More than one element.** The change moves one element: the roof 1567765 and its counterpart in each of the four large housing saves, so the four files are one roof four times, not four exercises. The other roof with holes (2175398) gets no quantities from rvt-rs, so the change cannot move it, and the 8 floors are on the branch that did not change. Section 4 says whether any other model exercises the rule.
+- **Why Revit takes a floor's holes off and not a roof's.** The rule rests on 2 roofs and 8 floors of one project's concrete as built, and only the first of the 2 roofs is one rvt-rs writes quantities for.
 - **The openings.** Revit's export writes an `IfcOpeningElement` for each of these holes; rvt-rs writes none (#1165).
 - **The roof 2175398's quantities.** rvt-rs writes none for it, so this change does not move it; Revit's `GrossArea` for it is the outline's, as the rule says.

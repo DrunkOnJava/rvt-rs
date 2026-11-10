@@ -3558,7 +3558,9 @@ fn add_slab_gross_area(
     let Some(area) = profile_area(body) else {
         return;
     };
-    // RE-413: a roof's holes are left in its gross quantities.
+    // RE-413: a roof's holes are left in its gross quantities. A profile with no
+    // holes has no outline of its own to take (its outline is `area`), so the
+    // fallback changes nothing for it.
     let gross = if roof {
         profile_outline_area(body).unwrap_or(area)
     } else {
