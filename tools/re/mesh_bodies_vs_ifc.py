@@ -45,6 +45,14 @@ largest "ref on ours", then per class how many bodies hold "ref on ours" and
 then the bodies that miss in the fine one. The verdicts of the class table are
 those of the bar above either way.
 
+A body whose volume is outside 1% of Revit's while every vertex of each lies within 0.01 ft of the
+other's surface is also read shell by shell (#1658, round_sections.py), because Revit's export draws a
+round section as a polygon inscribed in the circle a saved mesh draws with more segments: a shell is
+`explained` when Revit's end faces are such polygons and its volume ratio is their area ratio, and
+every other difference stays `other`. The `round sections:` line says how many bodies are read and how
+they come out, and a `round` row follows for each (the first 25 `other`, the first 5 `explained`); a
+file with no such body prints neither.
+
 Needs IfcOpenShell and numpy.
 
 Usage:
@@ -66,6 +74,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fine_mesh  # noqa: E402
+import round_sections  # noqa: E402
 import true_curves  # noqa: E402
 from ifc_common import mesh_parts, site_frame  # noqa: E402
 from roof_bodies_vs_ifc import shapes_of  # noqa: E402
@@ -498,6 +507,57 @@ def fine_block(fine_scores, moved, ref, default_scores):
     return scored
 
 
+def read_round_sections(scored, decided, ours, ref):
+    """The `round sections` block (#1658, RE-397 section 5.2): each body whose volume is outside 1%
+    of Revit's while every vertex of each lies within 0.01 ft of the other's surface, read shell by
+    shell by round_sections.py. Revit's export draws a round section as a polygon inscribed in the
+    circle a saved mesh draws with more segments, so the two volumes differ by the ratio of the two
+    polygons' areas with no body wrong; a shell is `explained` only where Revit's end faces are such
+    polygons and its volume ratio is their area ratio, and every other difference stays `other`.
+    Prints nothing for a file with no such body. Returns the counts by verdict."""
+    eligible = [s for s in scored if abs(s[4] - 1) > 0.01 and s[0] <= 0.01 and s[1] not in decided]
+    if not eligible:
+        return {}
+    readings = []
+    for far, tag, cls, object_type, ratio, to_ours, to_ref in sorted(eligible, key=lambda s: (len(s[1]), s[1])):
+        reading = round_sections.read_body(ours[tag][2], ref[tag][2])
+        readings.append((round_sections.verdict(reading), tag, cls, object_type, ratio, reading))
+    counts = collections.Counter(kind for kind, *_ in readings)
+    print(
+        f"round sections: {len(readings)} volume outliers with every vertex within 0.01 ft, read shell by shell:"
+        f" {counts['explained']} explained by inscribed end faces, {counts['other']} another reason,"
+        f" {counts['unread']} unread"
+    )
+    shown = collections.Counter()
+    for kind, tag, cls, object_type, ratio, reading in readings:
+        if shown[kind] >= (25 if kind == "other" else 5):
+            continue
+        shown[kind] += 1
+        if "unread" in reading:
+            print(f"  round {tag} {cls} '{object_type}': unread ({reading['unread']})")
+            continue
+        parts = []
+        for name in ("equal", "explained", "other"):
+            members = [r for r in reading["shells"] if r[0] == name]
+            if not members:
+                continue
+            text = f"{name} {len(members)}"
+            if name != "equal":
+                text += f" (volume ratio {min(r[1] for r in members):.4f}..{max(r[1] for r in members):.4f}"
+                areas = [r[2] for r in members if r[2] is not None]
+                if areas:
+                    text += f", end-face area ratio {min(areas):.4f}..{max(areas):.4f}"
+                reasons = sorted({r[3] for r in members if r[3]})
+                if reasons:
+                    text += ": " + "; ".join(reasons)
+                text += ")"
+            parts.append(text)
+        if reading["unpaired_ours"] or reading["unpaired_ref"]:
+            parts.append(f"no partner: rvt-rs {reading['unpaired_ours']}, Revit {reading['unpaired_ref']}")
+        print(f"  round {tag} {cls} '{object_type}': volume ratio {ratio:.4f}, {kind}: " + ", ".join(parts))
+    return dict(counts)
+
+
 def main():
     if len(sys.argv) != 3:
         print(__doc__)
@@ -600,6 +660,7 @@ def main():
             shells = shell_volumes(triangles)
             listed = " ".join(f"{v:.4f}" for v in shells[:8])
             print(f"    {side} shells {len(shells)}, signed volumes (cubic ft): {listed}")
+    RESULT["round_sections"] = read_round_sections(scored, decided, ours, ref)
     if study:
         RESULT["scored_fine"] = fine_block(fine_scores, fine_moved, ref, default_scores)
     elif decided:
