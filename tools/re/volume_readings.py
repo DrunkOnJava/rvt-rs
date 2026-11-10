@@ -1,6 +1,6 @@
-"""Whether a body's volume differs from Revit's only because Revit's export draws a round
-part's end faces as polygons inscribed in the circle rvt-rs's mesh draws (#1658, RE-397
-section 5.2).
+"""Whether a body's volume differs from Revit's only because of how Revit's export writes it: its
+round parts' end faces drawn as polygons inscribed in the circle rvt-rs's mesh draws, or faces it
+writes twice (#1658, RE-397 section 5.2).
 
 A saved mesh draws a round section with many segments (a 32-gon on the BIM4LCA housing's
 30 mm rails); Revit's own export draws the same section as a polygon inscribed in that
@@ -9,9 +9,19 @@ other vertices lying on the polygon's edges. Every vertex of each body then lies
 0.01 ft of the other's surface, and the volumes differ by the ratio of the two polygons'
 areas, which a volume bar of 1% reads as a difference.
 
+Revit's export also writes some bodies with every face twice, in the same winding (the BIM4LCA
+roofs, slabs and ramp flights that read exactly 0.5000: 12 of a roof's 24 triangles are distinct),
+and the volume of such a mesh is twice the body's.
+
 `read_body` takes the triangles of one body in rvt-rs's export and in Revit's, in internal
 feet, and says for each shell (a set of triangles joined through shared vertices) whether it
-is equal (volume within SAME), explained by its section, or differs for another reason:
+is equal (volume within SAME), doubled (equal once Revit's repeated triangles are counted once),
+explained by its section, or differs for another reason:
+
+* a triangle repeats an earlier one of the same shell of Revit's when it has the same vertices
+  in the same cyclic order; the shell's volume is taken over its distinct triangles (rvt-rs's own
+  triangles are never dropped, so a mesh of rvt-rs's that repeated a face would still read
+  wrong);
 
 * a cap is a set of coplanar triangles, joined through shared edges, whose boundary is one
   closed loop;
@@ -54,6 +64,9 @@ SAME = 5e-3
 EXPLAINED = 2e-2
 # Bodies with more triangles than this are not read.
 MAX_TRIANGLES = 200_000
+# Feet: a body whose volume is rvt-rs's once Revit's repeated triangles count once is `doubled` only
+# where every vertex of each lies within this of the other's surface, since a volume says nothing of shape.
+FAR = 1e-2
 # Shells are paired by the middle of their boxes: within this many feet, and this fraction of the
 # shell's own bounding box diagonal.
 PAIR_FEET = 0.05
@@ -101,6 +114,21 @@ def signed_volume(points, ids):
     centre = p.reshape(-1, 3).mean(axis=0)
     a, b, c = p[:, 0] - centre, p[:, 1] - centre, p[:, 2] - centre
     return abs(float(np.einsum("ij,ij->i", a, np.cross(b, c)).sum()) / 6.0)
+
+
+def distinct(ids):
+    """(the triangles of `ids` without those that repeat an earlier one, how many were dropped). A
+    triangle repeats another when it has the same vertices in the same cyclic order."""
+    seen = set()
+    keep = []
+    for t, (a, b, c) in enumerate(ids):
+        a, b, c = int(a), int(b), int(c)
+        key = (a, b, c) if a <= b and a <= c else (b, c, a) if b <= a and b <= c else (c, a, b)
+        if key in seen:
+            continue
+        seen.add(key)
+        keep.append(t)
+    return ids[keep], len(ids) - len(keep)
 
 
 def caps(points, ids):
@@ -236,18 +264,21 @@ def inscribed_ratio(circle, normal, cap_ours_area, theirs):
 
 
 def read_shell(ours_points, ours_ids, ref_points, ref_ids):
-    """('equal' | 'explained' | 'other', volume ratio, area ratio or None, reason) of a pair of shells."""
+    """('equal' | 'doubled' | 'explained' | 'other', volume ratio, area ratio or None, reason,
+    triangles of Revit's shell that repeat another) of a pair of shells. The volume ratio is
+    taken over Revit's distinct triangles."""
+    ref_ids, repeated = distinct(ref_ids)
     v_ours, v_ref = signed_volume(ours_points, ours_ids), signed_volume(ref_points, ref_ids)
     ratio = v_ours / v_ref if v_ref > 0 else float("inf")
     if abs(ratio - 1.0) <= SAME:
-        return "equal", ratio, None, ""
+        return ("doubled" if repeated else "equal"), ratio, None, "", repeated
     circles = []
     for cap in caps(ours_points, ours_ids):
         found = circle_of(cap)
         if found is not None:
             circles.append((found, cap))
     if not circles:
-        return "other", ratio, None, "no round end face in rvt-rs's shell"
+        return "other", ratio, None, "no round end face in rvt-rs's shell", repeated
     theirs = caps(ref_points, ref_ids)
     ratios = []
     for circle, cap in circles:
@@ -258,24 +289,38 @@ def read_shell(ours_points, ours_ids, ref_points, ref_ids):
                 best = got
                 break
         if best is None:
-            return "other", ratio, None, "a round end face of rvt-rs's has no inscribed polygon in Revit's"
+            return "other", ratio, None, "a round end face of rvt-rs's has no inscribed polygon in Revit's", repeated
         ratios.append(best)
     mean = float(np.mean(ratios))
     if max(ratios) - min(ratios) > AREA * mean:
-        return "other", ratio, mean, "the end faces' area ratios disagree"
+        return "other", ratio, mean, "the end faces' area ratios disagree", repeated
     if abs(ratio - mean) > EXPLAINED * mean:
-        return "other", ratio, mean, "the volume ratio is not the end faces' area ratio"
-    return "explained", ratio, mean, ""
+        return "other", ratio, mean, "the volume ratio is not the end faces' area ratio", repeated
+    return "explained", ratio, mean, "", repeated
 
 
-def read_body(ours_triangles, ref_triangles):
+def read_body(ours_triangles, ref_triangles, far=None):
     """The reading of one body: a dict of 'shells' (a list of (kind, volume ratio, area ratio,
-    reason)), 'unpaired_ours' and 'unpaired_ref' (shells with no partner in the other file),
-    or {'unread': why} for a body too large to read."""
+    reason, repeated triangles)), 'unpaired_ours' and 'unpaired_ref' (shells with no partner in
+    the other file), or {'unread': why} for a body too large to read. `far` is the farthest vertex
+    of either body from the other's surface, in feet, when known: a `doubled` reading asks it to be
+    within FAR. A body of Revit's with repeated triangles whose whole volume, over its distinct
+    triangles, is rvt-rs's is read as one `doubled` shell, whether or not the shells pair up
+    (rvt-rs's mesh can join two shells that Revit's export keeps apart)."""
     if len(ours_triangles) > MAX_TRIANGLES or len(ref_triangles) > MAX_TRIANGLES:
         return {"unread": "more than %d triangles" % MAX_TRIANGLES}
     ours_points, ours_ids = vertex_ids(ours_triangles)
     ref_points, ref_ids = vertex_ids(ref_triangles)
+    whole_ids, repeated_total = distinct(ref_ids)
+    if repeated_total:
+        v_ours, v_ref = signed_volume(ours_points, ours_ids), signed_volume(ref_points, whole_ids)
+        whole = v_ours / v_ref if v_ref > 0 else float("inf")
+        if abs(whole - 1.0) <= SAME and (far is None or far <= FAR):
+            return {
+                "shells": [("doubled", whole, None, "", repeated_total)],
+                "unpaired_ours": 0,
+                "unpaired_ref": 0,
+            }
 
     def describe(points, ids):
         used = points[np.unique(ids)]
@@ -311,13 +356,23 @@ def read_body(ours_triangles, ref_triangles):
             unpaired_ref += 1
             continue
         free.discard(best)
-        result.append(read_shell(ours_points, ours_shells[best]["ids"], ref_points, theirs["ids"]))
+        reading = read_shell(ours_points, ours_shells[best]["ids"], ref_points, theirs["ids"])
+        if reading[0] == "doubled" and far is not None and far > FAR:
+            reading = (
+                "other",
+                reading[1],
+                None,
+                "equal once repeated faces count once, but a vertex lies %.4f ft from the other's surface" % far,
+                reading[4],
+            )
+        result.append(reading)
     return {"shells": result, "unpaired_ours": len(free), "unpaired_ref": unpaired_ref}
 
 
 def verdict(reading):
-    """'equal' (every shell equal), 'explained' (every shell equal or explained, at least one
-    explained) or 'other' (a shell differs for another reason or has no partner), or 'unread'."""
+    """'equal' (every shell equal), 'doubled' (every shell equal, doubled or explained, at least one
+    doubled), 'explained' (every shell equal or explained, at least one explained), 'other' (a
+    shell differs for another reason or has no partner) or 'unread'."""
     if "unread" in reading:
         return "unread"
     if reading["unpaired_ours"] or reading["unpaired_ref"]:
@@ -325,4 +380,6 @@ def verdict(reading):
     kinds = {kind for kind, *_ in reading["shells"]}
     if "other" in kinds:
         return "other"
+    if "doubled" in kinds:
+        return "doubled"
     return "explained" if "explained" in kinds else "equal"

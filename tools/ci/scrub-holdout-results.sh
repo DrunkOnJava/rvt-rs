@@ -84,7 +84,7 @@
 # family, type or element), with the `fine` rows the two body scorers print under
 # RVT_SCORER_FINE_MESH (RE-331: the same), the last column those two print when the
 # fine tessellation decides some bodies and the line that counts them (RE-331
-# section 8, #1365: the same), the one `round sections:` line mesh_bodies_vs_ifc.py
+# section 8, #1365: the same), the one `shell readings:` line mesh_bodies_vs_ifc.py
 # prints (#1658: how many volume outliers it read and how they come out, as numbers
 # beside fixed words, never a Tag or a type), the counts of the IFC4 schema's findings on
 # the export (`schema validate:` and `schema rules:` lines, #1430: a number, and
@@ -230,7 +230,7 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       [ -f "$f" ] || continue
       grep -E "^(saved_graphics_mesh bodies scored: [0-9]+; in Revit's export [0-9]+|Ifc[A-Za-z0-9]+: [0-9]+ bodies, every [0-9]+th scored|Ifc[A-Za-z0-9]+ +[0-9]+( +[0-9]+){5} +([0-9]+\.[0-9]+|nan|-)( +[0-9]+)?|decided by the fine tessellation \(both files write true curves\): [0-9]+ of [0-9]+ bodies)$" "$f" | sed 's/^/mesh bodies: /' || true
       grep -E "^(fine tessellation: IfcOpenShell mesher-linear-deflection [0-9.e-]+ m \(1e-5 ft\) and mesher-angular-deflection [0-9.]+ rad, both files; [0-9]+ of [0-9]+ bodies meshed in both, [0-9]+ of them meshed differently|fine (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){8}  ([0-9]+\.[0-9]+|nan|inf) [0-9]+\.[0-9]+|fine change (Ifc[A-Za-z0-9]+|total) +[0-9]+( +[0-9]+){9}|fine bodies that miss 'ref on ours': [0-9]+)$" "$f" | sed 's/^/mesh bodies: /' || true
-      grep -E "^round sections: [0-9]+ volume outliers with every vertex within 0\.01 ft, read shell by shell: [0-9]+ explained by inscribed end faces, [0-9]+ another reason, [0-9]+ unread$" "$f" | sed 's/^/mesh bodies: /' || true
+      grep -E "^shell readings: [0-9]+ volume outliers read shell by shell: [0-9]+ explained by inscribed end faces, [0-9]+ explained by faces Revit's export holds twice, [0-9]+ another reason, [0-9]+ unread$" "$f" | sed 's/^/mesh bodies: /' || true
     done
     for f in "$dir"box_bodies_vs_ifc.txt; do
       [ -f "$f" ] || continue
