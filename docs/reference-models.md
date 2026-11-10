@@ -50,7 +50,7 @@ Who can fetch it is one of four words:
 | magnetar Einhoven, Revit 2023 | Einhoven | redistributable | `tools/fetch-reference-models.sh`; no Revit export of it |
 | IFC-ECS RE1 Architecture, Mechanical, Plumbing and Electrical, Revit 2025 | RE1 | redistributable | `tools/fetch-reference-models.sh`; with Revit 26.2's IFC2X3 exports; scored in every Measure run and in CI |
 | the synthetic fixtures of `corpus/tier1/` | corpus/tier1 | redistributable | committed to this repository (Apache-2.0); no Revit export |
-| VTT's BIM4LCA example buildings (a housing and an office, timber and concrete), Revit 2024 | BIM4LCA | fetched by Measure | `-f nordic=true`, [`research/bim4lca-measure.tsv`](../research/bim4lca-measure.tsv); CC BY-SA 4.0; Measure scores the concrete office as built and at building permit and the two terrain offices, each with Revit's IFC export |
+| VTT's BIM4LCA example buildings (a housing and an office, timber and concrete), Revit 2024 | BIM4LCA, BIM4LCA office, BIM4LCA housing | fetched by Measure | `-f nordic=true`, [`research/bim4lca-measure.tsv`](../research/bim4lca-measure.tsv); CC BY-SA 4.0; Measure scores the office in concrete and in timber, and the housing in concrete and in timber, each as built and at building permit, and the four terrain files at building permit, each with Revit's IFC export (the housing is a second project; the timber office is a structural variant of the concrete one) |
 | puzzbobb's 24 Revit 2025 models | puzzbobb, R2025 | fetched by Measure | `-f r2025=true`, [`research/r2025-models.tsv`](../research/r2025-models.tsv); Apache-2.0; with Revit's IFC4 export of each |
 | Autodesk's sample projects of Revit 2015 to 2027 (`rac_basic`, `rst_basic`, `rac_advanced`, `rme_basic`, `rme_advanced`, `rst_advanced`) | rac_basic, rst_basic, rac_advanced, rme_basic, rme_advanced, rst_advanced, rac_basic_sample_project, rac_advanced_sample_project, sample projects | fetched by Measure | `-f samples=true`, [`research/autodesk-sample-projects.tsv`](../research/autodesk-sample-projects.tsv); no Revit export of them in a run, except the IFC2X3 export of `rac_advanced` 2015 to 2020 that `-f racadv=true` fetches from the three.js repository |
 | Autodesk's family corpus (phi-ag/rvt, 12 releases of `rac_basic_sample_family`) | family corpus | fetched by Measure | `-f families=true`; CC BY-NC-SA 3.0; no Revit export of it |
@@ -197,12 +197,24 @@ against [`research/bim4lca-models.tsv`](../research/bim4lca-models.tsv):
 six `.rvt` models (the small terrain office, concrete, among them) and
 Revit's IFC export of one. Locally, point
 `RVT_NORDIC_LCA_DIR` at a folder holding them
-([`corpus/tier2/README.md`](../corpus/tier2/README.md)). Measure scores the
-concrete office, as built and at building permit, and the small terrain
-offices (concrete and timber, at building permit), against Revit's exports of
-each with `-f nordic=true`
+([`corpus/tier2/README.md`](../corpus/tier2/README.md)). Measure scores
+the buildings against Revit's exports of each with `-f nordic=true`
 ([`research/bim4lca-measure.tsv`](../research/bim4lca-measure.tsv), #763,
-#1262).
+#1262, #1636): the concrete office, as built and at building permit, since
+#763; its small terrain variants, since #1262; and, since #1636, the timber
+office (as built and at building permit), the housing in concrete and in
+timber (as built and at building permit) and the two small housing terrain
+files. Each of the eight large models has a shard of its own, and a shard
+fetches and caches only its own pair (about 180 to 200 MB for the largest).
+
+The housing is a second project, a different design from the office, and the
+timber office is a structural variant of the concrete office (a further state
+of one project, as built and at building permit are). All of them are
+development reference models, scored like the others against W4, W6 and W7
+(#1636): none is a W5 candidate, since tier-two tests read their `.rvt` files
+and the columns' cut bodies were fixed against them (RE-178). Which one-project
+rules the housing exercises, and whether they hold there, is
+[#1636](https://github.com/DrunkOnJava/rvt-rs/issues/1636)'s measurement.
 
 ## Revit 2025 models made for one feature each, fetched for a run
 
