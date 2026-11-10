@@ -289,7 +289,9 @@ impl Walker<'_, '_> {
                 hidden: self.hidden_depth > 0,
                 filtered: self.filtered_depth > 0,
             }),
-            "GElement" | "GGroup" | "GFilter" => {
+            // A `GGTag` is a group of one `GPoint`, a point with a test point for
+            // selecting it: walked as a group, its point is no surface (RE-400).
+            "GElement" | "GGroup" | "GFilter" | "GGTag" => {
                 let children = self.children(index)?;
                 if obj.class_name == "GFilter" {
                     if children.is_empty() {
