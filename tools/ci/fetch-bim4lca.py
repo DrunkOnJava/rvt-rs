@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fetch the BIM4LCA models CI reads, by byte range from VTT's ARCH.zip (#766).
 
-Usage: fetch-bim4lca.py <pins.tsv> <target_dir>
+Usage: fetch-bim4lca.py <pins.tsv> <target_dir> [<file name>...]
        fetch-bim4lca.py --pin <pins.tsv> <entry>...
 
 The pins (research/bim4lca-models.tsv) give the archive's URL and byte count,
@@ -12,7 +12,10 @@ and every byte is still checked against the pins. Only those entries are read: t
 gives each one's offset, and range requests fetch it, so a run downloads the
 models and not the 1.58 GB archive. Each file lands in target_dir under its
 own name and is checked against its pins; one already there with the right
-hash is kept. `--pin` prints the pin rows of the named entries instead.
+hash is kept. With file names after the target, only those pinned files are
+read (a name no pin has is as stale as a changed hash: exit 1), so a job that
+measures one model does not fetch the others. `--pin` prints the pin rows of
+the named entries instead.
 
 Files already in target_dir with their pinned hash are checked first and the
 host is asked only for the others, so a run whose cache holds every file never
@@ -199,6 +202,12 @@ def main(argv: list[str]) -> int:
         # restore leaves the run independent of the archive's server.
         target = Path(argv[1])
         target.mkdir(parents=True, exist_ok=True)
+        wanted = set(argv[2:])
+        if wanted:
+            unpinned = wanted - {Path(name).name for name, _, _ in pinned}
+            if unpinned:
+                raise Stale(f"{', '.join(sorted(unpinned))} is not a file the pins name")
+            pinned = [row for row in pinned if Path(row[0]).name in wanted]
         missing = []
         for name, sha, size in pinned:
             out = target / Path(name).name

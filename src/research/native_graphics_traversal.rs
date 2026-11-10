@@ -275,7 +275,10 @@ impl Walker<'_, '_> {
         // GGroup native child traversal admits visibility0/2;1/3 are skipped
         // outside special draw mode7. The default export uses normal mode.
         if let Some(flags) = obj.fields["m_GInfo"]["m_flags"].as_u64() {
-            if !self.include_hidden && matches!(graphics_visibility(flags), 1 | 3) {
+            if !self.include_hidden
+                && matches!(graphics_visibility(flags), 1 | 3)
+                && !drawn_hidden_instance(&obj.class_name, &obj.fields)
+            {
                 self.result.excluded_visibility_branches += 1;
                 return Ok(());
             }
@@ -289,7 +292,9 @@ impl Walker<'_, '_> {
                 hidden: self.hidden_depth > 0,
                 filtered: self.filtered_depth > 0,
             }),
-            "GElement" | "GGroup" | "GFilter" => {
+            // A `GGTag` is a group of one `GPoint`, a point with a test point for
+            // selecting it: walked as a group, its point is no surface (RE-401).
+            "GElement" | "GGroup" | "GFilter" | "GGTag" => {
                 let children = self.children(index)?;
                 if obj.class_name == "GFilter" {
                     if children.is_empty() {
@@ -450,7 +455,9 @@ impl Walker<'_, '_> {
                 if obj.fields["m_resolveSymInView"].as_bool() != Some(false) {
                     return Err("view-resolved instance is unsupported".into());
                 }
-                if obj.fields["m_forbiddenTarget"]["m_targets"].as_u64() != Some(0) {
+                if obj.fields["m_forbiddenTarget"]["m_targets"].as_u64() != Some(0)
+                    && !drawn_hidden_instance(&obj.class_name, &obj.fields)
+                {
                     return Err("instance target restrictions are unsupported".into());
                 }
                 let info = self.target(index, &obj.fields["m_instanceInfo"])?;
@@ -499,8 +506,12 @@ impl Walker<'_, '_> {
                     self.visit(embedded, multiply(matrix, transform), path);
                 }
             }
+            // A flip control is a grip drawn in a view: an origin, a base and a
+            // length, and no pointer, so no surface (RE-303, RE-397).
             "GLine" | "GArc" | "GEllipse" | "GCurve" | "GNurbSpline" | "GPolyLine"
-            | "GPolyline" | "GPoint" => self.result.excluded_non_surface_branches += 1,
+            | "GPolyline" | "GPoint" | "GBiFlipControl" => {
+                self.result.excluded_non_surface_branches += 1
+            }
             other => return Err(format!("unsupported reachable graphics class {other}")),
         }
         Ok(())
@@ -597,6 +608,24 @@ fn rotation(m: &GraphicsTransform) -> bool {
         - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
         + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
     orthonormal && (determinant - 1.0).abs() <= tolerance
+}
+/// The `m_forbiddenTarget.m_targets` of the only restricted instance measured
+/// (RE-397).
+const DRAWN_HIDDEN_INSTANCE_TARGETS: u64 = 53246;
+/// Whether `fields` are those of a `GInstance` flagged hidden in the normal draw
+/// (visibility 1) and forbidden the targets `DRAWN_HIDDEN_INSTANCE_TARGETS`,
+/// which Revit's export draws all the same: the 221 of them in the BIM4LCA
+/// office's 41 railings hold the parts a railing's body has beyond its visible
+/// instance's, and with them the 10 `KAI-4` railings' symbols add up to
+/// Revit's body within 0.2% where the visible instance alone is 0.4 of it.
+/// Every other hidden instance stays skipped and every other target mask stays
+/// refused: no other pair is measured.
+fn drawn_hidden_instance(class_name: &str, fields: &Value) -> bool {
+    class_name == "GInstance"
+        && fields["m_GInfo"]["m_flags"]
+            .as_u64()
+            .is_some_and(|flags| graphics_visibility(flags) == 1)
+        && fields["m_forbiddenTarget"]["m_targets"].as_u64() == Some(DRAWN_HIDDEN_INSTANCE_TARGETS)
 }
 fn graphics_visibility(flags: u64) -> u8 {
     let bits = flags & 0x1e0;
