@@ -114,7 +114,9 @@ when a release ships.
 - RE numbers (`reports/element-framing/RE-NN-*.md`, `probe_reNN_*`) are given out
   as findings land. When two open pull requests claim the same number, the
   later one is renumbered, and the maintainer names the new number on the pull
-  request. A very large pull request is reviewed against measurements, labelled
+  request; the PII guard job fails a pull request whose new report takes an id
+  that main, or an earlier open pull request, already has
+  (`tools/ci/re-id-reuse.py`). A very large pull request is reviewed against measurements, labelled
   `needs-split`, and the parts that hold up are merged as their own pull
   requests.
 - Every measured claim in a pull request links the run or command that
