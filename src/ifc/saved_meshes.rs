@@ -57,7 +57,7 @@ use super::export_content::{
     SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY,
     WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
-use super::mesh_volume::{all_faces_flat, closed_mesh_volume};
+use super::mesh_volume::{all_faces_flat, box_plan_width, closed_mesh_volume};
 use super::mesh_wall_quantities::{WallMeshQuantities, wall_mesh_quantities};
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
 use crate::native_wall_cuts::WallCutKind;
@@ -304,6 +304,8 @@ pub fn attach_scoped_with_control(
     let mut volumes: Vec<(usize, f64)> = Vec::new();
     // RE-388: what the mesh of each wall gives of its quantities.
     let mut wall_quantities: Vec<(usize, WallMeshQuantities)> = Vec::new();
+    // RE-396: the width of each curtain panel drawn from a mesh that is a vertical box.
+    let mut plate_widths: Vec<(usize, f64)> = Vec::new();
     // Each element is taken as it is meshed and its decoded graphs freed with
     // its batch of shared symbols, rather than all held until the last one is
     // meshed (#1075).
@@ -339,6 +341,7 @@ pub fn attach_scoped_with_control(
                 return Ok(());
             }
             let IfcEntity::BuildingElement {
+                ifc_type,
                 location_feet: Some(origin),
                 rotation_radians,
                 solid_shape,
@@ -355,6 +358,9 @@ pub fn attach_scoped_with_control(
             let volume = all_faces_flat(primitives)
                 .then(|| closed_mesh_volume(&vertices, &triangles))
                 .flatten();
+            let plate_width = volume
+                .filter(|_| ifc_type.eq_ignore_ascii_case("IFCPLATE"))
+                .and_then(|volume| box_plan_width(&vertices, &triangles, volume));
             report.replaced += 1;
             report.triangles += triangles.len();
             *solid_shape = Some(SolidShape::TriangulatedFaceSet {
@@ -363,6 +369,9 @@ pub fn attach_scoped_with_control(
             });
             if let Some(volume) = volume {
                 volumes.push((*index, volume));
+            }
+            if let Some(width) = plate_width {
+                plate_widths.push((*index, width));
             }
             for property in &mut set.properties {
                 if property.name == "BodySource" {
@@ -389,6 +398,7 @@ pub fn attach_scoped_with_control(
     )?;
     add_mesh_volumes(model, &volumes);
     add_wall_quantities(model, &wall_quantities);
+    add_plate_widths(model, &plate_widths);
     Ok(report)
 }
 
@@ -514,6 +524,38 @@ fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities
             add("GrossSideArea", PropertyValue::AreaSquareFeet(gross));
             if let Some(width) = width {
                 add("GrossVolume", PropertyValue::VolumeCubicFeet(width * gross));
+            }
+        }
+    }
+}
+
+/// Give each curtain panel of `widths` (an index into the entities and the
+/// longer horizontal side, feet, of the box its body was drawn from a mesh as)
+/// the `Width` of its `Qto_PlateBaseQuantities`, where that holds none
+/// (RE-396). Revit's export writes it on the panels it draws as a box and on no
+/// other, and `add_mesh_volumes` has made the set by now for each of these.
+fn add_plate_widths(model: &mut IfcModel, widths: &[(usize, f64)]) {
+    if widths.is_empty() {
+        return;
+    }
+    let mut held: BTreeMap<usize, usize> = BTreeMap::new();
+    for (position, entity) in model.entities.iter().enumerate() {
+        if let IfcEntity::ElementPropertySet { element, set } = entity {
+            if set.name == "Qto_PlateBaseQuantities" {
+                held.entry(*element).or_insert(position);
+            }
+        }
+    }
+    for &(index, width) in widths {
+        let Some(&position) = held.get(&index) else {
+            continue;
+        };
+        if let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position) {
+            if !has_property(set, "Width") {
+                set.properties.push(Property {
+                    name: "Width".into(),
+                    value: PropertyValue::LengthFeet(width),
+                });
             }
         }
     }

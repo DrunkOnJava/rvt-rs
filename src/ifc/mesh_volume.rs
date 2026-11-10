@@ -100,6 +100,41 @@ pub(super) fn closed_mesh_volume(vertices: &[[f64; 3]], triangles: &[BrepTriangl
     (volume.is_finite() && volume > 0.0).then_some(volume)
 }
 
+/// How close, relative, the volume of a mesh must be to the product of the
+/// extents of its box for the mesh to be that box.
+const BOX_TOLERANCE: f64 = 1e-4;
+
+/// The `Width` Revit's export writes for a curtain panel drawn as a vertical
+/// box (RE-396): the longer of its two horizontal extents. `vertices` are in
+/// the element's own frame, feet, `volume` is the closed volume of `triangles`
+/// over them; none where the mesh is not a box (its volume is not the product
+/// of the extents of the corners the triangles use, which Revit's export gives
+/// no `Width`) or the box is not upright (its smallest extent is not
+/// horizontal).
+pub(super) fn box_plan_width(
+    vertices: &[[f64; 3]],
+    triangles: &[BrepTriangle],
+    volume: f64,
+) -> Option<f64> {
+    let mut low = [f64::INFINITY; 3];
+    let mut high = [f64::NEG_INFINITY; 3];
+    for BrepTriangle(a, b, c) in triangles {
+        for index in [a, b, c] {
+            let point = vertices.get(*index as usize)?;
+            for ((lo, hi), coordinate) in low.iter_mut().zip(high.iter_mut()).zip(point) {
+                *lo = lo.min(*coordinate);
+                *hi = hi.max(*coordinate);
+            }
+        }
+    }
+    let [dx, dy, dz] = [high[0] - low[0], high[1] - low[1], high[2] - low[2]];
+    if !(dx.is_finite() && dy.is_finite() && dz.is_finite() && dx > 0.0 && dy > 0.0 && dz > 0.0) {
+        return None;
+    }
+    let is_box = (dx * dy * dz - volume).abs() <= BOX_TOLERANCE * volume;
+    (is_box && dx.min(dy) < dz).then_some(dx.max(dy))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -237,5 +272,60 @@ mod tests {
         assert!(!all_faces_flat(&[face(vec![up, up, [0.0, 0.1, 0.995]])]));
         assert!(!all_faces_flat(&[face(vec![up; 4]), face(Vec::new())]));
         assert!(!all_faces_flat(&[]));
+    }
+
+    /// The twelve triangles of a box with corner (x0, y0, z0) and sides dx, dy, dz.
+    fn box_mesh(origin: [f64; 3], size: [f64; 3]) -> (Vec<[f64; 3]>, Vec<BrepTriangle>) {
+        let (mut vertices, triangles) = cube();
+        for vertex in &mut vertices {
+            for (coordinate, (start, extent)) in vertex.iter_mut().zip(origin.iter().zip(&size)) {
+                *coordinate = start + *coordinate * extent;
+            }
+        }
+        (vertices, triangles)
+    }
+
+    #[test]
+    fn a_vertical_box_has_its_longer_horizontal_side_for_width() {
+        let (vertices, triangles) = box_mesh([10.0, 20.0, 5.0], [0.082, 4.9, 7.9]);
+        let volume = closed_mesh_volume(&vertices, &triangles).unwrap();
+        let width = box_plan_width(&vertices, &triangles, volume).unwrap();
+        assert!((width - 4.9).abs() < 1e-9, "{width}");
+        let (vertices, triangles) = box_mesh([0.0, 0.0, 0.0], [7.9, 0.082, 4.9]);
+        let volume = closed_mesh_volume(&vertices, &triangles).unwrap();
+        let width = box_plan_width(&vertices, &triangles, volume).unwrap();
+        assert!((width - 7.9).abs() < 1e-9, "{width}");
+    }
+
+    #[test]
+    fn a_flat_box_has_no_width() {
+        let (vertices, triangles) = box_mesh([0.0, 0.0, 0.0], [4.9, 7.9, 0.082]);
+        let volume = closed_mesh_volume(&vertices, &triangles).unwrap();
+        assert_eq!(box_plan_width(&vertices, &triangles, volume), None);
+    }
+
+    #[test]
+    fn a_mesh_that_is_not_a_box_has_no_width() {
+        // One top corner of a vertical box pulled in: a closed mesh about 1% short of its box.
+        let (mut vertices, triangles) = box_mesh([0.0, 0.0, 0.0], [0.082, 4.9, 7.9]);
+        vertices[6] = [0.082, 4.9 - 0.4, 7.9];
+        let volume = closed_mesh_volume(&vertices, &triangles).unwrap();
+        assert_eq!(box_plan_width(&vertices, &triangles, volume), None);
+    }
+
+    #[test]
+    fn a_point_no_triangle_uses_is_not_part_of_the_box() {
+        let (mut vertices, triangles) = box_mesh([0.0, 0.0, 0.0], [0.082, 4.9, 7.9]);
+        let volume = closed_mesh_volume(&vertices, &triangles).unwrap();
+        vertices.push([500.0, 500.0, 500.0]);
+        let width = box_plan_width(&vertices, &triangles, volume).unwrap();
+        assert!((width - 4.9).abs() < 1e-9, "{width}");
+    }
+
+    #[test]
+    fn a_triangle_that_points_outside_the_vertices_has_no_width() {
+        let (vertices, mut triangles) = box_mesh([0.0, 0.0, 0.0], [0.082, 4.9, 7.9]);
+        triangles.push(BrepTriangle(0, 1, 99));
+        assert_eq!(box_plan_width(&vertices, &triangles, 1.0), None);
     }
 }

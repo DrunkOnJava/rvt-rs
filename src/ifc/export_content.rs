@@ -3273,9 +3273,10 @@ fn add_door_window_quantities(
 /// export draws as that extrusion. A joined column's Length is left out:
 /// Revit's export draws 18 of the BIM4LCA office's at permit as a cut mesh
 /// and gives them none, and no field tells them from the others. None where
-/// another solid draws it. A curtain panel's `Width`, its box's larger side
-/// wherever Revit writes it, is left out too: Revit's export writes none on
-/// 3 of the office's panels that no field tells apart.
+/// another solid draws it. A curtain panel's `Width` is not written here: the
+/// saved-mesh pass gives it where the panel's mesh is a vertical box
+/// (`mesh_volume::box_plan_width`, RE-396), which is what
+/// tells the 3 of the office's panels Revit's export gives none from the rest.
 fn add_body_quantities(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
