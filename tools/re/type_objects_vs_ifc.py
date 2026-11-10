@@ -81,9 +81,10 @@ def main():
         for field, e, g in zip(fields, expected, got[1:]):
             if e == g or (field == "entity" and entity_agrees(e, g)):
                 agree[field] += 1
-            elif g is None:
-                # A value Revit writes that rvt-rs leaves out is not a wrong one
-                # (#1594: a plate type's Tag, which no record gives).
+            elif field == "tag" and g is None:
+                # A Tag Revit writes that rvt-rs leaves out is not a wrong one
+                # (#1594: a plate type's Tag, which no record gives). Any other
+                # field left out is a disagreement.
                 left_out[(field, occurrence)] += 1
             else:
                 wrong[(field, occurrence)] += 1
@@ -119,8 +120,9 @@ def main():
         if tag in type_names and name.split(":", 1)[-1] == type_names[tag]
     )
     print(f"TypeName carried: {carried} of {exported}; equal to Revit's type: {same}")
-    # A type object with no Tag is counted by its GlobalId, so the count is of objects.
-    types = {t.Tag or t.GlobalId for t in ours_file.by_type("IfcTypeObject")}
+    # By GlobalId, so the count is of objects whether or not one has a Tag (an
+    # IfcPlateType has none, #1594) and several can share a type's ElementId.
+    types = {t.GlobalId for t in ours_file.by_type("IfcTypeObject")}
     print(f"type objects in ours: {len(types)}")
 
 
