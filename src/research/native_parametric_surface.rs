@@ -111,6 +111,16 @@ pub enum Curve {
         radius: f64,
         range: [f64; 2],
     },
+    /// `center + x_len cos t x + y_len sin t y`: Revit's `GEllipse`, seen as
+    /// the meridian of a revolved dome (a pendant light's shade).
+    Ellipse {
+        center: Point,
+        x: Point,
+        y: Point,
+        x_len: f64,
+        y_len: f64,
+        range: [f64; 2],
+    },
 }
 
 impl Curve {
@@ -153,10 +163,35 @@ impl Curve {
                     range: range(&o.fields["m_endParams"], "arc range")?,
                 })
             }
+            "GEllipse" => {
+                let x = p(&o.fields["m_xVec"], "ellipse x basis")?;
+                let y = p(&o.fields["m_yVec"], "ellipse y basis")?;
+                let x_len = o.fields["m_xLen"].as_f64().context("ellipse x length")?;
+                let y_len = o.fields["m_yLen"].as_f64().context("ellipse y length")?;
+                ensure!(
+                    x_len.is_finite()
+                        && y_len.is_finite()
+                        && x_len > 0.
+                        && y_len > 0.
+                        && (len(x) - 1.).abs() <= 1e-6
+                        && (len(y) - 1.).abs() <= 1e-6
+                        && dot(x, y).abs() <= 1e-6,
+                    "invalid ellipse basis"
+                );
+                Ok(Self::Ellipse {
+                    center: p(&o.fields["m_center"], "ellipse center")?,
+                    x,
+                    y,
+                    x_len,
+                    y_len,
+                    range: range(&o.fields["m_endParams"], "ellipse range")?,
+                })
+            }
             name => bail!("unsupported parametric profile curve {name}"),
         }
     }
-    fn eval(&self, t: f64) -> Point {
+    /// The point at `t`.
+    pub(crate) fn eval(&self, t: f64) -> Point {
         match self {
             Self::Line {
                 origin, direction, ..
@@ -171,6 +206,25 @@ impl Curve {
                 *center,
                 mul(add(mul(*x, t.cos()), mul(*y, t.sin())), *radius),
             ),
+            Self::Ellipse {
+                center,
+                x,
+                y,
+                x_len,
+                y_len,
+                ..
+            } => add(
+                *center,
+                add(mul(*x, x_len * t.cos()), mul(*y, y_len * t.sin())),
+            ),
+        }
+    }
+    /// The parameter range.
+    pub fn range(&self) -> [f64; 2] {
+        match self {
+            Self::Line { range, .. } | Self::Arc { range, .. } | Self::Ellipse { range, .. } => {
+                *range
+            }
         }
     }
     fn derivative(&self, t: f64) -> Point {
@@ -179,6 +233,9 @@ impl Curve {
             Self::Arc { x, y, radius, .. } => {
                 mul(add(mul(*x, -t.sin()), mul(*y, t.cos())), *radius)
             }
+            Self::Ellipse {
+                x, y, x_len, y_len, ..
+            } => add(mul(*x, -x_len * t.sin()), mul(*y, y_len * t.cos())),
         }
     }
 }
@@ -457,7 +514,5 @@ impl ParametricSurface {
 }
 
 fn c_range(c: &Curve) -> [f64; 2] {
-    match c {
-        Curve::Line { range, .. } | Curve::Arc { range, .. } => *range,
-    }
+    c.range()
 }
