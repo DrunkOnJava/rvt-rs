@@ -7,7 +7,9 @@
   saved meshes (their bounding boxes within 0.01 ft of Revit's export's), as are
   2 on each of the four Revit 2025 stair models and 1 on RE1 Architecture; the
   four stairs, which aggregate their railings, go from 2.6 to 3.0 times Revit's
-  volume to Revit's (the stair volume RE-390 disclosed). 224 bodies on 19 of
+  volume to Revit's (the stair volume RE-390 disclosed). Two of the office's railings, the `KAI-3`, are 19.5% over
+  Revit's volume, all of it in their posts, which the saved graphics draw round
+  where Revit's export draws a rectangular prism; the cause is not found. 224 bodies on 19 of
   Autodesk's samples change from a record box in the same way, with no Revit
   export to score them. 26 railings of the office keep their boxes: the 22 stair
   railings, and 4 whose faces the parametric reader refuses.
