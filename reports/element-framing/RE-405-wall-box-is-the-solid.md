@@ -3,8 +3,8 @@
 **Date:** 2026-11-10
 **Issues:** #1636 (the second-project measurement), #1046 (base quantities Revit computes from its joined geometry, W7), #1016 (quantities); follows RE-266 and RE-293 (a wall's `Height`), RE-270 (its areas and volumes from its box), RE-292 (its footprint), RE-388 (the same from its saved mesh) and RE-402 (the first reading of these rules on the BIM4LCA housing and timber office)
 **Artefacts:** the BIM4LCA housing, concrete as built (Revit 2024; Revit 24.0.5's IFC4 export, CC BY-SA 4.0, as Measure fetches it), and rvt-rs's export of it by `main` at `237d6ef6`, which Measure [42906770416](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42906770416) kept (`keep_ifc`); the other BIM4LCA files, the Revit 2025 models and the samples through Measure's census
-**Runs:** Measure 42906770416 for section 2; [42910794770](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42910794770) (the first form of this change) and the unfiltered run of the change as it stands for section 4
-**Status:** In progress: section 2 is read from the one pair that was kept, and the first form of the change is measured (section 4); the change as it stands adds what that run missed and is running.
+**Runs:** Measure 42906770416 for section 2; [42910794770](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42910794770) (the first form of this change), [42912595607](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42912595607) (the layered walls' footprint alone) and [42915153052](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42915153052) (the change as it stands) for section 4
+**Status:** Positive, measured against the pre-registered row on #1636 (comment 6780710066): every wall `Height`, `NetVolume` and area that differed from Revit's on the eight BIM4LCA files is equal or missing, and no wall that Revit writes a quantity for loses an equal `Height` or `NetVolume`; it misses in three small ways, which section 4 lists.
 
 ## 1. What RE-402 left open
 
@@ -37,26 +37,30 @@ On the four large housing files RE-402 found the wall rules of RE-266, RE-270, R
 
 ## 4. Measured
 
-The first form of the change (the box against the mesh and the `Height`, not the layers) was measured by the unfiltered run 42910794770 (head `aadee99a` against `main` at `237d6ef6`: 126 models on each side, 47 exports move). Each cell is `equal / different / missing` for the wall quantity's census line, before and after:
+**The change as it stands** (unfiltered Measure 42915153052, head `199a1182` against `main` at `5dd1277d`, 126 models on each side; the same-project gates pass on the head): 48 exports move and 78 are byte-identical. The 9 BIM4LCA files that move are the four large housing files, the timber housing's terrain file (it gains its 2 missing `Height`s) and the four office files; the others are 11 Revit 2025 models, RE1 Architecture, Core Interior, 2 held-out models and 24 of Autodesk's samples that no Revit export scores. Each cell is `equal / different / missing` of the wall quantity's census line, with the values rvt-rs writes that Revit's export omits in brackets, before and after:
 
-| file | `Height` | `NetVolume` |
-|---|---|---|
-| housing, concrete as built | 198 / 3 / 156 to 225 / 0 / 132 | 313 / 9 / 47 to 322 / 0 / 47 |
-| housing, concrete at permit | 179 / 22 / 135 to 194 / 0 / 142 | 285 / 16 / 44 to 301 / 0 / 44 |
-| housing, timber as built | 85 / 2 / 267 to 225 / 0 / 129 | 312 / 20 / 35 to 330 / 2 / 35 |
-| housing, timber at permit | 81 / 0 / 261 to 218 / 0 / 124 | 312 / 4 / 39 to 316 / 0 / 39 |
-| office as built | 132 / 0 / 447 to 306 / 0 / 273 | unchanged |
-| office at permit | 130 / 0 / 435 to 313 / 0 / 252 | unchanged |
-| timber office as built | 103 / 1 / 490 to 310 / 0 / 284 | 546 / 1 / 64 to 547 / 0 / 64 |
-| timber office at permit | 82 / 1 / 487 to 297 / 0 / 273 | 514 / 1 / 71 to 515 / 0 / 71 |
+| file | `Height` | `NetVolume` | `GrossSideArea` | `GrossFootprintArea` |
+|---|---|---|---|---|
+| housing, concrete as built | 198 / 3 / 156 (+1) to 225 / 0 / 132 (+2) | 313 / 9 / 47 to 322 / 0 / 47 | 221 / 5 / 131 to 218 / 0 / 139 | 88 / 6 / 110 (+36) to 88 / 0 / 116 (+0) |
+| housing, concrete at permit | 179 / 22 / 135 to 194 / 0 / 142 | 285 / 16 / 44 to 301 / 0 / 44 | 217 / 14 / 105 to 228 / 0 / 108 | 90 / 6 / 106 (+2) to 90 / 3 / 109 (+0) |
+| housing, timber as built | 85 / 2 / 267 (+2) to 225 / 0 / 129 (+2) | 312 / 20 / 35 to 329 / 0 / 38 | 222 / 15 / 117 (+2) to 224 / 0 / 130 (+0) | 18 / 5 / 96 (+20) to 18 / 0 / 101 (+0) |
+| housing, timber at permit | 81 / 0 / 261 (+2) to 218 / 0 / 124 (+2) | 312 / 4 / 39 to 315 / 0 / 40 | 220 / 2 / 120 (+1) to 220 / 0 / 122 (+0) | 11 / 1 / 100 (+10) to 11 / 0 / 101 (+0) |
+| office as built | 132 / 0 / 447 to 306 / 0 / 273 | unchanged | unchanged | unchanged |
+| office at permit | 130 / 0 / 435 to 313 / 0 / 252 | unchanged | unchanged | unchanged |
+| timber office as built | 103 / 1 / 490 to 310 / 0 / 284 | 546 / 1 / 64 to 547 / 0 / 64 | 309 / 1 / 284 to 309 / 0 / 285 | 5 / 0 / 75 (+6) to 5 / 0 / 75 (+0) |
+| timber office at permit | 82 / 1 / 487 to 297 / 0 / 273 | 514 / 1 / 71 to 515 / 0 / 71 | 302 / 1 / 267 to 302 / 0 / 268 | 5 / 0 / 70 (+7) to 5 / 0 / 70 (+0) |
 
-Every `Height` that differed is gone on every file, the office's and the Revit 2025 models' included (each of the 24 gains its missing heights, none differs), and no wall that Revit's export writes a `Height` for loses an equal one. Where it missed the pre-registered bar (#1636, comment 6780710066):
+`NetSideArea` and `GrossVolume` move like `GrossSideArea`. Of the 50 census lines of the 48 exports that moved, none gains a different value, none loses an equal one but two (below), and none gains a value Revit omits but one (below). The 11 Revit 2025 models that move gain 1 to 6 of their missing `Height`s each, all equal. The concrete office's volumes and areas do not move: its walls' boxes are their solids.
 
-- **Timber housing as built.** 2 `NetVolume` and 3 each of `GrossSideArea`, `NetSideArea` and `GrossVolume` still differ: layered walls whose saved mesh is not whole, so that nothing says their box is not the solid (1347022 and 1347012 among them).
-- **`GrossFootprintArea`.** The 6 that differed on each of the concrete files and the 5 on the timber one are gone, and so are 10 equal ones on the concrete at permit: walls whose box is cut in height and not in plan, which the footprint rule above now keeps.
-- **One more value Revit omits.** 1 more `Height` on the concrete as built, on the tag 2168763 that Revit writes as an `IfcCovering` and rvt-rs as a wall, which already carries four.
+**Where it misses:**
 
-The unfiltered run of the change as it stands against `main` is dispatched from `main`; its readings go here when it finishes.
+- **Three equal values fall on the concrete as built.** `GrossSideArea` and `GrossVolume` go from 221 to 218 and from 219 to 216 equal: the 3 layered walls whose volume was wrong. Their box is not the solid, and their mesh has more than four vertical faces, so it gives the volume (now equal) and no area.
+- **One more value Revit omits.** `Height` on the concrete as built, on the tag 2168763 that Revit writes as an `IfcCovering` and rvt-rs as a wall, which already carries five values Revit omits; the other `Height`s Revit omits (the wall 1391852 on the concrete as built, 2 on each of the two timber housing files) are on walls whose export holds only a volume, a width and a length, and are the same before.
+- **3 footprints still differ on the concrete at permit** (6 before): walls cut in height whose plan also differs, whose footprint the rule keeps as the cut in height says it may.
+
+**The first form** (unfiltered Measure 42910794770, head `aadee99a`, against `main` at `237d6ef6`) lacked the layered walls and dropped a footprint wherever the box's volume differed. Every `Height` that differed was gone on every file and no equal `Height` fell, as now, and it missed the row in two ways: the timber housing as built kept 2 `NetVolume` and 3 each of `GrossSideArea`, `NetSideArea` and `GrossVolume` that differ (layered walls whose mesh is not whole, 1347022 and 1347012 among them), and the concrete at permit lost 10 equal footprints. The footprint of a wall cut in height is kept because of the second, and layered walls take no box quantities because of the first.
+
+**The layered walls' footprint alone** (RE-406's form of the change, unfiltered Measure 42912595607, against `main` at `237d6ef6`): the values rvt-rs writes that Revit omits on `GrossFootprintArea` go from 36, 2, 20, 10, 6 and 7 on the six files that have them to 0, 0, 2, 1, 0 and 0, with no equal value lost and 102 of 126 exports byte-identical; the 3 that stay on the two timber housing files (2 and 1) are gone in the change as it stands.
 
 ## 5. Not shown
 
