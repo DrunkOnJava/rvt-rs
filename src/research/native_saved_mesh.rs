@@ -1399,7 +1399,7 @@ pub fn graphics_with_resolver_at_detail<'a>(
 /// representation there (`native_graphics_traversal`). Every other reader of
 /// this module refuses all three, and so does this one on any other release's
 /// graphics, which the caller decides by the file's release (a set
-/// `m_bHasScale` with the identity matrix is walked on every route, RE-414). A research
+/// `m_bHasScale` with a rotation matrix is walked on every route, RE-414). A research
 /// route: `include_hidden` and `include_filtered` are as in
 /// [`graphics_including_hidden`] and [`graphics_including_filtered`].
 pub fn graphics_pre2023<'a>(

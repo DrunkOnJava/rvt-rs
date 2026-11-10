@@ -53,8 +53,9 @@ pub struct GraphicsSelection {
 /// [`select_graphics_pre2023_at_detail`] refuse an `InstanceInfo` with no
 /// `m_GRepId`, as they did before RE-342 (#1436 let every route read it as the
 /// default representation; RE-342 section 9.8 narrowed that to the pre-2023
-/// entry point), and a set `m_bHasScale` unless the instance's 3x3 matrix is
-/// the identity (RE-414). This is research API, outside the semver promise.
+/// entry point). Every entry point refuses a set `m_bHasScale` unless the
+/// instance's 3x3 matrix is a rotation (RE-414). This is research API, outside
+/// the semver promise.
 pub fn select_graphics(graph: &ObjectGraph) -> GraphicsSelection {
     select_graphics_with_resolver(graph, &|_| None)
 }
@@ -77,12 +78,9 @@ pub fn select_graphics_with_resolver_at_detail<'a>(
 /// [`select_graphics_with_resolver_at_detail`] for the graphics of a file of
 /// Revit 2015 to 2022, which no export reads: an `InstanceInfo` with no
 /// `m_GRepId` (exactly `m_Trf`, `m_symbolId` and `m_cda`) is read there as the
-/// default representation, and a set `m_bHasScale` on such an `InstanceInfo`
-/// with a rotation matrix is walked through (RE-342). Every other entry point
-/// refuses both, whatever the schema of the `InstanceInfo` (a set
-/// `m_bHasScale` with the identity matrix is walked on every route, RE-414),
-/// and the caller decides by the file's release which one to call.
-/// `include_hidden` and
+/// default representation (RE-342). Every other entry point refuses it,
+/// whatever the schema of the `InstanceInfo`, and the caller decides by the
+/// file's release which one to call. `include_hidden` and
 /// `include_filtered` are as in
 /// [`select_graphics_including_hidden_at_detail`] and
 /// [`select_graphics_including_filtered_at_detail`].
@@ -198,8 +196,7 @@ struct Walker<'a, 'r> {
     include_filtered: bool,
     filtered_depth: usize,
     /// Whether the graphics are a file of Revit 2015 to 2022's, the only ones
-    /// an `InstanceInfo` with no `m_GRepId`, and a set `m_bHasScale` with a
-    /// rotation that is not the identity, are read in (RE-342).
+    /// an `InstanceInfo` with no `m_GRepId` is read in (RE-342).
     pre2023: bool,
 }
 impl Walker<'_, '_> {
@@ -449,9 +446,7 @@ impl Walker<'_, '_> {
             "GInstance" => {
                 let has_scale = obj.fields["m_bHasScale"].as_bool();
                 if has_scale != Some(false)
-                    && !(has_scale == Some(true)
-                        && (self.identity_instance(index, obj)
-                            || (self.pre2023 && self.unscaled_legacy_instance(index, obj))))
+                    && !(has_scale == Some(true) && self.rigid_instance(index, obj))
                 {
                     return Err("scaled instance mode is not qualified".into());
                 }
@@ -521,44 +516,19 @@ impl Walker<'_, '_> {
         Ok(())
     }
     /// Whether a `GInstance` whose `m_bHasScale` is set names an
-    /// `InstanceInfo` of the older schema (no `m_GRepId`, the three fields
-    /// `default_representation` accepts) whose 3x3 matrix is a rotation, the
-    /// identity included (RE-342). What the flag means on that schema is not
-    /// read, so only a matrix that scales, shears and mirrors nothing passes:
-    /// the flag with a mirror or a scale, and the flag with the later
-    /// `InstanceInfo`, whose `m_GRepId` is present, stay refused. Asked only
-    /// on the pre-2023 route (`Walker::pre2023`): every other walk refuses a
-    /// set flag before it gets here, whatever the schema of the
-    /// `InstanceInfo`.
-    fn unscaled_legacy_instance(
-        &self,
-        index: usize,
-        obj: &crate::native_parameters::GraphObject,
-    ) -> bool {
+    /// `InstanceInfo` whose 3x3 matrix is a rotation, the identity included
+    /// (RE-342 on the older schema, RE-414 on the current one). What the flag
+    /// means is not read, so only a matrix that scales, shears and mirrors
+    /// nothing passes: the flag with a mirror or a scale stays refused. The
+    /// checks of an unflagged instance (the representation, the symbol, the
+    /// targets) follow.
+    fn rigid_instance(&self, index: usize, obj: &crate::native_parameters::GraphObject) -> bool {
         let Ok(info) = self.target(index, &obj.fields["m_instanceInfo"]) else {
             return false;
         };
         let info = &self.graph.objects[info];
         info.class_name == "InstanceInfo"
-            && info.fields.get("m_GRepId").is_none()
-            && default_representation(&info.fields, self.pre2023)
             && read_transform(&info.fields["m_Trf"]).is_ok_and(|t| rotation(&t))
-    }
-    /// Whether a `GInstance` whose `m_bHasScale` is set names an
-    /// `InstanceInfo` whose 3x3 matrix is the identity (RE-414). What the flag
-    /// means is not read: the nested instances of the BIM4LCA showers carry it
-    /// with the identity and a translation, and drawn so they match Revit's
-    /// export, so only that matrix passes on every route. A rotation that is
-    /// not the identity, a mirror and a scale stay refused outside the
-    /// pre-2023 route ([`Self::unscaled_legacy_instance`]). The checks of an
-    /// unflagged instance (the representation, the symbol, the targets) follow.
-    fn identity_instance(&self, index: usize, obj: &crate::native_parameters::GraphObject) -> bool {
-        let Ok(info) = self.target(index, &obj.fields["m_instanceInfo"]) else {
-            return false;
-        };
-        let info = &self.graph.objects[info];
-        info.class_name == "InstanceInfo"
-            && read_transform(&info.fields["m_Trf"]).is_ok_and(|t| identity_matrix(&t))
     }
     fn only_curves(&self, index: usize, seen: &mut HashSet<usize>) -> bool {
         if seen.len() >= 128 || !seen.insert(index) {
@@ -661,12 +631,6 @@ fn drawn_visible_instance(class_name: &str, fields: &Value) -> bool {
             .as_u64()
             .is_some_and(|flags| graphics_visibility(flags) == 0)
         && fields["m_forbiddenTarget"]["m_targets"].as_u64() == Some(DRAWN_VISIBLE_INSTANCE_TARGETS)
-}
-/// Whether the 3x3 part of `m` is the identity, each entry within the tolerance
-/// [`rotation`] holds a rotation to.
-fn identity_matrix(m: &GraphicsTransform) -> bool {
-    let tolerance = crate::partition_instance_transforms::ROTATION_TOLERANCE;
-    (0..3).all(|a| (0..3).all(|b| (m[a][b] - f64::from(u8::from(a == b))).abs() <= tolerance))
 }
 fn graphics_visibility(flags: u64) -> u8 {
     let bits = flags & 0x1e0;
