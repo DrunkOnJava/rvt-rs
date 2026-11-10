@@ -220,14 +220,18 @@ def main(argv):
     # A mullion shorter than its section keeps its own count; one whose end
     # meets it, or a mullion left out, is left out as well.
     sources = set(cause) | short
+    first = dict(cause)
     for host, group in by_host.items():
         for m in group:
             if m["tag"] in cause or m["axis"] is None:
                 continue
+            kinds = set()
             for p, _ in end_points(m):
-                if any(o["tag"] in sources and o is not m and box_distance(o, p) < NEAR for o in group):
-                    cause[m["tag"]] = "an end meets one left out or shorter than its section"
-                    break
+                for o in group:
+                    if o["tag"] in sources and o is not m and box_distance(o, p) < NEAR:
+                        kinds.add(first.get(o["tag"], "shorter than its section"))
+            if kinds:
+                cause[m["tag"]] = "an end meets one left out or shorter than its section: " + " + ".join(sorted(kinds))
     print(f"IfcMembers: {len(ours.by_type('IfcMember'))}, boxes: {len(boxes)}, not read: {dict(skipped)}")
     print(f"in a curtain wall: {sum(len(g) for g in by_host.values())}, hosts: {len(by_host)}")
     print(f"shorter than their section (kept unless an end meets one left out): {len(short)}")
@@ -276,7 +280,8 @@ def main(argv):
                 if m["tag"] in found:
                     predicted = sum(0 if hidden(f) else 1 for f in found[m["tag"]])
                     right = abs(perimeter * span + predicted * area - nsa) <= max(1e-5 * abs(nsa), 1e-6)
-                    left_out[(cause[m["tag"]], "its count would be right" if right else "its count would be wrong")] += 1
+                    own = "own span under 0.15 m" if span < 0.15 else ("own span 0.15 to 0.3 m" if span < 0.3 else "own span 0.3 m or more")
+                    left_out[(cause[m["tag"]] + " | " + own, "its count would be right" if right else "its count would be wrong")] += 1
     print("predicted ends, ends implied by Revit's NetSurfaceArea (- not a whole 0 to 2): mullions")
     for (a, b), n in sorted(confusion.items(), key=lambda kv: (str(kv[0][0]), str(kv[0][1]))):
         print(f"  {a} {b}: {n}")
