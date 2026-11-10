@@ -58,6 +58,7 @@ use super::export_content::{
     WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use super::mesh_volume::{all_faces_flat, closed_mesh_volume};
+use super::mesh_wall_quantities::{WallMeshQuantities, wall_mesh_quantities};
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
 use crate::native_wall_cuts::WallCutKind;
 use std::collections::{BTreeMap, BTreeSet};
@@ -252,6 +253,30 @@ pub fn attach_scoped_with_control(
         report.candidates += 1;
         by_id.entry(id).or_default().push(index);
     }
+    // RE-388: the walls whose quantities their saved mesh gives, whether or not
+    // the wall's own body is drawn from it.
+    let mut walls: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
+    for (index, entity) in model.entities.iter().enumerate() {
+        if wholes.contains(&index) {
+            continue;
+        }
+        let IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid: Some(tag),
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        if !matches!(ifc_type.as_str(), "IFCWALL" | "IFCWALLSTANDARDCASE")
+            || !scope.includes(ifc_type)
+        {
+            continue;
+        }
+        if let Ok(id) = tag.parse::<u64>() {
+            walls.entry(id).or_default().push(index);
+        }
+    }
     let hosts = match embed_hosts(rf, model, &by_id) {
         Ok(hosts) => hosts,
         Err(error) => {
@@ -260,13 +285,14 @@ pub fn attach_scoped_with_control(
         }
     };
     report.embed_hosts = hosts.len();
-    if by_id.is_empty() && hosts.is_empty() {
+    if by_id.is_empty() && hosts.is_empty() && walls.is_empty() {
         return Ok(report);
     }
     let options = crate::native_document::Options {
         selected_ids: by_id
             .keys()
             .chain(hosts.keys())
+            .chain(walls.keys())
             .copied()
             .collect::<BTreeSet<_>>(),
         max_graph_values: 1_000_000,
@@ -276,6 +302,8 @@ pub fn attach_scoped_with_control(
     };
     // RE-387: the volume of each body drawn from a mesh of flat faces.
     let mut volumes: Vec<(usize, f64)> = Vec::new();
+    // RE-388: what the mesh of each wall gives of its quantities.
+    let mut wall_quantities: Vec<(usize, WallMeshQuantities)> = Vec::new();
     // Each element is taken as it is meshed and its decoded graphs freed with
     // its batch of shared symbols, rather than all held until the last one is
     // meshed (#1075).
@@ -285,6 +313,11 @@ pub fn attach_scoped_with_control(
         3,
         control,
         |element| {
+            if let Some([index]) = walls.get(&element.identity.element_id).map(Vec::as_slice) {
+                if let Some(found) = wall_mesh_quantities(&element.meshes.primitives) {
+                    wall_quantities.push((*index, found));
+                }
+            }
             if let Some(&index) = hosts.get(&element.identity.element_id) {
                 raise_embed_host(model, index, &element.meshes, &mut report);
                 return Ok(());
@@ -355,6 +388,7 @@ pub fn attach_scoped_with_control(
         },
     )?;
     add_mesh_volumes(model, &volumes);
+    add_wall_quantities(model, &wall_quantities);
     Ok(report)
 }
 
@@ -417,6 +451,69 @@ fn add_mesh_volumes(model: &mut IfcModel, volumes: &[(usize, f64)]) {
                         properties: names.iter().map(|&name| volume_property(name)).collect(),
                     },
                 });
+            }
+        }
+    }
+}
+
+/// Give each wall of `found` (an index into the entities and what the mesh
+/// Revit saved for it gives) the quantities Revit's export writes from its
+/// solid, in the base quantity set it holds, where that holds none of them
+/// (RE-388): `NetVolume`, and of a wall with no more than four vertical faces
+/// `NetSideArea` and, where its two sides agree on it, `GrossSideArea` and, the
+/// wall type's `Width` times it, `GrossVolume`
+/// (revit-ifc's `PropertyUtil.CreateWallBaseQuantities`, CLEANROOM.md source 5,
+/// RE-270). A wall with no base quantity set, as a wall Revit's export writes
+/// none for may be, gets none.
+fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities)]) {
+    if found.is_empty() {
+        return;
+    }
+    let mut held: BTreeMap<usize, usize> = BTreeMap::new();
+    for (position, entity) in model.entities.iter().enumerate() {
+        if let IfcEntity::ElementPropertySet { element, set } = entity {
+            if set.name == "Qto_WallBaseQuantities" {
+                held.entry(*element).or_insert(position);
+            }
+        }
+    }
+    for (index, quantities) in found {
+        let Some(&position) = held.get(index) else {
+            continue;
+        };
+        let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
+        else {
+            continue;
+        };
+        let width = set
+            .properties
+            .iter()
+            .find_map(|property| match &property.value {
+                PropertyValue::PositiveLengthFeet(width) if property.name == "Width" => {
+                    Some(*width)
+                }
+                _ => None,
+            });
+        let mut add = |name: &str, value: PropertyValue| {
+            if !has_property(set, name) {
+                set.properties.push(Property {
+                    name: name.into(),
+                    value,
+                });
+            }
+        };
+        add(
+            "NetVolume",
+            PropertyValue::VolumeCubicFeet(quantities.net_volume),
+        );
+        let Some(sides) = quantities.sides else {
+            continue;
+        };
+        add("NetSideArea", PropertyValue::AreaSquareFeet(sides.net));
+        if let Some(gross) = sides.gross {
+            add("GrossSideArea", PropertyValue::AreaSquareFeet(gross));
+            if let Some(width) = width {
+                add("GrossVolume", PropertyValue::VolumeCubicFeet(width * gross));
             }
         }
     }

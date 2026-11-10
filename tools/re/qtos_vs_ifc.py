@@ -88,6 +88,11 @@ TWO_LENGTHS_TOLERANCE_M = 1e-4 * 0.3048
 # pair; a wall whose type rvt-rs picks wrong is not confirmed and stays
 # scored.
 WALL_WIDTH = ("Qto_WallBaseQuantities", "Width")
+# The quantities rvt-rs takes from a wall's saved body or its type's Width
+# (RE-388). On a wall the two exports give different types and the record
+# confirms rvt-rs's, they follow the saved state, not the export's, like Width.
+WALL_SET = "Qto_WallBaseQuantities"
+WALL_FROM_BODY = ("NetVolume", "GrossVolume", "NetSideArea", "GrossSideArea")
 
 REVIT_DEFECTS = {
     ("Qto_MemberBaseQuantities", "CrossSectionArea"): "MULLION",
@@ -394,6 +399,7 @@ def main(argv):
     apart = collections.Counter()
     against_one = collections.defaultdict(lambda: [0, 0, 0])
     other_types = 0
+    other_types_body = 0
     unconfirmed_types = 0
     for (key, qset, name), value in sorted(theirs.items()):
         if key not in our_objects:
@@ -431,14 +437,18 @@ def main(argv):
             if abs(as_feet - outline) <= 1e-4 * max(abs(as_feet), abs(outline)):
                 defects[(qset, name)] += 1
                 continue
-        if (qset, name) == WALL_WIDTH:
+        if (qset, name) == WALL_WIDTH or (qset in WALL_SET and name in WALL_FROM_BODY):
             mine = ours.get((key, qset, name))
             ours_type, theirs_type = our_types.get(key), their_types.get(key)
             if mine is not None and not same(mine, value) and ours_type and theirs_type and ours_type != theirs_type:
                 if key in confirmed:
-                    other_types += 1
+                    if (qset, name) == WALL_WIDTH:
+                        other_types += 1
+                    else:
+                        other_types_body += 1
                     continue
-                unconfirmed_types += 1
+                if (qset, name) == WALL_WIDTH:
+                    unconfirmed_types += 1
         row = rows[(qset, name)]
         row[0] += 1
         mine = ours.get((key, qset, name))
@@ -493,6 +503,7 @@ def main(argv):
         f"neither: {curve_checks['neither']}{'' if trust_curves else ' (none counted apart)'}"
     )
     print(f"walls the two exports give different types, their differing Width counted apart (RE-253): {other_types}")
+    print(f"walls the two exports give different types, their other differing wall quantities counted apart (RE-253, RE-388): {other_types_body}")
     print(f"walls the two exports give different types whose record does not confirm rvt-rs's, their Width scored (RE-253): {unconfirmed_types}")
     if our_own or their_own:
         print(f"quantities with their own unit, not scored: rvt-rs {our_own}, Revit {their_own}")
