@@ -309,8 +309,8 @@ pub fn attach_scoped_with_control(
     let mut wall_quantities: Vec<(usize, WallMeshQuantities)> = Vec::new();
     // RE-396: the width of each curtain panel drawn from a mesh that is a vertical box.
     let mut plate_widths: Vec<(usize, f64)> = Vec::new();
-    // RE-409: the extents along X and Z of each door's and window's mesh.
-    let mut filler_extents: Vec<(usize, f64, f64)> = Vec::new();
+    // RE-409: the height of each door's mesh.
+    let mut door_heights: Vec<(usize, f64)> = Vec::new();
     // Each element is taken as it is meshed and its decoded graphs freed with
     // its batch of shared symbols, rather than all held until the last one is
     // meshed (#1075).
@@ -366,10 +366,10 @@ pub fn attach_scoped_with_control(
             let plate_width = volume
                 .filter(|_| ifc_type.eq_ignore_ascii_case("IFCPLATE"))
                 .and_then(|volume| box_plan_width(&vertices, &triangles, volume));
-            let filler_extent = (ifc_type.eq_ignore_ascii_case("IFCDOOR")
-                || ifc_type.eq_ignore_ascii_case("IFCWINDOW"))
-            .then(|| local_extents(&vertices))
-            .flatten();
+            let door_height = ifc_type
+                .eq_ignore_ascii_case("IFCDOOR")
+                .then(|| mesh_height(&vertices))
+                .flatten();
             report.replaced += 1;
             report.triangles += triangles.len();
             *solid_shape = Some(SolidShape::TriangulatedFaceSet {
@@ -379,8 +379,8 @@ pub fn attach_scoped_with_control(
             if let Some(volume) = volume {
                 volumes.push((*index, volume));
             }
-            if let Some((width, height)) = filler_extent {
-                filler_extents.push((*index, width, height));
+            if let Some(height) = door_height {
+                door_heights.push((*index, height));
             }
             if let Some(width) = plate_width {
                 plate_widths.push((*index, width));
@@ -411,7 +411,7 @@ pub fn attach_scoped_with_control(
     add_mesh_volumes(model, &volumes);
     add_wall_quantities(model, &wall_quantities);
     add_plate_widths(model, &plate_widths);
-    add_filler_sizes(model, &filler_extents);
+    add_door_heights(model, &door_heights);
     Ok(report)
 }
 
@@ -542,33 +542,52 @@ fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities
     }
 }
 
-/// The extents of `vertices` along X and along Z, feet, where they have some.
-fn local_extents(vertices: &[[f64; 3]]) -> Option<(f64, f64)> {
-    let low = vertices.iter().fold([f64::INFINITY; 3], |low, v| {
-        [low[0].min(v[0]), low[1].min(v[1]), low[2].min(v[2])]
-    });
-    let high = vertices.iter().fold([f64::NEG_INFINITY; 3], |high, v| {
-        [high[0].max(v[0]), high[1].max(v[1]), high[2].max(v[2])]
-    });
-    let (width, height) = (high[0] - low[0], high[2] - low[2]);
-    (width.is_finite() && height.is_finite() && width > 0.0 && height > 0.0)
-        .then_some((width, height))
+/// How far, feet, a door's mesh may differ in height from the size it has and
+/// still be the door's height (RE-409): on the BIM4LCA timber office at permit
+/// the 65 doors whose written height is wrong are 0.049 or 0.148 ft too high, and
+/// the doors whose written height is Revit's that the mesh does not have are
+/// hatches, 1.6 ft or more off.
+const DOOR_HEIGHT_REACH_FEET: f64 = 0.2;
+
+/// The extent of `vertices` along Z, feet, where it is some.
+fn mesh_height(vertices: &[[f64; 3]]) -> Option<f64> {
+    let low = vertices.iter().map(|v| v[2]).fold(f64::INFINITY, f64::min);
+    let high = vertices
+        .iter()
+        .map(|v| v[2])
+        .fold(f64::NEG_INFINITY, f64::max);
+    let height = high - low;
+    (height.is_finite() && height > 0.0).then_some(height)
 }
 
-/// Give each door and window of `extents` (an index into the entities and the
-/// extents, feet, of the mesh its body was drawn from along its own X and Z) those
-/// as its `OverallWidth` and `OverallHeight`, where the size it has was not read
-/// from the outline its symbol cuts (RE-409). revit-ifc sizes a door or window from
-/// its symbol (`FamilyInstanceExporter.GetDoorWindowDimensionFromSymbol`, CLEANROOM.md
-/// source 5): where the symbol cuts an outline that is what RE-215 reads, and where it
-/// does not, the sizes the opening, the record box or the type give (RE-93, RE-187,
-/// #810) are Revit's on 47 of the 64 windows of the BIM4LCA housing as built, and the
-/// extents of the body on 60. Nothing is given a size it has none of.
-fn add_filler_sizes(model: &mut IfcModel, extents: &[(usize, f64, f64)]) {
-    for &(index, width, height) in extents {
+/// Give each door of `heights` (an index into the entities and the height, feet,
+/// of the mesh its body was drawn from) that as its `OverallHeight`, where it is
+/// hosted by a wall, the size it has was not read from the outline its symbol cuts
+/// and the two are within [`DOOR_HEIGHT_REACH_FEET`] (RE-409). revit-ifc sizes a
+/// door or window from its symbol, along Z where a wall hosts it
+/// (`FamilyInstanceExporter.GetDoorWindowDimensionFromSymbol`, CLEANROOM.md source
+/// 5), and the mesh's height is Revit's on the 65 doors of the BIM4LCA timber
+/// office at permit whose size the opening or the type gives 15 or 45 mm too high.
+/// A width stays as it is (the mesh's X is not always the door's width), and a
+/// door with no size is given none.
+fn add_door_heights(model: &mut IfcModel, heights: &[(usize, f64)]) {
+    for &(index, height) in heights {
+        let on_wall = match model.entities.get(index) {
+            Some(IfcEntity::BuildingElement {
+                host_element_index: Some(host),
+                ..
+            }) => matches!(
+                model.entities.get(*host),
+                Some(IfcEntity::BuildingElement { ifc_type, .. })
+                    if matches!(ifc_type.as_str(), "IFCWALL" | "IFCWALLSTANDARDCASE")
+            ),
+            _ => false,
+        };
+        if !on_wall {
+            continue;
+        }
         if let Some(size) = model.filler_sizes.get_mut(&index) {
-            if !size.cut_loop {
-                size.width_feet = width;
+            if !size.cut_loop && (size.height_feet - height).abs() <= DOOR_HEIGHT_REACH_FEET {
                 size.height_feet = height;
             }
         }
