@@ -868,6 +868,7 @@ fn solid_kind(shape: &SolidShape) -> &'static str {
     match shape {
         SolidShape::ExtrudedArea(_)
         | SolidShape::RevolvedArea { .. }
+        | SolidShape::PlacedRevolvedArea { .. }
         | SolidShape::PlacedExtrusion { .. } => "SweptSolid",
         SolidShape::SweptPath { .. } => "AdvancedSweptSolid",
         SolidShape::FacetedBrep { .. } => "Brep",
@@ -1627,6 +1628,92 @@ impl StepWriter<'_> {
                     ),
                 );
                 (solid_id, "SweptSolid")
+            }
+            SolidShape::PlacedRevolvedArea {
+                profile,
+                origin_feet,
+                axis_direction,
+                radial_direction,
+                angle_radians,
+            } => {
+                // IFC's profile and revolution axis share the Position XY
+                // plane. Local Y is the revolution axis; local X is radial.
+                let unit = |v: [f64; 3]| {
+                    let length = v.iter().map(|x| x * x).sum::<f64>().sqrt().max(1e-12);
+                    v.map(|x| x / length)
+                };
+                let y = unit(*axis_direction);
+                let x = unit(*radial_direction);
+                let z = unit([
+                    x[1] * y[2] - x[2] * y[1],
+                    x[2] * y[0] - x[0] * y[2],
+                    x[0] * y[1] - x[1] * y[0],
+                ]);
+                let x = [
+                    y[1] * z[2] - y[2] * z[1],
+                    y[2] * z[0] - y[0] * z[2],
+                    y[0] * z[1] - y[1] * z[0],
+                ];
+                let origin = self.id();
+                self.emit_entity(
+                    origin,
+                    format!(
+                        "IFCCARTESIANPOINT(({:.6},{:.6},{:.6}))",
+                        origin_feet[0] * 0.3048,
+                        origin_feet[1] * 0.3048,
+                        origin_feet[2] * 0.3048
+                    ),
+                );
+                let normal = self.id();
+                self.emit_entity(
+                    normal,
+                    format!("IFCDIRECTION(({:.15},{:.15},{:.15}))", z[0], z[1], z[2]),
+                );
+                let radial = self.id();
+                self.emit_entity(
+                    radial,
+                    format!("IFCDIRECTION(({:.15},{:.15},{:.15}))", x[0], x[1], x[2]),
+                );
+                let position = self.id();
+                self.emit_entity(
+                    position,
+                    format!("IFCAXIS2PLACEMENT3D(#{origin},#{normal},#{radial})"),
+                );
+                let local_origin = self.id();
+                self.emit_entity(local_origin, "IFCCARTESIANPOINT((0.,0.,0.))");
+                let local_axis = self.id();
+                self.emit_entity(local_axis, "IFCDIRECTION((0.,1.,0.))");
+                let axis = self.id();
+                self.emit_entity(
+                    axis,
+                    format!("IFCAXIS1PLACEMENT(#{local_origin},#{local_axis})"),
+                );
+                let profile_origin = self.id();
+                self.emit_entity(profile_origin, "IFCCARTESIANPOINT((0.,0.))");
+                let profile_position = self.id();
+                self.emit_entity(
+                    profile_position,
+                    format!("IFCAXIS2PLACEMENT2D(#{profile_origin},$)"),
+                );
+                let wrapped = Extrusion {
+                    width_feet: 0.0,
+                    depth_feet: 0.0,
+                    height_feet: 0.0,
+                    profile_override: Some(profile.clone()),
+                };
+                let profile = self.emit_profile_def(&wrapped, profile_position);
+                let id = self.id();
+                // Six decimals would turn 2*pi into an almost-closed solid.
+                let angle = if (angle_radians - std::f64::consts::TAU).abs() < 1e-10 {
+                    std::f64::consts::TAU
+                } else {
+                    *angle_radians
+                };
+                self.emit_entity(
+                    id,
+                    format!("IFCREVOLVEDAREASOLID(#{profile},#{position},#{axis},{angle:.15})"),
+                );
+                (id, "SweptSolid")
             }
             SolidShape::Compound(items) => {
                 // Nested in another solid, the items are one: their union.

@@ -5,7 +5,7 @@ import os
 from create_revit_fixtures import sha256
 
 
-def export_fixtures(uiapp, family_directory, output_directory):
+def export_fixtures(uiapp, family_directory, output_directory, names=None):
     import clr
     clr.AddReference("RevitAPI")
     from Autodesk.Revit import DB
@@ -25,7 +25,7 @@ def export_fixtures(uiapp, family_directory, output_directory):
             json.dump(report, stream, indent=2, sort_keys=True)
     save_report()
     try:
-        for name in ["REV-A", "REV-B", "REV-BT"]:
+        for name in (["REV-A", "REV-B", "REV-BT"] if names is None else names):
             doc = app.NewProjectDocument(DB.UnitSystem.Metric)
             try:
                 tx = DB.Transaction(doc, "Place synthetic reference family")

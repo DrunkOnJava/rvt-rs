@@ -1352,6 +1352,24 @@ pub fn solid_mesh(shape: &SolidShape) -> Option<Mesh> {
             axis_direction,
             angle_radians,
         } => revolved_mesh(profile, *axis_origin_feet, *axis_direction, *angle_radians),
+        SolidShape::PlacedRevolvedArea {
+            profile,
+            origin_feet,
+            axis_direction,
+            radial_direction,
+            angle_radians,
+        } => {
+            let y = unit(*axis_direction)?;
+            let z = unit(cross3(*radial_direction, y))?;
+            let x = cross3(y, z);
+            let mut mesh = revolved_mesh(profile, [0.0; 3], [0.0, 1.0, 0.0], *angle_radians)?;
+            for p in &mut mesh.vertices {
+                *p = std::array::from_fn(|i| {
+                    origin_feet[i] + x[i] * p[0] + y[i] * p[1] + z[i] * p[2]
+                });
+            }
+            Some(mesh)
+        }
         SolidShape::Compound(items) => {
             let mut meshes = items.iter().filter_map(solid_mesh);
             let mut mesh = meshes.next()?;

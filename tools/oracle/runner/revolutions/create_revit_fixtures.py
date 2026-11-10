@@ -15,7 +15,7 @@ import os
 from rectangular_fixtures import definitions
 
 
-def export_native_geometry(form, folder, name, DB):
+def export_native_geometry(form, folder, name, DB, level_of_detail=None):
     """Public API oracle only. Never used as on-disk decoder input."""
     options = DB.Options()
     options.DetailLevel = DB.ViewDetailLevel.Fine
@@ -29,7 +29,7 @@ def export_native_geometry(form, folder, name, DB):
                            centroid_m=[centroid.X*.3048, centroid.Y*.3048, centroid.Z*.3048],
                            faces=obj.Faces.Size))
         for face in obj.Faces:
-            mesh = face.Triangulate()
+            mesh = face.Triangulate() if level_of_detail is None else face.Triangulate(level_of_detail)
             for i in range(mesh.NumTriangles):
                 triangle = mesh.get_Triangle(i)
                 indices = []
@@ -50,7 +50,7 @@ def export_native_geometry(form, folder, name, DB):
     options.Dispose()
     return dict(source="Revit public API; independent oracle, not format evidence",
                 solids=solids, mesh_file=os.path.basename(path), mesh_sha256=sha256(path),
-                triangles=len(triangles))
+                triangles=len(triangles), level_of_detail=level_of_detail)
 
 
 def sha256(path):
@@ -61,7 +61,7 @@ def sha256(path):
     return digest.hexdigest()
 
 
-def create_fixtures(uiapp, template_path, output_directory):
+def create_fixtures(uiapp, template_path, output_directory, fixture_definitions=None):
     import clr
     clr.AddReference("RevitAPI")
     from Autodesk.Revit import DB
@@ -84,20 +84,25 @@ def create_fixtures(uiapp, template_path, output_directory):
             json.dump(receipt, stream, indent=2, sort_keys=True)
     write_receipt()
     try:
-        for f in definitions()["fixtures"]:
+        for f in (definitions() if fixture_definitions is None else fixture_definitions)["fixtures"]:
             doc = app.NewFamilyDocument(template_path)
             if doc is None:
                 raise RuntimeError("Revit did not create a family document")
             try:
-                transaction = DB.Transaction(doc, "Author rectangular revolution fixture")
+                transaction = DB.Transaction(doc, "Author synthetic revolution fixture")
                 transaction.Start()
                 try:
                     def point(values):
                         return DB.XYZ(*[v/304.8 for v in values])
-                    points = [point(p) for p in f["profile_points_mm"]]
                     curves = DB.CurveArray()
-                    for i in range(4):
-                        curves.Append(DB.Line.CreateBound(points[i], points[(i+1)%4]))
+                    if "profile_arcs_mm" in f:
+                        for arc in f["profile_arcs_mm"]:
+                            curves.Append(DB.Arc.Create(point(arc["start"]),
+                                point(arc["end"]), point(arc["midpoint"])))
+                    else:
+                        points = [point(p) for p in f["profile_points_mm"]]
+                        for i in range(4):
+                            curves.Append(DB.Line.CreateBound(points[i], points[(i+1)%4]))
                     loops = DB.CurveArrArray()
                     loops.Append(curves)
                     normal = DB.XYZ(*f["sketch_normal"])

@@ -2589,3 +2589,31 @@ Three authored Revit 2020 families establish the saved `RevolutionCurveData.m_ax
 ## Addendum — RE-395 a family type table's entries in a `Family` element's block are no type's value (2026-11-09)
 
 RE-354 reads a family type table's Fire Rating or Manufacturer entry as the value of the element whose value block holds it. A `Family` element's block holds the family's own type table: on Core Interior the `Family` `I_Single-Flush` (17235) holds `2HR`, `2HR` and `1HR`, while each of its five `FamilySymbol` types holds its own `2HR` in its own block. On seven files every element whose entries disagree is a `Family` (6 of 6), never a type, and a `Family` is not exported as a type object. rvt-rs now leaves a `Family`'s entries out, which removes the RE-354 warning from four files and changes no IFC. See `reports/element-framing/RE-395-family-type-table-owners.md`.
+
+## Addendum — Circular family revolutions (RE-392, #156, 2026-11-10)
+
+Three authored Revit 2020 files confirm GArc centre/radius/basis/limits in family
+coordinates for two-semicircle profiles. CurveElemDriver.m_pCrv selects the
+profile arc; the same record's arc-centre GLine is auxiliary. All three byte
+reconstructions pass independent native-face/projection and volume checks
+(maximum sampled gap 0.011423 mm). Native IFC results remain separate: the full
+torus passes, the partial reference differs, and the tilted reference times out.
+[RE-392](../reports/element-framing/RE-392-family-circular-revolutions.md).
+
+## Addendum — Shared line/arc reader (RE-393, #156, 2026-11-10)
+
+Extrusions and revolutions share driven sketch-curve selection and the existing
+GLine/GArc decoder. The bounded revolution reader returns a radial/axial
+profile, directed axis, angles and closed mesh. All six fixtures pass native
+comparisons and 22 refusal controls; all 30 decoded extrusions in the 14-file
+sample replay retain byte-identical probe results.
+[RE-393](../reports/element-framing/RE-393-shared-family-profile-reader.md).
+
+## Addendum — Analytic family revolution IFC (RE-394, #156, 2026-11-10)
+
+The default exporter writes a single visible positive standalone 2020 family
+revolution as an IfcRevolvedAreaSolid, preserving its line/arc profile, saved
+angular interval, axis and placement. All six fixture exports pass schema,
+topology, native geometry and default/fine OpenCascade import checks. The full
+torus is 9,051 bytes. Product typing, project instances and other releases gain
+no coverage. [RE-394](../reports/element-framing/RE-394-analytic-family-revolutions.md).
