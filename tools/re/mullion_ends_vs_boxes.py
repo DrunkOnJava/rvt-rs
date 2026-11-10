@@ -29,13 +29,13 @@ claimed, when an end is PERP_IN or OBLIQUE, when its axis is not known (no
 rvt-rs `Length` equal to a side of its box), or when an end meets, within
 NEAR, a mullion that is left out or overlapped (an end is PAR_SAME or PAR_IN:
 another mullion lies over it), unless it is overlapped itself. An overlapped
-mullion is read on its own where the mullion over it is of its own type, and a
-mullion shorter than its section is read like any other and leaves its
-neighbours alone (RE-400; RE-268 left out an overlapped mullion and the
-neighbours of a short one). A mullion with another of a different or unknown
-type over an end is left out: on the BIM4LCA timber office at permit the
-overlaps of one type were Revit's on 140 of 140 and those of another section
-on 0 of 20 (RE-403).
+mullion is read on its own, and a mullion shorter than its section is read like
+any other and leaves its neighbours alone (RE-400; RE-268 left out an
+overlapped mullion and the neighbours of a short one). A mullion with another
+over an end whose box has a section that most boxes of its type do not have
+(a box that is not its solid) is left out: on the BIM4LCA timber office at
+permit 16 of the 22 overlapped mullions that are wrong have one over an end,
+and 1 of the 148 that are right does (RE-403).
 
 It prints the boxes read, the mullions left out by cause, the confusion table
 of the count against the one Revit's NetSurfaceArea implies, and, for the
@@ -194,12 +194,35 @@ def labels(m, p, out, others):
     return found
 
 
-def over_other_type(m, p, out, group):
-    """Whether a mullion lies over the end at `p` that is not of `m`'s own, known, type (RE-403)."""
+def section_of(box):
+    """The two sides of a box across its mullion, in tenths of a millimetre, or None where its axis is not known."""
+    if box["axis"] is None:
+        return None
+    return tuple(sorted(round(2 * h / FEET_PER_METRE * 10000) for h in box["half"][1:]))
+
+
+def usual_sections(boxes):
+    """The section more than half of the boxes of each type have (RE-403)."""
+    counts = collections.defaultdict(collections.Counter)
+    for box in boxes:
+        section = section_of(box)
+        if box["type"] != "-" and section is not None:
+            counts[box["type"]][section] += 1
+    usual = {}
+    for kind, sections in counts.items():
+        section, most = sections.most_common(1)[0]
+        if 2 * most > sum(sections.values()):
+            usual[kind] = section
+    return usual
+
+
+def over_odd_box(m, p, out, group, usual):
+    """Whether a mullion lies over the end at `p` whose box has a section that most boxes of its type do not (RE-403)."""
     for o in group:
         if o is m or o["axis"] is None:
             continue
-        if set(OVERLAPPED) & labels(m, p, out, [o]) and not (m["type"] != "-" and m["type"] == o["type"]):
+        section = section_of(o)
+        if set(OVERLAPPED) & labels(m, p, out, [o]) and o["type"] in usual and section != usual[o["type"]]:
             return True
     return False
 
@@ -224,6 +247,7 @@ def main(argv):
     for box in boxes.values():
         if box["host"] is not None:
             by_host[box["host"]].append(box)
+    usual = usual_sections(box for group in by_host.values() for box in group)
 
     # Per mullion: its ends' labels, and why it is left out.
     cause = {}
@@ -241,8 +265,8 @@ def main(argv):
             if set(UNREAD) & seen:
                 cause[m["tag"]] = "an end is " + "/".join(sorted(set(UNREAD) & seen))
             elif set(OVERLAPPED) & seen:
-                if any(over_other_type(m, p, out, group) for p, out in ends):
-                    cause[m["tag"]] = "an end has a mullion of another type lying over it"
+                if any(over_odd_box(m, p, out, group, usual) for p, out in ends):
+                    cause[m["tag"]] = "an end has a mullion lying over it whose box is not its type's section"
                 else:
                     overlapped.add(m["tag"])
             if 2 * m["half"][0] < 2 * min(m["half"][1], m["half"][2]) - 1e-3:

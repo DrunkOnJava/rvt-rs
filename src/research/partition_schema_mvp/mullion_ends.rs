@@ -16,8 +16,9 @@
 //!   where the end only butts against it;
 //! - lying over it (the same way, its end at `p` and its body on the same
 //!   side, or its box holding `p` elsewhere): the end is overlapped, and the
-//!   mullion that lies over it counts for nothing at `p` (RE-400), when it is
-//!   of the mullion's own type, whose section is then the same (RE-403);
+//!   mullion that lies over it counts for nothing at `p` (RE-400), when its
+//!   box is its solid, which a box with a section that most boxes of its type
+//!   do not have is not (RE-403);
 //! - neither along nor across it (oblique): the end's join is not read.
 //!
 //! An end is hidden when it has a partner and nothing across covers `p`, or
@@ -25,12 +26,12 @@
 //! axis is not known, or one of whose ends has a mullion across it that holds
 //! `p` inside its box or one that is oblique to it, is left out. So is a mullion
 //! with an end that meets, within `NEAR_FEET`, a mullion that is left out or
-//! overlapped, unless it is overlapped itself, and a mullion with another of a
-//! different or unknown type lying over one of its ends: on the BIM4LCA timber
-//! office at permit the overlaps of one type are Revit's on 140 of 140 and
-//! those of another section on 0 of 20 (RE-403). A mullion shorter than its
-//! section is read like any other and is not a reason to leave its neighbours
-//! out (RE-400).
+//! overlapped, unless it is overlapped itself, and a mullion with another
+//! lying over one of its ends whose section is not the usual one of its type:
+//! on the BIM4LCA timber office at permit 16 of the 22 overlapped mullions
+//! that are wrong have such a mullion over an end, and 1 of the 148 that are
+//! right does (RE-403). A mullion shorter than its section is read like any
+//! other and is not a reason to leave its neighbours out (RE-400).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -58,6 +59,9 @@ pub struct MullionBox {
     pub axes: [[f64; 3]; 3],
     pub half: [f64; 3],
     pub along: Option<usize>,
+    /// Whether the box's section is not the one most boxes of its type have, so
+    /// that the box is not Revit's solid for it (RE-403).
+    pub odd: bool,
 }
 
 /// What lies at an end's point.
@@ -69,9 +73,8 @@ struct Neighbours {
     inside: bool,
     parallel_in: bool,
     oblique: bool,
-    /// A mullion lies over the end that is not of the mullion's own, known,
-    /// type (RE-403).
-    other_kind: bool,
+    /// A mullion lies over the end whose box is not its solid (RE-403).
+    unreliable: bool,
 }
 
 impl Neighbours {
@@ -89,11 +92,6 @@ impl Neighbours {
     fn hidden(&self) -> bool {
         self.partner != (self.centre || self.inside)
     }
-}
-
-/// Whether two mullions are of one type, which is then known.
-fn same_kind(a: &MullionBox, b: &MullionBox) -> bool {
-    a.kind != 0 && a.kind == b.kind
 }
 
 fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
@@ -129,6 +127,53 @@ fn end_points(b: &MullionBox, along: usize) -> [([f64; 3], [f64; 3]); 2] {
     [(at(-1.0), axis.map(|c| -c)), (at(1.0), axis)]
 }
 
+/// Tenths of a millimetre in a foot.
+const TENTH_MM_PER_FOOT: f64 = 3048.0;
+
+/// A box's two sides across the mullion, in tenths of a millimetre, the smaller
+/// first, or none where its axis is not known.
+fn section_of(b: &MullionBox) -> Option<(i64, i64)> {
+    let along = b.along.filter(|axis| *axis < 3)?;
+    let mut sides = (0..3)
+        .filter(|axis| *axis != along)
+        .map(|axis| (2.0 * b.half[axis] * TENTH_MM_PER_FOOT).round() as i64);
+    let (first, second) = (sides.next()?, sides.next()?);
+    Some((first.min(second), first.max(second)))
+}
+
+/// The section more than half of the boxes of each type have, in tenths of a
+/// millimetre, for the types that have one (RE-403): a type has one section, so
+/// a box with another is not its mullion's solid.
+pub fn usual_sections(boxes: &[&MullionBox]) -> BTreeMap<u64, (i64, i64)> {
+    let mut counts: BTreeMap<u64, BTreeMap<(i64, i64), usize>> = BTreeMap::new();
+    for b in boxes.iter().filter(|b| b.kind != 0) {
+        if let Some(section) = section_of(b) {
+            *counts
+                .entry(b.kind)
+                .or_default()
+                .entry(section)
+                .or_insert(0) += 1;
+        }
+    }
+    counts
+        .into_iter()
+        .filter_map(|(kind, sections)| {
+            let total: usize = sections.values().sum();
+            let (section, most) = sections.into_iter().max_by_key(|(_, count)| *count)?;
+            (2 * most > total).then_some((kind, section))
+        })
+        .collect()
+}
+
+/// Whether `b`'s section is not the usual one of its type in `usual`
+/// ([`usual_sections`]): a type with no usual section has no odd box.
+pub fn has_unusual_section(b: &MullionBox, usual: &BTreeMap<u64, (i64, i64)>) -> bool {
+    matches!(
+        (section_of(b), usual.get(&b.kind)),
+        (Some(section), Some(common)) if section != *common
+    )
+}
+
 fn neighbours(
     m: &MullionBox,
     along: usize,
@@ -159,12 +204,12 @@ fn neighbours(
                         found.partner = true;
                     } else {
                         found.same = true;
-                        found.other_kind |= !same_kind(m, o);
+                        found.unreliable |= o.odd;
                     }
                 }
                 None => {
                     found.parallel_in = true;
-                    found.other_kind |= !same_kind(m, o);
+                    found.unreliable |= o.odd;
                 }
             }
         } else if cosine < ACROSS {
@@ -204,7 +249,7 @@ pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
         if ends.iter().any(|end| end.unread()) {
             left_out.insert(m.id);
         } else if ends.iter().any(|end| end.overlapped()) {
-            if ends.iter().any(|end| end.other_kind) {
+            if ends.iter().any(|end| end.unreliable) {
                 left_out.insert(m.id);
             } else {
                 overlapped.insert(m.id);

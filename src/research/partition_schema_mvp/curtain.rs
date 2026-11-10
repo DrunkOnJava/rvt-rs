@@ -22,6 +22,7 @@ fn mullion_box(element: &DecodedElement, kind: u64) -> Option<MullionBox> {
         axes: MODEL_AXES,
         half: size.map(|side| side / 2.0),
         along: None,
+        odd: false,
     };
     if let Some(axes) = curtain_axes_from_fields(&element.fields) {
         return Some(match crate::ifc::export_content::oriented_box(axes, size) {
@@ -118,6 +119,10 @@ pub(super) fn attach_mullion_plain_hosts(rf: &mut RevitFile, products: &mut [Dec
         if let Some(mullion) = mullion_box(element, kind) {
             groups.entry(*host).or_default().push(mullion);
         }
+    }
+    let usual = usual_sections(&groups.values().flatten().collect::<Vec<_>>());
+    for mullion in groups.values_mut().flatten() {
+        mullion.odd = has_unusual_section(mullion, &usual);
     }
     let mut kept: BTreeMap<u32, u8> = BTreeMap::new();
     for group in groups.values() {
