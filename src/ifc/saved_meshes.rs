@@ -54,6 +54,8 @@ use super::IfcModel;
 use super::entities::{BrepTriangle, IfcEntity, Property, PropertySet, PropertyValue, SolidShape};
 use super::export_content::{
     BEAM_BOX_BODY_SOURCE, INSTANCE_TURNED_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE,
+    SAVED_MESH_ELEMENT_ID_SHARED, SAVED_MESH_NO_GRAPHICS, SAVED_MESH_NO_MESH,
+    SAVED_MESH_NO_TRIANGLES, SAVED_MESH_PARTIAL_PREFIX, SAVED_MESH_REFUSAL_PROPERTY,
     SLAB_SHAPE_REFUSAL_PROPERTY, SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY,
     WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
@@ -106,10 +108,63 @@ pub struct SavedMeshReport {
 /// BIM4LCA office 357 such meshes, none of them Revit's body. Only branches
 /// left out for their view semantics leave a mesh whole.
 fn is_partial(meshes: &GraphicsMeshes) -> bool {
-    meshes.diagnostics.iter().any(|diagnostic| {
-        !diagnostic.ends_with(crate::native_graphics_traversal::NESTED_DETAIL_FILTER_DIAGNOSTIC)
-            && !diagnostic.ends_with(crate::native_graphics_traversal::VIEW_COMPONENT_DIAGNOSTIC)
+    meshes
+        .diagnostics
+        .iter()
+        .any(|diagnostic| leaves_partial(diagnostic))
+}
+
+/// Whether a decoder diagnostic leaves its mesh partial (see [`is_partial`]).
+fn leaves_partial(diagnostic: &str) -> bool {
+    !diagnostic.ends_with(crate::native_graphics_traversal::NESTED_DETAIL_FILTER_DIAGNOSTIC)
+        && !diagnostic.ends_with(crate::native_graphics_traversal::VIEW_COMPONENT_DIAGNOSTIC)
+}
+
+/// A decoder diagnostic as [`SAVED_MESH_REFUSAL_PROPERTY`] says it: without the
+/// object it names (the text before its first `: `) and with its digits written
+/// as `#`, so that two elements with the same fault say it alike.
+fn diagnostic_kind(message: &str) -> String {
+    let text = message.split_once(": ").map_or(message, |(_, rest)| rest);
+    text.chars()
+        .map(|c| if c.is_ascii_digit() { '#' } else { c })
+        .collect()
+}
+
+/// What [`SAVED_MESH_REFUSAL_PROPERTY`] says of a mesh that did not decode
+/// whole: [`SAVED_MESH_PARTIAL_PREFIX`] and the distinct kinds of the
+/// diagnostics that left it partial, in order, joined by `; `. None where
+/// [`is_partial`] is false.
+fn partial_refusal(meshes: &GraphicsMeshes) -> Option<String> {
+    let kinds: BTreeSet<String> = meshes
+        .diagnostics
+        .iter()
+        .filter(|diagnostic| leaves_partial(diagnostic))
+        .map(|diagnostic| diagnostic_kind(diagnostic))
+        .collect();
+    (!kinds.is_empty()).then(|| {
+        format!(
+            "{SAVED_MESH_PARTIAL_PREFIX}{}",
+            kinds.into_iter().collect::<Vec<_>>().join("; ")
+        )
     })
+}
+
+/// Say on the element at `index` why its box was not replaced by the mesh Revit
+/// saved for it (#1645).
+fn note_refusal(model: &mut IfcModel, index: usize, reason: String) {
+    let Some(IfcEntity::BuildingElement {
+        property_set: Some(set),
+        ..
+    }) = model.entities.get_mut(index)
+    else {
+        return;
+    };
+    set.properties
+        .retain(|property| property.name != SAVED_MESH_REFUSAL_PROPERTY);
+    set.properties.push(Property {
+        name: SAVED_MESH_REFUSAL_PROPERTY.into(),
+        value: PropertyValue::Text(reason),
+    });
 }
 
 /// The vertices and triangles of `primitives`, in the frame of an element at
@@ -309,6 +364,10 @@ pub fn attach_scoped_with_control(
     let mut wall_quantities: Vec<(usize, WallMeshQuantities)> = Vec::new();
     // RE-396: the width of each curtain panel drawn from a mesh that is a vertical box.
     let mut plate_widths: Vec<(usize, f64)> = Vec::new();
+    // #1645: the candidates the scene held graphics for, and why each box that
+    // keeps its box does.
+    let mut seen: BTreeSet<u64> = BTreeSet::new();
+    let mut refusals: Vec<(usize, String)> = Vec::new();
     // Each element is taken as it is meshed and its decoded graphs freed with
     // its batch of shared symbols, rather than all held until the last one is
     // meshed (#1075).
@@ -318,6 +377,9 @@ pub fn attach_scoped_with_control(
         3,
         control,
         |element| {
+            if by_id.contains_key(&element.identity.element_id) {
+                seen.insert(element.identity.element_id);
+            }
             if let Some([index]) = walls.get(&element.identity.element_id).map(Vec::as_slice) {
                 if let Some(found) = wall_mesh_quantities(&element.meshes.primitives) {
                     wall_quantities.push((*index, found));
@@ -333,14 +395,25 @@ pub fn attach_scoped_with_control(
             // A Tag carried by several entities (a slab's pieces) is ambiguous:
             // leave them as they are.
             let [index] = indices.as_slice() else {
+                refusals.extend(
+                    indices
+                        .iter()
+                        .map(|index| (*index, SAVED_MESH_ELEMENT_ID_SHARED.to_string())),
+                );
                 return Ok(());
             };
             let primitives = &element.meshes.primitives;
+            let partial = partial_refusal(&element.meshes);
             if primitives.is_empty() {
+                refusals.push((
+                    *index,
+                    partial.unwrap_or_else(|| SAVED_MESH_NO_MESH.to_string()),
+                ));
                 return Ok(());
             }
-            if is_partial(&element.meshes) {
+            if let Some(partial) = partial {
                 report.partial += 1;
+                refusals.push((*index, partial));
                 return Ok(());
             }
             let IfcEntity::BuildingElement {
@@ -356,6 +429,7 @@ pub fn attach_scoped_with_control(
             };
             let (vertices, triangles) = local_mesh(primitives, *origin, *rotation_radians);
             if triangles.is_empty() {
+                refusals.push((*index, SAVED_MESH_NO_TRIANGLES.to_string()));
                 return Ok(());
             }
             let volume = all_faces_flat(primitives)
@@ -402,6 +476,19 @@ pub fn attach_scoped_with_control(
     add_mesh_volumes(model, &volumes);
     add_wall_quantities(model, &wall_quantities);
     add_plate_widths(model, &plate_widths);
+    // #1645: a candidate the scene held no graphics for keeps its box too.
+    for (id, indices) in &by_id {
+        if !seen.contains(id) {
+            refusals.extend(
+                indices
+                    .iter()
+                    .map(|index| (*index, SAVED_MESH_NO_GRAPHICS.to_string())),
+            );
+        }
+    }
+    for (index, reason) in refusals {
+        note_refusal(model, index, reason);
+    }
     Ok(report)
 }
 

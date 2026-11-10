@@ -5038,6 +5038,35 @@ pub const WALL_BASE_SLOPED_IN_PART_BODY_BASE_SOURCE: &str =
 /// (#1384, RE-336).
 pub const SLAB_SHAPE_REFUSAL_PROPERTY: &str = "SlabShapeRefusal";
 
+/// Property of the [`ELEMENT_RECORD_PROPERTY_SET`] of an element whose body is
+/// still the element record's box after the pass that draws such a box from the
+/// mesh Revit saved for it (#1191, #1645): why that mesh was not used. One of
+/// [`SAVED_MESH_NO_GRAPHICS`], [`SAVED_MESH_NO_MESH`],
+/// [`SAVED_MESH_NO_TRIANGLES`], [`SAVED_MESH_ELEMENT_ID_SHARED`], or
+/// [`SAVED_MESH_PARTIAL_PREFIX`] followed by the decoder diagnostics that left
+/// the mesh partial (RE-224), with their digits written as `#`.
+pub const SAVED_MESH_REFUSAL_PROPERTY: &str = "SavedMeshRefusal";
+
+/// [`SAVED_MESH_REFUSAL_PROPERTY`] of an element the file holds no saved
+/// graphics for.
+pub const SAVED_MESH_NO_GRAPHICS: &str = "no_saved_graphics";
+
+/// [`SAVED_MESH_REFUSAL_PROPERTY`] of an element whose saved graphics decode to
+/// no surface and report nothing they could not read.
+pub const SAVED_MESH_NO_MESH: &str = "no_saved_mesh";
+
+/// [`SAVED_MESH_REFUSAL_PROPERTY`] of an element whose saved mesh holds no
+/// triangle.
+pub const SAVED_MESH_NO_TRIANGLES: &str = "no_triangles";
+
+/// [`SAVED_MESH_REFUSAL_PROPERTY`] of an element whose ElementId several
+/// entities carry (a slab's pieces): the mesh is the element's, not a piece's.
+pub const SAVED_MESH_ELEMENT_ID_SHARED: &str = "element_id_shared";
+
+/// The start of the [`SAVED_MESH_REFUSAL_PROPERTY`] of an element whose saved
+/// graphics did not decode whole.
+pub const SAVED_MESH_PARTIAL_PREFIX: &str = "partial: ";
+
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says why a wall
 /// whose base join names a floor with shape-edited corners keeps the base of
 /// its record box (#1384, RE-336).
