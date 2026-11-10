@@ -28,7 +28,8 @@ use rvt::RevitFile;
 use rvt::research::native_document::Options;
 use rvt::research::native_saved_mesh::Primitive;
 use rvt::research::native_saved_scene::extract_at_detail;
-use rvt::research::partition_schema_mvp::recover_partition_schema_mvp;
+use rvt::research::partition_schema_mvp::{TYPE_ID_FIELD, recover_partition_schema_mvp};
+use rvt::research::partition_type_parameters::type_named_lengths;
 use rvt::walker::{InstanceField, WalkerLimits};
 
 const COLUMN_CLASSES: [&str; 2] = ["Column", "StructuralColumn"];
@@ -286,7 +287,7 @@ fn main() -> anyhow::Result<()> {
     let version = rf.basic_file_info()?.version;
     let mvp = recover_partition_schema_mvp(&mut rf, version, WalkerLimits::default())?;
     // Each column by id: its class, and whether RE-353 takes it as round.
-    let mut columns: BTreeMap<u64, (String, bool)> = BTreeMap::new();
+    let mut columns: BTreeMap<u64, (String, bool, Option<u32>)> = BTreeMap::new();
     for element in mvp.columns.iter().chain(mvp.products.iter()) {
         let Some(id) = element.id else { continue };
         if !COLUMN_CLASSES.contains(&element.class.as_str()) {
@@ -295,7 +296,11 @@ fn main() -> anyhow::Result<()> {
         let round = element.fields.iter().any(|(name, value)| {
             name == ROUND_DIAMETER_FIELD && matches!(value, InstanceField::Float { .. })
         });
-        columns.insert(u64::from(id), (element.class.clone(), round));
+        let type_id = element.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::ElementId { id, .. } if name == TYPE_ID_FIELD => Some(*id),
+            _ => None,
+        });
+        columns.insert(u64::from(id), (element.class.clone(), round, type_id));
     }
     let options = Options {
         selected_ids: columns.keys().copied().collect(),
@@ -329,7 +334,9 @@ fn main() -> anyhow::Result<()> {
         }
     }
     let mut tally: BTreeMap<&'static str, usize> = BTreeMap::new();
-    for (id, (class, re353)) in &columns {
+    // For each column type: its columns, those RE-353 takes as round, those RvtIO's rule does.
+    let mut per_type: BTreeMap<u32, [usize; 3]> = BTreeMap::new();
+    for (id, (class, re353, type_id)) in &columns {
         let faces = saved.get(id).map(Vec::as_slice).unwrap_or_default();
         let (verdict, detail) = if faces.is_empty() {
             ("no saved graphics".to_string(), String::new())
@@ -364,6 +371,20 @@ fn main() -> anyhow::Result<()> {
             (false, _) => "round by neither",
         };
         *tally.entry(both).or_default() += 1;
+        if let Some(type_id) = type_id {
+            let counts = per_type.entry(*type_id).or_default();
+            counts[0] += 1;
+            counts[1] += usize::from(*re353);
+            counts[2] += usize::from(verdict == "round");
+        }
+    }
+    let types: BTreeSet<u32> = per_type.keys().copied().collect();
+    let lengths = type_named_lengths(&mut rf, version, &types);
+    for (type_id, [all, by_353, by_rvtio]) in &per_type {
+        println!(
+            "type {type_id} columns {all} re353 round {by_353} rvtio round {by_rvtio} named lengths {:?}",
+            lengths.get(type_id)
+        );
     }
     for (what, count) in &tally {
         println!("tally {version}: {what} {count}");
