@@ -33,7 +33,14 @@ for c in theirs.by_type("IfcColumn"):
         for r in c.Representation.Representations:
             if r.RepresentationIdentifier == "Body":
                 for i in r.Items:
-                    items.add(i.is_a())
+                    if i.is_a("IfcMappedItem"):
+                        # The type's own representation: descend one level.
+                        for mr in i.MappingSource.MappedRepresentation.Items:
+                            items.add("mapped " + mr.is_a())
+                            if mr.is_a("IfcBooleanResult") or mr.is_a("IfcBooleanClippingResult"):
+                                items.add("mapped boolean")
+                    else:
+                        items.add(i.is_a())
                     if i.is_a("IfcBooleanResult") or i.is_a("IfcBooleanClippingResult"):
                         items.add("boolean")
     voided = bool(getattr(c, "HasOpenings", None))
