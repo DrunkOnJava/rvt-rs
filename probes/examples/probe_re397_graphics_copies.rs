@@ -37,10 +37,12 @@ const WANTED: [u64; 7] = [
 const CHANNEL: u64 = 103;
 
 /// Split a group into `(id, body)` records at the id width (4 or 8 bytes) at which
-/// every record's two length words agree and the group ends exactly.
+/// every record's two length words agree and the group ends exactly. A channel 102
+/// or 103 record's header is the id and two words, the second the body's length
+/// (`native_document::group_records`).
 fn split_group(bytes: &[u8]) -> Option<Vec<(u64, &[u8])>> {
     'width: for width in [8usize, 4] {
-        let header = width + 4;
+        let header = width + 8;
         let mut out = Vec::new();
         let mut pos = 0;
         while pos < bytes.len() {
