@@ -3,7 +3,7 @@
 **Date:** 2026-11-10
 **Issues:** #1046 (base quantities Revit computes from its joined geometry, W7), #1016 (quantities); follows RE-268 (which end faces of a curtain mullion Revit's solid keeps), RE-243 and RE-248
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, as Measure fetches them); revit-ifc is not read again here
-**Runs:** Measure [42885661997](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42885661997) (`tools/re/mullion_ends_vs_boxes.py` with RE-268's cascade split by what the neighbour is and by the mullion's own length, commit `0b106c9fb353`, on `main` at `2713ebcb`, saved meshes off; section 2), [42886890399](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42886890399) (this change's scorer and the quantity census on its code, same flag; section 4) and [42889843144](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42889843144) (unfiltered: this change against `main`; section 4)
+**Runs:** Measure [42885661997](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42885661997) (`tools/re/mullion_ends_vs_boxes.py` with RE-268's cascade split by what the neighbour is and by the mullion's own length, commit `0b106c9fb353`, on `main` at `2713ebcb`, saved meshes off; section 2), [42886890399](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42886890399) (this change's scorer and the quantity census on its code, same flag; section 4) and [42889843144](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42889843144) (unfiltered: this change against its parent; section 4)
 **Status:** Positive on the office: a curtain mullion drawn as an extrusion of its box has its `NetSurfaceArea` written on 926 more mullions as built (7,530 of 7,795, from 6,604) and 924 more at permit (7,558 of 7,823, from 6,634), Revit's on all of them, none different. The 263 mullions on each file that RE-268's reading would still get right on 256 and wrong on 7 stay out. The rule rests on the office, one project in two states; no other model has Revit's `NetSurfaceArea` of a mullion to score it against.
 
 ## 1. What RE-268 left out
@@ -47,7 +47,14 @@ A mullion with an end that has a mullion across it holding the point off its axi
 
 By what the rule read, the mullions written, with the curtain walls they stand on: as RE-268 read them 6,604 (211 walls; 6,634 on 212 at permit), overlapped 159 (40 walls; 157 on 39) and neighbours of a short mullion 767 (106 walls, both files); none different. The census (`qtos_vs_ifc`, same run) has `Qto_MemberBaseQuantities.NetSurfaceArea` equal on 7,532 of 10,003 as built (7,560 of 10,031 at permit) with none different, and 2,471 missing on both: the 2,208 mullions Revit does not draw as an extrusion of their box (RE-243 section 2) and the 263.
 
-**This change against `main`, unfiltered** (run 42889843144, `-f nordic=true -f r2025=true -f samples=true -f racadv=true -f bimcollab=true -f holdout=true`): pending; this section is filled in when the run completes.
+**This change against its parent, unfiltered** (run [42889843144](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42889843144): `-f nordic=true -f r2025=true -f samples=true -f racadv=true -f bimcollab=true -f holdout=true`, this change at `f1eb3dae` against its parent `38dff86c`, 118 models on each side; the same-project gates and the advisory semantic check pass on `f1eb3dae`). 7 exports move: the office as built and at permit and 5 of Autodesk's samples (`rac_advanced` 2024 to 2027 and Snowdon Towers Architectural 2024), whose exports a run hashes and does not keep and which have no Revit export to score, so how many of their mullions change is not measured. The other 111 are byte-identical: the 24 Revit 2025 models, RE1's four, Core Interior, Einhoven, the BIMcollab and `rac_advanced` IFC2X3 files and the 18 held-out models. Of every scorer's output only `qtos_vs_ifc` of the two office files differs, and `Qto_MemberBaseQuantities.NetSurfaceArea` is the one line that moves:
+
+| | `NetSurfaceArea` equal, before to after | missing | all quantities Revit writes on objects rvt-rs writes: equal, before to after | missing | different, rvt-rs's own |
+|---|---:|---:|---:|---:|---|
+| office as built | 6,606 to 7,532 of 10,003 | 3,397 to 2,471 | 33,181 to 34,107 of 39,754 | 6,572 to 5,646 | 1 and 1; 0 and 0 |
+| office at permit | 6,636 to 7,560 of 10,031 | 3,395 to 2,471 | 33,509 to 34,433 of 40,006 | 6,496 to 5,572 | 1 and 1; 0 and 0 |
+
+No model but the office exercises the rule. Three of the 24 Revit 2025 models (`Rooms_Stairs` 13 to 15) have a `NetSurfaceArea` census line, on two members each (equal 0, missing 2 before and after), and none of the 24 holds a curtain mullion; RE1 Architecture's 10 mullions are in an export made with base quantities off (RE-242), counted apart and unchanged; no held-out model moves. The census's one different value is the mullion `Length` of RE-243, the same on both sides.
 
 ## 5. Not shown
 
