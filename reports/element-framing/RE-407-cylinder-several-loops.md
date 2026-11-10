@@ -17,8 +17,8 @@ A cylinder face with more than one trim loop is refused (`multiple cylinder trim
 |---|---:|---:|---|
 | Housing, concrete as built | 1,653 | 18 | 2 outer rings, or an outer ring and a hole |
 | Housing, timber as built | 1,865 | 26 | the same |
-| Office as built; office timber as built | 4,580; 3,781 | 26; 26 | the same, and 12 faces with a loop the ring reader refuses (`disconnected UV boundary`) |
-| Autodesk's 2024 samples (16 models) | 43,079 | 175 | 108 two outer rings, 36 an outer ring and a hole, 26 an outer ring and two holes, 3 three outer rings, 2 an outer ring and nine holes, and 30 with a loop the ring reader refuses |
+| Office as built; office timber as built | 4,580; 3,781 | 26; 26 | the same, and 12 more faces per file with a loop the ring reader refuses (`disconnected UV boundary`), which are not among the 26 |
+| Autodesk's 2024 samples (16 models) | 43,079 | 175 | 108 two outer rings, 36 an outer ring and a hole, 26 an outer ring and two holes, 3 three outer rings, 2 an outer ring and nine holes (175 in all), and 30 more faces with a loop the ring reader refuses, which are not among the 175 |
 
 None is nested deeper than a hole in an outer ring, so the plane path's reading (an outer ring of even depth, its holes of odd depth) covers every one that can be read.
 
