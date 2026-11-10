@@ -3,7 +3,7 @@
 **Date:** 2026-11-09
 **Issues:** #1046 (base quantities, W7), #1016 (quantities); follows RE-387 (the volume of a body drawn from a mesh of flat faces) and #1191 (every element that would be a box is drawn from the mesh Revit saved for it)
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, as Measure fetches them)
-**Runs:** Measure [42676702980](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42676702980) and [42678202079](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42678202079) (`tools/re/mesh_features_vs_ifc.py`, commit `734cb1dba615`, on the code of the RE-387 head: which measures of a saved mesh equal which quantity Revit writes, and which objects Revit omits a quantity on); and [42857525344](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42857525344) (unfiltered: this change's code `6241f253` against `main` at `ae08c1da`, section 3)
+**Runs:** Measure [42676702980](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42676702980) and [42678202079](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42678202079) (`tools/re/mesh_features_vs_ifc.py`, commit `734cb1dba615`, on the code of the RE-387 head: which measures of a saved mesh equal which quantity Revit writes, and which objects Revit omits a quantity on); and [42864169952](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42864169952) (unfiltered: this change's code `376035fb` against `main` at `a8a126fb`, after #1629 landed, section 3)
 **Status:** Positive for the office: a curtain panel drawn from a mesh that is a vertical box gets `Width`, the longer horizontal side of the box, and it is Revit's on 257 of 257 panels as built and 266 of 266 at permit, the 3 panels Revit gives none are not boxes and get none, and nothing is written that Revit's export omits. The rule rests on one project in two states (Revit 2024), which is all there is to check it on: no other model with Revit's export holds a curtain panel.
 
 ## 1. What Revit writes
@@ -30,12 +30,12 @@ Revit's `Width` is the longer side of the panel's plan, which is the x extent on
 
 ### The change against `main`
 
-Measure [42857525344](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42857525344), unfiltered (`nordic`, `r2025`, `samples`, `racadv`, `bimcollab` and `holdout`), this change's code `6241f253` against `main` at `ae08c1da`, 118 exports. 22 move (the office as built and at permit, RE1 Architecture and 20 Autodesk samples, whose curtain panels have no Revit export to score); the other 96 are byte-identical, held-out models included. Only the quantity census of the two office files (`qtos_vs_ifc`) and the MCP answers that quote it change; `decoded.parameter_value_count` and `exported.total_entities` are the same on both sides, and no body, property or other scorer moves.
+Measure [42864169952](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42864169952), unfiltered (`nordic`, `r2025`, `samples`, `racadv`, `bimcollab` and `holdout`), this change's code `376035fb` against `main` at `a8a126fb`, after #1629 landed, 118 exports. 22 move (the office as built and at permit, RE1 Architecture and 20 Autodesk samples, whose curtain panels have no Revit export to score); the other 96 are byte-identical, held-out models included. Only the quantity census of the two office files (`qtos_vs_ifc`) and the MCP answers that quote it change; `decoded.parameter_value_count` and `exported.total_entities` are the same on both sides, and no body, property or other scorer moves.
 
 | Export | Revit's quantities on objects rvt-rs writes | Equal, before to after | Different | Written that Revit's export does not |
 |---|---:|---:|---:|---:|
-| office as built | 39,754 | 31,904 to 32,161 | 1 to 1 | 0 to 0 |
-| office at permit | 40,006 | 32,196 to 32,462 | 1 to 1 | 0 to 0 |
+| office as built | 39,754 | 32,924 to 33,181 | 1 to 1 | 0 to 0 |
+| office at permit | 40,006 | 33,243 to 33,509 | 1 to 1 | 0 to 0 |
 
 `Qto_PlateBaseQuantities.Width` goes from 0 to 257 of 257 equal as built and from 0 to 266 of 266 at permit, none missing. RE1 Architecture's export writes no base quantities (RE-242), so the census counts what rvt-rs writes beside them apart (its panels' `Width`, which `rvt-ifc --no-base-quantities` leaves out); the 20 samples gain the values and nothing else. Only the office exercises the rule, so the 3 panels that are not boxes are the only place it is shown to leave a value out.
 
@@ -55,6 +55,6 @@ gh workflow run measure.yml --ref measure/mesh-features -f ref=a82047aba5850c4ce
     -f base=none -f nordic=true -f models="nordic-office-as-built nordic-office-permit" \
     -f scorers=mesh_features_vs_ifc
 # The change against main, unfiltered:
-gh workflow run measure.yml --ref main -f ref=6241f253b93eedb6ad6822ee93ea4cc93db33d5a -f base=ae08c1dad8e1e7c10ed06ccadb1a1112e186384f \
+gh workflow run measure.yml --ref main -f ref=376035fb6a907b15e850ac91e8d725b0542512f0 -f base=a8a126fbc20037dc1a45eadfd9bc4a6a73c8bfc2 \
     -f nordic=true -f r2025=true -f samples=true -f racadv=true -f bimcollab=true -f holdout=true
 ```
