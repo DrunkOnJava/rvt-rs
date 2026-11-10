@@ -87,10 +87,12 @@ pub fn wall_cut_steps(
 
 /// Reads each `WallShadowCutoutGStep` as the step of the other wall it
 /// mirrors (#1165): the wall it names (`m_otherWallId`) holds an embed or a
-/// cutout step of the same cutter whose `m_id` is the shadow's `m_ggId`, and
-/// Revit's export writes the cutter's opening in the shadow's wall as it does
-/// in the other wall, on all 3 shadow steps of the BIM4LCA office. A shadow
-/// whose other wall holds no such step stays a shadow.
+/// cutout step of the same cutter whose `m_id` is the shadow's `m_ggId`: all
+/// 124 shadow steps of the BIM4LCA office, `rac_advanced` and Snowdon Towers
+/// Architectural name one (RE-398). Revit's export writes the cutter's opening
+/// in the shadow's wall as it does in the other wall on both of the office's
+/// shadow steps as built. A shadow whose other wall holds no such step stays a
+/// shadow.
 pub fn resolve_shadow_steps(steps: &mut BTreeMap<u64, Vec<WallCutStep>>) {
     let mut resolved: Vec<(u64, usize, WallCutStep)> = Vec::new();
     for (wall, list) in steps.iter() {
