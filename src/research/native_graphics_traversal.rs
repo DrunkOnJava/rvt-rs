@@ -455,6 +455,7 @@ impl Walker<'_, '_> {
                 }
                 if obj.fields["m_forbiddenTarget"]["m_targets"].as_u64() != Some(0)
                     && !drawn_hidden_instance(&obj.class_name, &obj.fields)
+                    && !drawn_visible_instance(&obj.class_name, &obj.fields)
                 {
                     return Err("instance target restrictions are unsupported".into());
                 }
@@ -624,6 +625,21 @@ fn drawn_hidden_instance(class_name: &str, fields: &Value) -> bool {
             .as_u64()
             .is_some_and(|flags| graphics_visibility(flags) == 1)
         && fields["m_forbiddenTarget"]["m_targets"].as_u64() == Some(DRAWN_HIDDEN_INSTANCE_TARGETS)
+}
+/// The `m_forbiddenTarget.m_targets` of the one restricted instance that is
+/// visible in the normal draw: the 554 of Autodesk's 2024 samples (appliances,
+/// chairs, pendant lamps, sinks) and the 22 of the BIM4LCA housing's showers
+/// hold it and no other mask (RE-408).
+const DRAWN_VISIBLE_INSTANCE_TARGETS: u64 = 10;
+/// Whether `fields` are those of a `GInstance` visible in the normal draw
+/// (visibility 0) and forbidden the targets `DRAWN_VISIBLE_INSTANCE_TARGETS`.
+/// Every other mask stays refused.
+fn drawn_visible_instance(class_name: &str, fields: &Value) -> bool {
+    class_name == "GInstance"
+        && fields["m_GInfo"]["m_flags"]
+            .as_u64()
+            .is_some_and(|flags| graphics_visibility(flags) == 0)
+        && fields["m_forbiddenTarget"]["m_targets"].as_u64() == Some(DRAWN_VISIBLE_INSTANCE_TARGETS)
 }
 fn graphics_visibility(flags: u64) -> u8 {
     let bits = flags & 0x1e0;
