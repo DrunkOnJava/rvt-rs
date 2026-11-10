@@ -118,6 +118,19 @@ fn main() -> anyhow::Result<()> {
             "element {id} class {} type {type_id} own {own:?} type {ty:?} decoded {decoded:?}",
             element.class
         );
+        if id == 1_857_214 {
+            // Where the ladder's reference list and host fields point (RE-412).
+            for (name, value) in &element.fields {
+                let lower = name.to_ascii_lowercase();
+                if lower.contains("host") || lower.contains("ref") || lower.contains("categ") {
+                    let shown = format!("{value:?}");
+                    println!(
+                        "ladder field {name} {}",
+                        shown.chars().take(240).collect::<String>()
+                    );
+                }
+            }
+        }
     }
     if !elements.iter().any(|element| element.id == Some(1_857_214)) {
         println!("element 1857214 is not among the partition elements");
