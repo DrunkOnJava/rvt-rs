@@ -290,7 +290,7 @@ impl Walker<'_, '_> {
                 filtered: self.filtered_depth > 0,
             }),
             // A `GGTag` is a group of one `GPoint`, a point with a test point for
-            // selecting it: walked as a group, its point is no surface (RE-400).
+            // selecting it: walked as a group, its point is no surface (RE-401).
             "GElement" | "GGroup" | "GFilter" | "GGTag" => {
                 let children = self.children(index)?;
                 if obj.class_name == "GFilter" {
