@@ -97,6 +97,23 @@ impl<'a> PointerIndex<'a> {
 pub fn pointer(g: &ObjectGraph, source: usize, v: &Value) -> Result<Option<usize>> {
     PointerIndex::new(g).resolve(source, v)
 }
+/// Every trim loop of a face as a UV ring, in the order the face lists them
+/// (#1645). The meshers read these themselves; this is for the probes that
+/// say what arrangements of loops the saved faces hold.
+pub fn face_trim_loops(g: &ObjectGraph, fi: usize) -> Result<Vec<Vec<[f64; 2]>>> {
+    let index = PointerIndex::new(g);
+    let face = g.objects.get(fi).context("face index")?;
+    ensure!(face.class_name == "Face", "not Face");
+    let mut next = index.resolve(fi, &face.fields["m_pFirstLoop"])?;
+    let mut seen = BTreeSet::new();
+    let mut loops = Vec::new();
+    while let Some(li) = next {
+        ensure!(seen.insert(li), "loop-list cycle");
+        loops.push(ring(g, &index, fi, li)?);
+        next = index.resolve(li, &g.objects[li].fields["m_nextLoop"])?;
+    }
+    Ok(loops)
+}
 fn point<const N: usize>(v: &Value) -> Result<[f64; N]> {
     let a = v.as_array().context("point array")?;
     ensure!(a.len() == N, "point dimension");
