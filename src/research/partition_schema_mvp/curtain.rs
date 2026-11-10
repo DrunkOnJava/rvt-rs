@@ -8,18 +8,21 @@ const MODEL_AXES: [[f64; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 
 /// The box of a curtain mullion: its record box, along the model's axes and
 /// the axis it runs along ([`CURTAIN_MULLION_ALONG_FIELD`]), or turned or
 /// tilted along its own axes ([`CURTAIN_AXES_FIELDS`], RE-106). A mullion
-/// whose axis is not known has no `along`.
-fn mullion_box(element: &DecodedElement) -> Option<MullionBox> {
+/// whose axis is not known has no `along`. `kind` is the mullion's type, 0
+/// where it is not known (RE-403).
+fn mullion_box(element: &DecodedElement, kind: u64) -> Option<MullionBox> {
     let id = element.id?;
     let [x0, y0, z0, x1, y1, z1] = element_record_bbox(element)?;
     let centre = [(x0 + x1) / 2.0, (y0 + y1) / 2.0, (z0 + z1) / 2.0];
     let size = [x1 - x0, y1 - y0, z1 - z0];
     let model = MullionBox {
         id,
+        kind,
         centre,
         axes: MODEL_AXES,
         half: size.map(|side| side / 2.0),
         along: None,
+        odd: false,
     };
     if let Some(axes) = curtain_axes_from_fields(&element.fields) {
         return Some(match crate::ifc::export_content::oriented_box(axes, size) {
@@ -108,9 +111,18 @@ pub(super) fn attach_mullion_plain_hosts(rf: &mut RevitFile, products: &mut [Dec
         let Some(host) = element.id.and_then(|id| found.host.get(&u64::from(id))) else {
             continue;
         };
-        if let Some(mullion) = mullion_box(element) {
+        let kind = element
+            .id
+            .and_then(|id| found.kind.get(&u64::from(id)))
+            .copied()
+            .unwrap_or(0);
+        if let Some(mullion) = mullion_box(element, kind) {
             groups.entry(*host).or_default().push(mullion);
         }
+    }
+    let usual = usual_sections(&groups.values().flatten().collect::<Vec<_>>());
+    for mullion in groups.values_mut().flatten() {
+        mullion.odd = has_unusual_section(mullion, &usual);
     }
     let mut kept: BTreeMap<u32, u8> = BTreeMap::new();
     for group in groups.values() {

@@ -415,7 +415,9 @@ pub fn attach_scoped_with_control(
 /// the BIM4LCA office at building permit that it draws as a cut mesh, and
 /// writes it on 6 that nothing tells from them. A curtain mullion, a curtain
 /// panel and a column are the entities measured equal to Revit's on every
-/// element (RE-387); a body of another entity gets none.
+/// element (RE-387); a body of another entity gets none. A curtain mullion
+/// whose `NetVolume` the box gave and whose mesh has another volume is not an
+/// extrusion of its box, and takes the mesh's (RE-403).
 fn add_mesh_volumes(model: &mut IfcModel, volumes: &[(usize, f64)]) {
     if volumes.is_empty() {
         return;
@@ -453,6 +455,9 @@ fn add_mesh_volumes(model: &mut IfcModel, volumes: &[(usize, f64)]) {
                             set.properties.push(volume_property(name));
                         }
                     }
+                    if set_name == "Qto_MemberBaseQuantities" {
+                        follow_mesh_over_box(set, volume);
+                    }
                 }
             }
             None => {
@@ -467,6 +472,44 @@ fn add_mesh_volumes(model: &mut IfcModel, volumes: &[(usize, f64)]) {
             }
         }
     }
+}
+
+/// How far a curtain mullion's box volume may differ from the volume of the
+/// mesh Revit saved for it, as a fraction of the mesh's, before the box is not
+/// its solid (RE-403). A mullion whose `NetVolume` is Revit's from its box has
+/// the mesh's volume to within 1e-4; one with a 45 degree end differs by 2.6 to
+/// 3.7%.
+const BOX_MESH_VOLUME_TOLERANCE: f64 = 1e-3;
+
+/// A curtain mullion whose `NetVolume` was written from its box (RE-243) and
+/// whose saved mesh has another volume is not an extrusion of that box, as a
+/// mullion with a 45 degree end is not: Revit's `NetVolume` is the mesh's
+/// (RE-387), and the box's `NetSurfaceArea`, its sides and the end faces its
+/// neighbours leave, is not Revit's, so it is left out (RE-403).
+fn follow_mesh_over_box(set: &mut PropertySet, mesh_volume: f64) {
+    if !(mesh_volume.is_finite() && mesh_volume > 0.0) {
+        return;
+    }
+    let box_volume = set
+        .properties
+        .iter()
+        .find_map(|property| match &property.value {
+            PropertyValue::VolumeCubicFeet(volume) if property.name == "NetVolume" => Some(*volume),
+            _ => None,
+        });
+    let Some(box_volume) = box_volume else {
+        return;
+    };
+    if (box_volume - mesh_volume).abs() <= BOX_MESH_VOLUME_TOLERANCE * mesh_volume {
+        return;
+    }
+    for property in &mut set.properties {
+        if property.name == "NetVolume" {
+            property.value = PropertyValue::VolumeCubicFeet(mesh_volume);
+        }
+    }
+    set.properties
+        .retain(|property| property.name != "NetSurfaceArea");
 }
 
 /// How far a wall's held `NetVolume` may differ from the volume of its mesh,
