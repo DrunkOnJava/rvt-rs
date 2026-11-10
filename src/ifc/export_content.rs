@@ -1591,7 +1591,7 @@ pub fn append_typed_production_elements(
                 };
                 let confirmed = float(crate::partition_schema_mvp::WALL_LENGTH_FIELD).is_some();
                 let cutback = float(crate::partition_schema_mvp::WALL_CUTBACK_LENGTH_FIELD);
-                if confirmed || cutback.is_some() {
+                if (confirmed || cutback.is_some()) && !layered_wall(&decoded) {
                     pending_bounded.push(wall_areas::Pending {
                         index: entity_index,
                         named,
@@ -3937,6 +3937,11 @@ fn add_wall_height(
     }
 }
 
+/// Whether a wall's type has several layers (RE-405).
+fn layered_wall(decoded: &DecodedElement) -> bool {
+    crate::partition_schema_mvp::wall_layer_count_from_fields(&decoded.fields) >= 2
+}
+
 /// Add a wall's `Qto_WallBaseQuantities` `GrossSideArea`, `NetSideArea`,
 /// `GrossVolume` and `NetVolume` to `sets`, where its native record holds no
 /// step that cuts, embeds or sweeps it
@@ -3958,6 +3963,14 @@ fn add_wall_height(
 /// footprint loop, which becomes `GrossFootprintArea`: its length times its
 /// thickness, Revit's on every one of those walls but the shortest, which is
 /// as long as it is thick and which Revit's export gives none (RE-292).
+///
+/// A wall whose type has several layers gets none of these (RE-405): Revit's
+/// export draws it layer by layer, and the volume of its solid is the sum of
+/// its layers' after they are joined, which its box does not know. On the
+/// BIM4LCA housing as built, 3 of its 153 such walls have a `NetVolume` that
+/// is not the box's, Revit's export writes no `GrossFootprintArea` on any of
+/// them, and all 204 walls of one layer with a `Height` have one. The saved
+/// mesh gives such a wall the quantities it can (RE-388).
 fn add_wall_areas_and_volumes(
     sets: &mut [PropertySet],
     ifc_type: &str,
@@ -3965,7 +3978,7 @@ fn add_wall_areas_and_volumes(
     extrusion: Option<&Extrusion>,
     property_set: Option<&PropertySet>,
 ) {
-    if !matches!(ifc_type, "IFCWALL" | "IFCWALLSTANDARDCASE") {
+    if !matches!(ifc_type, "IFCWALL" | "IFCWALLSTANDARDCASE") || layered_wall(decoded) {
         return;
     }
     let flagged = |wanted: &str| {
