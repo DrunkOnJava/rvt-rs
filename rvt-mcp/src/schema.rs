@@ -367,8 +367,10 @@ pub struct PropertySetOut {
 /// The type object an element is typed by.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct TypeOut {
-    /// The type object's `Tag`: the type's Revit ElementId, or the ElementId
-    /// of the room an `IfcSpaceType` is made for.
+    /// The type's Revit ElementId, or the ElementId of the room an
+    /// `IfcSpaceType` is made for. The export writes it as the type object's
+    /// `Tag`, except on an `IfcPlateType`, which it writes with none: Revit's
+    /// is a plate's ElementId, in an order no record holds.
     pub element_id: String,
     /// The type object's IFC entity, such as `IFCWALLTYPE`.
     pub ifc_type: String,
