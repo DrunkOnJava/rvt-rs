@@ -4677,11 +4677,20 @@ impl StepWriter<'_> {
             } else {
                 "$".into()
             };
+            // #1594: Revit gives an `IfcPlateType` the Tag of one of its plates, the
+            // first of its group in an order of the curtain grid no record holds, so
+            // the panel type's own ElementId (still the type's `tag` here) is a
+            // wrong Tag on every plate type; none is written.
+            let tag_text = if entity_name == "IFCPLATETYPE" {
+                "$".to_string()
+            } else {
+                format!("'{tag}'")
+            };
             let type_el_id = self.id();
             self.emit_entity(
                 type_el_id,
                 format!(
-                    "{entity_name}('{type_gid}',#{owner_hist},{},$,$,({}),$,'{tag}',{element_type},{tail})",
+                    "{entity_name}('{type_gid}',#{owner_hist},{},$,$,({}),$,{tag_text},{element_type},{tail})",
                     quoted_or_dollar(&escape(name)),
                     set_ids.join(","),
                 ),
