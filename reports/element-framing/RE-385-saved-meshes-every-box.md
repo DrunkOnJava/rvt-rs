@@ -65,7 +65,7 @@ The same export, with the four changes (`feat-bbox-bodies`, on `main` at `cbeba4
 
 The 18 left on Electrical are the 16 art-glass pendant drops (`instance target restrictions are unsupported`, section 3.5), Pendant Light - Linear 1632276, a cylinder with two trim loops (`multiple cylinder trim loops unsupported`), and the floor 1484949 (`Floor:Concrete 6"`), which is not offered a saved mesh.
 
-Fitting the box is a bound, not a match: a light's record box includes its light source's shape (an exterior spot of 0.5 ft has a 13 ft box), so many meshes are far smaller than their box. Revit's own export of these files is not held, and no mesh here is scored against it.
+Fitting the box is a bound, not a match: a light's record box includes its light source's shape (an exterior spot of 0.5 ft has a 13 ft box), so many meshes are far smaller than their box. Revit's own export of these Snowdon Towers and Golden Nugget files is not held, so no mesh above is scored against it; the models whose Revit export Measure holds, and whose bodies this change moves, are scored in section 5.1.
 
 ## 5. The export elsewhere
 
@@ -92,6 +92,18 @@ The IFC (less `FILE_NAME` and `IfcOwnerHistory`) is the same on 8: Einhoven, Cor
 `exported.bounding_box_bodies` does not count turned boxes, which is why a file can gain far more meshes than it loses record boxes (Golden Nugget Gebäudetechnik). The times are one run each on one machine, not a benchmark, and runs of one file differ by up to about 9% (Site is faster with the changes): the cost is the meshing of the elements newly drawn, up to 17% on Snowdon Towers Electrical 2024 and 13% on Golden Nugget Gebäudetechnik.
 
 The probe on 13 of these (both Golden Nugget models, `rac_basic` 2024, the five Snowdon Towers 2024 models, `rme_advanced` 2027, Snowdon Towers Electrical, Architectural and Facades 2025, and Core Interior) finds every mesh that replaces a box inside it, except 50 on Golden Nugget Architektur, 0.03 to 1.23 ft taller or wider than their box, which are the same 50 elements at `cbeba4c7`: none is drawn by these changes.
+
+### 5.1 The models Revit's export can score
+
+Measure [42870269070](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42870269070), unfiltered (`nordic`, `r2025`, `samples`, `racadv`, `bimcollab` and `holdout`), this change's code `c6c7368f` against `main` at `45cdcd4a`, 118 models. 22 exports move; the property and quantity censuses lose nothing and no body or placement scorer gets worse (`tools/re/cmp_measure.py`: census regressions 0, body scorer regressions 0). Only four of them have Revit's own IFC4 export (the office in two files and two held-out models) and hold a body this change moves:
+
+| model | what is drawn from its saved mesh now | against Revit's export |
+|---|---|---|
+| BIM4LCA office, as built and at permit | its one `IfcElectricAppliance` that was a turned box | the appliance row of `mesh_bodies_vs_ifc` goes from 50 to 51 bodies scored, and all 51 are within 1% and 0.01% of Revit's volume and within 0.01 ft and 0.001 ft of its surface, in both files |
+| AA Single Dwelling House (Revit 2026, held out; counts only) | 13 of its 14 `IfcWindow`s that were record boxes | its windows scored go from 2 to 15: all 15 equal Revit's volume within 0.01%, all within 0.01 ft of its surface and 9 within 0.001 ft; the record-box windows go from 14 (fill 0.354) to 1 |
+| `teste_export_2025` (Revit 2025, held out; counts only) | 1 `IfcWindow` | 1 scored, equal to Revit's in every column |
+
+Nothing a model with Revit's export holds is made worse by it: the other 18 models that move are Autodesk's sample projects (Snowdon Towers 2024 among them), which have no Revit export to score, and their bodies are bounded by their boxes as sections 4 and 5 say. The two held-out models are in the holdout pack, which W5 does not count (`docs/release-1.0-criteria.md`).
 
 ## 6. Not shown
 
