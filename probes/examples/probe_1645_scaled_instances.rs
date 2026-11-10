@@ -13,9 +13,9 @@
 //! export Revit holds.
 //!
 //! Output, tab separated:
-//!   scaled <class> kind=<rotation|mirror|uniform|axes|shear> det=<sign> cols=<x,y,z lengths>
+//!   scaled <class> kind=<identity|rotation|mirror|uniform|axes|shear> det=<sign> cols=<x,y,z lengths>
 //!     max_dev=<largest |column i . column j - identity| of the group> instances=<n> records=<n> first=<ids>
-//!   total <class> instances=<n> scaled=<n>
+//!   total <class> instances=<n> scaled=<n> with_category=<n> scaled_with_category=<n>
 //!   sample <class> flagged=<bool> id=<record> instance=<the GInstance's fields> info=<its InstanceInfo's>
 //! where the sample lines show the fields of the first two flagged instances of each class and of the
 //! first unflagged one, so that what the flag adds to an instance can be read from the bytes.
@@ -70,8 +70,12 @@ fn describe(c: [[f64; 3]; 3]) -> (String, i8, String, f64) {
     let unit = lengths.iter().all(|l| (l - 1.).abs() <= 1e-6);
     let uniform = (lengths[0] - lengths[1]).abs() <= 1e-6 * lengths[0]
         && (lengths[0] - lengths[2]).abs() <= 1e-6 * lengths[0];
+    let identity =
+        (0..3).all(|a| (0..3).all(|b| (c[a][b] - f64::from(u8::from(a == b))).abs() <= 1e-9));
     let kind = if !orthogonal {
         "shear"
+    } else if identity {
+        "identity"
     } else if unit && sign > 0 {
         "rotation"
     } else if unit {
@@ -126,7 +130,7 @@ fn main() -> anyhow::Result<()> {
     type Key = (String, String, i8, String);
     let mut census: BTreeMap<Key, (usize, BTreeSet<u64>, f64)> = BTreeMap::new();
     let mut shown: BTreeMap<(String, bool), usize> = BTreeMap::new();
-    let mut totals: BTreeMap<String, (usize, usize)> = BTreeMap::new();
+    let mut totals: BTreeMap<String, [usize; 4]> = BTreeMap::new();
     for _round in 0..4 {
         let options = Options {
             selected_ids: frontier.clone(),
@@ -164,8 +168,12 @@ fn main() -> anyhow::Result<()> {
                     continue;
                 }
                 let total = totals.entry(class.clone()).or_default();
-                total.0 += 1;
+                total[0] += 1;
                 let flagged = object.fields["m_bHasScale"].as_bool() == Some(true);
+                let with_category = object.fields["m_GInfo"]["m_categoryId"]["m_id"]["m_id64"]
+                    .as_i64()
+                    .is_some_and(|id| id != -1);
+                total[2] += usize::from(with_category);
                 let info = pointer(graph, index, &object.fields["m_instanceInfo"])
                     .ok()
                     .flatten();
@@ -185,7 +193,8 @@ fn main() -> anyhow::Result<()> {
                 if !flagged {
                     continue;
                 }
-                total.1 += 1;
+                total[1] += 1;
+                total[3] += usize::from(with_category);
                 let trf = info.and_then(|i| columns(&graph.objects[i].fields["m_Trf"]));
                 let (kind, sign, lengths, dev) = match trf {
                     Some(c) => describe(c),
@@ -216,8 +225,10 @@ fn main() -> anyhow::Result<()> {
             first.join(",")
         );
     }
-    for (class, (instances, scaled)) in &totals {
-        println!("total\t{class}\tinstances={instances}\tscaled={scaled}");
+    for (class, [instances, scaled, with_category, scaled_with_category]) in &totals {
+        println!(
+            "total\t{class}\tinstances={instances}\tscaled={scaled}\twith_category={with_category}\tscaled_with_category={scaled_with_category}"
+        );
     }
     Ok(())
 }
