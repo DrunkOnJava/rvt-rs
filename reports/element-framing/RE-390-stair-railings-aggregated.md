@@ -47,7 +47,7 @@ On `main` none of the office's 25 was aggregated. Snowdon's 142 railings: Revit'
 
 **Stair bodies** (`stair_bodies_vs_ifc.py`, the stair as the sum of its parts): R2025 model 13's stair has every vertex of Revit's body within 0.001 ft of rvt-rs's surface where it had none (0 of 1 to 1 of 1; its farthest Revit vertex 2.75 ft to 0.306 ft, its z range 0 to 5.35 ft to 0 to 8.09 ft, Revit's); the other stair models and the office's 35 stairs keep their count (the spiral model 17's stays 0 of 1).
 
-**A negative: the stair assembly's volume is larger than Revit's.** The railings now in the sum are record boxes (RE-303), a box of the railing's whole extent, where Revit's railing is a thin body:
+**A negative: the stair assembly's volume is larger than Revit's.** The railings now in the sum are record boxes, a box of the railing's whole extent, where Revit's railing is a thin body (every railing read under stairs 2598347 and 2859203 of the as-built export, 5 of 5, carries `BodySource` `partition_element_record_bbox`; RE-303 is why a railing's saved mesh is often not whole and the box stays):
 
 | Stair | rvt-rs on `main` | rvt-rs with the rule | Revit |
 |---|---:|---:|---:|
