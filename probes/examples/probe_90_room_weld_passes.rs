@@ -11,14 +11,16 @@
 //! axis. This welds those points at each of the three tolerances and says, for each
 //! solid, whether every face's boundary then closes (each point at an even degree), and
 //! which pass is the first to close it. An edge round a cylinder stores two points that
-//! are not its ends (RE-374), so a face with one is not placed and the solid is not
-//! testable.
+//! are not its ends (RE-374), on the cylinder and on the plane across it alike, so both
+//! its faces are not placed: a solid with such a face is `closed where placed` at best,
+//! and so is one whose edge has no face that was read.
 //!
 //! Output, one line for each solid of each room, then the tallies:
 //!   weld room <id> <stream> main <walk|faces|approximate|box> solid <k> faces <n> read <r>
-//!   cylinders <c> edges <m> unplaced faces <x> | <pass> <closed|open|untestable> split <s>
-//!   collapsed <c> slivers <f> open [<face indices>] | ... | first <pass|never|untestable>
+//!   cylinders <c> edges <m> unplaced faces <x> | <pass> <closed|closed where placed|open>
+//!   split <s> collapsed <c> slivers <f> open [<face indices>] | ... | first <pass|never>
 //!   weld tally <release>: <what> <count>
+//! `main` is what the walk of RE-101 and the span of RE-316 read, not the edges of RE-374.
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_90_room_weld_passes -- MODEL.rvt
@@ -102,6 +104,22 @@ fn place_edges(topology: &SolidTopology) -> Boundary {
     let mut twice = Vec::new();
     let mut unplaced = BTreeSet::new();
     for edge in &topology.edges {
+        // An edge round a cylinder stores two points that are not its ends (RE-374),
+        // on the cylinder and on the plane across it alike.
+        let round = (0..2).any(|side| {
+            topology
+                .faces
+                .get(&edge.faces[side])
+                .and_then(Option::as_ref)
+                .is_some_and(|face| {
+                    face.cylinder.is_some()
+                        && (edge.uv[side][0] - edge.uv[side + 2][0]).abs() > 1e-9
+                })
+        });
+        if round {
+            unplaced.extend(edge.faces);
+            continue;
+        }
         let mut placed: [Option<[usize; 2]>; 2] = [None, None];
         for (side, slot) in placed.iter_mut().enumerate() {
             let Some(face) = topology
@@ -173,6 +191,9 @@ fn assess(boundary: &Boundary, tolerance: f64) -> Verdict {
     let mut slivers = 0;
     let mut open = Vec::new();
     for (face, segments) in &boundary.segments {
+        if boundary.unplaced.contains(face) {
+            continue;
+        }
         let mut degree: BTreeMap<usize, usize> = BTreeMap::new();
         for &[a, b] in segments {
             let (p, q) = (cluster[a], cluster[b]);
@@ -185,7 +206,7 @@ fn assess(boundary: &Boundary, tolerance: f64) -> Verdict {
         }
         if degree.len() < 3 {
             slivers += 1;
-        } else if !boundary.unplaced.contains(face) && degree.values().any(|&d| d & 1 == 1) {
+        } else if degree.values().any(|&d| d & 1 == 1) {
             open.push(*face);
         }
     }
@@ -281,16 +302,14 @@ fn main() -> anyhow::Result<()> {
             let mut first = "never";
             for (name, tolerance) in PASSES {
                 let verdict = assess(&placed, tolerance);
-                let kind = if !placed.unplaced.is_empty() {
-                    "untestable"
-                } else if verdict.open.is_empty() {
-                    "closed"
-                } else {
+                let kind = if !verdict.open.is_empty() {
                     "open"
+                } else if !placed.unplaced.is_empty() {
+                    "closed where placed"
+                } else {
+                    "closed"
                 };
-                if kind == "untestable" {
-                    first = "untestable";
-                } else if kind == "closed" && first == "never" {
+                if kind != "open" && first == "never" {
                     first = name;
                 }
                 cells.push(format!(
