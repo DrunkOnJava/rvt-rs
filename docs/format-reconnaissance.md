@@ -2617,3 +2617,7 @@ angular interval, axis and placement. All six fixture exports pass schema,
 topology, native geometry and default/fine OpenCascade import checks. The full
 torus is 9,051 bytes. Product typing, project instances and other releases gain
 no coverage. [RE-394](../reports/element-framing/RE-394-analytic-family-revolutions.md).
+
+## Addendum — RE-385 a saved mesh replaces a turned box, and the saved graphics hold ellipses, curved ruled surfaces and rings that repeat their first point (2026-11-09)
+
+A family instance drawn as its record box turned to its angle (RE-87) is as much a stand-in for its shape as a record box, and its saved mesh replaces it where the mesh decodes whole. A `GEllipse`, the meridian of a pendant light's revolved dome, is `m_center + m_xLen cos t m_xVec + m_yLen sin t m_yVec` over `m_endParams`, with `m_xVec` and `m_yVec` unit and orthogonal. A `RuledSurf` can run between two arcs (a hand dryer), not only two lines. A conduit's end cap is a trim ring whose last sample repeats its first, 1e-12 ft apart. Each drop of a cascading art-glass pendant nests a `GInstance` whose `m_forbiddenTarget.m_targets` is 10, placed at the ceiling; what the bits name is not read, so it stays refused and the drop keeps its box. On Snowdon Towers Electrical (Revit 2025) these leave 18 of 2,428 elements as boxes in the export for every element, against 300, 16 of them those drops, and each of the 2,409 meshes fits the box it replaces. See `reports/element-framing/RE-385-saved-meshes-every-box.md`.

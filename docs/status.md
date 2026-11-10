@@ -201,7 +201,7 @@ geometry (every family instance is drawn from the mesh Revit saved for its
 display by default on Revit 2023 to 2027, where the whole mesh decodes, and so,
 on Revit 2024 to 2027, are the walls that embed a curtain wall where Revit
 raised their base, RE-340; a mesh with a face that does not decode keeps its
-box, RE-224, and a mesh is not always Revit's whole body, RE-78), hip roofs over a T or U footprint, roofs sloped by several slope arrows of the configuration of puzzbobb's U, where Revit slopes the two long outer walls along the arms only (RE-307; no other roof of the configuration is measured), and roofs by extrusion outside Revit 2025, the top of
+box, RE-224, which leaves 17 of Snowdon Towers Electrical's 2,428 elements a box, RE-385, 16 of them nested instances whose `m_forbiddenTarget.m_targets` is not read, and a mesh is not always Revit's whole body, RE-78), hip roofs over a T or U footprint, roofs sloped by several slope arrows of the configuration of puzzbobb's U, where Revit slopes the two long outer walls along the arms only (RE-307; no other roof of the configuration is measured), and roofs by extrusion outside Revit 2025, the top of
 walls whose layers Revit ends at different heights or cuts at a height no join names (#1067), the boundaries of
 the rooms whose stored solid still does not close (RE-316 §4) and opening
 profiles are not decoded, and rvt-rs does not edit Revit model data.

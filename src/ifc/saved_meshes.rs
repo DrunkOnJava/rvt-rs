@@ -53,9 +53,9 @@
 use super::IfcModel;
 use super::entities::{BrepTriangle, IfcEntity, Property, PropertySet, PropertyValue, SolidShape};
 use super::export_content::{
-    BEAM_BOX_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE, SLAB_SHAPE_REFUSAL_PROPERTY,
-    SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY,
-    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    BEAM_BOX_BODY_SOURCE, INSTANCE_TURNED_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE,
+    SLAB_SHAPE_REFUSAL_PROPERTY, SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY,
+    WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use super::mesh_volume::{all_faces_flat, box_plan_width, closed_mesh_volume};
 use super::mesh_wall_quantities::{WallMeshQuantities, wall_mesh_quantities};
@@ -236,13 +236,16 @@ pub fn attach_scoped_with_control(
             p.name == "ProfileResolved" && matches!(p.value, PropertyValue::Boolean(true))
         });
         // A beam RE-328 draws as its box along its line is a stand-in for
-        // its saved mesh, as the record box is, and so is the level block of
+        // its saved mesh, as the record box is, and so is a family instance
+        // RE-87 draws as its record box turned to its angle: on Snowdon
+        // Towers Electrical 116 of 130 such receptacles, outlets, conduit
+        // elbows and pendants have a whole saved mesh. So is the level block of
         // a roof's sketch outline: the record box holds the roof's reference
         // surface, not its slope or its thickness (#1612). A resolved outline
         // is the body of any other class (a floor's plan, a ceiling's).
         if !matches!(
             text("BodySource"),
-            Some(RECORD_BBOX_BODY_SOURCE | BEAM_BOX_BODY_SOURCE)
+            Some(RECORD_BBOX_BODY_SOURCE | BEAM_BOX_BODY_SOURCE | INSTANCE_TURNED_BODY_SOURCE)
         ) || (profile_resolved && ifc_type != "IFCROOF")
         {
             continue;

@@ -216,6 +216,13 @@ fn retain_boundary_points(
                 break;
             }
         }
+        // A ring that repeats its first point as its last (a conduit's end
+        // cap, its two samples 1e-12 ft apart) leaves the copy out of every
+        // triangle: the point is there already, through its twin.
+        if split.is_none() && (0..points.len()).any(|j| j != pi && used[j] && close(points[j], p)) {
+            used[pi] = true;
+            continue;
+        }
         let Some((ti, first, second)) = split else {
             bail!("boundary sample was discarded by triangulation")
         };

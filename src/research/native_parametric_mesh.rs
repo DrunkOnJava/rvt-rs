@@ -293,6 +293,18 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 angular(center[0].hypot(center[1]) + 2. * radius),
                 angular(*radius),
             ),
+            // The second derivative of `c + a cos t x + b sin t y` is at most
+            // max(a, b) long, so a step in `t` bows no further from its chord
+            // than the same step on a circle of that radius.
+            Curve::Ellipse {
+                center,
+                x_len,
+                y_len,
+                ..
+            } => (
+                angular(center[0].hypot(center[1]) + 2. * x_len.max(*y_len)),
+                angular(x_len.max(*y_len)),
+            ),
         },
         ParametricSurface::ConeSurf { half_angle, .. } => {
             // The generators are straight: only the angle needs a chord bound.
@@ -318,30 +330,39 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 }
                 let s = ParametricSurface::read(g, surface_index)?;
                 let ParametricSurface::RuledSurf {
-                    profile1:
-                        Curve::Line {
-                            direction: a,
-                            range: ra,
-                            ..
-                        },
-                    profile2:
-                        Curve::Line {
-                            direction: b,
-                            range: rb,
-                            ..
-                        },
-                    ..
+                    profile1, profile2, ..
                 } = s
                 else {
-                    anyhow::bail!("nonlinear ruled profiles need a curvature policy")
+                    continue;
                 };
-                let da = std::array::from_fn(|k| a[k] * (ra[1] - ra[0]));
-                let db = std::array::from_fn(|k| b[k] * (rb[1] - rb[0]));
+                // Each profile's chord (its end less its start) and the
+                // normalized steps its own curvature needs: one per foot
+                // along a line, and the angular step of its largest radius
+                // across an arc or an ellipse.
+                let profile_steps = |c: &Curve| -> ([f64; 3], f64) {
+                    let r = c.range();
+                    let chord = match c {
+                        Curve::Line { direction, .. } => {
+                            std::array::from_fn(|k| direction[k] * (r[1] - r[0]))
+                        }
+                        _ => {
+                            let (a, b) = (c.eval(r[0]), c.eval(r[1]));
+                            std::array::from_fn(|k| b[k] - a[k])
+                        }
+                    };
+                    let steps = match c {
+                        Curve::Line { .. } => length(chord).ceil(),
+                        Curve::Arc { radius, .. } => ((r[1] - r[0]) / angular(*radius)).ceil(),
+                        Curve::Ellipse { x_len, y_len, .. } => {
+                            ((r[1] - r[0]) / angular(x_len.max(*y_len))).ceil()
+                        }
+                    };
+                    (chord, steps)
+                };
+                let (da, na) = profile_steps(&profile1);
+                let (db, nb) = profile_steps(&profile2);
                 let mixed = length(std::array::from_fn(|k| da[k] - db[k]));
-                n = n
-                    .max((mixed / CHORD).sqrt().ceil())
-                    .max(length(da).ceil())
-                    .max(length(db).ceil());
+                n = n.max((mixed / CHORD).sqrt().ceil()).max(na).max(nb);
             }
             (1. / n, 1. / n)
         }
