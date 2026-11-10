@@ -12,9 +12,15 @@
 //! (a seam crossing) and whether the loops share a vertex, so what the mesher
 //! has to read is known before it is written.
 //!
+//! A furniture piece or a fitting keeps its faces in the graphics of the symbols
+//! its instances name, not in its own record, so this reads each exported
+//! element's graph and then, round by round, the graphs of every symbol an
+//! `InstanceInfo` names (at most four rounds), and attributes a symbol's faces
+//! to the IFC classes of the exported elements that reach it.
+//!
 //! Output, tab separated:
-//!   arrangement <class> <key> faces=<n> elements=<n> first=<ids>
-//!   detail <class> <element> face=<index> <loops: vertices/area/uv box> u=<range> v=<range>
+//!   arrangement <class> <key> faces=<n> records=<n> first=<ids>
+//!   detail <class> <record> face=<index> <loops: vertices/area/uv box> u=<range> v=<range>
 //! where <key> is `loops=<n> outers=<n> holes=<n> signs=<+-...> seam=<b> shared=<b>`.
 //!
 //! Usage:
@@ -87,131 +93,155 @@ fn main() -> anyhow::Result<()> {
             classes.entry(id).or_insert_with(|| ifc_type.clone());
         }
     }
-    let options = Options {
-        selected_ids: classes.keys().copied().collect(),
-        channels: BTreeSet::from([102, 103]),
-        max_graph_values: 1_000_000,
-        max_graph_objects: 1_000_000,
-        ..Options::default()
-    };
+    // The exported classes that reach each record: an element's own, then its symbols'.
+    let mut reached: BTreeMap<u64, BTreeSet<String>> = classes
+        .iter()
+        .map(|(id, class)| (*id, BTreeSet::from([class.clone()])))
+        .collect();
+    let mut visited: BTreeSet<u64> = BTreeSet::new();
+    let mut frontier: BTreeSet<u64> = classes.keys().copied().collect();
     type Key = (String, String);
     let mut census: BTreeMap<Key, (usize, BTreeSet<u64>)> = BTreeMap::new();
     let mut details: BTreeMap<Key, Vec<String>> = BTreeMap::new();
     let mut faces_seen = 0usize;
     let mut multi = 0usize;
-    extract_graphs(&mut rf, &options, |record| {
-        let Some(graph) = record.graph.as_ref() else {
-            return Ok(());
+    for round in 0..4 {
+        let options = Options {
+            selected_ids: frontier.clone(),
+            channels: BTreeSet::from([103]),
+            max_graph_values: 1_000_000,
+            max_graph_objects: 1_000_000,
+            ..Options::default()
         };
-        let id = record.identity.element_id;
-        let class = classes
-            .get(&id)
-            .cloned()
-            .unwrap_or_else(|| "unmapped".to_string());
-        for (fi, face) in graph.objects.iter().enumerate() {
-            if face.class_name != "Face" {
-                continue;
-            }
-            let Ok(Some(surface)) = pointer(graph, fi, &face.fields["m_pSurf"]) else {
-                continue;
+        visited.extend(frontier.iter().copied());
+        let mut named: BTreeSet<u64> = BTreeSet::new();
+        let mut update: Vec<(u64, BTreeSet<String>)> = Vec::new();
+        extract_graphs(&mut rf, &options, |record| {
+            let Some(graph) = record.graph.as_ref() else {
+                return Ok(());
             };
-            let surface = &graph.objects[surface];
-            if surface.class_name != "CylSurf" {
-                continue;
-            }
-            faces_seen += 1;
-            let key_of = |text: String| (class.clone(), text);
-            let loops = match face_trim_loops(graph, fi) {
-                Ok(loops) => loops,
-                Err(error) => {
-                    // A loop the ring reader refuses is a different question.
-                    let key = key_of(format!("loops unreadable: {error:#}"));
-                    let entry = census.entry(key).or_default();
-                    entry.0 += 1;
-                    entry.1.insert(id);
+            let id = record.identity.element_id;
+            let class = reached
+                .get(&id)
+                .map(|set| set.iter().cloned().collect::<Vec<_>>().join("+"))
+                .unwrap_or_else(|| "unmapped".to_string());
+            for object in &graph.objects {
+                if object.class_name != "InstanceInfo" {
                     continue;
                 }
-            };
-            if loops.len() < 2 {
-                continue;
+                if let Some(symbol) = object.fields["m_symbolId"]["m_id"]["m_id64"].as_u64() {
+                    if symbol != id {
+                        named.insert(symbol);
+                        if let Some(set) = reached.get(&id) {
+                            update.push((symbol, set.clone()));
+                        }
+                    }
+                }
             }
-            multi += 1;
-            let corners = surface.fields["m_Envelope"]["m_corners"].as_array();
-            let (u, v) = match corners {
-                Some(c) if c.len() == 2 => (
-                    [
-                        c[0][0].as_f64().unwrap_or(f64::NAN),
-                        c[1][0].as_f64().unwrap_or(f64::NAN),
-                    ],
-                    [
-                        c[0][1].as_f64().unwrap_or(f64::NAN),
-                        c[1][1].as_f64().unwrap_or(f64::NAN),
-                    ],
-                ),
-                _ => ([f64::NAN; 2], [f64::NAN; 2]),
-            };
-            let depths: Vec<usize> = loops
-                .iter()
-                .enumerate()
-                .map(|(i, r)| {
-                    loops
-                        .iter()
-                        .enumerate()
-                        .filter(|(j, s)| *j != i && inside(r[0], s))
-                        .count()
-                })
-                .collect();
-            let outers = depths.iter().filter(|d| **d % 2 == 0).count();
-            let signs: String = loops
-                .iter()
-                .map(|r| if signed_area(r) >= 0. { '+' } else { '-' })
-                .collect();
-            let seam = loops.iter().any(|r| {
-                let b = bbox(r);
-                (b[0] - u[0]).abs() < 1e-7 || (b[2] - u[1]).abs() < 1e-7
-            });
-            let shared = loops.iter().enumerate().any(|(i, first)| {
-                loops[i + 1..].iter().any(|second| {
-                    first.iter().any(|a| {
-                        second
-                            .iter()
-                            .any(|b| (a[0] - b[0]).abs() < 1e-9 && (a[1] - b[1]).abs() < 1e-9)
-                    })
-                })
-            });
-            let key = key_of(format!(
-                "loops={} outers={} holes={} signs={} seam={} shared={}",
-                loops.len(),
-                outers,
-                loops.len() - outers,
-                signs,
-                seam,
-                shared
-            ));
-            let entry = census.entry(key.clone()).or_default();
-            entry.0 += 1;
-            entry.1.insert(id);
-            let list = details.entry(key).or_default();
-            if list.len() < 3 {
-                let shape: Vec<String> = loops
+            for (fi, face) in graph.objects.iter().enumerate() {
+                if face.class_name != "Face" {
+                    continue;
+                }
+                let Ok(Some(surface)) = pointer(graph, fi, &face.fields["m_pSurf"]) else {
+                    continue;
+                };
+                let surface = &graph.objects[surface];
+                if surface.class_name != "CylSurf" {
+                    continue;
+                }
+                faces_seen += 1;
+                let key_of = |text: String| (class.clone(), text);
+                let loops = match face_trim_loops(graph, fi) {
+                    Ok(loops) => loops,
+                    Err(error) => {
+                        // A loop the ring reader refuses is a different question.
+                        let key = key_of(format!("loops unreadable: {error:#}"));
+                        let entry = census.entry(key).or_default();
+                        entry.0 += 1;
+                        entry.1.insert(id);
+                        continue;
+                    }
+                };
+                if loops.len() < 2 {
+                    continue;
+                }
+                multi += 1;
+                let corners = surface.fields["m_Envelope"]["m_corners"].as_array();
+                let (u, v) = match corners {
+                    Some(c) if c.len() == 2 => (
+                        [
+                            c[0][0].as_f64().unwrap_or(f64::NAN),
+                            c[1][0].as_f64().unwrap_or(f64::NAN),
+                        ],
+                        [
+                            c[0][1].as_f64().unwrap_or(f64::NAN),
+                            c[1][1].as_f64().unwrap_or(f64::NAN),
+                        ],
+                    ),
+                    _ => ([f64::NAN; 2], [f64::NAN; 2]),
+                };
+                let depths: Vec<usize> = loops
                     .iter()
-                    .zip(&depths)
-                    .map(|(r, d)| {
-                        let b = bbox(r);
-                        format!(
-                            "{}v/{:.5}/depth{}/u[{:.4},{:.4}]v[{:.4},{:.4}]",
-                            r.len(),
-                            signed_area(r),
-                            d,
-                            b[0],
-                            b[2],
-                            b[1],
-                            b[3]
-                        )
+                    .enumerate()
+                    .map(|(i, r)| {
+                        loops
+                            .iter()
+                            .enumerate()
+                            .filter(|(j, s)| *j != i && inside(r[0], s))
+                            .count()
                     })
                     .collect();
-                list.push(format!(
-                    "detail\t{class}\t{id}\tface={fi}\t{}\tu=[{:.4},{:.4}]\tv=[{:.4},{:.4}]\tradius={}",
+                let outers = depths.iter().filter(|d| **d % 2 == 0).count();
+                let signs: String = loops
+                    .iter()
+                    .map(|r| if signed_area(r) >= 0. { '+' } else { '-' })
+                    .collect();
+                let seam = loops.iter().any(|r| {
+                    let b = bbox(r);
+                    (b[0] - u[0]).abs() < 1e-7 || (b[2] - u[1]).abs() < 1e-7
+                });
+                let shared = loops.iter().enumerate().any(|(i, first)| {
+                    loops[i + 1..].iter().any(|second| {
+                        first.iter().any(|a| {
+                            second
+                                .iter()
+                                .any(|b| (a[0] - b[0]).abs() < 1e-9 && (a[1] - b[1]).abs() < 1e-9)
+                        })
+                    })
+                });
+                let key = key_of(format!(
+                    "loops={} outers={} holes={} signs={} seam={} shared={}",
+                    loops.len(),
+                    outers,
+                    loops.len() - outers,
+                    signs,
+                    seam,
+                    shared
+                ));
+                let entry = census.entry(key.clone()).or_default();
+                entry.0 += 1;
+                entry.1.insert(id);
+                let list = details.entry(key).or_default();
+                if list.len() < 3 {
+                    let shape: Vec<String> = loops
+                        .iter()
+                        .zip(&depths)
+                        .map(|(r, d)| {
+                            let b = bbox(r);
+                            format!(
+                                "{}v/{:.5}/depth{}/u[{:.4},{:.4}]v[{:.4},{:.4}]",
+                                r.len(),
+                                signed_area(r),
+                                d,
+                                b[0],
+                                b[2],
+                                b[1],
+                                b[3]
+                            )
+                        })
+                        .collect();
+                    list.push(format!(
+                    "detail\t{class}\t{id}\tround={round}\tface={fi}\t{}\tu=[{:.4},{:.4}]\tv=[{:.4},{:.4}]\tradius={}",
                     shape.join(" "),
                     u[0],
                     u[1],
@@ -219,15 +249,23 @@ fn main() -> anyhow::Result<()> {
                     v[1],
                     surface.fields["m_radius"]
                 ));
+                }
             }
+            Ok(())
+        })?;
+        for (symbol, set) in update {
+            reached.entry(symbol).or_default().extend(set);
         }
-        Ok(())
-    })?;
+        frontier = named.difference(&visited).copied().collect();
+        if frontier.is_empty() {
+            break;
+        }
+    }
     println!("cylinder faces={faces_seen} with_several_loops={multi}");
     for ((class, key), (faces, elements)) in &census {
         let first: Vec<String> = elements.iter().take(3).map(u64::to_string).collect();
         println!(
-            "arrangement\t{class}\t{key}\tfaces={faces}\telements={}\tfirst={}",
+            "arrangement\t{class}\t{key}\tfaces={faces}\trecords={}\tfirst={}",
             elements.len(),
             first.join(",")
         );
