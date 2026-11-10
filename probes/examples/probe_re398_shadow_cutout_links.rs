@@ -10,7 +10,8 @@
 //!
 //! Output:
 //!   shadow <wall> cutter=<id> <cutter's IFC class> other=<wall> gg=<m_ggId>
-//!     <resolves kind=<Embed|Cutout> cuts_something=<..>|no: <why>>
+//!     own=<the shadow's own m_bCutSomething>
+//!     <resolves kind=<Embed|Cutout> cuts_something=<the other step's>|no: <why>>
 //!   shadow <wall> cutter=<id> no m_otherWallId or m_ggId
 //!   steps walls=<n> steps=<n> embed=<n> cutout=<n> rect=<n> shadow=<n>
 //!     resolved=<n> unresolved=<n> ids_missing=<n>
@@ -102,8 +103,8 @@ fn main() -> anyhow::Result<()> {
                 unresolved += 1;
             }
             println!(
-                "shadow {wall} cutter={} {class} other={other} gg={gg} {verdict}",
-                step.cutter
+                "shadow {wall} cutter={} {class} other={other} gg={gg} own={:?} {verdict}",
+                step.cutter, step.cuts_something
             );
         }
     }
