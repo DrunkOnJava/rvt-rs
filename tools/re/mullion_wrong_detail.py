@@ -103,6 +103,7 @@ def main(argv):
 
     verdict = collections.Counter()
     near_short_table = collections.Counter()
+    near_short_relation = collections.Counter()
     features = collections.Counter()
     wrong = []
     for host, group in by_host.items():
@@ -146,6 +147,25 @@ def main(argv):
                 labels_per_end = tuple("+".join(sorted(f)) or "nothing" for f in found[tag])
                 key = ("right" if ok else "WRONG", labels_per_end, tuple(touching), predicted)
                 near_short_table[key] += 1
+                shorts = {
+                    o["tag"]: o
+                    for p, _ in M.end_points(m)
+                    for o in group
+                    if o is not m and o["tag"] in short and M.box_distance(o, p) < M.NEAR
+                }
+                mine_section = sorted(round(2 * h * MM, 1) for h in m["half"][1:])
+                relation = tuple(
+                    sorted(
+                        {
+                            (
+                                "same type" if (m["type"] != "-" and m["type"] == o["type"]) else "other type",
+                                "same section" if sorted(round(2 * h * MM, 1) for h in o["half"][1:]) == mine_section else "other section",
+                            )
+                            for o in shorts.values()
+                        }
+                    )
+                )
+                near_short_relation[("right" if ok else "WRONG", relation)] += 1
             if not ok:
                 wrong.append((tag, host, kind, m, found[tag], predicted, written, nsa, ends, group))
     print("written by the rule, by what it read:", dict(sorted(verdict.items())))
@@ -154,6 +174,9 @@ def main(argv):
         print(f"  {k}: {n}")
     print("mullions that meet a mullion shorter than their section, by verdict, labels at each end, whether the short one touches, ends counted: mullions")
     for key, n in sorted(near_short_table.items(), key=lambda kv: (kv[0][0], -kv[1])):
+        print(f"  {key}: {n}")
+    print("mullions that meet a short mullion, by verdict and what the short ones are (type, section) against the mullion's own: mullions")
+    for key, n in sorted(near_short_relation.items(), key=lambda kv: (kv[0][0], -kv[1])):
         print(f"  {key}: {n}")
     print(f"different: {len(wrong)}")
     for tag, host, kind, m, fnd, predicted, written, nsa, ends, group in wrong:
