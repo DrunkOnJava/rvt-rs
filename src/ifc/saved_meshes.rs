@@ -495,12 +495,14 @@ const WALL_HEIGHT_AGREE_FEET: f64 = 5e-4;
 /// The quantities of a wall's box (RE-270, RE-293) hold only where the box is
 /// the solid (RE-405). A wall whose held `NetVolume` is not the mesh's, by more
 /// than [`WALL_BOX_MESH_TOLERANCE`] of it, is a box that is not Revit's solid (a
-/// wall joined at an angle, whose footprint is a pentagon, or one whose layers
-/// Revit trims where it joins another): the quantities taken from the box are
-/// dropped, and the mesh gives those it can. A `Height` is the box's, and is
-/// written for a wall of at most four vertical faces, as its areas are, where
-/// the mesh's vertical span confirms it and is dropped where the span does not
-/// (a wall whose lower part a door as wide as the wall cuts away).
+/// wall joined at an angle, whose footprint is a pentagon, or a box longer than
+/// the wall): the quantities taken from the box are dropped, and the mesh gives
+/// those it can. The footprint stays where the mesh's vertical span is not the
+/// box's height, which says the wall is cut in height and not in plan. A
+/// `Height` is the box's, and is written for a wall of at most four vertical
+/// faces, as its areas are, where the mesh's vertical span confirms it and is
+/// dropped where the span does not (a wall whose lower part a door as wide as
+/// the wall cuts away).
 fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities)]) {
     if found.is_empty() {
         return;
@@ -530,6 +532,8 @@ fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities
         else {
             continue;
         };
+        let height_agrees = body_height
+            .map(|height| (quantities.height_feet - height).abs() <= WALL_HEIGHT_AGREE_FEET);
         let held_volume = set
             .properties
             .iter()
@@ -542,19 +546,18 @@ fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities
         if held_volume.is_some_and(|held| {
             (held - quantities.net_volume).abs() > WALL_BOX_MESH_TOLERANCE * quantities.net_volume
         }) {
-            set.properties.retain(|property| {
-                !matches!(
-                    property.name.as_str(),
-                    "NetVolume"
-                        | "NetSideArea"
-                        | "GrossSideArea"
-                        | "GrossVolume"
-                        | "GrossFootprintArea"
-                )
-            });
+            // The footprint is the plan's: a box whose height the mesh does not
+            // have (a wall cut away from below or above) may still have Revit's.
+            let keep_footprint = height_agrees == Some(false);
+            set.properties
+                .retain(|property| match property.name.as_str() {
+                    "NetVolume" | "NetSideArea" | "GrossSideArea" | "GrossVolume" => false,
+                    "GrossFootprintArea" => keep_footprint,
+                    _ => true,
+                });
         }
         if let Some(height) = body_height {
-            if (quantities.height_feet - height).abs() > WALL_HEIGHT_AGREE_FEET {
+            if height_agrees == Some(false) {
                 set.properties.retain(|property| property.name != "Height");
             } else if quantities.sides.is_some() && !has_property(set, "Height") {
                 set.properties.push(Property {
