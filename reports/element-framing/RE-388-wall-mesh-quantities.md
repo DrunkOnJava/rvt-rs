@@ -3,8 +3,8 @@
 **Date:** 2026-11-09
 **Issues:** #1046 (base quantities Revit computes from its joined geometry, W7), #1016 (quantities); follows RE-270 (the four wall quantities of a plain prism), RE-293 (walls joined to roofs and floors clear of them), RE-340 (walls drawn from a mesh because they embed a curtain wall) and RE-387 (the volume of a body drawn from a mesh of flat faces)
 **Artefacts:** the BIM4LCA office as built and at building permit (Revit 2024, Revit 24.0.5's IFC4 exports, CC BY-SA 4.0, as Measure fetches them) and puzzbobb's 24 Revit 2025 models (Revit 25.0.2's IFC4 exports)
-**Runs:** Measure [42677569083](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42677569083) (`probes/examples/probe_1046_wall_mesh_quantities.rs` and `tools/re/wall_mesh_quantities_vs_ifc.py`, commit `89b210a6d0fd`, the office as built and at permit and the Revit 2025 models) and [42681675150](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42681675150) (the same with the shape of each wall's top and bottom, commit `c6285bc2bf64`, the office); the change against its base, section 3
-**Status:** @@STATUS@@
+**Runs:** Measure [42677569083](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42677569083) (`probes/examples/probe_1046_wall_mesh_quantities.rs` and `tools/re/wall_mesh_quantities_vs_ifc.py`, commit `89b210a6d0fd`, the office as built and at permit and the Revit 2025 models) and [42681675150](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42681675150) (the same with the shape of each wall's top and bottom, commit `c6285bc2bf64`, the office); and [42690731323](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42690731323) (unfiltered: this change's code and scorers `a68a7562` against `main` at `ae08c1da`, section 3)
+**Status:** Positive for a wall's `NetVolume` and, of a wall with no more than four vertical faces, its `NetSideArea` and, where its two sides agree, its `GrossSideArea` and `GrossVolume`: each is Revit's on every wall it is written for in every model with Revit's export (the census's different and the quantities written that Revit's export does not stay as they were), and the office's equal quantities go from 31,904 to 32,924 as built and from 32,196 to 33,243 at permit. Negative for the areas of a wall with five or more vertical faces, which Revit gives only a volume on 26 of the office's walls that nothing else tells apart, and for a wall's `Height`, `Length` and `GrossFootprintArea`, which the mesh does not give.
 
 ## 1. What Revit writes, and what the wall's saved mesh is
 
@@ -35,9 +35,27 @@ The two sides of 457 of the 499 walls closed in one piece as built have the same
 
 ## 3. What rvt-rs writes
 
-@@WRITES@@
+`saved_meshes::attach_scoped_with_control` reads the mesh of each `IfcWall` it draws from a saved mesh or leaves as an extrusion and holds a mesh for (`mesh_wall_quantities::wall_mesh_quantities`) and, after the volumes of RE-387, gives a wall that already holds a `Qto_WallBaseQuantities` set and lacks them: `NetVolume`, the volume of the mesh; where the mesh has no more than four vertical flat faces, `NetSideArea`, the area of the largest vertical face less its holes; and where the two largest vertical faces face opposite ways and agree on their outer-loop area, `GrossSideArea`, that area, and `GrossVolume`, the type's `Width` times it. The mesh must be one closed surface wound one way, in one piece, with every face a plane; a wall with a curved face, a mesh that does not close or two pieces gets nothing. A wall with no base quantity set (Revit writes none on a wall it splits at its storeys) gets none, and what RE-270's and RE-293's rules wrote stays. `--no-base-quantities` leaves them out with the rest.
 
-@@MEASURE@@
+### The change against `main`
+
+Measure [42690731323](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42690731323), unfiltered (`nordic`, `r2025`, `samples`, `racadv`, `bimcollab` and `holdout`), this change's commit `a68a7562` against `main` at `ae08c1da`, 118 exports. 63 move. Of every scorer's output only the quantity census (`qtos_vs_ifc`, 26 models), the held-out counts (11), the MCP answers that quote the same quantities (25) and Core Interior's two witness observations (the counts of `IFCQUANTITYAREA` and `IFCQUANTITYVOLUME`, refreshed in this change and replayed to PASS) change; `decoded.parameter_value_count`, every body, box, mesh, opening and material scorer and the property census are byte-identical, so no body and no property moves. The quantities written that Revit's export does not stay 0 on every model, and the census's different stays as it was on every model with Revit's export (below, one model counts two apart).
+
+| Export | Revit's quantities on objects rvt-rs writes | Equal, before to after | Different |
+|---|---:|---:|---:|
+| office as built | 39,754 | 31,904 to 32,924 | 1 to 1 |
+| office at permit | 40,006 | 32,196 to 33,243 | 1 to 1 |
+| office terrain, concrete and timber (each) | 45 | 17 to 25 | 0 and 1, unchanged |
+| the 20 Revit 2025 models with walls | 37 to 106 each | 84 more in all | 0 to 0 |
+| held-out Revit 2024 to 2027 pairs (counts only) | 313, 313, 313, 357 | 89 to 99, 91 to 101, 91 to 101, 76 to 86 | 1 to 1 on each |
+| held-out Revit 2024 to 2027 office pairs (counts only) | 254, 254, 254, 295 | 74 to 83 (three), 60 to 69 | 3 to 3 |
+| held-out single dwelling (counts only) | 846 | 206 to 300 | 0 to 0 |
+| held-out Revit 2023 `modelo_bim` (counts only) | 211 | 16 to 20 | 0 to 0 |
+| held-out Revit 2025 `teste_export_2025` (counts only) | 44 to 42 | 10 to 17 | 0 to 0 (see below) |
+
+On the office as built `NetVolume` goes from 100 to 519 of 607 equal (missing 507 to 88), `NetSideArea` from 100 to 303 of 579, `GrossSideArea` and `GrossVolume` from 100 to 299 of 579 each; at permit `NetVolume` 108 to 524 of 589, `NetSideArea` 108 to 321, `GrossSideArea` and `GrossVolume` 108 to 317 of 565. The 88 and 65 walls still without a `NetVolume` are walls whose mesh is open, in two pieces or has a curved face, and walls with no mesh. None of the 26 office walls Revit writes only a volume on is given an area (the census's quantities written that Revit does not stay 0). Core Interior's and RE1 Architecture's exports were made with base quantities off, so the census counts the quantities rvt-rs writes there apart (Core Interior 2,554 to 3,124, RE1 Architecture 98 to 111).
+
+**One held-out wall is counted apart.** On `teste_export_2025` the census scored two quantities different at first, a `GrossVolume` at 0.667 of Revit's and a `NetVolume` at 0.8. That model's export names a type for one wall that its saved file does not hold (RE-253, #1048), and the census already counts that wall's `Width` apart for it (the maintainer, 2026-10-27). The mesh Revit saved is the saved state, and the type's `Width` rvt-rs gives `GrossVolume` is the saved type's, so a wall whose record confirms rvt-rs's type but whose export names another has its volume and side areas that Revit's export writes from the other state. The census now counts those apart on the same condition (`walls the two exports give different types, their other differing wall quantities counted apart`): 2 on 1 wall of 1 model, 0 on the 117 others, and different is 0 on that model with the change (the maintainer, 2026-11-09, through the question tool, chose to count them apart).
 
 ## 4. Not shown
 
@@ -56,5 +74,7 @@ The two sides of 457 of the 499 walls closed in one piece as built have the same
 gh workflow run measure.yml --ref main -f ref=89b210a6d0fd -f base=none -f nordic=true -f r2025=true \
     -f models="nordic-office-as-built nordic-office-permit r2025-*" -f scorers=none \
     -f probe=probe_1046_wall_mesh_quantities -f probe_scorer=wall_mesh_quantities_vs_ifc
-@@REPRODUCE@@
+# The change against main, unfiltered (the scorers come from this change's branch):
+gh workflow run measure.yml --ref feat/wall-mesh-quantities -f ref=a68a7562304acd208e456778a5c17f9dce7b0beb -f base=ae08c1dad8e1e7c10ed06ccadb1a1112e186384f \
+    -f nordic=true -f r2025=true -f samples=true -f racadv=true -f bimcollab=true -f holdout=true
 ```
