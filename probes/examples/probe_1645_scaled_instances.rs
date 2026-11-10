@@ -14,8 +14,11 @@
 //!
 //! Output, tab separated:
 //!   scaled <class> kind=<rotation|mirror|uniform|axes|shear> det=<sign> cols=<x,y,z lengths>
-//!     instances=<n> records=<n> first=<ids>
+//!     max_dev=<largest |column i . column j - identity| of the group> instances=<n> records=<n> first=<ids>
 //!   total <class> instances=<n> scaled=<n>
+//!   sample <class> flagged=<bool> id=<record> instance=<the GInstance's fields> info=<its InstanceInfo's>
+//! where the sample lines show the fields of the first two flagged instances of each class and of the
+//! first unflagged one, so that what the flag adds to an instance can be read from the bytes.
 //! where <class> is the IFC classes of the exported elements that reach the record
 //! (joined with `+`).
 //!
@@ -52,7 +55,7 @@ fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
     a.iter().zip(b).map(|(x, y)| x * y).sum()
 }
 
-fn describe(c: [[f64; 3]; 3]) -> (String, i8, String) {
+fn describe(c: [[f64; 3]; 3]) -> (String, i8, String, f64) {
     let lengths = [norm(c[0]), norm(c[1]), norm(c[2])];
     let cross = [
         c[0][1] * c[1][2] - c[0][2] * c[1][1],
@@ -78,11 +81,21 @@ fn describe(c: [[f64; 3]; 3]) -> (String, i8, String) {
     } else {
         "axes"
     };
+    let dev = (0..3)
+        .flat_map(|a| (0..3).map(move |b| (a, b)))
+        .map(|(a, b)| (dot(c[a], c[b]) - f64::from(u8::from(a == b))).abs())
+        .fold(0.0, f64::max);
     (
         kind.to_string(),
         sign,
         format!("{:.4},{:.4},{:.4}", lengths[0], lengths[1], lengths[2]),
+        dev,
     )
+}
+
+/// The first 1,400 characters of a JSON text, so that a sample line stays a line.
+fn clip(text: String) -> String {
+    text.chars().take(1400).collect()
 }
 
 fn main() -> anyhow::Result<()> {
@@ -111,7 +124,8 @@ fn main() -> anyhow::Result<()> {
     let mut visited: BTreeSet<u64> = BTreeSet::new();
     let mut frontier: BTreeSet<u64> = classes.keys().copied().collect();
     type Key = (String, String, i8, String);
-    let mut census: BTreeMap<Key, (usize, BTreeSet<u64>)> = BTreeMap::new();
+    let mut census: BTreeMap<Key, (usize, BTreeSet<u64>, f64)> = BTreeMap::new();
+    let mut shown: BTreeMap<(String, bool), usize> = BTreeMap::new();
     let mut totals: BTreeMap<String, (usize, usize)> = BTreeMap::new();
     for _round in 0..4 {
         let options = Options {
@@ -151,23 +165,38 @@ fn main() -> anyhow::Result<()> {
                 }
                 let total = totals.entry(class.clone()).or_default();
                 total.0 += 1;
-                if object.fields["m_bHasScale"].as_bool() != Some(true) {
+                let flagged = object.fields["m_bHasScale"].as_bool() == Some(true);
+                let info = pointer(graph, index, &object.fields["m_instanceInfo"])
+                    .ok()
+                    .flatten();
+                let limit = if flagged { 2 } else { 1 };
+                let seen = shown.entry((class.clone(), flagged)).or_default();
+                if *seen < limit {
+                    *seen += 1;
+                    let info_json = info
+                        .map(|i| graph.objects[i].fields.to_string())
+                        .unwrap_or_default();
+                    println!(
+                        "sample\t{class}\tflagged={flagged}\tid={id}\tinstance={}\tinfo={}",
+                        clip(object.fields.to_string()),
+                        clip(info_json)
+                    );
+                }
+                if !flagged {
                     continue;
                 }
                 total.1 += 1;
-                let trf = match pointer(graph, index, &object.fields["m_instanceInfo"]) {
-                    Ok(Some(info)) => columns(&graph.objects[info].fields["m_Trf"]),
-                    _ => None,
-                };
-                let (kind, sign, lengths) = match trf {
+                let trf = info.and_then(|i| columns(&graph.objects[i].fields["m_Trf"]));
+                let (kind, sign, lengths, dev) = match trf {
                     Some(c) => describe(c),
-                    None => ("unreadable".to_string(), 0, String::new()),
+                    None => ("unreadable".to_string(), 0, String::new(), 0.0),
                 };
                 let entry = census
                     .entry((class.clone(), kind, sign, lengths))
                     .or_default();
                 entry.0 += 1;
                 entry.1.insert(id);
+                entry.2 = entry.2.max(dev);
             }
             Ok(())
         })?;
@@ -179,10 +208,10 @@ fn main() -> anyhow::Result<()> {
             break;
         }
     }
-    for ((class, kind, sign, lengths), (instances, records)) in &census {
+    for ((class, kind, sign, lengths), (instances, records, dev)) in &census {
         let first: Vec<String> = records.iter().take(3).map(u64::to_string).collect();
         println!(
-            "scaled\t{class}\tkind={kind}\tdet={sign}\tcols={lengths}\tinstances={instances}\trecords={}\tfirst={}",
+            "scaled\t{class}\tkind={kind}\tdet={sign}\tcols={lengths}\tmax_dev={dev:.2e}\tinstances={instances}\trecords={}\tfirst={}",
             records.len(),
             first.join(",")
         );
