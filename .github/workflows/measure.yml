@@ -163,7 +163,7 @@ on:
         required: false
         default: ""
       families:
-        description: Also read every file of the phi-ag/rvt family corpus and the makers' public families (research/public-families.tsv) with rvt-info, and run the probe on them (fetched for the run and never stored)
+        description: Also read every file of the phi-ag/rvt family corpus and the makers' public families (research/public-families.tsv) with rvt-info, export each and hash its IFC (so the two sides' exports are compared), and run the probe on them (fetched for the run and never stored)
         type: boolean
         required: false
         default: false
