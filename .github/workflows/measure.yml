@@ -24,10 +24,12 @@
 # workflow, so rvt-info reads each family's PartAtom too and the probe runs on
 # it. The corpus is scored against nothing and never stored. Autodesk's sample
 # projects (2015 to 2027, pinned in research/autodesk-sample-projects.tsv) are
-# fetched the same way when `samples` is set, and the two versions of the
-# BIM4LCA office, and its terrain variants in concrete and timber, with Revit's
-# exports of them (research/bim4lca-measure.tsv, CC BY-SA 4.0) when `nordic` is
-# set; those are scored like the reference models (#763, #1262).
+# fetched the same way when `samples` is set, and the BIM4LCA buildings with
+# Revit's exports of them (research/bim4lca-measure.tsv, CC BY-SA 4.0) when
+# `nordic` is set: the office in concrete and timber, as built and at building
+# permit, the housing in concrete and timber, as built and at building permit,
+# and the terrain variants of both; those are scored like the reference models
+# (#763, #1262, #1636).
 #
 #   gh workflow run measure.yml -f ref=my-branch -f base=main -f nordic=true
 #
@@ -190,7 +192,7 @@ on:
         required: false
         default: false
       nordic:
-        description: Also score the BIM4LCA office as built and at building permit, and its two terrain variants, against Revit's exports of them (research/bim4lca-measure.tsv, CC BY-SA 4.0, read by byte range and kept in the Actions cache, never committed)
+        description: Also score the BIM4LCA office and housing buildings (concrete and timber, as built and at building permit) and their terrain variants against Revit's exports of them (research/bim4lca-measure.tsv, CC BY-SA 4.0, read by byte range and kept in the Actions cache, never committed); each large model has a shard of its own
         type: boolean
         required: false
         default: false
@@ -328,7 +330,7 @@ jobs:
           FAMILIES: ${{ (inputs.families || github.event_name == 'pull_request') && 'true' || 'false' }}
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json, os
+          import fnmatch, json, os
           e = os.environ
           def flag(name):
               return e[name] == "true"
@@ -342,9 +344,35 @@ jobs:
           rest = dict(families=flag("FAMILIES"), nordic=flag("NORDIC"),
                       r2025=flag("R2025"), holdout=flag("HOLDOUT"),
                       bimcollab=flag("BIMCOLLAB"), racadv=flag("RACADV"))
+          # The large BIM4LCA models, a shard each, so that a shard fetches and
+          # measures its own pair and the longest shard sets the run (#1636).
           offices = {"office-as-built": "nordic-office-as-built",
-                     "office-permit": "nordic-office-permit"}
-          if e["MODELS"] or e["YEARS"] or e["PAIR"]:
+                     "office-permit": "nordic-office-permit",
+                     "office-timber-as-built": "nordic-office-timber-as-built",
+                     "office-timber-permit": "nordic-office-timber-permit",
+                     "housing-concrete-as-built": "nordic-housing-concrete-as-built",
+                     "housing-concrete-permit": "nordic-housing-concrete-permit",
+                     "housing-timber-as-built": "nordic-housing-timber-as-built",
+                     "housing-timber-permit": "nordic-housing-timber-permit"}
+          terrain = ("nordic-office-terrain-concrete", "nordic-office-terrain-timber",
+                     "nordic-housing-terrain-concrete", "nordic-housing-terrain-timber")
+          patterns = e["MODELS"].split()
+          def kept(model):
+              return any(fnmatch.fnmatchcase(model, pattern) for pattern in patterns)
+          # A filter that names only BIM4LCA models gets a shard for each large
+          # one it keeps (and one for the terrain files), not one runner for all.
+          nordic_only = (flag("NORDIC") and patterns and not e["YEARS"] and not e["PAIR"]
+                         and not flag("SAMPLES")
+                         and all(any(fnmatch.fnmatchcase(model, pattern)
+                                     for model in list(offices.values()) + list(terrain))
+                                 for pattern in patterns))
+          if nordic_only:
+              shards = [shard(name, models=model, nordic=True)
+                        for name, model in offices.items() if kept(model)]
+              small = [model for model in terrain if kept(model)]
+              if small:
+                  shards.append(shard("terrain", models=" ".join(small), nordic=True))
+          elif e["MODELS"] or e["YEARS"] or e["PAIR"]:
               shards = [shard("all", models=e["MODELS"], samples=flag("SAMPLES"),
                               years=e["YEARS"], **rest)]
           else:
@@ -780,34 +808,73 @@ jobs:
       # fetched one; a restored R2025 model was checked when the run that
       # saved it fetched its archive, and only a job measuring main's own code
       # saves. The held-out models carry no licence and are never cached.
-      - name: Restore the BIM4LCA office models
-        id: bim4lca-cache
+      # A shard fetches and caches only the BIM4LCA pairs it measures: each
+      # large model has a shard of its own (the plan job), and the rest shard
+      # takes the four small terrain pairs. The files come from the table of
+      # models in tools/ci/measure-reference-models.sh, by the shard's filter
+      # and skip list, and the cache key names them, so a shard restores the
+      # files of its own models (about 180 to 200 MB for the largest pair)
+      # and never the others' (#1636).
+      - name: Plan the BIM4LCA files
+        id: bim4lca-files
         if: steps.reuse.outputs.cache-hit != 'true' && (matrix.nordic)
+        shell: bash
+        env:
+          MODELS: ${{ matrix.models }}
+          SKIP: ${{ matrix.skip }}
+        run: |
+          set -euo pipefail
+          files=()
+          while IFS='|' read -r model rvt ifc; do
+            keep=false
+            if [ -z "$MODELS" ]; then
+              keep=true
+            else
+              for pattern in $MODELS; do
+                # The patterns are globs, as MEASURE_MODELS' are.
+                # shellcheck disable=SC2254
+                case "$model" in $pattern) keep=true ;; esac
+              done
+            fi
+            for pattern in $SKIP; do
+              # shellcheck disable=SC2254
+              case "$model" in $pattern) keep=false ;; esac
+            done
+            if $keep; then files+=("$rvt" "$ifc"); fi
+          done < <(grep -E '^nordic-[a-z-]+[|]' tools/ci/measure-reference-models.sh)
+          echo "files=${files[*]-}" >> "$GITHUB_OUTPUT"
+          echo "key=$(printf '%s\n' "${files[@]-}" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+      - name: Restore the BIM4LCA models
+        id: bim4lca-cache
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.nordic) && steps.bim4lca-files.outputs.files != ''
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: _bim4lca-measure
-          key: bim4lca-measure-${{ hashFiles('research/bim4lca-measure.tsv', 'tools/ci/fetch-bim4lca.py') }}
-      - name: Fetch the BIM4LCA office models
+          key: bim4lca-measure-${{ steps.bim4lca-files.outputs.key }}-${{ hashFiles('research/bim4lca-measure.tsv', 'tools/ci/fetch-bim4lca.py') }}
+      - name: Fetch the BIM4LCA models
         id: bim4lca
-        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.nordic)
+        if: steps.reuse.outputs.cache-hit != 'true' && (matrix.nordic) && steps.bim4lca-files.outputs.files != ''
         shell: bash
+        env:
+          FILES: ${{ steps.bim4lca-files.outputs.files }}
         run: |
           set +e
-          python3 tools/ci/fetch-bim4lca.py research/bim4lca-measure.tsv _bim4lca-measure
+          # The names have no spaces; the shell splits them into arguments.
+          # shellcheck disable=SC2086
+          python3 tools/ci/fetch-bim4lca.py research/bim4lca-measure.tsv _bim4lca-measure $FILES
           status=$?
           set -e
           case "$status" in
             0)
-              # Only the pinned files, by name, so nothing else in the
-              # folder reaches the models.
+              # Only the pinned files this shard measures, by name, so nothing
+              # else in the folder reaches the models.
               mkdir -p models
-              awk -F'\t' '$1 == "entry" { n = split($2, a, "/"); print a[n] }' research/bim4lca-measure.tsv |
-                while read -r name; do ln -f "_bim4lca-measure/$name" models/; done
+              for name in $FILES; do ln -f "_bim4lca-measure/$name" models/; done
               echo "ok=true" >> "$GITHUB_OUTPUT" ;;
-            2) echo "::warning::BIM4LCA office models NOT MEASURED: the host was unreachable" ; : > "$RUNNER_TEMP/not-measured" ;;
-            *) echo "::error::the BIM4LCA office models no longer match research/bim4lca-measure.tsv"; exit 1 ;;
+            2) echo "::warning::BIM4LCA models NOT MEASURED: the host was unreachable" ; : > "$RUNNER_TEMP/not-measured" ;;
+            *) echo "::error::the BIM4LCA models no longer match research/bim4lca-measure.tsv"; exit 1 ;;
           esac
-      - name: Save the BIM4LCA office models
+      - name: Save the BIM4LCA models
         # Saved only by a job that measured main's own code, as rust-cache's
         # save-if. The rule was made when a job building another ref ran that
         # ref's build scripts before the fetch, which could have written into
@@ -1495,7 +1562,11 @@ jobs:
         run: |
           mkdir -p models
           set +e
-          python3 tools/ci/fetch-bim4lca.py research/bim4lca-measure.tsv models
+          python3 tools/ci/fetch-bim4lca.py research/bim4lca-measure.tsv models \
+            ARK_NordicLCA_Office_Concrete_As-Built.rvt ARK_NordicLCA_Office_Concrete_As-Built_Revit.ifc \
+            ARK_NordicLCA_Office_Concrete_BuildingPermit.rvt ARK_NordicLCA_Office_Concrete_BuildingPermit_Revit.ifc \
+            ARK_NordicLCA_Office_Terrain_Concrete_BuildingPermit.rvt ARK_NordicLCA_Office_Terrain_Concrete_BuildingPermit_Revit.ifc \
+            ARK_NordicLCA_Office_Terrain_Timber_BuildingPermit.rvt ARK_NordicLCA_Office_Terrain_Timber_BuildingPermit_Revit.ifc
           status=$?
           set -e
           case "$status" in

@@ -5,8 +5,10 @@ Research tool for `reports/element-framing/RE-134-curve-fields-at-the-anchor.md`
 Revit writes a duct as an extruded rectangle: for a duct along a principal axis
 it is the duct's own box, the profile turned so its two sides are whichever way
 round the export chose. This compares the world-space box of each duct's
-geometry in the two exports, in feet, for every duct both hold (same `Tag`, the
-ElementId). Revit's IFC2X3 export writes ducts as `IfcFlowSegment` like pipes,
+geometry in the two exports, in feet, in Revit's internal frame (each file's
+IfcSite placement undone with `ifc_common.site_frame`, since Revit's export
+rotates a project at an angle to true north and rvt-rs's writes no rotation:
+RE-402), for every duct both hold (same `Tag`, the ElementId). Revit's IFC2X3 export writes ducts as `IfcFlowSegment` like pipes,
 which are named "Pipe Types:<type>:<ElementId>" and left out here.
 
 The box is what a body along a principal axis cannot fake, and what a turned or
@@ -23,14 +25,17 @@ import argparse
 
 import ifcopenshell
 import ifcopenshell.geom
+import numpy
 
-FT = 0.3048
+from ifc_common import site_frame
+
 TOLERANCE_FT = 0.01
 
 
 def duct_boxes(path):
     """Tag -> (min, max) of the duct's world-space vertices, in feet."""
     model = ifcopenshell.open(path)
+    frame = site_frame(model)
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
     out = {}
@@ -40,7 +45,7 @@ def duct_boxes(path):
             continue
         shape = ifcopenshell.geom.create_shape(settings, element)
         verts = shape.geometry.verts
-        points = [(verts[i] / FT, verts[i + 1] / FT, verts[i + 2] / FT) for i in range(0, len(verts), 3)]
+        points = [tuple(float(c) for c in p) for p in frame(numpy.array(verts, dtype=float).reshape(-1, 3))]
         if not points:
             continue
         low = tuple(min(p[k] for p in points) for k in range(3))
