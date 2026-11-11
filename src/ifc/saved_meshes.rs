@@ -25,10 +25,13 @@
 //! Revit's export within 0.001 ft ("ref on ours"), windows among them; doors
 //! are 675 of 681, sanitary terminals 68 of 94, flow fittings 71 of 89, flow
 //! terminals 30 of 35 and walls 14 of 18. The cost is reading the saved
-//! graphics of every boxed element: on the BIM4LCA office as built 24.4 s
-//! against 21.2 s and a peak of 1,423 MiB against 913, with its IFC 83 MB
-//! against 68, and 1.01 times the time and the same peak on Core Interior
-//! (Measure run 42614230465, median of 3 on one runner).
+//! graphics of every boxed element: against 0.17.0 the BIM4LCA office as built
+//! goes from 25.4 s and 914 MiB to 33.0 s and 1,432 MiB, with its IFC 87 MB
+//! against 68, Core Interior from 4.7 s and 305 MiB to 5.3 s and 437 MiB and
+//! Snowdon Towers Architectural from 17.6 s and 1,073 MiB to 28.0 s and 2,086
+//! MiB, with its IFC 189 MB against 37 (Measure run 42956917709, the median of
+//! three exports on one runner per file); #1690 stopped holding every owner's
+//! graph at once, and what is left is #1694.
 //!
 //! A roof drawn as the level block of its sketch outline at its record box's
 //! full height is replaced too (#1612): the record box holds the roof's
