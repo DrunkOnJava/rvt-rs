@@ -6,4 +6,5 @@
   the axis its record runs it along, where the mesh is a prism along it and the
   extent lies within 35% of the box's `Length`, and its `Span` the same;
   otherwise the box's length stays. 49 more of 7,872 read equal to Revit's, and no other value on
-  that file or any model with a Revit export changes.
+  that file or any model with a Revit export changes; none of Autodesk's 58 samples
+  changes either.
