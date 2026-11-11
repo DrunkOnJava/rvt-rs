@@ -952,6 +952,21 @@ pub fn append_typed_production_elements(
                     })
                     .flatten()
             })
+            .or_else(|| {
+                // RE-419: Revit's exporter writes `NOTDEFINED` on a furniture or
+                // casework element that has no "IFC Predefined Type" of its own
+                // or its type's (revit-ifc's `IFCExportInfoPair`, CLEANROOM.md
+                // source 5, 89 and 90 on the BIM4LCA housing's four large files
+                // and 36 on its office). A value that is no enumerator is left
+                // unset: what Revit writes for one is not measured.
+                (effective.ifc_type == "IFCFURNITURE"
+                    && !decoded.fields.iter().any(|(name, value)| {
+                        matches!(value, InstanceField::String(text)
+                            if name == crate::partition_schema_mvp::IFC_PREDEFINED_TYPE_FIELD
+                                && !text.trim().is_empty())
+                    }))
+                .then_some("NOTDEFINED")
+            })
             .or(effective.predefined_type);
 
         // RE-65: a stair and its parts carry the name Revit gives them.

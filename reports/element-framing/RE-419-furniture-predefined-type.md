@@ -1,0 +1,32 @@
+# RE-419: a furniture element's `PredefinedType` is its own "IFC Predefined Type" where that is an enumerator, and `NOTDEFINED` where it has none
+
+**Date:** 2026-11-11
+**Issues:** #1681 (furniture: rvt-rs writes no `PredefinedType`), #1636 (second-project measurement); follows RE-417 (the Export to IFC As values) and RE-45 (the export parameters)
+**Artefacts:** the BIM4LCA housing's four large files (concrete and timber, as built and at permit) and the office's four (Revit 2024, Revit's IFC4 exports), as Measure fetches them. Never stored.
+**Runs:** Measure [42945616762](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42945616762) (`probe_re45_ifc_export_parameters` with `tools/re/export_parameters_vs_ifc.py`, on `main` at `134db9761fc48eaf4eceefb3f37e7591e7ec5e29`, the housing as built and at permit in timber and concrete and the office at permit) for section 1
+**Status:** pending the change's own measurement (section 3); the finding of section 1 is measured.
+
+## 1. What Revit writes
+
+`tools/re/predefined_types_vs_ifc.py` (which read `IfcFurniture` since RE-417) pairs each `IfcFurniture` of rvt-rs's export with Revit's by `Tag`. Before this change rvt-rs wrote no `PredefinedType` on 104 of the 107 furniture of the concrete housing files and 103 of the 106 of the timber ones, where Revit's export writes:
+
+| Revit writes | housing, concrete | housing, timber | office (each of four files) |
+|---|---:|---:|---:|
+| `NOTDEFINED` | 89 | 90 | 36 |
+| `CHAIR` | 9 | 9 | 0 |
+| `BED` | 6 | 4 | 0 |
+| `USERDEFINED` | 3 (written equal since RE-417) | 3 | 62 |
+
+The probe lists each element's own export parameters: the 15 furniture of the concrete housing (13 of the timber one) that carry "Export to IFC As" `IfcFurnitureType` carry "IFC Predefined Type" `CHAIR` (9) or `BED` (6 and 4), exactly the elements and values Revit's export writes them with; the office's 62 `USERDEFINED` carry "Export to IFC As" `IfcFurniture` with "IFC Predefined Type" `USERDEFINED`. The other 89 or 90 and 36 carry no predefined type, and Revit writes `NOTDEFINED` on them. revit-ifc's `IFCExportInfoPair` (CLEANROOM.md source 5) reads the same way: on its `release/2024.1` branch a value that is an enumerator of the entity is kept and any other, an empty one included, becomes `NOTDEFINED`; on `master` an empty one is left to the same default, and a value that is no enumerator becomes `USERDEFINED` with the text as the user-defined type. The two agree on the cases measured here (an enumerator, or none) and not on a value that is no enumerator.
+
+## 2. The rule
+
+`IFCFURNITURE`'s enumerators (`IfcFurnitureTypeEnum`) are in `category_map::PREDEFINED_TYPE_ENUMERATORS`, so any furniture or casework element takes its own or its type's "IFC Predefined Type" where it is one, as every other entity there does; RE-417 kept them out because the own predefined type of the furniture a category maps was not measured. An element that has none takes `NOTDEFINED`. An element whose value is no enumerator keeps none, since the two revit-ifc versions disagree on it and no file measured here has one.
+
+## 3. Measured: the change
+
+Pending: the unfiltered Measure of the change against `main`, which this section reports.
+
+## 4. Sources
+
+RE-45, RE-417. revit-ifc's `IFCExportInfoPair` (`Source/Revit.IFC.Export/Utility/IFCExportInfoPair.cs`, branches `release/2024.1` and `master`; CLEANROOM.md source 5). No Autodesk source was read.
