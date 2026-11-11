@@ -44,11 +44,13 @@ Unfiltered Measure [42951039566](https://github.com/DrunkOnJava/rvt-rs/actions/r
 
 Over the 19 models that hold furniture a Revit export scores, 872 of 884 read equal, and the 12 that do not are the 2022 pair's; `differs` is 0 and `NOTDEFINED` where Revit writes none is 0 on every class of every model. The only other scored line of any model that is not 0 is the 2027 pairs' `differs` on stairs (1), stair flights (1), slabs (3) and members (2), where rvt-rs writes a value and Revit none: identical on both sides of this change and recorded in section 2 (#1692). No other line of any census (`qtos_vs_ifc`, `psets_vs_ifc`, `class_sets_vs_ifc` and the others) changes on any model with a Revit export.
 
-RE1 Architecture moves (its 5 furniture take `NOTDEFINED`): Revit's export of it is IFC2X3, which has no `PredefinedType` on the class, so it scores nothing, and, as the IFC2X3 views are, it is counted apart and never removes a value.
+RE1 Architecture moves (its 23 furniture take `NOTDEFINED`): Revit's export of it is IFC2X3, which has no `PredefinedType` on the class, so it scores nothing, and, as the IFC2X3 views are, it is counted apart and never removes a value.
 
 ## 4. The Autodesk samples and the type objects
 
-Pending: the element-by-element diff of the seven samples that move, and the tally of Revit's furniture type objects against rvt-rs's.
+**The seven Autodesk samples that move.** Measure [42956695754](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42956695754) kept both sides' exports of the 58 samples (`samples=true keep_ifc=true scorers=none`, head `6792103992c19691e28c61f5aa736c7c7d770811`, kept under `refs/archive/2026-11-11/cited/6792103992c1`, against `0649e224b96285c2bced628c5379bdd4be924727`): 51 are byte-identical and 7 move, `rac_advanced` and `rac_basic` of 2024, 2025 and 2026 and Snowdon Towers Architectural of 2024. No Revit export of them exists, so each is read: `tools/re/furniture_predefined_types_diff.py <before> <after>` pairs every `IfcFurniture` and `IfcFurnitureType` by GlobalId, and on all seven the only change is `PredefinedType` of the furniture elements from none to `NOTDEFINED`: 104 in each `rac_advanced` save, 32 in each `rac_basic` save and 345 in Snowdon, 753 in all, every furniture of those files; no type changes, no name or tag differs and no entity is added or removed. RE1 Architecture, the one other file that moves, has the same change on its 23 furniture. `tools/re/ifc_element_diff.py`, which reads property and quantity sets, finds nothing to report on any of the seven: the attribute is not in a set.
+
+**The furniture type objects.** Pending: the tally of Revit's furniture type objects against rvt-rs's.
 
 ## 5. Sources
 
