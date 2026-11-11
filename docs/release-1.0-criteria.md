@@ -64,7 +64,7 @@ a saved mesh is Revit's own shape where it is complete (every vertex within 0.00
 A face the saved graphics do not decode marks a partial mesh, which keeps its box since RE-224.
 Some partial meshes record nothing, so a mesh that is drawn is not always Revit's whole body: of the bodies scored on 31 models (Measure run 42612357300) 17 classes are exact, and doors are 675 of 681, sanitary terminals 68 of 94, flow fittings 71 of 89, flow terminals 30 of 35 and walls 14 of 18;
 since RE-304 all 269 of the office's doors are drawn from their saved meshes, 265 of them exact (run 41850758987, RE-331 section 4.1).
-Reading every box's saved graphics costs the BIM4LCA office as built 24.4 s against 21.2 s and 1,423 MiB of peak memory against 913 (Measure run 42614230465).
+Reading every box's saved graphics costs 1.1 to 1.9 times the time and 1.4 to 4.4 times the peak memory of 0.17.0 on Autodesk's samples of Revit 2023 to 2027 (Measure run 42956917709); the BIM4LCA office as built goes from 25.4 s and 914 MiB to 33.0 s and 1,432 MiB, Core Interior from 4.7 s and 305 MiB to 5.3 s and 437 MiB and Snowdon Towers Architectural, one of the 28, from 17.6 s and 1,073 MiB to 28.0 s and 2,086 MiB (#1694).
 Walls: 360 of 360 with Revit's ends on Core Interior, 516 of 607 on the office as built and 439 of 589 at permit (Measure run 42530216655 at `1e2d3de4`; RE-222,
 RE-223, RE-322).
 Wall tops: a wall whose top join or cut pair names a floor, roof or footing that covers its whole plan is cut at its underside, which is Revit's top on 64 of the office's 65 cut tops as built and 70 of 70 at permit (RE-267);

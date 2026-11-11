@@ -609,7 +609,7 @@
             "type": "integer",
             "minimum": 0
           },
-          "description": "Of the exported bodies that are still their record's box after the pass that draws a box from the mesh Revit saved for it, why that mesh was not used, by reason (RvtElementRecordGeometry.SavedMeshRefusal, #1645): no_saved_graphics, no_saved_mesh, no_triangles, element_id_shared, partial: and the decoder diagnostics that left the mesh partial (RE-224), their digits written as # and joined by ;, or not_a_candidate: and why the pass did not look at the element's saved graphics (whole_drawn_by_its_parts, no_location, no_element_id, class_not_in_scope)."
+          "description": "Of the exported bodies that are still their record's box after the pass that draws a box from the mesh Revit saved for it, why that mesh was not used, by reason (RvtElementRecordGeometry.SavedMeshRefusal, #1645): no_saved_graphics, no_saved_mesh, no_triangles, element_id_shared, partial: and the decoder diagnostics that left the mesh partial (RE-224), their digits written as # and joined by ;, or not_a_candidate: and why the pass did not look at the element's saved graphics (whole_drawn_by_its_parts, no_location, no_element_id, class_not_in_scope), or not_offered: and why no pass ran (release_outside_2023_to_2027, release_not_read, saved_meshes_off, pass_failed)."
         },
         "wall_base_refusals": {
           "type": "object",
