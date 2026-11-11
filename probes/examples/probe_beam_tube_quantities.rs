@@ -273,7 +273,7 @@ fn read_mesh(mesh: &Mesh, start: [f64; 3], axis: [f64; 3]) -> Option<Found> {
     })
 }
 
-fn main() -> rvt::Result<()> {
+fn main() -> anyhow::Result<()> {
     let Some(path) = std::env::args().nth(1) else {
         eprintln!("usage: probe_beam_tube_quantities MODEL.rvt");
         return Ok(());
