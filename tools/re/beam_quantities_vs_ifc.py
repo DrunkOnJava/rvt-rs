@@ -237,6 +237,21 @@ def prism_axes(triangles):
     return sorted(out, key=lambda a: -a[1])
 
 
+def axis_length(beam, scale):
+    """The length, in metres, of the polyline of the beam's Axis representation (Revit writes its location line
+    there), or None."""
+    for representation in beam.Representation.Representations if beam.Representation else ():
+        if representation.RepresentationIdentifier != "Axis":
+            continue
+        for item in representation.Items:
+            points = curve_points(item) if item.is_a("IfcPolyline") or item.is_a("IfcIndexedPolyCurve") else None
+            if points and len(points) >= 2:
+                return sum(
+                    sum((float(a[k]) - float(b[k])) ** 2 for k in range(len(a))) ** 0.5 for a, b in zip(points, points[1:])
+                ) * scale[0]
+    return None
+
+
 def long_extent(triangles):
     """The extent of the body along its long axis (the first principal axis of its vertices), in metres."""
     points = triangles.reshape(-1, 3)
@@ -286,7 +301,7 @@ def main():
     if not both:
         return 0
     kinds, written, rules, bodies = collections.Counter(), collections.Counter(), collections.Counter(), collections.Counter()
-    choice, lengths, ratios = collections.Counter(), collections.Counter(), []
+    choice, lengths, ratios, lines = collections.Counter(), collections.Counter(), [], collections.Counter()
     odd = []
     for tag in both:
         r, profile, rb = read(settings, revit[tag], revit_scale)
@@ -303,6 +318,9 @@ def main():
         triangles = mesh(settings, revit[tag])
         axes = prism_axes(triangles) if triangles is not None else []
         choice[(run, axis_rule(axes, depth))] += 1
+        line = axis_length(revit[tag], revit_scale)
+        if r["Length"]:
+            lines[(run, "no Axis line" if line is None else ("Length is the Axis line's length" if close(line, r["Length"]) else "Length differs from the Axis line"), "rvt-rs writes a Length" if o["Length"] is not None else "rvt-rs writes none")] += 1
         if triangles is not None and r["Length"]:
             long = long_extent(triangles)
             same = close(long, r["Length"])
@@ -337,6 +355,9 @@ def main():
     if ratios:
         ratios.sort()
         print(f"  where it differs, Revit's Length over the long extent: min {ratios[0]:.6g}, median {ratios[len(ratios) // 2]:.6g}, max {ratios[-1]:.6g}")
+    print("Revit's Length against the length of its Axis line (extrusion, which, whether rvt-rs writes a Length):")
+    for key, count in lines.most_common():
+        print(f"  {count:5}  {key}")
     print("rvt-rs's body against Revit's (extrusion, ends of Revit's body, rvt-rs's body source):")
     for key, count in bodies.most_common():
         print(f"  {count:5}  {key}")
