@@ -7,7 +7,9 @@ IfcTransportElement of the two files by Tag, and each IfcSpace that is a family 
 GlobalId (Revit names it `<family>:<type>:<ElementId>`), and counts, per entity, how often the
 PredefinedType is the same, differs, is unset in rvt-rs's, or is NOTDEFINED where Revit writes none
 (RE-419: the default a furniture element takes), with Revit's values tallied, and names a few that
-differ.
+differ. It also tallies the PredefinedType of the IfcStairFlightType and IfcFurnitureType objects of
+both files (RE-419: a type is written once for each predefined type its instances carry). A Revit
+export in IFC2X3, which has no PredefinedType on these classes, is not scored and says so.
 
 Needs IfcOpenShell.
 
@@ -32,6 +34,7 @@ CLASSES = (
     "IfcTransportElement",
     "IfcSpace",
 )
+TYPE_CLASSES = ("IfcStairFlightType", "IfcFurnitureType")
 FAMILY_SPACE_NAME = re.compile(r":\d+$")
 
 
@@ -50,19 +53,25 @@ def predefined(path):
     return out
 
 
-def type_values(path):
+def type_values(path, cls):
     model = ifcopenshell.open(path)
     return collections.Counter(
-        getattr(t, "PredefinedType", None) or "-" for t in model.by_type("IfcStairFlightType")
+        getattr(t, "PredefinedType", None) or "-" for t in model.by_type(cls) if t.is_a() == cls
     )
 
 
 def main():
+    if ifcopenshell.open(sys.argv[2]).schema == "IFC2X3":
+        print("Revit's export is IFC2X3, which has no PredefinedType on these classes: not scored")
+        return
     ours, revit = predefined(sys.argv[1]), predefined(sys.argv[2])
-    print(
-        f"IfcStairFlightType PredefinedType: rvt-rs {dict(sorted(type_values(sys.argv[1]).items()))}, "
-        f"Revit {dict(sorted(type_values(sys.argv[2]).items()))}"
-    )
+    for cls in TYPE_CLASSES:
+        mine, theirs = type_values(sys.argv[1], cls), type_values(sys.argv[2], cls)
+        if mine or theirs:
+            print(
+                f"{cls} PredefinedType: rvt-rs {dict(sorted(mine.items()))}, "
+                f"Revit {dict(sorted(theirs.items()))}"
+            )
     for cls in CLASSES:
         keys = [k for k in revit if k[0] == cls and k in ours]
         if not keys:
