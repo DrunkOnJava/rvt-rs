@@ -19,6 +19,7 @@
   longer and peak at 1.8 to 1.9 times (557 to 579 MiB become 1,010 to 1,090 MiB),
   and Snowdon Towers Structural of 2024 takes 69% longer and peaks at 2.5 times
   (494 MiB becomes 1,224 MiB). The other 57 of the 68 files timed read 0.99 to 1.01
-  in time and 0.96 to 1.00 in peak memory; the BIM4LCA housing and timber office
-  are not among the 68. `--no-saved-meshes` runs no pass, so it leaves out these
-  quantities and this cost.
+  in time and 0.96 to 1.00 in peak memory, and the files the quantities are scored
+  on, the BIM4LCA housing and timber office (run 42976698994), read 0.98 to 1.01 in
+  time and 0.99 to 1.03 in peak memory. `--no-saved-meshes` runs no pass, so it
+  leaves out these quantities and this cost.

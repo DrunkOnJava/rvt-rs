@@ -401,7 +401,13 @@ jobs:
           # The timing jobs' files, in shards of about equal time. A unit's
           # seconds are its files' medians, base plus head, times the three
           # rounds, summed from the table of Measure run 41797994751 (the
-          # reference models, the four office files, Autodesk's samples). The
+          # reference models, the four office files, Autodesk's samples; the
+          # housing and the timber office from that of run 42976698994). The
+          # weights were taken again from the tables of runs 42977559276 and
+          # 42983436373 (the mean of base and head, six times): the 2024 samples had
+          # grown to 696 seconds and the 2026 and 2027 ones to about 296, where
+          # four shards of the old weights took 546 to 1,014 seconds, and a fifth
+          # shard takes the longest from 986 to 727 seconds. The
           # four shards of that run ran on four CPUs (two Intel Xeons, an
           # Intel Xeon Platinum and an AMD EPYC), and no runner's rows skew
           # clearly (its units took 0.98 to 1.21 of their time on the one
@@ -409,24 +415,35 @@ jobs:
           # Code that changes every file moves them alike, so the split stays
           # about even. A sample unit is a range of years, cut to the
           # `sample_years` input.
-          units = [("reference models", 71, dict(reference=True))]
+          housing = ["ARK_NordicLCA_Housing_Concrete_As-Built.rvt",
+                     "ARK_NordicLCA_Housing_Concrete_BuildingPermit.rvt",
+                     "ARK_NordicLCA_Housing_Timber_As-Built.rvt",
+                     "ARK_NordicLCA_Housing_Timber_BuildingPermit.rvt"]
+          timber_office = ["ARK_NordicLCA_Office_Timber_As-Built.rvt",
+                           "ARK_NordicLCA_Office_Timber_BuildingPermit.rvt"]
+          units = [("reference models", 68, dict(reference=True))]
           if flag("NORDIC"):
-              units.append(("offices", 329, dict(offices=True)))
+              units.append(("offices", 382, dict(offices=True)))
+              # The second project's files, scored in the same run (#1694: the
+              # timing table left them out, and a change to what the saved-mesh
+              # pass reads moves them).
+              units.append(("housing", 554, dict(bim4lca=" ".join(housing))))
+              units.append(("timber office", 437, dict(bim4lca=" ".join(timber_office))))
           if flag("SAMPLES"):
               years = e["YEARS"].split()
               low = int(years[0]) if years else 0
               high = int(years[1]) if len(years) > 1 else 9999
               for label, first, last, seconds in (
-                  ("samples to 2023", 0, 2023, 461),
-                  ("samples 2024", 2024, 2024, 559),
-                  ("samples 2025", 2025, 2025, 286),
-                  ("samples 2026", 2026, 2026, 216),
-                  ("samples 2027 on", 2027, 9999, 207),
+                  ("samples to 2023", 0, 2023, 421),
+                  ("samples 2024", 2024, 2024, 696),
+                  ("samples 2025", 2025, 2025, 296),
+                  ("samples 2026", 2026, 2026, 296),
+                  ("samples 2027 on", 2027, 9999, 290),
               ):
                   if max(first, low) <= min(last, high):
                       ranges = f"{max(first, low)} {min(last, high)}"
                       units.append((label, seconds, dict(ranges=ranges)))
-          bins = [dict(seconds=0, units=[]) for _ in range(min(4, len(units)))]
+          bins = [dict(seconds=0, units=[]) for _ in range(min(5, len(units)))]
           for unit in sorted(units, key=lambda unit: -unit[1]):
               target = min(bins, key=lambda bin: bin["seconds"])
               target["seconds"] += unit[1]
@@ -436,12 +453,13 @@ jobs:
                    what=", ".join(unit[0] for unit in bin["units"]),
                    reference=any(unit[2].get("reference") for unit in bin["units"]),
                    offices=any(unit[2].get("offices") for unit in bin["units"]),
+                   bim4lca=" ".join(unit[2]["bim4lca"] for unit in bin["units"] if "bim4lca" in unit[2]),
                    ranges=";".join(unit[2]["ranges"] for unit in bin["units"] if "ranges" in unit[2]))
               for number, bin in enumerate(bins, 1)
           ]
           if not flag("TIMING") or not base:
               # The timing jobs are skipped; a matrix still needs a row.
-              timing = [dict(shard="none", what="", reference=False, offices=False, ranges="")]
+              timing = [dict(shard="none", what="", reference=False, offices=False, bim4lca="", ranges="")]
           print("timing=" + json.dumps({"include": timing}))
           PY
 
@@ -1573,6 +1591,25 @@ jobs:
             0) ;;
             2) echo "::warning::BIM4LCA office models NOT MEASURED: the host was unreachable" ;;
             *) echo "::error::the BIM4LCA office models no longer match research/bim4lca-measure.tsv"; exit 1 ;;
+          esac
+      # The housing and the timber office, which the office step does not fetch:
+      # the files a unit names, beside the others in models/.
+      - name: Fetch the BIM4LCA housing and timber office models
+        if: matrix.bim4lca != ''
+        shell: bash
+        env:
+          FILES: ${{ matrix.bim4lca }}
+        run: |
+          mkdir -p models
+          set +e
+          # shellcheck disable=SC2086 # The file names are words.
+          python3 tools/ci/fetch-bim4lca.py research/bim4lca-measure.tsv models $FILES
+          status=$?
+          set -e
+          case "$status" in
+            0) ;;
+            2) echo "::warning::BIM4LCA housing and timber office models NOT MEASURED: the host was unreachable" ;;
+            *) echo "::error::the BIM4LCA housing and timber office models no longer match research/bim4lca-measure.tsv"; exit 1 ;;
           esac
       - name: Fetch Autodesk's sample projects
         if: matrix.ranges != ''
