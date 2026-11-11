@@ -34,6 +34,7 @@ from mullion_profiles_vs_ifc import close, fmt, mesh, scales  # noqa: E402
 from saved_meshes_vs_ifc import body_sources  # noqa: E402
 
 LISTED = 8
+MAX_TRIANGLES = 5000  # a column not added to with a larger body is counted, not read
 
 
 def accepted(found, how):
@@ -58,7 +59,13 @@ def main():
         now = columns.column_values(column, scale_after)
         was = columns.column_values(held[tag], scale_before) if tag in held else None
         added = [q for q in columns.FOUR if now[q] is not None and (was is None or was[q] is None)]
-        found, how = columns.rule(mesh(settings, column))
+        triangles = mesh(settings, column)
+        if not added and triangles is not None and len(triangles) > MAX_TRIANGLES:
+            # The pass reads a closed mesh of flat faces, which has tens of triangles; a body of thousands is
+            # curved, and the rule's search of its axes takes minutes.
+            rest[(body_sources(column) or "no BodySource", f"over {MAX_TRIANGLES} triangles, not read", "")] += 1
+            continue
+        found, how = columns.rule(triangles)
         if not added:
             if accepted(found, how):
                 # The rule gives this column quantities and the export did not add them: it already held them, or

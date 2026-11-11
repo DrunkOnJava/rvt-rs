@@ -10,7 +10,10 @@ and what rvt-rs writes. It then reads rvt-rs's own body as the saved-mesh pass r
 RE-423): a prism along its longest axis with two flat ends of one area, whose volume is the end area times its
 extent. For each column the rule accepts it says, per quantity, whether the value the rule gives (the end area, the
 lateral area, the volume, the extent) equals Revit's, differs from it or is one Revit does not write, and what
-rvt-rs writes today, so the first column of the last table is what the rule would add that is right.
+rvt-rs writes today, so the first column of the last table is what the rule would add that is right. The
+saved-mesh pass adds a column's quantities only where the axis is the vertical (the outcome says "vertical" or
+"not vertical"), but these tables count a column that is not as one the rule gives values to, which is how they
+show what that condition keeps out: the cut columns of the concrete office at permit.
 
 A body that is a prism in planes may have been a curved one: a tessellated cylinder has many lateral planes, and
 the saved-mesh pass refuses a mesh whose faces are not all flat, which this scorer cannot see. The class of
