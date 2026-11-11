@@ -34,8 +34,9 @@ import ifcopenshell.util.element
 FLAGS = ("LoadBearing", "IsExternal")
 # Parameters printed with their values on every class, whether or not the
 # flag takes both states there: FLOOR_PARAM_IS_STRUCTURAL, which a candidate
-# scan found for floors, and FUNCTION_PARAM (RE-286).
-WATCHED = (-1001954, -1001006)
+# scan found for floors, and FUNCTION_PARAM (RE-286), and the wall rule the
+# probe prints (the Structural box set and the usage Bearing, RE-429).
+WATCHED = (-1001954, -1001006, "wall_load_bearing_rule")
 
 
 def revit_flags(model):

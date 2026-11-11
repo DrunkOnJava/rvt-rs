@@ -142,6 +142,25 @@ fn run(path: &str) -> anyhow::Result<()> {
                 record.identity.element_id
             );
         }
+        // revit-ifc's `LoadBearingCalculator` takes a wall's `LoadBearing` from
+        // `StructuralUsage == Bearing`, which is the Structural box set and the
+        // usage `Bearing` (1): printed as one member so the scorer holds the
+        // rule itself, in every model, against Revit's value.
+        let integer = |name: &str| match root.get(name) {
+            Some(serde_json::Value::Bool(flag)) => Some(i64::from(*flag)),
+            Some(other) => other.as_i64(),
+            None => None,
+        };
+        if let (Some(significant), Some(usage)) = (
+            integer("m_isStructuralSignificant"),
+            integer("m_wallStructuralUsage"),
+        ) {
+            println!(
+                "member {} {class} Instance wall_load_bearing_rule {}",
+                record.identity.element_id,
+                i64::from(significant == 1 && usage == 1)
+            );
+        }
         Ok(())
     })?;
     println!("native readers: flag candidates wall root records {walls}");
