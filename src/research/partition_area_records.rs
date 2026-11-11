@@ -239,6 +239,18 @@ pub const AREA_BODY_BASE_FIELD: &str = "m_area_body_base";
 /// The field of an Area that holds its body's height, feet.
 pub const AREA_BODY_HEIGHT_FIELD: &str = "m_area_body_height";
 
+/// The field of an Area that holds its `Qto_SpaceBaseQuantities.Height`, feet:
+/// the height of its body, from its Level up to the Level above (RE-317).
+pub const AREA_SPACE_HEIGHT_FIELD: &str = "m_area_space_height";
+
+/// Releases an Area's `Qto_SpaceBaseQuantities.Height` is written on (RE-317):
+/// 2024, whose office's 30 Areas Revit's IFC4 export gives that height on, and
+/// 2025 to 2027, which hold the body height of that save
+/// (`tools/re/areas_across_saves.py`). A 2015 to 2023 Area keeps none: the only
+/// export of one of their Areas is an IFC2X3 one whose quantities are not
+/// measured (RE-324).
+pub const AREA_HEIGHT_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
+
 /// The field of an Area, true where its outline runs along a stretch of a line
 /// carried on past the extent its record gives, or along a connector (RE-330).
 pub const AREA_JOINED_FIELD: &str = "m_area_body_joined";
@@ -1940,6 +1952,15 @@ pub fn areas_from_partition_chain_records(
                         size: 8,
                     },
                 ));
+                if AREA_HEIGHT_REVIT_VERSIONS.contains(&revit_version) {
+                    fields.push((
+                        AREA_SPACE_HEIGHT_FIELD.into(),
+                        InstanceField::Float {
+                            value: body.height_feet,
+                            size: 8,
+                        },
+                    ));
+                }
                 if let Some(arcs) = arcs {
                     fields.push((AREA_ARCS_FIELD.into(), arcs));
                 }
