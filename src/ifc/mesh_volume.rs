@@ -400,6 +400,20 @@ pub(super) struct BeamQuantities {
     pub volume: f64,
 }
 
+/// The base quantities of a column read from the mesh of its body (RE-424),
+/// feet, square and cubic feet.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct ColumnQuantities {
+    /// The extent of the solid along the vertical: the depth of the extrusion.
+    pub length: f64,
+    /// The area of the section the column is extruded from.
+    pub cross_section_area: f64,
+    /// The area of the faces along the extrusion.
+    pub outer_surface_area: f64,
+    /// The volume of the solid.
+    pub volume: f64,
+}
+
 /// The distinct directions of the edges of `triangles`, unit vectors with a
 /// direction and its opposite one: the axes a prism may run along, since its
 /// lateral edges run along it. None where a vertex is not there or there are
@@ -436,27 +450,20 @@ fn edge_directions(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -> Option<
     Some(found)
 }
 
-/// The base quantities of a beam from the mesh of its body (RE-423): the
-/// section, the area along it and the volume of the prism the solid is, where it
-/// is one. Revit's export draws a beam as an extrusion of its profile and takes
-/// the quantities from it (revit-ifc's `CreateBeamColumnBaseQuantities`,
-/// CLEANROOM.md source 5): `CrossSectionArea` is the profile's area,
-/// `OuterSurfaceArea` its perimeter times the depth, `GrossSurfaceArea` and
-/// `NetSurfaceArea` that and the two ends, `GrossVolume` and `NetVolume` the
-/// solid's. The extrusion runs along the longest axis the mesh is a prism along
-/// with two flat ends: on all 142 beams of the BIM4LCA housing and office files
-/// the scorer reads, Revit's extrusion is that axis, which is the beam's line
-/// where its ends are square and across it where they are cut.
-///
-/// None where the mesh is not one closed solid with no hole through it (a
-/// hollow section's surfaces are outer and inner, and the outer perimeter is not
-/// told from the mesh), where no axis makes it a prism with two flat ends of one
-/// area, where two axes of one extent do (a cube), or where its volume is not the
-/// end area times the extent.
-pub(super) fn beam_quantities(
-    vertices: &[[f64; 3]],
-    triangles: &[BrepTriangle],
-) -> Option<BeamQuantities> {
+/// A mesh read as the prism of one section: the axis it runs along, the prism
+/// and the end area and the volume that make it one (RE-423, RE-424).
+struct FlatPrism {
+    axis: [f64; 3],
+    prism: Prism,
+    end_area: f64,
+    volume: f64,
+}
+
+/// The longest axis a mesh is a prism along with two flat ends of one area, where
+/// the mesh is one closed solid with no hole through it and its volume is the end
+/// area times the extent; None where it is not, or where two axes of one extent
+/// are (a cube).
+fn longest_flat_prism(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -> Option<FlatPrism> {
     let closed = closed_mesh(vertices, triangles)?;
     // One piece, and a solid with no hole through it has a sphere's Euler
     // characteristic, 2: vertices minus edges plus faces, and a closed triangle
@@ -487,7 +494,7 @@ pub(super) fn beam_quantities(
         best = Some((axis, prism));
         tied = false;
     }
-    let (_, prism) = best?;
+    let (axis, prism) = best?;
     if tied {
         return None;
     }
@@ -495,11 +502,73 @@ pub(super) fn beam_quantities(
     if (closed.volume - end_area * prism.extent).abs() > PRISM_VOLUME_TOLERANCE * closed.volume {
         return None;
     }
-    Some(BeamQuantities {
-        cross_section_area: end_area,
-        outer_surface_area: prism.lateral,
-        surface_area: prism.lateral + 2.0 * end_area,
+    Some(FlatPrism {
+        axis,
+        prism,
+        end_area,
         volume: closed.volume,
+    })
+}
+
+/// The base quantities of a beam from the mesh of its body (RE-423): the
+/// section, the area along it and the volume of the prism the solid is, where it
+/// is one. Revit's export draws a beam as an extrusion of its profile and takes
+/// the quantities from it (revit-ifc's `CreateBeamColumnBaseQuantities`,
+/// CLEANROOM.md source 5): `CrossSectionArea` is the profile's area,
+/// `OuterSurfaceArea` its perimeter times the depth, `GrossSurfaceArea` and
+/// `NetSurfaceArea` that and the two ends, `GrossVolume` and `NetVolume` the
+/// solid's. The extrusion runs along the longest axis the mesh is a prism along
+/// with two flat ends: on all 142 beams of the BIM4LCA housing and office files
+/// the scorer reads, Revit's extrusion is that axis, which is the beam's line
+/// where its ends are square and across it where they are cut.
+///
+/// None where the mesh is not one closed solid with no hole through it (a
+/// hollow section's surfaces are outer and inner, and the outer perimeter is not
+/// told from the mesh), where no axis makes it a prism with two flat ends of one
+/// area, where two axes of one extent do (a cube), or where its volume is not the
+/// end area times the extent.
+pub(super) fn beam_quantities(
+    vertices: &[[f64; 3]],
+    triangles: &[BrepTriangle],
+) -> Option<BeamQuantities> {
+    let found = longest_flat_prism(vertices, triangles)?;
+    Some(BeamQuantities {
+        cross_section_area: found.end_area,
+        outer_surface_area: found.prism.lateral,
+        surface_area: found.prism.lateral + 2.0 * found.end_area,
+        volume: found.volume,
+    })
+}
+
+/// The base quantities of a column from the mesh of its body (RE-424): the
+/// depth of the extrusion, the section, the area along it and the volume, where
+/// the mesh is the prism rule's (see [`beam_quantities`]) and its axis is the
+/// vertical. Revit's export draws a column as an extrusion of its profile and
+/// takes the same quantities from it as a beam's (revit-ifc's
+/// `CreateBeamColumnBaseQuantities`, CLEANROOM.md source 5), unless a slab cuts
+/// the column where it meets it: then it draws a cut mesh, which has a
+/// `CrossSectionArea` that is half its surface and a `NetVolume`, and no
+/// `Length`, `OuterSurfaceArea` or `GrossVolume` (RE-291, RE-353). On the
+/// BIM4LCA office, housing and timber office, the longest axis the mesh of an
+/// extruded column is a prism along is the vertical on every one, and the
+/// longest such axis of 14 of the 18 cut columns is a horizontal one, the other
+/// 4 being no prism at all, so a vertical axis is what tells the two apart
+/// where a slab's cut is not square across the column. A column lying down, a
+/// stub column wider than it is tall and one with two axes of one extent have
+/// another axis for their longest and get none.
+pub(super) fn column_quantities(
+    vertices: &[[f64; 3]],
+    triangles: &[BrepTriangle],
+) -> Option<ColumnQuantities> {
+    let found = longest_flat_prism(vertices, triangles)?;
+    if found.axis[2].abs() < SQUARE_COSINE {
+        return None;
+    }
+    Some(ColumnQuantities {
+        length: found.prism.extent,
+        cross_section_area: found.end_area,
+        outer_surface_area: found.prism.lateral,
+        volume: found.volume,
     })
 }
 
@@ -1205,6 +1274,64 @@ mod tests {
     fn a_round_section_with_many_planes_is_no_beam() {
         let (vertices, triangles) = polygon_prism(40);
         assert_eq!(beam_quantities(&vertices, &triangles), None);
+    }
+
+    #[test]
+    fn a_column_standing_on_its_end_takes_its_height_its_section_and_its_sides() {
+        let (vertices, triangles) = box_mesh([1.0, 2.0, 3.0], [0.3, 0.4, 3.0]);
+        let found = column_quantities(&vertices, &triangles).unwrap();
+        assert_close(found.length, 3.0);
+        assert_close(found.cross_section_area, 0.12);
+        assert_close(found.outer_surface_area, 2.0 * (0.3 + 0.4) * 3.0);
+        assert_close(found.volume, 0.36);
+    }
+
+    #[test]
+    fn a_box_lying_down_or_wider_than_it_is_tall_is_no_column() {
+        // The longest axis it is a prism along is a horizontal one (or two tie).
+        for size in [
+            [3.0, 0.1, 0.2],
+            [0.2, 3.0, 0.1],
+            [0.4, 0.3, 0.2],
+            [0.4, 0.4, 0.3],
+        ] {
+            let (vertices, triangles) = box_mesh([0.0; 3], size);
+            assert_eq!(column_quantities(&vertices, &triangles), None, "{size:?}");
+        }
+    }
+
+    #[test]
+    fn a_column_whose_longest_flat_prism_axis_is_not_vertical_is_none() {
+        // Flat ends along y only: a column cut across its top reads this way.
+        let (vertices, triangles) = slanted_beam();
+        assert!(beam_quantities(&vertices, &triangles).is_some());
+        assert_eq!(column_quantities(&vertices, &triangles), None);
+    }
+
+    #[test]
+    fn a_column_that_is_not_one_closed_solid_is_none() {
+        let (vertices, mut triangles) = box_mesh([0.0; 3], [0.3, 0.4, 3.0]);
+        triangles.pop();
+        assert_eq!(column_quantities(&vertices, &triangles), None);
+        let (vertices, triangles) = ring_mesh(0.0);
+        assert_eq!(column_quantities(&vertices, &triangles), None);
+        let (mut vertices, mut triangles) = box_mesh([0.0; 3], [0.3, 0.4, 3.0]);
+        let (more, extra) = box_mesh([5.0, 0.0, 0.0], [0.3, 0.4, 3.0]);
+        let shift = u32::try_from(vertices.len()).unwrap();
+        vertices.extend(more);
+        triangles.extend(
+            extra
+                .into_iter()
+                .map(|BrepTriangle(a, b, c)| BrepTriangle(a + shift, b + shift, c + shift)),
+        );
+        assert_eq!(column_quantities(&vertices, &triangles), None);
+    }
+
+    #[test]
+    fn a_round_column_of_many_planes_and_no_triangles_are_none() {
+        let (vertices, triangles) = polygon_prism(40);
+        assert_eq!(column_quantities(&vertices, &triangles), None);
+        assert_eq!(column_quantities(&[], &[]), None);
     }
 
     #[test]

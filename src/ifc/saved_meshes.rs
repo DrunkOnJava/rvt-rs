@@ -64,8 +64,9 @@ use super::export_content::{
     SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use super::mesh_volume::{
-    BeamQuantities, MESH_LENGTH_REACH, Placed, Prism, all_faces_flat, beam_quantities,
-    box_plan_width, closed_mesh_volume, mullion_surface_area, partner_ends, prism_along,
+    BeamQuantities, ColumnQuantities, MESH_LENGTH_REACH, Placed, Prism, all_faces_flat,
+    beam_quantities, box_plan_width, closed_mesh_volume, column_quantities, mullion_surface_area,
+    partner_ends, prism_along,
 };
 use super::mesh_wall_quantities::{WallMeshQuantities, wall_mesh_quantities};
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
@@ -460,6 +461,8 @@ pub fn attach_scoped_with_control(
     let kept_ends = rf.mullion_kept_ends();
     // RE-423: what each beam's mesh gives of its base quantities.
     let mut beams: Vec<(usize, BeamQuantities)> = Vec::new();
+    // RE-424: what each column's mesh gives of its base quantities.
+    let mut columns: Vec<(usize, ColumnQuantities)> = Vec::new();
     // RE-416: the volume of each column's mesh, whatever its faces.
     let mut column_volumes: Vec<(usize, f64)> = Vec::new();
     // RE-388: what the mesh of each wall gives of its quantities.
@@ -596,6 +599,11 @@ pub fn attach_scoped_with_control(
             let beam = volume
                 .filter(|_| ifc_type.eq_ignore_ascii_case("IFCBEAM"))
                 .and_then(|_| beam_quantities(&vertices, &triangles));
+            // RE-424: a column's mesh, where it is a closed solid of flat faces, as
+            // the vertical prism Revit's export extrudes its profile into.
+            let column = volume
+                .filter(|_| ifc_type.eq_ignore_ascii_case("IFCCOLUMN"))
+                .and_then(|_| column_quantities(&vertices, &triangles));
             report.replaced += 1;
             report.triangles += triangles.len();
             *solid_shape = Some(SolidShape::TriangulatedFaceSet {
@@ -610,6 +618,9 @@ pub fn attach_scoped_with_control(
             }
             if let Some(beam) = beam {
                 beams.push((*index, beam));
+            }
+            if let Some(column) = column {
+                columns.push((*index, column));
             }
             if let Some(volume) = column_volume {
                 column_volumes.push((*index, volume));
@@ -645,6 +656,7 @@ pub fn attach_scoped_with_control(
     follow_mesh_span(model, &moved);
     add_mullion_surface_areas(model, &members);
     add_beam_quantities(model, &mut beams);
+    add_column_quantities(model, &mut columns);
     add_wall_quantities(model, &wall_quantities);
     add_plate_widths(model, &plate_widths);
     // #1645: a candidate the scene held no graphics for keeps its box too.
@@ -769,9 +781,10 @@ fn drop_column_box_quantities(model: &mut IfcModel, found: &[(usize, f64)]) {
 /// its entity, where it holds none (RE-387): revit-ifc's `NetVolumeCalculator`
 /// takes the volume of the solid it writes (CLEANROOM.md source 5, RE-243),
 /// and the mesh is that solid, which a body of flat faces gives exactly. A
-/// column gets no `GrossVolume`: Revit's export omits it on the 18 columns of
-/// the BIM4LCA office at building permit that it draws as a cut mesh, and
-/// writes it on 6 that nothing tells from them. A curtain mullion, a curtain
+/// column gets no `GrossVolume` here: Revit's export omits it on the 18 columns of
+/// the BIM4LCA office at building permit that it draws as a cut mesh, and the
+/// volume alone does not tell them from the rest ([`add_column_quantities`]
+/// gives it where the mesh is a vertical prism, RE-424). A curtain mullion, a curtain
 /// panel and a column are the entities measured equal to Revit's on every
 /// element (RE-387); a body of another entity gets none. A curtain mullion
 /// whose `NetVolume` the box gave and whose mesh has another volume is not an
@@ -1062,6 +1075,76 @@ fn add_beam_quantities(model: &mut IfcModel, found: &mut [(usize, BeamQuantities
                             })
                             .collect(),
                     },
+                });
+            }
+        }
+    }
+}
+
+/// Give each column of `found` (an index into the entities and what its mesh
+/// gives of its base quantities) the quantities Revit's export writes for a
+/// column it draws as an extrusion (RE-424): `CrossSectionArea`,
+/// `OuterSurfaceArea` and `GrossVolume`, and `Length`, in the base quantity set it
+/// holds. A column whose set holds none of the three gets all four, and one
+/// that holds all three gets the `Length` it lacks; one that holds some of the
+/// three is left as it is, because the cut-column rule writes a
+/// `CrossSectionArea` and no more for a column Revit draws as a cut mesh, which has
+/// no `OuterSurfaceArea` or `GrossVolume` (RE-291, RE-353). The set is there:
+/// [`add_mesh_volumes`] gave every column whose mesh is a closed solid of flat
+/// faces its `NetVolume`. A value a column holds is never replaced.
+fn add_column_quantities(model: &mut IfcModel, found: &mut [(usize, ColumnQuantities)]) {
+    if found.is_empty() {
+        return;
+    }
+    found.sort_by_key(|(index, _)| *index);
+    let mut held: BTreeMap<usize, usize> = BTreeMap::new();
+    for (position, entity) in model.entities.iter().enumerate() {
+        if let IfcEntity::ElementPropertySet { element, set } = entity {
+            if set.name == "Qto_ColumnBaseQuantities" {
+                held.entry(*element).or_insert(position);
+            }
+        }
+    }
+    for (index, quantities) in found.iter() {
+        let Some(&position) = held.get(index) else {
+            continue;
+        };
+        let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
+        else {
+            continue;
+        };
+        let section = [
+            (
+                "CrossSectionArea",
+                PropertyValue::AreaSquareFeet(quantities.cross_section_area),
+            ),
+            (
+                "OuterSurfaceArea",
+                PropertyValue::AreaSquareFeet(quantities.outer_surface_area),
+            ),
+            (
+                "GrossVolume",
+                PropertyValue::VolumeCubicFeet(quantities.volume),
+            ),
+        ];
+        let length = (
+            "Length",
+            PropertyValue::PositiveLengthFeet(quantities.length),
+        );
+        let held_of_three = section
+            .iter()
+            .filter(|(name, _)| has_property(set, name))
+            .count();
+        let wanted = match held_of_three {
+            0 => section.into_iter().chain([length]).collect::<Vec<_>>(),
+            3 => vec![length],
+            _ => continue,
+        };
+        for (name, value) in wanted {
+            if !has_property(set, name) {
+                set.properties.push(Property {
+                    name: name.into(),
+                    value,
                 });
             }
         }
