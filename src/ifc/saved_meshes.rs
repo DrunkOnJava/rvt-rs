@@ -56,16 +56,16 @@
 use super::IfcModel;
 use super::entities::{BrepTriangle, IfcEntity, Property, PropertySet, PropertyValue, SolidShape};
 use super::export_content::{
-    BEAM_BOX_BODY_SOURCE, INSTANCE_ORIENTED_BODY_SOURCE, INSTANCE_TURNED_BODY_SOURCE,
-    RECORD_BBOX_BODY_SOURCE, SAVED_MESH_ELEMENT_ID_SHARED, SAVED_MESH_NO_GRAPHICS,
-    SAVED_MESH_NO_MESH, SAVED_MESH_NO_TRIANGLES, SAVED_MESH_NOT_CANDIDATE_PREFIX,
-    SAVED_MESH_NOT_OFFERED_PREFIX, SAVED_MESH_PARTIAL_PREFIX, SAVED_MESH_REFUSAL_PROPERTY,
-    SLAB_SHAPE_REFUSAL_PROPERTY, SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY,
-    WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    BEAM_AXIS_BODY_SOURCE, BEAM_BOX_BODY_SOURCE, INSTANCE_ORIENTED_BODY_SOURCE,
+    INSTANCE_TURNED_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE, SAVED_MESH_ELEMENT_ID_SHARED,
+    SAVED_MESH_NO_GRAPHICS, SAVED_MESH_NO_MESH, SAVED_MESH_NO_TRIANGLES,
+    SAVED_MESH_NOT_CANDIDATE_PREFIX, SAVED_MESH_NOT_OFFERED_PREFIX, SAVED_MESH_PARTIAL_PREFIX,
+    SAVED_MESH_REFUSAL_PROPERTY, SLAB_SHAPE_REFUSAL_PROPERTY, SPACE_OUTLINE_SAVED_MESH,
+    SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use super::mesh_volume::{
-    MESH_LENGTH_REACH, Placed, Prism, all_faces_flat, box_plan_width, closed_mesh_volume,
-    mullion_surface_area, partner_ends, prism_along,
+    BeamQuantities, MESH_LENGTH_REACH, Placed, Prism, all_faces_flat, beam_quantities,
+    box_plan_width, closed_mesh_volume, mullion_surface_area, partner_ends, prism_along,
 };
 use super::mesh_wall_quantities::{WallMeshQuantities, wall_mesh_quantities};
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
@@ -393,6 +393,36 @@ pub fn attach_scoped_with_control(
             walls.entry(id).or_default().push(index);
         }
     }
+    // RE-423: the beams drawn along their location line, whose base quantities
+    // their saved mesh gives, whether or not the beam's own body is drawn from
+    // it: that body is the extrusion of a resolved section and stays so, as a
+    // wall's does.
+    let mut beam_lines: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
+    for (index, entity) in model.entities.iter().enumerate() {
+        if wholes.contains(&index) {
+            continue;
+        }
+        let IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid: Some(tag),
+            property_set: Some(set),
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let along_its_line = set.properties.iter().any(|property| {
+            property.name == "BodySource"
+                && matches!(&property.value, PropertyValue::Text(text) if text == BEAM_AXIS_BODY_SOURCE)
+        });
+        if !ifc_type.eq_ignore_ascii_case("IFCBEAM") || !along_its_line || !scope.includes(ifc_type)
+        {
+            continue;
+        }
+        if let Ok(id) = tag.parse::<u64>() {
+            beam_lines.entry(id).or_default().push(index);
+        }
+    }
     let hosts = match embed_hosts(rf, model, &by_id) {
         Ok(hosts) => hosts,
         Err(error) => {
@@ -401,7 +431,7 @@ pub fn attach_scoped_with_control(
         }
     };
     report.embed_hosts = hosts.len();
-    if by_id.is_empty() && hosts.is_empty() && walls.is_empty() {
+    if by_id.is_empty() && hosts.is_empty() && walls.is_empty() && beam_lines.is_empty() {
         for (index, reason) in refusals {
             note_refusal(model, index, reason);
         }
@@ -412,6 +442,7 @@ pub fn attach_scoped_with_control(
             .keys()
             .chain(hosts.keys())
             .chain(walls.keys())
+            .chain(beam_lines.keys())
             .copied()
             .collect::<BTreeSet<_>>(),
         max_graph_values: 1_000_000,
@@ -427,6 +458,8 @@ pub fn attach_scoped_with_control(
     let mullion_axes = rf.mullion_axes();
     // RE-404: the end faces each curtain mullion's solid keeps, by ElementId.
     let kept_ends = rf.mullion_kept_ends();
+    // RE-423: what each beam's mesh gives of its base quantities.
+    let mut beams: Vec<(usize, BeamQuantities)> = Vec::new();
     // RE-416: the volume of each column's mesh, whatever its faces.
     let mut column_volumes: Vec<(usize, f64)> = Vec::new();
     // RE-388: what the mesh of each wall gives of its quantities.
@@ -450,6 +483,18 @@ pub fn attach_scoped_with_control(
             if let Some([index]) = walls.get(&element.identity.element_id).map(Vec::as_slice) {
                 if let Some(found) = wall_mesh_quantities(&element.meshes.primitives) {
                     wall_quantities.push((*index, found));
+                }
+            }
+            if let Some([index]) = beam_lines
+                .get(&element.identity.element_id)
+                .map(Vec::as_slice)
+            {
+                let found = partial_refusal(&element.meshes)
+                    .is_none()
+                    .then(|| beam_mesh_quantities(&element.meshes.primitives))
+                    .flatten();
+                if let Some(found) = found {
+                    beams.push((*index, found));
                 }
             }
             if let Some(&index) = hosts.get(&element.identity.element_id) {
@@ -546,6 +591,11 @@ pub fn attach_scoped_with_control(
                         placed,
                     })
                 });
+            // RE-423: a beam's mesh, where it is a closed solid of flat faces, as
+            // the prism Revit's export extrudes its profile into.
+            let beam = volume
+                .filter(|_| ifc_type.eq_ignore_ascii_case("IFCBEAM"))
+                .and_then(|_| beam_quantities(&vertices, &triangles));
             report.replaced += 1;
             report.triangles += triangles.len();
             *solid_shape = Some(SolidShape::TriangulatedFaceSet {
@@ -557,6 +607,9 @@ pub fn attach_scoped_with_control(
             }
             if let Some(member) = member {
                 members.push(member);
+            }
+            if let Some(beam) = beam {
+                beams.push((*index, beam));
             }
             if let Some(volume) = column_volume {
                 column_volumes.push((*index, volume));
@@ -591,6 +644,7 @@ pub fn attach_scoped_with_control(
     let moved = add_mesh_volumes(model, &volumes, &members);
     follow_mesh_span(model, &moved);
     add_mullion_surface_areas(model, &members);
+    add_beam_quantities(model, &mut beams);
     add_wall_quantities(model, &wall_quantities);
     add_plate_widths(model, &plate_widths);
     // #1645: a candidate the scene held no graphics for keeps its box too.
@@ -917,6 +971,100 @@ fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
             name: "NetSurfaceArea".into(),
             value: PropertyValue::AreaSquareFeet(area),
         });
+    }
+}
+
+/// What the saved mesh of a beam drawn along its line gives of its base
+/// quantities (RE-423), where all its faces are planes and it is one closed
+/// solid that is a prism. The quantities are lengths, areas and a volume, which
+/// where the mesh is placed does not change.
+fn beam_mesh_quantities(primitives: &[Primitive]) -> Option<BeamQuantities> {
+    if !all_faces_flat(primitives) {
+        return None;
+    }
+    let (vertices, triangles) = local_mesh(primitives, [0.0; 3], None);
+    beam_quantities(&vertices, &triangles)
+}
+
+/// Give each beam of `found` (an index into the entities and what its mesh gives
+/// of its base quantities) the quantities Revit's export writes for it, in the
+/// base quantity set it holds or a new one, where that holds none of them
+/// (RE-423): `CrossSectionArea`, `OuterSurfaceArea`, `GrossSurfaceArea`,
+/// `NetSurfaceArea`, `GrossVolume` and `NetVolume`. They are taken in the order
+/// of the entities, so that the sets a beam that has none gets are appended in
+/// one order whichever order the elements were meshed in.
+fn add_beam_quantities(model: &mut IfcModel, found: &mut [(usize, BeamQuantities)]) {
+    if found.is_empty() {
+        return;
+    }
+    found.sort_by_key(|(index, _)| *index);
+    let mut held: BTreeMap<usize, usize> = BTreeMap::new();
+    for (position, entity) in model.entities.iter().enumerate() {
+        if let IfcEntity::ElementPropertySet { element, set } = entity {
+            if set.name == "Qto_BeamBaseQuantities" {
+                held.entry(*element).or_insert(position);
+            }
+        }
+    }
+    for (index, quantities) in found.iter() {
+        let values = [
+            (
+                "CrossSectionArea",
+                PropertyValue::AreaSquareFeet(quantities.cross_section_area),
+            ),
+            (
+                "OuterSurfaceArea",
+                PropertyValue::AreaSquareFeet(quantities.outer_surface_area),
+            ),
+            (
+                "GrossSurfaceArea",
+                PropertyValue::AreaSquareFeet(quantities.surface_area),
+            ),
+            (
+                "NetSurfaceArea",
+                PropertyValue::AreaSquareFeet(quantities.surface_area),
+            ),
+            (
+                "GrossVolume",
+                PropertyValue::VolumeCubicFeet(quantities.volume),
+            ),
+            (
+                "NetVolume",
+                PropertyValue::VolumeCubicFeet(quantities.volume),
+            ),
+        ];
+        match held.get(index) {
+            Some(&position) => {
+                if let Some(IfcEntity::ElementPropertySet { set, .. }) =
+                    model.entities.get_mut(position)
+                {
+                    for (name, value) in values {
+                        if !has_property(set, name) {
+                            set.properties.push(Property {
+                                name: name.into(),
+                                value,
+                            });
+                        }
+                    }
+                }
+            }
+            None => {
+                held.insert(*index, model.entities.len());
+                model.entities.push(IfcEntity::ElementPropertySet {
+                    element: *index,
+                    set: PropertySet {
+                        name: "Qto_BeamBaseQuantities".into(),
+                        properties: values
+                            .into_iter()
+                            .map(|(name, value)| Property {
+                                name: name.into(),
+                                value,
+                            })
+                            .collect(),
+                    },
+                });
+            }
+        }
     }
 }
 
