@@ -1,11 +1,11 @@
-# RE-441: the mullions beside an overlapped mullion are read like any other, but for two kinds
+# RE-441: the mullions beside an overlapped mullion are read like any other, but for two kinds: 353 and 320 values on the offices, none different
 
 **Date:** 2026-11-11
 **Issues:** #1794 (the neighbours of overlapped mullions: most of the 507 mullions of the BIM4LCA concrete office as built and the 480 of the timber office that still have no `NetSurfaceArea`), #1767 and #1046 (W7: the BIM4LCA office's quantities), #1636 (the rules rest on the BIM4LCA models); follows RE-400 (the neighbours of overlapped and left-out mullions are not read), RE-438 and RE-439
 **Artefacts:** the BIM4LCA concrete office as built and at permit and the timber office as built and at permit (Revit 2024), with Revit's IFC4 exports of the two as built
 **Scorers:** `tools/re/qtos_vs_ifc.py`, `tools/re/ifc_element_diff.py` and `tools/re/mullion_ends_vs_boxes.py`
-**Runs:** not yet run (section 5)
-**Status:** Not yet measured: the change is written and its rows are registered on #1636 before the run.
+**Runs:** Measure 43115049478 (head `eb0fcdb1` against `4c2bb990`, section 5)
+**Status:** Positive, with a bound exceeded: the concrete office as built and at permit gain 353 `NetSurfaceArea` values and the timber office 320 (as built) and 316 (at permit), every one equal to Revit's, none different. The offline count (279 and 242) was an undercount: all of it is written, and 74 and 78 more, equal too. 120 and 127 mullions are still without a value. The 17 exports that move include 13 with no Revit export to meet.
 
 ## 1. The question
 
@@ -44,12 +44,43 @@ Measured against #1791's head (`base=4c2bb990`, RE-439), unfiltered with `holdou
 
 ## 5. What Measure found
 
-Not yet run.
+Measure run [43115049478](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43115049478), unfiltered (`samples`, `nordic`, `r2025`, `holdout`, `bimcollab`, `racadv` and `keep_ifc`): head `eb0fcdb1` (this change on #1791's head `4c2bb990`) against `4c2bb990`. `same-project gates` pass on `eb0fcdb1`. **126 exports: 109 identical, 17 moved**: the four BIM4LCA offices, Snowdon Towers Architectural and the 2024 to 2027 saves of `rac_advanced`, `rme_advanced` and `rme_basic`. `ifc_element_diff` on the 17: no element is added or removed, and the only change is `Qto_MemberBaseQuantities.NetSurfaceArea` of an `IfcMember`, added on 353 (concrete as built), 353 (concrete permit), 320 (timber as built), 316 (timber permit), 50 (Snowdon), 122 (each `rac_advanced` save) and 3 (each `rme_advanced` and `rme_basic` save), changed on none.
+
+`NetSurfaceArea` of the offices' mullions against Revit's (equal, different, missing), base to head:
+
+| office | base | head |
+| --- | --- | --- |
+| concrete, as built | 9,530, 0, 473 | 9,883, 0, 120 |
+| concrete, permit | 9,558, 0, 473 | 9,911, 0, 120 |
+| timber, as built | 7,429, 0, 447 | 7,749, 0, 127 |
+| timber, permit | 7,313, 1, 558 | 7,629, 1, 242 |
+
+The one different at timber permit is 3029161 (RE-438). Over the 42 models with a Revit export the quantity census's equal rises from 155,876 to 157,218 (+1,342) with different at 26 and missing from 17,938 to 16,596; `rvt-rs values Revit does not write` stays 29 (the concrete offices' 0 and the timber offices' 3, as on both sides); the property census does not move (0 of 42 differ).
+
+The rows of section 4, read on [#1636](https://github.com/DrunkOnJava/rvt-rs/issues/1636#issuecomment-6809537179):
+
+1. **Held in substance, over its bound.** The 353 and 320 values written on the offices as built are each equal to Revit's. Of them 279 and 242 are the offline set of section 3, all of it (the set is contained in what the run writes; the 29 and 28 mullions with a centred end are not written, nor are the 4 free ends with an overlapped axis on their plane on the concrete office and 8 of the 9 on the timber office, the ninth, a right one, being written because the rule's distance is not the offline search's); 74 and 78 more are written, which the bound did not count: 29 and 29 are the released mullions of RE-439's 36 that lie beside overlapped mullions only (28 with a partner end, and 3304572, the 35 mm piece whose cause RE-438 had not examined), and 45 and 49 are neighbours of the mullions RE-438 released, which the debug build that the offline count reads (before RE-438) put with the neighbours of mullions left out and which now lie beside overlapped mullions only.
+2. **Held.** No census row gains a `different`, equal never falls, the property census does not move, `rvt-rs values Revit does not write` does not change, 3029185 and 3029301 (Revit gives them no value) get none, and no mullion that had a value has it changed (changed 0 in every element diff).
+3. **Held, with exports I had not listed.** Every export that moved holds such a mullion, but the row named the offices, `rac_advanced` and Snowdon: the 2024 to 2027 saves of `rme_advanced` and `rme_basic` move too (3 values each). None of the 13 exports other than the offices has a Revit value to meet, so their 488 (`rac_advanced`, 122 a save), 24 (`rme_advanced` and `rme_basic`) and 50 (Snowdon) values are additions of a rule that is right on all 673 of the offices as built, not checks of it. The held-out pairs and the housing do not move.
+4. **Held.** The mullions with a mullion across centred on an end, and the free ends under an overlapped axis, are not written; the 19 and 23 with a lone inside end, the 18 with no axis and the mullions beside a mullion still left out have no value, as before.
+
+What is still without a value, on the concrete office as built (120, from 473): 19 with a lone inside end and 18 with no axis (RE-438); 8 of RE-439's 36, which lie beside mullions left out; and 75 left out for a neighbour: 29 with a centred end, 4 with a partnerless end under an overlapped axis, the 2 to which Revit gives no value, 23 beside mullions still left out (19 beside the lone-inside mullions, 4 that have an overlapped one as well), and 17 for which the offline search finds no unread mullion beside them (the rule's own distance, the box of the neighbour within 6 cm of the end's point, is not the search's, which takes the axis within 9 cm). The timber office as built has 127 (from 447) by the same causes (23, 18, 8 and 78).
+
+The change adds no read, so it is not timed.
 
 ## 6. Not done
 
-Pending.
+- The 54 mullions with a mullion across centred on an end that the rule reads right (29 concrete, 25 timber) stay out with the 3 it reads wrong: nothing in the boxes tells them apart (section 2). Revit's join condition at the crossing, which the boxes do not hold, is the likely input.
+- The relation that tells the 4 chain ends, a mullion standing on the face of a bar and centred on its end plane, is looked for beside overlapped mullions only. RE-268 tests the end's centre point (3 mm), which a mullion standing on the bar's face, 25 mm off the point, does not hold; beside a single mullion no value is different, so none of the written values is wrong for it, and a test of the end face rather than its point is not tried.
+- 120 and 127 mullions without a value: the 19 and 23 with a lone inside end (Revit counts such an end on 14 and hides it on 5 that read alike), the 18 with no axis, the neighbours of those mullions, and the 17 of the concrete office that the rule leaves unread for a reason the offline search does not find.
+- The 13 exports other than the offices carry 562 values that no Revit export checks (RE-438 added 32 a save to `rac_advanced` and 24 to Snowdon on the same footing).
 
 ## 7. Reproduce
 
-Pending.
+```bash
+gh workflow run measure.yml --ref main -f ref=eb0fcdb168d5f4882f9bb21a8b32a0869ef42551 \
+  -f base=4c2bb990bf105b206e5590da2c284bab37cc0ffb -f samples=true -f nordic=true -f r2025=true \
+  -f holdout=true -f bimcollab=true -f racadv=true -f keep_ifc=true
+```
+
+`tools/re/ifc_element_diff.py base/<model>/model.ifc head/<model>/model.ifc` on each moved pair gives the added values by tag, and `tools/re/qtos_vs_ifc.py`'s lines of the run (`Qto_MemberBaseQuantities.NetSurfaceArea`) the census above. The measured commit is archived as `refs/archive/2026-11-11/cited/eb0fcdb168d5` (the branch is deleted when the pull request lands). The offline reading of section 2 is the second debug build of RE-438 (commit `72f6a699f2f0`, `refs/archive/2026-11-11/cited/72f6a699f2f0`, Measure run 43090090858) joined with Revit's counts of kept ends; the distance of an overlapped mullion's axis from the end plane is read from the mullions' end points of the same build.
