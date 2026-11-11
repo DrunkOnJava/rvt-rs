@@ -308,6 +308,19 @@ pub const CUT_SOLID_SIZE_FIELDS: [&str; 3] = [
     "m_cut_solid_height",
 ];
 
+/// Field holding the Revit release (its version, 2024) of the file a furniture
+/// or casework element was read from (RE-419): the `NOTDEFINED` its predefined
+/// type defaults to is written on the releases of
+/// [`FURNITURE_DEFAULT_REVIT_VERSIONS`] only.
+pub const FURNITURE_RELEASE_FIELD: &str = "m_furniture_release";
+
+/// Releases Revit's export writes `NOTDEFINED` on a furniture or casework
+/// element that has no predefined type of its own or its type's (RE-419): 2024
+/// (the BIM4LCA housing and office) and the held-out house and office pairs of
+/// 2022, 2024, 2025 and 2026. The two 2027 pairs write none on any furniture,
+/// stair, slab or member.
+pub const FURNITURE_DEFAULT_REVIT_VERSIONS: &[u32] = &[2022, 2024, 2025, 2026];
+
 /// Releases a door's or window's cut loop is measured on (RE-215): 2024
 /// (Core Interior) and 2025 (RE1 Architecture, the R2025 models). 2026 and
 /// 2027 (RE-346): Autodesk's samples saved by them cut their walls as their

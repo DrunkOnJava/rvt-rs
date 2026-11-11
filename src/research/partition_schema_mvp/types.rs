@@ -9,9 +9,26 @@ use super::*;
 pub(super) fn attach_ifc_export_overrides(
     rf: &mut RevitFile,
     revit_version: u32,
-    lists: [&mut Vec<DecodedElement>; 6],
+    mut lists: [&mut Vec<DecodedElement>; 6],
 ) {
     use crate::partition_ifc_export_overrides as ieo;
+    // RE-419: a furniture or casework element's default predefined type depends
+    // on the release, so each carries it, whether or not the file holds an export
+    // parameter.
+    for elements in lists.iter_mut() {
+        for element in elements.iter_mut() {
+            if matches!(element.class.as_str(), "Furniture" | "Casework") {
+                element.fields.push((
+                    FURNITURE_RELEASE_FIELD.into(),
+                    InstanceField::Integer {
+                        value: i64::from(revit_version),
+                        signed: false,
+                        size: 4,
+                    },
+                ));
+            }
+        }
+    }
     let declared: BTreeSet<u32> = match crate::elem_table::parse_records(rf) {
         Ok(records) => crate::elem_table::declared_ids(&records),
         Err(_) => return,
