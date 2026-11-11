@@ -34,7 +34,19 @@ import ifcopenshell.geom
 import ifcopenshell.util.element
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from mullion_profiles_vs_ifc import analyse, close, fmt, mesh, prism_axis, scales  # noqa: E402
+import numpy as np  # noqa: E402
+from mullion_profiles_vs_ifc import (  # noqa: E402
+    AXIS_SINE,
+    PARALLEL_COSINE,
+    analyse,
+    close,
+    facts,
+    fmt,
+    mesh,
+    planes_of,
+    prism_axis,
+    scales,
+)
 from saved_meshes_vs_ifc import body_sources  # noqa: E402
 
 QUANTITIES = (
@@ -197,6 +209,41 @@ def equals(m, quantity, value, profile=None):
     return tuple(found)
 
 
+def prism_axes(triangles):
+    """Every axis the body is a prism along (at most two of its planes are not parallel to it), longest extent
+    first, as (axis, extent, kinds of its two ends)."""
+    kept, normals, _, offsets = facts(triangles)
+    planes = planes_of(normals, offsets)
+    directions = []
+    for i in range(len(planes)):
+        for j in range(i + 1, len(planes)):
+            c = np.cross(planes[i][0], planes[j][0])
+            norm = np.linalg.norm(c)
+            if norm < AXIS_SINE:
+                continue
+            c = c / norm
+            if not any(abs(float(c @ k)) > 1 - 1e-6 for k in directions):
+                directions.append(c)
+    points = kept.reshape(-1, 3)
+    out = []
+    for axis in directions:
+        ends = sorted("flat" if abs(float(p[0] @ axis)) > 0.9999 else "mitre" for p in planes if abs(float(p[0] @ axis)) > PARALLEL_COSINE)
+        if len(ends) <= 2:
+            out.append((axis, float(np.ptp(points @ axis)), tuple(ends)))
+    return sorted(out, key=lambda a: -a[1])
+
+
+def axis_rule(axes, depth):
+    """Where Revit's extrusion axis (the one whose extent is `depth`) stands among the prism axes: its rank by
+    extent, how many there are, and whether the longest with two flat ends is it."""
+    if depth is None or not axes:
+        return None
+    rank = min(range(len(axes)), key=lambda i: abs(axes[i][1] - depth))
+    flat = [i for i, a in enumerate(axes) if a[2] == ("flat", "flat")]
+    return rank + 1, len(axes), "the longest flat-ended prism axis" if flat and flat[0] == rank else (
+        "not the longest flat-ended" if flat else "no flat-ended axis")
+
+
 def read(settings, beam, scale, hint=None):
     """The beam's quantities, its extrusion depth, and its body analysed along the prism axis nearest `hint`,
     or its extrusion's depth, or its own `Length`."""
@@ -227,6 +274,7 @@ def main():
     if not both:
         return 0
     kinds, written, rules, bodies = collections.Counter(), collections.Counter(), collections.Counter(), collections.Counter()
+    choice = collections.Counter()
     odd = []
     for tag in both:
         r, profile, rb = read(settings, revit[tag], revit_scale)
@@ -240,6 +288,9 @@ def main():
             state = "absent" if o[name] is None else ("equal" if close(o[name], r[name]) else "different")
             written[(name, state)] += 1
         ends = rb["ends"] if rb else None
+        triangles = mesh(settings, revit[tag])
+        axes = prism_axes(triangles) if triangles is not None else []
+        choice[(run, axis_rule(axes, depth))] += 1
         for name in QUANTITIES:
             if r[name] is None:
                 continue
@@ -258,6 +309,9 @@ def main():
         print(f"  {count:5}  {key}")
     print("Revit's quantity as a sum of its own body's faces (quantity, extrusion, ends of Revit's body, the sums that equal it):")
     for key, count in sorted(rules.items(), key=lambda kv: (QUANTITIES.index(kv[0][0]), -kv[1])):
+        print(f"  {count:5}  {key}")
+    print("Revit's extrusion axis among the axes its body is a prism along (extrusion, (rank by extent, how many axes, the rule)):")
+    for key, count in choice.most_common():
         print(f"  {count:5}  {key}")
     print("rvt-rs's body against Revit's (extrusion, ends of Revit's body, rvt-rs's body source):")
     for key, count in bodies.most_common():
