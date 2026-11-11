@@ -1892,6 +1892,11 @@ jobs:
         run: python3 tools/ci/test_check_sealed_holdout.py
       - name: The semantic check's verdict failure modes
         run: python3 tools/ci/test_jev_check.py
+      # The models the semantic check judges are named in three places (the fetcher's
+      # MODELS_LIST, its dump case and OPEN_MODEL_NAMES); a model that one lacks has no
+      # dump in a complete run, and every such run's check reads NOT MEASURED (#1675).
+      - name: The semantic check names the same models everywhere
+        run: python3 tools/ci/check_semantic_models.py
       # The scheduled checks' pure parts (#1457): which NOT MEASURED streaks
       # persist (a measured run ends one, a run whose job failed neither adds
       # to it nor ends it), the label and body of the issue a failed job gets,
