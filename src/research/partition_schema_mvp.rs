@@ -980,6 +980,13 @@ pub fn recover_partition_schema_mvp(
     // --- A structural beam's or column's LoadBearing is its category's
     // (RE-285), unless a parameter named for it says otherwise ---
     attach_load_bearing(out.columns.iter_mut().chain(out.products.iter_mut()));
+    // --- A floor's or stair's LoadBearing from its Structural check box
+    // (RE-429), where no category or parameter named for it gives one ---
+    attach_structural_load_bearing(
+        rf,
+        revit_version,
+        out.slabs.iter_mut().chain(out.products.iter_mut()),
+    );
     Ok(out)
 }
 
