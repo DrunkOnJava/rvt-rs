@@ -757,7 +757,14 @@ writes the cached output and a `<step> cached` line to the model's
   environment variable by a computed name, or one given a directory as an
   argument: the cache tells the reason in `score-cache-<shard>.log` and runs
   it. A new scorer that reads anything but the files it is given is run every
-  time until `EXTRA_INPUTS` in `measure-cache.py` names what it reads. A step
+  time until `EXTRA_INPUTS` in `measure-cache.py` names what it reads. The
+  audit reads whole modules, not calls: `ifc_common.siblings()` splits a path
+  and lists a directory, so for six days after #1400 moved it there every
+  scorer that imports `ifc_common` was `reads dirname` and no body scorer was
+  cached (about 8,200 s of scorer time per side ran again on a warm run in which every lookup hit, 42992706693). `measure-cache.py` now allows the split
+  and the listing in `ifc_common` and refuses a closure that calls `siblings()`
+  unless `EXTRA_INPUTS` hashes the files it lists (`psets_vs_ifc` and
+  `unfilled_openings_vs_ifc` do). A step
   is kept only if it finished with status 0 and neither its output nor any file
   it also wrote (the validation findings, the rules summary) is over 4 MiB or
   shows a failure a rerun could mend (`unreadable:`, a traceback, a
