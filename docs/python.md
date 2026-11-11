@@ -1,4 +1,4 @@
-# rvt-rs — Python bindings (v0.17.0)
+# rvt-rs — Python bindings (v0.18.0)
 
 `rvt` is a Python package built on top of the Rust `rvt` crate. It
 exposes the file reader, metadata, schema introspection, the
@@ -25,12 +25,12 @@ For all installation paths, including release smoke tests, see
 pip install rvt
 ```
 
-**PyPI `rvt` 0.17.0 is the current release.** Wheels target Python ≥ 3.8
+**PyPI `rvt` 0.18.0 is the current release.** Wheels target Python ≥ 3.8
 via pyo3's `abi3-py38` feature, so one wheel per OS/architecture covers
 every supported Python minor. The matching Rust crate is on crates.io
 (`cargo add rvt`); platforms and the other install channels are in
 [`install.md`](install.md). This page describes `main`, which can be ahead
-of the latest release: what has landed since 0.17.0 is in the fragments
+of the latest release: what has landed since 0.18.0 is in the fragments
 under [`changelog.d/`](../changelog.d/README.md).
 
 ### From source
@@ -96,7 +96,7 @@ with open("my-family.ifc", "w") as out:
 ## API reference
 
 Every signature below is verified against
-[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.17.0).
+[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.18.0).
 
 ### Module-level
 
@@ -431,7 +431,7 @@ Every element of a Revit 2023 to 2027 file that would be a bounding box
 the mesh Revit saved for it where all of a mesh decodes, as `rvt-ifc` draws
 them by default; `saved_meshes=False` keeps their bounding boxes, as
 `rvt-ifc --no-saved-meshes` does; reading every box's saved graphics takes
-1% to 17% more time and up to 59% more peak memory (#1191); on Revit 2024 to 2027 files a wall that embeds a curtain wall is drawn from its saved mesh the same way where Revit has raised its base (RE-340), and `saved_meshes=False` keeps its record's body. When the saved graphics cannot be read,
+1.1 to 1.9 times the time and 1.4 to 4.4 times the peak memory of 0.17.0 on Autodesk's samples of Revit 2023 to 2027 (Measure run 42956917709, #1191, #1694); on Revit 2024 to 2027 files a wall that embeds a curtain wall is drawn from its saved mesh the same way where Revit has raised its base (RE-340), and `saved_meshes=False` keeps its record's body. When the saved graphics cannot be read,
 the export keeps the bounding boxes and a `RuntimeWarning` says so.
 `export_diagnostics()`, `export_diagnostics_json()` and
 `rvt_to_ifc_diagnostics()` take the same `saved_meshes` and describe the
