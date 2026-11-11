@@ -833,6 +833,12 @@ pub fn tessellate_uv(
 /// have no edge over 3e-5 ft. A tenth of the 0.001 ft the scorers compare vertices
 /// at: the crack that dropping such a triangle leaves is narrower than that.
 const DUST_EDGE: f64 = 1e-4;
+/// How short (feet) an edge is to count as collapsed: its two vertices are one
+/// point. A pole is exact, but two parameters that differ by less than the 1e-9 at
+/// which two knots are one can still be two vertices (the rounding that numbers
+/// them falls between), and on a surface of up to 10 ft to the unit they lie up to
+/// 1e-8 ft apart: the ones the 2023 and 2024 samples hold are 1.0e-10 and 6.6e-10.
+const COLLAPSED_EDGE: f64 = 1e-8;
 
 /// Whether a triangle of a face's cells is kept: `Some(true)` it has area,
 /// `Some(false)` it has none and nothing to lose (an edge collapsed at a pole, or
@@ -856,7 +862,8 @@ fn keep_triangle(p: [f64; 3], q: [f64; 3], r: [f64; 3]) -> Option<bool> {
     let edges = [square(p, q), square(q, r), square(r, p)];
     let shortest = edges.iter().copied().fold(f64::INFINITY, f64::min);
     let longest = edges.iter().copied().fold(0.0, f64::max);
-    (shortest <= 1e-20 || longest <= DUST_EDGE * DUST_EDGE).then_some(false)
+    (shortest <= COLLAPSED_EDGE * COLLAPSED_EDGE || longest <= DUST_EDGE * DUST_EDGE)
+        .then_some(false)
 }
 
 /// How close (in parameter units) a trim point must be to a knot, and two parameters
@@ -1243,6 +1250,17 @@ mod tests {
         assert_eq!(
             keep_triangle([0., 0., 0.], [0., 0., 0.], [1., 0., 0.]),
             Some(false)
+        );
+        // The same where the points are 6.6e-10 ft apart (two parameters one knot
+        // tolerance apart), the third 1.1e-3 ft away: still one point.
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [6.6e-10, 0., 0.], [1.1e-3, 0., 0.]),
+            Some(false)
+        );
+        // A hair 1e-7 ft apart at one end is not one point, and a foot long.
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [1e-7, 0., 0.], [1., 0., 0.]),
+            None
         );
         // Dust has to be all dust: one edge over 1e-4 ft keeps a hair a needle.
         assert_eq!(
