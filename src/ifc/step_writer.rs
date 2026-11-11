@@ -3717,11 +3717,6 @@ impl StepWriter<'_> {
             // angle: an arc of the sketch is chords there, whose polygon is
             // short of the area Revit takes from the curves themselves.
             if number.is_none() && base_quantities_written {
-                let corners = outline_feet
-                    .iter()
-                    .zip(outline_feet.iter().cycle().skip(1))
-                    .filter(|(from, to)| from != to)
-                    .count();
                 let area = outline_feet
                     .iter()
                     .zip(outline_feet.iter().cycle().skip(1))
@@ -3729,9 +3724,12 @@ impl StepWriter<'_> {
                     .sum::<f64>()
                     .abs()
                     / 2.0;
-                if corners > 4
-                    && area > 0.0
-                    && super::export_content::every_corner_square(outline_feet)
+                // More than four square corners: a rectangle one of whose
+                // edges is two sketch lines has four, and whether Revit calls
+                // that loop a rectangle is not measured.
+                if area > 0.0
+                    && super::export_content::square_corner_count(outline_feet)
+                        .is_some_and(|corners| corners > 4)
                 {
                     let quantities = PropertySet {
                         name: "Qto_OpeningElementBaseQuantities".into(),
