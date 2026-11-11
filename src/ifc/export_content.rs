@@ -3570,7 +3570,7 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// `Depth`, the one layer's thickness of a floor of one layer, and its
 /// `GrossVolume`, the area times it. A floor of several layers gets neither:
 /// the office's export (24.0.5) gives it its bottom layer's thickness, a
-/// newer exporter (26.4) another value (RE-298). Its
+/// newer exporter (26.4) another value (RE-298). A floor's
 /// `Perimeter` is left out: Revit's export writes it in feet, unscaled, in
 /// a file whose length unit is millimetres (RE-235 §5).
 ///
@@ -3590,6 +3590,12 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// sketch's outline, gets the same from its layers (RE-298): its `Depth` is
 /// the extrusion's, the layers' total, whatever their number, and its
 /// `NetVolume`, when its record holds no cutting step, the area times it. Its
+/// `Perimeter`, the length of the outline of that profile, is written too:
+/// Revit's export writes a roof's in the file's unit, unlike a floor's
+/// (RE-235 §5), and on all 10 of the office's roofs it is that outline's
+/// length. A roof whose profile has holes gets none: whether the export
+/// counts a hole's outline in the value is unmeasured, and the housing's 2
+/// roofs with holes are left out. Its
 /// `Width` is its profile's extent, as a floor of one layer's is, and is left
 /// out. All 10 of the office's roofs as built and at permit are Revit's, the
 /// one a hatch cuts (`YP-1`) but for its `NetVolume`.
@@ -3658,6 +3664,17 @@ fn add_slab_gross_area(
         name: "GrossArea".into(),
         value: PropertyValue::AreaSquareFeet(gross),
     }];
+    // A roof's `Perimeter` is its profile's outline length in the file's unit,
+    // not the floor's value in feet, and Revit writes it on every roof it
+    // writes the area on (RE-235 §5).
+    if roof {
+        if let Some(perimeter) = profile_outline_length(body) {
+            properties.push(Property {
+                name: "Perimeter".into(),
+                value: PropertyValue::PositiveLengthFeet(perimeter),
+            });
+        }
+    }
     // A floor of one layer only: on floors of several layers Revit's
     // exporters disagree (RE-298).
     let one_layer = layers
@@ -3740,6 +3757,23 @@ fn profile_outline_area(body: &Extrusion) -> Option<f64> {
     };
     let area = polygon_area_sqft(points);
     (area.is_finite() && area > 0.0).then_some(area)
+}
+
+/// The length of the outline of the profile `body` extrudes, its holes not
+/// taken in: `None` for a profile with holes or another shape (RE-235 §5).
+fn profile_outline_length(body: &Extrusion) -> Option<f64> {
+    let Some(entities::ProfileDef::ArbitraryClosed { points }) = &body.profile_override else {
+        return None;
+    };
+    if points.len() < 3 {
+        return None;
+    }
+    let mut length = 0.0;
+    for (index, &(x, y)) in points.iter().enumerate() {
+        let (next_x, next_y) = *points.get((index + 1) % points.len())?;
+        length += (next_x - x).hypot(next_y - y);
+    }
+    (length.is_finite() && length > 0.0).then_some(length)
 }
 
 /// The area and the length of the outline and hole of a hollow section
