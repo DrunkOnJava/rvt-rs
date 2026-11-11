@@ -4180,7 +4180,12 @@ fn prism_quantities(body: &Extrusion, width: f64) -> Option<[Property; 4]> {
 /// mullion's body extrusion where no parameter gives it. A mullion runs along
 /// its own Z axis (RE-226): on the model's axes, its record box's extent
 /// along the model axis that Z lies on; turned or tilted, the extent along Z
-/// of the box along its own axes (RE-106). Nothing where neither is read.
+/// of the box along its own axes (RE-106); turned so far about its own axis
+/// that the box leaves those extents undetermined, its extent along the model
+/// axis its own Z lies on, where that is one (RE-226). Nothing where none of
+/// these gives a length. Only a mullion whose box along its own axes is solved
+/// takes a `NetVolume` and a `NetSurfaceArea` from it, which need its two sides
+/// across it.
 /// The same length is its `Qto_MemberBaseQuantities.Length`, which Revit's
 /// export gives every one of the BIM4LCA office's 10,003 mullions equal to
 /// their `Span` (#1016).
@@ -4209,8 +4214,9 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
         }
         _ => None,
     });
+    let own = mvp::curtain_axes_from_fields(&decoded.fields);
     // The box's two sides across the mullion, then its length along it.
-    let sides = match (mvp::curtain_axes_from_fields(&decoded.fields), along) {
+    let sides = match (own, along) {
         (Some(axes), _) => oriented_box(axes, size).map(|(_, half)| half.map(|h| 2.0 * h)),
         (None, Some(axis)) if axis < 3 => {
             let across: Vec<f64> = (0..3).filter(|i| *i != axis).map(|i| size[i]).collect();
@@ -4218,10 +4224,15 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
         }
         _ => None,
     };
-    let Some(span) = sides
+    // RE-226: a mullion turned near enough to 45 degrees about its own axis
+    // leaves the box along its own axes undetermined (RE-106), but its own Z is
+    // still the direction of its length: where that Z is one of the model's
+    // axes, the record box's extent along it is the mullion's own extent.
+    let span = sides
         .map(|sides| sides[2])
-        .filter(|span| span.is_finite() && *span > 0.0)
-    else {
+        .or_else(|| own.and_then(|axes| length_on_a_model_axis(axes[2], size)))
+        .filter(|span| span.is_finite() && *span > 0.0);
+    let Some(span) = span else {
         return;
     };
     let property = Property {
@@ -4255,6 +4266,26 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
         name: "Qto_MemberBaseQuantities".into(),
         properties: quantities,
     });
+}
+
+/// The record box's extent along the model axis a mullion's own Z lies on,
+/// where it lies on exactly one of them: that extent is the box's extent along
+/// the mullion's own Z, its two other axes being square to that model axis
+/// (RE-106), and so the mullion's length. Nothing where the Z lies on none of
+/// the model's axes or on more than one, or where the extent is not positive.
+fn length_on_a_model_axis(own_z: [f64; 3], size: [f64; 3]) -> Option<f64> {
+    let mut on = None;
+    for (index, value) in own_z.iter().enumerate() {
+        if value.abs() <= crate::partition_schema_mvp::INSTANCE_TURN_MIN_RADIANS {
+            continue;
+        }
+        if on.is_some() {
+            return None;
+        }
+        on = Some(index);
+    }
+    let extent = *size.get(on?)?;
+    (extent.is_finite() && extent > 0.0).then_some(extent)
 }
 
 /// A curtain mullion's `NetVolume` (#1016, RE-243): its box's two sides across
