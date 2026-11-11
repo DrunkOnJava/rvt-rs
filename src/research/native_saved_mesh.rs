@@ -1117,9 +1117,12 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
     }
     let mut loops = Vec::new();
     let mut seen = BTreeSet::new();
+    let mut points = 0;
     loop {
         ensure!(seen.insert(li), "loop-list cycle");
-        loops.push(ring_impl(g, index, fi, li, EdgeSide::Plane)?);
+        let ring = ring_impl(g, index, fi, li, EdgeSide::Plane)?;
+        points = planar_points_with(points, ring.len()).context(PLANAR_BUDGET_EXCEEDED)?;
+        loops.push(ring);
         match index.resolve(li, &g.objects[li].fields["m_nextLoop"])? {
             Some(next) => li = next,
             None => break,
@@ -1153,6 +1156,25 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
 
 /// The text a planar face is refused with when its triangles do not add up to its rings' area.
 const AREA_MISMATCH: &str = "triangulated area mismatch";
+
+/// The most points all the rings of one planar face may hold (#1748). Earcut,
+/// `retain_boundary_points` and `split_pinched_rings` are super-linear in a face's
+/// points, and a hostile file can give each edge of a ring up to
+/// [`EDGE_POINT_BUDGET`] of them; the trimmed-cell path has its own budgets.
+const PLANAR_FACE_POINT_BUDGET: usize = 5_000;
+
+/// The text a planar face is refused with when its rings hold more points than
+/// [`PLANAR_FACE_POINT_BUDGET`], before any of them is triangulated.
+const PLANAR_BUDGET_EXCEEDED: &str = "planar face budget exceeded";
+
+/// The points a planar face holds once a ring of `ring` points joins the `points` it
+/// has, or `None` where that is over [`PLANAR_FACE_POINT_BUDGET`] or does not fit a
+/// `usize`.
+fn planar_points_with(points: usize, ring: usize) -> Option<usize> {
+    points
+        .checked_add(ring)
+        .filter(|total| *total <= PLANAR_FACE_POINT_BUDGET)
+}
 
 /// The vertices of a planar face and the triangles on them, by their indices.
 type PlaneMesh = (Vec<[f64; 3]>, Vec<[u32; 3]>);
@@ -2095,9 +2117,9 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EDGE_SAGITTA, EdgeLimits, area, distance_to_chord, isoparametric_axis,
-        normals_follow_winding, refine_crossing_edge, refine_crossing_edge_within, regions_tile,
-        split_pinched_rings, within_envelope,
+        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, area, distance_to_chord,
+        isoparametric_axis, normals_follow_winding, planar_points_with, refine_crossing_edge,
+        refine_crossing_edge_within, regions_tile, split_pinched_rings, within_envelope,
     };
     use anyhow::Result;
     use std::f64::consts::{FRAC_PI_2, PI};
@@ -2676,5 +2698,29 @@ mod tests {
         let both = split_pinched_rings(&[square.clone(), lobes()]).unwrap();
         assert_eq!(both.len(), 3);
         assert!(both.contains(&square));
+    }
+
+    // How a planar face's point budget can go wrong: one point too many let through at its
+    // edge, a count that wraps round, or a face of many small rings that no one ring shows.
+    #[test]
+    fn a_planar_face_at_the_budget_is_kept_and_one_point_over_is_refused() {
+        let budget = PLANAR_FACE_POINT_BUDGET;
+        assert_eq!(planar_points_with(0, budget), Some(budget));
+        assert_eq!(planar_points_with(budget - 3, 3), Some(budget));
+        assert_eq!(planar_points_with(budget - 3, 4), None);
+        assert_eq!(planar_points_with(0, budget + 1), None);
+        assert_eq!(planar_points_with(0, 0), Some(0));
+    }
+
+    #[test]
+    fn a_count_that_would_wrap_round_is_refused_and_small_rings_add_up() {
+        assert_eq!(planar_points_with(usize::MAX, 1), None);
+        assert_eq!(planar_points_with(usize::MAX - 1, 5), None);
+        let (mut points, mut rings) = (0, 0);
+        while let Some(next) = planar_points_with(points, 4) {
+            points = next;
+            rings += 1;
+        }
+        assert_eq!(rings, PLANAR_FACE_POINT_BUDGET / 4);
     }
 }
