@@ -196,6 +196,11 @@ fn ignorable(diagnostic: &str) -> bool {
 /// Every scalar under `value`, as (path, text): a pointer as `ptrnull` or
 /// `ptrset`, an array as its length and, short, its items.
 fn flatten(prefix: &str, value: &Value, depth: usize, out: &mut Vec<(String, String)>) {
+    if let Some(token) = rvt::research::native_parameters::pointer_token(value) {
+        let state = if token == 0 { "ptrnull" } else { "ptrset" };
+        out.push((prefix.to_string(), state.to_string()));
+        return;
+    }
     match value {
         Value::Null => {}
         Value::Bool(b) => out.push((prefix.to_string(), b.to_string())),
@@ -210,15 +215,6 @@ fn flatten(prefix: &str, value: &Value, depth: usize, out: &mut Vec<(String, Str
             }
         }
         Value::Object(members) => {
-            if let Some(token) = members.get("pointer_token") {
-                let state = if token.as_u64() == Some(0) {
-                    "ptrnull"
-                } else {
-                    "ptrset"
-                };
-                out.push((prefix.to_string(), state.to_string()));
-                return;
-            }
             if depth >= 4 {
                 return;
             }

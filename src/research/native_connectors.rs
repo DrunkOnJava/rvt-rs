@@ -22,6 +22,7 @@
 // Tracker: B54.
 
 use crate::native_json::{finite_triple, identifier_i64};
+use crate::native_parameters::{pointer_offset, pointer_token};
 use crate::partition_connector_pairs::ConnectorPair;
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
@@ -186,11 +187,7 @@ fn family_flow_directions(graph: &crate::native_parameters::ObjectGraph) -> BTre
         .iter()
         .filter(|object| object.class_name == "ConnectorDataCell")
         .filter_map(|cell| {
-            let offset = cell
-                .fields
-                .get("m_oRelevantParams")?
-                .get("offset")?
-                .as_u64()?;
+            let offset = pointer_offset(cell.fields.get("m_oRelevantParams")?)?;
             let index = cell.fields.get("m_index")?.as_i64()?;
             let domain = cell.fields.get("m_domain")?.as_i64()?;
             Some((offset, index, domain))
@@ -265,11 +262,7 @@ fn calculations(graph: &crate::native_parameters::ObjectGraph) -> BTreeMap<u32, 
                 || object.class_name == "SegmentConnectorCalculation"
         })
         .filter_map(|calculation| {
-            let token = calculation
-                .fields
-                .get("m_pConnector")?
-                .get("pointer_token")?
-                .as_u64()?;
+            let token = pointer_token(calculation.fields.get("m_pConnector")?)?;
             let value = |name: &str| calculation.fields.get(name).and_then(|v| v.as_i64());
             Some((
                 *index_of_token.get(&token)?,

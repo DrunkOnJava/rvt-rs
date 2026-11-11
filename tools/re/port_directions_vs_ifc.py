@@ -35,6 +35,19 @@ PIPE, DUCT = -1140248, -1140219
 NAME = {1: "In", 2: "Out", 0: "-"}
 
 
+def pointer_parts(value):
+    """(token, class tag or None, offset) of a graph pointer, or None for any other value.
+
+    A decoded graph holds a pointer as the array [token, class tag or null, offset, true]
+    (#1694); a dump from a build before that holds the map of pointer_token, class_tag and
+    offset. Both are read here, so a dump of either build scores."""
+    if isinstance(value, list) and len(value) == 4 and value[3] is True:
+        return value[0], value[1], value[2]
+    if isinstance(value, dict) and "pointer_token" in value:
+        return value["pointer_token"], value.get("class_tag"), value["offset"]
+    return None
+
+
 def main():
     probe, ifc = sys.argv[1], sys.argv[2]
     token_index, calculation, joins = {}, {}, {}
@@ -51,7 +64,7 @@ def main():
                     (r["m_id"]["m_id"]["m_id64"], r["m_nIndex"]) for r in fields.get("m_arrRefs", []) if r["m_connType"] == 1
                 ]
             elif cls == "SegmentConnectorCalculation" or cls.startswith("MEPFamilyConnectorCalculation"):
-                calculation[(owner, fields["m_pConnector"]["pointer_token"])] = fields.get("m_eDirection")
+                calculation[(owner, pointer_parts(fields["m_pConnector"])[0])] = fields.get("m_eDirection")
             elif cls == "FamilyParams":
                 params[owner].append((int(start), {p["m_paramId"]["m_id"]["m_id64"]: p["m_int"] for p in fields.get("m_params", [])}))
         elif kind == "cell":
@@ -68,8 +81,8 @@ def main():
     calculated = {(o, token_index[(o, t)]): d for (o, t), d in calculation.items() if (o, t) in token_index}
     family_direction = {}
     for family, family_cells in cells.items():
-        family_cells.sort(key=lambda c: c["m_oRelevantParams"]["offset"])
-        first = family_cells[0]["m_oRelevantParams"]["offset"]
+        family_cells.sort(key=lambda c: pointer_parts(c["m_oRelevantParams"])[2])
+        first = pointer_parts(family_cells[0]["m_oRelevantParams"])[2]
         owned = [p for start, p in sorted(params.get(family, [])) if start > first]
         if len(owned) != len(family_cells):
             continue

@@ -91,7 +91,9 @@ fn main() -> anyhow::Result<()> {
                     .map(|map| {
                         map.iter()
                             .map(|(key, value)| match value {
-                                Value::Object(inner) if inner.contains_key("pointer_token") => {
+                                _ if rvt::research::native_parameters::pointer_parts(value)
+                                    .is_some() =>
+                                {
                                     format!("{key}=->")
                                 }
                                 other => {

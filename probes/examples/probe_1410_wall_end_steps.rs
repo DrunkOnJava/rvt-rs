@@ -56,7 +56,7 @@ fn trimmed(fields: &Value) -> String {
         if name.ends_with("HistTable") {
             let count = member.as_array().map_or(0, Vec::len);
             kept.insert(format!("{name}#"), Value::from(count));
-        } else if member.get("pointer_token").is_none() {
+        } else if rvt::research::native_parameters::pointer_parts(member).is_none() {
             kept.insert(name.clone(), member.clone());
         }
     }

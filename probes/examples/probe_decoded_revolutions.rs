@@ -122,9 +122,10 @@ fn mutate(records: &mut Vec<(u64, ObjectGraph)>, case: &str) -> Result<()> {
                 .iter()
                 .position(|o| o.class_name == "CurveElemDriver")
                 .context("driver")?;
-            let offset = graph.objects[driver].fields["m_pCrv"]["offset"]
-                .as_u64()
-                .context("offset")?;
+            let offset = rvt::research::native_parameters::pointer_offset(
+                &graph.objects[driver].fields["m_pCrv"],
+            )
+            .context("offset")?;
             graph.edges.retain(|e| {
                 !(e.source_object_index == driver && e.pointer_offset as u64 == offset)
             });

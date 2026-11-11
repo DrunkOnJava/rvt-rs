@@ -3,6 +3,19 @@
 import math
 
 
+def pointer_parts(value):
+    """(token, class tag or None, offset) of a graph pointer, or None for any other value.
+
+    A decoded graph holds a pointer as the array [token, class tag or null, offset, true]
+    (#1694); a dump from a build before that holds the map of pointer_token, class_tag and
+    offset. Both are read here, so a dump of either build scores."""
+    if isinstance(value, list) and len(value) == 4 and value[3] is True:
+        return value[0], value[1], value[2]
+    if isinstance(value, dict) and "pointer_token" in value:
+        return value["pointer_token"], value.get("class_tag"), value["offset"]
+    return None
+
+
 def require(condition, message):
     if not condition:
         raise ValueError(message)
@@ -21,25 +34,24 @@ def one_object(record, name):
 
 
 def linked_object(record, source, field):
-    pointer = source["fields"][field]
+    token, class_tag, offset = pointer_parts(source["fields"][field])
     edges = [
         e
         for e in record["graph_edges"]
         if e["source_object_index"] == source["object_index"]
-        and e["pointer_offset"] == pointer["offset"]
+        and e["pointer_offset"] == offset
     ]
     require(len(edges) == 1, "missing or ambiguous graph edge: " + field)
     edge = edges[0]
     require(
-        edge["pointer_token"] == pointer["pointer_token"]
-        and edge["target_class_tag"] == pointer["class_tag"],
+        edge["pointer_token"] == token and edge["target_class_tag"] == class_tag,
         "graph pointer mismatch",
     )
     targets = [
         o for o in record["objects"] if o["object_index"] == edge["target_object_index"]
     ]
     require(
-        len(targets) == 1 and targets[0]["class_tag"] == pointer["class_tag"],
+        len(targets) == 1 and targets[0]["class_tag"] == class_tag,
         "missing or mismatched graph target",
     )
     return targets[0]

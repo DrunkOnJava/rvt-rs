@@ -879,8 +879,8 @@ fn end_connectors(graph: &crate::native_parameters::ObjectGraph, taps: bool) -> 
         };
         let index = position
             .fields
-            .pointer("/m_pConnector/pointer_token")
-            .and_then(serde_json::Value::as_u64)
+            .get("m_pConnector")
+            .and_then(crate::native_parameters::pointer_token)
             .and_then(|token| {
                 let mut found = graph.objects.iter().filter(|object| {
                     object.class_name == "Connector" && u64::from(object.token) == token
@@ -945,8 +945,8 @@ fn pipe_directions(graph: &crate::native_parameters::ObjectGraph) -> BTreeMap<u3
     {
         let Some((index, direction)) = calculation
             .fields
-            .pointer("/m_pConnector/pointer_token")
-            .and_then(serde_json::Value::as_u64)
+            .get("m_pConnector")
+            .and_then(crate::native_parameters::pointer_token)
             .and_then(|token| index_of_token.get(&token))
             .zip(
                 calculation
@@ -1232,10 +1232,8 @@ fn duct_taps(graph: &crate::native_parameters::ObjectGraph) -> Vec<(u32, f64)> {
                 .get("m_paramOnCurve")?
                 .as_f64()
                 .filter(|at| *at > 0.0 && *at < 1.0)?;
-            let token = position
-                .fields
-                .pointer("/m_pConnector/pointer_token")?
-                .as_u64()?;
+            let token =
+                crate::native_parameters::pointer_token(position.fields.get("m_pConnector")?)?;
             Some((*index_of_token.get(&token)?, at))
         })
         .collect()

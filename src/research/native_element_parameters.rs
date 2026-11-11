@@ -30,6 +30,7 @@
 use crate::RevitFile;
 use crate::native_document::{self, Options};
 use crate::native_parameter_definitions::Definition;
+use crate::native_parameters::pointer_offset;
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::Value;
@@ -357,7 +358,7 @@ fn read_selected(
                 _ => None,
             }
             .and_then(|field| root.fields.get(field))
-            .and_then(|pointer| pointer["offset"].as_u64())
+            .and_then(pointer_offset)
             .and_then(|offset| {
                 graph.edges.iter().find(|edge| {
                     edge.source_object_index == 0 && edge.pointer_offset as u64 == offset

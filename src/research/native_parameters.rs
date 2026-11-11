@@ -583,7 +583,7 @@ impl<'a> Cursor<'a> {
             None
         };
         Ok(if BUILD {
-            json!({"pointer_token":token,"class_tag":tag,"offset":offset})
+            pointer_value(token, tag, offset)
         } else {
             Value::Null
         })
@@ -1093,6 +1093,48 @@ fn identifier(value: &Value) -> Result<i64> {
         .and_then(Value::as_i64)
         .ok_or_else(|| anyhow::anyhow!("unsupported serialized ElementId value"))
 }
+/// A pointer as a decoded graph holds it: the array `[token, class tag or null,
+/// offset, true]`. As a map of `pointer_token`, `class_tag` and `offset` it came
+/// to one 631-byte `BTreeMap` leaf and three key strings, about 730 bytes for
+/// three numbers, and a face or an edge holds five or six of them (#1694); the
+/// array is one allocation of 128. The trailing `true` tells a pointer from any
+/// array of three integers (a facet's vertex indices are one), which a reader
+/// that walks a graph without knowing its fields could not otherwise. Readers
+/// take a pointer's parts through [`pointer_parts`] and the three functions on
+/// it, so none names the shape.
+pub(crate) fn pointer_value(token: u32, class_tag: Option<u16>, offset: usize) -> Value {
+    Value::Array(vec![
+        Value::from(token),
+        class_tag.map_or(Value::Null, Value::from),
+        Value::from(offset),
+        Value::Bool(true),
+    ])
+}
+/// The token, the class tag (`None` where the pointer is null or external) and
+/// the offset of a pointer value, `None` for any value that is not one.
+pub fn pointer_parts(value: &Value) -> Option<(u64, Option<u64>, u64)> {
+    let [token, tag, offset, Value::Bool(true)] = value.as_array()?.as_slice() else {
+        return None;
+    };
+    let tag = if tag.is_null() {
+        None
+    } else {
+        Some(tag.as_u64()?)
+    };
+    Some((token.as_u64()?, tag, offset.as_u64()?))
+}
+/// The token of a pointer value ([`pointer_parts`]); 0 is null.
+pub fn pointer_token(value: &Value) -> Option<u64> {
+    pointer_parts(value).map(|(token, _, _)| token)
+}
+/// The class tag of a pointer value, `None` where it names none or is no pointer.
+pub fn pointer_class_tag(value: &Value) -> Option<u64> {
+    pointer_parts(value)?.1
+}
+/// The offset of a pointer value in its body.
+pub fn pointer_offset(value: &Value) -> Option<u64> {
+    pointer_parts(value).map(|(_, _, offset)| offset)
+}
 /// Decode scalar parameter sets after the schema-directed derived-field prefix.
 /// This is not complete record decoding: subsequent geometry and graph objects
 /// remain unconsumed. Callers must separately establish current record ownership.
@@ -1122,9 +1164,8 @@ pub fn decode(body: &[u8], registry: &Registry) -> Result<Parameters> {
         ),
     ] {
         let pointer = &fields[name];
-        let token = pointer["pointer_token"]
-            .as_u64()
-            .ok_or_else(|| anyhow::anyhow!("missing parameter pointer"))?;
+        let token =
+            pointer_token(pointer).ok_or_else(|| anyhow::anyhow!("missing parameter pointer"))?;
         if token == 0 {
             continue;
         }
@@ -1132,8 +1173,7 @@ pub fn decode(body: &[u8], registry: &Registry) -> Result<Parameters> {
             token == u64::from(u32::MAX),
             "shared/referenced parameter set requires object-graph resolution"
         );
-        let tag = pointer["class_tag"]
-            .as_u64()
+        let tag = pointer_class_tag(pointer)
             .ok_or_else(|| anyhow::anyhow!("parameter set class absent"))? as u16;
         ensure!(
             registry.class(tag).is_some_and(|c| c.name == class_name),

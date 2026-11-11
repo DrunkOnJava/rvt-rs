@@ -29,7 +29,9 @@ fn scalars(fields: &Value) -> String {
     map.iter()
         .map(|(key, value)| {
             let text = match value {
-                Value::Object(inner) if inner.contains_key("pointer_token") => "->".to_string(),
+                _ if rvt::research::native_parameters::pointer_parts(value).is_some() => {
+                    "->".to_string()
+                }
                 Value::Array(items) => format!("[{}]", items.len()),
                 Value::Object(_) => {
                     let text = value.to_string();

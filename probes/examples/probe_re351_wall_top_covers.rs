@@ -140,7 +140,7 @@ fn trimmed(fields: &Value) -> Value {
                 format!("{name}#"),
                 Value::from(member.as_array().map_or(0, Vec::len)),
             );
-        } else if member.get("pointer_token").is_none() {
+        } else if rvt::research::native_parameters::pointer_parts(member).is_none() {
             kept.insert(name.clone(), member.clone());
         }
     }

@@ -52,7 +52,9 @@ fn compact(value: &Value) -> Value {
                 if name.ends_with("HistTable") {
                     let count = member.as_array().map_or(0, Vec::len);
                     out.insert(format!("{name}#"), Value::from(count));
-                } else if member.get("pointer_token").is_none() && name != "m_cleanData" {
+                } else if rvt::research::native_parameters::pointer_parts(member).is_none()
+                    && name != "m_cleanData"
+                {
                     out.insert(name.clone(), compact(member));
                 }
             }

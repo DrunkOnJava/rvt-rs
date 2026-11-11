@@ -113,7 +113,7 @@ fn pointer_items(value: &Value) -> Vec<&Value> {
 }
 
 fn token_of(item: &Value) -> Option<u64> {
-    item.get("pointer_token").and_then(Value::as_u64)
+    rvt::research::native_parameters::pointer_token(item)
 }
 
 fn layout(field: &Field, value: &Value) -> std::result::Result<(), String> {
@@ -137,7 +137,7 @@ fn layout(field: &Field, value: &Value) -> std::result::Result<(), String> {
                 let Some(token) = token_of(item) else {
                     return Err("an item is not a pointer".into());
                 };
-                let tagged = !item.get("class_tag").is_none_or(Value::is_null);
+                let tagged = rvt::research::native_parameters::pointer_class_tag(item).is_some();
                 let wants_tag = field.modifier == 0x54 && token != 0;
                 if tagged != wants_tag {
                     return Err(format!("item token {token} class tag present {tagged}"));
@@ -204,7 +204,7 @@ impl Walk<'_> {
                     Some(_) => stats.unresolved += 1,
                     None => {}
                 }
-                if let Some(tag) = item.get("class_tag").and_then(Value::as_u64) {
+                if let Some(tag) = rvt::research::native_parameters::pointer_class_tag(item) {
                     let name = u16::try_from(tag)
                         .ok()
                         .and_then(|tag| self.registry.class(tag))

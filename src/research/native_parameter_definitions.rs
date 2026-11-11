@@ -2,7 +2,7 @@
 //! Registry scope is one document/content namespace. Captions never identify a
 //! parameter, and unknown definition classes never select a family value slot.
 use crate::native_metadata::{FamilyParameterSlots, identifier};
-use crate::native_parameters::ObjectGraph;
+use crate::native_parameters::{ObjectGraph, pointer_offset, pointer_token};
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -40,11 +40,10 @@ pub fn project(graph: &ObjectGraph) -> Result<Option<Definition>> {
     let Some(pointer) = root.fields.get("m_pParamDef") else {
         return Ok(None);
     };
-    if pointer["pointer_token"].as_u64() == Some(0) {
+    if pointer_token(pointer) == Some(0) {
         return Ok(None);
     }
-    let offset = pointer["offset"]
-        .as_u64()
+    let offset = pointer_offset(pointer)
         .ok_or_else(|| anyhow::anyhow!("definition pointer offset absent"))?
         as usize;
     let edges: Vec<_> = graph

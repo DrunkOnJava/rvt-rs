@@ -36,7 +36,7 @@ mod revolution;
 pub use revolution::{Revolution, RevolutionMesh};
 
 use crate::le_bytes;
-use crate::native_parameters::{GraphObject, ObjectGraph};
+use crate::native_parameters::{GraphObject, ObjectGraph, pointer_offset};
 use crate::{RevitFile, native_document, native_saved_mesh, native_segments};
 use anyhow::{Result, ensure};
 use serde_json::Value;
@@ -1143,10 +1143,7 @@ fn linked_object<'a>(
         .get(source)
         .and_then(|o| o.fields.get(field))
         .ok_or_else(|| format!("missing {field}"))?;
-    let offset = pointer
-        .get("offset")
-        .and_then(Value::as_u64)
-        .ok_or("pointer offset")?;
+    let offset = pointer_offset(pointer).ok_or("pointer offset")?;
     if graph
         .edges
         .iter()

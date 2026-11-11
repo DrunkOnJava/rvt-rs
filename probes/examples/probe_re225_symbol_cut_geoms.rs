@@ -52,7 +52,9 @@ struct CutGeometry {
 
 fn pointers(value: &Value, out: &mut Vec<Value>) {
     match value {
-        Value::Object(map) if map.contains_key("pointer_token") => out.push(value.clone()),
+        _ if rvt::research::native_parameters::pointer_parts(value).is_some() => {
+            out.push(value.clone())
+        }
         Value::Object(map) => map.values().for_each(|v| pointers(v, out)),
         Value::Array(items) => items.iter().for_each(|v| pointers(v, out)),
         _ => {}

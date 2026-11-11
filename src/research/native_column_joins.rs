@@ -18,6 +18,7 @@
 //! hold one or more (RE-247).
 
 use crate::native_json::element_id;
+use crate::native_parameters::pointer_offset;
 use crate::{RevitFile, native_document};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -166,7 +167,7 @@ pub fn wall_sides(
         };
         let Some((driver, offset)) = graph.objects.iter().enumerate().find_map(|(i, object)| {
             (object.class_name == "VWallDriver")
-                .then(|| object.fields.get("m_pCrv")?["offset"].as_u64())
+                .then(|| pointer_offset(object.fields.get("m_pCrv")?))
                 .flatten()
                 .map(|offset| (i, offset))
         }) else {

@@ -1,7 +1,7 @@
 //! File-local Extensible Storage catalog from the owned Global/Latest graph.
 use crate::{
     native_extensible_storage::{Catalog, Field, Schema, guid_string},
-    native_parameters::{self, GraphLimits, ObjectGraph},
+    native_parameters::{self, GraphLimits, ObjectGraph, pointer_offset, pointer_token},
     schema_registry::Registry,
 };
 use anyhow::{Result, ensure};
@@ -80,7 +80,7 @@ pub fn from_graph(graph: &ObjectGraph, bytes: &[u8]) -> Result<(Catalog, Value)>
         .ok_or_else(|| anyhow::anyhow!("ES app info array absent"))?;
     let mut storages = Vec::new();
     for pointer in pointers {
-        if pointer["pointer_token"].as_u64() == Some(0) {
+        if pointer_token(pointer) == Some(0) {
             continue;
         }
         let index = owned(graph, manager, pointer)?;
@@ -185,9 +185,8 @@ fn guid(v: &Value) -> Result<String> {
     Ok(guid_string(b))
 }
 fn owned(g: &ObjectGraph, owner: usize, pointer: &Value) -> Result<usize> {
-    let offset = pointer["offset"]
-        .as_u64()
-        .ok_or_else(|| anyhow::anyhow!("ES ownership pointer absent"))?;
+    let offset =
+        pointer_offset(pointer).ok_or_else(|| anyhow::anyhow!("ES ownership pointer absent"))?;
     let edges: Vec<_> = g
         .edges
         .iter()

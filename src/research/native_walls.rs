@@ -48,6 +48,7 @@ use serde_json::Value;
 use crate::RevitFile;
 use crate::native_document::{Options, extract_graphs};
 use crate::native_json::{element_id, element_id_i64};
+use crate::native_parameters::pointer_token;
 use crate::native_wall_types::{functions_of_types, type_function, wall_type_id};
 
 /// A wall's curve and the joins at its ends, from its native record.
@@ -384,8 +385,8 @@ fn location_curve_index(graph: &crate::native_parameters::ObjectGraph) -> Option
         .iter()
         .find(|object| object.class_name == "VWallDriver")?
         .fields
-        .pointer("/m_pCrv/pointer_token")?
-        .as_u64()?;
+        .get("m_pCrv")
+        .and_then(pointer_token)?;
     let mut named = graph
         .objects
         .iter()

@@ -1,5 +1,5 @@
 //! Tessellation of bounded saved planar and cylindrical BRep faces. No application or vendor runtime.
-use crate::native_parameters::ObjectGraph;
+use crate::native_parameters::{ObjectGraph, pointer_class_tag, pointer_offset, pointer_token};
 use anyhow::{Context, Result, bail, ensure};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -56,13 +56,11 @@ impl<'a> PointerIndex<'a> {
     }
     fn resolve(&self, source: usize, v: &Value) -> Result<Option<usize>> {
         let g = self.graph;
-        let t = v["pointer_token"]
-            .as_u64()
-            .context("missing pointer token")?;
+        let t = pointer_token(v).context("missing pointer token")?;
         if t == 0 {
             return Ok(None);
         }
-        let off = v["offset"].as_u64().context("pointer offset")? as usize;
+        let off = pointer_offset(v).context("pointer offset")? as usize;
         let edges = self
             .lookup
             .edges
@@ -79,7 +77,7 @@ impl<'a> PointerIndex<'a> {
                 e.pointer_token as u64 == t && target.class_tag == e.target_class_tag,
                 "pointer edge metadata mismatch"
             );
-            if let Some(tag) = v["class_tag"].as_u64() {
+            if let Some(tag) = pointer_class_tag(v) {
                 ensure!(
                     tag == target.class_tag as u64,
                     "pointer target class mismatch"

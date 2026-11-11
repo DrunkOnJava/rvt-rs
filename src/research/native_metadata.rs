@@ -4,7 +4,7 @@
 use crate::native_parameter_definitions::{
     BuiltinDefinition, Definition, Registry, ResolvedFamilyParameter,
 };
-use crate::native_parameters::{ObjectGraph, Parameter};
+use crate::native_parameters::{ObjectGraph, Parameter, pointer_offset, pointer_token};
 use crate::revit_global_ids::compress_ifc_guid;
 use anyhow::{Result, ensure};
 use serde::Serialize;
@@ -148,11 +148,12 @@ pub fn project(graph: &ObjectGraph) -> Result<SavedMetadata> {
             });
         }
     }
-    if let Some(pointer) = root.fields.get("m_pMaterial").filter(|pointer| {
-        root.class_name == "MaterialElem" && pointer["pointer_token"].as_u64() != Some(0)
-    }) {
-        let offset = pointer["offset"]
-            .as_u64()
+    if let Some(pointer) = root
+        .fields
+        .get("m_pMaterial")
+        .filter(|pointer| root.class_name == "MaterialElem" && pointer_token(pointer) != Some(0))
+    {
+        let offset = pointer_offset(pointer)
             .ok_or_else(|| anyhow::anyhow!("material pointer offset absent"))?
             as usize;
         let edge = graph
@@ -218,10 +219,9 @@ pub fn project(graph: &ObjectGraph) -> Result<SavedMetadata> {
         if let Some(pointer) = root
             .fields
             .get("m_pDesignPropManager")
-            .filter(|pointer| pointer["pointer_token"].as_u64() != Some(0))
+            .filter(|pointer| pointer_token(pointer) != Some(0))
         {
-            let offset = pointer["offset"]
-                .as_u64()
+            let offset = pointer_offset(pointer)
                 .ok_or_else(|| anyhow::anyhow!("pipe property pointer offset absent"))?
                 as usize;
             let edge = graph
@@ -287,10 +287,9 @@ pub fn project(graph: &ObjectGraph) -> Result<SavedMetadata> {
     ];
     let mut contexts = vec![(0usize, "", direct)];
     if let Some(pointer) = root.fields.get("m_oParamSet").filter(|pointer| {
-        root.class_name == "PropertySetElement" && pointer["pointer_token"].as_u64() != Some(0)
+        root.class_name == "PropertySetElement" && pointer_token(pointer) != Some(0)
     }) {
-        let offset = pointer["offset"]
-            .as_u64()
+        let offset = pointer_offset(pointer)
             .ok_or_else(|| anyhow::anyhow!("asset parameter pointer offset absent"))?
             as usize;
         let edge = graph
@@ -323,11 +322,10 @@ pub fn project(graph: &ObjectGraph) -> Result<SavedMetadata> {
             let Some(pointer) = parameter_owner.fields.get(field) else {
                 continue;
             };
-            if pointer["pointer_token"].as_u64() == Some(0) {
+            if pointer_token(pointer) == Some(0) {
                 continue;
             }
-            let offset = pointer["offset"]
-                .as_u64()
+            let offset = pointer_offset(pointer)
                 .ok_or_else(|| anyhow::anyhow!("parameter pointer offset absent"))?
                 as usize;
             let edge = graph
@@ -382,10 +380,9 @@ pub fn project(graph: &ObjectGraph) -> Result<SavedMetadata> {
     if let Some(pointer) = root
         .fields
         .get("m_symbolInfo")
-        .filter(|pointer| symbol_info && pointer["pointer_token"].as_u64() != Some(0))
+        .filter(|pointer| symbol_info && pointer_token(pointer) != Some(0))
     {
-        let offset = pointer["offset"]
-            .as_u64()
+        let offset = pointer_offset(pointer)
             .ok_or_else(|| anyhow::anyhow!("symbol information pointer offset absent"))?
             as usize;
         let edge = graph
@@ -565,7 +562,7 @@ pub fn project_with_definitions(graph: &ObjectGraph, registry: &Registry) -> Res
     };
     let owner_target = owner_field
         .and_then(|field| root.fields.get(field))
-        .and_then(|pointer| pointer["offset"].as_u64())
+        .and_then(pointer_offset)
         .and_then(|offset| {
             graph.edges.iter().find(|edge| {
                 edge.source_object_index == 0 && edge.pointer_offset == offset as usize
@@ -713,11 +710,10 @@ fn project_global_associations(graph: &ObjectGraph) -> Result<Vec<GlobalParamete
     let Some(pointer) = root.fields.get("m_cellList") else {
         return Ok(Vec::new());
     };
-    if pointer["pointer_token"].as_u64() == Some(0) {
+    if pointer_token(pointer) == Some(0) {
         return Ok(Vec::new());
     }
-    let offset = pointer["offset"]
-        .as_u64()
+    let offset = pointer_offset(pointer)
         .ok_or_else(|| anyhow::anyhow!("owner cell-list pointer offset absent"))?
         as usize;
     let edge = graph
@@ -739,11 +735,10 @@ fn project_global_associations(graph: &ObjectGraph) -> Result<Vec<GlobalParamete
         .ok_or_else(|| anyhow::anyhow!("owner cell array absent"))?;
     let mut result = Vec::new();
     for pointer in cells {
-        if pointer["pointer_token"].as_u64() == Some(0) {
+        if pointer_token(pointer) == Some(0) {
             continue;
         }
-        let offset = pointer["offset"]
-            .as_u64()
+        let offset = pointer_offset(pointer)
             .ok_or_else(|| anyhow::anyhow!("cell pointer offset absent"))?
             as usize;
         let edge = graph

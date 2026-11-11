@@ -178,12 +178,14 @@ fn describe(g: &ObjectGraph, oi: usize, depth: usize) -> String {
 
 fn value_text(g: &ObjectGraph, oi: usize, v: &Value, depth: usize) -> String {
     match v {
-        Value::Object(m) if m.contains_key("pointer_token") => match pointer(g, oi, v) {
-            Ok(Some(t)) if depth > 0 => describe(g, t, depth - 1),
-            Ok(Some(t)) => format!("->{}#{t}", g.objects[t].class_name),
-            Ok(None) => "null".into(),
-            Err(_) => "->?".into(),
-        },
+        _ if rvt::research::native_parameters::pointer_parts(v).is_some() => {
+            match pointer(g, oi, v) {
+                Ok(Some(t)) if depth > 0 => describe(g, t, depth - 1),
+                Ok(Some(t)) => format!("->{}#{t}", g.objects[t].class_name),
+                Ok(None) => "null".into(),
+                Err(_) => "->?".into(),
+            }
+        }
         Value::Array(a) => {
             let items: Vec<String> = a
                 .iter()

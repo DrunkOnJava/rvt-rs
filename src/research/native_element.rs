@@ -1,5 +1,6 @@
 //! Bounded native Element base fields, using the structurally decoded schema.
 //! Pointer targets are retained as serialized tokens; no graph target is guessed.
+use crate::native_parameters::{pointer_class_tag, pointer_offset, pointer_token};
 use crate::schema_registry::{Class, Field, Registry};
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -202,20 +203,17 @@ fn read_base_by_graph(
                 } else {
                     name.into()
                 },
-                offset: value["offset"]
-                    .as_u64()
+                offset: pointer_offset(value)
                     .ok_or_else(|| anyhow::anyhow!("pointer offset absent"))?
                     as usize,
-                token: value["pointer_token"]
-                    .as_u64()
+                token: pointer_token(value)
                     .ok_or_else(|| anyhow::anyhow!("pointer token absent"))?
                     as u32,
-                class_tag: value["class_tag"].as_u64().map(|v| v as u16),
+                class_tag: pointer_class_tag(value).map(|v| v as u16),
             });
         }
     }
-    let document_token = fields["m_docAccess"]["m_pDoc"]["pointer_token"]
-        .as_u64()
+    let document_token = pointer_token(&fields["m_docAccess"]["m_pDoc"])
         .ok_or_else(|| anyhow::anyhow!("document pointer absent"))? as u32;
     let id_offset = decoded
         .field_spans

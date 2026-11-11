@@ -8,7 +8,7 @@
 //! callers must retain the raw graph record and its provenance.
 
 use crate::native_metadata::identifier;
-use crate::native_parameters::ObjectGraph;
+use crate::native_parameters::{ObjectGraph, pointer_token};
 use crate::native_saved_mesh::pointer;
 use anyhow::Result;
 use serde_json::Value;
@@ -70,11 +70,7 @@ pub fn is_observed_empty_trim_face(graph: &ObjectGraph, face_index: usize) -> bo
 }
 
 fn is_null_pointer(value: Option<&Value>) -> bool {
-    value
-        .and_then(Value::as_object)
-        .and_then(|v| v.get("pointer_token"))
-        .and_then(Value::as_u64)
-        == Some(0)
+    value.and_then(pointer_token) == Some(0)
 }
 
 fn is_minus_one_id(value: Option<&Value>) -> bool {

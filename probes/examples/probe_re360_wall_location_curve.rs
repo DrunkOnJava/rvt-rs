@@ -139,13 +139,11 @@ fn level_ends(fields: &Value) -> Option<([f64; 2], [f64; 2])> {
 
 /// The path of object keys and array indices to the pointer at `offset`.
 fn path_to(value: &Value, offset: usize, path: &mut Vec<String>) -> bool {
+    if let Some((_, _, at)) = rvt::research::native_parameters::pointer_parts(value) {
+        return Some(at) == u64::try_from(offset).ok();
+    }
     match value {
         Value::Object(map) => {
-            if map.contains_key("pointer_token")
-                && map.get("offset").and_then(Value::as_u64) == u64::try_from(offset).ok()
-            {
-                return true;
-            }
             for (name, member) in map {
                 path.push(name.clone());
                 if path_to(member, offset, path) {
@@ -243,7 +241,9 @@ fn named_curve(graph: &ObjectGraph) -> (Option<u64>, Vec<usize>) {
         .objects
         .iter()
         .find(|object| object.class_name == "VWallDriver")
-        .and_then(|driver| driver.fields.pointer("/m_pCrv/pointer_token")?.as_u64());
+        .and_then(|driver| {
+            rvt::research::native_parameters::pointer_token(driver.fields.get("m_pCrv")?)
+        });
     let indices: Vec<usize> = token
         .map(|token| {
             graph

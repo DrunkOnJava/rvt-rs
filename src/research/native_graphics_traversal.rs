@@ -1,7 +1,7 @@
 //! Bounded traversal of saved graphics under the default
 //! 3D context. This selects surface carriers, not regenerated Revit geometry.
 //! Unsupported solid-affecting filters and external instances remain explicit.
-use crate::native_parameters::ObjectGraph;
+use crate::native_parameters::{ObjectGraph, pointer_class_tag, pointer_offset, pointer_token};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -207,8 +207,8 @@ impl Walker<'_, '_> {
         });
     }
     fn target(&self, source: usize, p: &Value) -> Result<usize, String> {
-        let offset = p["offset"].as_u64().ok_or("missing pointer offset")? as usize;
-        let token = p["pointer_token"].as_u64().ok_or("missing pointer token")?;
+        let offset = pointer_offset(p).ok_or("missing pointer offset")? as usize;
+        let token = pointer_token(p).ok_or("missing pointer token")?;
         let edge_slot = self.edge_indexes[&(self.graph as *const ObjectGraph as usize)]
             .get(&(source, offset, token))
             .ok_or("unresolved null/external graphics pointer")?;
@@ -220,9 +220,7 @@ impl Walker<'_, '_> {
             .get(e.target_object_index)
             .ok_or("edge target out of bounds")?;
         if e.target_class_tag != target.class_tag
-            || p["class_tag"]
-                .as_u64()
-                .is_some_and(|tag| tag != u64::from(target.class_tag))
+            || pointer_class_tag(p).is_some_and(|tag| tag != u64::from(target.class_tag))
         {
             return Err("graphics edge class mismatch".into());
         }
@@ -412,8 +410,8 @@ impl Walker<'_, '_> {
                 let fields = &info_object.fields;
                 let _transform = read_transform(&fields["m_Trf"])?;
                 if !default_representation(fields, self.pre2023)
-                    || fields["m_cda"]["m_pDoc"]["pointer_token"].as_u64() != Some(1)
-                    || !fields["m_cda"]["m_pDoc"]["class_tag"].is_null()
+                    || pointer_token(&fields["m_cda"]["m_pDoc"]) != Some(1)
+                    || pointer_class_tag(&fields["m_cda"]["m_pDoc"]).is_some()
                 {
                     return Err("unsupported component representation/document context".into());
                 }
@@ -467,11 +465,11 @@ impl Walker<'_, '_> {
                 }
                 let transform = read_transform(&self.graph.objects[info].fields["m_Trf"])?;
                 let embedded_pointer = &obj.fields["m_oEmbeddedSymbolGRep"];
-                if embedded_pointer["pointer_token"].as_u64() == Some(0) {
+                if pointer_token(embedded_pointer) == Some(0) {
                     let info_fields = &self.graph.objects[info].fields;
                     if !default_representation(info_fields, self.pre2023)
-                        || info_fields["m_cda"]["m_pDoc"]["pointer_token"].as_u64() != Some(1)
-                        || !info_fields["m_cda"]["m_pDoc"]["class_tag"].is_null()
+                        || pointer_token(&info_fields["m_cda"]["m_pDoc"]) != Some(1)
+                        || pointer_class_tag(&info_fields["m_cda"]["m_pDoc"]).is_some()
                     {
                         return Err(
                             "external symbol has unsupported representation/document context"

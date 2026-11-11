@@ -2,6 +2,7 @@
 //! Explicit four-field (2023) and five-field (2024 to 2027) ElemTable contracts.
 //! Original identity suffixes are retained; they are not current record locators.
 use crate::le_bytes;
+use crate::native_parameters::{pointer_class_tag, pointer_token};
 use crate::{native_extensible_storage::guid_string, native_parameters, schema_registry::Registry};
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -298,8 +299,8 @@ fn read_creation_episodes(
     for entry in inline {
         let episode = episode_class()?;
         ensure!(
-            entry["class_tag"].as_u64() == Some(u64::from(episode.tag))
-                && entry["pointer_token"].as_u64() == Some(u64::from(u32::MAX)),
+            pointer_class_tag(entry) == Some(u64::from(episode.tag))
+                && pointer_token(entry) == Some(u64::from(u32::MAX)),
             "unsupported inline history episode reference"
         );
         let decoded = native_parameters::decode_object_fields(history, registry, pos, episode.tag)?;

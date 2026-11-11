@@ -44,6 +44,19 @@ TOLERANCE_FEET = 1e-3
 NO_TOKEN = 4294967295
 
 
+def pointer_parts(value):
+    """(token, class tag or None, offset) of a graph pointer, or None for any other value.
+
+    A decoded graph holds a pointer as the array [token, class tag or null, offset, true]
+    (#1694); a dump from a build before that holds the map of pointer_token, class_tag and
+    offset. Both are read here, so a dump of either build scores."""
+    if isinstance(value, list) and len(value) == 4 and value[3] is True:
+        return value[0], value[1], value[2]
+    if isinstance(value, dict) and "pointer_token" in value:
+        return value["pointer_token"], value.get("class_tag"), value["offset"]
+    return None
+
+
 def curve_points(cls, f):
     if cls == "GLine":
         o, d, (a, b) = f["m_origin"], f["m_dirVec"], f["m_endParams"]
@@ -96,7 +109,7 @@ def read_probe(path):
         if len(loops) == 1:
             points = []
             for curve in loops[0].get("m_curves", []):
-                cls, f = by_token.get(curve.get("pointer_token"), (None, None))
+                cls, f = by_token.get((pointer_parts(curve) or (None,))[0], (None, None))
                 classes.append(cls)
                 p = curve_points(cls, f) if f else None
                 if p is None:

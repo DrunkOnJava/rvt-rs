@@ -59,7 +59,7 @@ fn text(value: &str) -> String {
 
 fn flatten(prefix: &str, value: &Value, out: &mut Vec<(String, String)>) {
     match value {
-        Value::Object(map) if map.contains_key("pointer_token") => {
+        _ if rvt::research::native_parameters::pointer_parts(value).is_some() => {
             out.push((prefix.to_string(), "->".into()));
         }
         Value::Object(map) => {

@@ -11,6 +11,7 @@
 //! `17_Rooms_Stairs_Spiral.rvt` have only unset values in their types' maps,
 //! and their instance parameters name Revit's set on every one (RE-200).
 
+use crate::native_parameters::pointer_offset;
 use crate::{RevitFile, native_document, native_metadata::identifier};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -45,11 +46,7 @@ pub fn instance_parameter_materials(
         }
         // Only the object the root's own `m_pInstParams` points to: the
         // record's graph can hold other parameter objects.
-        let Some(offset) = root
-            .fields
-            .get("m_pInstParams")
-            .and_then(|pointer| pointer["offset"].as_u64())
-        else {
+        let Some(offset) = root.fields.get("m_pInstParams").and_then(pointer_offset) else {
             return Ok(());
         };
         let Some(target) = graph

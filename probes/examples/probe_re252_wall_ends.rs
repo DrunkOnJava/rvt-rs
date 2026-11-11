@@ -189,8 +189,8 @@ fn main() -> anyhow::Result<()> {
                 .filter(|o| o.class_name == "VWallDriver")
                 .filter_map(|o| {
                     o.fields
-                        .pointer("/m_pCrv/pointer_token")
-                        .and_then(Value::as_u64)
+                        .get("m_pCrv")
+                        .and_then(rvt::research::native_parameters::pointer_token)
                 })
                 .flat_map(|token| {
                     graph

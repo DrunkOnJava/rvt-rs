@@ -184,10 +184,9 @@ fn print_native(rf: &mut RevitFile) {
             .iter()
             .filter(|object| object.class_name == "SegmentConnectorPosition")
             .filter_map(|position| {
-                let token = position
-                    .fields
-                    .pointer("/m_pConnector/pointer_token")?
-                    .as_u64()?;
+                let token = rvt::research::native_parameters::pointer_token(
+                    position.fields.get("m_pConnector")?,
+                )?;
                 Some((
                     *index_of_token.get(&token)?,
                     position.fields.get("m_paramOnCurve")?.as_f64()?,
@@ -202,8 +201,8 @@ fn print_native(rf: &mut RevitFile) {
         }) {
             let Some(index) = calculation
                 .fields
-                .pointer("/m_pConnector/pointer_token")
-                .and_then(Value::as_u64)
+                .get("m_pConnector")
+                .and_then(rvt::research::native_parameters::pointer_token)
                 .and_then(|token| index_of_token.get(&token))
             else {
                 continue;

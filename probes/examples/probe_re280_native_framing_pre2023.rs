@@ -249,24 +249,18 @@ fn describe_class(registry: &Registry, class: &Class) -> String {
 /// A record's JSON with what differs between any two saves left out: the
 /// offsets, the pointer tokens and the class tags (named by their class).
 fn normalize(registry: &Registry, value: &Value) -> Value {
+    if let Some((token, tag, _)) = rvt::research::native_parameters::pointer_parts(value) {
+        let label: String = match tag.and_then(|t| u16::try_from(t).ok()) {
+            Some(tag) => registry
+                .class(tag)
+                .map_or("?".to_string(), |c| c.name.clone()),
+            None if token == 0 => "null".to_string(),
+            None => "external".to_string(),
+        };
+        return json!({ "ptr": label });
+    }
     match value {
         Value::Object(map) => {
-            if map.contains_key("pointer_token") {
-                let label: String = match map
-                    .get("class_tag")
-                    .and_then(Value::as_u64)
-                    .and_then(|t| u16::try_from(t).ok())
-                {
-                    Some(tag) => registry
-                        .class(tag)
-                        .map_or("?".to_string(), |c| c.name.clone()),
-                    None if map.get("pointer_token").and_then(Value::as_u64) == Some(0) => {
-                        "null".to_string()
-                    }
-                    None => "external".to_string(),
-                };
-                return json!({ "ptr": label });
-            }
             let drop_places = map.contains_key("state") || map.contains_key("raw_value");
             let mut out = Map::new();
             for (key, inner) in map {
