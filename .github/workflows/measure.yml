@@ -789,6 +789,7 @@ jobs:
         env:
           SCORE_CACHE: ${{ inputs.score_cache }}
           SHARD: ${{ matrix.shard }}
+          SIDE: ${{ matrix.side }}
           SAVE_FROM_MAIN: ${{ github.ref == 'refs/heads/main' && (matrix.side == 'base' && needs.plan.outputs.base_on_main == 'true' || matrix.side != 'base' && needs.plan.outputs.head_on_main == 'true') }}
         run: |
           enabled=true
@@ -816,8 +817,17 @@ jobs:
             echo "save=$save"
             echo "prefix=$own$SHARD."
             echo "restore<<END"
+            # A side restores its own side's newest entry first. Head and base
+            # export different files wherever the measured change reaches, so
+            # an entry of the other side hits only for the models both write
+            # alike: a second run restored whichever side saved last, and 8%
+            # of its lookups missed for that reason alone (run 42990521699).
+            echo "$own$SHARD.$SIDE-"
             echo "$own$SHARD."
-            [ "$own" != "$main" ] && echo "$main$SHARD."
+            if [ "$own" != "$main" ]; then
+              echo "$main$SHARD.$SIDE-"
+              echo "$main$SHARD."
+            fi
             echo "END"
           } >> "$GITHUB_OUTPUT"
           if [ "$enabled" = true ]; then

@@ -779,9 +779,13 @@ writes the cached output and a `<step> cached` line to the model's
   the unfiltered run 41748430211 the 18 held-out models took 32.8 of the 119
   task-minutes of model steps (28%); they run only with `-f holdout=true`.
 - **Where it lives.** Each shard of the run, whatever it is called, restores
-  the newest `measure-scores-v2-main-<shard>.*` cache (a run given `models`
+  the newest `measure-scores-v2-main-<shard>.<side>-*` cache of its own side,
+  or failing that of the other side (a run given `models`
   is the shard `all`, with a cache of its own,
-  built by earlier runs of that kind). No build script of the measured ref runs
+  built by earlier runs of that kind). The side comes first because head and
+  base export different files wherever the measured change reaches: a pair of
+  runs whose second restored whichever side had saved last read 8% of its
+  lookups as misses for that reason alone (run 42990521699). No build script of the measured ref runs
   in a shard (the Build job runs them, on a runner that holds no score cache),
   but its binaries and a probe's scorers do, with the cache writable. It is
   saved only where rust-cache is saved: the
