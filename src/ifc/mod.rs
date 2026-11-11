@@ -699,8 +699,14 @@ pub struct DecodedExportDiagnostics {
     /// Floor used for the below-min count / default export hide.
     #[serde(default = "default_min_element_confidence_serde")]
     pub min_element_confidence: f32,
+    /// The display units of length, area, volume, angle, mass and time, as
+    /// the project's `UnitsElem` sets them (RE-439).
     pub recovered_unit_identifiers: Vec<String>,
+    /// Those of the six whose unit no IFC unit is known for.
     pub unknown_unit_identifiers: Vec<String>,
+    /// The display unit of every spec the project lists, by spec (RE-439).
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub project_display_units: std::collections::BTreeMap<String, String>,
     /// The length of each exported wall's native curve, feet, by ElementId
     /// (RE-252):
     /// one of the two lengths Revit's export may write as the wall's
@@ -3826,81 +3832,74 @@ fn arcwall_geometry_from_record(
 #[derive(Debug, Default)]
 struct RecoveredProjectUnits {
     assignments: Vec<entities::UnitAssignment>,
+    /// The display units of the six specs the IFC assigns a unit to that
+    /// no IFC unit is known for.
     unknown_identifiers: Vec<String>,
+    /// The display unit of every spec the project lists (RE-439).
+    display_units: std::collections::BTreeMap<String, String>,
+    /// Why the project's `UnitsElem` was not read, where it was not.
+    read_error: Option<String>,
 }
 
-#[derive(Debug, Clone)]
-struct UnitCandidate {
-    identifier: String,
-    count: usize,
-    mapping: String,
-}
+/// The spec whose display unit each IFC unit type takes (RE-439). Mass is
+/// the structural spec, the one Revit's Project Units list under Common
+/// beside length, area, volume, angle and time.
+const IFC_UNIT_SPECS: [(entities::IfcUnitType, &str); 6] = [
+    (entities::IfcUnitType::Length, "autodesk.spec.aec:length"),
+    (entities::IfcUnitType::Area, "autodesk.spec.aec:area"),
+    (entities::IfcUnitType::Volume, "autodesk.spec.aec:volume"),
+    (entities::IfcUnitType::PlaneAngle, "autodesk.spec.aec:angle"),
+    (
+        entities::IfcUnitType::Mass,
+        "autodesk.spec.aec.structural:mass",
+    ),
+    (entities::IfcUnitType::Time, "autodesk.spec.aec:time"),
+];
 
+/// The project's display units, from its `UnitsElem` (RE-439): each IFC
+/// unit type takes the unit of its spec. Values are still written in SI
+/// units, as the IFC's unit assignment declares them; these describe the
+/// source model.
 fn recover_project_units(rf: &mut crate::RevitFile) -> RecoveredProjectUnits {
-    // `Global/Latest` includes Forge vocabulary tables in newer files;
-    // those are catalog entries, not project-selected display units.
-    // The observed project unit/spec records live in `Partitions/NN`.
-    let records = rf.partition_string_records().unwrap_or_default();
-    recover_project_units_from_identifiers(records.iter().map(|record| record.value.as_str()))
+    match rf.project_units().as_ref() {
+        Ok(Some(units)) => recovered_from_display_units(units),
+        Ok(None) => RecoveredProjectUnits::default(),
+        Err(error) => RecoveredProjectUnits {
+            read_error: Some(error.clone()),
+            ..RecoveredProjectUnits::default()
+        },
+    }
 }
 
-fn recover_project_units_from_identifiers<I, S>(identifiers: I) -> RecoveredProjectUnits
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<str>,
-{
-    let mut counts = std::collections::BTreeMap::<String, usize>::new();
-    for identifier in identifiers {
-        let value = identifier.as_ref().trim();
-        if value.starts_with("autodesk.unit.") {
-            *counts.entry(value.to_string()).or_insert(0) += 1;
-        }
-    }
-
-    let mut per_type = std::collections::HashMap::<entities::IfcUnitType, UnitCandidate>::new();
+fn recovered_from_display_units(
+    units: &crate::native_project_units::ProjectUnits,
+) -> RecoveredProjectUnits {
+    let mut assignments = Vec::new();
     let mut unknown_identifiers = Vec::new();
-    for (identifier, count) in counts {
-        let forge_unit = entities::ForgeUnit::from_forge_identifier(&identifier);
-        let Some(emission) = forge_unit.ifc_emission() else {
-            unknown_identifiers.push(identifier);
+    for (unit_type, spec) in IFC_UNIT_SPECS {
+        let Some(display) = units.unit_of(spec) else {
             continue;
         };
-        let unit_type = unit_type_for_emission(&emission);
-        let candidate = UnitCandidate {
-            identifier,
-            count,
-            mapping: ifc_mapping_label(&emission),
-        };
-        match per_type.get(&unit_type) {
-            Some(current)
-                if current.count > candidate.count
-                    || (current.count == candidate.count
-                        && current.identifier <= candidate.identifier) => {}
-            _ => {
-                per_type.insert(unit_type, candidate);
-            }
+        let emission = entities::ForgeUnit::from_forge_identifier(&display.unit)
+            .ifc_emission()
+            .filter(|emission| unit_type_for_emission(emission) == unit_type);
+        match emission {
+            Some(emission) => assignments.push(entities::UnitAssignment {
+                forge_identifier: display.unit.clone(),
+                ifc_mapping: Some(ifc_mapping_label(&emission)),
+            }),
+            None => unknown_identifiers.push(display.unit.clone()),
         }
     }
-
-    let assignments = [
-        entities::IfcUnitType::Length,
-        entities::IfcUnitType::Area,
-        entities::IfcUnitType::Volume,
-        entities::IfcUnitType::PlaneAngle,
-        entities::IfcUnitType::Mass,
-        entities::IfcUnitType::Time,
-    ]
-    .into_iter()
-    .filter_map(|unit_type| per_type.remove(&unit_type))
-    .map(|candidate| entities::UnitAssignment {
-        forge_identifier: candidate.identifier,
-        ifc_mapping: Some(candidate.mapping),
-    })
-    .collect();
-
     RecoveredProjectUnits {
         assignments,
         unknown_identifiers,
+        display_units: units
+            .specs
+            .iter()
+            .map(|(spec, display)| (spec.clone(), display.unit.clone()))
+            .collect(),
+        read_error: None,
     }
 }
 
@@ -4685,20 +4684,15 @@ pub(crate) fn build_export_diagnostics_and_decisions(
         warnings
             .push("No Revit display units were recovered; the IFC declares the SI units its values are written in.".into());
     }
-    let mut unmapped_unit_values: Vec<_> = recovered_units
-        .unknown_identifiers
-        .iter()
-        .filter(|identifier| identifier.starts_with("autodesk.unit.unit:"))
-        .cloned()
-        .collect();
-    if !unmapped_unit_values.is_empty() {
-        let sample = {
-            unmapped_unit_values.truncate(8);
-            unmapped_unit_values
-        };
+    if let Some(error) = &recovered_units.read_error {
         warnings.push(format!(
-            "Unmapped Revit unit identifiers were preserved in diagnostics: {}",
-            sample.join(", ")
+            "The project's display units were not read: {error} (RE-439)."
+        ));
+    }
+    if !recovered_units.unknown_identifiers.is_empty() {
+        warnings.push(format!(
+            "Revit display units with no IFC unit were preserved in diagnostics: {}",
+            recovered_units.unknown_identifiers.join(", ")
         ));
     }
     if model.building_storeys.is_empty() {
@@ -4885,6 +4879,7 @@ pub(crate) fn build_export_diagnostics_and_decisions(
                 .map(|unit| unit.forge_identifier.clone())
                 .collect(),
             unknown_unit_identifiers: recovered_units.unknown_identifiers,
+            project_display_units: recovered_units.display_units,
             wall_curve_lengths_feet: walker_stats.wall_curve_lengths_feet,
             walls_type_confirmed: walker_stats.walls_type_confirmed,
             element_provenance: None,

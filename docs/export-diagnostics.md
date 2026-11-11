@@ -773,8 +773,9 @@ Important nested fields:
 | `decoded.diagnostic_proxy_candidates` | integer | Low-confidence candidates available to diagnostic export. |
 | `decoded.arcwall_records` | integer | Version-gated ArcWall records exported as `IFCWALL`. |
 | `decoded.parameter_value_count` | integer | Property values the export writes in `Pset_*` sets: each element's, and the storeys' and the building's. It equals the values of the IFC file's `Pset_` sets. A piece folded into another element's body (`exported.body_pieces_folded`) writes no set, so its clone of its owner's sets is not counted (it was, before #1424): on the BIM4LCA office the count goes from 54,952 to 54,764 as built and from 55,145 to 54,957 at permit, which the Pset_ values of the IFC file equal (Measure run 41989882391). |
-| `decoded.recovered_unit_identifiers` | array | Revit `autodesk.unit.*` identifiers selected for IFC unit assignment. |
-| `decoded.unknown_unit_identifiers` | array | Revit unit identifiers observed but not mapped to IFC units. |
+| `decoded.recovered_unit_identifiers` | array | The display units of length, area, volume, angle, mass (the structural spec) and time, as the project's Project Units set them: its `UnitsElem` record, or the format maps of its string records where they all agree and the record is not read (RE-439). They describe the source model; the IFC's values and unit assignment are SI. Empty for a Revit 2015 to 2020 file, whose units are saved without spec names. |
+| `decoded.unknown_unit_identifiers` | array | Those of the six display units no IFC unit is known for. The export warns when there is one. |
+| `decoded.project_display_units` | object | The display unit of every spec the project lists (133 to 150 on Autodesk's samples), by the spec's `ForgeTypeId` (RE-439). Absent where none was read. |
 | `decoded.wall_curve_lengths_feet` | object | The length of each exported wall's native curve in feet, by ElementId (RE-252): one of the two lengths Revit's export may write as the wall's `Qto_WallBaseQuantities.Length`. `tools/re/qtos_vs_ifc.py` reads it to count apart a wall whose two lengths differ. It is not written in the IFC file, and is absent when no wall has one. |
 | `decoded.walls_type_confirmed` | array | The ElementIds of the exported walls whose native `SWall` record names the type the export gives them (RE-253). Where Revit's export gives such a wall another type, `tools/re/qtos_vs_ifc.py` counts its differing `Width` apart. Not written in the IFC file; absent when there is none. |
 | `room_phase_fallback` | object | Present only where no phase was named and the project's last phase holds no room, so the export writes the rooms of the latest phase that holds any (#1359, see `room_not_in_export_phase` above). `phase` (string) is that phase's name, or `ElementId <n>`; `--anonymize` replaces it. `rooms` (integer) counts its placed rooms, each once. Absent in every other export. |
@@ -912,7 +913,7 @@ export.
       "HostObjAttr": 9
     },
     "recovered_unit_identifiers": [
-      "autodesk.unit.unit:meters-1.0.0"
+      "autodesk.unit.unit:millimeters-1.0.1"
     ],
     "unknown_unit_identifiers": []
   },
