@@ -408,10 +408,12 @@ jobs:
               # each is measured in full on every run, and as one shard each they
               # set the length of the run: 770 and 899 seconds on the head side of
               # run 42980660819, where a shard whose steps hit the cache takes 3 to
-              # 5 minutes. Each is cut in three, by name; a model that matches
-              # neither of the first two held-out shards, or the first two racadv
-              # ones, falls into the third, so a model added to a list is measured
-              # whatever its name.
+              # 5 minutes. Each is cut by name (the held-out ones in four, the
+              # 64 MB single-dwelling house of the flowbim.ee export a shard of its
+              # own, as the remainder still took 454 s of the 10.2 minutes of run
+              # 42997978043); a model that matches none of the named shards falls
+              # into the last, so a model added to a list is measured whatever its
+              # name.
               if flag("HOLDOUT"):
                   # The held-out fetch brings the spent pairs too.
                   shards += [
@@ -419,8 +421,9 @@ jobs:
                             holdout=True),
                       shard("held-out-rvt", models="holdout-rvt-holdout-[0-9]*",
                             holdout=True),
+                      shard("held-out-house", models="holdout-AA-*", holdout=True),
                       shard("held-out", models="holdout-* spent-*",
-                            skip="holdout-rvt-holdout-office-* holdout-rvt-holdout-[0-9]*",
+                            skip="holdout-rvt-holdout-office-* holdout-rvt-holdout-[0-9]* holdout-AA-*",
                             holdout=True),
                   ]
               if flag("RACADV"):
