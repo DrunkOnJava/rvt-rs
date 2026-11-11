@@ -22,7 +22,11 @@ Four checks, all fail-closed:
    Revit classes legitimately have no mapped value (``IfcSpace`` via
    ``Area`` / ``Space``, ``IfcBuildingElementProxy`` via
    ``GenericModel``) are not in that set: writing ``$`` there is the
-   honest answer, and forcing a value would be an invention.
+   honest answer, and forcing a value would be an invention. From Revit
+   2027 the occurrence of ten classes is written without one, as Revit's
+   own export writes none (#1692): the release is read from the
+   project's ``Revit <release> export`` description, and those classes are
+   not required there.
 3. **Placement composition** — a swept solid's ``Position`` must never
    be the same instance as its product's
    ``ObjectPlacement.RelativePlacement``, and for a handful of pinned
@@ -72,6 +76,34 @@ PREDEFINED_TYPE_REQUIRED = {
     "IfcWall",
     "IfcWindow",
 }
+
+# From this Revit release the occurrence of these entities is written without a
+# `PredefinedType` (#1692, `PREDEFINED_TYPE_LEFT_OUT_CLASSES` in
+# src/ifc/category_map.rs): Revit's own export of the 2027 pairs writes none, so a
+# null there is the rule and not a value the writer dropped.
+PREDEFINED_TYPE_LEFT_OUT_FROM = 2027
+PREDEFINED_TYPE_LEFT_OUT = {
+    "IfcDoor",
+    "IfcFurniture",
+    "IfcMember",
+    "IfcRailing",
+    "IfcRoof",
+    "IfcSlab",
+    "IfcStair",
+    "IfcStairFlight",
+    "IfcWall",
+    "IfcWindow",
+}
+
+
+def revit_release(model) -> int | None:
+    """The Revit release the export reads, from the project's `Revit <release> export`."""
+    for project in model.by_type("IfcProject"):
+        for text in (project.Description, project.LongName):
+            match = re.fullmatch(r"Revit (\d{4}) export", text or "")
+            if match:
+                return int(match.group(1))
+    return None
 
 
 # #220: the `PredefinedType` values Revit's own exporter writes on the
@@ -213,7 +245,13 @@ def check_predefined_types(ifc_path: Path, model=None) -> Counter:
     model = model if model is not None else ifcopenshell.open(str(ifc_path))
     populated: Counter = Counter()
     failures: list[str] = []
-    for ifc_class in sorted(PREDEFINED_TYPE_REQUIRED):
+    release = revit_release(model)
+    left_out = (
+        PREDEFINED_TYPE_LEFT_OUT
+        if release is not None and release >= PREDEFINED_TYPE_LEFT_OUT_FROM
+        else set()
+    )
+    for ifc_class in sorted(PREDEFINED_TYPE_REQUIRED - left_out):
         try:
             instances = model.by_type(ifc_class, include_subtypes=False)
         except Exception:  # noqa: BLE001 - class absent from this schema
