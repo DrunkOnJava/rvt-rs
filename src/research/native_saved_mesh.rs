@@ -289,9 +289,11 @@ fn point_distance(a: [f64; 3], b: [f64; 3]) -> f64 {
 /// solved for, by Newton's method, until the point is within [`EDGE_ON_PLANE`] of
 /// the plane) is put between them and each half is looked at in turn, to
 /// [`EDGE_REFINEMENT_DEPTH`] halvings. A point that does not reach the plane, or
-/// lies away from the span it should be in, is an error: the edge keeps being
-/// refused as it was. The plane's polygon and the cylinder's loop both take this
-/// list, so their vertices along the edge are the same.
+/// lies away from the span it should be in, or a span that is still above the
+/// bound after the last halving, is an error: the edge keeps being refused as it
+/// was. The plane's polygon and the cylinder's loop both take this list (less the
+/// points beyond the cylinder's envelope, which both leave out), so their
+/// vertices along the edge are the same.
 fn refine_crossing_edge(
     evaluate: &dyn Fn([f64; 2]) -> Result<[f64; 3]>,
     plane_origin: [f64; 3],
@@ -320,9 +322,6 @@ fn bisect_crossing_edge(
     depth: u32,
     out: &mut Vec<[f64; 2]>,
 ) -> Result<()> {
-    if depth >= EDGE_REFINEMENT_DEPTH {
-        return Ok(());
-    }
     let (point_a, point_b) = (evaluate(a)?, evaluate(b)?);
     let middle = [(a[0] + b[0]) / 2., (a[1] + b[1]) / 2.];
     let on_surface = evaluate(middle)?;
@@ -332,6 +331,13 @@ fn bisect_crossing_edge(
     if sagitta <= EDGE_SAGITTA {
         return Ok(());
     }
+    // A halving quarters a chord's sagitta, so six bring one of about a foot to
+    // the bound; a span still above it after the last is not held to the bound,
+    // and the edge is refused rather than drawn coarser than that.
+    ensure!(
+        depth < EDGE_REFINEMENT_DEPTH,
+        "edge refinement is still above the bound after {EDGE_REFINEMENT_DEPTH} halvings"
+    );
     // The parameter that changes more is the one the edge is followed along; the
     // other is solved so that the point is in the plane.
     let free = usize::from((b[0] - a[0]).abs() >= (b[1] - a[1]).abs());
@@ -359,11 +365,15 @@ fn bisect_crossing_edge(
         ensure!(x.is_finite(), "edge refinement left the parameters");
     }
     ensure!(solved, "edge refinement did not reach the plane");
-    let exact = along(x);
+    // The edge passes between the samples through the middle value of the parameter
+    // that was held, so the value solved for lies between the samples' own; the
+    // other branch of the intersection does not.
+    let (low, high) = (a[free].min(b[free]), a[free].max(b[free]));
     ensure!(
-        point_distance(evaluate(exact)?, chord_middle) <= 4. * sagitta + 1e-6,
+        x >= low - 1e-9 && x <= high + 1e-9,
         "edge refinement left its span"
     );
+    let exact = along(x);
     bisect_crossing_edge(evaluate, signed, a, exact, depth + 1, out)?;
     out.push(exact);
     bisect_crossing_edge(evaluate, signed, exact, b, depth + 1, out)
@@ -427,22 +437,39 @@ fn refined_curved_edge(
             center[k] + radius * (cs * x_vec[k] + sn * y_vec[k]) + uv[1] * z_vec[k]
         }))
     };
-    let envelope = cylinder.fields["m_Envelope"]["m_corners"]
-        .as_array()
-        .context("cylinder envelope")?;
-    ensure!(envelope.len() == 2, "cylinder envelope bounds");
-    let corner = |k: usize| -> Result<[f64; 2]> { point::<2>(&envelope[k]) };
-    let (low, high) = (corner(0)?, corner(1)?);
-    // The envelope is made from the samples, and a point of the edge between two
-    // of them can lie a sagitta beyond it: the loop keeps the samples there, and
-    // `cylinder_face` still refuses a loop outside its envelope.
-    Ok(refine_crossing_edge(&evaluate, origin, normal, original)?
+    let envelope = cylinder_envelope(&cylinder.fields["m_Envelope"]["m_corners"])?;
+    Ok(within_envelope(
+        refine_crossing_edge(&evaluate, origin, normal, original)?,
+        original,
+        envelope,
+    ))
+}
+
+/// The parameter box of a cylinder surface, from its `m_Envelope` corners.
+fn cylinder_envelope(corners: &Value) -> Result<([f64; 2], [f64; 2])> {
+    let corners = corners.as_array().context("cylinder envelope")?;
+    ensure!(corners.len() == 2, "cylinder envelope bounds");
+    Ok((point::<2>(&corners[0])?, point::<2>(&corners[1])?))
+}
+
+/// The points of a refined crossing edge that a cylinder's loop and the plane's
+/// polygon both take: the samples the graph gave, and the points of the edge
+/// inside the cylinder's envelope. The envelope is made from the samples, so a
+/// point of the edge between two of them can lie a sagitta beyond it, and
+/// `cylinder_face` refuses a loop outside its envelope: both sides leave that
+/// point out, so that they hold one list.
+fn within_envelope(
+    refined: Vec<[f64; 2]>,
+    original: &[[f64; 2]],
+    (low, high): ([f64; 2], [f64; 2]),
+) -> Vec<[f64; 2]> {
+    refined
         .into_iter()
         .filter(|uv| {
             original.contains(uv)
                 || (0..2).all(|k| uv[k] >= low[k] - 1e-9 && uv[k] <= high[k] + 1e-9)
         })
-        .collect())
+        .collect()
 }
 
 // Refine a particular shared edge in its curved surface's parameter domain.
@@ -588,7 +615,16 @@ fn refined_plane_edge(
         // keep its chords within the bar of the surface, the same points the
         // curved face's loop takes (#1706).
         let normal = unit_normal(x, y)?;
-        let refined = refine_crossing_edge(evaluate.as_ref(), origin, normal, &samples)?;
+        let mut refined = refine_crossing_edge(evaluate.as_ref(), origin, normal, &samples)?;
+        if kind == "CylSurf" {
+            // The cylinder's loop leaves out the points beyond its envelope, and so
+            // does the polygon, so that the two hold one list.
+            refined = within_envelope(
+                refined,
+                &samples,
+                cylinder_envelope(&g.objects[other_surface].fields["m_Envelope"]["m_corners"])?,
+            );
+        }
         return refined.into_iter().map(project).collect();
     };
     let knots = if axis == 0 { u_values } else { v_values };
@@ -1938,7 +1974,7 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
 mod tests {
     use super::{
         EDGE_SAGITTA, isoparametric_axis, normals_follow_winding, point_distance,
-        refine_crossing_edge, regions_tile,
+        refine_crossing_edge, regions_tile, within_envelope,
     };
     use anyhow::Result;
 
@@ -2245,6 +2281,63 @@ mod tests {
         // The samples the graph gave are kept, first and last.
         assert_eq!(refined[0], coarse[0]);
         assert_eq!(*refined.last().unwrap(), coarse[1]);
+    }
+
+    // The same cut on a cylinder of radius 20, where a quarter turn is 5.9 ft off its chord.
+    fn wide_cylinder(uv: [f64; 2]) -> Result<[f64; 3]> {
+        Ok([10. + 20. * uv[0].cos(), 20. + 20. * uv[0].sin(), 5. + uv[1]])
+    }
+
+    #[test]
+    fn a_span_still_above_the_bound_after_the_last_halving_is_refused() {
+        // Six halvings bring it only to 0.0015 ft, above the bound: the edge is
+        // refused rather than drawn coarser than that.
+        let (origin, normal) = slanted_plane();
+        let samples = [[0., 10.], [std::f64::consts::FRAC_PI_2, 0.]];
+        let error = refine_crossing_edge(&wide_cylinder, origin, normal, &samples).unwrap_err();
+        assert!(format!("{error:#}").contains("halvings"), "{error:#}");
+    }
+
+    #[test]
+    fn a_wide_cylinder_with_samples_close_enough_is_refined_within_the_bound() {
+        let (origin, normal) = slanted_plane();
+        let samples: Vec<[f64; 2]> = (0..8)
+            .map(|i| {
+                let u = std::f64::consts::FRAC_PI_2 * i as f64 / 7.;
+                [u, 10. * u.cos()]
+            })
+            .collect();
+        let refined = refine_crossing_edge(&wide_cylinder, origin, normal, &samples).unwrap();
+        assert!(refined.len() > samples.len());
+        for pair in refined.windows(2) {
+            let (a, b) = (
+                wide_cylinder(pair[0]).unwrap(),
+                wide_cylinder(pair[1]).unwrap(),
+            );
+            let middle = wide_cylinder([
+                (pair[0][0] + pair[1][0]) / 2.,
+                (pair[0][1] + pair[1][1]) / 2.,
+            ])
+            .unwrap();
+            let chord: [f64; 3] = std::array::from_fn(|k| (a[k] + b[k]) / 2.);
+            assert!(point_distance(middle, chord) <= EDGE_SAGITTA * 1.0001 + 1e-9);
+        }
+    }
+
+    #[test]
+    fn a_point_beyond_the_envelope_is_left_out_of_the_list_both_sides_take() {
+        let original = [[0., 0.], [1., 1.]];
+        let refined = vec![[0., 0.], [0.5, 0.4], [0.9, 1.0004], [1., 1.]];
+        // The point at v = 1.0004 is past the envelope's top, 1; the samples stay
+        // wherever they are, and a point inside stays.
+        let kept = within_envelope(refined, &original, ([0., 0.], [1., 1.]));
+        assert_eq!(kept, vec![[0., 0.], [0.5, 0.4], [1., 1.]]);
+        let outside = within_envelope(
+            vec![[0., 0.], [2., 2.]],
+            &[[0., 0.], [2., 2.]],
+            ([0., 0.], [1., 1.]),
+        );
+        assert_eq!(outside, vec![[0., 0.], [2., 2.]]);
     }
 
     #[test]
