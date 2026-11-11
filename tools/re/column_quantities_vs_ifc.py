@@ -45,6 +45,7 @@ UNIT = {"Length": 0, "GrossVolume": 2, "NetVolume": 2}  # the index into scales(
 ENDS_EQUAL = 1e-4  # the saved-mesh pass's rule: the two ends' areas agree to this fraction
 VOLUME_AGREES = 1e-4  # and the volume is the end area times the extent to this fraction
 EXTENT_TIE = 1e-6  # two longest axes within this fraction of each other: no axis
+VERTICAL_COSINE = 0.9999  # the saved-mesh pass's own: the axis it takes is the vertical to this cosine
 LISTED = 40
 
 
@@ -82,7 +83,7 @@ def rule(triangles):
     # Beyond the beam rule: whether the axis it takes is the longest of all the axes the body is a prism along (a
     # cut column's longest may have unequal ends, leaving only a short flat-ended one), and whether it is vertical.
     longest = every[0][1] <= axes[0][1] * (1 + EXTENT_TIE)
-    vertical = abs(float(axis[2])) > 0.99
+    vertical = abs(float(axis[2])) >= VERTICAL_COSINE
     measures = analyse(triangles, axis)
     _, normals, area, _ = facts(triangles)
     along = normals @ axis
@@ -137,6 +138,8 @@ def main():
         o = column_values(ours[tag], ours_scale)
         kind, body = set_kind(r), body_kind(revit[tag])
         src = body_sources(ours[tag]) or "no BodySource"
+        # The saved-mesh pass reads a mesh; a record box or a hollow section is a body it does not touch.
+        drawn = "drawn from a saved mesh" if src == "saved_graphics_mesh" else "another body"
         found, why = rule(mesh(settings, ours[tag]))
         kinds[(kind, body)] += 1
         outcomes[(kind, body, src, why)] += 1
@@ -144,12 +147,12 @@ def main():
             now = today(o[name], r[name], name)
             if found is None:
                 if r[name] is not None:
-                    states[(name, kind, "rule gives none", now)] += 1
+                    states[(name, kind, drawn, "rule gives none", now)] += 1
                 continue
             if r[name] is None:
-                states[(name, kind, "Revit omits it", now)] += 1
+                states[(name, kind, drawn, "Revit omits it", now)] += 1
             else:
-                states[(name, kind, "rule equal" if close(found[name], r[name]) else "rule different", now)] += 1
+                states[(name, kind, drawn, "rule equal" if close(found[name], r[name]) else "rule different", now)] += 1
         if found is not None and len(odd) < LISTED and any(r[n] is not None and not close(found[n], r[n]) for n in QUANTITIES):
             odd.append((tag, revit[tag].Name, kind, body, src, r, found))
     print("Revit's set on each column, and the class of Revit's body (set, body):")
@@ -158,15 +161,16 @@ def main():
     print("what the rule makes of rvt-rs's own body (Revit's set, Revit's body, rvt-rs's body source, outcome):")
     for key, count in outcomes.most_common():
         print(f"  {count:5}  {key}")
-    print("per quantity, the rule against Revit's and what rvt-rs writes now (quantity, Revit's set, rule, rvt-rs now):")
-    for key, count in sorted(states.items(), key=lambda kv: (QUANTITIES.index(kv[0][0]), kv[0][1], kv[0][2], kv[0][3])):
+    print("per quantity, the rule against Revit's and what rvt-rs writes now (quantity, Revit's set, rvt-rs's body, rule, rvt-rs now):")
+    for key, count in sorted(states.items(), key=lambda kv: (QUANTITIES.index(kv[0][0]),) + kv[0][1:]):
         print(f"  {count:5}  {key}")
-    print("the rule would add, per quantity: right where rvt-rs writes none / different from Revit's / a value Revit omits:")
-    for name in QUANTITIES:
-        right = sum(c for (q, _, rule_state, now), c in states.items() if q == name and rule_state == "rule equal" and now == "writes none")
-        wrong = sum(c for (q, _, rule_state, _), c in states.items() if q == name and rule_state == "rule different")
-        omit = sum(c for (q, _, rule_state, _), c in states.items() if q == name and rule_state == "Revit omits it")
-        print(f"  {name}: {right} / {wrong} / {omit}")
+    for drawn in ("drawn from a saved mesh", "another body"):
+        print(f"the rule would add, per quantity, on the columns {drawn}: right where rvt-rs writes none / different from Revit's / a value Revit omits:")
+        for name in QUANTITIES:
+            right = sum(c for (q, _, d, rule_state, now), c in states.items() if q == name and d == drawn and rule_state == "rule equal" and now == "writes none")
+            wrong = sum(c for (q, _, d, rule_state, _), c in states.items() if q == name and d == drawn and rule_state == "rule different")
+            omit = sum(c for (q, _, d, rule_state, _), c in states.items() if q == name and d == drawn and rule_state == "Revit omits it")
+            print(f"  {name}: {right} / {wrong} / {omit}")
     print(f"the first {len(odd)} columns the rule accepts with a quantity different from Revit's:")
     for tag, name, kind, body, src, r, found in odd:
         print(f"  column {tag} {name!r} set {kind!r} body {body} src {src}")
