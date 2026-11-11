@@ -20,7 +20,10 @@ Buckets: `box` (fill within 0.5% of 100%), `90%`, `50%`, `<50%`, `>100%`
 (a fill over 100.5%: overlapping solids or an open mesh, so the volume is
 not the body's), and `no ref` (no element with that Tag, or no body). Every class is listed, most
 numerous first, with its median fill, and under it the three Revit types
-(`ObjectType`) most of its bodies that are not boxes belong to.
+(`ObjectType`) most of its bodies that are not boxes belong to. After the
+classes, the boxes by class and reason: the `SavedMeshRefusal` of each (#1645),
+which says why the pass that draws a box from the mesh Revit saved for it left
+the box, as the export's own diagnostics count them (`exported.saved_mesh_refusals`).
 
 Usage:
 
@@ -52,16 +55,31 @@ def profile_resolved(element):
     return False
 
 
+def refusal(element):
+    """The `SavedMeshRefusal` of an element: why the saved-mesh pass left its box (#1645), or None."""
+    for rel in element.IsDefinedBy:
+        if not rel.is_a("IfcRelDefinesByProperties"):
+            continue
+        for prop in getattr(rel.RelatingPropertyDefinition, "HasProperties", None) or []:
+            if prop.Name == "SavedMeshRefusal" and prop.NominalValue is not None:
+                return prop.NominalValue.wrappedValue
+    return None
+
+
 def boxed_tags(path):
+    """Tag -> IFC class of each record-box body of the file, and Tag -> its `SavedMeshRefusal`."""
     model = ifcopenshell.open(path)
-    return {
-        e.Tag: e.is_a()
-        for e in model.by_type("IfcElement")
-        if e.Tag
-        and not e.is_a("IfcOpeningElement")
-        and body_sources(e) == BOX_SOURCE
-        and not profile_resolved(e)
-    }
+    classes, reasons = {}, {}
+    for e in model.by_type("IfcElement"):
+        if (
+            e.Tag
+            and not e.is_a("IfcOpeningElement")
+            and body_sources(e) == BOX_SOURCE
+            and not profile_resolved(e)
+        ):
+            classes[e.Tag] = e.is_a()
+            reasons[e.Tag] = refusal(e)
+    return classes, reasons
 
 
 def fills(path, tags):
@@ -114,7 +132,7 @@ def main():
     if len(sys.argv) != 3:
         print(__doc__, file=sys.stderr)
         return 2
-    boxed = boxed_tags(sys.argv[1])
+    boxed, reasons = boxed_tags(sys.argv[1])
     fill = fills(sys.argv[2], set(boxed))
     rows = collections.defaultdict(lambda: collections.Counter())
     medians = collections.defaultdict(list)
@@ -151,6 +169,15 @@ def main():
             print(f"    {count:>6}  {kind}")
         total.update(row)
     print(f"{'total':28}" + "".join(f"{total[h]:>8}" for h in heads))
+    by_reason = collections.defaultdict(collections.Counter)
+    for tag, cls in boxed.items():
+        by_reason[cls][reasons.get(tag) or "(none)"] += 1
+    reasoned = sum(1 for tag in boxed if reasons.get(tag))
+    print(f"box bodies by class and reason (SavedMeshRefusal, #1645): {reasoned} of {len(boxed)} have one")
+    for cls, counter in sorted(by_reason.items(), key=lambda kv: -sum(kv[1].values())):
+        print(f"{cls:28}{sum(counter.values()):>8}")
+        for reason, count in counter.most_common():
+            print(f"    {count:>6}  {reason}")
     return 0
 
 
