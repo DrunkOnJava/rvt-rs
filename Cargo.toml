@@ -99,7 +99,12 @@ earcut = "0.4.5"
 quick-xml = { version = "0.42", features = ["serialize"] }
 # Serialisation for JSON output + test fixtures.
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# `preserve_order` backs a JSON object with a vector and an index of positions instead of a
+# `BTreeMap`, whose every node holds eleven entries whatever it is given: a decoded graph
+# of Revit's saved graphics is millions of objects of three to twenty fields, and the
+# nodes were 75% to 87% of the saved-mesh pass's peak memory (#1694). Keys come back in the
+# order they were inserted, not sorted.
+serde_json = { version = "1", features = ["preserve_order"] }
 # Witness mode (docs/verification-protocol.md): `rvt-ifc --observation`
 # records the SHA-256 of the input it observed so a replay can prove the
 # same bytes were read. Also used by tests/corpus_health for sidecars.
