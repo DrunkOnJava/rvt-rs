@@ -653,35 +653,37 @@ pub fn face(g: &ObjectGraph, fi: usize) -> Result<FaceMesh> {
             2_000_000,
         )?
     };
-    // DIAGNOSTIC (scratch branch, not for main): where the triangles of a trimmed face go (#1737).
-    if !grid.rectangular && mesh.triangles.len() >= 300 {
-        let distinct = |k: usize| {
-            let mut a: Vec<f64> = grid.trim.iter().map(|p| p[k]).collect();
-            a.sort_by(f64::total_cmp);
-            a.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
-            a.len()
-        };
+    // DIAGNOSTIC (scratch branch, not for main): every trimmed face with its data, once (#1737).
+    if !grid.rectangular {
+        use std::fmt::Write as _;
+        static SEEN: std::sync::Mutex<Option<std::collections::HashSet<String>>> =
+            std::sync::Mutex::new(None);
         let surface_class = crate::native_saved_mesh::pointer(g, fi, &f.fields["m_pSurf"])
             .ok()
             .flatten()
             .map(|si| g.objects[si].class_name.clone())
             .unwrap_or_default();
-        let loop_points: Vec<usize> = grid.loops.iter().map(|l| l.len()).collect();
-        eprintln!(
-            "DENSITYDIAG fi={fi} tag={} surf={surface_class} loops={} loop_pts={loop_points:?} trim_samples={} distinct_trim_u={} distinct_trim_v={} nu={} nv={} tri={} area_u=[{:.4},{:.4}] area_v=[{:.4},{:.4}]",
-            f.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1),
-            grid.loops.len(),
-            grid.trim.len(),
-            distinct(0),
-            distinct(1),
+        let mut line = format!(
+            "DENSITYFACE surf={surface_class} nu={} nv={} tri={} bounds={:?} loops=",
             grid.u.len(),
             grid.v.len(),
             mesh.triangles.len(),
-            grid.bounds[0][0],
-            grid.bounds[1][0],
-            grid.bounds[0][1],
-            grid.bounds[1][1],
+            grid.bounds,
         );
+        for ring in &grid.loops {
+            line.push('[');
+            for p in ring {
+                let _ = write!(line, "({:.12},{:.12})", p[0], p[1]);
+            }
+            line.push(']');
+        }
+        let mut seen = SEEN.lock().unwrap();
+        if seen
+            .get_or_insert_with(Default::default)
+            .insert(line.clone())
+        {
+            eprintln!("{line}");
+        }
     }
     Ok(FaceMesh {
         face_index: fi,
