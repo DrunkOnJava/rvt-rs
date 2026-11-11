@@ -374,11 +374,6 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
     anyhow::bail!("a trim loop does not close in the surface's parameters")
 }
 
-/// The grid the face at `fi` is meshed on, or why it is not meshed (a trim loop
-/// that does not close, a ruled face whose neighbours the graph does not resolve,
-/// a surface that is not read). A face whose one loop is the rectangle of its
-/// parameters is meshed on the grid; any other loop, or several, is cut into its
-/// cells.
 /// How far a revolved profile's points lie from the axis (the surface frame's `z`) for
 /// the parameters from `lo` to `hi`, never less: the farthest of 64 equal steps' ends,
 /// and half a step's length of the most the point can move (`speed`, the length of the
@@ -399,6 +394,11 @@ fn profile_reach(
     reach + speed * (hi - lo).abs() / STEPS as f64 / 2.
 }
 
+/// The grid the face at `fi` is meshed on, or why it is not meshed (a trim loop
+/// that does not close, a ruled face whose neighbours the graph does not resolve,
+/// a surface that is not read). A face whose one loop is the rectangle of its
+/// parameters is meshed on the grid; any other loop, or several, is cut into its
+/// cells.
 pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     use crate::native_parametric_surface::Curve;
     use crate::native_saved_mesh::pointer;
