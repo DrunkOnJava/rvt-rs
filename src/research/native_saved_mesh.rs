@@ -1206,6 +1206,58 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
             }
             triangles.push([base + t[0], base + t[1], base + t[2]])
         }
+        if (sum - expected).abs() > 1e-7 * expected.max(1.) {
+            // DIAGNOSTIC (scratch branch, not for main): why the area check fails (#1732).
+            let tag = f.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1);
+            let summary: Vec<String> = loops
+                .iter()
+                .enumerate()
+                .map(|(j, l)| format!("{j}:n{} a{:.6e} d{}", l.len(), area(l), depths[j]))
+                .collect();
+            let hole_loops: Vec<&Vec<[f64; 2]>> = loops
+                .iter()
+                .enumerate()
+                .filter(|(j, h)| depths[*j] == depths[i] + 1 && inside(h[0], outer))
+                .map(|(_, h)| h)
+                .collect();
+            let mut touch_outer = 0usize;
+            let mut outside_outer = 0usize;
+            let mut touch_holes = 0usize;
+            for (a, h) in hole_loops.iter().enumerate() {
+                for v in h.iter() {
+                    if outer.iter().any(|o| close(*o, *v)) {
+                        touch_outer += 1;
+                    }
+                    if !inside(*v, outer) {
+                        outside_outer += 1;
+                    }
+                    for (b, g) in hole_loops.iter().enumerate() {
+                        if a < b && g.iter().any(|o| close(*o, *v)) {
+                            touch_holes += 1;
+                        }
+                    }
+                }
+            }
+            let bbox = outer
+                .iter()
+                .fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |m, p| {
+                    [
+                        m[0].min(p[0]),
+                        m[1].min(p[1]),
+                        m[2].max(p[0]),
+                        m[3].max(p[1]),
+                    ]
+                });
+            eprintln!(
+                "AREADIAG fi={fi} tag={tag} outer={i} loops=[{}] holes={} pts={} earcut_tris={} kept_tris={} sum={sum:e} expected={expected:e} diff={:e} touch_outer={touch_outer} outside_outer={outside_outer} touch_holes={touch_holes} bbox={bbox:?}",
+                summary.join("; "),
+                holes.len(),
+                pts.len(),
+                ts.len() / 3,
+                earcut_triangles.len(),
+                sum - expected,
+            );
+        }
         ensure!(
             (sum - expected).abs() <= 1e-7 * expected.max(1.),
             "triangulated area mismatch: {sum} vs {expected}"
