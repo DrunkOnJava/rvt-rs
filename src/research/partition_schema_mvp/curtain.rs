@@ -139,6 +139,9 @@ pub(super) fn attach_mullion_plain_hosts(rf: &mut RevitFile, products: &mut [Dec
     for group in groups.values() {
         kept.extend(kept_ends(group));
     }
+    // RE-404: the pass that draws a mullion from its saved mesh reads the ends of
+    // those that stand on no plain host as well.
+    rf.remember_mullion_kept_ends(kept.clone());
     for element in products.iter_mut() {
         let Some(id) = element.id else {
             continue;
