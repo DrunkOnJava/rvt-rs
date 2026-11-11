@@ -148,7 +148,13 @@ fn element_row(computed: &Computed, index: usize) -> Option<ElementRow> {
         name: (!names.name_is_placeholder).then_some(names.name),
         long_name: names.long_name,
         level: storey_name(&computed.model, computed.storey(index)),
-        predefined_type: predefined_type.clone(),
+        // What the export writes on the occurrence (#1692).
+        predefined_type: predefined_type.clone().filter(|_| {
+            !rvt::ifc::category_map::predefined_type_left_out(
+                ifc_type,
+                computed.model.global_ids.revit_version,
+            )
+        }),
         provenance: provenance(computed, index, false)?,
     })
 }
@@ -700,7 +706,12 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
         name: (!names.name_is_placeholder).then_some(names.name),
         long_name: names.long_name,
         level,
-        predefined_type: predefined_type.clone(),
+        predefined_type: predefined_type.clone().filter(|_| {
+            !rvt::ifc::category_map::predefined_type_left_out(
+                ifc_type,
+                model.global_ids.revit_version,
+            )
+        }),
         location_feet: *location_feet,
         rotation_degrees: rotation_radians
             .filter(|_| location_feet.is_some())

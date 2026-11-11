@@ -477,7 +477,11 @@ pub fn element_info_panel(model: &IfcModel, entity_index: usize) -> Option<Eleme
         name: name.clone(),
         ifc_type: ifc_type.clone(),
         type_guid: type_guid.clone(),
-        predefined_type: predefined_type.clone(),
+        // What the export writes on the occurrence, which is none on some classes
+        // from Revit 2027 (#1692).
+        predefined_type: predefined_type.clone().filter(|_| {
+            !super::category_map::predefined_type_left_out(ifc_type, model.global_ids.revit_version)
+        }),
         storey_name,
         storey_elevation_feet,
         storey,

@@ -3269,8 +3269,19 @@ impl StepWriter<'_> {
                 // states its user-defined type in `ObjectType`. With none
                 // read the element cannot say which, and the writer invents
                 // no value, so its `PredefinedType` is left unset (#1430).
+                //
+                // From 2027 the occurrence of ten classes states none at all,
+                // as Revit's own export does (#1692), where its type objects
+                // still state theirs: `type_objects` takes the enumerator from
+                // the element as before, so the types, their GlobalIds and the
+                // property sets that depend on it do not change.
+                let predefined_left_out = super::category_map::predefined_type_left_out(
+                    &ifc_upper,
+                    model.global_ids.revit_version,
+                );
                 let predefined = predefined_type.as_deref().filter(|token| {
-                    !(token.eq_ignore_ascii_case("USERDEFINED") && object_type_quoted == "$")
+                    !predefined_left_out
+                        && !(token.eq_ignore_ascii_case("USERDEFINED") && object_type_quoted == "$")
                 });
                 // RE-93, RE-94: a window's or door's OverallHeight and
                 // OverallWidth are its opening's, which Revit's export writes
