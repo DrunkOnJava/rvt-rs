@@ -7,4 +7,6 @@
   158,585.00 mm), and 10 of the 29 values the measurement finds missing are
   written. A floor's, a base slab's and a stair landing's `Perimeter` stay
   out, and a roof whose profile has holes gets none: whether the export counts
-  a hole's outline in the value is unmeasured.
+  a hole's outline in the value is unmeasured. A roof whose outline has a
+  corner that is not a right angle gets none either: an arc of its sketch
+  reaches the outline as chords, whose length is short of the arc's.
