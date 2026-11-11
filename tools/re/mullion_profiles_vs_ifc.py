@@ -16,7 +16,7 @@ Three tallies say what a rule would change, by what the mullion's ends are:
     mitre ends), by the ends of our mesh, where the written value is Revit's and where it is not;
   - whether Revit's `Length` is the extent of its own body.
 
-A mullion that differs from Revit's in any quantity is printed (the first few), the rest are counted.
+A few mullions of each kind of difference (by which quantities differ and the ends of the body) are printed, the rest counted.
 
 Usage:
 
@@ -38,9 +38,14 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from saved_meshes_vs_ifc import body_sources  # noqa: E402
 
-LISTED = 40
-CONTRAST = 8
+LISTED = 6
 TOLERANCE = 1e-5
+# The thresholds of src/ifc/mesh_volume.rs's prism_extents, which this mirrors, in metres.
+MIN_TWICE_AREA = 1.8e-12
+PLANE_COSINE = 1e-5
+PLANE_METRES = 2.1e-4
+PARALLEL_COSINE = 1e-3
+AXIS_SINE = 1e-2
 # The extent along the axis a rule would take must lie this close to the written Length, so that a box's
 # other axes are never taken for the mullion's own.
 AXIS_REACH = 0.35
@@ -100,7 +105,7 @@ def facts(triangles):
     """The triangles that have an area, with their unit normals, areas and plane offsets."""
     cross = np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0])
     area = np.linalg.norm(cross, axis=1) / 2
-    keep = area > 1e-12
+    keep = 2 * area >= MIN_TWICE_AREA
     kept = triangles[keep]
     normals = cross[keep] / (2 * area[keep])[:, None]
     return kept, normals, area[keep], (normals * kept[:, 0]).sum(axis=1)
@@ -112,7 +117,7 @@ def planes_of(normals, offsets):
     for n, d in zip(normals, offsets):
         for p in planes:
             s = float(n @ p[0])
-            if abs(s) > 1 - 1e-7 and abs(d - np.sign(s) * p[1]) < 2e-4:
+            if abs(s) > 1 - PLANE_COSINE and abs(d - np.sign(s) * p[1]) < PLANE_METRES:
                 break
         else:
             planes.append([n, d])
@@ -129,15 +134,15 @@ def prism_axis(triangles, hint):
         for j in range(i + 1, len(planes)):
             c = np.cross(planes[i][0], planes[j][0])
             norm = np.linalg.norm(c)
-            if norm < 1e-6:
+            if norm < AXIS_SINE:
                 continue
             c = c / norm
-            if not any(abs(float(c @ k)) > 1 - 1e-9 for k in directions):
+            if not any(abs(float(c @ k)) > 1 - 1e-6 for k in directions):
                 directions.append(c)
     points = kept.reshape(-1, 3)
     best = None
     for axis in directions:
-        if sum(1 for p in planes if abs(float(p[0] @ axis)) > 1e-4) > 2:
+        if sum(1 for p in planes if abs(float(p[0] @ axis)) > PARALLEL_COSINE) > 2:
             continue
         extent = float(np.ptp(points @ axis))
         if best is None or abs(extent - hint) < abs(best[1] - hint):
@@ -151,9 +156,9 @@ def analyse(triangles, axis):
     """The extent along the axis, the lateral, flat and mitre areas, the volume and the kind of each end."""
     kept, normals, area, offsets = facts(triangles)
     along = np.abs(normals @ axis)
-    lateral, flat = along < 1e-4, along > 0.9999
+    lateral, flat = along < PARALLEL_COSINE, along > 0.9999
     middle = ~lateral & ~flat
-    ends = sorted("flat" if abs(float(p[0] @ axis)) > 0.9999 else "mitre" for p in planes_of(normals, offsets) if abs(float(p[0] @ axis)) > 1e-4)
+    ends = sorted("flat" if abs(float(p[0] @ axis)) > 0.9999 else "mitre" for p in planes_of(normals, offsets) if abs(float(p[0] @ axis)) > PARALLEL_COSINE)
     volume = abs(float(np.einsum("ij,ij->i", kept[:, 0], np.cross(kept[:, 1], kept[:, 2])).sum() / 6))
     return {
         "extent": float(np.ptp(kept.reshape(-1, 3) @ axis)),
@@ -189,14 +194,20 @@ def word(equal):
     return "equal" if equal else "different"
 
 
-def sums(m):
-    """The sums of an analysed body's faces a NetSurfaceArea could be."""
-    return (
-        ("lateral", m["lateral"]),
-        ("lateral+flat", m["lateral"] + m["flat"]),
-        ("lateral+mitre", m["lateral"] + m["mitre"]),
-        ("lateral+flat+mitre", m["lateral"] + m["flat"] + m["mitre"]),
-    )
+def decompose(m, value):
+    """The ways `value` is the body's lateral area plus a number of its mitre face and of its flat ends
+    (each flat end is half the flat area of a body with two): as labels such as 'lateral + 1 flat end'."""
+    if value is None:
+        return ()
+    flats = m["ends"].count("flat")
+    one = m["flat"] / flats if flats else 0.0
+    found = []
+    for mitres in ((0, 1) if m["mitre"] > 1e-9 else (0,)):
+        for count in range(flats + 1):
+            total = m["lateral"] + mitres * m["mitre"] + count * one
+            if close(total, value):
+                found.append(f"lateral{' + mitre' if mitres else ''}{f' + {count} flat end' if count else ''}")
+    return tuple(found)
 
 
 def main():
@@ -215,7 +226,7 @@ def main():
     if not both:
         return 0
     lengths, areas, own = collections.Counter(), collections.Counter(), collections.Counter()
-    tally, rows, equal_listed = collections.Counter(), [], 0
+    tally, rows, listed = collections.Counter(), [], collections.Counter()
     for tag in both:
         o, ma = read(settings, ours[tag], ours_scale)
         r, mb = read(settings, revit[tag], revit_scale)
@@ -228,16 +239,16 @@ def main():
             before = word(close(o["Length"], r["Length"]) and close(o["Span"], r["Span"]))
             after = word(close(ma["extent"], r["Length"]) and close(ma["extent"], r["Span"]))
             lengths[(ma["ends"], before + " to " + after)] += 1
-            made = tuple(label for label, total in sums(ma) if r["NetSurfaceArea"] is not None and close(total, r["NetSurfaceArea"]))
-            areas[(ma["ends"], "written " + word(close(o["NetSurfaceArea"], r["NetSurfaceArea"])), made)] += 1
+            written = "absent" if o["NetSurfaceArea"] is None else word(close(o["NetSurfaceArea"], r["NetSurfaceArea"]))
+            areas[(ma["ends"], "written " + written, "Revit: " + " | ".join(decompose(ma, r["NetSurfaceArea"])), "ours: " + " | ".join(decompose(ma, o["NetSurfaceArea"])))] += 1
         if mb is not None:
             own[("Revit's Length is its body's extent" if close(r["Length"], mb["extent"]) else "not", ma is not None and close(ma["extent"], mb["extent"]) and close(ma["area"], mb["area"]))] += 1
-        if diff or equal_listed < CONTRAST:
-            if not diff:
-                equal_listed += 1
+        kind = (diff, ma["ends"] if ma else None)
+        if listed[kind] < LISTED:
+            listed[kind] += 1
             rows.append((tag, diff, src, o, r, ma, mb, revit[tag].Name))
     print("by what differs:", {", ".join(k) or "nothing": v for k, v in tally.most_common()})
-    for tag, diff, src, o, r, ma, mb, name in rows[:LISTED]:
+    for tag, diff, src, o, r, ma, mb, name in rows:
         name = (name or "-").split(":")[1] if ":" in (name or "") else (name or "-")
         print(
             f"mullion {tag} {name!r} src {src} differs {','.join(diff) or '-'} | "
@@ -251,12 +262,10 @@ def main():
                 )
             else:
                 print(f"    {label} body: no prism axis near the Length")
-    if len(rows) > LISTED:
-        print(f"({len(rows) - LISTED} more mullions differ or were listed for contrast)")
     print("RE-418, Length and Span from the extent of our body along its axis (ends of our body, written to rule):")
     for key, count in lengths.most_common():
         print(f"  {count:6}  {key}")
-    print("RE-404, which sums of our body's faces equal Revit's NetSurfaceArea (ends of our body, written value, sums that equal):")
+    print("RE-404, Revit's NetSurfaceArea as our body's faces (ends of our body, the written one, what Revit's is, what ours is):")
     for key, count in areas.most_common():
         print(f"  {count:6}  {key}")
     print("Revit's own Length against its body (Length is the extent of its body, our body is the same shape and area):")
