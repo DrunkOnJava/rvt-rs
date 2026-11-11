@@ -294,6 +294,10 @@ struct Cut {
     up: [f64; 2],
     recess: bool,
     reference_from: usize,
+    /// Whether `Width` and `Height` are written too: Revit's export may swap
+    /// them on a door's opening (RE-244, RE-235 section 5) and nothing read
+    /// says it does not on the opening a door cuts in a second wall, so that
+    /// one takes only its `Depth`.
     quantities: bool,
 }
 
