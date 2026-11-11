@@ -987,9 +987,9 @@ fn follow_mesh_over_box(
 struct MemberMesh {
     /// The mullion's index into the entities.
     index: usize,
-    /// How many of its two end faces its Revit solid keeps, where its curtain
-    /// wall's boxes say (RE-268).
-    kept: Option<u8>,
+    /// How many of its two end faces its Revit solid keeps, and how many of those
+    /// ends have a partner, where its curtain wall's boxes say (RE-268, RE-439).
+    kept: Option<crate::partition_schema_mvp::KeptEnds>,
     /// The mesh as a prism along the mullion's axis.
     prism: Prism,
     /// Where its two end faces are, in the model's frame.
@@ -1007,7 +1007,8 @@ struct MemberMesh {
 /// it. Where a mullion has a partner at an end that `kept` counts, the count
 /// misses a continuation on another curtain wall, and the mullion gets none:
 /// `kept` must leave every end with a partner (`partner_ends`) among the ends it
-/// does not count.
+/// does not count, but for the partners the boxes saw at an end they keep, which an
+/// oblique mullion or one across inside keeps (RE-438, RE-439).
 fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
     let mut held: BTreeMap<usize, usize> = BTreeMap::new();
     for (position, entity) in model.entities.iter().enumerate() {
@@ -1020,11 +1021,18 @@ fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
     let placed: Vec<Placed> = members.iter().map(|member| member.placed).collect();
     let partners = partner_ends(&placed);
     for (member, partners) in members.iter().zip(partners) {
-        let (Some(kept), Some(&position)) = (member.kept, held.get(&member.index)) else {
+        let (Some(ends), Some(&position)) = (member.kept, held.get(&member.index)) else {
             continue;
         };
-        let with_partner = partners.iter().filter(|partner| **partner).count();
-        if with_partner > usize::from(2 - kept.min(2)) {
+        let kept = ends.kept;
+        // The partners the boxes saw at the ends they keep are no continuation they
+        // missed; a partner beyond them is.
+        let missed = partners
+            .iter()
+            .filter(|partner| **partner)
+            .count()
+            .saturating_sub(usize::from(ends.with_partner));
+        if missed > usize::from(2 - kept.min(2)) {
             continue;
         }
         let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
