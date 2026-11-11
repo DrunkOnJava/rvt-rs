@@ -299,17 +299,11 @@ pub fn attach_scoped_with_control(
         // a roof's sketch outline: the record box holds the roof's reference
         // surface, not its slope or its thickness (#1612). A resolved outline
         // is the body of any other class (a floor's plan, a ceiling's).
-        //
-        // RE-423: so is a beam drawn as the box along its location line, though
-        // its section is resolved: Revit's solid for it has the cut ends and the
-        // section its type gives, and its mesh gives its base quantities.
-        let source = text("BodySource");
-        let beam_axis = ifc_type == "IFCBEAM" && source == Some(BEAM_AXIS_BODY_SOURCE);
-        let stand_in = matches!(
-            source,
+        if !matches!(
+            text("BodySource"),
             Some(RECORD_BBOX_BODY_SOURCE | BEAM_BOX_BODY_SOURCE | INSTANCE_TURNED_BODY_SOURCE)
-        ) && !(profile_resolved && ifc_type != "IFCROOF");
-        if !(stand_in || beam_axis) {
+        ) || (profile_resolved && ifc_type != "IFCROOF")
+        {
             continue;
         }
         let id = type_guid.as_deref().and_then(|tag| tag.parse::<u64>().ok());
@@ -359,6 +353,36 @@ pub fn attach_scoped_with_control(
             walls.entry(id).or_default().push(index);
         }
     }
+    // RE-423: the beams drawn along their location line, whose base quantities
+    // their saved mesh gives, whether or not the beam's own body is drawn from
+    // it: that body is the extrusion of a resolved section and stays so, as a
+    // wall's does.
+    let mut beam_lines: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
+    for (index, entity) in model.entities.iter().enumerate() {
+        if wholes.contains(&index) {
+            continue;
+        }
+        let IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid: Some(tag),
+            property_set: Some(set),
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let along_its_line = set.properties.iter().any(|property| {
+            property.name == "BodySource"
+                && matches!(&property.value, PropertyValue::Text(text) if text == BEAM_AXIS_BODY_SOURCE)
+        });
+        if !ifc_type.eq_ignore_ascii_case("IFCBEAM") || !along_its_line || !scope.includes(ifc_type)
+        {
+            continue;
+        }
+        if let Ok(id) = tag.parse::<u64>() {
+            beam_lines.entry(id).or_default().push(index);
+        }
+    }
     let hosts = match embed_hosts(rf, model, &by_id) {
         Ok(hosts) => hosts,
         Err(error) => {
@@ -367,7 +391,7 @@ pub fn attach_scoped_with_control(
         }
     };
     report.embed_hosts = hosts.len();
-    if by_id.is_empty() && hosts.is_empty() && walls.is_empty() {
+    if by_id.is_empty() && hosts.is_empty() && walls.is_empty() && beam_lines.is_empty() {
         for (index, reason) in refusals {
             note_refusal(model, index, reason);
         }
@@ -378,6 +402,7 @@ pub fn attach_scoped_with_control(
             .keys()
             .chain(hosts.keys())
             .chain(walls.keys())
+            .chain(beam_lines.keys())
             .copied()
             .collect::<BTreeSet<_>>(),
         max_graph_values: 1_000_000,
@@ -418,6 +443,18 @@ pub fn attach_scoped_with_control(
             if let Some([index]) = walls.get(&element.identity.element_id).map(Vec::as_slice) {
                 if let Some(found) = wall_mesh_quantities(&element.meshes.primitives) {
                     wall_quantities.push((*index, found));
+                }
+            }
+            if let Some([index]) = beam_lines
+                .get(&element.identity.element_id)
+                .map(Vec::as_slice)
+            {
+                let found = partial_refusal(&element.meshes)
+                    .is_none()
+                    .then(|| beam_mesh_quantities(&element.meshes.primitives))
+                    .flatten();
+                if let Some(found) = found {
+                    beams.push((*index, found));
                 }
             }
             if let Some(&index) = hosts.get(&element.identity.element_id) {
@@ -895,6 +932,18 @@ fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
             value: PropertyValue::AreaSquareFeet(area),
         });
     }
+}
+
+/// What the saved mesh of a beam drawn along its line gives of its base
+/// quantities (RE-423), where all its faces are planes and it is one closed
+/// solid that is a prism. The quantities are lengths, areas and a volume, which
+/// where the mesh is placed does not change.
+fn beam_mesh_quantities(primitives: &[Primitive]) -> Option<BeamQuantities> {
+    if !all_faces_flat(primitives) {
+        return None;
+    }
+    let (vertices, triangles) = local_mesh(primitives, [0.0; 3], None);
+    beam_quantities(&vertices, &triangles)
 }
 
 /// Give each beam of `found` (an index into the entities and what its mesh gives

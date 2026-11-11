@@ -49,12 +49,34 @@ pub(super) fn closed_mesh_volume(vertices: &[[f64; 3]], triangles: &[BrepTriangl
     closed_mesh(vertices, triangles).map(|mesh| mesh.volume)
 }
 
-/// A closed surface a mesh makes (RE-423): its volume, cubic feet, and how many
-/// vertices and triangles it has once welded, which give its Euler characteristic.
+/// A closed surface a mesh makes (RE-423): its volume, cubic feet, how many
+/// vertices and triangles it has once welded, which give its Euler characteristic,
+/// and how many separate pieces it is in (the characteristic of several is the sum
+/// of theirs, so a solid with a hole through it beside a solid without one has the
+/// characteristic of a single solid with none).
 struct ClosedMesh {
     volume: f64,
     vertices: usize,
     triangles: usize,
+    components: usize,
+}
+
+/// The root of `x` in the union-find forest `parent`, shortening the path to it.
+fn find_root(parent: &mut [u32], mut x: u32) -> u32 {
+    while parent[x as usize] != x {
+        let up = parent[parent[x as usize] as usize];
+        parent[x as usize] = up;
+        x = up;
+    }
+    x
+}
+
+/// Join the pieces holding `a` and `b`.
+fn join_roots(parent: &mut [u32], a: u32, b: u32) {
+    let (a, b) = (find_root(parent, a), find_root(parent, b));
+    if a != b {
+        parent[b as usize] = a;
+    }
 }
 
 /// The closed surface `triangles` make of `vertices`, as [`closed_mesh_volume`]
@@ -81,6 +103,7 @@ fn closed_mesh(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -> Option<Clos
     centre = centre.map(|sum| sum / count);
     let mut edges: HashMap<(u32, u32), u32> = HashMap::new();
     let mut used: HashSet<u32> = HashSet::new();
+    let mut parent: Vec<u32> = (0..u32::try_from(welded.len()).ok()?).collect();
     let mut counted = 0usize;
     let mut sum = 0.0;
     for BrepTriangle(a, b, c) in triangles {
@@ -93,6 +116,8 @@ fn closed_mesh(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -> Option<Clos
             continue;
         }
         used.extend([ia, ib, ic]);
+        join_roots(&mut parent, ia, ib);
+        join_roots(&mut parent, ib, ic);
         counted += 1;
         for edge in [(ia, ib), (ib, ic), (ic, ia)] {
             *edges.entry(edge).or_insert(0) += 1;
@@ -115,10 +140,16 @@ fn closed_mesh(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -> Option<Clos
         return None;
     }
     let volume = sum.abs() / 6.0;
+    let components = used
+        .iter()
+        .map(|vertex| find_root(&mut parent, *vertex))
+        .collect::<HashSet<u32>>()
+        .len();
     (volume.is_finite() && volume > 0.0).then_some(ClosedMesh {
         volume,
         vertices: used.len(),
         triangles: counted,
+        components,
     })
 }
 
@@ -347,7 +378,7 @@ const EDGE_COSINE: f64 = 1e-5;
 /// A mesh with more is a curved or a free-form solid.
 const MAX_AXIS_CANDIDATES: usize = 48;
 
-/// Two prisms' extents are one where they differ by less than this fraction of
+/// Two prisms' extents are one where they differ by no more than this fraction of
 /// the longer.
 const EXTENT_TIE: f64 = 1e-6;
 
@@ -427,10 +458,10 @@ pub(super) fn beam_quantities(
     triangles: &[BrepTriangle],
 ) -> Option<BeamQuantities> {
     let closed = closed_mesh(vertices, triangles)?;
-    // A solid with no hole through it has a sphere's Euler characteristic, 2:
-    // vertices minus edges plus faces, and a closed triangle mesh has one and a
-    // half edges to a face.
-    if 2 * closed.vertices as i64 - closed.triangles as i64 != 4 {
+    // One piece, and a solid with no hole through it has a sphere's Euler
+    // characteristic, 2: vertices minus edges plus faces, and a closed triangle
+    // mesh has one and a half edges to a face.
+    if closed.components != 1 || 2 * closed.vertices as i64 - closed.triangles as i64 != 4 {
         return None;
     }
     let mut best: Option<([f64; 3], Prism)> = None;
@@ -445,7 +476,7 @@ pub(super) fn beam_quantities(
             continue;
         }
         if let Some((held_axis, held)) = &best {
-            if (prism.extent - held.extent).abs() <= EXTENT_TIE * held.extent {
+            if (prism.extent - held.extent).abs() <= EXTENT_TIE * prism.extent.max(held.extent) {
                 tied |= dot(*held_axis, axis).abs() < 0.999;
                 continue;
             }
@@ -1116,6 +1147,52 @@ mod tests {
             extra
                 .into_iter()
                 .map(|BrepTriangle(a, b, c)| BrepTriangle(a + shift, b + shift, c + shift)),
+        );
+        assert_eq!(beam_quantities(&vertices, &triangles), None);
+    }
+
+    /// A square ring of flat faces, 3 ft high, 0.4 ft across outside and 0.2 inside,
+    /// centred on (cx, 0): a surface of Euler characteristic 0.
+    fn ring_mesh(cx: f64) -> (Vec<[f64; 3]>, Vec<BrepTriangle>) {
+        let mut vertices = Vec::new();
+        for (half, z) in [(0.2, 0.0), (0.2, 3.0), (0.1, 0.0), (0.1, 3.0)] {
+            for (x, y) in [(-half, -half), (half, -half), (half, half), (-half, half)] {
+                vertices.push([cx + x, y, z]);
+            }
+        }
+        // Outer bottom 0 to 3, outer top 4 to 7, inner bottom 8 to 11, inner top
+        // 12 to 15, each corner ring counter-clockwise from above.
+        let mut triangles = Vec::new();
+        for i in 0..4u32 {
+            let j = (i + 1) % 4;
+            triangles.extend(fan(&[i, j, 4 + j, 4 + i]));
+            triangles.extend(fan(&[8 + j, 8 + i, 12 + i, 12 + j]));
+            triangles.extend(fan(&[4 + i, 4 + j, 12 + j, 12 + i]));
+            triangles.extend(fan(&[i, 8 + i, 8 + j, j]));
+        }
+        (vertices, triangles)
+    }
+
+    #[test]
+    fn a_ring_alone_or_beside_a_box_is_no_beam() {
+        let (vertices, triangles) = ring_mesh(0.0);
+        assert_eq!(beam_quantities(&vertices, &triangles), None);
+        // The box is a sphere (characteristic 2) and the ring a torus (0): together
+        // 2, the characteristic of one solid with no hole, and both prisms run along z
+        // with ends in the same two planes. Only the count of pieces tells them.
+        let (mut vertices, mut triangles) = box_mesh([0.0; 3], [0.2, 0.3, 3.0]);
+        let (more, extra) = ring_mesh(2.0);
+        let shift = u32::try_from(vertices.len()).unwrap();
+        vertices.extend(more);
+        triangles.extend(
+            extra
+                .into_iter()
+                .map(|BrepTriangle(a, b, c)| BrepTriangle(a + shift, b + shift, c + shift)),
+        );
+        assert_eq!(
+            2 * vertices.len() as i64 - triangles.len() as i64,
+            4,
+            "the pair has a single solid's characteristic"
         );
         assert_eq!(beam_quantities(&vertices, &triangles), None);
     }
