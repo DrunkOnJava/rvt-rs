@@ -58,6 +58,35 @@ def distinct(triangles):
     return triangles[keep]
 
 
+def shell_groups(triangles):
+    """The triangles of `triangles` (n, 3, 3) as lists of indices, one per set joined through shared
+    vertices (to 1e-6 ft), the largest first."""
+    keys = [tuple(int(x) for x in v) for v in np.round(triangles.reshape(-1, 3) * 1e6)]
+    parent = {}
+
+    def find(k):
+        while parent.setdefault(k, k) != k:
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        return k
+
+    for i in range(0, len(keys), 3):
+        root = find(keys[i])
+        for k in keys[i + 1 : i + 3]:
+            parent[find(k)] = root
+    groups = {}
+    for i in range(len(triangles)):
+        groups.setdefault(find(keys[3 * i]), []).append(i)
+    return sorted(groups.values(), key=lambda g: -len(g))
+
+
+def area_and_normal(triangles):
+    """The area of `triangles` and their area-weighted mean unit normal."""
+    cross = np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0])
+    total = cross.sum(axis=0)
+    return float(np.linalg.norm(cross, axis=1).sum() / 2), total / max(float(np.linalg.norm(total)), 1e-24)
+
+
 def cone_volume(triangles, centre):
     """The signed volume of the cones from `centre` over `triangles`."""
     a, b, c = triangles[:, 0] - centre, triangles[:, 1] - centre, triangles[:, 2] - centre
@@ -88,6 +117,31 @@ def compare(prims, revit):
         f"Revit: {len(revit)} triangles, {len(once)} distinct, {len(shells)} shells of volume"
         f" {', '.join(f'{abs(s):.6f}' for s in shells)} ft3 (distinct triangles), volume {abs(sum(shells)):.6f} ft3",
     ]
+    # Revit's shells and what lies between them: a body of several solids that meet at a seam is
+    # one solid in a saved mesh, and the seam's width is the volume the mesh holds over Revit's.
+    groups = shell_groups(once)
+    pieces = [once[g] for g in groups]
+    for k, piece in enumerate(pieces):
+        low, high = piece.reshape(-1, 3).min(axis=0), piece.reshape(-1, 3).max(axis=0)
+        lines.append(
+            f"Revit shell {k}: {len(piece)} triangles, volume {abs(cone_volume(piece, piece.reshape(-1, 3).mean(axis=0))):.6f} ft3,"
+            f" box ({low[0]:.4f}, {low[1]:.4f}, {low[2]:.4f}) to ({high[0]:.4f}, {high[1]:.4f}, {high[2]:.4f}) ft"
+        )
+    for a in range(len(pieces)):
+        for b in range(a + 1, len(pieces)):
+            a_to_b = vertex_distances(pieces[a].reshape(-1, 3), pieces[b])
+            b_to_a = vertex_distances(pieces[b].reshape(-1, 3), pieces[a])
+            gap = float(min(a_to_b.min(), b_to_a.min()))
+            lines.append(f"shells {a} and {b}: the nearest vertex of one is {gap:.6f} ft from the surface of the other")
+            for name, mine, other in ((a, pieces[a], pieces[b]), (b, pieces[b], pieces[a])):
+                centres = mine.mean(axis=1)
+                near = vertex_distances(centres, other) <= gap + 1e-3
+                if near.any():
+                    area, normal = area_and_normal(mine[near])
+                    lines.append(
+                        f"  shell {name}: {int(near.sum())} triangles within {gap + 1e-3:.4f} ft of the other, area {area:.4f} ft2,"
+                        f" mean normal ({normal[0]:.4f}, {normal[1]:.4f}, {normal[2]:.4f}), area x gap {area * gap:.6f} ft3"
+                    )
     theirs = vertex_distances(once.reshape(-1, 3), every)
     lines.append(
         f"Revit's vertices from rvt-rs's surface: farthest {theirs.max():.6f} ft,"
