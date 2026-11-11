@@ -3,8 +3,8 @@
 **Date:** 2026-11-11
 **Issues:** #1046 (curtain mullion quantities), #1636 (second-project measurement); follows RE-268 (which ends Revit's solid keeps), RE-403 (the box is not the solid), RE-387 (the mesh's volume) and RE-418 (the mesh's length)
 **Artefacts:** the BIM4LCA office at building permit, in concrete and in timber, and the housing's four large files (Revit 2024, Revit's IFC4 exports), as Measure fetches them. Never stored.
-**Runs:** Measure [42946015504](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42946015504) (the scorer `tools/re/mullion_profiles_vs_ifc.py` at `b98bc2e2575d6de675e34a25e9b6f50de3518fff`, on `main` at `0649e224b96285c2bced628c5379bdd4be924727`) for section 1
-**Status:** pending the change's own measurement (section 3); the finding of section 1 is measured.
+**Runs:** Measure [42946015504](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42946015504) (the scorer `tools/re/mullion_profiles_vs_ifc.py` at `b98bc2e2575d6de675e34a25e9b6f50de3518fff`, on `main` at `0649e224b96285c2bced628c5379bdd4be924727`) for section 1; [42956686568](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42956686568) (unfiltered, head `75fd899c627895a1bd772f791303a8f0baf395f3`, kept under `refs/archive/2026-11-11/cited/75fd899c6278`, against RE-418's `2136399d614606bd760d11ea34322b00cc740045`, kept under `refs/archive/2026-11-11/cited/2136399d6146`) for section 3; [42953777974](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42953777974) (both sides' exports of the Autodesk samples kept) for section 4; [42947332778](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42947332778) (the first version, section 2)
+**Status:** Positive. 1,634 to 1,658 more of each office's mullions read `NetSurfaceArea` equal to Revit's and 184 more of the housing's, none different; 21 of the 126 exports move and the other 105 are byte-identical.
 
 ## 1. What Revit's `NetSurfaceArea` is, against rvt-rs's body
 
@@ -32,9 +32,22 @@ A curtain mullion drawn from its saved mesh (a closed mesh of flat faces) that h
 
 `mesh_volume::partner_ends` finds a partner in the meshes themselves, whatever the wall: another mullion running the same way (cosine over 0.999) with an end within 1 cm of the end and its body beyond it. A mullion gets no `NetSurfaceArea` where it has a partner at an end that `kept` counts, that is where it has more partners than `2 - kept`. The check can only take a value away from what `kept` alone would write.
 
-## 3. Measured: the change
+## 3. Measured: every model
 
-Pending: the unfiltered Measure of the change against the change it follows (RE-418), which this section reports.
+Unfiltered Measure 42956686568, every flag, 126 models on each side, the head against RE-418's: 105 exports are byte-identical and 21 move, the eight BIM4LCA files that hold curtain mullions drawn from their meshes and 13 Autodesk samples (section 4); the held-out files' counts, the four terrain files and every other model do not change. `same-project gates` passed on the head.
+
+| file | `NetSurfaceArea` equal | missing | quantities equal (of those Revit writes) | different |
+|---|---:|---:|---:|---:|
+| office, concrete, as built | 7,532 to 9,166 of 10,003 | 2,471 to 837 | 34,281 to 35,915 of 39,754 | 1, unchanged |
+| office, concrete, at permit | 7,560 to 9,194 of 10,031 | 2,471 to 837 | 34,616 to 36,250 of 40,006 | 1, unchanged |
+| office, timber, as built | 5,431 to 7,065 of 7,876 | 2,443 to 809 | 27,253 to 28,887 of 33,800 | 3, unchanged |
+| office, timber, at permit | 5,292 to 6,950 of 7,872 | 2,575 to 917 | 26,831 to 28,489 of 33,663 | 22, unchanged |
+| housing, concrete, as built | 306 to 354 of 356 | 50 to 2 | 3,636 to 3,684 of 5,358 | 0, unchanged |
+| housing, concrete, at permit | 314 to 354 of 356 | 42 to 2 | 3,598 to 3,638 of 5,062 | 4, unchanged |
+| housing, timber, as built | 396 to 444 of 452 | 56 to 8 | 3,909 to 3,957 of 5,872 | 0, unchanged |
+| housing, timber, at permit | 396 to 444 of 452 | 56 to 8 | 3,863 to 3,911 of 5,664 | 0, unchanged |
+
+On the timber office at permit `NetSurfaceArea` keeps its 5 different (the first version made 9, section 2), and the quantities rvt-rs writes that Revit does not (0, 0, 3, 3 on the offices; 7, 0, 2, 2 on the housing) are unchanged on every file. The housing's gain of 48, 40, 48 and 48 is the 184 mitred mullions of section 1, all of them. The row registered on #1636 before the first version's run holds on its four points for this version: the offices gain far more than the 1,500 it asks, the housing's 184 mitred mullions read equal (it asks 90), nothing is different, and every export without a curtain mullion is byte-identical.
 
 ## 4. The Autodesk samples
 
@@ -52,6 +65,15 @@ Measure [42953777974](https://github.com/DrunkOnJava/rvt-rs/actions/runs/4295377
 
 That is the rule's own shape and no more: what those files' Revit exports would write is not known here.
 
-## 5. Sources
+## 5. Reproduce
+
+```bash
+gh workflow run measure.yml --ref feat/1046-mullion-surface-area -f ref=75fd899c627895a1bd772f791303a8f0baf395f3 -f base=2136399d614606bd760d11ea34322b00cc740045 \
+  -f nordic=true -f samples=true -f r2025=true -f holdout=true -f bimcollab=true -f racadv=true
+```
+
+The scorer of section 1: `python3 tools/re/mullion_profiles_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc>`; the samples of section 4: `python3 tools/re/mullion_added_areas.py <before.ifc> <after.ifc>` over the kept exports of a run with `-f samples=true -f keep_ifc=true -f scorers=none`.
+
+## 6. Sources
 
 RE-243, RE-248, RE-268, RE-387, RE-403, RE-418. revit-ifc's `NetSurfaceAreaCalculator` and `PropertyUtil.CreateBeamColumnBaseQuantities` as RE-268 read them (CLEANROOM.md source 5). No Autodesk source was read.

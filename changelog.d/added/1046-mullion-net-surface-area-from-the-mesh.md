@@ -8,4 +8,8 @@
   same run that meets its end) at an end that count keeps is given none, since the
   count reads the boxes of one curtain wall and misses a continuation on another.
   Revit's export writes the same on the mullions of the BIM4LCA housing and
-  office whose body rvt-rs draws from the mesh Revit saved.
+  office whose body rvt-rs draws from the mesh Revit saved: 1,634 to 1,658 more
+  of each office's mullions read equal to Revit's (the timber office at permit,
+  5,292 to 6,950 of 7,872) and the 184 mitred mullions of the housing's large
+  files, none different. 13 of Autodesk's samples gain the value on 4,877
+  mullions, which no Revit export scores.
