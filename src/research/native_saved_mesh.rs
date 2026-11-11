@@ -243,6 +243,16 @@ const EDGE_SAGITTA: f64 = 2.5e-4;
 const EDGE_REFINEMENT_DEPTH: u32 = 32;
 /// The most points one edge may be given, so that a hostile file cannot ask for more.
 const EDGE_POINT_BUDGET: usize = 100_000;
+
+/// What a crossing edge's refinement may spend: halvings of one span, and points in all.
+struct EdgeLimits {
+    depth: u32,
+    points: usize,
+}
+const EDGE_LIMITS: EdgeLimits = EdgeLimits {
+    depth: EDGE_REFINEMENT_DEPTH,
+    points: EDGE_POINT_BUDGET,
+};
 /// How close to the plane (feet) a point solved onto it must lie.
 const EDGE_ON_PLANE: f64 = 1e-9;
 
@@ -323,6 +333,16 @@ fn refine_crossing_edge(
     plane_normal: [f64; 3],
     samples: &[[f64; 2]],
 ) -> Result<Vec<[f64; 2]>> {
+    refine_crossing_edge_within(evaluate, plane_origin, plane_normal, samples, &EDGE_LIMITS)
+}
+
+fn refine_crossing_edge_within(
+    evaluate: &dyn Fn([f64; 2]) -> Result<[f64; 3]>,
+    plane_origin: [f64; 3],
+    plane_normal: [f64; 3],
+    samples: &[[f64; 2]],
+    limits: &EdgeLimits,
+) -> Result<Vec<[f64; 2]>> {
     ensure!(samples.len() >= 2, "an edge needs two samples");
     let signed = |p: [f64; 3]| -> f64 {
         (0..3)
@@ -331,7 +351,7 @@ fn refine_crossing_edge(
     };
     let mut out = vec![samples[0]];
     for pair in samples.windows(2) {
-        bisect_crossing_edge(evaluate, &signed, pair[0], pair[1], 0, &mut out)?;
+        bisect_crossing_edge(evaluate, &signed, limits, pair[0], pair[1], 0, &mut out)?;
         out.push(pair[1]);
     }
     Ok(out)
@@ -340,6 +360,7 @@ fn refine_crossing_edge(
 fn bisect_crossing_edge(
     evaluate: &dyn Fn([f64; 2]) -> Result<[f64; 3]>,
     signed: &dyn Fn([f64; 3]) -> f64,
+    limits: &EdgeLimits,
     a: [f64; 2],
     b: [f64; 2],
     depth: u32,
@@ -395,16 +416,17 @@ fn bisect_crossing_edge(
         return Ok(());
     }
     ensure!(
-        depth < EDGE_REFINEMENT_DEPTH,
-        "edge refinement is still above the bound after {EDGE_REFINEMENT_DEPTH} halvings"
+        depth < limits.depth,
+        "edge refinement is still above the bound after {} halvings",
+        limits.depth
     );
     ensure!(
-        out.len() < EDGE_POINT_BUDGET,
+        out.len() < limits.points,
         "edge refinement point budget exceeded"
     );
-    bisect_crossing_edge(evaluate, signed, a, exact, depth + 1, out)?;
+    bisect_crossing_edge(evaluate, signed, limits, a, exact, depth + 1, out)?;
     out.push(exact);
-    bisect_crossing_edge(evaluate, signed, exact, b, depth + 1, out)
+    bisect_crossing_edge(evaluate, signed, limits, exact, b, depth + 1, out)
 }
 
 /// The cylinder side of [`refined_plane_edge`] (#1706): the loop of a cylinder
@@ -2001,8 +2023,8 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EDGE_SAGITTA, distance_to_chord, isoparametric_axis, normals_follow_winding,
-        refine_crossing_edge, regions_tile, within_envelope,
+        EDGE_SAGITTA, EdgeLimits, distance_to_chord, isoparametric_axis, normals_follow_winding,
+        refine_crossing_edge, refine_crossing_edge_within, regions_tile, within_envelope,
     };
     use anyhow::Result;
     use std::f64::consts::{FRAC_PI_2, PI};
@@ -2417,18 +2439,30 @@ mod tests {
     }
 
     #[test]
-    fn an_edge_that_never_settles_is_refused() {
-        // A ripple of a millimetre at a million radians to the unit: no chord of it is
-        // within the bound, however often the span is halved.
+    fn a_span_still_above_the_bound_at_the_depth_limit_is_refused() {
+        // The sparse quarter turn needs about a dozen halvings; two are not enough.
         let plane = slanted_plane();
-        let rippled = |uv: [f64; 2]| -> Result<[f64; 3]> {
-            let mut p = cylinder(uv)?;
-            let ripple = 1e-3 * (1e6 * uv[0]).sin();
-            p[0] += ripple * uv[0].cos();
-            p[1] += ripple * uv[0].sin();
-            Ok(p)
+        let limits = EdgeLimits {
+            depth: 2,
+            points: 1_000,
         };
-        assert!(refine_crossing_edge(&rippled, plane.0, plane.1, &cut(2)).is_err());
+        let error =
+            refine_crossing_edge_within(&cylinder, plane.0, plane.1, &cut(2), &limits).unwrap_err();
+        assert!(format!("{error:#}").contains("2 halvings"), "{error:#}");
+        // With the limits of the rule it is refined.
+        assert!(refine_crossing_edge(&cylinder, plane.0, plane.1, &cut(2)).is_ok());
+    }
+
+    #[test]
+    fn an_edge_that_asks_for_more_points_than_the_budget_is_refused() {
+        let plane = slanted_plane();
+        let limits = EdgeLimits {
+            depth: 32,
+            points: 3,
+        };
+        let error =
+            refine_crossing_edge_within(&cylinder, plane.0, plane.1, &cut(2), &limits).unwrap_err();
+        assert!(format!("{error:#}").contains("point budget"), "{error:#}");
     }
 
     #[test]
