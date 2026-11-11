@@ -653,6 +653,36 @@ pub fn face(g: &ObjectGraph, fi: usize) -> Result<FaceMesh> {
             2_000_000,
         )?
     };
+    // DIAGNOSTIC (scratch branch, not for main): where the triangles of a trimmed face go (#1737).
+    if !grid.rectangular && mesh.triangles.len() >= 300 {
+        let distinct = |k: usize| {
+            let mut a: Vec<f64> = grid.trim.iter().map(|p| p[k]).collect();
+            a.sort_by(f64::total_cmp);
+            a.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
+            a.len()
+        };
+        let surface_class = crate::native_saved_mesh::pointer(g, fi, &f.fields["m_pSurf"])
+            .ok()
+            .flatten()
+            .map(|si| g.objects[si].class_name.clone())
+            .unwrap_or_default();
+        let loop_points: Vec<usize> = grid.loops.iter().map(|l| l.len()).collect();
+        eprintln!(
+            "DENSITYDIAG fi={fi} tag={} surf={surface_class} loops={} loop_pts={loop_points:?} trim_samples={} distinct_trim_u={} distinct_trim_v={} nu={} nv={} tri={} area_u=[{:.4},{:.4}] area_v=[{:.4},{:.4}]",
+            f.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1),
+            grid.loops.len(),
+            grid.trim.len(),
+            distinct(0),
+            distinct(1),
+            grid.u.len(),
+            grid.v.len(),
+            mesh.triangles.len(),
+            grid.bounds[0][0],
+            grid.bounds[1][0],
+            grid.bounds[0][1],
+            grid.bounds[1][1],
+        );
+    }
     Ok(FaceMesh {
         face_index: fi,
         face_tag: f.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1),
