@@ -421,7 +421,7 @@ const BATCH_BODY_BUDGET: usize = 2_000_000;
 /// The graph objects of the owners that name nothing that are held at once
 /// while they are meshed: the buffer is meshed and let go when it holds this
 /// many (the same 95 MiB or so as a batch of symbols).
-const OWNER_OBJECT_BUDGET: usize = 20_000;
+const OWNER_OBJECT_BUDGET: usize = 5_000;
 /// An owner as a batch is planned: the first shared symbol it names (the
 /// order owners naming the same one together), its id, and the shared symbols
 /// it names itself.
