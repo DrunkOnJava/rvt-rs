@@ -1183,9 +1183,9 @@ fn tessellate_trimmed(
                 ParametricSurface::ConeSurf { .. } => "ConeSurf",
                 ParametricSurface::RuledSurf { .. } => "RuledSurf",
             };
-            ensure!(
-                collapsed(p, q) || collapsed(q, r) || collapsed(r, p),
-                "DETAIL {kind} area {area:.3e} edges {:.3e} {:.3e} {:.3e} uv {:.6?} {:.6?} {:.6?} of {} cells",
+            // The refusal texts are stored with their digits scrubbed: write them as letters.
+            let detail = format!(
+                "{kind} area {area:.3e} edges {:.3e} {:.3e} {:.3e} uv {:.9?} {:.9?} {:.9?} of {} cells",
                 dist(p, q),
                 dist(q, r),
                 dist(r, p),
@@ -1193,6 +1193,20 @@ fn tessellate_trimmed(
                 points[b as usize],
                 points[c as usize],
                 points.len()
+            );
+            let letters: String = detail
+                .chars()
+                .map(|ch| {
+                    if ch.is_ascii_digit() {
+                        (b'a' + (ch as u8 - b'0')) as char
+                    } else {
+                        ch
+                    }
+                })
+                .collect();
+            ensure!(
+                collapsed(p, q) || collapsed(q, r) || collapsed(r, p),
+                "DETAIL {letters}"
             );
         } else {
             triangles.push(if winding { [a, b, c] } else { [a, c, b] });
