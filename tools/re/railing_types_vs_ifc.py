@@ -32,6 +32,14 @@ import sys
 import ifcopenshell
 
 
+def read_name(entry):
+    """`name@partition` or `name@partition*` (the routed copy) as a triple."""
+    name, _, partition = entry.rpartition("@")
+    routed = partition.endswith("*")
+    number = int(partition.rstrip("*")) if partition.rstrip("*").isdigit() else -1
+    return (name, number, routed)
+
+
 def read_probe(path):
     copies = collections.defaultdict(list)
     for line in open(path, encoding="utf-8", errors="replace"):
@@ -46,7 +54,7 @@ def read_probe(path):
         if parts[5] != "-":
             for item in parts[5].split(","):
                 attr_id, _, names = item.partition("=")
-                attrs[attr_id] = set(names.split("|"))
+                attrs[attr_id] = [read_name(entry) for entry in names.split("|")]
         copies[parts[1]].append(
             {
                 "partition": parts[2],
@@ -71,12 +79,38 @@ def revit_type_names(path):
 
 
 def ids_named(copies):
-    """Every StairsRailingAttr id the copies' words hold, with its names."""
+    """Every StairsRailingAttr id the copies' words hold, with the set of
+    names its copies hold ('?' where a copy holds none)."""
     found = collections.defaultdict(set)
     for copy in copies:
-        for attr_id, names in copy["attrs"].items():
-            found[attr_id] |= names
+        for attr_id, entries in copy["attrs"].items():
+            found[attr_id] |= {name for name, _, _ in entries}
     return found
+
+
+def entries_of(copies, attr_id):
+    seen = set()
+    for copy in copies:
+        seen |= set(copy["attrs"].get(attr_id, []))
+    return seen
+
+
+def named_by(policy, entries):
+    """The name a policy gives a type object from its copies' entries, or None."""
+    read = [(name, part, routed) for name, part, routed in entries if name != "?"]
+    if policy == "agree":
+        names = {name for name, _, _ in read}
+        return names.pop() if len(names) == 1 else None
+    if policy == "latest":
+        if not read:
+            return None
+        newest = max(part for _, part, _ in read)
+        names = {name for name, part, _ in read if part == newest}
+        return names.pop() if len(names) == 1 else None
+    if policy == "routed":
+        names = {name for name, _, routed in read if routed}
+        return names.pop() if len(names) == 1 else None
+    return None
 
 
 def main():
@@ -114,7 +148,11 @@ def main():
         if len(union) == 1:
             ((only, names),) = union.items()
             counted["union rule (one id over all copies) types the railing"] += 1
-            counted["  as Revit does"] += names == {type_name}
+            entries = entries_of(held, only)
+            for policy in ("agree", "latest", "routed"):
+                picked = named_by(policy, entries)
+                counted[f"  name by the {policy} policy: found"] += picked is not None
+                counted[f"  name by the {policy} policy: Revit's"] += picked == type_name
         else:
             untyped.append((tag, type_name, held))
             if not union:
@@ -122,9 +160,7 @@ def main():
                     for word, classes in copy["words"].items():
                         other_classes[classes] += 1
         if len(current_ids) == 1:
-            ((only, names),) = current_ids.items()
             counted["current-copy rule types the railing"] += 1
-            counted["  as Revit does (current copy)"] += names == {type_name}
     print(f"railings in Revit's export: {len(revit)}; with BaseRailing copies listed: {len(probe)}")
     for key, value in counted.items():
         print(f"  {key}: {value}")

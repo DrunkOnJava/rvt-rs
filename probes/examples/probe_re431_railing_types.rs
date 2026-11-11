@@ -21,8 +21,9 @@
 //! payload, from 1000 up, that is the ElementId of a data object of the
 //! file, with the classes of the objects that hold that id (joined by `/`);
 //! `attrs` are the ones among them of `StairsRailingAttr` objects, each as
-//! `<id>=<name>` with the name its object holds (`?` for none; spaces as
-//! `~`; the names of copies that disagree joined by `|`).
+//! `<id>=<name>@<partition>|<name>@<partition>...`: the name each copy of the
+//! object holds in each partition (`?` where it holds none; spaces as `~`),
+//! the partition its element's stored revision routes to marked `*` (RE-216).
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_re431_railing_types -- MODEL.rvt
@@ -118,7 +119,7 @@ fn main() -> anyhow::Result<()> {
         .collect();
     let name_tags = RailingTypeTags::from_classes(&schema);
     let mut classes_of: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
-    let mut attr_names: BTreeMap<u32, BTreeSet<String>> = BTreeMap::new();
+    let mut attr_names: BTreeMap<u32, BTreeMap<u32, BTreeSet<String>>> = BTreeMap::new();
     let mut attr_objects = 0usize;
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
@@ -135,6 +136,8 @@ fn main() -> anyhow::Result<()> {
                         .map_or_else(|| "?".to_string(), |name| name.replace(' ', "~"));
                     attr_names
                         .entry(object.element_id)
+                        .or_default()
+                        .entry(partition_of(&stream))
                         .or_default()
                         .insert(name);
                 }
@@ -153,6 +156,11 @@ fn main() -> anyhow::Result<()> {
         holders.entry(copy.id).or_default().insert(copy.partition);
     }
     let current = current_partitions(&mut rf, &holders);
+    let attr_holders: BTreeMap<u32, BTreeSet<u32>> = attr_names
+        .iter()
+        .map(|(id, by_partition)| (*id, by_partition.keys().copied().collect()))
+        .collect();
+    let attr_current = current_partitions(&mut rf, &attr_holders);
 
     for copy in &copies {
         let is_current = current.get(&copy.id) == Some(&copy.partition);
@@ -165,9 +173,21 @@ fn main() -> anyhow::Result<()> {
                     .is_some_and(|set| set.contains(&attr_tag))
             })
             .map(|word| {
+                let routed = attr_current.get(word);
                 let names = attr_names.get(word).map_or_else(
                     || "?".to_string(),
-                    |names| names.iter().cloned().collect::<Vec<_>>().join("|"),
+                    |by_partition| {
+                        by_partition
+                            .iter()
+                            .flat_map(|(partition, names)| {
+                                names.iter().map(move |name| {
+                                    let mark = if routed == Some(partition) { "*" } else { "" };
+                                    format!("{name}@{partition}{mark}")
+                                })
+                            })
+                            .collect::<Vec<_>>()
+                            .join("|")
+                    },
                 );
                 format!("{word}={names}")
             })
