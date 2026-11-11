@@ -841,8 +841,12 @@ fn drop_column_box_quantities(model: &mut IfcModel, found: &[(usize, f64)]) {
 /// the BIM4LCA office at building permit that it draws as a cut mesh, and the
 /// volume alone does not tell them from the rest ([`add_column_quantities`]
 /// gives it where the mesh is a vertical prism, RE-424). A curtain mullion, a curtain
-/// panel and a column are the entities measured equal to Revit's on every
-/// element (RE-387); a body of another entity gets none. A curtain mullion
+/// panel, a column and a building element proxy are the entities measured equal to
+/// Revit's on every element (RE-387); a body of another entity gets none. A proxy's
+/// saved mesh is a tessellation wherever its solid has a curved face, which
+/// [`all_faces_flat`] refuses, so on the BIM4LCA office as built the 3 proxies drawn
+/// as a box take Revit's `NetVolume` and its 9 wall sweeps, drawn from a profile with
+/// rounded folds, get none. A curtain mullion
 /// whose `NetVolume` the box gave and whose mesh has another volume is not an
 /// extrusion of its box, and takes the mesh's (RE-403) and the mesh's length
 /// (RE-418): the mullions of `members` whose `Length` it changed are returned with
@@ -876,6 +880,7 @@ fn add_mesh_volumes(
             "IFCMEMBER" => ("Qto_MemberBaseQuantities", &["NetVolume"]),
             "IFCPLATE" => ("Qto_PlateBaseQuantities", &["NetVolume"]),
             "IFCCOLUMN" => ("Qto_ColumnBaseQuantities", &["NetVolume"]),
+            "IFCBUILDINGELEMENTPROXY" => ("Qto_BuildingElementProxyQuantities", &["NetVolume"]),
             _ => continue,
         };
         let volume_property = |name: &str| Property {
