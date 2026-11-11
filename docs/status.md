@@ -159,7 +159,12 @@ of the two held-out 2027 pairs writes none on 71 elements of those classes (coun
 only), where its export of the same projects saved by 2024 to 2026 writes one;
 its proxies (`NOTDEFINED`), openings, spaces and every type object keep theirs,
 and a class the pairs do not hold (columns, beams, coverings, curtain walls,
-plates, MEP terminals ...) is not measured on 2027 and keeps its value (#1692). The
+plates, MEP terminals ...) is not measured on 2027 and keeps its value (#1692). The exporter's
+public source writes an occurrence's `PredefinedType` only where the element has no type
+object when it is created, and only from its tag `v27.3.0.12` (not in `v27.0.1.1` and
+earlier), so what decides is the exporter's build and not the save's release: a Revit 2027
+install with an older exporter still writes the values, and the file does not say which
+exporter read it. The
 viewer's element panel, the schedule CSV and the MCP server report what the export
 writes, so they say none for those elements as well.
 Each
