@@ -3163,15 +3163,18 @@ fn add_railing_length(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Dec
     });
 }
 
-/// Add a space's `Qto_SpaceBaseQuantities.Height` to `sets`, its room's
-/// height (RE-255).
+/// Add a space's `Qto_SpaceBaseQuantities.Height` to `sets`: its room's height
+/// (RE-255), or an Area's, the height of its body, from its Level up to the
+/// Level above (RE-317), which its reader gives on the releases Revit's export
+/// is measured on.
 fn add_space_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     if ifc_type != "IFCSPACE" {
         return;
     }
     let Some(height) = decoded.fields.iter().find_map(|(name, value)| match value {
         InstanceField::Float { value, .. }
-            if name == crate::partition_schema_mvp::ROOM_HEIGHT_FIELD =>
+            if name == crate::partition_schema_mvp::ROOM_HEIGHT_FIELD
+                || name == crate::partition_area_records::AREA_SPACE_HEIGHT_FIELD =>
         {
             Some(*value)
         }
@@ -3316,13 +3319,16 @@ fn add_door_window_quantities(
 /// its `Length`, the depth of the extrusion it is drawn as, and, where that
 /// extrusion is its type's hollow section (whose family parameters are
 /// Revit's profile exactly), its `CrossSectionArea` (the section's area),
-/// `OuterSurfaceArea` (the length times the section's outline and hole) and
-/// `GrossVolume` (the area times the length), as revit-ifc's
+/// `OuterSurfaceArea` (the length times the section's outline and hole),
+/// `GrossVolume` (the area times the length) and `NetVolume`, as revit-ifc's
 /// `PropertyUtil.CreateBeamColumnBaseQuantities` takes them (CLEANROOM.md
-/// source 5). Its `NetVolume` is left out: Revit's export writes the volume
-/// Revit computes, less than that on every one of the BIM4LCA office's
-/// hollow columns. A column drawn as its record's box gets none of these, as a
-/// round column is drawn as one too. All on a column joined by no
+/// source 5). A hollow section's `NetVolume` is the volume Revit computes,
+/// which the arcs of its corners are missing from: the section's outside
+/// rectangle less its inside one times the length, Revit's exactly on the
+/// BIM4LCA office's three hollow-section types measured (PI-2, PI-4 and PI-5,
+/// five columns, the PI-4 arcs taking 3.4 per cent off its area's box). A
+/// column drawn as its record's box gets none of these, as a round column is
+/// drawn as one too. All on a column joined by no
 /// `CleanPairGStep`
 /// ([`crate::partition_schema_mvp::COLUMN_UNJOINED_FIELD`]), which Revit's
 /// export draws as that extrusion. A joined column's Length is left out:
@@ -3360,7 +3366,7 @@ fn add_body_quantities(
         name: "Length".into(),
         value: PropertyValue::PositiveLengthFeet(feet),
     }];
-    if let Some((area, perimeter)) = profile.and_then(hollow_section_area_perimeter) {
+    if let Some((area, perimeter, rectangles)) = profile.and_then(hollow_section_area_perimeter) {
         properties.extend([
             Property {
                 name: "CrossSectionArea".into(),
@@ -3373,6 +3379,10 @@ fn add_body_quantities(
             Property {
                 name: "GrossVolume".into(),
                 value: PropertyValue::VolumeCubicFeet(area * feet),
+            },
+            Property {
+                name: "NetVolume".into(),
+                value: PropertyValue::VolumeCubicFeet(rectangles * feet),
             },
         ]);
     }
@@ -3575,7 +3585,7 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// `Depth`, the one layer's thickness of a floor of one layer, and its
 /// `GrossVolume`, the area times it. A floor of several layers gets neither:
 /// the office's export (24.0.5) gives it its bottom layer's thickness, a
-/// newer exporter (26.4) another value (RE-298). Its
+/// newer exporter (26.4) another value (RE-298). A floor's
 /// `Perimeter` is left out: Revit's export writes it in feet, unscaled, in
 /// a file whose length unit is millimetres (RE-235 §5).
 ///
@@ -3595,6 +3605,13 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// sketch's outline, gets the same from its layers (RE-298): its `Depth` is
 /// the extrusion's, the layers' total, whatever their number, and its
 /// `NetVolume`, when its record holds no cutting step, the area times it. Its
+/// `Perimeter`, the length of the outline of that profile, is written too:
+/// Revit's export writes a roof's in the file's unit, unlike a floor's
+/// (RE-235 §5), and on all 10 of the office's roofs it is that outline's
+/// length. A roof whose profile has holes gets none: whether the export
+/// counts a hole's outline in the value is unmeasured, and the housing's 2
+/// roofs with holes are left out. Nor does one whose outline has a corner
+/// that is not a right angle: an arc of its sketch is chords there. Its
 /// `Width` is its profile's extent, as a floor of one layer's is, and is left
 /// out. All 10 of the office's roofs as built and at permit are Revit's, the
 /// one a hatch cuts (`YP-1`) but for its `NetVolume`.
@@ -3663,6 +3680,17 @@ fn add_slab_gross_area(
         name: "GrossArea".into(),
         value: PropertyValue::AreaSquareFeet(gross),
     }];
+    // A roof's `Perimeter` is its profile's outline length in the file's unit,
+    // not the floor's value in feet, and Revit writes it on every roof it
+    // writes the area on (RE-235 §5).
+    if roof {
+        if let Some(perimeter) = profile_outline_length(body) {
+            properties.push(Property {
+                name: "Perimeter".into(),
+                value: PropertyValue::PositiveLengthFeet(perimeter),
+            });
+        }
+    }
     // A floor of one layer only: on floors of several layers Revit's
     // exporters disagree (RE-298).
     let one_layer = layers
@@ -3747,10 +3775,79 @@ fn profile_outline_area(body: &Extrusion) -> Option<f64> {
     (area.is_finite() && area > 0.0).then_some(area)
 }
 
+/// The length of the outline of the profile `body` extrudes, its holes not
+/// taken in: `None` for a profile with holes or another shape (RE-235 §5),
+/// and for an outline with a corner that is not a right angle
+/// ([`square_corner_count`]): a sketch arc reaches the outline as chords,
+/// whose length is short of the arc's.
+fn profile_outline_length(body: &Extrusion) -> Option<f64> {
+    let Some(entities::ProfileDef::ArbitraryClosed { points }) = &body.profile_override else {
+        return None;
+    };
+    if square_corner_count(points).is_none_or(|corners| corners < 4) {
+        return None;
+    }
+    let mut length = 0.0;
+    for (index, &(x, y)) in points.iter().enumerate() {
+        let (next_x, next_y) = *points.get((index + 1) % points.len())?;
+        length += (next_x - x).hypot(next_y - y);
+    }
+    (length.is_finite() && length > 0.0).then_some(length)
+}
+
+/// The number of corners of the closed outline `points` where every one of
+/// them is a right angle, and `None` where one is not. A sketch arc reaches an
+/// outline as chords within 0.0005 ft of it, and no corner between two such
+/// chords is square, so an outline that has a count holds no arc and its
+/// polygon's length and area are its sketch's own. A point the outline runs
+/// straight through is no corner (a rectangle one of whose edges is two
+/// sketch lines has four), a repeated point and the closing one are dropped,
+/// and a spike is a corner that is not square.
+pub(super) fn square_corner_count(points: &[(f64, f64)]) -> Option<usize> {
+    // How far from zero a corner's cosine and a straight joint's sine may be.
+    const SQUARE: f64 = 1e-6;
+    const STRAIGHT: f64 = 1e-9;
+    let mut ring: Vec<(f64, f64)> = Vec::with_capacity(points.len());
+    for &point in points {
+        if ring.last() != Some(&point) {
+            ring.push(point);
+        }
+    }
+    if ring.len() > 1 && ring.first() == ring.last() {
+        ring.pop();
+    }
+    let count = ring.len();
+    let mut corners = 0usize;
+    for index in 0..count {
+        let before = ring.get((index + count - 1) % count)?;
+        let at = ring.get(index)?;
+        let after = ring.get((index + 1) % count)?;
+        let (u, v) = (
+            (at.0 - before.0, at.1 - before.1),
+            (after.0 - at.0, after.1 - at.1),
+        );
+        let scale = u.0.hypot(u.1) * v.0.hypot(v.1);
+        if !(scale.is_finite() && scale > 0.0) {
+            return None;
+        }
+        let (dot, cross) = (u.0 * v.0 + u.1 * v.1, u.0 * v.1 - u.1 * v.0);
+        if cross.abs() <= STRAIGHT * scale && dot > 0.0 {
+            continue;
+        }
+        if dot.abs() > SQUARE * scale {
+            return None;
+        }
+        corners += 1;
+    }
+    Some(corners)
+}
+
 /// The area and the length of the outline and hole of a hollow section
-/// `body` extrudes ([`hollow_section_profile`]), its arcs counted exactly;
+/// `body` extrudes ([`hollow_section_profile`]), its arcs counted exactly,
+/// and the area the section's two rectangles span: the outside's less the
+/// inside's, which times the length is the volume Revit computes for it.
 /// `None` for another profile.
-fn hollow_section_area_perimeter(body: &Extrusion) -> Option<(f64, f64)> {
+fn hollow_section_area_perimeter(body: &Extrusion) -> Option<(f64, f64, f64)> {
     let Some(entities::ProfileDef::IndexedPolyCurveWithVoids { outer, voids }) =
         &body.profile_override
     else {
@@ -3758,12 +3855,33 @@ fn hollow_section_area_perimeter(body: &Extrusion) -> Option<(f64, f64)> {
     };
     let (mut area, mut perimeter) = curve_area_length(outer)?;
     area = area.abs();
+    let mut rectangles = ring_rectangle_area(outer)?;
     for void in voids {
         let (hole, length) = curve_area_length(void)?;
         area -= hole.abs();
         perimeter += length;
+        rectangles -= ring_rectangle_area(void)?;
     }
-    (area.is_finite() && area > 0.0 && perimeter.is_finite()).then_some((area, perimeter))
+    (area.is_finite()
+        && area > 0.0
+        && perimeter.is_finite()
+        && rectangles.is_finite()
+        && rectangles > 0.0)
+        .then_some((area, perimeter, rectangles))
+}
+
+/// The area of the rectangle a closed ring spans, its corners' arcs lying
+/// inside it: for a hollow section's ring, the rectangle its family's
+/// parameters build it on.
+fn ring_rectangle_area(curve: &entities::IndexedCurve) -> Option<f64> {
+    let mut low = (f64::INFINITY, f64::INFINITY);
+    let mut high = (f64::NEG_INFINITY, f64::NEG_INFINITY);
+    for &(x, y) in &curve.points {
+        low = (low.0.min(x), low.1.min(y));
+        high = (high.0.max(x), high.1.max(y));
+    }
+    let area = (high.0 - low.0) * (high.1 - low.1);
+    (area.is_finite() && area > 0.0).then_some(area)
 }
 
 /// The signed area (positive counter-clockwise) and the length of a closed
@@ -4186,7 +4304,12 @@ fn prism_quantities(body: &Extrusion, width: f64) -> Option<[Property; 4]> {
 /// mullion's body extrusion where no parameter gives it. A mullion runs along
 /// its own Z axis (RE-226): on the model's axes, its record box's extent
 /// along the model axis that Z lies on; turned or tilted, the extent along Z
-/// of the box along its own axes (RE-106). Nothing where neither is read.
+/// of the box along its own axes (RE-106); turned so far about its own axis
+/// that the box leaves those extents undetermined, its extent along the model
+/// axis its own Z lies on, where that is one (RE-226). Nothing where none of
+/// these gives a length. Only a mullion whose box along its own axes is solved
+/// takes a `NetVolume` and a `NetSurfaceArea` from it, which need its two sides
+/// across it.
 /// The same length is its `Qto_MemberBaseQuantities.Length`, which Revit's
 /// export gives every one of the BIM4LCA office's 10,003 mullions equal to
 /// their `Span` (#1016).
@@ -4215,8 +4338,9 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
         }
         _ => None,
     });
+    let own = mvp::curtain_axes_from_fields(&decoded.fields);
     // The box's two sides across the mullion, then its length along it.
-    let sides = match (mvp::curtain_axes_from_fields(&decoded.fields), along) {
+    let sides = match (own, along) {
         (Some(axes), _) => oriented_box(axes, size).map(|(_, half)| half.map(|h| 2.0 * h)),
         (None, Some(axis)) if axis < 3 => {
             let across: Vec<f64> = (0..3).filter(|i| *i != axis).map(|i| size[i]).collect();
@@ -4224,10 +4348,15 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
         }
         _ => None,
     };
-    let Some(span) = sides
+    // RE-226: a mullion turned near enough to 45 degrees about its own axis
+    // leaves the box along its own axes undetermined (RE-106), but its own Z is
+    // still the direction of its length: where that Z is one of the model's
+    // axes, the record box's extent along it is the mullion's own extent.
+    let span = sides
         .map(|sides| sides[2])
-        .filter(|span| span.is_finite() && *span > 0.0)
-    else {
+        .or_else(|| own.and_then(|axes| length_on_a_model_axis(axes[2], size)))
+        .filter(|span| span.is_finite() && *span > 0.0);
+    let Some(span) = span else {
         return;
     };
     let property = Property {
@@ -4261,6 +4390,26 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
         name: "Qto_MemberBaseQuantities".into(),
         properties: quantities,
     });
+}
+
+/// The record box's extent along the model axis a mullion's own Z lies on,
+/// where it lies on exactly one of them: that extent is the box's extent along
+/// the mullion's own Z, its two other axes being square to that model axis
+/// (RE-106), and so the mullion's length. Nothing where the Z lies on none of
+/// the model's axes or on more than one, or where the extent is not positive.
+fn length_on_a_model_axis(own_z: [f64; 3], size: [f64; 3]) -> Option<f64> {
+    let mut on = None;
+    for (index, value) in own_z.iter().enumerate() {
+        if value.abs() <= crate::partition_schema_mvp::INSTANCE_TURN_MIN_RADIANS {
+            continue;
+        }
+        if on.is_some() {
+            return None;
+        }
+        on = Some(index);
+    }
+    let extent = *size.get(on?)?;
+    (extent.is_finite() && extent > 0.0).then_some(extent)
 }
 
 /// A curtain mullion's `NetVolume` (#1016, RE-243): its box's two sides across
@@ -8474,4 +8623,106 @@ fn floor_boundary_annotation_from_decoded(decoded: &DecodedElement) -> Option<Pr
             },
         ],
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::square_corner_count;
+
+    /// A square with one corner rounded by a quarter circle of radius 1,
+    /// the arc as `chords` chords, which is how a sketch arc reaches an
+    /// outline.
+    fn rounded_square(chords: usize) -> Vec<(f64, f64)> {
+        let mut points = vec![(0.0, 0.0), (4.0, 0.0), (4.0, 3.0)];
+        for step in 1..=chords {
+            let angle = std::f64::consts::FRAC_PI_2 * step as f64 / chords as f64;
+            points.push((3.0 + angle.cos(), 3.0 + angle.sin()));
+        }
+        points.push((0.0, 4.0));
+        points
+    }
+
+    #[test]
+    fn an_arc_of_chords_is_refused() {
+        for chords in [2, 8, 64, 1024] {
+            assert_eq!(
+                square_corner_count(&rounded_square(chords)),
+                None,
+                "{chords} chords"
+            );
+        }
+    }
+
+    #[test]
+    fn a_slanted_edge_is_refused() {
+        assert_eq!(
+            square_corner_count(&[(0.0, 0.0), (4.0, 0.0), (5.0, 3.0), (0.0, 3.0)]),
+            None
+        );
+        assert_eq!(
+            square_corner_count(&[(0.0, 0.0), (4.0, 0.0), (0.0, 3.0)]),
+            None
+        );
+    }
+
+    #[test]
+    fn a_spike_is_refused() {
+        let spike = [
+            (0.0, 0.0),
+            (4.0, 0.0),
+            (4.0, 3.0),
+            (2.0, 3.0),
+            (2.0, 5.0),
+            (2.0, 3.0),
+            (0.0, 3.0),
+        ];
+        assert_eq!(square_corner_count(&spike), None);
+    }
+
+    #[test]
+    fn a_rectangle_with_a_collinear_joint_has_four_corners() {
+        let split = [(0.0, 0.0), (2.0, 0.0), (4.0, 0.0), (4.0, 3.0), (0.0, 3.0)];
+        assert_eq!(square_corner_count(&split), Some(4));
+    }
+
+    #[test]
+    fn a_repeated_point_and_the_closing_point_are_dropped() {
+        let closed = [
+            (0.0, 0.0),
+            (4.0, 0.0),
+            (4.0, 0.0),
+            (4.0, 3.0),
+            (0.0, 3.0),
+            (0.0, 0.0),
+        ];
+        assert_eq!(square_corner_count(&closed), Some(4));
+    }
+
+    #[test]
+    fn an_l_has_six_corners_at_any_turn_and_either_winding() {
+        let l = [
+            (0.0, 0.0),
+            (4.0, 0.0),
+            (4.0, 2.0),
+            (2.0, 2.0),
+            (2.0, 4.0),
+            (0.0, 4.0),
+        ];
+        assert_eq!(square_corner_count(&l), Some(6));
+        let reversed: Vec<(f64, f64)> = l.iter().rev().copied().collect();
+        assert_eq!(square_corner_count(&reversed), Some(6));
+        let (sin, cos) = 0.5_f64.sin_cos();
+        let turned: Vec<(f64, f64)> = l
+            .iter()
+            .map(|&(x, y)| (1e4 + x * cos - y * sin, -2e3 + x * sin + y * cos))
+            .collect();
+        assert_eq!(square_corner_count(&turned), Some(6));
+    }
+
+    #[test]
+    fn no_outline_has_no_corner() {
+        assert_eq!(square_corner_count(&[]), Some(0));
+        assert_eq!(square_corner_count(&[(1.0, 1.0)]), None);
+        assert_eq!(square_corner_count(&[(0.0, 0.0), (1.0, 0.0)]), None);
+    }
 }
