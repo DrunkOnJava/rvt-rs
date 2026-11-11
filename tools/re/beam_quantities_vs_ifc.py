@@ -32,6 +32,7 @@ import sys
 import ifcopenshell
 import ifcopenshell.geom
 import ifcopenshell.util.element
+import ifcopenshell.util.placement
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import numpy as np  # noqa: E402
@@ -252,6 +253,17 @@ def axis_length(beam, scale):
     return None
 
 
+def placement_extents(beam, triangles):
+    """The extents of the body along the three axes of the beam's own placement, in metres (the beam's local x, y
+    and z in the model's frame), or None."""
+    try:
+        matrix = np.array(ifcopenshell.util.placement.get_local_placement(beam.ObjectPlacement), dtype=float)
+    except Exception:  # noqa: BLE001
+        return None
+    points = triangles.reshape(-1, 3)
+    return [float(np.ptp(points @ matrix[:3, axis])) for axis in range(3)]
+
+
 def long_extent(triangles):
     """The extent of the body along its long axis (the first principal axis of its vertices), in metres."""
     points = triangles.reshape(-1, 3)
@@ -302,6 +314,8 @@ def main():
         return 0
     kinds, written, rules, bodies = collections.Counter(), collections.Counter(), collections.Counter(), collections.Counter()
     choice, lengths, ratios, lines = collections.Counter(), collections.Counter(), [], collections.Counter()
+    placed = collections.Counter()
+    placed_ratio = []
     odd = []
     for tag in both:
         r, profile, rb = read(settings, revit[tag], revit_scale)
@@ -319,6 +333,13 @@ def main():
         axes = prism_axes(triangles) if triangles is not None else []
         choice[(run, axis_rule(axes, depth))] += 1
         line = axis_length(revit[tag], revit_scale)
+        if triangles is not None and r["Length"]:
+            extents = placement_extents(revit[tag], triangles)
+            if extents:
+                which = [name for name, extent in zip("xyz", extents) if close(extent, r["Length"])]
+                placed[(run, "Length is the extent along the placement's " + ("/".join(which) if which else "no axis"), "rvt-rs writes it" if o["Length"] is not None else "rvt-rs writes none")] += 1
+                if not which:
+                    placed_ratio.append(r["Length"] / extents[0])
         if r["Length"]:
             lines[(run, "no Axis line" if line is None else ("Length is the Axis line's length" if close(line, r["Length"]) else "Length differs from the Axis line"), "rvt-rs writes a Length" if o["Length"] is not None else "rvt-rs writes none")] += 1
         if triangles is not None and r["Length"]:
@@ -355,6 +376,12 @@ def main():
     if ratios:
         ratios.sort()
         print(f"  where it differs, Revit's Length over the long extent: min {ratios[0]:.6g}, median {ratios[len(ratios) // 2]:.6g}, max {ratios[-1]:.6g}")
+    print("Revit's Length against the extents of its body along its placement's axes (extrusion, which, whether rvt-rs writes a Length):")
+    for key, count in placed.most_common():
+        print(f"  {count:5}  {key}")
+    if placed_ratio:
+        placed_ratio.sort()
+        print(f"  where it is none of them, Revit's Length over the extent along x: min {placed_ratio[0]:.6g}, median {placed_ratio[len(placed_ratio) // 2]:.6g}, max {placed_ratio[-1]:.6g}")
     print("Revit's Length against the length of its Axis line (extrusion, which, whether rvt-rs writes a Length):")
     for key, count in lines.most_common():
         print(f"  {count:5}  {key}")
