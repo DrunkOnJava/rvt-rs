@@ -22,8 +22,17 @@ use std::sync::Mutex;
 /// included, and `m_id`. A decode that keeps a field reads it, and checks it, as
 /// the full decode does, so a graph that is refused is refused for the same
 /// reason; what is left out reads as absent. A reader added to those modules
-/// that takes another field of these graphs must add its name here: Measure's
-/// `ifc.sha256` of the 126 exports moves when it does not.
+/// that takes another field of these graphs must add its name here: CI fails
+/// when the names differ (`tools/ci/saved-graphics-fields.py` holds the `m_`
+/// literals of the seven modules against this list), and Measure's
+/// `ifc.sha256` of the 126 exports moves when it does not, on the routes an
+/// export reads. One reader depends on how many fields an object holds and not
+/// on a name, which that check cannot see: `default_representation` in
+/// `native_graphics_traversal` reads a pre-2023 `InstanceInfo` with no
+/// `m_GRepId` as the default representation only if it holds exactly `m_Trf`,
+/// `m_symbolId` and `m_cda`, so a fourth field a build declares outside this
+/// list would change its reading (RE-342; the 30 sample projects of 2015 to
+/// 2022 declare exactly those three, and no export reads that route).
 pub const SAVED_GRAPHICS_FIELDS: &[&str] = &[
     "m_3x3",
     "m_Envelope",
