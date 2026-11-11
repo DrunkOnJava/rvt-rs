@@ -4,8 +4,8 @@
 **Issues:** #1706 (the saved-mesh refusals left after #1683: this is its first step); follows RE-422 (#1683, the four ruled-surface roofs), RE-407 (multi-loop cylinder faces) and RE-420
 **Artefacts:** Autodesk's Snowdon Towers Sample Architectural (Revit 2024, as Measure fetches the sample) and Revit's IFC4 export of it (local only: percentages, distances and triangle counts only here, no Revit-side volumes); rvt-rs's exports of the 2024 samples and the reference models by `main` and by the change, which Measure kept (`keep_ifc`)
 **Probe and scorer:** `probes/examples/probe_1706_shared_edges.rs`, `tools/re/mesh_bodies_vs_ifc.py`
-**Runs:** Measure [42998375045](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42998375045) (the probe, Autodesk's 2024 samples), [43000891419](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43000891419) (`keep_ifc`, the rule on its own) and [43002827683](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43002827683) (`keep_ifc`, with the envelope guard of section 3); the baseline is [42993080184](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42993080184) (`keep_ifc` of `main` 16411282)
-**Status:** Positive on 102 of the 126 elements of Snowdon Towers Architectural, which Revit's export lets be read: 100 building element proxies, a slab and a roof agree with Revit's body (volume within 1%, every vertex within 0.001 ft). The 24 railings are drawn and 22 of them read 1.21 to 1.26 times Revit's volume (two glass-panel railings are within 1%), as the 101 railings drawn before this change do, for the polygons Revit's export draws round bars with (section 5); the volume bar registered for them misses and they stay drawn (section 7). 49 elements of five other 2024 samples are drawn too, none of them scored (section 6). No element that was drawn changes, and 19 stay boxes for the next reason.
+**Runs:** Measure [42998375045](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42998375045) (the probe, Autodesk's 2024 samples), [43000891419](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43000891419) (`keep_ifc`, the rule on its own) and [43002827683](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43002827683) (`keep_ifc`, with the envelope guard of section 3); the baseline is [42993080184](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42993080184) (`keep_ifc` of `main` 16411282); the final head `dce5241f` is read whole in [43018413566](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43018413566) (unfiltered against `main` `5cf94975`) and timed in [43020958270](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43020958270) (section 9)
+**Status:** Positive on 102 of the 126 elements of Snowdon Towers Architectural, which Revit's export lets be read: 100 building element proxies, a slab and a roof agree with Revit's body (volume within 1%, every vertex within 0.001 ft). The 24 railings are drawn and 22 of them read 1.21 to 1.26 times Revit's volume (two glass-panel railings are within 1%), as the 101 railings drawn before this change do, for the polygons Revit's export draws round bars with (section 5); the volume bar registered for them misses and they stay drawn (section 7). 49 elements of five other 2024 samples are drawn too, none of them scored (section 6). No element that was drawn changes, and 19 stay boxes for the next reason. The unfiltered run of the final head moves 38 of 126 exports (section 9): 25 railings in each of the four BIM4LCA offices (24 of 25 within 1% of Revit's volume), the same elements in the other releases of Autodesk's samples and 2 railings in four held-out files; the exports that draw more are 1% to 19% larger (Snowdon Towers Architectural +16.8%), and export time stays within 4% and peak memory within 3% of `main`'s on the same runner.
 
 ## 1. The question
 
@@ -99,6 +99,51 @@ gh run download <run> -n measure-head
 python3 tools/re/mesh_bodies_vs_ifc.py <rvt-rs.ifc> <revit.ifc>
 # the probe of section 2 (Measure 42998375045 ran it on the 2024 samples)
 cargo run --profile ci -p rvt-probes --example probe_1706_shared_edges -- MODEL.rvt
+# the whole run of section 9 against main: no models filter, every flag the semantic check needs,
+# and --ref the branch, because the gate scripts (bodies_across_saves.py, readers_across_saves.py) come from it
+gh workflow run measure.yml --ref fix/1706-crossing-edges -f ref=dce5241f52a20f550e6d6d9808e966155705a5e7 -f base=5cf9497503de71582766b422d150038e4cda712f -f nordic=true -f samples=true -f r2025=true -f holdout=true -f racadv=true
+# time and peak memory of both builds on one runner, three rounds
+gh workflow run measure.yml --ref main -f ref=dce5241f52a20f550e6d6d9808e966155705a5e7 -f base=5cf9497503de71582766b422d150038e4cda712f -f timing=true -f nordic=true -f samples=true -f sample_years="2024 2024" -f scorers=none -f models=core-interior
 ```
 
-`ea1f01fd` is kept under `refs/archive/2026-11-11/cited/ea1f01fd073a`.
+`ea1f01fd` is kept under `refs/archive/2026-11-11/cited/ea1f01fd073a` and `dce5241f` under `refs/archive/2026-11-11/cited/dce5241f52a2`.
+
+## 9. The whole unfiltered run, and what the change costs
+
+Sections 4 to 6 read the 16 models of the `keep_ifc` runs. The unfiltered run of the final head, Measure [43018413566](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43018413566) (`dce5241f` against `main` `5cf94975`), holds 126 exports: `same-project gates` passed and 88 exports are byte-identical. The 38 that differ:
+
+| exports | what changes |
+|---|---|
+| Snowdon Towers Architectural 2024 | 126 elements drawn (sections 4 and 6) |
+| 23 other saves of Autodesk's sample projects, 2023 to 2027 | the elements of section 6 by release: `rac_advanced` 21 (22 in 2023, 2026 and 2027), `rac_basic` 3, `rme_advanced` and `rme_basic` 8 each (2024 to 2027), `rst_basic` 9 beams (3 in 2023) |
+| the four BIM4LCA offices (concrete and timber, as built and permit) | 25 `IfcRailing` each |
+| the two terrain offices, the two terrain housing files | 1 and 2 `IfcRailing` |
+| held-out files | 2 `IfcRailing` in each of the 2024 to 2027 files of one pair; the CIADD house moves by hash and its counts do not (counts only) |
+| RE1 Architecture | the refusal text of 2 boxes |
+
+A drawn element's body source goes from `partition_element_record_bbox` (`partition_beam_box_along_axis` for a beam) to `saved_graphics_mesh`, its extrusion becomes a solid, and its `provenance.value_sources` entry for the body goes from reader `selected_frame`, rule `selected` to reader `saved_graphics`, rule `native`. An element that stays a box loses the shared-edge words from its `SavedMeshRefusal` (the property, its trust marker and `saved_mesh_refusals` in the diagnostics) and reads its next reason: per concrete office 2 sanitary terminals ("unsupported faceted topology"), per office 1 further element ("unsupported surface HermiteSurf"), in `rac_basic` 1 sanitary terminal ("multiple parametric trim loops unsupported"), in RE1 Architecture 2 elements ("disconnected UV boundary", and "disconnected UV boundary; nonrectangular parametric trim").
+
+**Against Revit's export.** The offices, the terrain files and four held-out files have one (`mesh_bodies_vs_ifc`; ratios and counts only for the held-out):
+
+| files | drawn now | volume within 1% | median ratio | read |
+|---|---:|---:|---:|---|
+| the four offices | 25 each | 24 of 25 | 1.0047 over all 40 scored railings (1.0046 timber), from 1.0009 over 15 | 22 `Railing:KJO-1` at 1.0048 (Revit's vertices 0.0042 ft from rvt-rs's surface), 2 `Railing:KAI-2` within 1%, `Railing:KAI-5` at 1.2131: 71 of its 73 shells read 1.50 to 1.52, a round end face of rvt-rs's with no inscribed polygon in Revit's |
+| the two terrain offices | 1 each | 1 | 1.0003 | |
+| the two terrain housing files | 2 each | 0 | 1.0895 | every vertex within 0.01 ft of the other's surface |
+| four held-out files | 2 each | 0 | 1.2152 | the boxes read 77 times Revit's volume (fill 0.013) |
+
+The railings split by design, as section 5 found: the offices' `Railing:KJO-1` bars read 0.5% over, the housing's 9% over, Snowdon's pipe railings and the held-out files' 21% to 26% over. The polygon Revit's export draws a round bar with is the difference.
+
+**What it costs.** A mesh is bigger than a box. IFC size, base to head (`wrote N bytes` in each export's `rvt-ifc.log`, Measure 43018413566):
+
+| export | base (MB) | head (MB) | change |
+|---|---:|---:|---:|
+| Snowdon Towers Architectural | 196.6 | 229.7 | +16.8% |
+| `rac_advanced`, 2023 to 2027 | 42.1 to 45.5 | 50.3 to 53.6 | +17.8% to +19.6% |
+| the four offices | 77.2 to 87.7 | 85.4 to 95.9 | +9.3% to +10.7% |
+| the two terrain offices | 0.9 | 1.2 | +32% |
+| `rme_advanced`, `rme_basic`, 2024 to 2027 | 95.4 to 104.7 | 96.6 to 105.8 | +1.1% to +1.2% |
+| `rac_basic`, the terrain housing files | 29.4 to 29.6, 8.6 | 29.8 to 30.0, 8.7 | +1.3%, +1.2% |
+| `rst_basic` | 4.3 to 4.7 | 4.4 to 4.8 | +4.2% to +4.4% (+1.1% in 2023, 3 beams) |
+
+The 25 railings of the permit office add 8.1 MB, about 320 KB and 6,300 triangles each (saved-graphics triangles 680,612 to 838,380): the saved mesh of a railing is the display tessellation, with far more triangles than Revit's export of the same bars. Time and peak memory, Measure [43020958270](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43020958270) (`timing`: both builds on one runner, three rounds with the order alternating, 26 files): export time head over base 0.99 to 1.04 (Snowdon Towers Architectural 41.5 s to 42.4 s, `rac_advanced` 8.0 s to 8.3 s, the permit offices 1.01 and 1.02) and peak memory 0.97 to 1.03 (Snowdon Towers Architectural 1,399 MiB on both sides, the concrete permit office 1,435 and 1,436); the 0.97 and 1.03 are files this change leaves byte-identical, which is the runs' noise. The rows registered for it on the pull request, T1 (time at most 1.15) and T2 (peak memory at most 1.10), held.

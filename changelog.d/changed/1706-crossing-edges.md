@@ -19,4 +19,11 @@
   reads 1,792 of the 1,937 shells of 22 of them as exactly that; the 145 it
   does not read are #1712. The 49 elements of the other samples are not
   scored, no Revit export of them existing. No element that was drawn
-  changes (0 of 19,207).
+  changes (0 of 19,207). The same change draws 25 railings in each of the
+  four BIM4LCA offices (24 of the 25 within 1% of Revit's volume), 1 and 2
+  in the terrain files, 2 in each of four held-out files and the same
+  elements in the other releases of the samples (38 of 126 exports of the
+  unfiltered run differ). An export that draws more is larger: Snowdon
+  Towers Architectural 196.6 to 229.7 MB (+16.8%), `rac_advanced` +18% to
+  +20%, the offices +9% to +11%, the rest 1% to 4%; export time stays within
+  4% and peak memory within 3% of the previous build's on the same runner.
