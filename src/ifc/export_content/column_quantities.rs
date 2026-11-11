@@ -73,6 +73,12 @@
 //! `GrossVolume` and `NetVolume` are not the circle's and stay out: that is one
 //! column on each of the two office files, the same column, and it is taken as
 //! round from the caption `Diameter` alone.
+//!
+//! A round column whose type holds `b` alone is read as a square above, and the
+//! four quantities the box gave it are the square's. The saved-mesh pass takes
+//! them out again where the mesh Revit saved for the column is not the box
+//! (`saved_meshes::drop_column_box_quantities`, RE-416): 24 columns of Autodesk's
+//! rac_advanced sample, 6 in each save of 2024 to 2027, keep their `Length`.
 
 use std::collections::HashMap;
 

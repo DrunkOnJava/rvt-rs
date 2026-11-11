@@ -360,7 +360,7 @@ pub fn attach_scoped_with_control(
     };
     // RE-387: the volume of each body drawn from a mesh of flat faces.
     let mut volumes: Vec<(usize, f64)> = Vec::new();
-    // RE-414: the volume of each column's mesh, whatever its faces.
+    // RE-416: the volume of each column's mesh, whatever its faces.
     let mut column_volumes: Vec<(usize, f64)> = Vec::new();
     // RE-388: what the mesh of each wall gives of its quantities.
     let mut wall_quantities: Vec<(usize, WallMeshQuantities)> = Vec::new();
@@ -503,7 +503,7 @@ pub fn attach_scoped_with_control(
 }
 
 /// How far a column's box volume may differ from the volume of the mesh Revit
-/// saved for it, as a fraction of the mesh's, and still be its solid (RE-414):
+/// saved for it, as a fraction of the mesh's, and still be its solid (RE-416):
 /// the mesh of a cylinder drawn with chords is within 1% of it, and a round
 /// column's box (the circle's bounding square) is 27% over it.
 const COLUMN_BOX_MESH_TOLERANCE: f64 = 0.02;
@@ -550,7 +550,7 @@ fn oriented_mesh_volume(primitives: &[Primitive], origin: [f64; 3]) -> Option<f6
 
 /// Take from each column of `found` (an index into the entities and the volume
 /// of the mesh its body was drawn from) the quantities its record's box gave
-/// where the box is not its solid (RE-414): its `CrossSectionArea`,
+/// where the box is not its solid (RE-416): its `CrossSectionArea`,
 /// `OuterSurfaceArea`, `GrossVolume` and `NetVolume`, written for a type whose
 /// length parameter `b` is both sides of its box (RE-291), which a round column
 /// of that type is as well. Its `Length` stays. The box is its solid where its
