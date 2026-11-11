@@ -215,6 +215,20 @@ fn neighbours(
             continue;
         }
         let cosine = dot(o.axes[o_along], axis).abs();
+        if matches!(m.id, 3539474 | 3539475 | 3135318 | 3135319 | 3029161) {
+            eprintln!(
+                "mullion-nb {} p={:.4?} o={} cos={:.6} same_section={} odd={} kind={} o_kind={} offset={:.4}",
+                m.id,
+                p,
+                o.id,
+                cosine,
+                same_section(m, along, o, o_along),
+                o.odd,
+                m.kind,
+                o.kind,
+                dot(sub(p, o.centre), axis).abs()
+            );
+        }
         if cosine > PARALLEL {
             let ends = end_points(o, o_along);
             let at_p = ends.iter().position(|(q, _)| {
@@ -269,10 +283,31 @@ pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
     let mut overlapped: BTreeSet<u32> = BTreeSet::new();
     for m in group {
         let Some(along) = m.along.filter(|a| *a < 3) else {
+            eprintln!("mullion-kd {} noaxis", m.id);
             left_out.insert(m.id);
             continue;
         };
         let ends = end_points(m, along).map(|(p, out)| neighbours(m, along, p, out, group));
+        let flags = |n: &Neighbours| {
+            format!(
+                "{}{}{}{}{}{}{}",
+                if n.partner { "P" } else { "-" },
+                if n.same { "S" } else { "-" },
+                if n.centre { "C" } else { "-" },
+                if n.inside { "I" } else { "-" },
+                if n.parallel_in { "L" } else { "-" },
+                if n.oblique { "O" } else { "-" },
+                if n.unreliable { "U" } else { "-" },
+            )
+        };
+        eprintln!(
+            "mullion-kd {} ends {} {} odd={} kind={}",
+            m.id,
+            flags(&ends[0]),
+            flags(&ends[1]),
+            m.odd,
+            m.kind
+        );
         if ends.iter().any(|end| end.unread()) {
             left_out.insert(m.id);
         } else if ends.iter().any(|end| end.overlapped()) {
@@ -290,6 +325,7 @@ pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
             continue;
         };
         if left_out.contains(&m.id) {
+            eprintln!("mullion-kd {} left_out", m.id);
             continue;
         }
         // An overlapped mullion is read on its own where what lies over it is
@@ -304,9 +340,16 @@ pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
                 })
             });
         if meets_one_not_read {
+            eprintln!("mullion-kd {} neighbour_not_read", m.id);
             continue;
         }
         let count = ends.iter().filter(|end| !end.hidden()).count();
+        eprintln!(
+            "mullion-kd {} kept {} overlapped={}",
+            m.id,
+            count,
+            overlapped.contains(&m.id)
+        );
         if let Ok(count) = u8::try_from(count) {
             kept.insert(m.id, count);
         }

@@ -1020,11 +1020,24 @@ fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
     let placed: Vec<Placed> = members.iter().map(|member| member.placed).collect();
     let partners = partner_ends(&placed);
     for (member, partners) in members.iter().zip(partners) {
+        let tag = match model.entities.get(member.index) {
+            Some(IfcEntity::BuildingElement {
+                type_guid: Some(tag),
+                ..
+            }) => tag.clone(),
+            _ => String::new(),
+        };
         let (Some(kept), Some(&position)) = (member.kept, held.get(&member.index)) else {
+            eprintln!(
+                "mullion-dbg {tag} refused kept={:?} held={}",
+                member.kept,
+                held.contains_key(&member.index)
+            );
             continue;
         };
         let with_partner = partners.iter().filter(|partner| **partner).count();
         if with_partner > usize::from(2 - kept.min(2)) {
+            eprintln!("mullion-dbg {tag} refused partners={with_partner} kept={kept}");
             continue;
         }
         let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
@@ -1032,11 +1045,14 @@ fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
             continue;
         };
         if has_property(set, "NetSurfaceArea") {
+            eprintln!("mullion-dbg {tag} has NSA already kept={kept} partners={with_partner}");
             continue;
         }
         let Some(area) = mullion_surface_area(&member.prism, kept) else {
+            eprintln!("mullion-dbg {tag} refused prism kept={kept}");
             continue;
         };
+        eprintln!("mullion-dbg {tag} wrote kept={kept} partners={with_partner} flags={partners:?}");
         set.properties.push(Property {
             name: "NetSurfaceArea".into(),
             value: PropertyValue::AreaSquareFeet(area),
