@@ -413,7 +413,8 @@ fn type_entity_for(ifc_upper: &str, predefined: Option<&str>) -> Option<(String,
         | "IFCWASTETERMINAL"
         | "IFCFIRESUPPRESSIONTERMINAL"
         | "IFCSOLARDEVICE"
-        | "IFCTRANSPORTELEMENT" => pt,
+        | "IFCTRANSPORTELEMENT"
+        | "IFCGEOGRAPHICELEMENT" => pt,
         _ => return None,
     };
     Some((format!("{ifc_upper}TYPE"), tail))
@@ -743,6 +744,7 @@ fn revit_ifc_type_entity_name(step_name: &str) -> Option<&'static str> {
         "IFCFIRESUPPRESSIONTERMINALTYPE" => "IfcFireSuppressionTerminalType",
         "IFCSOLARDEVICETYPE" => "IfcSolarDeviceType",
         "IFCTRANSPORTELEMENTTYPE" => "IfcTransportElementType",
+        "IFCGEOGRAPHICELEMENTTYPE" => "IfcGeographicElementType",
         "IFCSPACETYPE" => "IfcSpaceType",
         _ => return None,
     })
@@ -3270,11 +3272,12 @@ impl StepWriter<'_> {
                 // read the element cannot say which, and the writer invents
                 // no value, so its `PredefinedType` is left unset (#1430).
                 //
-                // From 2027 the occurrence of ten classes states none at all,
-                // as Revit's own export does (#1692), where its type objects
-                // still state theirs: `type_objects` takes the enumerator from
-                // the element as before, so the types, their GlobalIds and the
-                // property sets that depend on it do not change.
+                // From 2027 the occurrence of the classes
+                // `category_map::predefined_type_left_out` names states none at
+                // all, as Revit's own export does (#1692, #1716), where its type
+                // objects still state theirs: `type_objects` takes the enumerator
+                // from the element as before, so the types, their GlobalIds and
+                // the property sets that depend on it do not change.
                 let predefined_left_out = super::category_map::predefined_type_left_out(
                     &ifc_upper,
                     model.global_ids.revit_version,

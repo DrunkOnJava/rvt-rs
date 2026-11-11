@@ -2524,6 +2524,10 @@ fn reference_set_kinds(
 /// and the R2025 models' IFC4 exports, and RE1's IFC2X3 exports for the duct
 /// and pipe fitting and duct segment types. Reference goes in no other set
 /// until a Revit export confirms it (the maintainer, 2026-10-29).
+/// `Pset_ShadingDeviceCommon` joins on the timber office's IFC4 exports, as
+/// built and at building permit, which write it on all 44 of their
+/// `IfcShadingDevice` and on no other element: rvt-rs's value is Revit's on
+/// 44 of 44 in both (Measure run 43058225020).
 const CONFIRMED_REFERENCE_SETS: &[&str] = &[
     "Pset_AirTerminalTypeCommon",
     "Pset_BeamCommon",
@@ -2552,6 +2556,7 @@ const CONFIRMED_REFERENCE_SETS: &[&str] = &[
     "Pset_ReinforcementBarPitchOfWall",
     "Pset_RoofCommon",
     "Pset_SanitaryTerminalTypeCommon",
+    "Pset_ShadingDeviceCommon",
     "Pset_SlabCommon",
     "Pset_SpaceCommon",
     "Pset_StairCommon",
@@ -3311,13 +3316,16 @@ fn add_door_window_quantities(
 /// its `Length`, the depth of the extrusion it is drawn as, and, where that
 /// extrusion is its type's hollow section (whose family parameters are
 /// Revit's profile exactly), its `CrossSectionArea` (the section's area),
-/// `OuterSurfaceArea` (the length times the section's outline and hole) and
-/// `GrossVolume` (the area times the length), as revit-ifc's
+/// `OuterSurfaceArea` (the length times the section's outline and hole),
+/// `GrossVolume` (the area times the length) and `NetVolume`, as revit-ifc's
 /// `PropertyUtil.CreateBeamColumnBaseQuantities` takes them (CLEANROOM.md
-/// source 5). Its `NetVolume` is left out: Revit's export writes the volume
-/// Revit computes, less than that on every one of the BIM4LCA office's
-/// hollow columns. A column drawn as its record's box gets none of these, as a
-/// round column is drawn as one too. All on a column joined by no
+/// source 5). A hollow section's `NetVolume` is the volume Revit computes,
+/// which the arcs of its corners are missing from: the section's outside
+/// rectangle less its inside one times the length, Revit's exactly on the
+/// BIM4LCA office's three hollow-section types measured (PI-2, PI-4 and PI-5,
+/// five columns, the PI-4 arcs taking 3.4 per cent off its area's box). A
+/// column drawn as its record's box gets none of these, as a round column is
+/// drawn as one too. All on a column joined by no
 /// `CleanPairGStep`
 /// ([`crate::partition_schema_mvp::COLUMN_UNJOINED_FIELD`]), which Revit's
 /// export draws as that extrusion. A joined column's Length is left out:
@@ -3355,7 +3363,7 @@ fn add_body_quantities(
         name: "Length".into(),
         value: PropertyValue::PositiveLengthFeet(feet),
     }];
-    if let Some((area, perimeter)) = profile.and_then(hollow_section_area_perimeter) {
+    if let Some((area, perimeter, rectangles)) = profile.and_then(hollow_section_area_perimeter) {
         properties.extend([
             Property {
                 name: "CrossSectionArea".into(),
@@ -3368,6 +3376,10 @@ fn add_body_quantities(
             Property {
                 name: "GrossVolume".into(),
                 value: PropertyValue::VolumeCubicFeet(area * feet),
+            },
+            Property {
+                name: "NetVolume".into(),
+                value: PropertyValue::VolumeCubicFeet(rectangles * feet),
             },
         ]);
     }
@@ -3743,9 +3755,11 @@ fn profile_outline_area(body: &Extrusion) -> Option<f64> {
 }
 
 /// The area and the length of the outline and hole of a hollow section
-/// `body` extrudes ([`hollow_section_profile`]), its arcs counted exactly;
+/// `body` extrudes ([`hollow_section_profile`]), its arcs counted exactly,
+/// and the area the section's two rectangles span: the outside's less the
+/// inside's, which times the length is the volume Revit computes for it.
 /// `None` for another profile.
-fn hollow_section_area_perimeter(body: &Extrusion) -> Option<(f64, f64)> {
+fn hollow_section_area_perimeter(body: &Extrusion) -> Option<(f64, f64, f64)> {
     let Some(entities::ProfileDef::IndexedPolyCurveWithVoids { outer, voids }) =
         &body.profile_override
     else {
@@ -3753,12 +3767,33 @@ fn hollow_section_area_perimeter(body: &Extrusion) -> Option<(f64, f64)> {
     };
     let (mut area, mut perimeter) = curve_area_length(outer)?;
     area = area.abs();
+    let mut rectangles = ring_rectangle_area(outer)?;
     for void in voids {
         let (hole, length) = curve_area_length(void)?;
         area -= hole.abs();
         perimeter += length;
+        rectangles -= ring_rectangle_area(void)?;
     }
-    (area.is_finite() && area > 0.0 && perimeter.is_finite()).then_some((area, perimeter))
+    (area.is_finite()
+        && area > 0.0
+        && perimeter.is_finite()
+        && rectangles.is_finite()
+        && rectangles > 0.0)
+        .then_some((area, perimeter, rectangles))
+}
+
+/// The area of the rectangle a closed ring spans, its corners' arcs lying
+/// inside it: for a hollow section's ring, the rectangle its family's
+/// parameters build it on.
+fn ring_rectangle_area(curve: &entities::IndexedCurve) -> Option<f64> {
+    let mut low = (f64::INFINITY, f64::INFINITY);
+    let mut high = (f64::NEG_INFINITY, f64::NEG_INFINITY);
+    for &(x, y) in &curve.points {
+        low = (low.0.min(x), low.1.min(y));
+        high = (high.0.max(x), high.1.max(y));
+    }
+    let area = (high.0 - low.0) * (high.1 - low.1);
+    (area.is_finite() && area > 0.0).then_some(area)
 }
 
 /// The signed area (positive counter-clockwise) and the length of a closed
@@ -3940,10 +3975,11 @@ fn add_stair_flight_quantities(
 /// written only where the two are the same (Griffin, 2026-10-26, RE-252).
 /// Nothing where the thickness is not read.
 /// Add a curtain wall's `Qto_CurtainWallQuantities.Length` to `sets`: its
-/// curve's length ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]), which
-/// revit-ifc's `LengthCalculator` takes from the wall's location curve
-/// (CLEANROOM.md source 5): on all 218 of the BIM4LCA office's straight
-/// curtain walls, as built and at permit (#1016). Nothing on a curved one.
+/// location curve's length ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]),
+/// which revit-ifc's `LengthCalculator` takes from the wall's location curve
+/// (CLEANROOM.md source 5): on all 218 of the BIM4LCA office's curtain walls
+/// whose record holds a straight location curve, as built and at permit
+/// (#1016). Nothing on a curved one, whose location curve is an arc.
 fn add_curtain_wall_length(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     use crate::partition_schema_mvp as mvp;
     if ifc_type != "IFCCURTAINWALL" || decoded.class != mvp::CURTAIN_WALL_CLASS {
@@ -4180,7 +4216,12 @@ fn prism_quantities(body: &Extrusion, width: f64) -> Option<[Property; 4]> {
 /// mullion's body extrusion where no parameter gives it. A mullion runs along
 /// its own Z axis (RE-226): on the model's axes, its record box's extent
 /// along the model axis that Z lies on; turned or tilted, the extent along Z
-/// of the box along its own axes (RE-106). Nothing where neither is read.
+/// of the box along its own axes (RE-106); turned so far about its own axis
+/// that the box leaves those extents undetermined, its extent along the model
+/// axis its own Z lies on, where that is one (RE-226). Nothing where none of
+/// these gives a length. Only a mullion whose box along its own axes is solved
+/// takes a `NetVolume` and a `NetSurfaceArea` from it, which need its two sides
+/// across it.
 /// The same length is its `Qto_MemberBaseQuantities.Length`, which Revit's
 /// export gives every one of the BIM4LCA office's 10,003 mullions equal to
 /// their `Span` (#1016).
@@ -4209,8 +4250,9 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
         }
         _ => None,
     });
+    let own = mvp::curtain_axes_from_fields(&decoded.fields);
     // The box's two sides across the mullion, then its length along it.
-    let sides = match (mvp::curtain_axes_from_fields(&decoded.fields), along) {
+    let sides = match (own, along) {
         (Some(axes), _) => oriented_box(axes, size).map(|(_, half)| half.map(|h| 2.0 * h)),
         (None, Some(axis)) if axis < 3 => {
             let across: Vec<f64> = (0..3).filter(|i| *i != axis).map(|i| size[i]).collect();
@@ -4218,10 +4260,15 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
         }
         _ => None,
     };
-    let Some(span) = sides
+    // RE-226: a mullion turned near enough to 45 degrees about its own axis
+    // leaves the box along its own axes undetermined (RE-106), but its own Z is
+    // still the direction of its length: where that Z is one of the model's
+    // axes, the record box's extent along it is the mullion's own extent.
+    let span = sides
         .map(|sides| sides[2])
-        .filter(|span| span.is_finite() && *span > 0.0)
-    else {
+        .or_else(|| own.and_then(|axes| length_on_a_model_axis(axes[2], size)))
+        .filter(|span| span.is_finite() && *span > 0.0);
+    let Some(span) = span else {
         return;
     };
     let property = Property {
@@ -4255,6 +4302,26 @@ fn add_mullion_span(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decod
         name: "Qto_MemberBaseQuantities".into(),
         properties: quantities,
     });
+}
+
+/// The record box's extent along the model axis a mullion's own Z lies on,
+/// where it lies on exactly one of them: that extent is the box's extent along
+/// the mullion's own Z, its two other axes being square to that model axis
+/// (RE-106), and so the mullion's length. Nothing where the Z lies on none of
+/// the model's axes or on more than one, or where the extent is not positive.
+fn length_on_a_model_axis(own_z: [f64; 3], size: [f64; 3]) -> Option<f64> {
+    let mut on = None;
+    for (index, value) in own_z.iter().enumerate() {
+        if value.abs() <= crate::partition_schema_mvp::INSTANCE_TURN_MIN_RADIANS {
+            continue;
+        }
+        if on.is_some() {
+            return None;
+        }
+        on = Some(index);
+    }
+    let extent = *size.get(on?)?;
+    (extent.is_finite() && extent > 0.0).then_some(extent)
 }
 
 /// A curtain mullion's `NetVolume` (#1016, RE-243): its box's two sides across

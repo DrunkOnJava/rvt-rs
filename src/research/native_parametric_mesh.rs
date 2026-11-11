@@ -31,9 +31,14 @@ fn uv_point(v: &serde_json::Value) -> Result<[f64; 2]> {
 #[derive(Debug)]
 pub struct FaceGrid {
     pub surface: ParametricSurface,
+    /// The chord's steps along `u` and every trim point's `u`.
     pub u: Vec<f64>,
+    /// The chord's steps along `v`, and every trim point's `v` where the face is
+    /// meshed on its grid (`rectangular`): a face cut by its trim is cut across at
+    /// the chord's steps and at its trim's steps (`trim_steps`).
     pub v: Vec<f64>,
-    /// The points of every trim loop, edge after edge: the knots' source.
+    /// The points of every trim loop, edge after edge: the source of the `u` knots
+    /// (and of the `v` knots of a face meshed on its grid).
     pub trim: Vec<[f64; 2]>,
     pub bounds: [[f64; 2]; 2],
     /// Whether the face's one trim loop is the rectangle `bounds`, so that the grid's
@@ -374,11 +379,66 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
     anyhow::bail!("a trim loop does not close in the surface's parameters")
 }
 
+/// How far a revolved profile's points lie from the axis (the surface frame's `z`) for
+/// the parameters from `lo` to `hi`, never less: the farthest of 64 equal steps' ends,
+/// and half a step's length of the most the point can move (`speed`, the length of the
+/// profile's derivative at most) added, since the farthest point can lie between two.
+fn profile_reach(
+    profile: &crate::native_parametric_surface::Curve,
+    lo: f64,
+    hi: f64,
+    speed: f64,
+) -> f64 {
+    const STEPS: usize = 64;
+    let reach = (0..=STEPS)
+        .map(|i| {
+            let q = profile.eval(lo + (hi - lo) * i as f64 / STEPS as f64);
+            q[0].hypot(q[1])
+        })
+        .fold(0., f64::max);
+    reach + speed * (hi - lo).abs() / STEPS as f64 / 2.
+}
+
+/// The `v` of every vertex of the trim `rings` that a strip beside it would pass by
+/// (#1737): one whose two neighbours are not on opposite sides of its `u`, so that the
+/// trim does not run through it from one strip to the next. A step of the trim along
+/// its strip boundary has such a vertex at each end, and so has a cusp, the tip of a
+/// hole; the strip that the step or the cusp does not bound has a cell edge along the
+/// boundary that runs past the vertex, and a cut at its `v` is what makes it one
+/// vertex of both strips' cells. Where the trim runs through its vertex, the strips
+/// on both sides have it for a corner and the vertex is no cut.
+fn trim_steps(rings: &[Vec<[f64; 2]>]) -> Vec<f64> {
+    // Which side of `p`'s strip boundary `q` is on, none where it is on it.
+    let side = |p: [f64; 2], q: [f64; 2]| -> Option<bool> {
+        if q[0] - p[0] > KNOT_TOLERANCE {
+            Some(true)
+        } else if p[0] - q[0] > KNOT_TOLERANCE {
+            Some(false)
+        } else {
+            None
+        }
+    };
+    let mut steps = Vec::new();
+    for ring in rings {
+        for (i, &p) in ring.iter().enumerate() {
+            let before = ring[(i + ring.len() - 1) % ring.len()];
+            let after = ring[(i + 1) % ring.len()];
+            let runs_through =
+                matches!((side(p, before), side(p, after)), (Some(a), Some(b)) if a != b);
+            if !runs_through {
+                steps.push(p[1]);
+            }
+        }
+    }
+    steps
+}
+
 /// The grid the face at `fi` is meshed on, or why it is not meshed (a trim loop
 /// that does not close, a ruled face whose neighbours the graph does not resolve,
 /// a surface that is not read). A face whose one loop is the rectangle of its
 /// parameters is meshed on the grid; any other loop, or several, is cut into its
-/// cells.
+/// cells: strips between the `u` knots (every trim point's `u` is one) cut across at
+/// the chord's `v` steps and at those of the trim's steps (`trim_steps`).
 pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     use crate::native_parametric_surface::Curve;
     use crate::native_saved_mesh::pointer;
@@ -446,20 +506,17 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                     .fold(0., f64::max);
                 (angular(radius), 1. / length(*direction))
             }
-            Curve::Arc { center, radius, .. } => (
-                angular(center[0].hypot(center[1]) + 2. * radius),
+            // A step around the axis bows from its chord by the radius the
+            // profile reaches over the face's own `v`: the grid takes the farthest.
+            Curve::Arc { radius, .. } => (
+                angular(profile_reach(profile, min[1], max[1], *radius)),
                 angular(*radius),
             ),
             // The second derivative of `c + a cos t x + b sin t y` is at most
             // max(a, b) long, so a step in `t` bows no further from its chord
             // than the same step on a circle of that radius.
-            Curve::Ellipse {
-                center,
-                x_len,
-                y_len,
-                ..
-            } => (
-                angular(center[0].hypot(center[1]) + 2. * x_len.max(*y_len)),
+            Curve::Ellipse { x_len, y_len, .. } => (
+                angular(profile_reach(profile, min[1], max[1], x_len.max(*y_len))),
                 angular(x_len.max(*y_len)),
             ),
         },
@@ -603,7 +660,13 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             }
         }
     };
-    let axis = |k: usize, step: f64| -> Result<Vec<f64>> {
+    // The chord's steps along axis `k`, with the coordinates `extra` added. A face cut
+    // by its trim takes every trim point in `u` (each strip between two `u` knots must
+    // be crossed whole by the trim segments that meet it) but in `v` only the steps
+    // of its trim (`trim_steps`): a trim point's `v` as a cut ran across the whole
+    // face and left a row of thin cells at each, and none of them but the steps is a
+    // vertex a strip beside it would pass by (#1737).
+    let axis = |k: usize, step: f64, extra: &[f64]| -> Result<Vec<f64>> {
         let count = ((max[k] - min[k]) / step).ceil().max(1.);
         ensure!(
             count.is_finite() && count <= 10000.,
@@ -613,14 +676,20 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         let mut a = (0..=count)
             .map(|i| min[k] + (max[k] - min[k]) * i as f64 / count as f64)
             .collect::<Vec<_>>();
-        a.extend(trim.iter().map(|p| p[k]));
+        a.extend_from_slice(extra);
         a.sort_by(f64::total_cmp);
         a.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
         Ok(a)
     };
+    let trim_u: Vec<f64> = trim.iter().map(|p| p[0]).collect();
+    let trim_v: Vec<f64> = if rectangular {
+        trim.iter().map(|p| p[1]).collect()
+    } else {
+        trim_steps(&polygons)
+    };
     Ok(FaceGrid {
-        u: axis(0, du)?,
-        v: axis(1, dv)?,
+        u: axis(0, du, &trim_u)?,
+        v: axis(1, dv, &trim_v)?,
         surface,
         trim,
         bounds: [min, max],
@@ -1001,13 +1070,17 @@ fn point_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
 /// The cells of a face whose trim is not the rectangle of its grid: the region
 /// inside `loops` (every loop closed and its last point not repeated; the holes
 /// are loops inside the first), cut by the grid's `u_knots` into strips and by
-/// `v_knots` across them. Every point of every loop must be on the knots, so
-/// that within a strip each trim segment runs from one side to the other and
+/// `v_knots` across them. The `u` of every point of every loop must be a knot,
+/// so that within a strip each trim segment runs from one side to the other and
 /// the strip's region is a set of trapezoids between them, which the `v_knots`
 /// cut into convex pieces that are fanned into triangles, counter-clockwise in
-/// (u, v). The triangles must cover the area the loops enclose, or the loops
-/// cross each other or themselves. Returns the points in (u, v) and the
-/// triangles (#1706).
+/// (u, v). A point's `v` need not be a knot: the `v_knots` are the cuts the
+/// surface's curvature asks for, and a trim point's `v` as a cut would run across
+/// every trapezoid that holds it (#1737). Those the trim does not run through from
+/// one strip to the next (`trim_steps`) have to be, or an edge of one strip's cells
+/// runs straight past a vertex of the next strip's, a crack inside the face. The
+/// triangles must cover the area the loops enclose, or the loops cross each other
+/// or themselves. Returns the points in (u, v) and the triangles (#1706).
 fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> Result<Cells> {
     ensure!(
         !loops.is_empty() && loops.iter().all(|ring| ring.len() >= 3),
@@ -1034,8 +1107,8 @@ fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> R
                 "nonfinite trim point"
             );
             ensure!(
-                on_knots(u_knots, a[0]) && on_knots(v_knots, a[1]),
-                "a trim point is not on the grid's knots"
+                on_knots(u_knots, a[0]),
+                "a trim point's u is not on the grid's knots"
             );
             // A segment along a strip's edge bounds no strip.
             if (b[0] - a[0]).abs() <= KNOT_TOLERANCE {
@@ -1209,7 +1282,8 @@ fn tessellate_trimmed(
 
 #[cfg(test)]
 mod tests {
-    use super::{inside_polygon, keep_triangle, trimmed_cells};
+    use super::{inside_polygon, keep_triangle, profile_reach, trim_steps, trimmed_cells};
+    use crate::native_parametric_surface::Curve;
 
     // How a triangle of a face's cells can be wrong, and the one thing that looks
     // wrong and is not.
@@ -1406,8 +1480,42 @@ mod tests {
         assert!(trimmed_cells(&bowtie, &[0., 2.], &[0., 2.]).is_err());
     }
 
+    // How cutting at the chord's `v` steps alone can go wrong: a strip's trapezoid is
+    // left without a cover, a corner of the trim is dropped, or the cuts are made
+    // at the trim's own `v` again.
     #[test]
-    fn a_point_off_the_knots_a_nonfinite_point_and_bad_knots_are_refused() {
+    fn a_trim_point_between_the_v_knots_is_a_corner_and_not_a_cut() {
+        // The eaves (0, 1.5) and (2, 1.5) and the apex (1, 2.5) of a house lie
+        // between the knots of v; its area is 3 + 1.
+        let house = vec![vec![[0., 0.], [2., 0.], [2., 1.5], [1., 2.5], [0., 1.5]]];
+        let u = [0., 1., 2.];
+        let (points, triangles) = check(&house, &u, &[0., 1., 2., 3.], 4.0);
+        for corner in &house[0] {
+            assert!(
+                points
+                    .iter()
+                    .any(|p| (p[0] - corner[0]).abs() < 1e-12 && (p[1] - corner[1]).abs() < 1e-12),
+                "{corner:?} is not a vertex"
+            );
+        }
+        // Cut at the v of the eaves and the apex as well, the same house takes more
+        // cells.
+        let (_, cut_everywhere) = check(&house, &u, &[0., 1., 1.5, 2., 2.5, 3.], 4.0);
+        assert_eq!(triangles.len(), 12);
+        assert!(cut_everywhere.len() > triangles.len());
+        // Knots that do not reach the trim's v range cut only where they lie.
+        check(&house, &u, &[1., 1.2], 4.0);
+    }
+
+    #[test]
+    fn a_point_on_a_vertical_side_between_the_v_knots_is_covered_all_the_same() {
+        // (2, 1) lies on the side u = 2 between (2, 0) and (2, 2), and on no knot of v.
+        let r = vec![vec![[0., 0.], [2., 0.], [2., 1.], [2., 2.], [0., 2.]]];
+        check(&r, &[0., 1., 2.], &[0., 2.], 4.0);
+    }
+
+    #[test]
+    fn a_point_off_the_u_knots_a_nonfinite_point_and_bad_knots_are_refused() {
         let off = vec![vec![[0., 0.], [2., 0.], [2.5, 2.], [0., 2.]]];
         assert!(trimmed_cells(&off, &[0., 2.], &[0., 2.]).is_err());
         let nan = vec![vec![[0., 0.], [1., 0.], [f64::NAN, 1.]]];
@@ -1417,5 +1525,150 @@ mod tests {
         assert!(trimmed_cells(&square, &[1., 0.], &[0., 1.]).is_err());
         assert!(trimmed_cells(&[vec![[0., 0.], [1., 0.]]], &[0., 1.], &[0., 1.]).is_err());
         assert!(trimmed_cells(&[], &[0., 1.], &[0., 1.]).is_err());
+    }
+
+    // The farthest a revolved profile reaches from the axis, which sets the grid's steps
+    // around it: short by any amount and a face's grid would be coarser than its chord.
+    fn arc(centre: f64, radius: f64, range: [f64; 2]) -> Curve {
+        Curve::Arc {
+            center: [centre, 0., 0.],
+            x: [1., 0., 0.],
+            y: [0., 1., 0.],
+            radius,
+            range,
+        }
+    }
+
+    #[test]
+    fn the_reach_is_never_less_than_the_farthest_point_of_the_profile() {
+        // The farthest point is at t = 0, centre + radius, and no step of 64 ends on it.
+        let profile = arc(2., 3., [-0.0013, 0.0007]);
+        assert!(profile_reach(&profile, -0.0013, 0.0007, 3.) >= 5.);
+        // The whole circle, where the farthest is on a step.
+        let circle = arc(0.5, 0.25, [0., std::f64::consts::TAU]);
+        assert!(profile_reach(&circle, 0., std::f64::consts::TAU, 0.25) >= 0.75 - 1e-12);
+        // An ellipse of axes 2 and 1 about a centre 1 from the axis reaches 3 at t = 0.
+        let ellipse = Curve::Ellipse {
+            center: [1., 0., 0.],
+            x: [1., 0., 0.],
+            y: [0., 1., 0.],
+            x_len: 2.,
+            y_len: 1.,
+            range: [-0.4, 0.3],
+        };
+        assert!(profile_reach(&ellipse, -0.4, 0.3, 2.) >= 3.);
+    }
+
+    #[test]
+    fn a_part_of_the_profile_that_stays_near_the_axis_does_not_pay_for_the_rest() {
+        // A circle of radius 3 about a centre 0.7 from the axis reaches 3.7 on its far side,
+        // but the part of it from 3.0 to 3.6 radians lies on the near side, 2.3 to 2.4 from it.
+        let profile = arc(0.7, 3., [0., std::f64::consts::TAU]);
+        let part = profile_reach(&profile, 3.0, 3.6, 3.);
+        let at = |t: f64| (0.7 + 3. * t.cos()).hypot(3. * t.sin());
+        assert!(part >= at(3.0).max(at(3.6)) - 1e-9);
+        assert!(part < 2.5, "{part}");
+        // The bound the whole circle gave, centre plus twice the radius, was 6.7.
+        assert!(part < 6.7 / 2.);
+    }
+
+    #[test]
+    fn a_range_of_one_parameter_reaches_the_point_and_a_reversed_range_the_same_as_its_order() {
+        let profile = arc(1., 1., [0., 1.]);
+        let one = profile_reach(&profile, 0.5, 0.5, 1.);
+        let point = profile.eval(0.5);
+        assert!((one - point[0].hypot(point[1])).abs() < 1e-12);
+        let forward = profile_reach(&profile, 0.2, 0.9, 1.);
+        let backward = profile_reach(&profile, 0.9, 0.2, 1.);
+        assert!((forward - backward).abs() < 1e-12);
+    }
+
+    /// The edges one triangle uses that are not along the trim: a crack inside the cells,
+    /// where the edge of one strip's cells runs straight past a vertex of the next strip's.
+    fn free_edges_off_the_trim(
+        points: &[[f64; 2]],
+        triangles: &[[u32; 3]],
+        loops: &[Vec<[f64; 2]>],
+    ) -> Vec<(u32, u32)> {
+        let mut uses = std::collections::BTreeMap::new();
+        for t in triangles {
+            for (a, b) in [(t[0], t[1]), (t[1], t[2]), (t[2], t[0])] {
+                *uses.entry((a.min(b), a.max(b))).or_insert(0) += 1;
+            }
+        }
+        let on_segment = |p: [f64; 2], a: [f64; 2], b: [f64; 2]| {
+            let cross = (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]);
+            let dot = (p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1]);
+            let length2 = (b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2);
+            cross.abs() < 1e-9 && dot > -1e-9 && dot < length2 + 1e-9
+        };
+        uses.into_iter()
+            .filter(|(_, count)| *count == 1)
+            .map(|(edge, _)| edge)
+            .filter(|(i, j)| {
+                !loops.iter().any(|ring| {
+                    ring.iter()
+                        .zip(ring.iter().cycle().skip(1))
+                        .take(ring.len())
+                        .any(|(a, b)| {
+                            on_segment(points[*i as usize], *a, *b)
+                                && on_segment(points[*j as usize], *a, *b)
+                        })
+                })
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_vertices_a_strip_beside_passes_by_are_the_steps_and_the_cusps() {
+        let steps = |rings: &[Vec<[f64; 2]>]| {
+            let mut v = trim_steps(rings);
+            v.sort_by(f64::total_cmp);
+            v.dedup();
+            v
+        };
+        // An L: every corner is the end of a step along a strip boundary.
+        let l = vec![vec![
+            [0., 0.],
+            [2., 0.],
+            [2., 1.],
+            [1., 1.],
+            [1., 2.],
+            [0., 2.],
+        ]];
+        assert_eq!(steps(&l), vec![0., 1., 2.]);
+        // A diamond: the trim runs through its top and bottom vertices, and its left and
+        // right ends are cusps.
+        let diamond = vec![vec![[1., 0.], [2., 1.], [1., 2.], [0., 1.]]];
+        assert_eq!(steps(&diamond), vec![1.]);
+        // A square with a diamond hole: the hole's left and right tips are cusps the
+        // strips beside them pass by, and its top and bottom vertices are run through.
+        let outer = vec![[0., 0.], [4., 0.], [4., 4.], [0., 4.]];
+        let hole = vec![[1., 2.], [2., 3.], [3., 2.], [2., 1.]];
+        assert_eq!(steps(&[outer, hole]), vec![0., 2., 4.]);
+    }
+
+    #[test]
+    fn a_step_of_the_trim_is_a_vertex_of_the_strips_on_both_sides_of_it_when_its_v_is_a_knot() {
+        let l = vec![vec![
+            [0., 0.],
+            [2., 0.],
+            [2., 1.],
+            [1., 1.],
+            [1., 2.],
+            [0., 2.],
+        ]];
+        let u = [0., 1., 2.];
+        // Cut at the chord's steps alone, the strip on the left runs straight past the
+        // corner (1, 1) of the strip on the right: a crack inside the cells.
+        let (points, triangles) = check(&l, &u, &[0., 2.], 3.0);
+        assert!(!free_edges_off_the_trim(&points, &triangles, &l).is_empty());
+        // With the v of the trim's steps as knots, no edge of the cells is free off the trim.
+        let mut v = vec![0., 2.];
+        v.extend(trim_steps(&l));
+        v.sort_by(f64::total_cmp);
+        v.dedup();
+        let (points, triangles) = check(&l, &u, &v, 3.0);
+        assert!(free_edges_off_the_trim(&points, &triangles, &l).is_empty());
     }
 }

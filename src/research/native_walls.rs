@@ -323,6 +323,12 @@ const BOUNDED_STEPS: [&str; 2] = ["JoinToRoofGStep", "CleanPairGStep"];
 pub struct WallRecords {
     /// [`native_walls`].
     pub walls: BTreeMap<u64, NativeWall>,
+    /// The location curve of each wall whose record holds one that
+    /// `VWallDriver.m_pCrv` names but which `walls` leaves out because the
+    /// record holds another curve besides it: its start and its end, plan
+    /// model feet. A curtain wall is not cut back at its joins, so its
+    /// `Length` is this curve's (RE-252).
+    pub located_lines: BTreeMap<u64, ([f64; 2], [f64; 2])>,
     /// Whether each wall's top is joined to a roof or floor.
     pub top_joined: BTreeMap<u64, bool>,
     /// The walls nothing is joined to or cuts.
@@ -829,6 +835,7 @@ pub fn native_walls_and_top_joins_into(
         ..Options::default()
     };
     let mut found: BTreeMap<u64, (NativeWall, Option<u64>)> = BTreeMap::new();
+    let mut located_lines: BTreeMap<u64, ([f64; 2], [f64; 2])> = BTreeMap::new();
     let mut types: BTreeMap<u64, [f64; 2]> = BTreeMap::new();
     extract_graphs(rf, &options, |record| {
         if let Some(graph) = record.graph.as_ref() {
@@ -1031,8 +1038,18 @@ pub fn native_walls_and_top_joins_into(
             let type_id = root.and_then(|fields| element_id(fields.get("m_WallAttributesId")?));
             (wall, type_id)
         });
-        if let Some(read) = read {
-            found.insert(id, read);
+        match read {
+            Some(read) => {
+                found.insert(id, read);
+            }
+            // A record holding another curve besides the one `m_pCrv` names
+            // gives no wall, but the curve it names is still the wall's
+            // location curve, which a curtain wall's `Length` is (RE-252).
+            None => {
+                if let Some(line) = location_curve(graph) {
+                    located_lines.insert(id, line);
+                }
+            }
         }
         Ok(())
     })?;
@@ -1074,6 +1091,7 @@ pub fn native_walls_and_top_joins_into(
         .collect();
     Ok(WallRecords {
         walls,
+        located_lines,
         top_joined,
         uncut,
         top_cutters,

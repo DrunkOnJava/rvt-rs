@@ -521,6 +521,16 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
 /// of each (`ELEVATOR`). Each takes its own predefined type where it is an
 /// enumerator of the entity ([`override_predefined_type_for`] for the last
 /// two).
+///
+/// #1772 adds `IfcGeographicElement`, which 9 furniture, 9 planting, 3
+/// specialty equipment and 2 floor elements of the BIM4LCA housing terrain
+/// model measured carry, and which Revit's export writes as that entity. Its
+/// `PredefinedType` is the element's own or its type's "IFC Predefined Type"
+/// where that is an `IfcGeographicElementTypeEnum` enumerator (`USERDEFINED`
+/// on 20 of the 23, `NOTDEFINED` on 3). It is limited to those four classes
+/// ([`lookup_export_override_for`]), and an element of one of them that
+/// carries no such value is written with `$`: what Revit writes for one is
+/// not measured.
 pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
     Mapping {
         revit_class: "IfcShadingDevice",
@@ -597,6 +607,11 @@ pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
         ifc_type: "IFCTRANSPORTELEMENT",
         predefined_type: Some("NOTDEFINED"),
     },
+    Mapping {
+        revit_class: "IfcGeographicElement",
+        ifc_type: "IFCGEOGRAPHICELEMENT",
+        predefined_type: None,
+    },
 ];
 
 /// The Revit classes an [`EXPORT_OVERRIDE_TARGETS`] value is acted on for,
@@ -610,6 +625,10 @@ const OVERRIDE_CLASS_LIMITS: &[(&str, &[&str])] = &[
     ("IfcFurniture", &["GenericModel"]),
     ("IfcSolarDevice", &["Roof"]),
     ("IfcTransportElement", &["SpecialtyEquipment"]),
+    (
+        "IfcGeographicElement",
+        &["Floor", "Furniture", "Planting", "SpecialtyEquipment"],
+    ),
 ];
 
 /// [`lookup_export_override`] for an element of `revit_class`: `None` where
@@ -656,11 +675,33 @@ pub fn space_predefined_type_for(value: &str) -> Option<&'static str> {
 /// `IfcFireSuppressionTerminalTypeEnum`, `IfcSanitaryTerminalTypeEnum`,
 /// `IfcAirTerminalTypeEnum`) and of `IfcFurniture`, whose own predefined type
 /// every furniture and casework element takes where it is an enumerator
-/// (`IfcFurnitureTypeEnum`, RE-419). `IfcStair` and `IfcDoor`, honoured as targets
+/// (`IfcFurnitureTypeEnum`, RE-419). `IfcRailing` is listed for the same reason
+/// (#1713): Revit's export of the BIM4LCA office writes one value per railing
+/// type (`HANDRAIL` on its `KAI-4` and `KJO-1`, `GUARDRAIL` on its `KAI-1`,
+/// `KAI-2`, `KAI-3` and `KAI-5`, `NOTDEFINED` on its `KAI-6`), and the railing's
+/// host does not decide it: 26 of the 41 name a stair and 8 a ramp, where 32 are
+/// `HANDRAIL`. `IfcStair` and `IfcDoor`, honoured as targets
 /// since #792, are not listed, because listing them would apply every door's
 /// and stair's own predefined type as well, which is not measured. An
 /// element exported as either through its value takes the target's
 /// default, the one Revit writes on the elements measured.
+///
+/// #1713 adds four more, each measured on the BIM4LCA office (Revit 2024)
+/// against Revit's export of it: `IfcWall`, whose 607 walls Revit writes
+/// `PARTITIONING` (450), `SOLIDWALL` (96), `SHEAR` (53), `PARAPET` (4),
+/// `PLUMBINGWALL` (2) and `NOTDEFINED` (2); `IfcRamp`, whose 5 are
+/// `STRAIGHT_RUN_RAMP`; `IfcLightFixture`, whose 43 are `SECURITYLIGHTING`;
+/// and `IfcPipeSegment`, whose 12 are `GUTTER`. The value is the element's
+/// own before its type's, as RE-45 reads it: Revit writes two type objects
+/// for the wall type `KS-3`, `SOLIDWALL` and `STANDARD`, and types its 4
+/// `SOLIDWALL` walls by the first and its 2 `NOTDEFINED` ones by the second.
+/// The reason `IfcStair` and `IfcDoor` are not listed does not apply to the
+/// four: their elements are measured, and each class is reached by the rows
+/// of one or two Revit categories (Wall and ArcWall, Ramp, LightingFixture,
+/// Pipe and Gutter). A wall with no value keeps the mapping's `NOTDEFINED`,
+/// which is what Revit writes there; a ramp, light fixture or pipe segment
+/// with none keeps `$`, since Revit writes `NOTDEFINED` on some of them and
+/// no 2027 export of the three is measured.
 const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
     (
         "IFCSLAB",
@@ -792,6 +833,57 @@ const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "IFCWALL",
+        &[
+            "MOVABLE",
+            "PARAPET",
+            "PARTITIONING",
+            "PLUMBINGWALL",
+            "SHEAR",
+            "SOLIDWALL",
+            "STANDARD",
+            "POLYGONAL",
+            "ELEMENTEDWALL",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCRAMP",
+        &[
+            "STRAIGHT_RUN_RAMP",
+            "TWO_STRAIGHT_RUN_RAMP",
+            "QUARTER_TURN_RAMP",
+            "TWO_QUARTER_TURN_RAMP",
+            "HALF_TURN_RAMP",
+            "SPIRAL_RAMP",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCLIGHTFIXTURE",
+        &[
+            "POINTSOURCE",
+            "DIRECTIONSOURCE",
+            "SECURITYLIGHTING",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCPIPESEGMENT",
+        &[
+            "CULVERT",
+            "FLEXIBLESEGMENT",
+            "RIGIDSEGMENT",
+            "GUTTER",
+            "SPOOL",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
         "IFCFURNITURE",
         &[
             "CHAIR",
@@ -801,6 +893,16 @@ const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
             "FILECABINET",
             "SHELF",
             "SOFA",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCRAILING",
+        &[
+            "HANDRAIL",
+            "GUARDRAIL",
+            "BALUSTRADE",
             "USERDEFINED",
             "NOTDEFINED",
         ],
@@ -832,7 +934,8 @@ pub fn export_value_is_space(value: &str, revit_class: &str) -> bool {
 
 /// IFC4 `PredefinedType` enumerators of the entities an element reaches
 /// only through its "Export to IFC As" value (RE-417): `IfcSolarDeviceTypeEnum`
-/// and `IfcTransportElementTypeEnum`. They are not in
+/// and `IfcTransportElementTypeEnum`, and `IfcGeographicElementTypeEnum`
+/// (#1772). They are not in
 /// [`PREDEFINED_TYPE_ENUMERATORS`], which would apply the own predefined type of
 /// any element a category maps to them as well, and none is. (`IfcFurniture`,
 /// first here, is in it since RE-419, which measured its own predefined type
@@ -853,6 +956,10 @@ const OVERRIDE_ONLY_ENUMERATORS: &[(&str, &[&str])] = &[
             "USERDEFINED",
             "NOTDEFINED",
         ],
+    ),
+    (
+        "IFCGEOGRAPHICELEMENT",
+        &["TERRAIN", "USERDEFINED", "NOTDEFINED"],
     ),
 ];
 
@@ -902,7 +1009,8 @@ pub fn export_override_applies(revit_class: &str, revit_version: Option<u32>) ->
 }
 
 /// The first release whose saves are written without a `PredefinedType` on the
-/// occurrence of [`PREDEFINED_TYPE_LEFT_OUT_CLASSES`] (#1692). On the two
+/// occurrence of [`PREDEFINED_TYPE_LEFT_OUT_CLASSES`] and
+/// [`PREDEFINED_TYPE_LEFT_OUT_CLASSES_FROM_SOURCE`] (#1692, #1716). On the two
 /// held-out pairs saved by 2027 (hemanth1986's house and office, counts only),
 /// Revit's own export writes none on 71 elements of those ten classes (stairs 1,
 /// stair flights 1, slabs 3, members 2, furniture 12, doors 7, windows 22, walls
@@ -915,12 +1023,14 @@ pub fn export_override_applies(revit_class: &str, revit_version: Option<u32>) ->
 pub const PREDEFINED_TYPE_LEFT_OUT_FROM: u32 = 2027;
 
 /// The entities whose occurrence is written without a `PredefinedType` from
-/// [`PREDEFINED_TYPE_LEFT_OUT_FROM`]: the ten classes the 2027 pairs hold and
-/// Revit's export writes none on. A class the pairs do not hold (columns, beams,
-/// coverings, curtain walls, plates, footings, ramps, shading devices, the MEP
-/// terminals ...) is not measured on 2027 and keeps its value; a member is read
-/// on two stringers only, so a mullion is left out with them on the strength of
-/// its class.
+/// [`PREDEFINED_TYPE_LEFT_OUT_FROM`], measured: the ten classes the 2027 pairs
+/// hold and Revit's export writes none on. A class the pairs do not hold
+/// (columns, beams, coverings, curtain walls, plates, footings, ramps, shading
+/// devices, the MEP terminals ...) is not measured on 2027; the ones the
+/// exporter's source leaves out as well are in
+/// [`PREDEFINED_TYPE_LEFT_OUT_CLASSES_FROM_SOURCE`], and the rest keep their
+/// value. A member is read on two stringers only, so a mullion is left out with
+/// them on the strength of its class.
 pub const PREDEFINED_TYPE_LEFT_OUT_CLASSES: [&str; 10] = [
     "IFCDOOR",
     "IFCFURNITURE",
@@ -934,9 +1044,29 @@ pub const PREDEFINED_TYPE_LEFT_OUT_CLASSES: [&str; 10] = [
     "IFCWINDOW",
 ];
 
+/// The entities the exporter's source leaves out as well, and no measured 2027
+/// export holds one of (#1716): a beam, a column, a plate and a covering whose
+/// element has a type object. Autodesk's public exporter source (revit-ifc,
+/// `Source/Revit.IFC.Export/Toolkit/IFCInstanceExporter.cs`, tag
+/// `IFC_v27.4.0.30`; CLEANROOM.md source 5, cited and not quoted) writes an
+/// occurrence's `PredefinedType` only where the element has no type object when
+/// it is created, and the creators of these four classes call that helper as the
+/// creators of the ten measured ones do. This is taken from the source and not
+/// from a measured export: the 2027 samples hold beams, columns, plates and
+/// coverings that rvt-rs writes a value on, and no Revit 2027 export of them
+/// exists. The same source leaves out a typed ramp, ramp flight, pile, mechanical
+/// fastener and grid, and rvt-rs writes no `PredefinedType` on any of them (no
+/// mapping row carries one, and none is in `PREDEFINED_TYPE_ENUMERATORS` or an
+/// export-override target), so none is listed. Nor is `IFCCURTAINWALL`: the
+/// source's family-based curtain wall is not the system curtain wall and curtain
+/// panel wall rvt-rs writes as that entity, which keep their value.
+pub const PREDEFINED_TYPE_LEFT_OUT_CLASSES_FROM_SOURCE: [&str; 4] =
+    ["IFCBEAM", "IFCCOLUMN", "IFCCOVERING", "IFCPLATE"];
+
 /// Whether the occurrence of `ifc_type` in a file Revit `revit_version` saved is
-/// written without a `PredefinedType` (#1692): the entity is one of
-/// [`PREDEFINED_TYPE_LEFT_OUT_CLASSES`] and the release
+/// written without a `PredefinedType` (#1692, #1716): the entity is one of
+/// [`PREDEFINED_TYPE_LEFT_OUT_CLASSES`] or
+/// [`PREDEFINED_TYPE_LEFT_OUT_CLASSES_FROM_SOURCE`] and the release
 /// [`PREDEFINED_TYPE_LEFT_OUT_FROM`] or later. The occurrence only: the type
 /// objects, their GlobalIds and the property sets that depend on a predefined type
 /// take the element's value as before, and so does the model; whatever reports
@@ -946,6 +1076,7 @@ pub fn predefined_type_left_out(ifc_type: &str, revit_version: Option<u32>) -> b
     revit_version.is_some_and(|version| version >= PREDEFINED_TYPE_LEFT_OUT_FROM)
         && PREDEFINED_TYPE_LEFT_OUT_CLASSES
             .iter()
+            .chain(PREDEFINED_TYPE_LEFT_OUT_CLASSES_FROM_SOURCE.iter())
             .any(|class| class.eq_ignore_ascii_case(ifc_type))
 }
 
