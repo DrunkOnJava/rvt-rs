@@ -13,8 +13,9 @@ a release (#1692: Revit 2027's export writes none on the classes above) is read 
 class both files hold and not only the eight, and the elements one file holds and the other does
 not are counted by class. It also tallies the PredefinedType of every IfcElementType class of both
 files (RE-419: a type is written once for each predefined type its instances carry) and of every
-IfcSpace of either, rooms and areas included, which carry no Tag to pair by. A Revit export in
-IFC2X3, which has no PredefinedType on these classes, is not scored and says so.
+product of either that is no IfcElement and declares one (an IfcSpace, rooms and areas included, an
+IfcDistributionPort ...), which carry no Tag to pair by. A Revit export in IFC2X3, which has no
+PredefinedType on these classes, is not scored and says so.
 
 Needs IfcOpenShell.
 
@@ -94,9 +95,17 @@ def type_values(model):
     return out
 
 
-def space_values(model):
-    """How many IfcSpace hold each PredefinedType, rooms and areas among them."""
-    return collections.Counter(value_of(space) for space in model.by_type("IfcSpace"))
+def product_values(model):
+    """Per class of product that is no IfcElement and declares a PredefinedType (an IfcSpace, an
+    IfcDistributionPort ...), how many hold each value."""
+    schema = ifcopenshell.ifcopenshell_wrapper.schema_by_name(model.schema)
+    has = {}
+    out = collections.defaultdict(collections.Counter)
+    for product in model.by_type("IfcProduct"):
+        cls = product.is_a()
+        if not product.is_a("IfcElement") and declares_predefined(schema, cls, has):
+            out[cls][value_of(product)] += 1
+    return out
 
 
 def report(cls, keys, ours, revit):
@@ -138,10 +147,12 @@ def main():
             f"{cls} PredefinedType: rvt-rs {dict(sorted(mine_types[cls].items()))}, "
             f"Revit {dict(sorted(revit_types[cls].items()))}"
         )
-    print(
-        f"IfcSpace PredefinedType, every space: rvt-rs {dict(sorted(space_values(mine_model).items()))}, "
-        f"Revit {dict(sorted(space_values(revit_model).items()))}"
-    )
+    mine_products, revit_products = product_values(mine_model), product_values(revit_model)
+    for cls in sorted(set(mine_products) | set(revit_products)):
+        print(
+            f"{cls} PredefinedType, all: rvt-rs {dict(sorted(mine_products[cls].items()))}, "
+            f"Revit {dict(sorted(revit_products[cls].items()))}"
+        )
     ours, revit = predefined(mine_model), predefined(revit_model)
     for cls in CLASSES:
         keys = [k for k in revit if k[0] == cls and k in ours]

@@ -185,8 +185,9 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E "^Ifc[A-Za-z0-9]+: [0-9]+ in both; same [0-9]+, differs [0-9]+, unset in rvt-rs [0-9]+, NOTDEFINED where Revit writes none [0-9]+; Revit's: \{(('[A-Z_0-9-]+': [0-9]+)(, )?)*\}$" "$f" | sed 's/^/predefined types: /' || true
       # And the tally of each type class's PredefinedType, counts beside enumerator names.
       grep -E "^Ifc[A-Za-z0-9]+Type PredefinedType: rvt-rs \{(('[A-Z_0-9-]+': [0-9]+)(, )?)*\}, Revit \{(('[A-Z_0-9-]+': [0-9]+)(, )?)*\}$" "$f" | sed 's/^/predefined types: /' || true
-      # The same tally over every space, rooms and areas among them, which carry no Tag to pair by.
-      grep -E "^IfcSpace PredefinedType, every space: rvt-rs \{(('[A-Z_0-9-]+': [0-9]+)(, )?)*\}, Revit \{(('[A-Z_0-9-]+': [0-9]+)(, )?)*\}$" "$f" | sed 's/^/predefined types: /' || true
+      # The same tally over every product that is no element, spaces (rooms and areas among them) and
+      # ports, which carry no Tag to pair by.
+      grep -E "^Ifc[A-Za-z0-9]+ PredefinedType, all: rvt-rs \{(('[A-Z_0-9-]+': [0-9]+)(, )?)*\}, Revit \{(('[A-Z_0-9-]+': [0-9]+)(, )?)*\}$" "$f" | sed 's/^/predefined types: /' || true
       # How many elements of each class one file holds that the other does not (#1692): counts beside IFC class names.
       grep -E "^  not paired by Tag: in Revit's only \{(('Ifc[A-Za-z0-9]+': [0-9]+)(, )?)*\}, in rvt-rs's only \{(('Ifc[A-Za-z0-9]+': [0-9]+)(, )?)*\}$" "$f" | sed -E 's/^ +/predefined types: /' || true
     done
