@@ -25,10 +25,13 @@
 //! Revit's export within 0.001 ft ("ref on ours"), windows among them; doors
 //! are 675 of 681, sanitary terminals 68 of 94, flow fittings 71 of 89, flow
 //! terminals 30 of 35 and walls 14 of 18. The cost is reading the saved
-//! graphics of every boxed element: on the BIM4LCA office as built 24.4 s
-//! against 21.2 s and a peak of 1,423 MiB against 913, with its IFC 83 MB
-//! against 68, and 1.01 times the time and the same peak on Core Interior
-//! (Measure run 42614230465, median of 3 on one runner).
+//! graphics of every boxed element: against 0.17.0 the BIM4LCA office as built
+//! goes from 25.4 s and 914 MiB to 33.0 s and 1,432 MiB, with its IFC 87 MB
+//! against 68, Core Interior from 4.7 s and 305 MiB to 5.3 s and 437 MiB and
+//! Snowdon Towers Architectural from 17.6 s and 1,073 MiB to 28.0 s and 2,086
+//! MiB, with its IFC 189 MB against 37 (Measure run 42956917709, the median of
+//! three exports on one runner per file); #1690 stopped holding every owner's
+//! graph at once, and what is left is #1694.
 //!
 //! A roof drawn as the level block of its sketch outline at its record box's
 //! full height is replaced too (#1612): the record box holds the roof's
@@ -55,9 +58,10 @@ use super::entities::{BrepTriangle, IfcEntity, Property, PropertySet, PropertyVa
 use super::export_content::{
     BEAM_BOX_BODY_SOURCE, INSTANCE_TURNED_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE,
     SAVED_MESH_ELEMENT_ID_SHARED, SAVED_MESH_NO_GRAPHICS, SAVED_MESH_NO_MESH,
-    SAVED_MESH_NO_TRIANGLES, SAVED_MESH_NOT_CANDIDATE_PREFIX, SAVED_MESH_PARTIAL_PREFIX,
-    SAVED_MESH_REFUSAL_PROPERTY, SLAB_SHAPE_REFUSAL_PROPERTY, SPACE_OUTLINE_SAVED_MESH,
-    SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    SAVED_MESH_NO_TRIANGLES, SAVED_MESH_NOT_CANDIDATE_PREFIX, SAVED_MESH_NOT_OFFERED_PREFIX,
+    SAVED_MESH_PARTIAL_PREFIX, SAVED_MESH_REFUSAL_PROPERTY, SLAB_SHAPE_REFUSAL_PROPERTY,
+    SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY,
+    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use super::mesh_volume::{
     MESH_LENGTH_REACH, all_faces_flat, box_plan_width, closed_mesh_volume, extent_along,
@@ -149,6 +153,55 @@ fn partial_refusal(meshes: &GraphicsMeshes) -> Option<String> {
             kinds.into_iter().collect::<Vec<_>>().join("; ")
         )
     })
+}
+
+/// Whether an element of `ifc_type` with `properties` is drawn as a box that
+/// the pass can replace with its saved mesh: its record's box, a beam's box
+/// (RE-328) or a family instance's box turned to its angle (RE-87), each a
+/// stand-in for the mesh; and a roof's level block, whose record box holds the
+/// reference surface and not the slope or thickness (#1612). A resolved outline
+/// is the body of any other class (a floor's plan, a ceiling's).
+fn is_replaceable_box(ifc_type: &str, properties: &[Property]) -> bool {
+    let source = properties
+        .iter()
+        .find_map(|property| match &property.value {
+            PropertyValue::Text(text) if property.name == "BodySource" => Some(text.as_str()),
+            _ => None,
+        });
+    let profile_resolved = properties.iter().any(|property| {
+        property.name == "ProfileResolved" && matches!(property.value, PropertyValue::Boolean(true))
+    });
+    matches!(
+        source,
+        Some(RECORD_BBOX_BODY_SOURCE | BEAM_BOX_BODY_SOURCE | INSTANCE_TURNED_BODY_SOURCE)
+    ) && !(profile_resolved && ifc_type != "IFCROOF")
+}
+
+/// Say on each box body that no pass offered a saved mesh why none did
+/// (#1645): `why` follows [`SAVED_MESH_NOT_OFFERED_PREFIX`]. Returns how many
+/// elements it said it on.
+pub fn note_not_offered(model: &mut IfcModel, why: &str) -> usize {
+    let boxed: Vec<usize> = model
+        .entities
+        .iter()
+        .enumerate()
+        .filter_map(|(index, entity)| match entity {
+            IfcEntity::BuildingElement {
+                ifc_type,
+                property_set: Some(set),
+                ..
+            } if is_replaceable_box(ifc_type, &set.properties) => Some(index),
+            _ => None,
+        })
+        .collect();
+    for &index in &boxed {
+        note_refusal(
+            model,
+            index,
+            format!("{SAVED_MESH_NOT_OFFERED_PREFIX}{why}"),
+        );
+    }
+    boxed.len()
 }
 
 /// Say on the element at `index` why its box was not replaced by the mesh Revit
@@ -280,28 +333,9 @@ pub fn attach_scoped_with_control(
         else {
             continue;
         };
-        let text = |name: &str| {
-            set.properties.iter().find_map(|p| match &p.value {
-                PropertyValue::Text(t) if p.name == name => Some(t.as_str()),
-                _ => None,
-            })
-        };
-        let profile_resolved = set.properties.iter().any(|p| {
-            p.name == "ProfileResolved" && matches!(p.value, PropertyValue::Boolean(true))
-        });
-        // A beam RE-328 draws as its box along its line is a stand-in for
-        // its saved mesh, as the record box is, and so is a family instance
-        // RE-87 draws as its record box turned to its angle: on Snowdon
-        // Towers Electrical 116 of 130 such receptacles, outlets, conduit
-        // elbows and pendants have a whole saved mesh. So is the level block of
-        // a roof's sketch outline: the record box holds the roof's reference
-        // surface, not its slope or its thickness (#1612). A resolved outline
-        // is the body of any other class (a floor's plan, a ceiling's).
-        if !matches!(
-            text("BodySource"),
-            Some(RECORD_BBOX_BODY_SOURCE | BEAM_BOX_BODY_SOURCE | INSTANCE_TURNED_BODY_SOURCE)
-        ) || (profile_resolved && ifc_type != "IFCROOF")
-        {
+        // On Snowdon Towers Electrical 116 of 130 receptacles, outlets, conduit
+        // elbows and pendants drawn as a turned box have a whole saved mesh.
+        if !is_replaceable_box(ifc_type, &set.properties) {
             continue;
         }
         let id = type_guid.as_deref().and_then(|tag| tag.parse::<u64>().ok());
