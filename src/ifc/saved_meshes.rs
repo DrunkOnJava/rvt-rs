@@ -55,9 +55,9 @@ use super::entities::{BrepTriangle, IfcEntity, Property, PropertySet, PropertyVa
 use super::export_content::{
     BEAM_BOX_BODY_SOURCE, INSTANCE_TURNED_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE,
     SAVED_MESH_ELEMENT_ID_SHARED, SAVED_MESH_NO_GRAPHICS, SAVED_MESH_NO_MESH,
-    SAVED_MESH_NO_TRIANGLES, SAVED_MESH_PARTIAL_PREFIX, SAVED_MESH_REFUSAL_PROPERTY,
-    SLAB_SHAPE_REFUSAL_PROPERTY, SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY,
-    WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    SAVED_MESH_NO_TRIANGLES, SAVED_MESH_NOT_CANDIDATE_PREFIX, SAVED_MESH_PARTIAL_PREFIX,
+    SAVED_MESH_REFUSAL_PROPERTY, SLAB_SHAPE_REFUSAL_PROPERTY, SPACE_OUTLINE_SAVED_MESH,
+    SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use super::mesh_volume::{all_faces_flat, box_plan_width, closed_mesh_volume};
 use super::mesh_wall_quantities::{WallMeshQuantities, wall_mesh_quantities};
@@ -264,23 +264,20 @@ pub fn attach_scoped_with_control(
             _ => None,
         })
         .collect();
+    // #1645: why each box that keeps its box does; a box the pass does not take
+    // as a candidate says so before it looks at any saved graphics.
+    let mut refusals: Vec<(usize, String)> = Vec::new();
     for (index, entity) in model.entities.iter().enumerate() {
-        if wholes.contains(&index) {
-            continue;
-        }
         let IfcEntity::BuildingElement {
             ifc_type,
-            type_guid: Some(tag),
+            type_guid,
             property_set: Some(set),
-            location_feet: Some(_),
+            location_feet,
             ..
         } = entity
         else {
             continue;
         };
-        if !scope.includes(ifc_type) {
-            continue;
-        }
         let text = |name: &str| {
             set.properties.iter().find_map(|p| match &p.value {
                 PropertyValue::Text(t) if p.name == name => Some(t.as_str()),
@@ -305,11 +302,28 @@ pub fn attach_scoped_with_control(
         {
             continue;
         }
-        let Ok(id) = tag.parse::<u64>() else {
-            continue;
+        let id = type_guid.as_deref().and_then(|tag| tag.parse::<u64>().ok());
+        let not_taken = if wholes.contains(&index) {
+            Some("whole_drawn_by_its_parts")
+        } else if location_feet.is_none() {
+            Some("no_location")
+        } else if id.is_none() {
+            Some("no_element_id")
+        } else if !scope.includes(ifc_type) {
+            Some("class_not_in_scope")
+        } else {
+            None
         };
-        report.candidates += 1;
-        by_id.entry(id).or_default().push(index);
+        match (id, not_taken) {
+            (Some(id), None) => {
+                report.candidates += 1;
+                by_id.entry(id).or_default().push(index);
+            }
+            (_, Some(why)) => {
+                refusals.push((index, format!("{SAVED_MESH_NOT_CANDIDATE_PREFIX}{why}")));
+            }
+            (None, None) => {}
+        }
     }
     // RE-388: the walls whose quantities their saved mesh gives, whether or not
     // the wall's own body is drawn from it.
@@ -344,6 +358,9 @@ pub fn attach_scoped_with_control(
     };
     report.embed_hosts = hosts.len();
     if by_id.is_empty() && hosts.is_empty() && walls.is_empty() {
+        for (index, reason) in refusals {
+            note_refusal(model, index, reason);
+        }
         return Ok(report);
     }
     let options = crate::native_document::Options {
@@ -360,14 +377,14 @@ pub fn attach_scoped_with_control(
     };
     // RE-387: the volume of each body drawn from a mesh of flat faces.
     let mut volumes: Vec<(usize, f64)> = Vec::new();
+    // RE-416: the volume of each column's mesh, whatever its faces.
+    let mut column_volumes: Vec<(usize, f64)> = Vec::new();
     // RE-388: what the mesh of each wall gives of its quantities.
     let mut wall_quantities: Vec<(usize, WallMeshQuantities)> = Vec::new();
     // RE-396: the width of each curtain panel drawn from a mesh that is a vertical box.
     let mut plate_widths: Vec<(usize, f64)> = Vec::new();
-    // #1645: the candidates the scene held graphics for, and why each box that
-    // keeps its box does.
+    // #1645: the candidates the scene held graphics for.
     let mut seen: BTreeSet<u64> = BTreeSet::new();
-    let mut refusals: Vec<(usize, String)> = Vec::new();
     // Each element is taken as it is meshed and its decoded graphs freed with
     // its batch of shared symbols, rather than all held until the last one is
     // meshed (#1075).
@@ -438,6 +455,10 @@ pub fn attach_scoped_with_control(
             let plate_width = volume
                 .filter(|_| ifc_type.eq_ignore_ascii_case("IFCPLATE"))
                 .and_then(|volume| box_plan_width(&vertices, &triangles, volume));
+            let column_volume = ifc_type
+                .eq_ignore_ascii_case("IFCCOLUMN")
+                .then(|| oriented_mesh_volume(primitives, *origin))
+                .flatten();
             report.replaced += 1;
             report.triangles += triangles.len();
             *solid_shape = Some(SolidShape::TriangulatedFaceSet {
@@ -446,6 +467,9 @@ pub fn attach_scoped_with_control(
             });
             if let Some(volume) = volume {
                 volumes.push((*index, volume));
+            }
+            if let Some(volume) = column_volume {
+                column_volumes.push((*index, volume));
             }
             if let Some(width) = plate_width {
                 plate_widths.push((*index, width));
@@ -473,6 +497,7 @@ pub fn attach_scoped_with_control(
             Ok(())
         },
     )?;
+    drop_column_box_quantities(model, &column_volumes);
     add_mesh_volumes(model, &volumes);
     add_wall_quantities(model, &wall_quantities);
     add_plate_widths(model, &plate_widths);
@@ -490,6 +515,106 @@ pub fn attach_scoped_with_control(
         note_refusal(model, index, reason);
     }
     Ok(report)
+}
+
+/// How far a column's box volume may differ from the volume of the mesh Revit
+/// saved for it, as a fraction of the mesh's, and still be its solid (RE-416):
+/// the mesh of a cylinder drawn with chords is within 1% of it, and a round
+/// column's box (the circle's bounding square) is 27% over it.
+const COLUMN_BOX_MESH_TOLERANCE: f64 = 0.02;
+
+/// The volume, cubic feet, of the surface `primitives` make, each triangle
+/// turned outward by its vertices' normals and measured from `origin`, or none
+/// where a primitive has no normals for its vertices or the volume is not
+/// positive. It does not need the surface closed or its faces flat, so it reads
+/// the chord-drawn side of a cylinder to the accuracy of its chords.
+fn oriented_mesh_volume(primitives: &[Primitive], origin: [f64; 3]) -> Option<f64> {
+    let sub = |a: [f64; 3], b: [f64; 3]| [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+    let cross = |a: [f64; 3], b: [f64; 3]| {
+        [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+    };
+    let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let mut total = 0.0;
+    for primitive in primitives {
+        if primitive.normals.len() != primitive.vertices.len() {
+            return None;
+        }
+        for triangle in &primitive.triangles {
+            let [i, j, k] = triangle.map(|index| index as usize);
+            let a = sub(*primitive.vertices.get(i)?, origin);
+            let mut b = sub(*primitive.vertices.get(j)?, origin);
+            let mut c = sub(*primitive.vertices.get(k)?, origin);
+            let outward = [i, j, k].map(|index| primitive.normals[index]);
+            let sum = [
+                outward[0][0] + outward[1][0] + outward[2][0],
+                outward[0][1] + outward[1][1] + outward[2][1],
+                outward[0][2] + outward[1][2] + outward[2][2],
+            ];
+            if dot(cross(sub(b, a), sub(c, a)), sum) < 0.0 {
+                std::mem::swap(&mut b, &mut c);
+            }
+            total += dot(a, cross(b, c)) / 6.0;
+        }
+    }
+    (total.is_finite() && total > 0.0).then_some(total)
+}
+
+/// Take from each column of `found` (an index into the entities and the volume
+/// of the mesh its body was drawn from) the quantities its record's box gave
+/// where the box is not its solid (RE-416): its `CrossSectionArea`,
+/// `OuterSurfaceArea`, `GrossVolume` and `NetVolume`, written for a type whose
+/// length parameter `b` is both sides of its box (RE-291), which a round column
+/// of that type is as well. Its `Length` stays. The box is its solid where its
+/// held `NetVolume`, or its `GrossVolume` where it holds no other, is within
+/// [`COLUMN_BOX_MESH_TOLERANCE`] of its mesh's volume. On Autodesk's
+/// rac_advanced sample 6 round columns of 450 mm and as many in each of its
+/// three later saves hold the square's areas and volumes, 4/pi of the circle's.
+fn drop_column_box_quantities(model: &mut IfcModel, found: &[(usize, f64)]) {
+    if found.is_empty() {
+        return;
+    }
+    let mut held: BTreeMap<usize, usize> = BTreeMap::new();
+    for (position, entity) in model.entities.iter().enumerate() {
+        if let IfcEntity::ElementPropertySet { element, set } = entity {
+            if set.name == "Qto_ColumnBaseQuantities" {
+                held.entry(*element).or_insert(position);
+            }
+        }
+    }
+    for &(index, mesh_volume) in found {
+        let Some(&position) = held.get(&index) else {
+            continue;
+        };
+        let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
+        else {
+            continue;
+        };
+        let volume_of = |wanted: &str| {
+            set.properties
+                .iter()
+                .find_map(|property| match &property.value {
+                    PropertyValue::VolumeCubicFeet(volume) if property.name == wanted => {
+                        Some(*volume)
+                    }
+                    _ => None,
+                })
+        };
+        let Some(box_volume) = volume_of("NetVolume").or_else(|| volume_of("GrossVolume")) else {
+            continue;
+        };
+        if (box_volume - mesh_volume).abs() > COLUMN_BOX_MESH_TOLERANCE * mesh_volume {
+            set.properties.retain(|property| {
+                !matches!(
+                    property.name.as_str(),
+                    "CrossSectionArea" | "OuterSurfaceArea" | "GrossVolume" | "NetVolume"
+                )
+            });
+        }
+    }
 }
 
 /// Give each element of `volumes` (an index into the entities and the volume,
