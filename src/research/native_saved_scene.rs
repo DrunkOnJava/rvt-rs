@@ -501,20 +501,12 @@ pub fn extract_in_batches_with_control(
     let mut owners = BTreeMap::<u64, Record>::new();
     native_document::extract_graphs(file, &opts, |r| {
         let id = r.identity.element_id;
-        let references = instance_symbols(&r);
-        let names_something = !references.is_empty();
         ensure!(
-            owner_references.insert(id, references).is_none(),
+            owner_references.insert(id, instance_symbols(&r)).is_none(),
             "duplicate current graphics owner"
         );
-        // An owner that names nothing is not kept: its graph is its own
-        // geometry (a wall's is about 1.6 MiB, #1429, and a file has hundreds),
-        // and it is read again below and meshed a buffer of them at a time. One
-        // that names a symbol or an owner is kept, as every owner was, for the
-        // batch that meshes it with what it names.
-        if names_something {
-            owners.insert(id, r);
-        }
+        // No owner is kept (scratch, #1694 lever b): each batch reads its own
+        // owners with it, as it reads an owner it does not hold.
         Ok(())
     })?;
     // The owners another owner names: their graphs stay for the mesh of the one
