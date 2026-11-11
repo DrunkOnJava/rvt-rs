@@ -10,3 +10,5 @@
   elements across the 95 exports Measure keeps, each in the set it already held); no element is added
   or removed. A stair with a checked box, a wall whose usage is Shear or Combined, and floors and stairs
   before Revit 2024 are left without: no model holds the first two, and the third reads another layout.
+  Timed on 26 files (Measure run 43040952174), the change reads 0.96 to 1.04 of `main`'s time and 0.95 to
+  1.00 of its peak memory.
