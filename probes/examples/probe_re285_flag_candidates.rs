@@ -12,6 +12,8 @@
 //!   paramd <ElementId> <class> <level> <parameter id> <value>   (a double)
 //!   named <ElementId> <class> <level> <name> <value>   (a parameter named
 //!   for external or bearing, spaces as underscores)
+//!   member <ElementId> <class> Instance <member name> <value>   (an integer
+//!   or Yes/No member of a wall's root record, RE-429)
 //!
 //! `<class>` is the class of the element's own record, `<level>` `Instance`
 //! or `Type`. `tools/re/native_flags_vs_ifc.py` scores them against the
@@ -22,6 +24,7 @@
 
 use rvt::RevitFile;
 use rvt::elem_table;
+use rvt::research::native_document::{NATIVE_RELEASES, Options, extract_graphs};
 use rvt::research::native_element_parameters::{ParameterKind, ParameterLevel, read};
 use std::collections::BTreeSet;
 
@@ -105,5 +108,42 @@ fn run(path: &str) -> anyhow::Result<()> {
         saved.elements.len()
     );
     println!("native readers: flag candidates classes with saved parameters: {classes:?}");
+    // A wall's Structural Usage is no integer among its saved parameters (the
+    // 2024 walls hold none), so the integer and Yes/No members of its root
+    // record are printed for the scorer to hold against `LoadBearing` (RE-429).
+    let options = Options {
+        selected_classes: BTreeSet::from(["SWall".to_string(), "ArcWall".to_string()]),
+        releases: NATIVE_RELEASES,
+        ..Options::default()
+    };
+    let mut walls = 0usize;
+    extract_graphs(&mut rf, &options, |record| {
+        let (Some(class), Some(root)) = (
+            record.class_name.as_deref(),
+            record
+                .graph
+                .as_ref()
+                .and_then(|graph| graph.objects.first())
+                .and_then(|object| object.fields.as_object()),
+        ) else {
+            return Ok(());
+        };
+        walls += 1;
+        for (name, value) in root {
+            let value = match value {
+                serde_json::Value::Bool(flag) => i64::from(*flag),
+                other => match other.as_i64() {
+                    Some(value) => value,
+                    None => continue,
+                },
+            };
+            println!(
+                "member {} {class} Instance {name} {value}",
+                record.identity.element_id
+            );
+        }
+        Ok(())
+    })?;
+    println!("native readers: flag candidates wall root records {walls}");
     Ok(())
 }

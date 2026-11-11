@@ -61,7 +61,8 @@ def read_params(path, kind="param"):
             continue
         try:
             value = float(fields[5]) if kind == "paramd" else int(fields[5])
-            parameter = int(fields[4])
+            # A `member` line names a member of a record, not a parameter id.
+            parameter = fields[4] if kind == "member" else int(fields[4])
         except ValueError:
             continue
         params[int(fields[1])][(fields[3], parameter)] = value
@@ -140,6 +141,8 @@ def main():
     if len(args) < 2:
         raise SystemExit(__doc__)
     params = read_params(args[0])
+    for tag, held in read_params(args[0], "member").items():
+        params[tag].update(held)
     model = ifcopenshell.open(args[1])
     thermal_candidates(read_params(args[0], "paramd"), thermal(model))
     exported = revit_flags(model)
@@ -159,7 +162,9 @@ def main():
                 for key, value in held.items():
                     holders[key][value][state] += 1
                     have[key] += 1
-            for key in sorted(holders):
+            near = []
+            # Parameter ids are numbers and record members are names.
+            for key in sorted(holders, key=lambda key: (key[0], str(key[1]))):
                 if key[1] in WATCHED:
                     triples = "; ".join(
                         f"{value} {'true' if state else 'false'} {count}"
@@ -169,14 +174,20 @@ def main():
                     print(
                         f"native readers: flag {klass} {flag} watched {key[0]} parameter {key[1]} held by {have[key]} of {len(rows)} values ({triples})"
                     )
-                if have[key] != len(rows):
-                    continue
                 by_value = holders[key]
                 if len(by_value) < 2:
                     continue
-                if any(len(states) != 1 for states in by_value.values()):
-                    continue
-                if len({next(iter(states)) for states in by_value.values()}) < 2:
+                exact = (
+                    have[key] == len(rows)
+                    and all(len(states) == 1 for states in by_value.values())
+                    and len({next(iter(states)) for states in by_value.values()}) >= 2
+                )
+                if not exact:
+                    # Held by nine in ten and agreeing on nine in ten (the
+                    # majority state of each value): a lead, not a rule.
+                    agree = sum(max(states.values()) for states in by_value.values())
+                    if have[key] * 10 >= len(rows) * 9 and agree * 10 >= have[key] * 9:
+                        near.append((agree / have[key], key, have[key], by_value))
                     continue
                 triples = "; ".join(
                     f"{value} {'true' if next(iter(states)) else 'false'} {sum(states.values())}"
@@ -184,6 +195,15 @@ def main():
                 )
                 print(
                     f"native readers: flag {klass} {flag} candidate {key[0]} parameter {key[1]} values ({triples})"
+                )
+            for share, key, held, by_value in sorted(near, key=lambda n: -n[0])[:3]:
+                triples = "; ".join(
+                    f"{value} {'true' if state else 'false'} {count}"
+                    for value, states in sorted(by_value.items())
+                    for state, count in sorted(states.items())
+                )
+                print(
+                    f"native readers: flag {klass} {flag} near {key[0]} parameter {key[1]} held by {held} of {len(rows)}, agreeing {share:.3f} values ({triples})"
                 )
 
 
