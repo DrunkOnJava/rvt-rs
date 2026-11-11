@@ -53,12 +53,12 @@
 use super::IfcModel;
 use super::entities::{BrepTriangle, IfcEntity, Property, PropertySet, PropertyValue, SolidShape};
 use super::export_content::{
-    BEAM_BOX_BODY_SOURCE, INSTANCE_TURNED_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE,
-    SAVED_MESH_ELEMENT_ID_SHARED, SAVED_MESH_NO_GRAPHICS, SAVED_MESH_NO_MESH,
-    SAVED_MESH_NO_TRIANGLES, SAVED_MESH_NOT_CANDIDATE_PREFIX, SAVED_MESH_NOT_OFFERED_PREFIX,
-    SAVED_MESH_PARTIAL_PREFIX, SAVED_MESH_REFUSAL_PROPERTY, SLAB_SHAPE_REFUSAL_PROPERTY,
-    SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY,
-    WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    BEAM_BOX_BODY_SOURCE, INSTANCE_ORIENTED_BODY_SOURCE, INSTANCE_TURNED_BODY_SOURCE,
+    RECORD_BBOX_BODY_SOURCE, SAVED_MESH_ELEMENT_ID_SHARED, SAVED_MESH_NO_GRAPHICS,
+    SAVED_MESH_NO_MESH, SAVED_MESH_NO_TRIANGLES, SAVED_MESH_NOT_CANDIDATE_PREFIX,
+    SAVED_MESH_NOT_OFFERED_PREFIX, SAVED_MESH_PARTIAL_PREFIX, SAVED_MESH_REFUSAL_PROPERTY,
+    SLAB_SHAPE_REFUSAL_PROPERTY, SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY,
+    WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use super::mesh_volume::{all_faces_flat, box_plan_width, closed_mesh_volume};
 use super::mesh_wall_quantities::{WallMeshQuantities, wall_mesh_quantities};
@@ -152,7 +152,9 @@ fn partial_refusal(meshes: &GraphicsMeshes) -> Option<String> {
 
 /// Whether an element of `ifc_type` with `properties` is drawn as a box that
 /// the pass can replace with its saved mesh: its record's box, a beam's box
-/// (RE-328) or a family instance's box turned to its angle (RE-87), each a
+/// (RE-328), a family instance's box turned to its angle (RE-87) or a curtain
+/// mullion's box along its own axes (RE-106, RE-421: 327 mullions of the BIM4LCA
+/// timber office at permit, whose Revit solids have mitred ends), each a
 /// stand-in for the mesh; and a roof's level block, whose record box holds the
 /// reference surface and not the slope or thickness (#1612). A resolved outline
 /// is the body of any other class (a floor's plan, a ceiling's).
@@ -168,7 +170,12 @@ fn is_replaceable_box(ifc_type: &str, properties: &[Property]) -> bool {
     });
     matches!(
         source,
-        Some(RECORD_BBOX_BODY_SOURCE | BEAM_BOX_BODY_SOURCE | INSTANCE_TURNED_BODY_SOURCE)
+        Some(
+            RECORD_BBOX_BODY_SOURCE
+                | BEAM_BOX_BODY_SOURCE
+                | INSTANCE_TURNED_BODY_SOURCE
+                | INSTANCE_ORIENTED_BODY_SOURCE
+        )
     ) && !(profile_resolved && ifc_type != "IFCROOF")
 }
 
