@@ -4026,6 +4026,18 @@ impl StepWriter<'_> {
             // which are the right way round on a rectangular opening (not on
             // a door's, RE-244). With base quantities off the wall has none
             // and the opening none either.
+            // RE-338: Revit's export sweeps the wall's section along the
+            // door's width for a door's opening in a second wall, so on that
+            // one its `Width` is the wall's thickness and its `Depth` the
+            // outline's extent along the wall. The cutter at `reference_from`
+            // is the door there alone.
+            let cutter_is_door = model.entities.get(*reference_from).is_some_and(|cutter| {
+                matches!(
+                    cutter,
+                    super::entities::IfcEntity::BuildingElement { ifc_type, .. }
+                        if ifc_type.eq_ignore_ascii_case("IFCDOOR")
+                )
+            });
             if *with_quantities && wall_widths.contains_key(host) {
                 let extent = |axis: fn(&(f64, f64)) -> f64| {
                     let low = outline_feet.iter().map(axis).fold(f64::INFINITY, f64::min);
@@ -4039,13 +4051,22 @@ impl StepWriter<'_> {
                     name: name.into(),
                     value: super::entities::PropertyValue::PositiveLengthFeet(feet),
                 };
-                let quantities = PropertySet {
-                    name: "Qto_OpeningElementBaseQuantities".into(),
-                    properties: vec![
+                let properties = if cutter_is_door {
+                    vec![
+                        length("Width", *thickness_feet),
+                        length("Height", extent(|point| point.1)),
+                        length("Depth", extent(|point| point.0)),
+                    ]
+                } else {
+                    vec![
                         length("Width", extent(|point| point.0)),
                         length("Height", extent(|point| point.1)),
                         length("Depth", *thickness_feet),
-                    ],
+                    ]
+                };
+                let quantities = PropertySet {
+                    name: "Qto_OpeningElementBaseQuantities".into(),
+                    properties,
                 };
                 self.emit_property_set(
                     owner_hist,

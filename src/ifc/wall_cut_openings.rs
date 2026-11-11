@@ -448,7 +448,9 @@ fn door_cut(host: &Host, world: &[f64; 6], door: usize) -> Result<Cut, &'static 
         up,
         recess: false,
         reference_from: door,
-        quantities: false,
+        // RE-338: Revit's export sweeps the wall's section along the door's
+        // width to make this opening, and writes the three quantities of it.
+        quantities: true,
     })
 }
 

@@ -296,7 +296,12 @@ pub enum IfcEntity {
     /// `OpeningUtil`). Its `Pset_OpeningElementCommon.Reference` is the type
     /// name of the entity at `reference_from`; `recess` says it does not pass
     /// through the wall; `quantities` says its `Qto_OpeningElementBaseQuantities`
-    /// are written.
+    /// are written: `Width` and `Height` the outline's extents along the wall
+    /// and up, `Depth` the wall's thickness, or, where `reference_from` is a
+    /// door, `Width` the wall's thickness, `Height` the outline's height and
+    /// `Depth` its extent along the wall, which is how Revit's export measures
+    /// the opening it sweeps a wall's section along the door's width into
+    /// (RE-338).
     WallCutOpening {
         host: usize,
         number: u32,
