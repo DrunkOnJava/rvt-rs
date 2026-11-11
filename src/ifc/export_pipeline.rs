@@ -10,7 +10,9 @@
 //! limit kept unread. What each front end adds on top (writing the file,
 //! refusing an incomplete export, checking the quality mode) stays with it.
 
-use super::saved_meshes::{SavedMeshScope, attach_scoped_with_control, default_scope};
+use super::saved_meshes::{
+    SavedMeshScope, attach_scoped_with_control, default_scope, note_not_offered,
+};
 use super::{
     DiagnosticRvtDocExporter, ExportDiagnostics, ExportQualityMode, IfcModel, PlaceholderExporter,
     RvtDocExporter, leave_out_base_quantities, record_unread_streams, recount_exported,
@@ -704,7 +706,24 @@ pub fn run_export_with_limits_and_control(
                 notes.push(ExportNote::SavedMeshesSkipped {
                     error: error.to_string(),
                 });
+                // #1645: the boxes the pass was to look at keep their body, and say why.
+                if note_not_offered(&mut model, "pass_failed") > 0 {
+                    recount_exported(&mut diagnostics, &model);
+                }
             }
+        }
+    } else if options.kind != ExportKind::Placeholder {
+        // #1645: no pass was offered, so each box says why it is one: the caller
+        // turned the pass off, or the release's saved graphics are not read.
+        let why = if matches!(options.saved_meshes, SavedMeshChoice::Off) {
+            "saved_meshes_off"
+        } else if rf.basic_file_info().is_ok() {
+            "release_outside_2023_to_2027"
+        } else {
+            "release_not_read"
+        };
+        if note_not_offered(&mut model, why) > 0 {
+            recount_exported(&mut diagnostics, &model);
         }
     }
 
