@@ -656,7 +656,12 @@ pub fn space_predefined_type_for(value: &str) -> Option<&'static str> {
 /// `IfcFireSuppressionTerminalTypeEnum`, `IfcSanitaryTerminalTypeEnum`,
 /// `IfcAirTerminalTypeEnum`) and of `IfcFurniture`, whose own predefined type
 /// every furniture and casework element takes where it is an enumerator
-/// (`IfcFurnitureTypeEnum`, RE-419). `IfcStair` and `IfcDoor`, honoured as targets
+/// (`IfcFurnitureTypeEnum`, RE-419). `IfcRailing` is listed for the same reason
+/// (#1713): Revit's export of the BIM4LCA office writes one value per railing
+/// type (`HANDRAIL` on its `KAI-4` and `KJO-1`, `GUARDRAIL` on its `KAI-1`,
+/// `KAI-2`, `KAI-3` and `KAI-5`, `NOTDEFINED` on its `KAI-6`), and the railing's
+/// host does not decide it: 26 of the 41 name a stair and 8 a ramp, where 32 are
+/// `HANDRAIL`. `IfcStair` and `IfcDoor`, honoured as targets
 /// since #792, are not listed, because listing them would apply every door's
 /// and stair's own predefined type as well, which is not measured. An
 /// element exported as either through its value takes the target's
@@ -801,6 +806,16 @@ const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
             "FILECABINET",
             "SHELF",
             "SOFA",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCRAILING",
+        &[
+            "HANDRAIL",
+            "GUARDRAIL",
+            "BALUSTRADE",
             "USERDEFINED",
             "NOTDEFINED",
         ],

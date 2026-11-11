@@ -161,6 +161,21 @@ fn retain_boundary_points(
     points: &[[f64; 2]],
     boundary_edges: &BTreeSet<(u32, u32)>,
     triangles: &mut Vec<[u32; 3]>,
+    work: &mut u64,
+) -> Result<()> {
+    retain_boundary_points_within(points, boundary_edges, triangles, work, PLANAR_WORK_BUDGET)
+}
+
+/// [`retain_boundary_points`] charging its work to `work`, the face's, and refusing the
+/// face once that is past `budget` (#1748): one unit for each edge of a triangle it
+/// tests against a point, and as many more as there are boundary edges where that edge
+/// has to be tested against all of them.
+fn retain_boundary_points_within(
+    points: &[[f64; 2]],
+    boundary_edges: &BTreeSet<(u32, u32)>,
+    triangles: &mut Vec<[u32; 3]>,
+    work: &mut u64,
+    budget: u64,
 ) -> Result<()> {
     // Which points a triangle uses, kept as splits add them, instead of a
     // search of every triangle for every point.
@@ -185,7 +200,13 @@ fn retain_boundary_points(
                     t[edge].min(t[(edge + 1) % 3]),
                     t[edge].max(t[(edge + 1) % 3]),
                 );
-                let boundary_line = boundary_edges.contains(&edge_key)
+                *work += 1;
+                let on_edge = boundary_edges.contains(&edge_key);
+                if !on_edge {
+                    *work += boundary_edges.len() as u64;
+                }
+                ensure!(*work <= budget, PLANAR_BUDGET_EXCEEDED);
+                let boundary_line = on_edge
                     || boundary_edges.iter().any(|(u, v)| {
                         cross(points[*u as usize], points[*v as usize], points[a]).abs() <= 1e-8
                             && cross(points[*u as usize], points[*v as usize], points[b]).abs()
@@ -1117,20 +1138,35 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
     }
     let mut loops = Vec::new();
     let mut seen = BTreeSet::new();
+    let mut points = 0;
     loop {
         ensure!(seen.insert(li), "loop-list cycle");
-        loops.push(ring_impl(g, index, fi, li, EdgeSide::Plane)?);
+        let ring = ring_impl(g, index, fi, li, EdgeSide::Plane)?;
+        points = planar_points_with(points, ring.len()).context(PLANAR_BUDGET_EXCEEDED)?;
+        loops.push(ring);
         match index.resolve(li, &g.objects[li].fields["m_nextLoop"])? {
             Some(next) => li = next,
             None => break,
         }
     }
-    let (vertices, triangles) = match plane_mesh(&loops, orient, origin, x, y) {
+    // The work of the whole face: its outer rings and a second try after a split
+    // share one budget (#1748).
+    let mut work = 0;
+    let (vertices, triangles) = match plane_mesh(&loops, orient, origin, x, y, &mut work) {
         Err(error) if error.to_string().starts_with(AREA_MISMATCH) => {
             // The outline of two lobes that touch at a vertex is one ring that visits
             // it twice, which earcut covers a sliver beside (#1732): split, once.
-            match split_pinched_rings(&loops) {
-                Some(split) => plane_mesh(&split, orient, origin, x, y).map_err(|_| error)?,
+            match split_pinched_rings(&loops, &mut work, PLANAR_WORK_BUDGET)? {
+                Some(split) => {
+                    plane_mesh(&split, orient, origin, x, y, &mut work).map_err(|second| {
+                        // A face the second try runs out of budget on says so.
+                        if second.to_string().starts_with(PLANAR_BUDGET_EXCEEDED) {
+                            second
+                        } else {
+                            error
+                        }
+                    })?
+                }
                 None => return Err(error),
             }
         }
@@ -1154,6 +1190,38 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
 /// The text a planar face is refused with when its triangles do not add up to its rings' area.
 const AREA_MISMATCH: &str = "triangulated area mismatch";
 
+/// The most points all the rings of one planar face may hold (#1748). Earcut,
+/// `retain_boundary_points` and `split_pinched_rings` are super-linear in a face's
+/// points, and a hostile file can give each edge of a ring up to
+/// [`EDGE_POINT_BUDGET`] of them; the trimmed-cell path has its own budgets. The
+/// largest planar face of the 2023 to 2027 samples, the BIM4LCA models and the
+/// reference models holds 2,308 points (Autodesk's Snowdon Towers Architectural), so
+/// this is 4.3 times it.
+const PLANAR_FACE_POINT_BUDGET: usize = 10_000;
+
+/// The most work one planar face may ask in all (#1748): its outer rings and the
+/// second try after a split share it. It is counted by [`retain_boundary_points_within`]
+/// (for each point earcut left out, every triangle edge is tested against every
+/// boundary edge, so the work grows with the cube of a face's points where a ring has
+/// many collinear ones) and by [`split_pinched_rings`] (every pair of points of a
+/// ring it compares). The most any one call of the first asks of the corpus is
+/// 14,597,894 (the `rme` samples), so this is 17 times it, about two seconds of one
+/// face; no face of the corpus is refused by it.
+const PLANAR_WORK_BUDGET: u64 = 250_000_000;
+
+/// The text a planar face is refused with when its rings hold more points than
+/// [`PLANAR_FACE_POINT_BUDGET`], before any of them is triangulated.
+const PLANAR_BUDGET_EXCEEDED: &str = "planar face budget exceeded";
+
+/// The points a planar face holds once a ring of `ring` points joins the `points` it
+/// has, or `None` where that is over [`PLANAR_FACE_POINT_BUDGET`] or does not fit a
+/// `usize`.
+fn planar_points_with(points: usize, ring: usize) -> Option<usize> {
+    points
+        .checked_add(ring)
+        .filter(|total| *total <= PLANAR_FACE_POINT_BUDGET)
+}
+
 /// The vertices of a planar face and the triangles on them, by their indices.
 type PlaneMesh = (Vec<[f64; 3]>, Vec<[u32; 3]>);
 
@@ -1167,6 +1235,7 @@ fn plane_mesh(
     origin: [f64; 3],
     x: [f64; 3],
     y: [f64; 3],
+    work: &mut u64,
 ) -> Result<PlaneMesh> {
     // A face can contain multiple disconnected outer rings, with nested holes.
     let depths: Vec<_> = loops
@@ -1231,7 +1300,7 @@ fn plane_mesh(
         earcut_triangles.retain(|t| {
             cross(pts[t[0] as usize], pts[t[1] as usize], pts[t[2] as usize]).abs() > 1e-12
         });
-        retain_boundary_points(&pts, &boundary_edges, &mut earcut_triangles)?;
+        retain_boundary_points(&pts, &boundary_edges, &mut earcut_triangles, work)?;
         let mut sum = 0.;
         let base = vertices.len() as u32;
         for t in &mut earcut_triangles {
@@ -1269,8 +1338,15 @@ fn plane_mesh(
 /// it is made of (the outline of two lobes that touch at a vertex is one such ring), or
 /// `None` when no ring does. A ring of two points has no area and is dropped; a ring
 /// that starts at the shared vertex is turned to start at the next, so that the nesting
-/// test does not read the point where two rings touch (#1732).
-fn split_pinched_rings(loops: &[Vec<[f64; 2]>]) -> Option<Vec<Vec<[f64; 2]>>> {
+/// test does not read the point where two rings touch (#1732). Each pair of points it
+/// compares is a unit of the face's `work`, so that a ring of many lobes is refused
+/// past `budget` instead of searched in time that grows with the cube of its points
+/// (#1748).
+fn split_pinched_rings(
+    loops: &[Vec<[f64; 2]>],
+    work: &mut u64,
+    budget: u64,
+) -> Result<Option<Vec<Vec<[f64; 2]>>>> {
     let mut out = Vec::new();
     let mut split_any = false;
     for ring in loops {
@@ -1280,11 +1356,17 @@ fn split_pinched_rings(loops: &[Vec<[f64; 2]>]) -> Option<Vec<Vec<[f64; 2]>>> {
             while ring.len() > 1 && close(ring[0], ring[ring.len() - 1]) {
                 ring.pop();
             }
-            let twice = (0..ring.len()).find_map(|i| {
-                (i + 1..ring.len())
-                    .find(|j| close(ring[i], ring[*j]))
-                    .map(|j| (i, j))
-            });
+            let mut twice = None;
+            'search: for i in 0..ring.len() {
+                for j in i + 1..ring.len() {
+                    *work += 1;
+                    ensure!(*work <= budget, PLANAR_BUDGET_EXCEEDED);
+                    if close(ring[i], ring[j]) {
+                        twice = Some((i, j));
+                        break 'search;
+                    }
+                }
+            }
             let Some((i, j)) = twice else {
                 if ring.len() >= 3 {
                     out.push(ring);
@@ -1303,7 +1385,7 @@ fn split_pinched_rings(loops: &[Vec<[f64; 2]>]) -> Option<Vec<Vec<[f64; 2]>>> {
             pending.push(rest);
         }
     }
-    split_any.then_some(out)
+    Ok(split_any.then_some(out))
 }
 
 /// Tessellate one Face whose saved surface is a bounded cylindrical surface.
@@ -2095,14 +2177,22 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EDGE_SAGITTA, EdgeLimits, area, distance_to_chord, isoparametric_axis,
-        normals_follow_winding, refine_crossing_edge, refine_crossing_edge_within, regions_tile,
-        split_pinched_rings, within_envelope,
+        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, PLANAR_WORK_BUDGET, area, cross,
+        distance_to_chord, isoparametric_axis, normals_follow_winding, planar_points_with,
+        refine_crossing_edge, refine_crossing_edge_within, regions_tile,
+        retain_boundary_points_within, split_pinched_rings, within_envelope,
     };
     use anyhow::Result;
+    use std::collections::BTreeSet;
     use std::f64::consts::{FRAC_PI_2, PI};
 
     const TOLERANCE: f64 = 1e-7;
+
+    // The ring split on a fresh face's work, the real budget.
+    fn split(loops: &[Vec<[f64; 2]>]) -> Option<Vec<Vec<[f64; 2]>>> {
+        let mut work = 0;
+        split_pinched_rings(loops, &mut work, PLANAR_WORK_BUDGET).unwrap()
+    }
 
     // One facet whose winding normal is +z.
     fn follows(normal: [f64; 3]) -> bool {
@@ -2606,18 +2696,18 @@ mod tests {
     #[test]
     fn a_ring_that_visits_no_vertex_twice_is_not_split() {
         let square = vec![[0., 0.], [1., 0.], [1., 1.], [0., 1.]];
-        assert!(split_pinched_rings(std::slice::from_ref(&square)).is_none());
+        assert!(split(std::slice::from_ref(&square)).is_none());
         // Repeating the first point to close the ring, or a point twice in a row, is no pinch.
         let closed = vec![[0., 0.], [1., 0.], [1., 1.], [0., 1.], [0., 0.]];
-        assert!(split_pinched_rings(&[closed]).is_none());
+        assert!(split(&[closed]).is_none());
         let doubled = vec![[0., 0.], [1., 0.], [1., 0.], [1., 1.], [0., 1.]];
-        assert!(split_pinched_rings(&[doubled]).is_none());
-        assert!(split_pinched_rings(&[]).is_none());
+        assert!(split(&[doubled]).is_none());
+        assert!(split(&[]).is_none());
     }
 
     #[test]
     fn two_lobes_touching_at_a_vertex_become_two_rings_that_do_not_start_there() {
-        let rings = split_pinched_rings(&[lobes()]).unwrap();
+        let rings = split(&[lobes()]).unwrap();
         assert_eq!(rings.len(), 2);
         assert!(rings.iter().all(|ring| ring.len() >= 3));
         // Neither starts at the crown, where the nesting test would read a boundary point.
@@ -2630,7 +2720,7 @@ mod tests {
     #[test]
     fn a_ring_that_starts_at_the_shared_vertex_is_split_too() {
         let ring = vec![[1., 1.], [0., 1.], [0., 0.], [1., 1.], [2., 0.], [2., 1.]];
-        let rings = split_pinched_rings(&[ring]).unwrap();
+        let rings = split(&[ring]).unwrap();
         assert_eq!(rings.len(), 2);
         assert!(
             rings
@@ -2643,7 +2733,7 @@ mod tests {
     #[test]
     fn a_spike_out_and_back_leaves_the_ring_without_it() {
         let ring = vec![[0., 0.], [2., 0.], [2., 2.], [3., 2.], [2., 2.], [0., 2.]];
-        let rings = split_pinched_rings(&[ring]).unwrap();
+        let rings = split(&[ring]).unwrap();
         assert_eq!(rings.len(), 1);
         assert_eq!(rings[0].len(), 4);
         assert!((total_area(&rings) - 4.).abs() < 1e-12);
@@ -2662,7 +2752,7 @@ mod tests {
             [0., 1.],
             [-1., 1.],
         ];
-        let rings = split_pinched_rings(std::slice::from_ref(&ring)).unwrap();
+        let rings = split(std::slice::from_ref(&ring)).unwrap();
         assert_eq!(rings.len(), 3);
         assert!(
             rings
@@ -2673,8 +2763,124 @@ mod tests {
         assert!((total_area(&rings) - 1.5).abs() < 1e-12);
         // Rings that do not pinch pass through beside one that does.
         let square = vec![[5., 5.], [6., 5.], [6., 6.], [5., 6.]];
-        let both = split_pinched_rings(&[square.clone(), lobes()]).unwrap();
+        let both = split(&[square.clone(), lobes()]).unwrap();
         assert_eq!(both.len(), 3);
         assert!(both.contains(&square));
+    }
+
+    // How a planar face's point budget can go wrong: one point too many let through at its
+    // edge, a count that wraps round, or a face of many small rings that no one ring shows.
+    #[test]
+    fn a_planar_face_at_the_budget_is_kept_and_one_point_over_is_refused() {
+        let budget = PLANAR_FACE_POINT_BUDGET;
+        assert_eq!(planar_points_with(0, budget), Some(budget));
+        assert_eq!(planar_points_with(budget - 3, 3), Some(budget));
+        assert_eq!(planar_points_with(budget - 3, 4), None);
+        assert_eq!(planar_points_with(0, budget + 1), None);
+        assert_eq!(planar_points_with(0, 0), Some(0));
+    }
+
+    #[test]
+    fn a_count_that_would_wrap_round_is_refused_and_small_rings_add_up() {
+        assert_eq!(planar_points_with(usize::MAX, 1), None);
+        assert_eq!(planar_points_with(usize::MAX - 1, 5), None);
+        let (mut points, mut rings) = (0, 0);
+        while let Some(next) = planar_points_with(points, 4) {
+            points = next;
+            rings += 1;
+        }
+        assert_eq!(rings, PLANAR_FACE_POINT_BUDGET / 4);
+    }
+
+    // A face's points, the edges of its rings and the triangles earcut made of them.
+    type Square = (Vec<[f64; 2]>, BTreeSet<(u32, u32)>, Vec<[u32; 3]>);
+
+    // A square whose bottom side holds three points that earcut left out, with the
+    // triangles on its corners only: the points the boundary search has to put back.
+    fn square_with_a_dropped_side() -> Square {
+        let points = vec![
+            [0., 0.],
+            [0.25, 0.],
+            [0.5, 0.],
+            [0.75, 0.],
+            [1., 0.],
+            [1., 1.],
+            [0., 1.],
+        ];
+        let ring = |i: u32| (i.min((i + 1) % 7), i.max((i + 1) % 7));
+        (
+            points,
+            (0..7).map(ring).collect(),
+            vec![[0, 4, 5], [0, 5, 6]],
+        )
+    }
+
+    #[test]
+    fn a_boundary_search_past_its_work_is_refused_and_one_within_it_puts_every_point_back() {
+        let (points, edges, triangles) = square_with_a_dropped_side();
+        // Too little work is refused with the named reason, before a triangle is split.
+        let mut refused = triangles.clone();
+        let error =
+            retain_boundary_points_within(&points, &edges, &mut refused, &mut 0, 5).unwrap_err();
+        assert_eq!(error.to_string(), "planar face budget exceeded");
+        assert_eq!(refused, triangles);
+        // With the budget the face holds, every point is a vertex again and the square's
+        // area is kept.
+        let mut kept = triangles.clone();
+        let mut used = 0;
+        retain_boundary_points_within(&points, &edges, &mut kept, &mut used, PLANAR_WORK_BUDGET)
+            .unwrap();
+        assert!((0..7).all(|i| kept.iter().flatten().any(|v| *v == i)));
+        let total: f64 = kept
+            .iter()
+            .map(|t| {
+                cross(
+                    points[t[0] as usize],
+                    points[t[1] as usize],
+                    points[t[2] as usize],
+                )
+                .abs()
+                    / 2.
+            })
+            .sum();
+        assert!((total - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn the_work_budget_is_one_faces_and_not_each_calls() {
+        let (points, edges, triangles) = square_with_a_dropped_side();
+        // What one call of the boundary search asks of this square.
+        let mut used = 0;
+        let mut once = triangles.clone();
+        retain_boundary_points_within(&points, &edges, &mut once, &mut used, PLANAR_WORK_BUDGET)
+            .unwrap();
+        assert!(used > 0);
+        // With a budget one call fits in and two do not, the second call of the same face,
+        // on the counter the first left, is refused.
+        let budget = used + used / 2;
+        let mut work = 0;
+        let mut first = triangles.clone();
+        retain_boundary_points_within(&points, &edges, &mut first, &mut work, budget).unwrap();
+        let mut second = triangles.clone();
+        let error = retain_boundary_points_within(&points, &edges, &mut second, &mut work, budget)
+            .unwrap_err();
+        assert_eq!(error.to_string(), "planar face budget exceeded");
+    }
+
+    #[test]
+    fn a_ring_with_a_late_pinch_is_refused_past_the_work_budget_and_split_within_it() {
+        // 30 points of its own, then five lobes that touch at one vertex: the search for
+        // a vertex the ring visits twice compares each of the early points with every
+        // later one before it reaches the pinch.
+        let mut ring: Vec<[f64; 2]> = (0..30).map(|i| [f64::from(i), 0.]).collect();
+        for k in 0..5 {
+            let x = 101. + f64::from(k);
+            ring.extend([[100., 100.], [x, 101.], [x, 102.]]);
+        }
+        let mut work = 0;
+        let error = split_pinched_rings(std::slice::from_ref(&ring), &mut work, 100).unwrap_err();
+        assert_eq!(error.to_string(), "planar face budget exceeded");
+        let rings = split(&[ring]).unwrap();
+        assert_eq!(rings.len(), 5);
     }
 }
