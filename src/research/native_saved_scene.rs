@@ -429,8 +429,12 @@ fn extract_impl(
 const BATCH_BODY_BUDGET: usize = 2_000_000;
 /// The graph objects of the owners that name nothing that are held at once
 /// while they are meshed: the buffer is meshed and let go when it holds this
-/// many (the same 95 MiB or so as a batch of symbols).
-const OWNER_OBJECT_BUDGET: usize = 20_000;
+/// many, about 24 MiB at 4.8 KiB an object. At 20,000 (about 95 MiB) it was the
+/// pass's peak on Core Interior, whose walls fill it: 5,000 took 82 MiB off that
+/// file's export and 44 to 46 off the BIM4LCA office's, at no cost in time, since
+/// the owners are read once however often the buffer is meshed (#1694). A file
+/// small enough that its owners never fill it is not moved.
+const OWNER_OBJECT_BUDGET: usize = 5_000;
 /// An owner as a batch is planned: the first shared symbol it names (the
 /// order owners naming the same one together), its id, and the shared symbols
 /// it names itself.
