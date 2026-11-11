@@ -5,9 +5,12 @@ Pairs each `IfcBeam` of the two files by `Tag`. For each beam it reads `Length`,
 `OuterSurfaceArea`, `GrossSurfaceArea`, `NetSurfaceArea`, `GrossVolume` and `NetVolume` in each file's own units,
 the kind of body Revit writes (an extrusion and its profile, or a mesh), and the body's mesh. A mesh is a prism
 along an axis when all its planes but at most two (its ends) are parallel to it (`mullion_profiles_vs_ifc`'s
-reading, taking the axis whose extent is nearest the beam's own `Length`): from it the scorer reads the extent,
-the area of the faces along the axis (lateral), of the end faces square to it (flat), of those between (mitre),
-and the volume, and says which sum of them each of Revit's quantities equals, by the kind of ends the body has.
+reading). Revit's extrusion need not run along the beam: a beam modelled as its side profile extruded by its
+width has a `Depth` of the width, not of its `Length`. So the axis taken is the one whose extent is nearest the
+`Depth` of Revit's extrusion (or, with no extrusion, the beam's `Length`), and the scorer says whether the
+extrusion runs along the `Length`. From the axis it reads the extent, the area of the faces along it (lateral),
+of the end faces square to it (flat), of those between (mitre), and the volume, and says which sum of them each
+of Revit's quantities equals, by whether the extrusion runs along the `Length` and the kind of ends it has.
 
 Then, for rvt-rs's beam, which of the quantities it writes and whether they equal Revit's, the body source it
 carries, and whether its body is Revit's (the same extent, area and volume along the same axis): a beam whose
@@ -77,6 +80,68 @@ def body_kind(beam):
     return "+".join(sorted(set(kinds))) or "none"
 
 
+def curve_points(curve):
+    """The 2D points of a polyline or an indexed poly curve of lines, or None (an arc is not read)."""
+    if curve.is_a("IfcPolyline"):
+        return [tuple(p.Coordinates[:2]) for p in curve.Points]
+    if curve.is_a("IfcIndexedPolyCurve"):
+        if curve.Segments and any(segment.is_a("IfcArcIndex") for segment in curve.Segments):
+            return None
+        return [tuple(p[:2]) for p in curve.Points.CoordList]
+    return None
+
+
+def polygon(points):
+    """The perimeter and the area of a closed polygon given by its points."""
+    if points is None or len(points) < 3:
+        return None
+    ring = points if points[0] != points[-1] else points[:-1]
+    perimeter = sum(((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2) ** 0.5 for a, b in zip(ring, ring[1:] + ring[:1]))
+    area = abs(sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(ring, ring[1:] + ring[:1]))) / 2
+    return perimeter, area
+
+
+def profile_of(solid, factor):
+    """The depth, the profile's area, its outer perimeter and the perimeters of its voids, in metres, of an extrusion
+    (None for what is not an extrusion of a rectangle or of a polygon, and for a profile with an arc)."""
+    depth = float(solid.Depth) * factor
+    area = solid.SweptArea
+    if area.is_a("IfcRectangleProfileDef"):
+        x, y = float(area.XDim) * factor, float(area.YDim) * factor
+        return {"depth": depth, "area": x * y, "outer": 2 * (x + y), "inner": 0.0}
+    if area.is_a("IfcArbitraryClosedProfileDef"):
+        outer = polygon(curve_points(area.OuterCurve))
+        if outer is None:
+            return {"depth": depth}
+        inner = [polygon(curve_points(c)) for c in (area.InnerCurves if area.is_a("IfcArbitraryProfileDefWithVoids") else ())]
+        if any(v is None for v in inner):
+            return {"depth": depth}
+        return {
+            "depth": depth,
+            "area": (outer[1] - sum(v[1] for v in inner)) * factor**2,
+            "outer": outer[0] * factor,
+            "inner": sum(v[0] for v in inner) * factor,
+        }
+    return {"depth": depth}
+
+
+def extrusion(beam, scale):
+    """What the first IfcExtrudedAreaSolid of the beam's Body is (see `profile_of`), or None."""
+    found = []
+
+    def items(representation, depth):
+        for item in representation.Items:
+            if item.is_a("IfcMappedItem") and depth < 3:
+                items(item.MappingSource.MappedRepresentation, depth + 1)
+            elif item.is_a("IfcExtrudedAreaSolid"):
+                found.append(item)
+
+    for representation in beam.Representation.Representations if beam.Representation else ():
+        if representation.RepresentationIdentifier == "Body":
+            items(representation, 0)
+    return profile_of(found[0], scale[0]) if found else None
+
+
 def sums(m, quantity):
     """What a prism could give for `quantity`, by name: the extent, the volume, or a sum of its faces."""
     if quantity == "Length":
@@ -96,12 +161,35 @@ def sums(m, quantity):
     }
 
 
-def equals(m, quantity, value):
-    """The names of the sums of the prism that equal `value`; one that gives what an earlier one did is in brackets."""
-    if m is None or value is None:
+def profile_sums(profile, quantity):
+    """What the extrusion's own profile gives for `quantity`: the area, the outer perimeter times the depth, and the
+    outer or all perimeters times the depth plus the two ends."""
+    if not profile or "area" not in profile:
+        return {}
+    depth, area, outer, inner = profile["depth"], profile["area"], profile["outer"], profile["inner"]
+    if quantity == "CrossSectionArea":
+        return {"profile area": area}
+    if quantity == "OuterSurfaceArea":
+        return {"outer perimeter x depth": outer * depth}
+    if quantity == "GrossSurfaceArea":
+        return {"outer perimeter x depth + 2 areas": outer * depth + 2 * area}
+    if quantity == "NetSurfaceArea":
+        return {"all perimeters x depth + 2 areas": (outer + inner) * depth + 2 * area}
+    if quantity in ("GrossVolume", "NetVolume"):
+        return {"profile area x depth": area * depth}
+    return {}
+
+
+def equals(m, quantity, value, profile=None):
+    """The names of the sums of the prism and of the extrusion's profile that equal `value`; one that gives what an
+    earlier one did is in brackets."""
+    if value is None:
         return ()
+    candidates = dict(profile_sums(profile, quantity))
+    if m is not None:
+        candidates.update(sums(m, quantity))
     seen, found = [], []
-    for name, total in sums(m, quantity).items():
+    for name, total in candidates.items():
         if not close(total, value):
             continue
         found.append(f"({name})" if any(close(total, other) for other in seen) else name)
@@ -110,12 +198,15 @@ def equals(m, quantity, value):
 
 
 def read(settings, beam, scale, hint=None):
-    """The beam's quantities, and its body analysed along the prism axis nearest `hint` or its own `Length`."""
+    """The beam's quantities, its extrusion depth, and its body analysed along the prism axis nearest `hint`,
+    or its extrusion's depth, or its own `Length`."""
     values = beam_values(beam, scale)
+    profile = extrusion(beam, scale)
+    depth = profile["depth"] if profile else None
     triangles = mesh(settings, beam)
-    reach = hint if hint is not None else values["Length"]
+    reach = hint if hint is not None else (depth if depth is not None else values["Length"])
     axis = prism_axis(triangles, reach) if triangles is not None and reach else None
-    return values, (analyse(triangles, axis) if axis is not None else None)
+    return values, profile, (analyse(triangles, axis) if axis is not None else None)
 
 
 def main():
@@ -138,10 +229,11 @@ def main():
     kinds, written, rules, bodies = collections.Counter(), collections.Counter(), collections.Counter(), collections.Counter()
     odd = []
     for tag in both:
-        r, rb = read(settings, revit[tag], revit_scale)
-        hint = r["Length"]
-        o, ob = read(settings, ours[tag], ours_scale, hint)
-        kinds[body_kind(revit[tag])] += 1
+        r, profile, rb = read(settings, revit[tag], revit_scale)
+        depth = profile["depth"] if profile else None
+        o, _, ob = read(settings, ours[tag], ours_scale, depth if depth is not None else r["Length"])
+        run = "no extrusion" if depth is None else ("along the Length" if close(depth, r["Length"]) else "across the Length")
+        kinds[(body_kind(revit[tag]), run)] += 1
         for name in QUANTITIES:
             if r[name] is None:
                 continue
@@ -151,28 +243,28 @@ def main():
         for name in QUANTITIES:
             if r[name] is None:
                 continue
-            rules[(name, ends, equals(rb, name, r[name]) or ("none" if rb else "no prism axis"))] += 1
+            rules[(name, run, ends, equals(rb, name, r[name], profile) or ("none" if rb else "no prism axis"))] += 1
         same = ob is not None and rb is not None and close(ob["extent"], rb["extent"]) and close(ob["area"], rb["area"]) and close(ob["volume"], rb["volume"])
         src = body_sources(ours[tag])
-        bodies[(ends, src, "our body is Revit's" if same else "our body differs")] += 1
-        missing = [name for name in QUANTITIES[1:] if r[name] is not None and not equals(rb, name, r[name])]
+        bodies[(run, ends, src, "our body is Revit's" if same else "our body differs")] += 1
+        missing = [name for name in QUANTITIES[1:] if r[name] is not None and not equals(rb, name, r[name], profile)]
         if missing and len(odd) < LISTED:
-            odd.append((tag, revit[tag].Name, src, r, rb, o, ob, missing))
-    print("Revit's body of each beam:")
+            odd.append((tag, revit[tag].Name, src, r, rb, o, ob, missing, depth))
+    print("Revit's body of each beam, and whether its extrusion runs along the Length:")
     for kind, count in kinds.most_common():
         print(f"  {count:5}  {kind}")
     print("what rvt-rs writes of each quantity Revit writes (quantity, state):")
     for key, count in sorted(written.items()):
         print(f"  {count:5}  {key}")
-    print("Revit's quantity as a sum of its own body's faces (quantity, ends of Revit's body, the sums that equal it):")
+    print("Revit's quantity as a sum of its own body's faces (quantity, extrusion, ends of Revit's body, the sums that equal it):")
     for key, count in sorted(rules.items(), key=lambda kv: (QUANTITIES.index(kv[0][0]), -kv[1])):
         print(f"  {count:5}  {key}")
-    print("rvt-rs's body against Revit's (ends of Revit's body, rvt-rs's body source):")
+    print("rvt-rs's body against Revit's (extrusion, ends of Revit's body, rvt-rs's body source):")
     for key, count in bodies.most_common():
         print(f"  {count:5}  {key}")
     print(f"the first {len(odd)} beams with a quantity that is no sum of Revit's own faces:")
-    for tag, name, src, r, rb, o, ob, missing in odd:
-        print(f"  beam {tag} {name!r} src {src} no sum for {','.join(missing)}")
+    for tag, name, src, r, rb, o, ob, missing, depth in odd:
+        print(f"  beam {tag} {name!r} src {src} extrusion depth {fmt(depth)} no sum for {','.join(missing)}")
         print("      Revit " + " | ".join(f"{q} {fmt(r[q])}" for q in QUANTITIES))
         print("      ours  " + " | ".join(f"{q} {fmt(o[q])}" for q in QUANTITIES))
         for label, m in (("Revit", rb), ("ours", ob)):
