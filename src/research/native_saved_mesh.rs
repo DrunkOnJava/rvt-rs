@@ -162,6 +162,18 @@ fn retain_boundary_points(
     boundary_edges: &BTreeSet<(u32, u32)>,
     triangles: &mut Vec<[u32; 3]>,
 ) -> Result<()> {
+    retain_boundary_points_within(points, boundary_edges, triangles, PLANAR_WORK_BUDGET)
+}
+
+/// [`retain_boundary_points`] with at most `budget` units of work: one for each edge of a
+/// triangle it tests against a point, and as many more as there are boundary edges where
+/// that edge has to be tested against all of them. Past it the face is refused (#1748).
+fn retain_boundary_points_within(
+    points: &[[f64; 2]],
+    boundary_edges: &BTreeSet<(u32, u32)>,
+    triangles: &mut Vec<[u32; 3]>,
+    budget: u64,
+) -> Result<()> {
     // Which points a triangle uses, kept as splits add them, instead of a
     // search of every triangle for every point.
     let mut used = vec![false; points.len()];
@@ -170,6 +182,7 @@ fn retain_boundary_points(
             *slot = true;
         }
     }
+    let mut work: u64 = 0;
     for pi in 0..points.len() {
         if used[pi] {
             continue;
@@ -185,7 +198,13 @@ fn retain_boundary_points(
                     t[edge].min(t[(edge + 1) % 3]),
                     t[edge].max(t[(edge + 1) % 3]),
                 );
-                let boundary_line = boundary_edges.contains(&edge_key)
+                work += 1;
+                let on_edge = boundary_edges.contains(&edge_key);
+                if !on_edge {
+                    work += boundary_edges.len() as u64;
+                }
+                ensure!(work <= budget, PLANAR_BUDGET_EXCEEDED);
+                let boundary_line = on_edge
                     || boundary_edges.iter().any(|(u, v)| {
                         cross(points[*u as usize], points[*v as usize], points[a]).abs() <= 1e-8
                             && cross(points[*u as usize], points[*v as usize], points[b]).abs()
@@ -1160,8 +1179,19 @@ const AREA_MISMATCH: &str = "triangulated area mismatch";
 /// The most points all the rings of one planar face may hold (#1748). Earcut,
 /// `retain_boundary_points` and `split_pinched_rings` are super-linear in a face's
 /// points, and a hostile file can give each edge of a ring up to
-/// [`EDGE_POINT_BUDGET`] of them; the trimmed-cell path has its own budgets.
-const PLANAR_FACE_POINT_BUDGET: usize = 5_000;
+/// [`EDGE_POINT_BUDGET`] of them; the trimmed-cell path has its own budgets. The
+/// largest planar face of the 2023 to 2027 samples, the BIM4LCA models and the
+/// reference models holds 2,308 points (Autodesk's Snowdon Towers Architectural), so
+/// this is 4.3 times it.
+const PLANAR_FACE_POINT_BUDGET: usize = 10_000;
+
+/// The most work `retain_boundary_points` may do for one planar face (#1748), counted
+/// as [`retain_boundary_points_within`] says: for each point earcut left out, every
+/// triangle edge is tested against every boundary edge, so the work grows with the
+/// cube of a face's points where a ring has many collinear ones. The most any face of
+/// the corpus asks is 14,597,894 (the `rme` samples), so this is 17 times it, about
+/// two seconds of one face.
+const PLANAR_WORK_BUDGET: u64 = 250_000_000;
 
 /// The text a planar face is refused with when its rings hold more points than
 /// [`PLANAR_FACE_POINT_BUDGET`], before any of them is triangulated.
@@ -2117,11 +2147,13 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, area, distance_to_chord,
-        isoparametric_axis, normals_follow_winding, planar_points_with, refine_crossing_edge,
-        refine_crossing_edge_within, regions_tile, split_pinched_rings, within_envelope,
+        EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, PLANAR_WORK_BUDGET, area, cross,
+        distance_to_chord, isoparametric_axis, normals_follow_winding, planar_points_with,
+        refine_crossing_edge, refine_crossing_edge_within, regions_tile,
+        retain_boundary_points_within, split_pinched_rings, within_envelope,
     };
     use anyhow::Result;
+    use std::collections::BTreeSet;
     use std::f64::consts::{FRAC_PI_2, PI};
 
     const TOLERANCE: f64 = 1e-7;
@@ -2722,5 +2754,53 @@ mod tests {
             rings += 1;
         }
         assert_eq!(rings, PLANAR_FACE_POINT_BUDGET / 4);
+    }
+
+    // A square whose bottom side holds three points that earcut left out, with the
+    // triangles on its corners only: the points the boundary search has to put back.
+    fn square_with_a_dropped_side() -> (Vec<[f64; 2]>, BTreeSet<(u32, u32)>, Vec<[u32; 3]>) {
+        let points = vec![
+            [0., 0.],
+            [0.25, 0.],
+            [0.5, 0.],
+            [0.75, 0.],
+            [1., 0.],
+            [1., 1.],
+            [0., 1.],
+        ];
+        let ring = |i: u32| (i.min((i + 1) % 7), i.max((i + 1) % 7));
+        (
+            points,
+            (0..7).map(ring).collect(),
+            vec![[0, 4, 5], [0, 5, 6]],
+        )
+    }
+
+    #[test]
+    fn a_boundary_search_past_its_work_is_refused_and_one_within_it_puts_every_point_back() {
+        let (points, edges, triangles) = square_with_a_dropped_side();
+        // Too little work is refused with the named reason, before a triangle is split.
+        let mut refused = triangles.clone();
+        let error = retain_boundary_points_within(&points, &edges, &mut refused, 5).unwrap_err();
+        assert_eq!(error.to_string(), "planar face budget exceeded");
+        assert_eq!(refused, triangles);
+        // With the budget the face holds, every point is a vertex again and the square's
+        // area is kept.
+        let mut kept = triangles.clone();
+        retain_boundary_points_within(&points, &edges, &mut kept, PLANAR_WORK_BUDGET).unwrap();
+        assert!((0..7).all(|i| kept.iter().flatten().any(|v| *v == i)));
+        let total: f64 = kept
+            .iter()
+            .map(|t| {
+                cross(
+                    points[t[0] as usize],
+                    points[t[1] as usize],
+                    points[t[2] as usize],
+                )
+                .abs()
+                    / 2.
+            })
+            .sum();
+        assert!((total - 1.0).abs() < 1e-12);
     }
 }
