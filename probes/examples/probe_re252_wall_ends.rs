@@ -43,6 +43,7 @@ use std::fmt::Write as _;
 
 use rvt::RevitFile;
 use rvt::research::native_document::{Options, extract_graphs};
+use rvt::research::native_parameters::pointer_token;
 use serde_json::Value;
 
 fn field_json(field: &rvt::walker::InstanceField) -> String {
@@ -187,11 +188,7 @@ fn main() -> anyhow::Result<()> {
                 .objects
                 .iter()
                 .filter(|o| o.class_name == "VWallDriver")
-                .filter_map(|o| {
-                    o.fields
-                        .get("m_pCrv")
-                        .and_then(rvt::research::native_parameters::pointer_token)
-                })
+                .filter_map(|o| o.fields.get("m_pCrv").and_then(pointer_token))
                 .flat_map(|token| {
                     graph
                         .objects

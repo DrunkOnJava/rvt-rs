@@ -20,6 +20,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::research::native_document::{Options, extract_graphs};
+use rvt::research::native_parameters::pointer_parts;
 use serde_json::Value;
 
 fn main() -> anyhow::Result<()> {
@@ -91,9 +92,7 @@ fn main() -> anyhow::Result<()> {
                     .map(|map| {
                         map.iter()
                             .map(|(key, value)| match value {
-                                _ if rvt::research::native_parameters::pointer_parts(value)
-                                    .is_some() =>
-                                {
+                                _ if pointer_parts(value).is_some() => {
                                     format!("{key}=->")
                                 }
                                 other => {

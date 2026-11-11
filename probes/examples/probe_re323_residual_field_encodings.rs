@@ -30,6 +30,7 @@ use anyhow::Result;
 use rvt::RevitFile;
 use rvt::formats::FieldType;
 use rvt::research::native_document::{self, Options};
+use rvt::research::native_parameters::{pointer_class_tag, pointer_token};
 use rvt::research::schema_registry::{Class, Field, Registry};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -113,7 +114,7 @@ fn pointer_items(value: &Value) -> Vec<&Value> {
 }
 
 fn token_of(item: &Value) -> Option<u64> {
-    rvt::research::native_parameters::pointer_token(item)
+    pointer_token(item)
 }
 
 fn layout(field: &Field, value: &Value) -> std::result::Result<(), String> {
@@ -137,7 +138,7 @@ fn layout(field: &Field, value: &Value) -> std::result::Result<(), String> {
                 let Some(token) = token_of(item) else {
                     return Err("an item is not a pointer".into());
                 };
-                let tagged = rvt::research::native_parameters::pointer_class_tag(item).is_some();
+                let tagged = pointer_class_tag(item).is_some();
                 let wants_tag = field.modifier == 0x54 && token != 0;
                 if tagged != wants_tag {
                     return Err(format!("item token {token} class tag present {tagged}"));
@@ -204,7 +205,7 @@ impl Walk<'_> {
                     Some(_) => stats.unresolved += 1,
                     None => {}
                 }
-                if let Some(tag) = rvt::research::native_parameters::pointer_class_tag(item) {
+                if let Some(tag) = pointer_class_tag(item) {
                     let name = u16::try_from(tag)
                         .ok()
                         .and_then(|tag| self.registry.class(tag))

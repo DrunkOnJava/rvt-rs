@@ -28,6 +28,7 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use rvt::research::native_document::{Options, extract_graphs};
+use rvt::research::native_parameters::pointer_parts;
 use serde_json::Value;
 
 fn scalars(fields: &Value) -> String {
@@ -37,9 +38,7 @@ fn scalars(fields: &Value) -> String {
     map.iter()
         .map(|(key, value)| {
             let text = match value {
-                _ if rvt::research::native_parameters::pointer_parts(value).is_some() => {
-                    "->".to_string()
-                }
+                _ if pointer_parts(value).is_some() => "->".to_string(),
                 Value::Array(items) => format!("[{}]", items.len()),
                 Value::Object(_) => {
                     let text = value.to_string();

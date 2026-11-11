@@ -35,6 +35,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::Result;
 use rvt::RevitFile;
 use rvt::research::native_document::{Options, extract_graphs};
+use rvt::research::native_parameters::pointer_parts;
 use serde_json::{Map, Value, json};
 
 const CLIP: usize = 6000;
@@ -52,9 +53,7 @@ fn compact(value: &Value) -> Value {
                 if name.ends_with("HistTable") {
                     let count = member.as_array().map_or(0, Vec::len);
                     out.insert(format!("{name}#"), Value::from(count));
-                } else if rvt::research::native_parameters::pointer_parts(member).is_none()
-                    && name != "m_cleanData"
-                {
+                } else if pointer_parts(member).is_none() && name != "m_cleanData" {
                     out.insert(name.clone(), compact(member));
                 }
             }

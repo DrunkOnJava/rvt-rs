@@ -49,6 +49,7 @@ use rvt::RevitFile;
 use rvt::compression::{has_gzip_magic, inflate_at, prepare_stream_for_inflate};
 use rvt::elem_table;
 use rvt::research::native_extensible_storage::Catalog;
+use rvt::research::native_parameters::pointer_parts;
 use rvt::research::native_parameters::{GraphLimits, GraphObject};
 use rvt::research::schema_registry::{Class, Field, Registry};
 use rvt::research::{
@@ -249,7 +250,7 @@ fn describe_class(registry: &Registry, class: &Class) -> String {
 /// A record's JSON with what differs between any two saves left out: the
 /// offsets, the pointer tokens and the class tags (named by their class).
 fn normalize(registry: &Registry, value: &Value) -> Value {
-    if let Some((token, tag, _)) = rvt::research::native_parameters::pointer_parts(value) {
+    if let Some((token, tag, _)) = pointer_parts(value) {
         let label: String = match tag.and_then(|t| u16::try_from(t).ok()) {
             Some(tag) => registry
                 .class(tag)

@@ -66,6 +66,7 @@ use rvt::RevitFile;
 use rvt::ifc::entities::{IfcEntity, PropertySet};
 use rvt::ifc::{ExportOptions, run_export_with_limits};
 use rvt::research::native_document::{NATIVE_RELEASES, Options, extract_graphs};
+use rvt::research::native_parameters::pointer_parts;
 use rvt::research::native_walls::native_walls_and_top_joins;
 use rvt::research::partition_element_records as per;
 use rvt::research::partition_element_records_2023 as per32;
@@ -140,7 +141,7 @@ fn trimmed(fields: &Value) -> Value {
                 format!("{name}#"),
                 Value::from(member.as_array().map_or(0, Vec::len)),
             );
-        } else if rvt::research::native_parameters::pointer_parts(member).is_none() {
+        } else if pointer_parts(member).is_none() {
             kept.insert(name.clone(), member.clone());
         }
     }

@@ -57,6 +57,7 @@ use rvt::research::native_graphics_traversal::{
     NESTED_DETAIL_FILTER_DIAGNOSTIC, VIEW_COMPONENT_DIAGNOSTIC,
 };
 use rvt::research::native_parameters::ObjectGraph;
+use rvt::research::native_parameters::pointer_token;
 use rvt::research::native_saved_mesh::{
     graphics_including_hidden, graphics_with_resolver_at_detail,
 };
@@ -196,7 +197,7 @@ fn ignorable(diagnostic: &str) -> bool {
 /// Every scalar under `value`, as (path, text): a pointer as `ptrnull` or
 /// `ptrset`, an array as its length and, short, its items.
 fn flatten(prefix: &str, value: &Value, depth: usize, out: &mut Vec<(String, String)>) {
-    if let Some(token) = rvt::research::native_parameters::pointer_token(value) {
+    if let Some(token) = pointer_token(value) {
         let state = if token == 0 { "ptrnull" } else { "ptrset" };
         out.push((prefix.to_string(), state.to_string()));
         return;

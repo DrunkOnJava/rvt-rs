@@ -25,6 +25,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use rvt::RevitFile;
 use rvt::research::native_document::{Options, Record, extract_graphs};
+use rvt::research::native_parameters::pointer_parts;
 use rvt::research::partition_element_records::{self as per};
 use serde_json::{Map, Value};
 
@@ -48,7 +49,7 @@ fn trimmed(fields: &Value) -> String {
         if name.ends_with("HistTable") {
             let count = member.as_array().map_or(0, Vec::len);
             kept.insert(format!("{name}#"), Value::from(count));
-        } else if rvt::research::native_parameters::pointer_parts(member).is_none() {
+        } else if pointer_parts(member).is_none() {
             kept.insert(name.clone(), member.clone());
         }
     }

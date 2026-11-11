@@ -67,6 +67,7 @@ use anyhow::Result;
 use rvt::RevitFile;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
+use rvt::research::native_parameters::{pointer_parts, pointer_token};
 use rvt::research::native_walls::native_walls;
 use rvt::research::partition_schema_mvp::{
     CURTAIN_WALL_CLASS, OPENING_HOST_FIELD, OPENING_PLACEMENT_X_AXIS_FIELDS,
@@ -139,7 +140,7 @@ fn level_ends(fields: &Value) -> Option<([f64; 2], [f64; 2])> {
 
 /// The path of object keys and array indices to the pointer at `offset`.
 fn path_to(value: &Value, offset: usize, path: &mut Vec<String>) -> bool {
-    if let Some((_, _, at)) = rvt::research::native_parameters::pointer_parts(value) {
+    if let Some((_, _, at)) = pointer_parts(value) {
         return Some(at) == u64::try_from(offset).ok();
     }
     match value {
@@ -241,9 +242,7 @@ fn named_curve(graph: &ObjectGraph) -> (Option<u64>, Vec<usize>) {
         .objects
         .iter()
         .find(|object| object.class_name == "VWallDriver")
-        .and_then(|driver| {
-            rvt::research::native_parameters::pointer_token(driver.fields.get("m_pCrv")?)
-        });
+        .and_then(|driver| pointer_token(driver.fields.get("m_pCrv")?));
     let indices: Vec<usize> = token
         .map(|token| {
             graph

@@ -33,6 +33,7 @@ use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
+use rvt::research::native_parameters::pointer_parts;
 use rvt::research::native_saved_mesh::{face, pointer};
 use rvt::research::native_symbol_cuts::instance_cut_loops;
 use serde_json::Value;
@@ -52,9 +53,7 @@ struct CutGeometry {
 
 fn pointers(value: &Value, out: &mut Vec<Value>) {
     match value {
-        _ if rvt::research::native_parameters::pointer_parts(value).is_some() => {
-            out.push(value.clone())
-        }
+        _ if pointer_parts(value).is_some() => out.push(value.clone()),
         Value::Object(map) => map.values().for_each(|v| pointers(v, out)),
         Value::Array(items) => items.iter().for_each(|v| pointers(v, out)),
         _ => {}

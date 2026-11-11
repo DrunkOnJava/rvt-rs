@@ -39,6 +39,7 @@
 use rvt::RevitFile;
 use rvt::research::native_document as nd;
 use rvt::research::native_parameters::ObjectGraph;
+use rvt::research::native_parameters::pointer_token;
 use rvt::research::partition_schema_mvp::{
     TYPE_NAME_FIELD, curve_size_from_fields, duct_ends_from_fields, recover_partition_schema_mvp,
 };
@@ -184,9 +185,7 @@ fn print_native(rf: &mut RevitFile) {
             .iter()
             .filter(|object| object.class_name == "SegmentConnectorPosition")
             .filter_map(|position| {
-                let token = rvt::research::native_parameters::pointer_token(
-                    position.fields.get("m_pConnector")?,
-                )?;
+                let token = pointer_token(position.fields.get("m_pConnector")?)?;
                 Some((
                     *index_of_token.get(&token)?,
                     position.fields.get("m_paramOnCurve")?.as_f64()?,
@@ -202,7 +201,7 @@ fn print_native(rf: &mut RevitFile) {
             let Some(index) = calculation
                 .fields
                 .get("m_pConnector")
-                .and_then(rvt::research::native_parameters::pointer_token)
+                .and_then(pointer_token)
                 .and_then(|token| index_of_token.get(&token))
             else {
                 continue;

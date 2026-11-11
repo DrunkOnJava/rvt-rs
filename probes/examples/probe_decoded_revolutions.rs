@@ -3,6 +3,7 @@
 //! Refusal cases mutate decoded native graphs only; source files never change.
 use anyhow::{Context, Result, ensure};
 use rvt::RevitFile;
+use rvt::research::native_parameters::pointer_offset;
 use rvt::research::{
     native_form_geometry::{self, Curve, FormDocument},
     native_parameters::{self, ObjectGraph},
@@ -122,10 +123,8 @@ fn mutate(records: &mut Vec<(u64, ObjectGraph)>, case: &str) -> Result<()> {
                 .iter()
                 .position(|o| o.class_name == "CurveElemDriver")
                 .context("driver")?;
-            let offset = rvt::research::native_parameters::pointer_offset(
-                &graph.objects[driver].fields["m_pCrv"],
-            )
-            .context("offset")?;
+            let offset =
+                pointer_offset(&graph.objects[driver].fields["m_pCrv"]).context("offset")?;
             graph.edges.retain(|e| {
                 !(e.source_object_index == driver && e.pointer_offset as u64 == offset)
             });

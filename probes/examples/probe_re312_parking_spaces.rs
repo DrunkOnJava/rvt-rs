@@ -40,6 +40,7 @@
 
 use rvt::RevitFile;
 use rvt::research::native_document::{Options, extract_graphs};
+use rvt::research::native_parameters::pointer_parts;
 use rvt::research::partition_element_records::scan_category_records_multi;
 use rvt::research::partition_ifc_export_overrides::scan_export_parameters;
 use serde_json::Value;
@@ -59,7 +60,7 @@ fn text(value: &str) -> String {
 
 fn flatten(prefix: &str, value: &Value, out: &mut Vec<(String, String)>) {
     match value {
-        _ if rvt::research::native_parameters::pointer_parts(value).is_some() => {
+        _ if pointer_parts(value).is_some() => {
             out.push((prefix.to_string(), "->".into()));
         }
         Value::Object(map) => {

@@ -40,6 +40,7 @@ use rvt::research::native_graphics_traversal::{
     GraphicsTransform, select_graphics_with_resolver_at_detail,
 };
 use rvt::research::native_parameters::ObjectGraph;
+use rvt::research::native_parameters::pointer_parts;
 use rvt::research::native_saved_mesh::{self, pointer};
 use serde_json::Value;
 
@@ -178,14 +179,12 @@ fn describe(g: &ObjectGraph, oi: usize, depth: usize) -> String {
 
 fn value_text(g: &ObjectGraph, oi: usize, v: &Value, depth: usize) -> String {
     match v {
-        _ if rvt::research::native_parameters::pointer_parts(v).is_some() => {
-            match pointer(g, oi, v) {
-                Ok(Some(t)) if depth > 0 => describe(g, t, depth - 1),
-                Ok(Some(t)) => format!("->{}#{t}", g.objects[t].class_name),
-                Ok(None) => "null".into(),
-                Err(_) => "->?".into(),
-            }
-        }
+        _ if pointer_parts(v).is_some() => match pointer(g, oi, v) {
+            Ok(Some(t)) if depth > 0 => describe(g, t, depth - 1),
+            Ok(Some(t)) => format!("->{}#{t}", g.objects[t].class_name),
+            Ok(None) => "null".into(),
+            Err(_) => "->?".into(),
+        },
         Value::Array(a) => {
             let items: Vec<String> = a
                 .iter()
