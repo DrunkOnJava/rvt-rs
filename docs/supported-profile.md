@@ -170,7 +170,9 @@ the predefined type a scoped set needs (booleans, text, counts and integers,
 lengths and thermal transmittance, RE-194, #817), and Revit's "Export to IFC As"
 override, applied where it names `IfcShadingDevice`, `IfcSlab`, `IfcCovering`,
 `IfcWasteTerminal`, `IfcFireSuppressionTerminal`, `IfcSanitaryTerminal`,
-`IfcAirTerminal`, `IfcElectricAppliance` (RE-190), `IfcStair` or `IfcDoor` (#792)
+`IfcAirTerminal`, `IfcElectricAppliance` (RE-190), `IfcStair` or `IfcDoor` (#792),
+`IfcGeographicElement` on a floor, furniture, planting or specialty equipment
+(#1772)
 and Revit's exporter acts on it (not on a 2024 file's curtain walls, RE-188, or its wall sweeps, RE-192),
 with the values not applied listed in the diagnostics. With `--revit-property-sets`, each element's
 named saved parameters in Revit's own property sets, one per parameter group (RE-210; the set
