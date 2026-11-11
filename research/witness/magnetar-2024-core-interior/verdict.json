@@ -101,7 +101,7 @@
     "rvt-rs": {
       "input_hash_sha256": "c805df445d613b408e37337765572021265e3f5dfdc7d1fa53b22ba1600b8014",
       "role": "source",
-      "witness_version": "0.17.0"
+      "witness_version": "0.18.0"
     }
   },
   "insufficient_witnesses": false,
@@ -120,7 +120,7 @@
     "storeys.IFCBUILDINGSTOREY"
   ],
   "status": "PASS",
-  "verdict_hash_sha256": "fe715948a15738b45cd49623aa637f0b7198900bf46de989253ad173d0b0af59",
+  "verdict_hash_sha256": "6f9d2f092d45ee3c804856531fea8fc554ec2dff1457c61cabf3d625b9d71ca5",
   "witnesses_compared": [
     "ifc-lite",
     "ifcopenshell",
