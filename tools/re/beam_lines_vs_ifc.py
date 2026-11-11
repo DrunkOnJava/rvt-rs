@@ -16,7 +16,9 @@ group the exporter puts them in: a line attached (its body is a box along the li
 Revit's export holds each of the four values. `--list` names the beams where a value differs, or where Revit holds
 a value the line does not give.
 
-Revit's export in IFC2X3, which has no `Qto_` sets, is not scored.
+Every summary line starts `beam lines:` and holds counts beside fixed words, which the held-out scrub keeps; the
+lines `--list` adds name an ElementId and are dropped there. Revit's export in IFC2X3, which has no `Qto_` sets,
+is not scored.
 
 Usage:
 
@@ -121,7 +123,7 @@ def main():
         }
     paired = [t for t in revit if t in probe]
     print(
-        f"beams: Revit's export {len(revit)}, the probe {len(probe)}, paired by ElementId {len(paired)}; "
+        f"beam lines: beams in Revit's export {len(revit)}, in the probe {len(probe)}, paired by ElementId {len(paired)}; "
         f"length unit {metre:g} m, angle unit {radian:g} rad"
     )
     unit_feet = FEET_METRES / metre
@@ -157,14 +159,14 @@ def main():
             rows.append((group, tag, theirs, line_length, slope, roll, verdict))
     for group in sorted(table):
         t = table[group]
-        print(f"{group}: {t['beams']} beams")
+        print(f"beam lines: {group}: {t['beams']} beams")
         for name in ("Length", "Span", "Slope", "Roll"):
             parts = ", ".join(
                 f"{label} {t[f'{name} {label}']}"
                 for label in ("equal", "different", "not read", "Revit holds none")
                 if t[f"{name} {label}"]
             )
-            print(f"  {name}: Revit holds {t[f'Revit holds {name}']}; {parts or 'no beam with a line'}")
+            print(f"beam lines: {group} {name}: Revit holds {t[f'Revit holds {name}']}; {parts or 'no beam with a line'}")
     for group, tag, theirs, line_length, slope, roll, verdict in rows[:40]:
         print(
             f"  {group} {tag}: Revit Length {theirs['Length']} Span {theirs['Span']} Slope {theirs['Slope']} "
