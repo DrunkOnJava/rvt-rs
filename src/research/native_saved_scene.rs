@@ -10,6 +10,92 @@ use anyhow::{Result, ensure};
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
+/// The fields of a graphics record's objects that meshing reads, which are the
+/// only ones this pass builds ([`Options::graph_fields`], #1694). The dhat run
+/// of the pass on Autodesk's samples of Revit 2023 put 77% to 87% of its peak in
+/// the decoded nodes, each a map entry with its own key, and the readers below
+/// take a small part of what a graph holds. The names are the `m_` string
+/// literals of every module that reads a graph object on the way from a record
+/// to a mesh (`native_saved_mesh`, `native_graphics_traversal`,
+/// `native_parametric_mesh`, `native_parametric_surface`, `native_empty_faces`,
+/// `partition_instance_transforms` and this one), keys inside a field's value
+/// included, and `m_id`. A decode that keeps a field reads it, and checks it, as
+/// the full decode does, so a graph that is refused is refused for the same
+/// reason; what is left out reads as absent. A reader added to those modules
+/// that takes another field of these graphs must add its name here: Measure's
+/// `ifc.sha256` of the 126 exports moves when it does not.
+pub const SAVED_GRAPHICS_FIELDS: &[&str] = &[
+    "m_3x3",
+    "m_Envelope",
+    "m_GInfo",
+    "m_GRepId",
+    "m_Trf",
+    "m_bHasScale",
+    "m_bIsNestedDetailFamily",
+    "m_cda",
+    "m_center",
+    "m_comp",
+    "m_corners",
+    "m_dir",
+    "m_dirVec",
+    "m_elementId",
+    "m_endParams",
+    "m_faceFlags_v9",
+    "m_faceRegions",
+    "m_facetsArr",
+    "m_firstAndLastEdgePnts",
+    "m_flags",
+    "m_forbiddenTarget",
+    "m_halfAngle",
+    "m_id",
+    "m_instanceInfo",
+    "m_interiorEdgePnts",
+    "m_interiorGStyleID",
+    "m_materialID",
+    "m_negateDirCondition",
+    "m_next",
+    "m_nextLoop",
+    "m_normalsArr",
+    "m_normalsFlag",
+    "m_oBackgroundFilling",
+    "m_oConditions",
+    "m_oEmbeddedSymbolGRep",
+    "m_open",
+    "m_or",
+    "m_orientFlag",
+    "m_origin",
+    "m_other",
+    "m_pDoc",
+    "m_pFace",
+    "m_pFaces",
+    "m_pFacetedTopology",
+    "m_pFirstLoop",
+    "m_pGFilling",
+    "m_pProfileCurve",
+    "m_pProfileCurve1",
+    "m_pProfileCurve2",
+    "m_pSurf",
+    "m_param",
+    "m_pointsArr",
+    "m_prev",
+    "m_radius",
+    "m_renderStyleId",
+    "m_resolveSymInView",
+    "m_subNodes",
+    "m_symbolId",
+    "m_tag",
+    "m_targets",
+    "m_value",
+    "m_xLen",
+    "m_xVec",
+    "m_yLen",
+    "m_yVec",
+    "m_zVec",
+];
+/// [`SAVED_GRAPHICS_FIELDS`] for a record of any class.
+fn saved_graphics_fields(_class: &str) -> Option<&'static [&'static str]> {
+    Some(SAVED_GRAPHICS_FIELDS)
+}
 #[derive(Debug, Serialize)]
 pub struct SavedElement {
     pub id: u64,
@@ -247,6 +333,7 @@ fn extract_impl(
     opts.channels = BTreeSet::from([103]);
     // Each element's `source` below carries its record's body digest.
     opts.record_extras = true;
+    opts.graph_fields = Some(saved_graphics_fields);
     let mut records = BTreeMap::<u64, Record>::new();
     let first = native_document::extract_graphs(file, &opts, |r| {
         ensure!(
@@ -494,6 +581,7 @@ pub fn extract_in_batches_with_control(
     let mut opts = options.clone();
     opts.channels = BTreeSet::from([103]);
     opts.record_extras = true;
+    opts.graph_fields = Some(saved_graphics_fields);
     // Everything each owner's graph names. An owner can name another owner,
     // whose own symbols its mesh then reaches, as the one-shot read finds them
     // by reading every record's references.
