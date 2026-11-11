@@ -417,7 +417,7 @@ fn extract_impl(
 /// before it is decoded and its objects are not, and the symbols sort by id
 /// with the largest last: a batch sized from the one before it, in symbols, held
 /// 3 to 7 times those objects on Autodesk's samples of Revit 2023 and 2024.
-const BATCH_BODY_BUDGET: usize = 2_000_000;
+const BATCH_BODY_BUDGET: usize = 1_000_000;
 /// The graph objects of the owners that name nothing that are held at once
 /// while they are meshed: the buffer is meshed and let go when it holds this
 /// many (the same 95 MiB or so as a batch of symbols).
