@@ -1336,15 +1336,16 @@ framing (`reports/element-framing/RE-285-structural-load-bearing.md`).
 
 **RE-429 (2026-11-11)** writes a wall's `LoadBearing` as Revit's exporter
 calculates it: true when the Structural box of its native record is set and
-its usage is Bearing, otherwise false (on every release whose wall records
-Measure holds), and a floor's from its Structural box and an unchecked
-stair's as false (Revit 2024 and later); a parameter named for the property
-still replaces it. Against Revit's exports: all 4,253 walls of the BIM4LCA
-models, the R2025 models, RE1 and an IFC2X3 pair counted apart, 294 of 313
-slabs and all 168 stairs, none different, and the 554 walls of the held-out
-models. A stair with a checked
-box, a wall whose usage is Shear or Combined, and floors and stairs before
-Revit 2024 are not measured (`reports/element-framing/RE-429-structural-load-bearing.md`).
+its usage is Bearing, otherwise false, and a floor's from its Structural box
+and an unchecked stair's as false, all on Revit 2024 and later; a parameter
+named for the property still replaces it. Against Revit's exports: 4,006 of
+4,253 walls of the BIM4LCA models, the R2025 models and RE1, 294 of 313 slabs
+and all 168 stairs, none different, and the 138 walls of the held-out models
+of Revit 2024 to 2027. A stair with a checked box, a wall whose usage is Shear
+or Combined, and walls, floors and stairs before Revit 2024 are left without
+(the older models show only the false state, so nothing is written for them;
+Vitoria's 247 walls are the ones the census counts apart)
+(`reports/element-framing/RE-429-structural-load-bearing.md`).
 
 **RE-327 (2026-11-04)** rebuilds a family's extrusions from their own records:
 the sketch's `CurveElem` lines and arcs (in the family's coordinates), chained
