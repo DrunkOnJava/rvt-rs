@@ -108,6 +108,7 @@ def main(argv):
     settings.set("use-world-coords", False)
     tally = collections.Counter()
     hosts = collections.Counter()
+    heights = collections.Counter()
     rows = collections.defaultdict(list)
     for entity in ("IfcDoor", "IfcWindow"):
         for element in ours.by_type(entity):
@@ -129,10 +130,18 @@ def main(argv):
                 body = "equal" if equal(extents[0], width) and equal(extents[1], height) else "differs"
             tally[(entity, current, body)] += 1
             hosts[(entity, current, body, host_class(element), revit_hosts.get(key, "-"))] += 1
+            if entity == "IfcDoor" and current == "equal" and extents is not None:
+                # A door whose written height is Revit's and whose mesh height is near but
+                # not equal to it is the one a height rule would move wrongly (RE-409).
+                gap = abs(extents[1] - height)
+                band = "equal" if gap <= TOLERANCE_FEET else "within 0.2 ft" if gap <= 0.2 else "beyond 0.2 ft"
+                heights[band] += 1
             if (current, body) != ("equal", "equal"):
                 rows[(entity, current, body)].append((element.Tag, (width, height), own, extents))
     for (entity, current, body), count in sorted(tally.items()):
         print(f"{entity}: size written {current}, body extents {body}: {count}")
+    for band in ("equal", "within 0.2 ft", "beyond 0.2 ft"):
+        print(f"IfcDoor: size written equal, mesh height {band} of Revit's: {heights[band]}")
     for (entity, current, body, ours_host, revit_host), count in sorted(hosts.items()):
         if (current, body) != ("equal", "equal"):
             print(

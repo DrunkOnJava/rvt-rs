@@ -741,10 +741,12 @@ fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities
 }
 
 /// How far, feet, a door's mesh may differ in height from the size it has and
-/// still be the door's height (RE-409): on the BIM4LCA timber office at permit
-/// the 65 doors whose written height is wrong are 0.049 or 0.148 ft too high, and
-/// the doors whose written height is Revit's and whose mesh is not are 1.64 ft or
-/// more short of it (4 and 4 on each office file, and the housing's hatches).
+/// still be taken for its height (RE-409). It is fitted to a gap in one file's
+/// data and is not a measure of anything about a door: on the BIM4LCA timber
+/// office at permit the 65 doors whose written height is wrong are 0.049 or
+/// 0.148 ft too high, and the 8 whose written height is Revit's and whose mesh
+/// is not are 1.64 or 4.438 ft short of it (so are 4 and 4 on each other office
+/// file, and the housing's hatches). No other project is known to exercise it.
 const DOOR_HEIGHT_REACH_FEET: f64 = 0.2;
 
 /// The extent of `vertices` along Z, feet, where it is some.
