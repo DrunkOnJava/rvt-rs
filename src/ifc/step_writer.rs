@@ -4652,7 +4652,7 @@ impl StepWriter<'_> {
             };
             // A type read for several symbols can leave several type objects of
             // one entity and Tag with no Revit GlobalId left to give (the BIM4LCA
-            // office at permit has 6 of one mullion type): the first takes the
+            // office at permit has 7 of one mullion type): the first takes the
             // writer's own, each later one a GlobalId that carries its place in
             // the list, so that none repeats (IFC4's IfcRoot.UR1, #1667).
             let type_gid = match revit {
