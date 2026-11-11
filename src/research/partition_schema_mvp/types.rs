@@ -294,24 +294,27 @@ pub(super) fn attach_system_type_names(
         .and_then(|classes| crate::partition_names::RailingTypeTags::from_classes(&classes));
     if let Some(tags) = railing_tags.filter(|_| revit_version >= 2024 && !railing_types.is_empty())
     {
+        // The latest partition's copy of a type object names it (RE-431): the
+        // BIM4LCA housing's railing types hold an older copy with a Finnish
+        // name and a newer one with the English name Revit's export carries.
+        use crate::partition_room_parameters::{LatestCopy, partition_number};
+        let mut latest = LatestCopy::default();
         for stream in rf.partition_stream_names() {
             let Ok(inflated) = rf.inflated_partition(&stream) else {
                 continue;
             };
+            let partition = partition_number(&stream);
             for (id, name) in crate::partition_names::find_railing_type_names(
                 inflated.bytes(),
                 &railing_types,
                 tags,
             ) {
-                match names.get(&id) {
-                    Some(Some(held)) if *held != name => {
-                        names.insert(id, None);
-                    }
-                    Some(None) => {}
-                    _ => {
-                        names.insert(id, Some(name));
-                    }
-                }
+                latest.offer(id, partition, name);
+            }
+        }
+        for (id, name) in latest.into_options() {
+            if !matches!(names.get(&id), Some(None)) {
+                names.insert(id, name);
             }
         }
     }
@@ -329,7 +332,11 @@ pub(super) fn attach_system_type_names(
 /// object. RE1 Architecture's railing 462556 holds its type 446543, Revit's
 /// `IfcRailingType` Tag, at +283 of its 329-byte object. With the picks, the
 /// picked types' names their own objects hold
-/// ([`crate::partition_names::railing_type_name_in`]). Revit 2024 and later.
+/// ([`crate::partition_names::railing_type_name_in`]), each from the latest
+/// partition that holds one, as a type's element data name is (RE-431): on the
+/// BIM4LCA housing every railing type has an older copy with its Finnish name
+/// and a newer one with the English name Revit's export carries. Revit 2024 and
+/// later.
 // Tracker: B45.
 pub(super) fn railing_type_picks(
     rf: &mut RevitFile,
@@ -352,14 +359,16 @@ pub(super) fn railing_type_picks(
     let name_tags = crate::partition_names::RailingTypeTags::from_classes(&classes);
     let wanted: BTreeSet<u32> = railings.iter().map(|(_, id)| *id).collect();
     let mut type_ids: BTreeSet<u32> = BTreeSet::new();
-    // Each type's name where its copies that read one agree; a copy whose
-    // name does not read takes no part.
-    let mut type_names: BTreeMap<u32, Option<String>> = BTreeMap::new();
+    // Each type's name from the latest partition whose copy reads one, none
+    // where that partition's copies disagree; a copy whose name does not read
+    // takes no part.
+    let mut type_names = crate::partition_room_parameters::LatestCopy::default();
     let mut held: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
+        let partition = crate::partition_room_parameters::partition_number(&stream);
         let buf = inflated.bytes();
         let Ok(objects) = rf.memoised_partition_data_objects(&stream) else {
             continue;
@@ -372,12 +381,7 @@ pub(super) fn railing_type_picks(
                 });
                 type_ids.insert(object.element_id);
                 if let Some(name) = name {
-                    let held = type_names
-                        .entry(object.element_id)
-                        .or_insert_with(|| Some(name.clone()));
-                    if held.as_deref() != Some(name.as_str()) {
-                        *held = None;
-                    }
+                    type_names.offer(object.element_id, partition, name);
                 }
             } else if class == railing_tag && wanted.contains(&object.element_id) {
                 let payload =
@@ -399,9 +403,10 @@ pub(super) fn railing_type_picks(
             }
         })
         .collect();
+    let type_names = type_names.into_values();
     let names = picks
         .iter()
-        .filter_map(|(_, type_id)| Some((*type_id, type_names.get(type_id)?.clone()?)))
+        .filter_map(|(_, type_id)| Some((*type_id, type_names.get(type_id)?.clone())))
         .collect();
     (picks, names)
 }
