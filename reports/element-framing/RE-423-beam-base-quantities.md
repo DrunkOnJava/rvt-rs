@@ -62,6 +62,8 @@ On the eight large files that is 266 of the 284 beams on each of the six quantit
 
 **The beam still without.** The concrete housing's 22 beams in each state read 21 equal; the beam without the six has a body Revit draws as an extrusion along its `Length` (the other 21 are extruded across it) and an `IfcBeam` whose mesh `beam_quantities` does not read as a prism with two flat, square ends of one area along a longest axis. Why is not established, and it gets none.
 
+**What is left.** The 8 tubes' six quantities need the profile with its voids and rounded corners (Revit's are 0.01% to 0.03% off the faces of its tessellated body), which the mesh does not give. Beams drawn from a saved mesh carry no `Length`, `Roll`, `Slope` or `Span` (28 of the timber housing's 41, 7 of the timber office's 71): #1697. A beam's body that is not Revit's solid (the tubes, 20 of the concrete housing's 22 beams, 10 of the timber housing's 41) is untouched by this change: #1698.
+
 ## 5. Reproduce
 
 ```bash
