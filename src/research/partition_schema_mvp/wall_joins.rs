@@ -87,9 +87,15 @@ pub fn wall_layer_ends_from_fields(fields: &[(String, InstanceField)]) -> Option
 /// back curve (RE-252). The reach each end's join lists give
 /// ([`WALL_JOIN_REACH_FIELDS`], or the largest of its layers' where they end
 /// apart) is the second reading the record's must agree with.
+///
+/// A curtain wall takes its location curve's length, from its record's
+/// [`crate::native_walls::NativeWall`] or, where the record holds another
+/// curve besides the one `VWallDriver.m_pCrv` names, from `located`: it is
+/// not cut back at its joins, so its `Length` is that curve's (RE-252).
 pub(super) fn attach_wall_lengths(
     walls: &mut [DecodedElement],
     native: &BTreeMap<u64, crate::native_walls::NativeWall>,
+    located: &BTreeMap<u64, ([f64; 2], [f64; 2])>,
 ) {
     const SAME_LENGTH_FEET: f64 = 1e-4;
     let joined = crate::native_walls::joined_at_ends(native);
@@ -101,8 +107,12 @@ pub(super) fn attach_wall_lengths(
             continue;
         };
         if wall.class == CURTAIN_WALL_CLASS {
-            if let Some(curve) = native.get(&id) {
-                let length = (curve.end[0] - curve.start[0]).hypot(curve.end[1] - curve.start[1]);
+            let curve = native
+                .get(&id)
+                .map(|curve| (curve.start, curve.end))
+                .or_else(|| located.get(&id).copied());
+            if let Some((start, end)) = curve {
+                let length = (end[0] - start[0]).hypot(end[1] - start[1]);
                 if length.is_finite() && length > 0.0 {
                     wall.fields.push((
                         WALL_LENGTH_FIELD.into(),
