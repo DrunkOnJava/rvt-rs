@@ -342,6 +342,9 @@ pub fn recover_partition_schema_mvp(
         // --- Whether a wall's top is joined to a roof or floor, from its
         // native record (RE-228, RE-284) ---
         attach_wall_top_joins(rf, revit_version, &mut out.walls, &mut wall_reads);
+        // --- A wall's LoadBearing: its Structural box set and its usage
+        // Bearing, from its native record (RE-429) ---
+        attach_wall_load_bearing(rf, revit_version, out.walls.iter_mut(), &mut wall_reads);
 
         // --- A structural beam's or column's LoadBearing is its category's
         // (RE-285), unless a parameter named for it says otherwise ---
@@ -980,6 +983,18 @@ pub fn recover_partition_schema_mvp(
     // --- A structural beam's or column's LoadBearing is its category's
     // (RE-285), unless a parameter named for it says otherwise ---
     attach_load_bearing(out.columns.iter_mut().chain(out.products.iter_mut()));
+    // --- A wall's LoadBearing: its Structural box set and its usage
+    // Bearing, from its native record, curtain panel walls included (RE-429) ---
+    attach_wall_load_bearing(
+        rf,
+        revit_version,
+        out.walls.iter_mut().chain(
+            out.products
+                .iter_mut()
+                .filter(|product| product.class == CURTAIN_PANEL_WALL_CLASS),
+        ),
+        &mut wall_reads,
+    );
     // --- A floor's or stair's LoadBearing from its Structural check box
     // (RE-429), where no category or parameter named for it gives one ---
     attach_structural_load_bearing(
