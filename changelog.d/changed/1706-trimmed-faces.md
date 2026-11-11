@@ -4,7 +4,8 @@
   refused as `nonrectangular parametric trim` or `multiple parametric trim
   loops unsupported`. The `u` of every point of every loop is already a knot
   of the face's grid, so the loops cut the region they enclose into strips,
-  cut across at the grid's own `v` steps (#1737), each cell is fanned into
+  cut across at the grid's own `v` steps and at the `v` of the trim's steps and
+  cusps (#1737), each cell is fanned into
   triangles, and a triangle without area whose edges
   are all 1e-4 ft or shorter, or whose shortest edge is 1e-8 ft or shorter, is
   dropped as a pole's is; one without area and a longer edge still refuses the
