@@ -603,6 +603,14 @@
           },
           "description": "Of the exported floors, roofs and ceilings whose corner vertices are shape-edited and that keep their record's box, why, by reason (RvtElementRecordGeometry.SlabShapeRefusal, RE-336): interior_edge_vertices_or_creases, corners_not_in_one_plane, first_three_corners_collinear, fewer_than_three_corner_vertices, shape_edit_dormant_or_unmarked, shape_edit_steps_disagree, shape_edit_fields_not_read, corner_vertex_not_finite, record_copies_disagree, record_copy_not_read, roof_or_ceiling_edit_not_drawn, plan_outline_not_read, plan_outline_in_pieces, corners_not_the_outline_vertices, plane_does_not_reproduce_record_box. Empty when no such element is kept as its box."
         },
+        "saved_mesh_refusals": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Of the exported bodies that are still their record's box after the pass that draws a box from the mesh Revit saved for it, why that mesh was not used, by reason (RvtElementRecordGeometry.SavedMeshRefusal, #1645): no_saved_graphics, no_saved_mesh, no_triangles, element_id_shared, or partial: and the decoder diagnostics that left the mesh partial (RE-224), their digits written as # and joined by ;."
+        },
         "wall_base_refusals": {
           "type": "object",
           "additionalProperties": {
@@ -987,7 +995,7 @@
     },
     "export_decisions": {
       "type": "object",
-      "description": "Each fail-closed decision behind skipped and the exported body and outline counts, one entry per element (#1326): why an element was left out, a body is only its record's box, an opening was not cut, an outline was not read. Present only when asked for (rvt-ifc --export-decisions); without it the diagnostics are the bytes they were. Bounded: at most cap_per_reason entries a reason, the rest counted as dropped. Not written in the IFC file. The skipped items are counted from the same decisions: for every reason of skipped (the stream_not_read_resource_limit item apart, which counts streams) reasons[reason].total is the sum of the items' counts; body_is_record_box, space_outline_is_record_box, area_body_refused, slab_shape_refused, wall_base_cut_refused, wall_end_extension_refused and wall_profile_extension_refused total exported.bounding_box_bodies, bounding_box_spaces, area_body_refusals, slab_shape_refusals, wall_base_refusals, wall_end_refusals and wall_profile_refusals.",
+      "description": "Each fail-closed decision behind skipped and the exported body and outline counts, one entry per element (#1326): why an element was left out, a body is only its record's box, an opening was not cut, an outline was not read. Present only when asked for (rvt-ifc --export-decisions); without it the diagnostics are the bytes they were. Bounded: at most cap_per_reason entries a reason, the rest counted as dropped. Not written in the IFC file. The skipped items are counted from the same decisions: for every reason of skipped (the stream_not_read_resource_limit item apart, which counts streams) reasons[reason].total is the sum of the items' counts; body_is_record_box, space_outline_is_record_box, area_body_refused, slab_shape_refused, wall_base_cut_refused, wall_end_extension_refused, wall_profile_extension_refused and saved_mesh_not_used total exported.bounding_box_bodies, bounding_box_spaces, area_body_refusals, slab_shape_refusals, wall_base_refusals, wall_end_refusals, wall_profile_refusals and saved_mesh_refusals.",
       "required": ["cap_per_reason", "dropped", "reasons", "entries"],
       "properties": {
         "cap_per_reason": {
@@ -1060,7 +1068,7 @@
               },
               "reason": {
                 "type": "string",
-                "description": "The reason of the skipped item the decision is counted in, or body_is_record_box, space_outline_is_record_box, area_body_refused, slab_shape_refused, wall_base_cut_refused, wall_end_extension_refused or wall_profile_extension_refused."
+                "description": "The reason of the skipped item the decision is counted in, or body_is_record_box, space_outline_is_record_box, area_body_refused, slab_shape_refused, wall_base_cut_refused, wall_end_extension_refused, wall_profile_extension_refused or saved_mesh_not_used."
               },
               "element_id": {
                 "type": "integer",
