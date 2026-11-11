@@ -1828,6 +1828,12 @@ jobs:
       # docs.
       - name: API docs cite only reported RE findings and no planning labels
         run: python3 tools/ci/api-doc-ids.py
+      # The saved-graphics pass builds only the fields in SAVED_GRAPHICS_FIELDS
+      # (#1694), and a reader that takes another reads it as absent: no export
+      # need show it on a route none reads. This keeps the list and the `m_`
+      # names of the modules it serves equal.
+      - name: The saved-graphics field list names what its readers read
+        run: python3 tools/ci/saved-graphics-fields.py
       # One RE id names one report. A pull request whose new report takes an id
       # that main, or an earlier open pull request, already has fails here, so
       # the later one is renumbered before two reports carry one number
