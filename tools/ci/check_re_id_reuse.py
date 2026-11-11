@@ -16,9 +16,13 @@ one of them
   of a pull request's checkout is the merge of the pull request into `main`,
   so another path with the id is `main`'s, or the pull request's own second
   file;
-- has an id that an EARLIER open pull request (a lower number) adds too. The
-  later one fails, as docs/maintaining.md says; the earlier one is not blamed
-  for it.
+- has an id that an EARLIER open pull request (a lower number) adds too, at
+  another path. The later one fails, as docs/maintaining.md says; the earlier
+  one is not blamed for it. The SAME path is no clash: a pull request stacked
+  on the earlier one carries its commits, so its file list holds the report
+  the earlier one added, and that is one report seen twice, not two reports
+  under one id (a stacked pull request used to be told to renumber a report
+  that was not its own).
 
 Needs `GH_TOKEN` or `GITHUB_TOKEN` and the pull request's event. Anything that
 keeps a lookup from being made (no token, the network, a rate limit, a server
@@ -70,7 +74,7 @@ def reused(added, tree, earlier):
         if others:
             problems.append(f"{found} is already the id of {', '.join(others)} on main: take the next free id")
         for number, theirs in sorted(earlier.items()):
-            clash = [p for p in theirs if report_id(p) == found]
+            clash = [p for p in theirs if report_id(p) == found and p not in paths]
             if clash:
                 problems.append(f"{found} is also added by #{number}, opened first ({', '.join(clash)}): renumber this report")
     return problems
