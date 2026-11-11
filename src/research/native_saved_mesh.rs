@@ -613,8 +613,6 @@ fn inside(p: [f64; 2], r: &[[f64; 2]]) -> bool {
 /// Which side of a plane-to-cylinder edge a loop's samples are refined on (#1706).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum EdgeSide {
-    /// Samples as the graph stores them.
-    Stored,
     /// The loop of a plane: an edge it shares with a curved face follows that
     /// face's grid ([`refined_plane_edge`]).
     Plane,
@@ -682,7 +680,6 @@ fn ring_impl(
         }
         pts.push(point::<2>(&endpoints[1]["uv"][side])?);
         pts = match refine {
-            EdgeSide::Stored => pts,
             EdgeSide::Plane => refined_plane_edge(g, index, face, cur, side, pts)?,
             EdgeSide::Cylinder => {
                 refined_curved_edge(g, index, face, cur, side, &pts).unwrap_or(pts)
