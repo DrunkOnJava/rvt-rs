@@ -53,9 +53,8 @@ pub struct GraphicsSelection {
 /// [`select_graphics_pre2023_at_detail`] refuse an `InstanceInfo` with no
 /// `m_GRepId`, as they did before RE-342 (#1436 let every route read it as the
 /// default representation; RE-342 section 9.8 narrowed that to the pre-2023
-/// entry point). Every entry point refuses a set `m_bHasScale` unless the
-/// instance's 3x3 matrix is a rotation (RE-414). This is research API, outside
-/// the semver promise.
+/// entry point), and a set `m_bHasScale`. This is research API, outside the
+/// semver promise.
 pub fn select_graphics(graph: &ObjectGraph) -> GraphicsSelection {
     select_graphics_with_resolver(graph, &|_| None)
 }
@@ -78,9 +77,10 @@ pub fn select_graphics_with_resolver_at_detail<'a>(
 /// [`select_graphics_with_resolver_at_detail`] for the graphics of a file of
 /// Revit 2015 to 2022, which no export reads: an `InstanceInfo` with no
 /// `m_GRepId` (exactly `m_Trf`, `m_symbolId` and `m_cda`) is read there as the
-/// default representation (RE-342). Every other entry point refuses it,
-/// whatever the schema of the `InstanceInfo`, and the caller decides by the
-/// file's release which one to call. `include_hidden` and
+/// default representation, and a set `m_bHasScale` on such an `InstanceInfo`
+/// with a rotation matrix is walked through (RE-342). Every other entry point
+/// refuses both, whatever the schema of the `InstanceInfo`, and the caller
+/// decides by the file's release which one to call. `include_hidden` and
 /// `include_filtered` are as in
 /// [`select_graphics_including_hidden_at_detail`] and
 /// [`select_graphics_including_filtered_at_detail`].
@@ -196,7 +196,7 @@ struct Walker<'a, 'r> {
     include_filtered: bool,
     filtered_depth: usize,
     /// Whether the graphics are a file of Revit 2015 to 2022's, the only ones
-    /// an `InstanceInfo` with no `m_GRepId` is read in (RE-342).
+    /// a set `m_bHasScale` is read in (RE-342).
     pre2023: bool,
 }
 impl Walker<'_, '_> {
@@ -446,7 +446,9 @@ impl Walker<'_, '_> {
             "GInstance" => {
                 let has_scale = obj.fields["m_bHasScale"].as_bool();
                 if has_scale != Some(false)
-                    && !(has_scale == Some(true) && self.rigid_instance(index, obj))
+                    && !(self.pre2023
+                        && has_scale == Some(true)
+                        && self.unscaled_legacy_instance(index, obj))
                 {
                     return Err("scaled instance mode is not qualified".into());
                 }
@@ -516,18 +518,27 @@ impl Walker<'_, '_> {
         Ok(())
     }
     /// Whether a `GInstance` whose `m_bHasScale` is set names an
-    /// `InstanceInfo` whose 3x3 matrix is a rotation, the identity included
-    /// (RE-342 on the older schema, RE-414 on the current one). What the flag
-    /// means is not read, so only a matrix that scales, shears and mirrors
-    /// nothing passes: the flag with a mirror or a scale stays refused. The
-    /// checks of an unflagged instance (the representation, the symbol, the
-    /// targets) follow.
-    fn rigid_instance(&self, index: usize, obj: &crate::native_parameters::GraphObject) -> bool {
+    /// `InstanceInfo` of the older schema (no `m_GRepId`, the three fields
+    /// `default_representation` accepts) whose 3x3 matrix is a rotation, the
+    /// identity included (RE-342). What the flag means on that schema is not
+    /// read, so only a matrix that scales, shears and mirrors nothing passes:
+    /// the flag with a mirror or a scale, and the flag with the later
+    /// `InstanceInfo`, whose `m_GRepId` is present, stay refused. Asked only
+    /// on the pre-2023 route (`Walker::pre2023`): every other walk refuses a
+    /// set flag before it gets here, whatever the schema of the
+    /// `InstanceInfo`.
+    fn unscaled_legacy_instance(
+        &self,
+        index: usize,
+        obj: &crate::native_parameters::GraphObject,
+    ) -> bool {
         let Ok(info) = self.target(index, &obj.fields["m_instanceInfo"]) else {
             return false;
         };
         let info = &self.graph.objects[info];
         info.class_name == "InstanceInfo"
+            && info.fields.get("m_GRepId").is_none()
+            && default_representation(&info.fields, self.pre2023)
             && read_transform(&info.fields["m_Trf"]).is_ok_and(|t| rotation(&t))
     }
     fn only_curves(&self, index: usize, seen: &mut HashSet<usize>) -> bool {
