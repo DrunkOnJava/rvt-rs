@@ -1154,6 +1154,9 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
 /// The text a planar face is refused with when its triangles do not add up to its rings' area.
 const AREA_MISMATCH: &str = "triangulated area mismatch";
 
+/// The vertices of a planar face and the triangles on them, by their indices.
+type PlaneMesh = (Vec<[f64; 3]>, Vec<[u32; 3]>);
+
 /// The vertices on the plane (`origin + u x + v y`) and the triangles of a planar face's
 /// rings `loops`, in the plane's own coordinates: every ring at an even nesting depth is
 /// an outer ring and the rings one level in are its holes. The triangles must add up to
@@ -1164,7 +1167,7 @@ fn plane_mesh(
     origin: [f64; 3],
     x: [f64; 3],
     y: [f64; 3],
-) -> Result<(Vec<[f64; 3]>, Vec<[u32; 3]>)> {
+) -> Result<PlaneMesh> {
     // A face can contain multiple disconnected outer rings, with nested holes.
     let depths: Vec<_> = loops
         .iter()
