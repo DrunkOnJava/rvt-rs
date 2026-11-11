@@ -886,6 +886,10 @@ pub fn append_typed_production_elements(
         let effective = ifc_export_override(&decoded).unwrap_or(mapping);
         let ifc_type = effective.ifc_type.to_string();
         let family_space = space_by_export_value(&decoded);
+        // RE-417: an element redirected to another entity than its category's
+        // takes its own predefined type there where the entity is one of those
+        // only a value reaches ([`category_map::override_predefined_type_for`]).
+        let redirected = effective.ifc_type != mapping.ifc_type;
         // RE-45: the element's own or its type's IFC predefined type, when
         // it is an enumerator of the entity it exports as; a family instance
         // written as a space through its value takes its own (#763).
@@ -896,11 +900,22 @@ pub fn append_typed_production_elements(
                 InstanceField::String(text)
                     if name == crate::partition_schema_mvp::IFC_PREDEFINED_TYPE_FIELD =>
                 {
-                    category_map::predefined_type_for(effective.ifc_type, text).or_else(|| {
-                        family_space
-                            .then(|| category_map::space_predefined_type_for(text))
-                            .flatten()
-                    })
+                    category_map::predefined_type_for(effective.ifc_type, text)
+                        .or_else(|| {
+                            redirected
+                                .then(|| {
+                                    category_map::override_predefined_type_for(
+                                        effective.ifc_type,
+                                        text,
+                                    )
+                                })
+                                .flatten()
+                        })
+                        .or_else(|| {
+                            family_space
+                                .then(|| category_map::space_predefined_type_for(text))
+                                .flatten()
+                        })
                 }
                 _ => None,
             })
@@ -4836,7 +4851,7 @@ fn ifc_export_override(decoded: &DecodedElement) -> Option<&'static category_map
         .iter()
         .find_map(|(name, value)| match (name.as_str(), value) {
             (crate::partition_schema_mvp::IFC_EXPORT_AS_FIELD, InstanceField::String(text)) => {
-                category_map::lookup_export_override(text)
+                category_map::lookup_export_override_for(text, &decoded.class)
             }
             _ => None,
         })
@@ -4878,7 +4893,15 @@ pub(crate) fn unapplied_export_value(decoded: &DecodedElement) -> Option<&str> {
         })?;
     let written = ifc_export_override(decoded).unwrap_or(mapping).ifc_type;
     let entity = value.split('.').next().unwrap_or(value);
-    (!written.eq_ignore_ascii_case(entity)).then_some(value)
+    // RE-417: a value that names an entity's type object (`IfcFurnitureType`)
+    // names the entity it types, which is what the element is written as.
+    let named = match entity.len().checked_sub(4) {
+        Some(cut) if entity.is_char_boundary(cut) && entity[cut..].eq_ignore_ascii_case("type") => {
+            &entity[..cut]
+        }
+        _ => entity,
+    };
+    (!written.eq_ignore_ascii_case(entity) && !written.eq_ignore_ascii_case(named)).then_some(value)
 }
 
 /// True when this element came from a partition element record.

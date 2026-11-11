@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Score the PredefinedType rvt-rs writes on stairs and their parts against
-Revit's own IFC export (#323).
+"""Score the PredefinedType rvt-rs writes on stairs and their parts, and on the elements an
+"Export to IFC As" value redirects, against Revit's own IFC export (#323, RE-417).
 
-Pairs each IfcStair, IfcStairFlight, IfcSlab and IfcMember of the two files
-by Tag and counts, per entity, how often the PredefinedType is the same,
-differs, or is unset in rvt-rs's, with Revit's values tallied, and names a
-few that differ.
+Pairs each IfcStair, IfcStairFlight, IfcSlab, IfcMember, IfcFurniture, IfcSolarDevice and
+IfcTransportElement of the two files by Tag, and each IfcSpace that is a family instance by
+GlobalId (Revit names it `<family>:<type>:<ElementId>`), and counts, per entity, how often the
+PredefinedType is the same, differs, or is unset in rvt-rs's, with Revit's values tallied, and
+names a few that differ.
 
 Needs IfcOpenShell.
 
@@ -15,11 +16,22 @@ Usage:
 """
 
 import collections
+import re
 import sys
 
 import ifcopenshell
 
-CLASSES = ("IfcStair", "IfcStairFlight", "IfcSlab", "IfcMember")
+CLASSES = (
+    "IfcStair",
+    "IfcStairFlight",
+    "IfcSlab",
+    "IfcMember",
+    "IfcFurniture",
+    "IfcSolarDevice",
+    "IfcTransportElement",
+    "IfcSpace",
+)
+FAMILY_SPACE_NAME = re.compile(r":\d+$")
 
 
 def predefined(path):
@@ -27,7 +39,12 @@ def predefined(path):
     out = {}
     for cls in CLASSES:
         for element in model.by_type(cls):
-            if element.is_a() == cls and element.Tag:
+            if element.is_a() != cls:
+                continue
+            if cls == "IfcSpace":
+                if element.Name and FAMILY_SPACE_NAME.search(element.Name):
+                    out[(cls, element.GlobalId)] = getattr(element, "PredefinedType", None) or "-"
+            elif element.Tag:
                 out[(cls, str(element.Tag))] = getattr(element, "PredefinedType", None) or "-"
     return out
 
