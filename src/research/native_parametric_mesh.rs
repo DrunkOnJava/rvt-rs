@@ -24,7 +24,12 @@ fn uv_point(v: &serde_json::Value) -> Result<[f64; 2]> {
     Ok(p)
 }
 
-pub(crate) struct FaceGrid {
+/// The grid a `Face` is meshed on: its surface, the knots along `u` and `v`, the
+/// trim loop in the surface's parameters and the parameter rectangle the face
+/// spans. Public for `probe_1683_ruled_grids`, which prints what sets a ruled
+/// face's cells.
+#[derive(Debug)]
+pub struct FaceGrid {
     pub surface: ParametricSurface,
     pub u: Vec<f64>,
     pub v: Vec<f64>,
@@ -34,10 +39,14 @@ pub(crate) struct FaceGrid {
 
 // Only complete rectangular boundaries (including analytic collapsed poles)
 // are accepted. Merely lying on the rectangle's perimeter is insufficient.
+//
+// The component comes back with whether `main`'s guard, which refused one with
+// an edge naming fewer than two faces anywhere in it, would have refused it:
+// such a component is drawn only because the guard was narrowed (#1683).
 fn ruled_surface_component(
     g: &ObjectGraph,
     start_face: usize,
-) -> Result<std::collections::BTreeSet<usize>> {
+) -> Result<(std::collections::BTreeSet<usize>, bool)> {
     // The saved graph does not consistently materialize Edge -> Face pointer
     // records in g.edges.  Resolve the authoritative m_pFace pair on each
     // Edge instead; pointer() also covers token-only references.  Malformed
@@ -94,13 +103,38 @@ fn ruled_surface_component(
             }
         }
     }
-    if let Some(face) = component.iter().find(|face| invalid_by_face.contains(face)) {
+    // An edge that names fewer than two faces leaves a face's neighbours unknown
+    // only where it borders a ruled face. The shared grid sizes the ruled faces
+    // of a component alike, a ruled face's neighbours are the faces its own
+    // edges name, and an edge of a plane or a cylinder that names one face (a
+    // boundary of the faces the graph holds, as on four roofs of Snowdon Towers
+    // Architectural, #1683) cannot join two ruled faces.
+    let ruled = |face: usize| {
+        g.objects
+            .get(face)
+            .and_then(|object| object.fields.get("m_pSurf"))
+            .and_then(|value| {
+                crate::native_saved_mesh::pointer(g, face, value)
+                    .ok()
+                    .flatten()
+            })
+            .and_then(|surface| g.objects.get(surface))
+            .is_some_and(|surface| surface.class_name == "RuledSurf")
+    };
+    if let Some(face) = component
+        .iter()
+        .find(|face| ruled(**face) && invalid_by_face.contains(face))
+    {
         anyhow::bail!("malformed ruled-surface edge is connected to face {face}");
     }
-    Ok(component)
+    let refused_before = component.iter().any(|face| invalid_by_face.contains(face));
+    Ok((component, refused_before))
 }
 
-pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
+/// The grid the face at `fi` is meshed on, or why it is not meshed (a trim that
+/// is not a complete rectangle, a ruled face whose neighbours the graph does not
+/// resolve, a surface that is not read).
+pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     use crate::native_parametric_surface::Curve;
     use crate::native_saved_mesh::pointer;
     let f = g.objects.get(fi).context("face index")?;
@@ -311,62 +345,139 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             let far = min[1].abs().max(max[1].abs());
             (angular(far * half_angle.sin()), 1.)
         }
-        ParametricSurface::RuledSurf { .. } => {
-            // A shared normalized grid across ruled patches preserves their
-            // common straight generator edges even when profile lengths differ.
-            let mut n = 1.0_f64;
-            let component = ruled_surface_component(g, fi)?;
-            for i in component.into_iter().filter(|i| {
-                g.objects
-                    .get(*i)
-                    .and_then(|face| face.fields.get("m_pSurf"))
-                    .is_some()
-            }) {
-                let Some(surface_index) = pointer(g, i, &g.objects[i].fields["m_pSurf"])? else {
-                    continue;
-                };
-                if g.objects[surface_index].class_name != "RuledSurf" {
-                    continue;
-                }
-                let s = ParametricSurface::read(g, surface_index)?;
-                let ParametricSurface::RuledSurf {
-                    profile1, profile2, ..
-                } = s
-                else {
-                    continue;
-                };
-                // Each profile's chord (its end less its start) and the
-                // normalized steps its own curvature needs: one per foot
-                // along a line, and the angular step of its largest radius
-                // across an arc or an ellipse.
-                let profile_steps = |c: &Curve| -> ([f64; 3], f64) {
-                    let r = c.range();
-                    let chord = match c {
-                        Curve::Line { direction, .. } => {
-                            std::array::from_fn(|k| direction[k] * (r[1] - r[0]))
-                        }
-                        _ => {
-                            let (a, b) = (c.eval(r[0]), c.eval(r[1]));
-                            std::array::from_fn(|k| b[k] - a[k])
-                        }
+        ParametricSurface::RuledSurf {
+            profile1, profile2, ..
+        } => {
+            // A face whose neighbours the graph does not resolve is refused: what
+            // is drawn from it would hold a hole the graph does not show.
+            let (component, narrowed) = ruled_surface_component(g, fi)?;
+            if !narrowed {
+                // A component `main`'s guard accepted keeps the grid it always
+                // had, one normalized grid across its ruled patches, so that no
+                // export drawn before changes (#1683).
+                //
+                // A shared normalized grid across ruled patches preserves their
+                // common straight generator edges even when profile lengths differ.
+                let mut n = 1.0_f64;
+                for i in component.into_iter().filter(|i| {
+                    g.objects
+                        .get(*i)
+                        .and_then(|face| face.fields.get("m_pSurf"))
+                        .is_some()
+                }) {
+                    let Some(surface_index) = pointer(g, i, &g.objects[i].fields["m_pSurf"])?
+                    else {
+                        continue;
                     };
-                    let steps = match c {
-                        Curve::Line { .. } => length(chord).ceil(),
+                    if g.objects[surface_index].class_name != "RuledSurf" {
+                        continue;
+                    }
+                    let s = ParametricSurface::read(g, surface_index)?;
+                    let ParametricSurface::RuledSurf {
+                        profile1, profile2, ..
+                    } = s
+                    else {
+                        continue;
+                    };
+                    // Each profile's chord (its end less its start) and the
+                    // normalized steps its own curvature needs: one per foot
+                    // along a line, and the angular step of its largest radius
+                    // across an arc or an ellipse.
+                    let profile_steps = |c: &Curve| -> ([f64; 3], f64) {
+                        let r = c.range();
+                        let chord = match c {
+                            Curve::Line { direction, .. } => {
+                                std::array::from_fn(|k| direction[k] * (r[1] - r[0]))
+                            }
+                            _ => {
+                                let (a, b) = (c.eval(r[0]), c.eval(r[1]));
+                                std::array::from_fn(|k| b[k] - a[k])
+                            }
+                        };
+                        let steps = match c {
+                            Curve::Line { .. } => length(chord).ceil(),
+                            Curve::Arc { radius, .. } => {
+                                ((r[1] - r[0]).abs() / angular(*radius)).ceil()
+                            }
+                            Curve::Ellipse { x_len, y_len, .. } => {
+                                ((r[1] - r[0]).abs() / angular(x_len.max(*y_len))).ceil()
+                            }
+                        };
+                        (chord, steps)
+                    };
+                    let (da, na) = profile_steps(&profile1);
+                    let (db, nb) = profile_steps(&profile2);
+                    let mixed = length(std::array::from_fn(|k| da[k] - db[k]));
+                    n = n.max((mixed / CHORD).sqrt().ceil()).max(na).max(nb);
+                }
+                (1. / n, 1. / n)
+            } else {
+                // Each face takes the grid its own surface needs. Its generators are
+                // straight, so a neighbour's finer grid along a shared generator
+                // adds vertices on the same line and opens no gap (#1683: one grid
+                // for the whole component gave a roof of 23 ruled faces 1.1 million
+                // triangles where Revit's own body has 1,259). The normalized steps
+                // are the angular step of the largest radius across an arc or an
+                // ellipse, none along a line, and the twist: a surface between two
+                // lines leaves its corners' plane by the corners' second difference
+                // along the plane's normal, so a face whose four corners lie in one
+                // plane is flat whatever its profiles' lengths, and any other keeps
+                // the whole difference, as before.
+                let range_steps = |c: &Curve| -> f64 {
+                    let r = c.range();
+                    match c {
+                        Curve::Line { .. } => 1.,
                         Curve::Arc { radius, .. } => {
                             ((r[1] - r[0]).abs() / angular(*radius)).ceil()
                         }
                         Curve::Ellipse { x_len, y_len, .. } => {
                             ((r[1] - r[0]).abs() / angular(x_len.max(*y_len))).ceil()
                         }
-                    };
-                    (chord, steps)
+                    }
                 };
-                let (da, na) = profile_steps(&profile1);
-                let (db, nb) = profile_steps(&profile2);
-                let mixed = length(std::array::from_fn(|k| da[k] - db[k]));
-                n = n.max((mixed / CHORD).sqrt().ceil()).max(na).max(nb);
+                let corner = |u: f64, v: f64| surface.evaluate(u, v);
+                let c00 = corner(env[0][0], env[0][1])?;
+                let c10 = corner(env[1][0], env[0][1])?;
+                let c01 = corner(env[0][0], env[1][1])?;
+                let c11 = corner(env[1][0], env[1][1])?;
+                let twist: [f64; 3] = std::array::from_fn(|k| c00[k] - c10[k] - c01[k] + c11[k]);
+                let a: [f64; 3] = std::array::from_fn(|k| c10[k] - c00[k]);
+                let b: [f64; 3] = std::array::from_fn(|k| c01[k] - c00[k]);
+                let normal = [
+                    a[1] * b[2] - a[2] * b[1],
+                    a[2] * b[0] - a[0] * b[2],
+                    a[0] * b[1] - a[1] * b[0],
+                ];
+                let normal_length = length(normal);
+                let flat = normal_length > 0.
+                    && (twist.iter().zip(normal).map(|(t, n)| t * n).sum::<f64>() / normal_length)
+                        .abs()
+                        < 1e-8;
+                let twisted = if flat { 0. } else { length(twist) };
+                // `u` runs along the profiles, `v` between them. The profiles' arcs
+                // ask for steps along `u` alone, and the twist for `twisted / CHORD`
+                // cells in all, however they divide between the two: a face of a long
+                // arc between two straight generators needs its arc's steps and one
+                // cell across, not as many across as along.
+                //
+                // Between two straight profiles the surface is a bilinear patch, and
+                // cut into `n_u * n_v` cells of two triangles it leaves them by
+                // `twisted / (4 * n_u * n_v)` at most (at a cell's middle), so a
+                // quarter of the cells hold the bar (#1683: the roofs' faces of 11 to
+                // 24 ft of twist asked 4 times that). A curved profile adds its own
+                // bow, up to the bar, to the twist's, so such a face keeps the margin.
+                let straight = matches!(profile1, Curve::Line { .. })
+                    && matches!(profile2, Curve::Line { .. });
+                let cells = twisted / if straight { 4. * CHORD } else { CHORD };
+                let n_u = cells
+                    .sqrt()
+                    .ceil()
+                    .max(range_steps(profile1))
+                    .max(range_steps(profile2))
+                    .max(1.);
+                let n_v = (cells / n_u).ceil().max(1.);
+                (1. / n_u, 1. / n_v)
             }
-            (1. / n, 1. / n)
         }
     };
     let axis = |k: usize, step: f64| -> Result<Vec<f64>> {
