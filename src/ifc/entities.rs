@@ -296,7 +296,7 @@ pub enum IfcEntity {
     /// `OpeningUtil`). Its `Pset_OpeningElementCommon.Reference` is the type
     /// name of the entity at `reference_from`; `recess` says it does not pass
     /// through the wall; `quantities` says its `Qto_OpeningElementBaseQuantities`
-    /// holds `Width` and `Height` too, `Depth` being written on every one of
+    /// holds `Width` too, `Height` and `Depth` being written on every one of
     /// them.
     WallCutOpening {
         host: usize,

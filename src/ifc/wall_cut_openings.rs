@@ -294,10 +294,10 @@ struct Cut {
     up: [f64; 2],
     recess: bool,
     reference_from: usize,
-    /// Whether `Width` and `Height` are written too: Revit's export may swap
-    /// them on a door's opening (RE-244, RE-235 section 5) and nothing read
-    /// says it does not on the opening a door cuts in a second wall, so that
-    /// one takes only its `Depth`.
+    /// Whether `Width` is written beside `Height` and `Depth`: the opening a
+    /// door cuts in a second wall takes the two only, since Revit's `Width`
+    /// there is the thickness of the wall the door stands in and this
+    /// outline is not always that to the scorer's tolerance (#1165).
     quantities: bool,
 }
 
