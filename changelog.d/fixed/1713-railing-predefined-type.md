@@ -1,7 +1,8 @@
 - **A railing's `PredefinedType` is its own or its type's (#1713).** rvt-rs
-  wrote none on all 41 railings of the BIM4LCA office, where Revit's export
-  writes `HANDRAIL` on 32, `GUARDRAIL` on 8 and `NOTDEFINED` on 1, one value per
-  railing type. A railing now takes its own or its type's "IFC Predefined Type"
-  where that is an `IfcRailingTypeEnum` enumerator, and stays unset where it has
-  none, since what Revit writes for a railing with no value is not measured. A
-  Revit 2027 save still writes none (#1692).
+  wrote none on any railing. A railing now takes its own or its type's "IFC
+  Predefined Type" where that is one of IFC4's `IfcRailingTypeEnum` enumerators:
+  on the BIM4LCA office and housing files 360 railings read as Revit's export
+  writes them and none differs. A railing with no such value stays unset:
+  Revit's 2024 export writes `NOTDEFINED` on the 8 of those files, and its 2027
+  exporter leaves the attribute off, so nothing is written there without a
+  measurement per release. A Revit 2027 save still writes none (#1692).
