@@ -86,21 +86,32 @@ The other 57 read 0.99 to 1.01 in time and 0.96 to 1.00 in peak memory: Core Int
 
 **The pass ran in all 11 before this change.** Their `body_sources` hold `saved_graphics_mesh` bodies at the base commit (5,123 to 5,225 in `rac_advanced`, 67 to 91 in `rst_basic`, 83 in Snowdon Towers Structural), so what is added is the reading of the beams' graphics, not the pass beginning. The 2024 saves read 29, 345 and 923 beams drawn along their axes (`partition_beam_axis`), of which 12, 171 and 32 gain quantities. Why that costs what it does is not established: the time added is 0.9 to 1.0 s on `rac_advanced`'s 29 beams, 0.3 s on `rst_basic`'s 345 and 2.6 s on Snowdon's 923, so it does not scale with the beams read, and no profile by stage has been taken. [#1694](https://github.com/DrunkOnJava/rvt-rs/issues/1694) tracks the pass's peak memory; these 11 files are a second set of numbers for it.
 
-**Not measured.** Measure's timing table holds the reference models, the office's four files and the samples. The BIM4LCA housing and timber office, on which the quantities are scored, are not in it, and neither is a structural model larger than Snowdon Towers Structural.
+**The files it is scored on.** Measure's timing table held the reference models, the office's four files and the samples, so the housing and the timber office were timed apart: run [42976698994](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42976698994), from a throwaway workflow branch whose timing job also takes these files, base `47aa70be` and head `302415ba` (this change, whose later commits are documents), one runner per shard, three rounds. The four office files, timed again as controls, read 1.00.
+
+| file | time, base to head | peak memory, base to head |
+|---|---|---|
+| Housing Concrete, as built | 23,814 to 23,876 ms (1.00) | 1,170 to 1,155 MiB (0.99) |
+| Housing Concrete, permit | 22,799 to 22,648 ms (0.99) | 1,071 to 1,103 MiB (1.03) |
+| Housing Timber, as built | 23,664 to 23,494 ms (0.99) | 1,320 to 1,335 MiB (1.01) |
+| Housing Timber, permit | 23,506 to 23,064 ms (0.98) | 1,255 to 1,261 MiB (1.00) |
+| Office Timber, as built | 35,002 to 35,228 ms (1.01) | 1,618 to 1,622 MiB (1.00) |
+| Office Timber, permit | 45,242 to 44,995 ms (0.99) | 2,005 to 2,056 MiB (1.03) |
+
+So the read of their 41 to 71 beams a file costs no measurable time (0.98 to 1.01) and 0 to 3% of peak memory. Not measured: a structural model larger than Snowdon Towers Structural.
 
 **Opting out.** `--no-saved-meshes` runs no pass, so it leaves out the six quantities and this cost with the rest of the pass.
 
 ## 6. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref feat/1693-beam-quantities -f ref=781ed0cd1a4508d32b6260508d094b5190c36e43 -f base=5d291201904b9e61d8ce62c3201308a152d4c65a \
+gh workflow run measure.yml --ref main -f ref=781ed0cd1a4508d32b6260508d094b5190c36e43 -f base=5d291201904b9e61d8ce62c3201308a152d4c65a \
   -f nordic=true -f samples=true -f r2025=true -f holdout=true -f bimcollab=true -f racadv=true
-gh workflow run measure.yml --ref feat/1693-beam-quantities -f ref=<head> -f base=<base> -f samples=true -f keep_ifc=true -f scorers=none
+gh workflow run measure.yml --ref main -f ref=<head> -f base=<base> -f samples=true -f keep_ifc=true -f scorers=none
 ```
 
 The scorers: `python3 tools/re/beam_quantities_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc>` (Measure 42967412141: `-f nordic=true -f scorers=beam_quantities_vs_ifc -f "models=nordic-housing-concrete-as-built ..."`), and `python3 tools/re/beam_added_quantities.py <before.ifc> <after.ifc>` for the exports a run keeps.
 
-The timing of section 5: `gh workflow run measure.yml --ref feat/1693-beam-quantities -f ref=e10641ce4d037de4900605beb3375dbfe5482670 -f base=47aa70bedff92f93ebb118e0773134be2a5e9c9a -f nordic=true -f samples=true -f timing=true`.
+The timing of section 5: `gh workflow run measure.yml --ref main -f ref=e10641ce4d037de4900605beb3375dbfe5482670 -f base=47aa70bedff92f93ebb118e0773134be2a5e9c9a -f nordic=true -f samples=true -f timing=true` (the head is kept under `refs/archive/2026-11-11/cited/e10641ce4d03`); the housing's and timber office's rows are run 42976698994, dispatched the same way (`timing`, base `47aa70be`) from a throwaway workflow branch that adds their files to the timing job, which the timing job of `main` takes once its change lands.
 
 ## 7. Sources
 
