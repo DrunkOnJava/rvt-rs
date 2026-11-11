@@ -1257,6 +1257,21 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
                 earcut_triangles.len(),
                 sum - expected,
             );
+            static PRINTED: std::sync::atomic::AtomicBool =
+                std::sync::atomic::AtomicBool::new(false);
+            if !PRINTED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+                for (j, l) in loops.iter().enumerate() {
+                    let coordinates: Vec<String> = l
+                        .iter()
+                        .map(|p| format!("({:.9},{:.9})", p[0], p[1]))
+                        .collect();
+                    eprintln!(
+                        "AREALOOP fi={fi} loop={j} n={} {}",
+                        l.len(),
+                        coordinates.join(" ")
+                    );
+                }
+            }
         }
         ensure!(
             (sum - expected).abs() <= 1e-7 * expected.max(1.),
