@@ -1186,7 +1186,43 @@ fn tessellate_trimmed(
         ) {
             Some(true) => triangles.push(if winding { [a, b, c] } else { [a, c, b] }),
             Some(false) => {}
-            None => anyhow::bail!("noncollapsed degenerate parametric triangle"),
+            None => {
+                let (p, q, r) = (
+                    vertices[a as usize],
+                    vertices[b as usize],
+                    vertices[c as usize],
+                );
+                let dist = |x: [f64; 3], y: [f64; 3]| {
+                    ((x[0] - y[0]).powi(2) + (x[1] - y[1]).powi(2) + (x[2] - y[2]).powi(2)).sqrt()
+                };
+                let kind = match surface {
+                    ParametricSurface::SurfRev { .. } => "SurfRev",
+                    ParametricSurface::ConeSurf { .. } => "ConeSurf",
+                    ParametricSurface::RuledSurf { .. } => "RuledSurf",
+                    _ => "other",
+                };
+                let detail = format!(
+                    "{kind} edges {:.3e} {:.3e} {:.3e} uv {:.9?} {:.9?} {:.9?} of {} cells",
+                    dist(p, q),
+                    dist(q, r),
+                    dist(r, p),
+                    points[a as usize],
+                    points[b as usize],
+                    points[c as usize],
+                    points.len()
+                );
+                let letters: String = detail
+                    .chars()
+                    .map(|ch| {
+                        if ch.is_ascii_digit() {
+                            (b'a' + (ch as u8 - b'0')) as char
+                        } else {
+                            ch
+                        }
+                    })
+                    .collect();
+                anyhow::bail!("NEEDLE {letters}")
+            }
         }
     }
     ensure!(
