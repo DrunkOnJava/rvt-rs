@@ -553,18 +553,22 @@ pub(super) fn partner_ends(placed: &[Placed]) -> Vec<[bool; 2]> {
                 (-1..=1).any(|dx| {
                     (-1..=1).any(|dy| {
                         (-1..=1).any(|dz| {
-                            grid.get(&[cx + dx, cy + dy, cz + dz])
-                                .into_iter()
-                                .flatten()
-                                .any(|&(other, other_end)| {
-                                    let neighbour = &placed[other];
-                                    let near = sub(neighbour.ends[other_end], point);
-                                    let beyond = sub(neighbour.ends[1 - other_end], point);
-                                    other != index
-                                        && dot(mullion.axis, neighbour.axis).abs() > PARTNER_COSINE
-                                        && dot(near, near).sqrt() < PARTNER_FEET
-                                        && dot(beyond, outward) > PARTNER_FEET
-                                })
+                            grid.get(&[
+                                cx.saturating_add(dx),
+                                cy.saturating_add(dy),
+                                cz.saturating_add(dz),
+                            ])
+                            .into_iter()
+                            .flatten()
+                            .any(|&(other, other_end)| {
+                                let neighbour = &placed[other];
+                                let near = sub(neighbour.ends[other_end], point);
+                                let beyond = sub(neighbour.ends[1 - other_end], point);
+                                other != index
+                                    && dot(mullion.axis, neighbour.axis).abs() > PARTNER_COSINE
+                                    && dot(near, near).sqrt() < PARTNER_FEET
+                                    && dot(beyond, outward) > PARTNER_FEET
+                            })
                         })
                     })
                 })

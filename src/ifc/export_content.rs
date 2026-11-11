@@ -5109,7 +5109,8 @@ pub const SLAB_SHAPE_REFUSAL_PROPERTY: &str = "SlabShapeRefusal";
 /// [`SAVED_MESH_NO_TRIANGLES`], [`SAVED_MESH_ELEMENT_ID_SHARED`], or
 /// [`SAVED_MESH_PARTIAL_PREFIX`] followed by the decoder diagnostics that left
 /// the mesh partial (RE-224), with their digits written as `#`, or
-/// [`SAVED_MESH_NOT_CANDIDATE_PREFIX`] and why the pass did not look.
+/// [`SAVED_MESH_NOT_CANDIDATE_PREFIX`] and why the pass did not look, or
+/// [`SAVED_MESH_NOT_OFFERED_PREFIX`] and why no pass ran.
 pub const SAVED_MESH_REFUSAL_PROPERTY: &str = "SavedMeshRefusal";
 
 /// [`SAVED_MESH_REFUSAL_PROPERTY`] of an element the file holds no saved
@@ -5138,6 +5139,14 @@ pub const SAVED_MESH_PARTIAL_PREFIX: &str = "partial: ";
 /// draw it), `no_location`, `no_element_id` (its Tag is no ElementId) or
 /// `class_not_in_scope` (a caller asked for the doors and windows only).
 pub const SAVED_MESH_NOT_CANDIDATE_PREFIX: &str = "not_a_candidate: ";
+
+/// The start of the [`SAVED_MESH_REFUSAL_PROPERTY`] of a box body that no pass
+/// offered a saved mesh (#1645): followed by `release_outside_2023_to_2027` (the
+/// release's saved graphics are not read), `release_not_read` (the file's
+/// release could not be read), `saved_meshes_off` (the caller turned the pass
+/// off) or `pass_failed` (the pass stopped on an error, which the export notes
+/// name).
+pub const SAVED_MESH_NOT_OFFERED_PREFIX: &str = "not_offered: ";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says why a wall
 /// whose base join names a floor with shape-edited corners keeps the base of
