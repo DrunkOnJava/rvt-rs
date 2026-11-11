@@ -1817,11 +1817,18 @@ pub fn append_typed_production_elements(
                     value: PropertyValue::PositiveLengthFeet(length),
                 }];
                 if let Some(radius) = pipe_radius {
+                    let section_area = std::f64::consts::PI * radius * radius;
                     properties.push(Property {
                         name: "GrossCrossSectionArea".into(),
-                        value: PropertyValue::AreaSquareFeet(
-                            std::f64::consts::PI * radius * radius,
-                        ),
+                        value: PropertyValue::AreaSquareFeet(section_area),
+                    });
+                    // Revit's export draws a pipe as a solid cylinder with no
+                    // bore in this section, so its net cross-section is its
+                    // gross: the same number on every pipe it gives that set
+                    // (RE-247, the office's 12).
+                    properties.push(Property {
+                        name: "NetCrossSectionArea".into(),
+                        value: PropertyValue::AreaSquareFeet(section_area),
                     });
                     properties.push(Property {
                         name: "OuterSurfaceArea".into(),
