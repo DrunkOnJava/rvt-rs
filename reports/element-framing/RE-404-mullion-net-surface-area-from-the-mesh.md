@@ -36,6 +36,22 @@ A curtain mullion drawn from its saved mesh (a closed mesh of flat faces) that h
 
 Pending: the unfiltered Measure of the change against the change it follows (RE-418), which this section reports.
 
-## 4. Sources
+## 4. The Autodesk samples
+
+Measure [42953777974](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42953777974) kept both sides' exports of the 58 Autodesk samples (`samples=true keep_ifc=true scorers=none`; the head `75fd899c627895a1bd772f791303a8f0baf395f3`, kept under `refs/archive/2026-11-11/cited/75fd899c6278`, against `2136399d614606bd760d11ea34322b00cc740045`, RE-418's, kept under `refs/archive/2026-11-11/cited/2136399d6146`): 13 exports move and 45 are byte-identical, and the 13 are `rac_advanced` (2024 to 2027), `rme_advanced` and `rme_basic` (2024 to 2027) and Snowdon Towers Architectural (2024). No Revit export of them exists to score against, so each moved file is read element by element.
+
+`tools/re/ifc_element_diff.py` pairs every `IfcElement` of the two exports of a file by GlobalId: the only change on all 13 is `NetSurfaceArea` added to the `Qto_MemberBaseQuantities` of curtain mullions, one `IfcQuantityArea` each (79 mullions in each `rac_advanced` save, 569 in each `rme_advanced` and `rme_basic` save and 9 in Snowdon's, 4,877 in all); nothing is removed or changed, and no element is added or removed.
+
+`tools/re/mullion_added_areas.py <before> <after>` reads each added value against the mullion's own mesh, measured along the axis it is a prism along: on all 13 files every one is the body's lateral area plus 0, 1 or 2 of its flat ends or, of a mitred one, its mitre face and, where the end is kept, its flat end, and none is anything else:
+
+| file | added | lateral only | + 1 flat end | + 2 flat ends | mitre (+ 1 flat end) |
+|---|---:|---:|---:|---:|---:|
+| `rac_advanced`, each of 4 saves | 79 | 62 | 16 | 1 | 0 |
+| `rme_advanced` and `rme_basic`, each of 8 saves | 569 | 71 | 66 | 401 | 31 (all with one flat end) |
+| Snowdon Towers Architectural 2024 | 9 | 0 | 8 | 0 | 1 (no flat end) |
+
+That is the rule's own shape and no more: what those files' Revit exports would write is not known here.
+
+## 5. Sources
 
 RE-243, RE-248, RE-268, RE-387, RE-403, RE-418. revit-ifc's `NetSurfaceAreaCalculator` and `PropertyUtil.CreateBeamColumnBaseQuantities` as RE-268 read them (CLEANROOM.md source 5). No Autodesk source was read.
