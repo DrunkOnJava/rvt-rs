@@ -157,20 +157,44 @@ const PARALLEL_COSINE: f64 = 1e-3;
 /// the noise in their normals.
 const AXIS_SINE: f64 = 1e-2;
 
-/// The extents, feet, of the mesh `triangles` make of `vertices` along each
-/// axis it is a prism along, smallest first (RE-418): the planes of its
-/// triangles, all but at most two of them (its ends) parallel to the axis. A
-/// rectangular mullion with a flat or a mitred end is one along its own axis
-/// and, being a box in section, along no other unless it is a box; a box is one
-/// along each of its three. The extent is the distance between the first and
-/// the last of the mesh's corners along the axis, so a mitred end counts at its
-/// longer side.
+/// A plane's normal is square to an axis where its cosine with it is over this
+/// (0.8 degrees).
+const SQUARE_COSINE: f64 = 0.9999;
+
+/// One of the two end planes of a mesh read as a prism ([`Prism`]).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct PrismEnd {
+    /// Whether the plane is square to the axis; a mitred end is not.
+    pub square: bool,
+    /// The area of the mesh's triangles on the plane, square feet.
+    pub area: f64,
+}
+
+/// A mesh read as a prism along one axis (RE-418, RE-404).
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct Prism {
+    /// The distance between the first and the last of the mesh's corners along
+    /// the axis, feet: a mitred end counts at its longer side.
+    pub extent: f64,
+    /// The area of the triangles on the planes parallel to the axis, square
+    /// feet.
+    pub lateral: f64,
+    /// The planes that are not parallel to it, at most two.
+    pub ends: Vec<PrismEnd>,
+}
+
+/// The ways the mesh `triangles` make of `vertices` is a prism, smallest extent
+/// first (RE-418): along each axis that leaves all but at most two of the planes
+/// of its triangles (its ends) parallel to it. A rectangular mullion with a flat
+/// or a mitred end is one along its own axis and, being a box in section, along
+/// no other unless it is a box; a box is one along each of its three.
 ///
-/// None where a vertex is not there or not finite, where no triangle has an
-/// area, and where no axis leaves the mesh at two end planes, which a pyramid
-/// or a mesh cut in three directions does not.
-pub(super) fn prism_extents(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -> Vec<f64> {
-    let mut planes: Vec<([f64; 3], f64)> = Vec::new();
+/// Nothing where a vertex is not there or not finite, where no triangle has an
+/// area, and where no axis leaves the mesh at two end planes, which a mesh cut
+/// in three directions does not.
+pub(super) fn prisms(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -> Vec<Prism> {
+    // Each plane: its unit normal, its offset and the area of its triangles.
+    let mut planes: Vec<([f64; 3], f64, f64)> = Vec::new();
     let mut corners: Vec<[f64; 3]> = Vec::new();
     for BrepTriangle(a, b, c) in triangles {
         let (Some(&p), Some(&q), Some(&r)) = (
@@ -194,19 +218,20 @@ pub(super) fn prism_extents(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -
         }
         let normal = normal.map(|component| component / twice_area);
         let offset = dot(normal, p);
-        let known = planes.iter().any(|&(other, other_offset)| {
-            let cosine = dot(normal, other);
+        let known = planes.iter_mut().find(|(other, other_offset, _)| {
+            let cosine = dot(normal, *other);
             cosine.abs() > 1.0 - PLANE_COSINE
-                && (offset - cosine.signum() * other_offset).abs() < PLANE_FEET
+                && (offset - cosine.signum() * *other_offset).abs() < PLANE_FEET
         });
-        if !known {
-            planes.push((normal, offset));
+        match known {
+            Some(plane) => plane.2 += twice_area / 2.0,
+            None => planes.push((normal, offset, twice_area / 2.0)),
         }
         corners.extend([p, q, r]);
     }
     let mut axes: Vec<[f64; 3]> = Vec::new();
-    for (position, (first, _)) in planes.iter().enumerate() {
-        for (second, _) in &planes[position + 1..] {
+    for (position, (first, ..)) in planes.iter().enumerate() {
+        for (second, ..) in &planes[position + 1..] {
             let direction = cross(*first, *second);
             let length = dot(direction, direction).sqrt();
             if length < AXIS_SINE {
@@ -221,16 +246,24 @@ pub(super) fn prism_extents(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -
             }
         }
     }
-    let mut extents: Vec<f64> = axes
+    let mut found: Vec<Prism> = axes
         .iter()
-        .filter(|axis| {
-            planes
-                .iter()
-                .filter(|(normal, _)| dot(*normal, **axis).abs() > PARALLEL_COSINE)
-                .count()
-                <= 2
-        })
-        .map(|axis| {
+        .filter_map(|axis| {
+            let (mut lateral, mut ends) = (0.0, Vec::new());
+            for (normal, _, area) in &planes {
+                let cosine = dot(*normal, *axis).abs();
+                if cosine > PARALLEL_COSINE {
+                    ends.push(PrismEnd {
+                        square: cosine > SQUARE_COSINE,
+                        area: *area,
+                    });
+                } else {
+                    lateral += area;
+                }
+            }
+            if ends.len() > 2 {
+                return None;
+            }
             let (low, high) =
                 corners
                     .iter()
@@ -238,11 +271,63 @@ pub(super) fn prism_extents(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -
                         let along = dot(*corner, *axis);
                         (low.min(along), high.max(along))
                     });
-            high - low
+            Some(Prism {
+                extent: high - low,
+                lateral,
+                ends,
+            })
         })
         .collect();
-    extents.sort_by(f64::total_cmp);
-    extents
+    found.sort_by(|a, b| a.extent.total_cmp(&b.extent));
+    found
+}
+
+/// How far, as a fraction of a mullion's written `Length`, the extent of its
+/// mesh along an axis it is a prism along may be from it and be the mullion's
+/// own length (RE-418): the box overruns the solid by up to 14% on the 49
+/// mullions of the BIM4LCA timber office at permit that it moves, and no other
+/// side of a mullion's section comes within 35% of its length.
+pub(super) const MESH_LENGTH_REACH: f64 = 0.35;
+
+/// The prism of `prisms` that is a mullion's own: the one whose extent lies
+/// within [`MESH_LENGTH_REACH`] of its written `length`, where exactly one does.
+pub(super) fn own_prism(prisms: &[Prism], length: f64) -> Option<&Prism> {
+    let mut near = prisms
+        .iter()
+        .filter(|prism| (prism.extent - length).abs() <= MESH_LENGTH_REACH * length);
+    let (prism, None) = (near.next()?, near.next()) else {
+        return None;
+    };
+    Some(prism)
+}
+
+/// How far, as a fraction of the larger, the areas of a prism's two flat ends
+/// may differ and the ends still be the two of one section.
+const END_AREA_TOLERANCE: f64 = 1e-4;
+
+/// The `NetSurfaceArea` of a curtain mullion drawn from its mesh (RE-404): the
+/// area of the faces along it plus that of the end faces Revit's solid keeps,
+/// `kept` of its two ends (0, 1 or 2, RE-268). revit-ifc's
+/// `NetSurfaceAreaCalculator` (CLEANROOM.md source 5) sums the faces of the solid
+/// it writes. Of two flat ends of one area each is one section's, and `kept`
+/// of them count. Of a mitred end and a flat one, the mitred end always counts
+/// (on every one of the 184 of the BIM4LCA housing's four large files and the
+/// 58 of the office's two permit files) and the flat one where `kept` is 2; a
+/// mullion with a mitred end and `kept` 0 contradicts that and gets none. A
+/// prism with any other ends gets none.
+pub(super) fn mullion_surface_area(prism: &Prism, kept: u8) -> Option<f64> {
+    match prism.ends.as_slice() {
+        [a, b] if a.square && b.square => {
+            let same = (a.area - b.area).abs() <= END_AREA_TOLERANCE * a.area.max(b.area);
+            (same && kept <= 2).then(|| prism.lateral + f64::from(kept) * a.area)
+        }
+        [a, b] if a.square != b.square && (1..=2).contains(&kept) => {
+            let (flat, mitre) = if a.square { (a, b) } else { (b, a) };
+            let flat = if kept == 2 { flat.area } else { 0.0 };
+            Some(prism.lateral + mitre.area + flat)
+        }
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -449,6 +534,14 @@ mod tests {
         (vertices, triangles)
     }
 
+    /// The extents of the prisms of a mesh, smallest first.
+    fn extents(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -> Vec<f64> {
+        prisms(vertices, triangles)
+            .iter()
+            .map(|prism| prism.extent)
+            .collect()
+    }
+
     fn assert_extents(found: Vec<f64>, wanted: &[f64]) {
         assert_eq!(found.len(), wanted.len(), "{found:?}");
         for (found, wanted) in found.iter().zip(wanted) {
@@ -459,13 +552,13 @@ mod tests {
     #[test]
     fn a_box_is_a_prism_along_each_of_its_three_axes() {
         let (vertices, triangles) = box_mesh([10.0, 20.0, 5.0], [0.082, 4.9, 7.9]);
-        assert_extents(prism_extents(&vertices, &triangles), &[0.082, 4.9, 7.9]);
+        assert_extents(extents(&vertices, &triangles), &[0.082, 4.9, 7.9]);
     }
 
     #[test]
     fn a_mitred_end_counts_at_its_longer_side() {
         let (vertices, triangles) = mitred_prism();
-        let extents = prism_extents(&vertices, &triangles);
+        let extents = extents(&vertices, &triangles);
         assert_extents(extents, &[2.0, 11.0]);
     }
 
@@ -489,24 +582,24 @@ mod tests {
                 }
             }
         }
-        assert!(prism_extents(&vertices, &triangles).is_empty());
+        assert!(extents(&vertices, &triangles).is_empty());
     }
 
     #[test]
     fn a_vertex_that_is_not_there_or_not_finite_leaves_no_extent() {
         let (mut vertices, mut triangles) = box_mesh([0.0, 0.0, 0.0], [1.0, 2.0, 10.0]);
         triangles.push(BrepTriangle(0, 1, 99));
-        assert!(prism_extents(&vertices, &triangles).is_empty());
+        assert!(extents(&vertices, &triangles).is_empty());
         triangles.pop();
         vertices[3][2] = f64::NAN;
-        assert!(prism_extents(&vertices, &triangles).is_empty());
+        assert!(extents(&vertices, &triangles).is_empty());
     }
 
     #[test]
     fn nothing_leaves_no_extent() {
-        assert!(prism_extents(&[], &[]).is_empty());
+        assert!(extents(&[], &[]).is_empty());
         let (vertices, _) = box_mesh([0.0, 0.0, 0.0], [1.0, 2.0, 10.0]);
-        assert!(prism_extents(&vertices, &[]).is_empty());
+        assert!(extents(&vertices, &[]).is_empty());
     }
 
     #[test]
@@ -516,7 +609,7 @@ mod tests {
         vertices.push([41.0, 41.0, 41.0]);
         vertices.push([42.0, 42.0, 42.0]);
         triangles.push(BrepTriangle(8, 9, 10));
-        assert_extents(prism_extents(&vertices, &triangles), &[0.05, 0.1, 3.0]);
+        assert_extents(extents(&vertices, &triangles), &[0.05, 0.1, 3.0]);
     }
 
     #[test]
@@ -529,7 +622,7 @@ mod tests {
         }
         // The long axis is read to the noise; the short ones are tilted by it
         // toward the long side and are read to a hundredth of the section.
-        let extents = prism_extents(&vertices, &triangles);
+        let extents = extents(&vertices, &triangles);
         assert_eq!(extents.len(), 3, "{extents:?}");
         assert!((extents[2] - 3.0).abs() < 1e-5, "{extents:?}");
         assert!((extents[0] - 0.05).abs() < 1e-3, "{extents:?}");
@@ -542,10 +635,104 @@ mod tests {
         // height's axis.
         let (mut vertices, triangles) = box_mesh([0.0, 0.0, 0.0], [0.082, 4.9, 7.9]);
         vertices[6] = [0.082, 4.9 - 0.4, 7.9];
-        let extents = prism_extents(&vertices, &triangles);
+        let extents = extents(&vertices, &triangles);
         assert!(
             extents.iter().all(|extent| (extent - 7.9).abs() > 1e-6),
             "{extents:?}"
         );
+    }
+
+    fn assert_close(found: f64, wanted: f64) {
+        assert!((found - wanted).abs() < 1e-9, "{found} not {wanted}");
+    }
+
+    #[test]
+    fn a_box_prism_reports_the_areas_of_its_faces() {
+        let (vertices, triangles) = box_mesh([10.0, 20.0, 5.0], [0.05, 0.1, 3.0]);
+        let all = prisms(&vertices, &triangles);
+        let long = all.last().unwrap();
+        assert_close(long.extent, 3.0);
+        assert_close(long.lateral, 2.0 * (0.05 * 3.0 + 0.1 * 3.0));
+        assert_eq!(long.ends.len(), 2);
+        for end in &long.ends {
+            assert!(end.square);
+            assert_close(end.area, 0.05 * 0.1);
+        }
+    }
+
+    #[test]
+    fn a_mitred_prism_reports_its_mitre_face_apart_from_its_flat_end() {
+        let (vertices, triangles) = mitred_prism();
+        let all = prisms(&vertices, &triangles);
+        let long = all.last().unwrap();
+        assert_close(long.extent, 11.0);
+        // Two sides of 10 and 11 ft by 2 ft, and two trapezoids of 10.5 ft by 1 ft.
+        assert_close(long.lateral, 2.0 * 10.0 + 2.0 * 11.0 + 2.0 * 10.5);
+        let flat: Vec<_> = long.ends.iter().filter(|end| end.square).collect();
+        let mitre: Vec<_> = long.ends.iter().filter(|end| !end.square).collect();
+        assert_eq!((flat.len(), mitre.len()), (1, 1));
+        assert_close(flat[0].area, 2.0);
+        assert_close(mitre[0].area, 2.0 * 2.0_f64.sqrt());
+    }
+
+    fn prism(extent: f64, lateral: f64, ends: &[(bool, f64)]) -> Prism {
+        Prism {
+            extent,
+            lateral,
+            ends: ends
+                .iter()
+                .map(|&(square, area)| PrismEnd { square, area })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn a_mullion_has_the_one_prism_near_its_length() {
+        let all = [
+            prism(0.05, 1.0, &[]),
+            prism(0.1, 1.0, &[]),
+            prism(3.0, 1.0, &[]),
+        ];
+        assert_close(own_prism(&all, 3.2).unwrap().extent, 3.0);
+        assert!(own_prism(&all, 6.0).is_none(), "none within reach");
+        // A stub as long as its section is two prisms within reach of its length.
+        let stub = [prism(0.1, 1.0, &[]), prism(0.12, 1.0, &[])];
+        assert!(own_prism(&stub, 0.11).is_none());
+        assert!(own_prism(&[], 1.0).is_none());
+    }
+
+    #[test]
+    fn two_flat_ends_count_as_many_sections_as_are_kept() {
+        let flat = prism(3.0, 0.9, &[(true, 0.005), (true, 0.005)]);
+        assert_close(mullion_surface_area(&flat, 0).unwrap(), 0.9);
+        assert_close(mullion_surface_area(&flat, 1).unwrap(), 0.905);
+        assert_close(mullion_surface_area(&flat, 2).unwrap(), 0.91);
+        assert!(mullion_surface_area(&flat, 3).is_none());
+    }
+
+    #[test]
+    fn two_flat_ends_of_different_areas_are_not_one_section() {
+        let uneven = prism(3.0, 0.9, &[(true, 0.005), (true, 0.0051)]);
+        assert!(mullion_surface_area(&uneven, 1).is_none());
+    }
+
+    #[test]
+    fn a_mitred_end_always_counts_and_the_flat_end_where_both_are_kept() {
+        let mitred = prism(0.68, 0.2, &[(true, 0.005), (false, 0.007)]);
+        assert!(mullion_surface_area(&mitred, 0).is_none());
+        assert_close(mullion_surface_area(&mitred, 1).unwrap(), 0.207);
+        assert_close(mullion_surface_area(&mitred, 2).unwrap(), 0.212);
+        let swapped = prism(0.68, 0.2, &[(false, 0.007), (true, 0.005)]);
+        assert_close(mullion_surface_area(&swapped, 2).unwrap(), 0.212);
+    }
+
+    #[test]
+    fn other_ends_are_not_read() {
+        let two_mitres = prism(0.68, 0.2, &[(false, 0.007), (false, 0.007)]);
+        assert!(mullion_surface_area(&two_mitres, 2).is_none());
+        let one_end = prism(0.68, 0.2, &[(true, 0.005)]);
+        assert!(mullion_surface_area(&one_end, 1).is_none());
+        let no_ends = prism(0.68, 0.2, &[]);
+        assert!(mullion_surface_area(&no_ends, 0).is_none());
     }
 }

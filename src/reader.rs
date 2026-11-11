@@ -237,6 +237,11 @@ pub struct RevitFile {
     /// Memoised index of every native record's partitions (#1032): each
     /// native pass walked every partition again to find its records.
     native_record_index: Option<Arc<crate::native_document::RecordIndex>>,
+    /// How many of its two end faces the Revit solid of each curtain mullion
+    /// keeps, by ElementId, where the boxes of its curtain wall's mullions say
+    /// (RE-268), set when the partition's mullions are read, for the pass that
+    /// draws their bodies from saved meshes (RE-404).
+    mullion_kept_ends: Option<Arc<BTreeMap<u32, u8>>>,
     /// Memoised `Formats/Latest` classes: a dozen partition readers each
     /// read and parsed the schema again for a few class tags.
     schema_classes_memo: Option<Arc<crate::formats::SchemaClasses>>,
@@ -504,6 +509,7 @@ impl RevitFile {
             native_preamble_deferred: 0,
             native_definitions: None,
             native_record_index: None,
+            mullion_kept_ends: None,
             schema_classes_memo: None,
             layout_release_memo: None,
             material_names: std::collections::HashMap::new(),
@@ -1015,6 +1021,18 @@ impl RevitFile {
     /// once a native pass has recorded it (#1032).
     pub(crate) fn native_record_index(&self) -> Option<Arc<crate::native_document::RecordIndex>> {
         self.native_record_index.clone()
+    }
+
+    /// Keep the end faces each curtain mullion's solid keeps (RE-268, RE-404).
+    pub(crate) fn remember_mullion_kept_ends(&mut self, kept: BTreeMap<u32, u8>) {
+        self.mullion_kept_ends = Some(Arc::new(kept));
+    }
+
+    /// The kept end faces of each curtain mullion
+    /// ([`Self::remember_mullion_kept_ends`]), or none where the partition's
+    /// mullions were not read.
+    pub(crate) fn mullion_kept_ends(&self) -> Option<Arc<BTreeMap<u32, u8>>> {
+        self.mullion_kept_ends.clone()
     }
 
     /// Keep the record index a native pass recorded (#1032).

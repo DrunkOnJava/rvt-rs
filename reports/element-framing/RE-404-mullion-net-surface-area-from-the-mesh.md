@@ -1,0 +1,37 @@
+# RE-404: a curtain mullion drawn from its saved mesh gets the `NetSurfaceArea` of its lateral faces and of the end faces its solid keeps
+
+**Date:** 2026-11-11
+**Issues:** #1046 (curtain mullion quantities), #1636 (second-project measurement); follows RE-268 (which ends Revit's solid keeps), RE-403 (the box is not the solid), RE-387 (the mesh's volume) and RE-418 (the mesh's length)
+**Artefacts:** the BIM4LCA office at building permit, in concrete and in timber, and the housing's four large files (Revit 2024, Revit's IFC4 exports), as Measure fetches them. Never stored.
+**Runs:** Measure [42946015504](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42946015504) (the scorer `tools/re/mullion_profiles_vs_ifc.py` at `b98bc2e2dcd7c5b2dd1dc5d0f33b2ee96d4fc1b6`, on `main` at `0649e224b96285c2bced628c5379bdd4be924727`) for section 1
+**Status:** pending the change's own measurement (section 3); the finding of section 1 is measured.
+
+## 1. What Revit's `NetSurfaceArea` is, against rvt-rs's body
+
+`tools/re/mullion_profiles_vs_ifc.py` pairs every curtain mullion of rvt-rs's export with Revit's by `Tag`, reads each side's `NetSurfaceArea` in its own unit, measures the body's mesh along its own axis (RE-418) and writes Revit's value as the mesh's lateral area (the faces along the axis) plus a number of its end faces. Where rvt-rs draws the body from the mesh Revit saved, the body is Revit's: the same extent, area and volume.
+
+| model | mullions | `NetSurfaceArea` written and equal | written none, the body Revit's, a whole number of ends | written none, mitred | written none, the body not Revit's | written, different |
+|---|---:|---:|---:|---:|---:|---:|
+| office at permit | 10,031 | 7,560 | 2,258 | 29 | 166 | 0 |
+| timber office at permit | 7,872 | 5,292 | 2,355 | 29 | 173 | 5 |
+| housing, concrete, as built | 354 | 306 | 0 | 48 | 0 | 0 |
+| housing, concrete, at permit | 354 | 314 | 0 | 40 | 0 | 0 |
+| housing, timber, as built and at permit | 444 each | 396 | 0 | 48 | 0 | 0 |
+
+(The offices' remaining 18 mullions have no axis the scorer reads in rvt-rs's body.)
+
+- **Flat ends.** Of the 2,258 and 2,355, Revit's value is the lateral area plus 0, 1 or 2 flat end faces (on the office at permit 1,242, 168 and 848). RE-268 reads that number from the boxes of the mullion's curtain wall, and writes it only for a mullion on a plain host.
+- **Mitred ends.** Of the 29 and 29 of the offices and the 184 of the housing's large files (48, 40, 48 and 48), Revit's value is the lateral area plus the mitre face, and plus the flat end where that is kept (housing as built: 36 without it and 12 with it; the office: 29 with it). Never the flat end without the mitre.
+- **A body that is not Revit's.** The 166 and 173 have a body that differs from Revit's in extent, area and volume: the 30 listed on the office at permit are drawn from their record's oriented box (`partition_family_instance_oriented_box`), where Revit's solid has mitred ends. They are not drawn from a mesh and are not touched here.
+
+## 2. The rule
+
+A curtain mullion drawn from its saved mesh (a closed mesh of flat faces) that holds no `NetSurfaceArea` gets `mesh_volume::mullion_surface_area` of its own prism (the one whose extent is within 35% of its `Length`, where there is exactly one) and of `kept`, the end faces RE-268 reads for it: the lateral area plus `kept` of its two flat ends of one area each; or, of a flat and a mitred end, the lateral area plus the mitre face and, where `kept` is 2, the flat end, and none where `kept` is 0. `kept` is read for a mullion on any host (it is kept in the file's memo as the partition's mullions are read, `RevitFile::mullion_kept_ends`); until now it was written to a mullion's record only where its host is plain, and the box's own `NetSurfaceArea` only there too.
+
+## 3. Measured: the change
+
+Pending: the unfiltered Measure of the change against the change it follows (RE-418), which this section reports.
+
+## 4. Sources
+
+RE-243, RE-248, RE-268, RE-387, RE-403, RE-418. revit-ifc's `NetSurfaceAreaCalculator` and `PropertyUtil.CreateBeamColumnBaseQuantities` as RE-268 read them (CLEANROOM.md source 5). No Autodesk source was read.
