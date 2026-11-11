@@ -615,6 +615,17 @@ pub fn attach_scoped_with_control(
                 .flatten();
             // RE-418: the mullion's own axis, from its record, turned into the
             // element's frame as its mesh is.
+            if ifc_type.eq_ignore_ascii_case("IFCMEMBER") {
+                let dbg_id = u32::try_from(element.identity.element_id).ok();
+                eprintln!(
+                    "mullion-dbg {} stage volume={} axis={}",
+                    element.identity.element_id,
+                    volume.is_some(),
+                    dbg_id
+                        .and_then(|id| mullion_axes.as_deref().and_then(|axes| axes.get(&id)))
+                        .is_some()
+                );
+            }
             let member = volume
                 .filter(|_| ifc_type.eq_ignore_ascii_case("IFCMEMBER"))
                 .and_then(|_| {
@@ -627,7 +638,9 @@ pub fn attach_scoped_with_control(
                         axis[0] * sin + axis[1] * cos,
                         axis[2],
                     ];
-                    let prism = prism_along(&vertices, &triangles, local)?;
+                    let prism = prism_along(&vertices, &triangles, local);
+                    eprintln!("mullion-dbg {id} stage prism={}", prism.is_some());
+                    let prism = prism?;
                     // The end faces' centres in the model's frame, where mullions
                     // are compared with one another.
                     let (sin, cos) = turn.sin_cos();
@@ -1019,11 +1032,24 @@ fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
     let placed: Vec<Placed> = members.iter().map(|member| member.placed).collect();
     let partners = partner_ends(&placed);
     for (member, partners) in members.iter().zip(partners) {
+        let tag = match model.entities.get(member.index) {
+            Some(IfcEntity::BuildingElement {
+                type_guid: Some(tag),
+                ..
+            }) => tag.clone(),
+            _ => String::new(),
+        };
         let (Some(kept), Some(&position)) = (member.kept, held.get(&member.index)) else {
+            eprintln!(
+                "mullion-dbg {tag} refused kept={:?} held={}",
+                member.kept,
+                held.contains_key(&member.index)
+            );
             continue;
         };
         let with_partner = partners.iter().filter(|partner| **partner).count();
         if with_partner > usize::from(2 - kept.min(2)) {
+            eprintln!("mullion-dbg {tag} refused partners={with_partner} kept={kept}");
             continue;
         }
         let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
@@ -1031,11 +1057,14 @@ fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
             continue;
         };
         if has_property(set, "NetSurfaceArea") {
+            eprintln!("mullion-dbg {tag} has NSA already");
             continue;
         }
         let Some(area) = mullion_surface_area(&member.prism, kept) else {
+            eprintln!("mullion-dbg {tag} refused prism kept={kept}");
             continue;
         };
+        eprintln!("mullion-dbg {tag} wrote kept={kept} partners={with_partner}");
         set.properties.push(Property {
             name: "NetSurfaceArea".into(),
             value: PropertyValue::AreaSquareFeet(area),
