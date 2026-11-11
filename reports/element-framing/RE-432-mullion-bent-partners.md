@@ -4,8 +4,8 @@
 **Issues:** #1735 (8 mullion `NetSurfaceArea` values one end face short; its duplicate #1734 is closed), #1046 (W7: the BIM4LCA office's quantities), #1636 (the rules rest on the BIM4LCA models); follows RE-248 (a mullion's `NetSurfaceArea` counts the end faces its solid keeps), RE-268 (which ends are kept, from the boxes), RE-404 (the value from the saved mesh) and RE-421 (the oriented-box mullions are offered their saved mesh)
 **Artefacts:** the BIM4LCA concrete office as built (Revit 2024) and its permit state, with Revit's IFC4 exports of both
 **Scorers:** `tools/re/mullion_bent_partners.py` (new), `tools/re/mullion_ends_vs_boxes.py`
-**Runs:** Measure [43034275062](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43034275062) (the census whose base side first read 9 different), [43049477290](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43049477290) (the office as built exported with `--no-saved-meshes` on `main` at `4fe00620`, which `mullion_bent_partners.py` and `mullion_ends_vs_boxes.py` read against Revit's export); the change's own run is in section 5
-**Status:** Positive. All 8 values are RE-268's partner bent off the axis; the change's Measure result is in section 5.
+**Runs:** Measure [43034275062](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43034275062) (the census whose base side first read 9 different), [43049477290](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43049477290) (the office as built exported with `--no-saved-meshes` on `main` at `4fe00620`, which `mullion_bent_partners.py` and `mullion_ends_vs_boxes.py` read against Revit's export) and the change [43054102602](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43054102602) (unfiltered, `keep_ifc`, head `a614153c` against `main` at `dae660b8`)
+**Status:** Positive. All 8 values are RE-268's partner bent off the axis, and the change makes them equal to Revit's on both concrete office files (9 different quantities to 1 each) and 7 of the timber office's 9 as built and 5 of its 11 at permit; 30 mullion values change and nothing else.
 
 ## 1. The question
 
@@ -32,18 +32,41 @@ A partner hides an end only where it coincides with it, a cosine above 0.99999 (
 
 Registered on #1636 before the run was read: https://github.com/DrunkOnJava/rvt-rs/issues/1636#issuecomment-6800586926. They said 157 mullions whose Revit value counts every end; Revit's own geometry gives 159 of 159 (the 2 more had no value in the rvt-rs export the first count used).
 
+| row | result |
+|---|---|
+| 1 the 8 become equal | **Held**: `NetSurfaceArea` different 8 to 0 on the office as built and at permit, equal 9,249 to 9,257 and 9,277 to 9,285 |
+| 2 the other bent-partner mullions gain a value only where it is Revit's | **Held, with nothing gained**: none gains a value, 746 missing before and after on each concrete office file; the 151 whose Revit value is the whole surface have no value from rvt-rs for a reason after `kept` (#1746) |
+| 3 coincident partners behave as before | **Held**: the equal values only rise, by the 8 on each concrete file, and the mullions drawn as their box's extrusion are untouched |
+| 4 other models | **Held**: 122 of 126 exports are byte-identical, the held-out models, the 24 Revit 2025 models, RE1 and Autodesk's samples among them; the quantity census reads different 61 to 33 and the property census does not move |
+| 5 what moves | **Held**: 30 mullions' `NetSurfaceArea` and nothing else; no element is added or removed |
+
+The timber office, which the rows did not name, moves too: 7 of its 9 as built and 5 of its 11 at permit become equal (each is one of the mullions of the concrete office's design, 3028014, 3028399, 3028703, 3028863, 3029161, 3029290, 3029300) and 1 gains a value at permit; the 2 as built (1912157 and 1912158, one end face short each, no bent partner) and 6 at permit stay different for another cause, #1745.
+
 ## 5. What Measure found
 
-Not yet read: the unfiltered Measure of the change against `main` is running.
+Run 43054102602 (126 exports each side). The quantity census of the 42 models that have a Revit export, base against head: Revit's quantities 173,840 each side; equal 154,594 to 154,623 (+29); missing 19,185 to 19,184; **different 61 to 33**; the values rvt-rs writes that Revit does not, 29 to 29. By file:
+
+| file | quantities | equal | different | missing |
+|---|---:|---:|---:|---:|
+| BIM4LCA concrete office, as built | 39,754 | 36,321 to 36,329 | 9 to 1 | 3,424 |
+| BIM4LCA concrete office, at permit | 40,006 | 36,680 to 36,688 | 9 to 1 | 3,317 |
+| BIM4LCA timber office, as built | 33,800 | 30,696 to 30,703 | 10 to 3 | 3,094 |
+| BIM4LCA timber office, at permit | 33,663 | 30,291 to 30,297 | 28 to 23 | 3,344 to 3,343 |
+
+All of it is `Qto_MemberBaseQuantities.NetSurfaceArea` (equal 32,702 to 32,731, different 36 to 8, missing 3,044 to 3,043). The property census does not move (213,756 values each side, equal 199,261, different 61, missing 14,434, 358 rvt-rs-only). **4 of 126 exports move** (the four office files) and 122 are byte-identical. `tools/re/ifc_element_diff.py` on the 4 pairs: no element is only in one file and 30 elements differ, each a mullion whose `NetSurfaceArea` is changed (29) or added (1), nothing removed; the only entity count that moves is `IfcQuantityArea`, by 1. `same-project gates` pass on the measured head. The office as built reads 36,329 of 39,754 quantities equal and 1 different, the `Length` of mullion 3027671, which is older and not this.
 
 ## 6. Not done
 
 - The older `Length` of mullion 3027671 (4.269995 against 4.270047 m, 5e-5 m) is not this and stays.
-- A bent partner on another model is not measured: the rule rests on the office, one project in two states.
+- The 151 mullions with a bent partner whose Revit value is the whole surface get no value from rvt-rs: [#1746](https://github.com/DrunkOnJava/rvt-rs/issues/1746).
+- The timber office's 2 values as built and 6 at permit one end face short, with no bent partner: [#1745](https://github.com/DrunkOnJava/rvt-rs/issues/1745).
+- A bent partner on another model is not measured: no other export moves, so the rule rests on the office and the timber office, two projects in four states.
 
 ## 7. Reproduce
 
 ```bash
+# the change against main
+gh workflow run measure.yml --ref fix/1735-mullion-bent-partners -f ref=a614153c142c8abeb4e360a4560f6542c6e76014 -f base=dae660b8 -f samples=true -f nordic=true -f r2025=true -f holdout=true -f bimcollab=true -f racadv=true -f keep_ifc=true
 # the office as built exported as boxes, kept
 gh workflow run measure.yml --ref main -f ref=4fe0062012716869438a67f6c000b1fc9b28c0f4 -f base=none -f nordic=true -f models="nordic-office-as-built" -f scorers=none -f keep_ifc=true -f ifc_flags=--no-saved-meshes
 # then, with the kept model.ifc and Revit's export of the office as built
