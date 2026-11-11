@@ -1273,7 +1273,12 @@ sloped, rolled beams of rst_basic and the 2 Snowdon beams keep their box. The
 beams that were drawn along their line are unchanged, and the BIM4LCA office
 is byte for byte the same. The probe for a private file is
 `probe_re328_beam_rejections`
-(`reports/element-framing/RE-328-beam-rejections.md`).
+(`reports/element-framing/RE-328-beam-rejections.md`). **Since RE-428
+(2026-11-11, #1697)** the beam's location line gives such a beam the
+`Length`, `Span`, `Slope` and `Roll` it was left without, as it does every
+beam that has a line, whatever its body is drawn from; the 39 beams of this
+kind in the BIM4LCA files read Revit's four values (the report holds the
+counts).
 
 **RE-281 (2026-10-30)** reads the project's phases and each element's saved
 parameters on Revit 2015 to 2022, experimentally, and the phase order on

@@ -732,6 +732,24 @@ pub const BEAM_AXIS_END_FIELDS: [&str; 3] = [
     "m_beam_axis_end_z",
 ];
 
+/// Fields holding the first end of a beam's location line for its properties,
+/// model feet (#1697, RE-428): the line of the beam's element data, whenever it
+/// lies inside the beam's record box, whether or not a solid along it is drawn
+/// ([`BEAM_AXIS_START_FIELDS`] is the line of a beam that has one).
+pub const BEAM_LINE_START_FIELDS: [&str; 3] = [
+    "m_beam_line_start_x",
+    "m_beam_line_start_y",
+    "m_beam_line_start_z",
+];
+
+/// Fields holding the second end of a beam's location line for its properties,
+/// model feet (#1697, RE-428).
+pub const BEAM_LINE_END_FIELDS: [&str; 3] = [
+    "m_beam_line_end_x",
+    "m_beam_line_end_y",
+    "m_beam_line_end_z",
+];
+
 /// Fields holding the first end of a pipe's centreline, model feet (RE-131).
 pub const PIPE_AXIS_START_FIELDS: [&str; 3] = [
     "m_pipe_axis_start_x",
