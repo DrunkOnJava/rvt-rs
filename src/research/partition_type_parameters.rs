@@ -48,9 +48,19 @@ pub const TYPE_TEXT_PARAMETERS: &[(i64, &str)] = &[
 /// export gives a `Manufacturer`, which RE-289 looked for in RE-77's form
 /// alone. An entry is a type's only where no mark of any id lies between the
 /// type's block mark and the entry ([`scan_partition`]), and its copies must
-/// agree ([`type_text_parameters`]).
+/// agree ([`type_text_parameters`]). A Fire Rating is read under the family
+/// parameters named [`FIRE_RATING_PARAMETER_NAME`] too, which is where the
+/// R2025 models' window types hold theirs (RE-185 section 3.3, #1507).
 pub const TABLE_TEXT_PARAMETERS: &[(i64, &str)] =
     &[(-1001206, "Fire Rating"), (-1010108, "Manufacturer")];
+
+/// The name of the family parameter a type holds its Fire Rating in where it
+/// holds none under the built-in -1001206: the R2025 models' window types
+/// hold their `0.5h` so, under two definitions of that name, and Revit's
+/// export writes it as the windows' `Pset_WindowCommon.FireRating` (RE-185
+/// section 3.3, RE-207, #1507). The ids are found by this name, not by the
+/// two ids those models happen to use.
+pub const FIRE_RATING_PARAMETER_NAME: &str = "Fire Rating";
 
 /// Longest value read, in UTF-16 units.
 const MAX_VALUE_UNITS: usize = 400;
@@ -118,7 +128,12 @@ pub fn scan_partition(buf: &[u8], declared_ids: &BTreeSet<u32>) -> PartitionText
             note(&mut id_values, owner, name, text);
         }
     }
-    for (parameter, name) in TABLE_TEXT_PARAMETERS {
+    let table_parameters = TABLE_TEXT_PARAMETERS.iter().copied().chain(
+        family_parameters_named(buf, declared_ids, FIRE_RATING_PARAMETER_NAME)
+            .into_iter()
+            .map(|id| (i64::from(id), FIRE_RATING_PARAMETER_NAME)),
+    );
+    for (parameter, name) in table_parameters {
         let mut mark = [0xffu8; 16];
         mark[8..].copy_from_slice(&parameter.to_le_bytes());
         for at in memchr::memmem::find_iter(buf, &mark) {
