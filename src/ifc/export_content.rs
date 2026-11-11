@@ -2524,6 +2524,10 @@ fn reference_set_kinds(
 /// and the R2025 models' IFC4 exports, and RE1's IFC2X3 exports for the duct
 /// and pipe fitting and duct segment types. Reference goes in no other set
 /// until a Revit export confirms it (the maintainer, 2026-10-29).
+/// `Pset_ShadingDeviceCommon` joins on the timber office's IFC4 exports, as
+/// built and at building permit, which write it on all 44 of their
+/// `IfcShadingDevice` and on no other element: rvt-rs's value is Revit's on
+/// 44 of 44 in both (Measure run 43058225020).
 const CONFIRMED_REFERENCE_SETS: &[&str] = &[
     "Pset_AirTerminalTypeCommon",
     "Pset_BeamCommon",
@@ -2552,6 +2556,7 @@ const CONFIRMED_REFERENCE_SETS: &[&str] = &[
     "Pset_ReinforcementBarPitchOfWall",
     "Pset_RoofCommon",
     "Pset_SanitaryTerminalTypeCommon",
+    "Pset_ShadingDeviceCommon",
     "Pset_SlabCommon",
     "Pset_SpaceCommon",
     "Pset_StairCommon",
