@@ -816,7 +816,6 @@ const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
             "HANDRAIL",
             "GUARDRAIL",
             "BALUSTRADE",
-            "FENCE",
             "USERDEFINED",
             "NOTDEFINED",
         ],
