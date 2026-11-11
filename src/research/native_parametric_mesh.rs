@@ -401,7 +401,16 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             // cells in all, however they divide between the two: a face of a long
             // arc between two straight generators needs its arc's steps and one
             // cell across, not as many across as along.
-            let cells = twisted / CHORD;
+            //
+            // Between two straight profiles the surface is a bilinear patch, and
+            // cut into `n_u * n_v` cells of two triangles it leaves them by
+            // `twisted / (4 * n_u * n_v)` at most (at a cell's middle), so a
+            // quarter of the cells hold the bar (#1683: the roofs' faces of 11 to
+            // 24 ft of twist asked 4 times that). A curved profile adds its own
+            // bow, up to the bar, to the twist's, so such a face keeps the margin.
+            let straight =
+                matches!(profile1, Curve::Line { .. }) && matches!(profile2, Curve::Line { .. });
+            let cells = twisted / if straight { 4. * CHORD } else { CHORD };
             let n_u = cells
                 .sqrt()
                 .ceil()
