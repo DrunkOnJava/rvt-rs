@@ -323,10 +323,12 @@ jobs:
             status=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$1" --jq .status 2>/dev/null || true)
             case "$status" in identical | behind) echo true ;; *) echo false ;; esac
           }
-          echo "head=$head" >> "$GITHUB_OUTPUT"
-          echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "head_on_main=$(on_main "$head")" >> "$GITHUB_OUTPUT"
-          echo "base_on_main=$(on_main "$base")" >> "$GITHUB_OUTPUT"
+          {
+            echo "head=$head"
+            echo "base=$base"
+            echo "head_on_main=$(on_main "$head")"
+            echo "base_on_main=$(on_main "$base")"
+          } >> "$GITHUB_OUTPUT"
           echo "head ${HEAD_REF} -> ${head}; base ${BASE_REF} -> ${base}"
       - id: plan
         shell: bash
