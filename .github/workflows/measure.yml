@@ -409,9 +409,11 @@ jobs:
           # Code that changes every file moves them alike, so the split stays
           # about even. A sample unit is a range of years, cut to the
           # `sample_years` input.
-          units = [("reference models", 71, dict(reference=True))]
+          units = []
           if flag("NORDIC"):
               units.append(("offices", 329, dict(offices=True)))
+              units.append(("housing", 600, dict(bim4lca="ARK_NordicLCA_Housing_Concrete_As-Built.rvt ARK_NordicLCA_Housing_Concrete_BuildingPermit.rvt ARK_NordicLCA_Housing_Timber_As-Built.rvt ARK_NordicLCA_Housing_Timber_BuildingPermit.rvt")))
+              units.append(("timber office", 400, dict(bim4lca="ARK_NordicLCA_Office_Timber_As-Built.rvt ARK_NordicLCA_Office_Timber_BuildingPermit.rvt")))
           if flag("SAMPLES"):
               years = e["YEARS"].split()
               low = int(years[0]) if years else 0
@@ -436,12 +438,13 @@ jobs:
                    what=", ".join(unit[0] for unit in bin["units"]),
                    reference=any(unit[2].get("reference") for unit in bin["units"]),
                    offices=any(unit[2].get("offices") for unit in bin["units"]),
+                   bim4lca=" ".join(unit[2]["bim4lca"] for unit in bin["units"] if "bim4lca" in unit[2]),
                    ranges=";".join(unit[2]["ranges"] for unit in bin["units"] if "ranges" in unit[2]))
               for number, bin in enumerate(bins, 1)
           ]
           if not flag("TIMING") or not base:
               # The timing jobs are skipped; a matrix still needs a row.
-              timing = [dict(shard="none", what="", reference=False, offices=False, ranges="")]
+              timing = [dict(shard="none", what="", reference=False, offices=False, bim4lca="", ranges="")]
           print("timing=" + json.dumps({"include": timing}))
           PY
 
@@ -1573,6 +1576,23 @@ jobs:
             0) ;;
             2) echo "::warning::BIM4LCA office models NOT MEASURED: the host was unreachable" ;;
             *) echo "::error::the BIM4LCA office models no longer match research/bim4lca-measure.tsv"; exit 1 ;;
+          esac
+      - name: Fetch the BIM4LCA housing and timber office models
+        if: matrix.bim4lca != ''
+        shell: bash
+        env:
+          FILES: ${{ matrix.bim4lca }}
+        run: |
+          mkdir -p models
+          set +e
+          # shellcheck disable=SC2086 # The file names are words.
+          python3 tools/ci/fetch-bim4lca.py research/bim4lca-measure.tsv models $FILES
+          status=$?
+          set -e
+          case "$status" in
+            0) ;;
+            2) echo "::warning::BIM4LCA models NOT MEASURED: the host was unreachable" ;;
+            *) echo "::error::the BIM4LCA models no longer match research/bim4lca-measure.tsv"; exit 1 ;;
           esac
       - name: Fetch Autodesk's sample projects
         if: matrix.ranges != ''
