@@ -724,6 +724,18 @@ jobs:
       # its path. A ref that is not a full SHA can move between the two jobs;
       # then the binaries and this source would be two commits.
       - name: Measured binaries
+        id: dl_bin
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        continue-on-error: true
+        with:
+          name: measure-bin-${{ matrix.side }}
+          path: measured/target/ci
+      # A second attempt after a transient failure (#1742): the artifacts service can reset a request.
+      - name: Pause before the second attempt of Measured binaries
+        if: steps.dl_bin.outcome == 'failure'
+        run: sleep 20
+      - name: Measured binaries (second attempt)
+        if: steps.dl_bin.outcome == 'failure'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: measure-bin-${{ matrix.side }}
@@ -1219,7 +1231,19 @@ jobs:
             tools/ci/same_project_verdict.py
           sparse-checkout-cone-mode: false
       # One directory for each shard: two shards write an areas_across_saves.txt.
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+      - id: dl_head_results
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        continue-on-error: true
+        with:
+          pattern: measure-head-*
+          path: measure-head
+      # A second attempt after a transient failure (#1742): the artifacts service can reset a request.
+      - name: Pause before the second attempt of Download measure-head-*
+        if: steps.dl_head_results.outcome == 'failure'
+        run: sleep 20
+      - name: Download measure-head-* (second attempt)
+        if: steps.dl_head_results.outcome == 'failure'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: measure-head-*
           path: measure-head
@@ -1303,13 +1327,39 @@ jobs:
           sparse-checkout-cone-mode: false
       # Each side's shards hold disjoint models; merged, they are the
       # measure-head and measure-base directories one runner used to write.
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+      - id: dl_head
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        continue-on-error: true
         with:
           pattern: measure-head-*
           path: measure-head
           merge-multiple: true
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+      # A second attempt after a transient failure (#1742): the artifacts service can reset a request.
+      - name: Pause before the second attempt of Download measure-head-*
+        if: steps.dl_head.outcome == 'failure'
+        run: sleep 20
+      - name: Download measure-head-* (second attempt)
+        if: steps.dl_head.outcome == 'failure'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: measure-head-*
+          path: measure-head
+          merge-multiple: true
+      - id: dl_base
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        continue-on-error: true
         if: needs.plan.outputs.base == 'true'
+        with:
+          pattern: measure-base-*
+          path: measure-base
+          merge-multiple: true
+      # A second attempt after a transient failure (#1742): the artifacts service can reset a request.
+      - name: Pause before the second attempt of Download measure-base-*
+        if: needs.plan.outputs.base == 'true' && steps.dl_base.outcome == 'failure'
+        run: sleep 20
+      - name: Download measure-base-* (second attempt)
+        if: needs.plan.outputs.base == 'true' && steps.dl_base.outcome == 'failure'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: measure-base-*
           path: measure-base
@@ -1317,7 +1367,19 @@ jobs:
       # The head side's shards one by one, for what two shards write under one
       # name: the merged measure-head keeps one of their areas_across_saves.txt,
       # and a shard that skipped the gate must not hide the one that ran it.
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+      - id: dl_head_shards
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        continue-on-error: true
+        with:
+          pattern: measure-head-*
+          path: measure-head-shards
+      # A second attempt after a transient failure (#1742): the artifacts service can reset a request.
+      - name: Pause before the second attempt of Download measure-head-*
+        if: steps.dl_head_shards.outcome == 'failure'
+        run: sleep 20
+      - name: Download measure-head-* (second attempt)
+        if: steps.dl_head_shards.outcome == 'failure'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: measure-head-*
           path: measure-head-shards
@@ -1619,7 +1681,19 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+      - id: dl_timing_bin
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        continue-on-error: true
+        with:
+          name: timing-bin
+          path: timing-bin
+      # A second attempt after a transient failure (#1742): the artifacts service can reset a request.
+      - name: Pause before the second attempt of Download timing-bin
+        if: steps.dl_timing_bin.outcome == 'failure'
+        run: sleep 20
+      - name: Download timing-bin (second attempt)
+        if: steps.dl_timing_bin.outcome == 'failure'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: timing-bin
           path: timing-bin
@@ -1711,7 +1785,19 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+      - id: dl_timing_shards
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        continue-on-error: true
+        with:
+          pattern: measure-timing-shard-*
+          path: shards
+      # A second attempt after a transient failure (#1742): the artifacts service can reset a request.
+      - name: Pause before the second attempt of Download measure-timing-shard-*
+        if: steps.dl_timing_shards.outcome == 'failure'
+        run: sleep 20
+      - name: Download measure-timing-shard-* (second attempt)
+        if: steps.dl_timing_shards.outcome == 'failure'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: measure-timing-shard-*
           path: shards
