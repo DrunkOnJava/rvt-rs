@@ -244,3 +244,9 @@ print("\nvolume-only walls among the first two classes")
 for r in rows:
     if r["kind"] != "full" and r["unexplained"] == 0:
         print("  ", r)
+
+import json, os
+if os.environ.get("ROWS_OUT"):
+    with open(os.environ["ROWS_OUT"], "w") as handle:
+        for r in rows:
+            handle.write(json.dumps({"tag": r["tag"], "kind": r["kind"], "cls": "prism" if r["mids"] == 0 else "less-openings" if r["unexplained"] == 0 else "unexplained"}) + "\n")
