@@ -125,10 +125,12 @@ def compare(prims, revit):
 
 
 def main():
-    if len(sys.argv) != 3:
+    # Measure adds `--list` to every probe scorer's arguments; this one has no use for it.
+    args = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
+    if len(args) != 2:
         print(__doc__)
         return 2
-    probe_path, ref_path = sys.argv[1:3]
+    probe_path, ref_path = args
     tag, header, prims = read_probe(probe_path)
     if tag is None:
         print("the probe printed no element: the model holds no saved graphics under that ElementId")
