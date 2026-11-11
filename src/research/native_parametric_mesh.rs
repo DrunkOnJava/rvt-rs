@@ -111,8 +111,27 @@ fn ruled_surface_component(
             }
         }
     }
+    // An edge that names fewer than two faces leaves a face's neighbours unknown
+    // only where it borders a ruled face. The shared grid sizes the ruled faces
+    // of a component alike, a ruled face's neighbours are the faces its own
+    // edges name, and an edge of a plane or a cylinder that names one face (a
+    // boundary of the faces the graph holds, as on four roofs of Snowdon Towers
+    // Architectural, #1683) cannot join two ruled faces.
+    let ruled = |face: usize| {
+        g.objects
+            .get(face)
+            .and_then(|object| object.fields.get("m_pSurf"))
+            .and_then(|value| {
+                crate::native_saved_mesh::pointer(g, face, value)
+                    .ok()
+                    .flatten()
+            })
+            .and_then(|surface| g.objects.get(surface))
+            .is_some_and(|surface| surface.class_name == "RuledSurf")
+    };
     if let Some((face, held)) = component
         .iter()
+        .filter(|face| ruled(**face))
         .find_map(|face| invalid_by_face.get(face).map(|held| (face, held)))
     {
         anyhow::bail!("malformed ruled-surface edge ({held}) is connected to face {face}");
