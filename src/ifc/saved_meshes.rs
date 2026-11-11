@@ -512,6 +512,19 @@ fn follow_mesh_over_box(set: &mut PropertySet, mesh_volume: f64) {
         .retain(|property| property.name != "NetSurfaceArea");
 }
 
+/// How far a wall's held `NetVolume` may differ from the volume of its mesh,
+/// relative to the mesh's, and still be the solid's (RE-405): the mesh's corners
+/// are single precision, which moves the volume of a small wall at 190 ft by
+/// about 1e-4 of it (RE-388).
+const WALL_BOX_MESH_TOLERANCE: f64 = 1e-3;
+
+/// How far the vertical span of a wall's mesh may differ from the height of its
+/// body, feet, and still confirm it (RE-405): the span is within 1e-4 ft of
+/// Revit's `Height` on every wall of the BIM4LCA office (RE-388), and the
+/// smallest difference between a body's height and Revit's measured on the
+/// BIM4LCA housing is 0.11 ft.
+const WALL_HEIGHT_AGREE_FEET: f64 = 5e-4;
+
 /// Give each wall of `found` (an index into the entities and what the mesh
 /// Revit saved for it gives) the quantities Revit's export writes from its
 /// solid, in the base quantity set it holds, where that holds none of them
@@ -521,6 +534,18 @@ fn follow_mesh_over_box(set: &mut PropertySet, mesh_volume: f64) {
 /// (revit-ifc's `PropertyUtil.CreateWallBaseQuantities`, CLEANROOM.md source 5,
 /// RE-270). A wall with no base quantity set, as a wall Revit's export writes
 /// none for may be, gets none.
+///
+/// The quantities of a wall's box (RE-270, RE-293) hold only where the box is
+/// the solid (RE-405). A wall whose held `NetVolume` is not the mesh's, by more
+/// than [`WALL_BOX_MESH_TOLERANCE`] of it, is a box that is not Revit's solid (a
+/// wall joined at an angle, whose footprint is a pentagon, or a box longer than
+/// the wall): the quantities taken from the box are dropped, and the mesh gives
+/// those it can. The footprint stays where the mesh's vertical span is not the
+/// box's height, which says the wall is cut in height and not in plan. A
+/// `Height` is the box's, and is written for a wall of at most four vertical
+/// faces, as its areas are, where the mesh's vertical span confirms it and is
+/// dropped where the span does not (a wall whose lower part a door as wide as
+/// the wall cuts away).
 fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities)]) {
     if found.is_empty() {
         return;
@@ -537,10 +562,53 @@ fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities
         let Some(&position) = held.get(index) else {
             continue;
         };
+        // The height of the wall's body, where it is the extrusion of its box.
+        let body_height = match model.entities.get(*index) {
+            Some(IfcEntity::BuildingElement {
+                extrusion: Some(body),
+                solid_shape: None,
+                ..
+            }) => Some(body.height_feet),
+            _ => None,
+        };
         let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
         else {
             continue;
         };
+        let height_agrees = body_height
+            .map(|height| (quantities.height_feet - height).abs() <= WALL_HEIGHT_AGREE_FEET);
+        let held_volume = set
+            .properties
+            .iter()
+            .find_map(|property| match &property.value {
+                PropertyValue::VolumeCubicFeet(volume) if property.name == "NetVolume" => {
+                    Some(*volume)
+                }
+                _ => None,
+            });
+        if held_volume.is_some_and(|held| {
+            (held - quantities.net_volume).abs() > WALL_BOX_MESH_TOLERANCE * quantities.net_volume
+        }) {
+            // The footprint is the plan's: a box whose height the mesh does not
+            // have (a wall cut away from below or above) may still have Revit's.
+            let keep_footprint = height_agrees == Some(false);
+            set.properties
+                .retain(|property| match property.name.as_str() {
+                    "NetVolume" | "NetSideArea" | "GrossSideArea" | "GrossVolume" => false,
+                    "GrossFootprintArea" => keep_footprint,
+                    _ => true,
+                });
+        }
+        if let Some(height) = body_height {
+            if height_agrees == Some(false) {
+                set.properties.retain(|property| property.name != "Height");
+            } else if quantities.sides.is_some() && !has_property(set, "Height") {
+                set.properties.push(Property {
+                    name: "Height".into(),
+                    value: PropertyValue::PositiveLengthFeet(height),
+                });
+            }
+        }
         let width = set
             .properties
             .iter()
