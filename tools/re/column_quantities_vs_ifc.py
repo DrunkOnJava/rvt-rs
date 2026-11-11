@@ -45,7 +45,7 @@ UNIT = {"Length": 0, "GrossVolume": 2, "NetVolume": 2}  # the index into scales(
 ENDS_EQUAL = 1e-4  # the saved-mesh pass's rule: the two ends' areas agree to this fraction
 VOLUME_AGREES = 1e-4  # and the volume is the end area times the extent to this fraction
 EXTENT_TIE = 1e-6  # two longest axes within this fraction of each other: no axis
-LISTED = 8
+LISTED = 40
 
 
 def column_values(column, scale):
@@ -72,12 +72,17 @@ def rule(triangles):
     """The saved-mesh pass's beam rule on a body (RE-423): the values it would give and why, or None and why not."""
     if triangles is None:
         return None, "no body"
-    axes = [axis for axis in prism_axes(triangles) if axis[2] == ("flat", "flat")]
+    every = prism_axes(triangles)
+    axes = [axis for axis in every if axis[2] == ("flat", "flat")]
     if not axes:
         return None, "no prism axis with two flat ends"
     if len(axes) > 1 and abs(axes[0][1] - axes[1][1]) <= EXTENT_TIE * axes[0][1]:
         return None, "the two longest axes tie"
     axis = axes[0][0]
+    # Beyond the beam rule: whether the axis it takes is the longest of all the axes the body is a prism along (a
+    # cut column's longest may have unequal ends, leaving only a short flat-ended one), and whether it is vertical.
+    longest = every[0][1] <= axes[0][1] * (1 + EXTENT_TIE)
+    vertical = abs(float(axis[2])) > 0.99
     measures = analyse(triangles, axis)
     _, normals, area, _ = facts(triangles)
     along = normals @ axis
@@ -87,13 +92,16 @@ def rule(triangles):
     end = (up + down) / 2
     if abs(measures["volume"] - end * measures["extent"]) > VOLUME_AGREES * measures["volume"]:
         return None, "the volume is not the end area times the extent"
+    how = "accepted, " + ("vertical" if vertical else "not vertical") + ", " + (
+        "the longest prism axis" if longest else "a longer prism axis has unequal or mitred ends")
     return {
         "Length": measures["extent"],
         "CrossSectionArea": end,
         "OuterSurfaceArea": measures["lateral"],
         "GrossVolume": measures["volume"],
         "NetVolume": measures["volume"],
-    }, "accepted"
+        "extent of the longest prism axis": every[0][1],
+    }, how
 
 
 def today(ours, revit, name):
@@ -163,7 +171,7 @@ def main():
     for tag, name, kind, body, src, r, found in odd:
         print(f"  column {tag} {name!r} set {kind!r} body {body} src {src}")
         print("      Revit " + " | ".join(f"{q} {fmt(r[q])}" for q in QUANTITIES))
-        print("      rule  " + " | ".join(f"{q} {fmt(found[q])}" for q in QUANTITIES))
+        print("      rule  " + " | ".join(f"{q} {fmt(found[q])}" for q in QUANTITIES) + f" | longest prism axis {fmt(found['extent of the longest prism axis'])}")
     return 0
 
 
