@@ -374,6 +374,26 @@ fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Resu
     anyhow::bail!("a trim loop does not close in the surface's parameters")
 }
 
+/// How far a revolved profile's points lie from the axis (the surface frame's `z`) for
+/// the parameters from `lo` to `hi`, never less: the farthest of 64 equal steps' ends,
+/// and half a step's length of the most the point can move (`speed`, the length of the
+/// profile's derivative at most) added, since the farthest point can lie between two.
+fn profile_reach(
+    profile: &crate::native_parametric_surface::Curve,
+    lo: f64,
+    hi: f64,
+    speed: f64,
+) -> f64 {
+    const STEPS: usize = 64;
+    let reach = (0..=STEPS)
+        .map(|i| {
+            let q = profile.eval(lo + (hi - lo) * i as f64 / STEPS as f64);
+            q[0].hypot(q[1])
+        })
+        .fold(0., f64::max);
+    reach + speed * (hi - lo).abs() / STEPS as f64 / 2.
+}
+
 /// The grid the face at `fi` is meshed on, or why it is not meshed (a trim loop
 /// that does not close, a ruled face whose neighbours the graph does not resolve,
 /// a surface that is not read). A face whose one loop is the rectangle of its
@@ -446,20 +466,17 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                     .fold(0., f64::max);
                 (angular(radius), 1. / length(*direction))
             }
-            Curve::Arc { center, radius, .. } => (
-                angular(center[0].hypot(center[1]) + 2. * radius),
+            // A step around the axis bows from its chord by the radius the
+            // profile reaches over the face's own `v`: the grid takes the farthest.
+            Curve::Arc { radius, .. } => (
+                angular(profile_reach(profile, min[1], max[1], *radius)),
                 angular(*radius),
             ),
             // The second derivative of `c + a cos t x + b sin t y` is at most
             // max(a, b) long, so a step in `t` bows no further from its chord
             // than the same step on a circle of that radius.
-            Curve::Ellipse {
-                center,
-                x_len,
-                y_len,
-                ..
-            } => (
-                angular(center[0].hypot(center[1]) + 2. * x_len.max(*y_len)),
+            Curve::Ellipse { x_len, y_len, .. } => (
+                angular(profile_reach(profile, min[1], max[1], x_len.max(*y_len))),
                 angular(x_len.max(*y_len)),
             ),
         },
@@ -1209,7 +1226,8 @@ fn tessellate_trimmed(
 
 #[cfg(test)]
 mod tests {
-    use super::{inside_polygon, keep_triangle, trimmed_cells};
+    use super::{inside_polygon, keep_triangle, profile_reach, trimmed_cells};
+    use crate::native_parametric_surface::Curve;
 
     // How a triangle of a face's cells can be wrong, and the one thing that looks
     // wrong and is not.
@@ -1417,5 +1435,61 @@ mod tests {
         assert!(trimmed_cells(&square, &[1., 0.], &[0., 1.]).is_err());
         assert!(trimmed_cells(&[vec![[0., 0.], [1., 0.]]], &[0., 1.], &[0., 1.]).is_err());
         assert!(trimmed_cells(&[], &[0., 1.], &[0., 1.]).is_err());
+    }
+
+    // The farthest a revolved profile reaches from the axis, which sets the grid's steps
+    // around it: short by any amount and a face's grid would be coarser than its chord.
+    fn arc(centre: f64, radius: f64, range: [f64; 2]) -> Curve {
+        Curve::Arc {
+            center: [centre, 0., 0.],
+            x: [1., 0., 0.],
+            y: [0., 1., 0.],
+            radius,
+            range,
+        }
+    }
+
+    #[test]
+    fn the_reach_is_never_less_than_the_farthest_point_of_the_profile() {
+        // The farthest point is at t = 0, centre + radius, and no step of 64 ends on it.
+        let profile = arc(2., 3., [-0.0013, 0.0007]);
+        assert!(profile_reach(&profile, -0.0013, 0.0007, 3.) >= 5.);
+        // The whole circle, where the farthest is on a step.
+        let circle = arc(0.5, 0.25, [0., std::f64::consts::TAU]);
+        assert!(profile_reach(&circle, 0., std::f64::consts::TAU, 0.25) >= 0.75 - 1e-12);
+        // An ellipse of axes 2 and 1 about a centre 1 from the axis reaches 3 at t = 0.
+        let ellipse = Curve::Ellipse {
+            center: [1., 0., 0.],
+            x: [1., 0., 0.],
+            y: [0., 1., 0.],
+            x_len: 2.,
+            y_len: 1.,
+            range: [-0.4, 0.3],
+        };
+        assert!(profile_reach(&ellipse, -0.4, 0.3, 2.) >= 3.);
+    }
+
+    #[test]
+    fn a_part_of_the_profile_that_stays_near_the_axis_does_not_pay_for_the_rest() {
+        // A circle of radius 3 about a centre 0.7 from the axis reaches 3.7 on its far side,
+        // but the part of it from 3.0 to 3.6 radians lies on the near side, 2.3 to 2.4 from it.
+        let profile = arc(0.7, 3., [0., std::f64::consts::TAU]);
+        let part = profile_reach(&profile, 3.0, 3.6, 3.);
+        let at = |t: f64| (0.7 + 3. * t.cos()).hypot(3. * t.sin());
+        assert!(part >= at(3.0).max(at(3.6)) - 1e-9);
+        assert!(part < 2.5, "{part}");
+        // The bound the whole circle gave, centre plus twice the radius, was 6.7.
+        assert!(part < 6.7 / 2.);
+    }
+
+    #[test]
+    fn a_range_of_one_parameter_reaches_the_point_and_a_reversed_range_the_same_as_its_order() {
+        let profile = arc(1., 1., [0., 1.]);
+        let one = profile_reach(&profile, 0.5, 0.5, 1.);
+        let point = profile.eval(0.5);
+        assert!((one - point[0].hypot(point[1])).abs() < 1e-12);
+        let forward = profile_reach(&profile, 0.2, 0.9, 1.);
+        let backward = profile_reach(&profile, 0.9, 0.2, 1.);
+        assert!((forward - backward).abs() < 1e-12);
     }
 }
