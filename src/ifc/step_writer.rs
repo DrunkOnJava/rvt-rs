@@ -4650,9 +4650,21 @@ impl StepWriter<'_> {
                     )))
                 }),
             };
+            // A type read for several symbols can leave several type objects of
+            // one entity and Tag with no Revit GlobalId left to give (the BIM4LCA
+            // office at permit has 6 of one mullion type): the first takes the
+            // writer's own, each later one a GlobalId that carries its place in
+            // the list, so that none repeats (IFC4's IfcRoot.UR1, #1667).
             let type_gid = match revit {
                 Some(global_id) if used_gids.insert(global_id.clone()) => global_id,
-                _ => gid(&["type", entity_name, tag]),
+                _ => {
+                    let own = gid(&["type", entity_name, tag]);
+                    if used_gids.insert(own.clone()) {
+                        own
+                    } else {
+                        gid(&["type", entity_name, tag, &index.to_string()])
+                    }
+                }
             };
             let set_ids: Vec<String> = property_sets
                 .iter()
