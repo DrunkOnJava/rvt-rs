@@ -462,9 +462,11 @@ on a change it did not look at.
 
 **Only a run of every open model writes the check.** That is a run dispatched
 in this repository with a base, no `models` filter, and the office and the
-Revit 2025 models on; and it compares all 34 open models
+Revit 2025 models on; and it compares all 36 open models
 (`OPEN_MODEL_NAMES` in `tools/re/semantic_diff.py`, a list that gains a name when
-a fetcher gains a model). A run with a filter, or `base=none`, gets its diffs in
+a fetcher gains a model, together with the dump case of
+`tools/ci/measure-reference-models.sh`: an open model with no dump reads as a gap
+and the check as NOT MEASURED, #1675). A run with a filter, or `base=none`, gets its diffs in
 the `semantic-diff` artifact and no check run, and says so in the step summary
 of both its compare job and the Semantic check run: a narrower run's pass would
 stand beside a fuller run's fail on the same commit, since the check has one
@@ -526,7 +528,8 @@ a profile point is not in the dump. The check's summary says so every time, and
 Measure's `ifc.sha256` is what says that an export is identical.
 
 - **What is compared.** The MCP server's dump of each openly licensed model
-  (Core Interior, Einhoven, RE1, the BIM4LCA office, the Revit 2025 models), on
+  (Core Interior, Einhoven, RE1, the BIM4LCA office in concrete and timber, the
+  Revit 2025 models), on
   both sides of the run: every element's row, the rooms' numbers and areas, the
   levels, the summary and the diagnostics, and the property and quantity sets,
   type object, placement and provenance of the sampled elements (the five

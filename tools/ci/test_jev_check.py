@@ -74,7 +74,7 @@ class Coverage(unittest.TestCase):
     def test_a_model_with_no_folder_is_not_silently_absent(self):
         names = [name for name in NAMES if not name.startswith("nordic-office")]
         uncovered, _ = jc.coverage_gaps(manifest(names), diffs_for(names))
-        self.assertEqual(len(uncovered), 4)
+        self.assertEqual(len(uncovered), len(NAMES) - len(names))
         self.assertTrue(all("no result folder" in line for line in uncovered))
 
     def test_a_dropped_group_or_a_skipped_unlisted_model_is_a_gap(self):
