@@ -732,8 +732,12 @@ writes the cached output and a `<step> cached` line to the model's
   lines, which carry the export time, so a rebuild that writes the same model
   hits; Revit's export; the glTF; the validation findings); the scorer and
   every module of `tools/re` and `tools/ci` it reaches by import, importlib
-  path or name, and every file of `tools/re` and `tools/ci` that is not Python
-  (the Measure script, the requirements, the schemas); the value of every
+  path or name, and every file of `tools/re` and `tools/ci` that is neither Python
+  nor a shell script (the requirements, the schemas: a shell script, such as the
+  Measure script, changes a step's output only through its arguments, its
+  environment and the files it is given, which the key hashes itself, and
+  hashing the scripts reset every entry on 25 of 153 commits of `main` in 72
+  hours); the value of every
   environment variable the scorers read (apart from the two that size the mesh
   cache), which is `PSETS_MISSING` for `psets_vs_ifc` and `qtos_vs_ifc`; the
   files a scorer reads that its arguments do not name (`qtos_vs_ifc`'s
@@ -753,7 +757,14 @@ writes the cached output and a `<step> cached` line to the model's
   environment variable by a computed name, or one given a directory as an
   argument: the cache tells the reason in `score-cache-<shard>.log` and runs
   it. A new scorer that reads anything but the files it is given is run every
-  time until `EXTRA_INPUTS` in `measure-cache.py` names what it reads. A step
+  time until `EXTRA_INPUTS` in `measure-cache.py` names what it reads. The
+  audit reads whole modules, not calls: `ifc_common.siblings()` splits a path
+  and lists a directory, so for six days after #1400 moved it there every
+  scorer that imports `ifc_common` was `reads dirname` and no body scorer was
+  cached (about 8,200 s of scorer time per side ran again on a warm run in which every lookup hit, 42992706693). `measure-cache.py` now allows the split
+  and the listing in `ifc_common` and refuses a closure that calls `siblings()`
+  unless `EXTRA_INPUTS` hashes the files it lists (`psets_vs_ifc` and
+  `unfilled_openings_vs_ifc` do). A step
   is kept only if it finished with status 0 and neither its output nor any file
   it also wrote (the validation findings, the rules summary) is over 4 MiB or
   shows a failure a rerun could mend (`unreadable:`, a traceback, a
@@ -775,16 +786,23 @@ writes the cached output and a `<step> cached` line to the model's
   the unfiltered run 41748430211 the 18 held-out models took 32.8 of the 119
   task-minutes of model steps (28%); they run only with `-f holdout=true`.
 - **Where it lives.** Each shard of the run, whatever it is called, restores
-  the newest `measure-scores-v2-main-<shard>.*` cache (a run given `models`
+  the newest `measure-scores-v2-main-<shard>.<side>-*` cache of its own side,
+  or failing that of the other side (a run given `models`
   is the shard `all`, with a cache of its own,
-  built by earlier runs of that kind). No build script of the measured ref runs
+  built by earlier runs of that kind). The side comes first because head and
+  base export different files wherever the measured change reaches: a pair of
+  runs whose second restored whichever side had saved last read 8% of its
+  lookups as misses for that reason alone (run 42990521699). No build script of the measured ref runs
   in a shard (the Build job runs them, on a runner that holds no score cache),
   but its binaries and a probe's scorers do, with the cache writable. It is
   saved only where rust-cache is saved: the
-  workflow dispatched from `main` and the side measuring `main`'s own code
-  (`inputs.ref` empty, or `base` `main`), because code of any
-  other ref runs on the runner and must not write what a later `main` run
-  reads. A pull request run, and a run of any other ref, only reads. Keying on
+  workflow dispatched from `main` and a side whose commit is on `main`'s
+  history (`main`'s tip or an ancestor of it, whether the run named it `main`,
+  left `ref` empty or gave its SHA: the plan job asks the compare API), because
+  code of any other ref runs on the runner and must not write what a later
+  `main` run reads. (Until a run that pinned its base to a SHA saved nothing,
+  the cache of runs 42980660819 and 42983301930 was cold: 0 of 4,548 lookups
+  hit.) A pull request run, and a run of any other ref, only reads. Keying on
   the scorers makes an entry reachable only by a run whose scorers, files and
   libraries hash alike, but that is not safe by construction: code of the
   measured ref that runs in the shard (its binaries, a probe's scorers) could

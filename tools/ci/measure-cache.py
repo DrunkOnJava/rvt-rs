@@ -26,8 +26,10 @@ The key is a sha256 over:
     writes to ifc.sha256), so a rebuild that writes the same model hits;
   - the scorer and every module of tools/re and tools/ci it can reach, by
     import, importlib path or name (a module it only mentions is included),
-    and every file under tools/re and tools/ci that is not Python (the Measure
-    script, the requirements, the schemas), whichever the scorer reads;
+    and every file under tools/re and tools/ci that is neither Python nor a shell
+    script (the requirements, the schemas), whichever the scorer reads (a shell
+    script, such as the Measure script, can change a step's output only through
+    the arguments, the environment and the files the key already hashes);
   - the value of every environment variable the closure reads, except the two
     that only size the mesh cache (RVT_MESH_CACHE, RVT_MESH_WORKERS);
   - the files a scorer reads that its arguments do not name (EXTRA_INPUTS);
@@ -40,7 +42,8 @@ A step is not cached when its closure does something the key cannot see: lists
 or walks a directory, takes a directory name from an argument, reads a file
 it names itself, runs a program, draws a random number or a date, reads the
 IFC's export time, or reads an environment variable by a computed name; or when
-an argument is a directory. The models that Measure keeps only counts of, or
+an argument is a directory. (ifc_common's own split and listing are allowed, and a
+closure that calls its siblings() must declare the files it lists, EXTRA_INPUTS.) The models that Measure keeps only counts of, or
 once did (`holdout-*`, `bimcollab-*`, the directories
 tools/ci/scrub-holdout-results.sh reduces, and `spent-*`, a pair that left the
 held-out list and came back), and `racadv-*`, Autodesk's rac_advanced sample
@@ -106,11 +109,16 @@ BAD_ATTRIBUTES = {
 }
 OWN_DIRECTORY = {"os.path.abspath(__file__)", "__file__"}
 # ifc_common lists the mesh cache directory that RVT_MESH_CACHE names, which
-# only saves meshing and changes no scorer's output.
+# only saves meshing and changes no scorer's output. Its siblings(path) splits
+# a path and lists the directory, so a scorer that calls it reads files no
+# argument names: make_key allows the split and the listing here, and refuses a
+# closure that calls siblings() unless EXTRA_INPUTS declares what it lists (since
+# #1400 moved siblings() into ifc_common every scorer that imports it read
+# "dirname" and none of the body scorers was cached, 6 days of cold lookups).
 # gen_standard_property_sets fetches the property set definitions when the
 # file is absent, and checks them against the sha256 it pins; its source is in
 # the key, so the pin is.
-ALLOWED_IN = {"ifc_common": {"fs-listing"}, "gen_standard_property_sets": {"process"}}
+ALLOWED_IN = {"ifc_common": {"fs-listing", "dirname"}, "gen_standard_property_sets": {"process"}}
 
 
 class Uncacheable(Exception):
@@ -303,15 +311,29 @@ def closure_digest(trees):
 
 
 def declared_siblings(script, trees, ref):
-    """unfilled_openings_vs_ifc's `siblings(path)`: the other Revit exports in
-    the reference export's directory that share its first four words."""
-    tree = trees[os.path.abspath(script)]
-    for node in tree.body:
-        if isinstance(node, ast.FunctionDef) and node.name == "siblings":
-            namespace = {"os": os}
-            exec(compile(ast.Module([node], []), script, "exec"), namespace)
-            return namespace["siblings"](ref)
-    raise Uncacheable("the scorer no longer has the siblings() Measure's cache reads")
+    """The closure's `siblings(path)` (tools/re/ifc_common.py): the other Revit
+    exports in the reference export's directory that share its first four words."""
+    for tree in trees.values():
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name == "siblings":
+                namespace = {"os": os}
+                exec(compile(ast.Module([node], []), script, "exec"), namespace)
+                return namespace["siblings"](ref)
+    raise Uncacheable("the closure no longer has the siblings() Measure's cache reads")
+
+
+def calls_siblings(trees):
+    """Whether any module of the closure calls siblings(): the call lists a
+    directory that no argument names."""
+    for tree in trees.values():
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                called = node.func
+                if (isinstance(called, ast.Name) and called.id == "siblings") or (
+                    isinstance(called, ast.Attribute) and called.attr == "siblings"
+                ):
+                    return True
+    return False
 
 
 # scorer -> (what it reads beside its arguments, found from the file arguments)
@@ -319,6 +341,8 @@ EXTRA_INPUTS = {
     # The export's diagnostics, beside the IFC (args[0]).
     "qtos_vs_ifc": lambda script, trees, files: [os.path.join(os.path.dirname(os.path.abspath(files[0])), "diagnostics.json")],
     "unfilled_openings_vs_ifc": lambda script, trees, files: declared_siblings(script, trees, files[1]),
+    # sibling_openings(args[1]): the Revit export's siblings.
+    "psets_vs_ifc": lambda script, trees, files: declared_siblings(script, trees, files[1]),
 }
 
 
@@ -358,7 +382,12 @@ def fingerprint():
             for base, names, files in os.walk(directory):
                 names.sort()
                 for name in sorted(files):
-                    if not name.endswith(".py") and "__pycache__" not in base:
+                    # A shell script (the Measure driver, the scrub, the sealing and
+                    # change-scope scripts) can change a step's output only through its
+                    # arguments, its environment and the files it is given, which the key
+                    # hashes itself; hashing the scripts too reset every entry on one in
+                    # six commits of main (25 of 153 in 72 hours changed one).
+                    if not name.endswith((".py", ".sh")) and "__pycache__" not in base:
                         path = os.path.join(base, name)
                         with open(path, "rb") as handle:
                             others.append(f"{os.path.relpath(path, os.path.dirname(CI_DIR))} {sha(handle.read())}")
@@ -392,6 +421,8 @@ def make_key(args, script, script_args):
     if declared:
         kinds.discard("dirname")
         kinds.discard("fs-listing")
+    elif calls_siblings(trees):
+        raise Uncacheable("calls siblings() without declaring the files it lists")
     if None in names:
         kinds.add("computed-env")
     if kinds:
