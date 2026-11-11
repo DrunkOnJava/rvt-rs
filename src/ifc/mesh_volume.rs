@@ -585,9 +585,12 @@ pub(super) struct Placed {
 /// its partner (about 1 cm): the two meet end to end.
 const PARTNER_FEET: f64 = 0.033;
 
-/// The cosine of the angle between two axes over which the mullions run the same
-/// way.
-const PARTNER_COSINE: f64 = 0.999;
+/// The cosine of the angle between two axes over which the mullions coincide
+/// (about a quarter of a degree, RE-432): a continuation bent off the axis by
+/// two degrees leaves the end face counted in Revit's value, on all 159 of the
+/// BIM4LCA office's mullions that have one, while every partner that hides an
+/// end is within 0.01 degrees.
+const PARTNER_COSINE: f64 = 0.99999;
 
 /// For each mullion of `placed`, at each of its two ends, whether another
 /// mullion continues it there (RE-404): one that runs the same way, has an end
@@ -1130,6 +1133,30 @@ mod tests {
         // Stands 10 cm above the end.
         let gap = placed([0.0, 0.0, 1.0], [0.0, 0.0, 2.2], [0.0, 0.0, 2.6]);
         assert_eq!(partner_ends(&[lower, gap]), vec![[false, false]; 2]);
+    }
+
+    #[test]
+    fn a_continuation_bent_off_the_axis_is_no_partner_but_a_hair_off_it_is() {
+        let lower = placed([0.0, 0.0, 1.0], [0.0, 0.0, 0.0], [0.0, 0.0, 2.1]);
+        let continuation = |degrees: f64| {
+            let angle = degrees.to_radians();
+            let axis = [angle.sin(), 0.0, angle.cos()];
+            placed(
+                axis,
+                [0.0, 0.0, 2.1],
+                [0.4 * axis[0], 0.0, 2.1 + 0.4 * axis[2]],
+            )
+        };
+        // Two degrees off the axis (cosine 0.9994): it covers none of the end face.
+        assert_eq!(
+            partner_ends(&[lower, continuation(2.0)]),
+            vec![[false, false]; 2]
+        );
+        // A hundredth of a degree off it still meets the end face to face.
+        assert_eq!(
+            partner_ends(&[lower, continuation(0.01)]),
+            vec![[false, true], [true, false]]
+        );
     }
 
     #[test]
