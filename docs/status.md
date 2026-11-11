@@ -1465,12 +1465,44 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.17.0** (2026-11-09) is the latest release: crates.io (`rvt` and
+- **v0.18.0** (2026-11-11) is the latest release: crates.io (`rvt` and
   `rvt-rs-mcp`, both published from the tag), the `rvt` wheels and sdist on
   PyPI, GitHub Release archives for Linux, macOS and Windows, and the
   container image, each checked from its published artifacts
   ([`install.md`](install.md)); docs.rs had built `rvt` when they were checked
-  (`rvt-rs-mcp` is a binary crate with no documentation there). It reads more
+  (`rvt-rs-mcp` is a binary crate with no documentation there). A default
+  export of a Revit 2023 to 2027 project draws every element that would be a
+  bounding box from the mesh Revit saved for it, where all of the mesh decodes
+  (#1191): walls, roofs, railings, curtain mullions and panels, columns, doors,
+  windows, furniture, fixtures and equipment. A roof that was the level block
+  of its sketch outline, a railing whose parts are instances of other elements,
+  an instance forbidden the targets 10, a turned family instance, and the
+  ellipses, curved ruled surfaces and rings that repeat their first point in
+  the saved graphics are read now. The export writes more of what Revit's own
+  writes for the bodies it draws: a wall's `NetVolume` and side areas, a
+  mullion's `NetVolume` and `NetSurfaceArea`, a panel's `Width`, a roof's
+  `GrossArea` and `GrossVolume`, a sloped floor's `PitchAngle` and the
+  properties of an opening, where the BIM4LCA office and the housing show it;
+  a round column no longer carries a square's quantities. A railing that
+  belongs to a stair is aggregated under it, a wall with an edited elevation
+  profile has the openings Revit's export writes, four more "Export to IFC As"
+  values are acted on, every type object has a GlobalId of its own, and a
+  standalone Revit 2020 family with one revolution exports as an
+  `IfcRevolvedAreaSolid` (experimental). Every record box that stays one says
+  why (`SavedMeshRefusal`). Reading every box's saved graphics takes 1.1 to 1.9
+  times the time and 1.4 to 4.4 times the peak memory of 0.17.0 on Autodesk's
+  samples of Revit 2023 to 2027 and makes the IFC larger; `--no-saved-meshes`
+  keeps the boxes (#1694). No roof, beam, slab, footing or stair flight mesh is
+  among the bodies scored against Revit's export on 31 models, so the roofs
+  drawn from their meshes rest on Snowdon Towers Architectural (local only),
+  the T and U roof of puzzbobb's Revit 2025 models and the same-project gates;
+  a mesh is not always Revit's (doors 675 of 681, walls 14 of 18), and a stair
+  that aggregates its railings has more volume than Revit's where a railing is
+  still its record box (RE-303). `[0.18.0]` in
+  [`CHANGELOG.md`](../CHANGELOG.md) gives what each change measures and what it
+  does not.
+- **v0.17.0** (2026-11-09): published on every channel, each checked from its
+  published artifacts. It reads more
   of Revit 2015 to 2023 projects: curtain walls are `IfcCurtainWall` with their
   mullions and panels under them, along their own axes, with their type,
   family, material, `Span`, `Length` and `IsExternal`; steel beams of 2017 to
@@ -1600,7 +1632,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.17.0 has, and is ahead of it by the fragments
+- `main` has everything v0.18.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
