@@ -33,23 +33,23 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `element` | [IdArg](#idarg) | yes | The element's Revit ElementId (`1234`), whether or not the export holds it, or the 22-character IFC GlobalId of an exported one. |
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
+| `element` | [IdArg](#idarg) | yes | The element's Revit ElementId (`1234`), whether or not the export holds it, or the 22-character IFC GlobalId of an exported one. |
 | `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `capped_reasons` | array of string | yes | The reasons whose log was full: a decision of one of these about this element may be missing. |
-| `decisions` | array of [DecisionOut](#decisionout) | yes | Every decision recorded for the element, by reason. |
-| `exported` | boolean | yes | Whether the export holds the element. A left-out element has decisions and no provenance. |
-| `file` | [FileProvenance](#fileprovenance) | yes | The file the element comes from. |
-| `id` | string | yes | The Revit ElementId asked about. |
 | `model_id` | string | yes |  |
+| `id` | string | yes | The Revit ElementId asked about. |
+| `exported` | boolean | yes | Whether the export holds the element. A left-out element has decisions and no provenance. |
 | `name` | string \| null | no | The `Name` the export writes for the element, as in `list_elements`: absent where the element is not exported, and for a room whose name is exactly the exporter's `<class>-<ElementId>` placeholder. |
 | `provenance` | [ElementProvenance](#elementprovenance) \| null | no | Where the element's record was read from, where the export holds it. |
 | `trust_markers` | object | yes | Every `...Source`, `...Resolved` and `...Refusal` property of the element's record. Empty (`{}`) where the export has no record for it. |
+| `decisions` | array of [DecisionOut](#decisionout) | yes | Every decision recorded for the element, by reason. |
+| `capped_reasons` | array of string | yes | The reasons whose log was full: a decision of one of these about this element may be missing. |
+| `file` | [FileProvenance](#fileprovenance) | yes | The file the element comes from. |
 
 ## export_gltf
 
@@ -61,26 +61,26 @@ Hints: read-only: no, may overwrite: yes, idempotent: yes, open world: no.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `allow_partial` | boolean | no | Write the file even when a resource limit kept part of the model from being read. The result lists the unread streams. Default: false. |
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
 | `out_path` | string | yes | Where to write the binary glTF. It must end in `.glb`, must not be the model, and must not exist unless `overwrite` is true. |
 | `overwrite` | boolean | no | Replace `out_path` if it exists. Default: false. |
+| `allow_partial` | boolean | no | Write the file even when a resource limit kept part of the model from being read. The result lists the unread streams. Default: false. |
 | `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
 | Field | Type | Required | Description |
 |---|---|---|---|
+| `model_id` | string | yes |  |
+| `format` | string | yes | `ifc` or `glb`. |
+| `output` | [OutputOut](#outputout) | yes |  |
 | `building_elements` | integer | yes | Building elements the IFC export writes (the diagnostics' `exported.building_elements`), for `export_gltf` too: the glb also draws each piece of an element of separate loops that the IFC folds into the body of another element (`elements.folded_into_bodies`), which is not counted here or in `entity_counts`, and `notes` says how many. |
 | `building_elements_with_geometry` | integer | yes |  |
-| `diagnostics` | any | no | The export diagnostics (`ifc` only), as for `get_diagnostics`. |
 | `entity_counts` | object of integer by name | yes | By IFC entity. |
-| `format` | string | yes | `ifc` or `glb`. |
-| `model_id` | string | yes |  |
-| `notes` | array of string | yes |  |
-| `output` | [OutputOut](#outputout) | yes |  |
 | `partial` | boolean | yes | True when part of the file was not read and the export was written anyway (`allow_partial`). |
 | `unread_streams` | array of [UnreadOut](#unreadout) | yes |  |
+| `notes` | array of string | yes |  |
+| `diagnostics` | any | no | The export diagnostics (`ifc` only), as for `get_diagnostics`. |
 
 ## export_ifc
 
@@ -93,25 +93,25 @@ Hints: read-only: no, may overwrite: yes, idempotent: yes, open world: no.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
-| `options` | [IfcOptions](#ifcoptions) | no | The `rvt-ifc` switches; none by default. |
 | `out_path` | string | yes | Where to write the IFC4 file. It must end in `.ifc`, must not be the model, and must not exist unless `overwrite` is true. |
 | `overwrite` | boolean | no | Replace `out_path` if it exists. Default: false. |
+| `options` | [IfcOptions](#ifcoptions) | no | The `rvt-ifc` switches; none by default. |
 | `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
 | Field | Type | Required | Description |
 |---|---|---|---|
+| `model_id` | string | yes |  |
+| `format` | string | yes | `ifc` or `glb`. |
+| `output` | [OutputOut](#outputout) | yes |  |
 | `building_elements` | integer | yes | Building elements the IFC export writes (the diagnostics' `exported.building_elements`), for `export_gltf` too: the glb also draws each piece of an element of separate loops that the IFC folds into the body of another element (`elements.folded_into_bodies`), which is not counted here or in `entity_counts`, and `notes` says how many. |
 | `building_elements_with_geometry` | integer | yes |  |
-| `diagnostics` | any | no | The export diagnostics (`ifc` only), as for `get_diagnostics`. |
 | `entity_counts` | object of integer by name | yes | By IFC entity. |
-| `format` | string | yes | `ifc` or `glb`. |
-| `model_id` | string | yes |  |
-| `notes` | array of string | yes |  |
-| `output` | [OutputOut](#outputout) | yes |  |
 | `partial` | boolean | yes | True when part of the file was not read and the export was written anyway (`allow_partial`). |
 | `unread_streams` | array of [UnreadOut](#unreadout) | yes |  |
+| `notes` | array of string | yes |  |
+| `diagnostics` | any | no | The export diagnostics (`ifc` only), as for `get_diagnostics`. |
 
 ## get_diagnostics
 
@@ -130,10 +130,10 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `diagnostics` | any | yes | The export diagnostics, as `rvt-ifc --diagnostics` writes them (`docs/schemas/export-diagnostics.schema.json`). |
 | `model_id` | string | yes |  |
-| `notes` | array of string | yes |  |
+| `diagnostics` | any | yes | The export diagnostics, as `rvt-ifc --diagnostics` writes them (`docs/schemas/export-diagnostics.schema.json`). |
 | `unread_streams` | array of [UnreadOut](#unreadout) | yes |  |
+| `notes` | array of string | yes |  |
 
 ## get_element
 
@@ -145,30 +145,30 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `id` | [IdArg](#idarg) | yes | The element's Revit ElementId (`1234`) or its 22-character IFC GlobalId, as `list_elements` gives them. |
 | `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
+| `id` | [IdArg](#idarg) | yes | The element's Revit ElementId (`1234`) or its 22-character IFC GlobalId, as `list_elements` gives them. |
 | `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `body` | string | yes | `extrusion`, `solid`, `mapped` or `none`: the kind of body the export writes for the element. |
-| `element_type` | [TypeOut](#typeout) \| null | no | The type object the export writes for the element, with its sets; absent where the export writes none for it. |
-| `file` | [FileProvenance](#fileprovenance) | yes | The file the element comes from. |
-| `host_id` | string \| null | no | The ElementId of the wall that hosts a door or window. |
-| `id` | string \| null | no | The Revit ElementId. |
-| `level` | [LevelRefOut](#levelrefout) \| null | no |  |
-| `location_feet` | array of number (3 items) \| null | no | Where the element is placed, in the model's feet. |
-| `long_name` | string \| null | no | An `IfcSpace`'s `LongName`, its room name, as in `list_elements`. |
 | `model_id` | string | yes |  |
+| `id` | string \| null | no | The Revit ElementId. |
 | `name` | string \| null | no | The `Name` the IFC export writes, as in `list_elements`: absent only for a room whose name is exactly the exporter's `<class>-<ElementId>`. |
-| `other_entities` | array of [EntityRefOut](#entityrefout) | yes | Other entities the export writes as elements with the same ElementId: not a piece folded into the body of the element, which is no entity of its own. |
+| `long_name` | string \| null | no | An `IfcSpace`'s `LongName`, its room name, as in `list_elements`. |
+| `level` | [LevelRefOut](#levelrefout) \| null | no |  |
 | `predefined_type` | string \| null | no |  |
-| `property_sets` | array of [PropertySetOut](#propertysetout) | yes |  |
-| `provenance` | [ElementProvenance](#elementprovenance) | yes |  |
+| `location_feet` | array of number (3 items) \| null | no | Where the element is placed, in the model's feet. |
 | `rotation_degrees` | number \| null | no |  |
+| `host_id` | string \| null | no | The ElementId of the wall that hosts a door or window. |
+| `body` | string | yes | `extrusion`, `solid`, `mapped` or `none`: the kind of body the export writes for the element. |
+| `provenance` | [ElementProvenance](#elementprovenance) | yes |  |
+| `file` | [FileProvenance](#fileprovenance) | yes | The file the element comes from. |
 | `trust_markers` | object | yes | Every `...Source`, `...Resolved` and `...Refusal` property of the element's record: how its body, profile, thickness, level and family name were derived. Empty (`{}`) where the export has no record for it. |
+| `property_sets` | array of [PropertySetOut](#propertysetout) | yes |  |
+| `element_type` | [TypeOut](#typeout) \| null | no | The type object the export writes for the element, with its sets; absent where the export writes none for it. |
+| `other_entities` | array of [EntityRefOut](#entityrefout) | yes | Other entities the export writes as elements with the same ElementId: not a piece folded into the body of the element, which is no entity of its own. |
 
 ## get_summary
 
@@ -187,19 +187,19 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `diagnostics` | [DiagnosticsSummary](#diagnosticssummary) | yes |  |
-| `elements` | [ElementCounts](#elementcounts) | yes |  |
-| `file` | [FileProvenance](#fileprovenance) | yes |  |
-| `file_kind` | string | yes | `rvt`, `rfa`, `rte`, `rft` or `unknown`, from the file name extension. |
-| `levels` | array of [LevelOut](#levelout) | yes |  |
 | `model_id` | string | yes | Opaque handle for the other tools. It lives while the server runs and while the model is among the most recently used ones it keeps. |
-| `not_read` | string | yes | What the answers do not cover. |
+| `file_kind` | string | yes | `rvt`, `rfa`, `rte`, `rft` or `unknown`, from the file name extension. |
+| `size_bytes` | integer | yes |  |
+| `revit_release` | integer \| null | no | The Revit release that saved the file. |
 | `project_name` | string \| null | no |  |
 | `release_support` | any | no | How the file's release is read, and that row's status. |
-| `revit_release` | integer \| null | no | The Revit release that saved the file. |
+| `file` | [FileProvenance](#fileprovenance) | yes |  |
+| `elements` | [ElementCounts](#elementcounts) | yes |  |
+| `levels` | array of [LevelOut](#levelout) | yes |  |
 | `room_count` | integer | yes | The number of `IfcSpace`s the export writes, of every kind: rooms, Areas and family instances written as spaces. It is not the number of rooms (the name is older than `space_kinds`); `space_kinds.room` is. On the BIM4LCA office it is 308, of which 234 are rooms. |
-| `size_bytes` | integer | yes |  |
 | `space_kinds` | object of integer by name | yes | The `IfcSpace`s by `RvtElementRecordGeometry.SpaceKind` (#1437): `room`, `area`, `mep_space` or `family_instance`. The counts sum to `room_count` less the spaces with no kind, which `get_diagnostics` counts as `exported.spaces_without_kind`. |
+| `diagnostics` | [DiagnosticsSummary](#diagnosticssummary) | yes |  |
+| `not_read` | string | yes | What the answers do not cover. |
 
 ## list_elements
 
@@ -211,24 +211,24 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
+| `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
+| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 | `category` | string \| null | no | Only elements of this IFC entity: `IFCWALL`, `IfcWall` and `wall` all name walls. `get_summary` lists the entities the model holds. |
 | `class` | string \| null | no | Only elements of this Revit class, such as `Wall`, `Room` or `Level`, as the element's record names it (`provenance.class`). |
 | `level` | string \| null | no | Only elements on the storey with this name (see `list_levels`). |
 | `limit` | integer \| null | no | How many elements to return: 100 by default, at most 1000. |
-| `model` | string | yes | The `model_id` that `open_model` returned, or the path of the file. |
 | `offset` | integer \| null | no | How many matching elements to skip, for the next page. |
-| `phase` | string \| null | no | The project phase to read, by its name (exactly) or its ElementId, instead of the project's last (`rvt-ifc --phase`). A phase named is exact: naming the last phase differs from leaving `phase` out where the last phase holds no room, since leaving it out then reads the rooms of the latest phase that holds any. It applies to a file path: a `model_id` names the phase its model was opened at. An unknown phase is an error that lists the file's phases. |
 
 ### Output
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `elements` | array of [ElementRow](#elementrow) | yes |  |
-| `limit` | integer | yes |  |
 | `model_id` | string | yes |  |
-| `offset` | integer | yes |  |
-| `returned` | integer | yes |  |
 | `total` | integer | yes | How many elements match the filters. |
+| `offset` | integer | yes |  |
+| `limit` | integer | yes |  |
+| `returned` | integer | yes |  |
+| `elements` | array of [ElementRow](#elementrow) | yes |  |
 
 ## list_levels
 
@@ -247,8 +247,8 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `levels` | array of [LevelOut](#levelout) | yes |  |
 | `model_id` | string | yes |  |
+| `levels` | array of [LevelOut](#levelout) | yes |  |
 
 ## list_rooms
 
@@ -287,19 +287,19 @@ Hints: read-only: yes, may overwrite: no, idempotent: yes, open world: no.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `diagnostics` | [DiagnosticsSummary](#diagnosticssummary) | yes |  |
-| `elements` | [ElementCounts](#elementcounts) | yes |  |
-| `file` | [FileProvenance](#fileprovenance) | yes |  |
-| `file_kind` | string | yes | `rvt`, `rfa`, `rte`, `rft` or `unknown`, from the file name extension. |
-| `levels` | array of [LevelOut](#levelout) | yes |  |
 | `model_id` | string | yes | Opaque handle for the other tools. It lives while the server runs and while the model is among the most recently used ones it keeps. |
-| `not_read` | string | yes | What the answers do not cover. |
+| `file_kind` | string | yes | `rvt`, `rfa`, `rte`, `rft` or `unknown`, from the file name extension. |
+| `size_bytes` | integer | yes |  |
+| `revit_release` | integer \| null | no | The Revit release that saved the file. |
 | `project_name` | string \| null | no |  |
 | `release_support` | any | no | How the file's release is read, and that row's status. |
-| `revit_release` | integer \| null | no | The Revit release that saved the file. |
+| `file` | [FileProvenance](#fileprovenance) | yes |  |
+| `elements` | [ElementCounts](#elementcounts) | yes |  |
+| `levels` | array of [LevelOut](#levelout) | yes |  |
 | `room_count` | integer | yes | The number of `IfcSpace`s the export writes, of every kind: rooms, Areas and family instances written as spaces. It is not the number of rooms (the name is older than `space_kinds`); `space_kinds.room` is. On the BIM4LCA office it is 308, of which 234 are rooms. |
-| `size_bytes` | integer | yes |  |
 | `space_kinds` | object of integer by name | yes | The `IfcSpace`s by `RvtElementRecordGeometry.SpaceKind` (#1437): `room`, `area`, `mep_space` or `family_instance`. The counts sum to `room_count` less the spaces with no kind, which `get_diagnostics` counts as `exported.spaces_without_kind`. |
+| `diagnostics` | [DiagnosticsSummary](#diagnosticssummary) | yes |  |
+| `not_read` | string | yes | What the answers do not cover. |
 
 ## Types
 
@@ -309,12 +309,12 @@ One fail-closed decision about an element (#1326).
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `class` | string \| null | no | The class the diagnostics count it under: a Revit class, or an IFC entity such as `IFCDOOR`. |
-| `detail` | string \| null | no | What tells the reason apart: a phase's name, why an Area has no body, the `BodySource` of a box body. |
-| `offset` | integer \| null | no | The byte offset of the record in that stream inflated, where known. For the element-record reasons it is the element's last frame in scan order (partition number, then offset), which can differ from the frame `get_element`'s provenance names. |
-| `reason` | string | yes | The reason code: the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box`, `area_body_refused`, `slab_shape_refused`, `wall_base_cut_refused`, `wall_end_extension_refused`, `wall_profile_extension_refused` or `saved_mesh_not_used`. |
 | `stage` | string | yes | The step that made it: `element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read` or `storey_not_bound`. |
+| `reason` | string | yes | The reason code: the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box`, `area_body_refused`, `slab_shape_refused`, `wall_base_cut_refused`, `wall_end_extension_refused`, `wall_profile_extension_refused` or `saved_mesh_not_used`. |
+| `class` | string \| null | no | The class the diagnostics count it under: a Revit class, or an IFC entity such as `IFCDOOR`. |
 | `stream` | string \| null | no | The stream its record was read from, where known. |
+| `offset` | integer \| null | no | The byte offset of the record in that stream inflated, where known. For the element-record reasons it is the element's last frame in scan order (partition number, then offset), which can differ from the frame `get_element`'s provenance names. |
+| `detail` | string \| null | no | What tells the reason apart: a phase's name, why an Area has no body, the `BodySource` of a box body. |
 
 ### DiagnosticsSummary
 
@@ -322,17 +322,17 @@ What the export read, approximated and left out. `get_diagnostics` has the whole
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `bounding_box_bodies` | integer | yes | Bodies that are only their element record's bounding box: placed and sized, shape not decoded. |
-| `bounding_box_spaces` | integer | yes | Spaces whose area is the area of their record's box. |
 | `confidence_level` | string | yes | `scaffold`, or how far past it the model goes. |
 | `confidence_score` | number | yes |  |
-| `notes` | array of string | yes | Steps of the export that were skipped or fell back, in words. |
 | `partial` | boolean | yes | True when a resource limit kept part of the file from being read, so the answers miss what those streams hold. |
-| `skipped` | array of [SkippedOut](#skippedout) | yes |  |
-| `unexported_element_records` | integer | yes | Element records found but not exported for want of an ElementId. |
 | `unread_streams` | array of [UnreadOut](#unreadout) | yes |  |
-| `unsupported_feature_count` | integer | yes |  |
+| `skipped` | array of [SkippedOut](#skippedout) | yes |  |
 | `warning_count` | integer | yes |  |
+| `unsupported_feature_count` | integer | yes |  |
+| `bounding_box_bodies` | integer | yes | Bodies that are only their element record's bounding box: placed and sized, shape not decoded. |
+| `bounding_box_spaces` | integer | yes | Spaces whose area is the area of their record's box. |
+| `unexported_element_records` | integer | yes | Element records found but not exported for want of an ElementId. |
+| `notes` | array of string | yes | Steps of the export that were skipped or fell back, in words. |
 
 ### ElemTableProvenance
 
@@ -340,10 +340,10 @@ How the file's `Global/ElemTable` stream frames its records.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
+| `record_stride` | integer | yes | Bytes per record (28 or 40 on every file in the corpus). |
+| `owner_field_offset` | integer | yes | Offset of the owner field within a record. |
 | `framing` | string | yes | `explicit` for the 28- and 40-byte layouts, `implicit` for the 12-byte fallback no corpus file uses. |
 | `owner_field_bytes` | integer \| null | no | Width of the owner field, on the explicit layouts. |
-| `owner_field_offset` | integer | yes | Offset of the owner field within a record. |
-| `record_stride` | integer | yes | Bytes per record (28 or 40 on every file in the corpus). |
 
 ### ElementCounts
 
@@ -351,10 +351,10 @@ How many building elements the model holds.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
+| `total` | integer | yes |  |
 | `by_ifc_type` | object of integer by name | yes | By IFC entity, such as `IFCWALL`. |
 | `by_revit_class` | object of integer by name | yes | By the Revit class the record names, such as `Wall`. |
 | `folded_into_bodies` | object of integer by name | yes | By IFC entity: the elements the model holds that the export does not write as elements, each a further piece of an element of separate loops, written as an item of the body of the element that owns it. They are not in `total`, `by_ifc_type` or the lists, nor in the diagnostics' `exported` counts, which hold them apart in `exported.body_pieces_folded`. Always present, empty where the export folds none. |
-| `total` | integer | yes |  |
 
 ### ElementProvenance
 
@@ -362,23 +362,23 @@ Where one element's answer comes from. Every element in an answer carries one. F
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `area_body_refusal` | string \| null | no | For an Area with no body, why it has none. |
-| `body_source` | string \| null | no | How the element's body was derived, such as `partition_element_record_bbox` (only its record's box) or `partition_wall_centreline`. |
-| `carrier` | string \| null | no | The kind of record the element was read from, such as `partition_element_record_first_prologue`. |
+| `element_id` | string \| null | no | The Revit ElementId, which the IFC export writes as the `Tag`. |
+| `global_id` | string \| null | no | The IFC GlobalId the export writes: Revit's own where the file yields it, otherwise one derived from the document's identity and the ElementId. |
 | `category` | string \| null | no | The IFC entity the export writes, such as `IFCWALL`. |
 | `class` | string \| null | no | The Revit class the element's record names, such as `Wall`. |
-| `class_name` | string \| null | no | The class that tag resolves to in the file's own schema. |
-| `class_tag` | integer \| null | no | The class tag the record names. |
-| `element_id` | string \| null | no | The Revit ElementId, which the IFC export writes as the `Tag`. |
-| `enclosing_record_id` | string \| null | no | For a frame inside another partition record, the ElementId of that record. |
-| `global_id` | string \| null | no | The IFC GlobalId the export writes: Revit's own where the file yields it, otherwise one derived from the document's identity and the ElementId. |
-| `native_record` | [NativeRecordOut](#nativerecordout) \| null | no | The element's native record, where the export's native passes indexed one. |
-| `offset` | integer \| null | no | Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy; `value_sources` names it. |
+| `body_source` | string \| null | no | How the element's body was derived, such as `partition_element_record_bbox` (only its record's box) or `partition_wall_centreline`. |
 | `profile_source` | string \| null | no | Where the plan profile of the body came from. |
-| `provenance_omitted` | boolean \| null | no | True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`). |
-| `record_offset` | integer \| null | no | Where the ElementId is stored: the partition record header it is the first bytes of. |
 | `space_outline_source` | string \| null | no | For a room or space, where its outline came from: `record_box` (the area of its box, not of the room), `stored_solid`, `stored_solid_faces`, `stored_solid_approximate`, `stored_solid_edges`, `saved_mesh`, `family_body`, and for an Area `area_plan_topology`, `area_plan_topology_unchecked` (which nothing outside the file checks: Revit 2025 to 2027, and an Area drawn from lines whose partition copies disagree), `area_boundary`, `area_boundary_joined` or `none`. |
+| `area_body_refusal` | string \| null | no | For an Area with no body, why it has none. |
+| `carrier` | string \| null | no | The kind of record the element was read from, such as `partition_element_record_first_prologue`. |
 | `stream` | string \| null | no | The stream the record is in: `Partitions/NN` or `Global/Latest`. |
+| `offset` | integer \| null | no | Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy; `value_sources` names it. |
+| `record_offset` | integer \| null | no | Where the ElementId is stored: the partition record header it is the first bytes of. |
+| `enclosing_record_id` | string \| null | no | For a frame inside another partition record, the ElementId of that record. |
+| `class_tag` | integer \| null | no | The class tag the record names. |
+| `class_name` | string \| null | no | The class that tag resolves to in the file's own schema. |
+| `native_record` | [NativeRecordOut](#nativerecordout) \| null | no | The element's native record, where the export's native passes indexed one. |
+| `provenance_omitted` | boolean \| null | no | True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`). |
 | `value_sources` | array of [ValueSourceOut](#valuesourceout) | no | The copy each reader took a value of the element's body from, where the reader notes it and the body is drawn from that reader (`body_source`): `get_element` and `explain_element` list them, `list_elements` does not. Absent for an element with no body of its own, and for one whose body is none of the kinds `docs/export-diagnostics.md` lists readers for. |
 
 ### ElementRow
@@ -388,9 +388,9 @@ One element in a list.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `id` | string \| null | no | The Revit ElementId. |
-| `level` | string \| null | no | The name of the storey the element is on. |
-| `long_name` | string \| null | no | An `IfcSpace`'s `LongName`, its room name. Absent for any other element and for a room whose name was not read. |
 | `name` | string \| null | no | The `Name` the IFC export writes. An `IfcSpace`'s is its room number, or `<room name>:<ElementId>` for a room with a name and no number. Absent only for a room with neither whose name is exactly the exporter's `<Revit class>-<ElementId>`, made where no source named it: that placeholder is not served as a name. The placeholder names of other elements (a wall nothing named is `Wall-<ElementId>`) are still served. |
+| `long_name` | string \| null | no | An `IfcSpace`'s `LongName`, its room name. Absent for any other element and for a room whose name was not read. |
+| `level` | string \| null | no | The name of the storey the element is on. |
 | `predefined_type` | string \| null | no | The IFC4 `PredefinedType` the export writes. |
 | `provenance` | [ElementProvenance](#elementprovenance) | yes |  |
 
@@ -400,9 +400,9 @@ Another entity the export writes as an element for the same ElementId (a slab's 
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `global_id` | string \| null | no |  |
 | `ifc_type` | string | yes |  |
 | `name` | string | yes |  |
+| `global_id` | string \| null | no |  |
 
 ### FileProvenance
 
@@ -410,13 +410,13 @@ What the file itself says about where its elements come from.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
+| `revit_release` | integer \| null | no | The Revit release that saved the file (from `BasicFileInfo`). |
+| `revit_build` | string \| null | no | That release's build tag (from `BasicFileInfo`). |
+| `schema_class_count` | integer \| null | no | How many classes the file's embedded schema (`Formats/Latest`) lists. |
 | `elem_table` | [ElemTableProvenance](#elemtableprovenance) \| null | no | The record layout of `Global/ElemTable`. |
+| `partition_count` | integer \| null | no | How many `Partitions/NN` streams the file has. |
 | `layout_release` | integer \| null | no | The release whose record layout the file takes, which can be older than the saving release. |
 | `omitted_entries` | integer \| null | no | How many elements the provenance table left out past its cap of 250,000 listed; their record fields are absent and `provenance_omitted` says so. |
-| `partition_count` | integer \| null | no | How many `Partitions/NN` streams the file has. |
-| `revit_build` | string \| null | no | That release's build tag (from `BasicFileInfo`). |
-| `revit_release` | integer \| null | no | The Revit release that saved the file (from `BasicFileInfo`). |
-| `schema_class_count` | integer \| null | no | How many classes the file's embedded schema (`Formats/Latest`) lists. |
 
 ### IdArg
 
@@ -433,12 +433,12 @@ The `rvt-ifc` switches that change the model. The defaults are `rvt-ifc`'s.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `allow_partial` | boolean | no | Write the file even when a resource limit kept part of the model from being read (`--allow-partial`). The result lists the unread streams. Default: false. |
 | `mode` | [ModeArg](#modearg) | no | Required quality (`rvt-ifc --mode`). |
-| `no_base_quantities` | boolean | no | Leave out the base quantities (`--no-base-quantities`). Default: false. |
+| `saved_meshes` | [MeshesArg](#meshesarg) | no | Bodies drawn from saved meshes (`rvt-ifc --saved-meshes`, `--no-saved-meshes`). |
 | `revit_property_sets` | boolean | no | Also write Revit's own parameter sets (`--revit-property-sets`). Default: false. |
 | `revit_set_placement` | boolean | no | Also place properties where Revit's exporter does, and keep the material it associates with an `IfcSpace`, which IFC4 does not allow (`--revit-set-placement`). Default: false. |
-| `saved_meshes` | [MeshesArg](#meshesarg) | no | Bodies drawn from saved meshes (`rvt-ifc --saved-meshes`, `--no-saved-meshes`). |
+| `no_base_quantities` | boolean | no | Leave out the base quantities (`--no-base-quantities`). Default: false. |
+| `allow_partial` | boolean | no | Write the file even when a resource limit kept part of the model from being read (`--allow-partial`). The result lists the unread streams. Default: false. |
 
 ### LevelOut
 
@@ -446,11 +446,11 @@ One storey of the model.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `element_count` | integer | yes | The building elements the export puts on this storey. |
-| `elevation_feet` | number | yes |  |
-| `elevation_metres` | number | yes |  |
 | `index` | integer | yes | Position in the model's list of storeys. |
 | `name` | string | yes |  |
+| `elevation_feet` | number | yes |  |
+| `elevation_metres` | number | yes |  |
+| `element_count` | integer | yes | The building elements the export puts on this storey. |
 
 ### LevelRefOut
 
@@ -458,9 +458,9 @@ A storey as one element sits on it.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `elevation_feet` | number | yes |  |
 | `index` | integer | yes |  |
 | `name` | string | yes |  |
+| `elevation_feet` | number | yes |  |
 
 ### MeshesArg
 
@@ -490,11 +490,11 @@ The native record the native readers hold for an element.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `class_name` | string \| null | no | The class the record names in the file's schema. |
 | `copies` | integer | yes | In how many partitions the element has a native record. |
 | `copy` | string | yes | Which copy this is: `only`, `current` (the current one of several, RE-216) or `unresolved`. |
-| `offset` | integer \| null | no | Where the record's header starts in that partition inflated. |
 | `stream` | string \| null | no | The partition of that copy, such as `Partitions/46`. It can differ from `provenance.stream`, the frame the exporter selected. The record a reader decoded is in `provenance.value_sources`, where that reader notes its choice. |
+| `offset` | integer \| null | no | Where the record's header starts in that partition inflated. |
+| `class_name` | string \| null | no | The class the record names in the file's schema. |
 
 ### OutputOut
 
@@ -502,8 +502,8 @@ The file an export wrote.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `bytes` | integer | yes |  |
 | `path` | string | yes | Absolute path of the file. |
+| `bytes` | integer | yes |  |
 | `sha256` | string | yes |  |
 
 ### PropertyOut
@@ -512,8 +512,8 @@ One property or quantity, as the IFC export writes it.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `ifc_type` | string \| null | no | For a property, its IfcValue type, such as `IFCLENGTHMEASURE`. |
 | `name` | string | yes |  |
+| `ifc_type` | string \| null | no | For a property, its IfcValue type, such as `IFCLENGTHMEASURE`. |
 | `quantity` | string \| null | no | For a quantity, its IFC4 quantity type, such as `IFCQUANTITYLENGTH`. |
 | `value` | any | yes | The value in the units the IFC is written in: metres, square metres, cubic metres, kilograms, radians. |
 
@@ -523,8 +523,8 @@ A property set or a quantity set of an element or its type.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `kind` | string | yes | `properties`, or `quantities` for a `Qto_` set. |
 | `name` | string | yes |  |
+| `kind` | string | yes | `properties`, or `quantities` for a `Qto_` set. |
 | `properties` | array of [PropertyOut](#propertyout) | yes |  |
 
 ### RoomOut
@@ -533,15 +533,15 @@ One room.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `area_square_feet` | number \| null | no | The plan area of the room's outline, where the outline is one read exactly (`space_outline_source` is `stored_solid`, `stored_solid_faces`, `stored_solid_edges` or, for an Area, `area_plan_topology`, `area_plan_topology_unchecked`, `area_boundary` or `area_boundary_joined`). Absent for `record_box`, where the area of a box is not the area of a room, and for `stored_solid_approximate`. |
-| `area_square_metres` | number \| null | no |  |
 | `id` | string \| null | no |  |
+| `number` | string \| null | no |  |
+| `name` | string \| null | no |  |
+| `space_kind` | string \| null | no | What the space is (#1437): `room`, `area` (a Revit Area), `mep_space` (a Revit Space, MEP) or `family_instance` (any other element, a family instance or a mass, that its own "Export to IFC As" writes as a space), from the Revit class of the record it was read from. Ask this to tell an Area from a room, and never filter on the values of `space_outline_source`, which says where an outline came from and gains values with a release. `mep_space` is the kind of a Revit Space, which rvt-rs does not read from a file's partition records, so none is written today: that says what rvt-rs writes, not what the files hold. The same value is the IFC export's `RvtElementRecordGeometry.SpaceKind` and the room schedule's `space_kind` column. Absent only for a space whose property set is not `RvtElementRecordGeometry`, which `get_diagnostics` counts as `exported.spaces_without_kind`. |
 | `level` | string \| null | no |  |
 | `level_elevation_feet` | number \| null | no |  |
-| `name` | string \| null | no |  |
-| `number` | string \| null | no |  |
+| `area_square_feet` | number \| null | no | The plan area of the room's outline, where the outline is one read exactly (`space_outline_source` is `stored_solid`, `stored_solid_faces`, `stored_solid_edges` or, for an Area, `area_plan_topology`, `area_plan_topology_unchecked`, `area_boundary` or `area_boundary_joined`). Absent for `record_box`, where the area of a box is not the area of a room, and for `stored_solid_approximate`. |
+| `area_square_metres` | number \| null | no |  |
 | `provenance` | [ElementProvenance](#elementprovenance) | yes |  |
-| `space_kind` | string \| null | no | What the space is (#1437): `room`, `area` (a Revit Area), `mep_space` (a Revit Space, MEP) or `family_instance` (any other element, a family instance or a mass, that its own "Export to IFC As" writes as a space), from the Revit class of the record it was read from. Ask this to tell an Area from a room, and never filter on the values of `space_outline_source`, which says where an outline came from and gains values with a release. `mep_space` is the kind of a Revit Space, which rvt-rs does not read from a file's partition records, so none is written today: that says what rvt-rs writes, not what the files hold. The same value is the IFC export's `RvtElementRecordGeometry.SpaceKind` and the room schedule's `space_kind` column. Absent only for a space whose property set is not `RvtElementRecordGeometry`, which `get_diagnostics` counts as `exported.spaces_without_kind`. |
 
 ### SkippedOut
 
@@ -549,8 +549,8 @@ Something the export left out or approximated, with how many.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `count` | integer | yes | How many the reason counts. Mostly elements; for `element_record_frame_stopped` it is frames of record markers in every category (several frames can belong to one element), not lost elements. |
 | `reason` | string | yes |  |
+| `count` | integer | yes | How many the reason counts. Mostly elements; for `element_record_frame_stopped` it is frames of record markers in every category (several frames can belong to one element), not lost elements. |
 
 ### SourcePartOut
 
@@ -559,8 +559,8 @@ One record a value source is made of.
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `element_id` | integer | yes | The ElementId of the record's element, which need not be the element the source is of. |
-| `offset` | integer | yes | Where the record starts in that partition inflated; what starts there depends on the reader. |
 | `stream` | string | yes | The partition the record is in, such as `Partitions/46`. |
+| `offset` | integer | yes | Where the record starts in that partition inflated; what starts there depends on the reader. |
 
 ### TypeOut
 
@@ -579,11 +579,11 @@ A stream a resource limit kept from being read whole.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `description` | string | yes | The same, in words. |
-| `kind` | string | yes | `stream_too_large`, `inflated_member_too_large` or `inflated_total_too_large`. |
-| `limit` | integer | yes | That limit in bytes. |
 | `name` | string | yes | The stream, such as `Partitions/189`. |
 | `stored_bytes` | integer | yes |  |
+| `kind` | string | yes | `stream_too_large`, `inflated_member_too_large` or `inflated_total_too_large`. |
+| `limit` | integer | yes | That limit in bytes. |
+| `description` | string | yes | The same, in words. |
 
 ### ValueSourceOut
 
@@ -591,12 +591,12 @@ The copy of an element's data a reader took a value from. The readers, the rules
 
 | Field | Type | Required | Description |
 |---|---|---|---|
+| `reader` | string | yes | The name of the reader that took the value, such as the reader of a wall's location line or of a type's parameters. Each reader and the body it belongs to is listed in `docs/export-diagnostics.md`, "Value sources". |
+| `rule` | string | yes | How the copy was chosen. The rules are listed in `docs/export-diagnostics.md`, "Value sources"; for a source made of `parts` it is how each record's copy was chosen. |
 | `copies` | integer | yes | In how many partitions the element's data named it, so how many copies there were to choose from; for a source made of several `parts`, how many records it is made of; for one record, in how many partitions that record was held. |
-| `differs_from_frame` | boolean | yes | True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, where every copy holds the same value, so is every copy; for a source made of `parts`, none of them is in the frame's partition (`docs/export-diagnostics.md` says where a profile's records count as held there). |
+| `stream` | string \| null | no | The partition of the copy, such as `Partitions/46`. |
 | `offset` | integer \| null | no | Where the copy starts in that partition inflated: the element-data header whose element id follows it, for the readers of element data; the record's header, for a native record; the frame, for a body read from the frame. |
 | `partitions` | array of integer | no | Where every copy holds the same value, the numbers of the partitions that hold a copy; the copy named is the lowest-numbered partition's. |
 | `parts` | array of [SourcePartOut](#sourcepartout) | no | The records the value is made of, where it is made of several or of another element's, at most 64. Such a source has no `stream` or `offset` of its own. |
 | `parts_left_out` | integer | no | How many more records than the 64 listed in `parts` the value is made of. |
-| `reader` | string | yes | The name of the reader that took the value, such as the reader of a wall's location line or of a type's parameters. Each reader and the body it belongs to is listed in `docs/export-diagnostics.md`, "Value sources". |
-| `rule` | string | yes | How the copy was chosen. The rules are listed in `docs/export-diagnostics.md`, "Value sources"; for a source made of `parts` it is how each record's copy was chosen. |
-| `stream` | string \| null | no | The partition of the copy, such as `Partitions/46`. |
+| `differs_from_frame` | boolean | yes | True when the value is held in another partition than `provenance.stream`, the frame: the copy named is in another and, where every copy holds the same value, so is every copy; for a source made of `parts`, none of them is in the frame's partition (`docs/export-diagnostics.md` says where a profile's records count as held there). |
