@@ -984,13 +984,12 @@ fn indexed_outlines(fields: &[(String, InstanceField)], prefix: &str) -> Vec<(u3
         .collect()
 }
 
-/// Read in one pass what [`attach_wall_type_functions`],
-/// [`attach_wall_top_joins`] and [`attach_wall_load_bearing`] take from
-/// `walls`' native records: the type ids of the walls with no type Function
-/// yet, whether each wall's top is joined, on the releases each is measured
-/// on, and whether each wall is load bearing. The records are the same, so
-/// three passes over them would decode each wall three times (#1237). An
-/// error is left to those three to meet again.
+/// Read in one pass what [`attach_wall_type_functions`] and
+/// [`attach_wall_top_joins`] take from `walls`' native records: the type ids
+/// of the walls with no type Function yet and whether each wall's top is
+/// joined, on the releases each is measured on. The records are the same, so
+/// two passes over them would decode each wall twice (#1237). An error is
+/// left to those two to meet again.
 pub(super) fn read_wall_records(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -999,7 +998,6 @@ pub(super) fn read_wall_records(
 ) {
     let mut type_walls: BTreeSet<u64> = BTreeSet::new();
     let mut join_walls: BTreeSet<u64> = BTreeSet::new();
-    let mut bearing_walls: BTreeSet<u64> = BTreeSet::new();
     for wall in walls {
         let Some(id) = wall.id.map(u64::from) else {
             continue;
@@ -1010,25 +1008,24 @@ pub(super) fn read_wall_records(
         if WALL_TOP_JOIN_RECORD_REVIT_VERSIONS.contains(&revit_version) {
             join_walls.insert(id);
         }
-        bearing_walls.insert(id);
     }
-    let _ = reads.read(rf, &type_walls, &join_walls, &bearing_walls);
+    let _ = reads.read(rf, &type_walls, &join_walls);
 }
 
 /// Give each of `walls` the `LoadBearing` revit-ifc's `LoadBearingCalculator`
 /// (CLEANROOM.md source 5) calculates for a wall, whether its `StructuralUsage`
 /// is `Bearing` ([`crate::native_walls::wall_load_bearing`], RE-429), from the
-/// members of its native record, on the releases the native records are read.
-/// A wall that already has a [`LOAD_BEARING_FIELD`] keeps it, and a parameter
-/// named for the property replaces it in the export
-/// ([`attach_named_parameters`]).
+/// members of its native record, on the releases in
+/// [`WALL_LOAD_BEARING_REVIT_VERSIONS`]. A wall that already has a
+/// [`LOAD_BEARING_FIELD`] keeps it, and a parameter named for the property
+/// replaces it in the export ([`attach_named_parameters`]).
 pub(super) fn attach_wall_load_bearing<'a>(
     rf: &mut RevitFile,
     revit_version: u32,
     walls: impl IntoIterator<Item = &'a mut DecodedElement>,
     reads: &mut crate::native_walls::WallReads,
 ) {
-    if !crate::native_document::NATIVE_RELEASES.contains(&revit_version) {
+    if !WALL_LOAD_BEARING_REVIT_VERSIONS.contains(&revit_version) {
         return;
     }
     let mut walls: Vec<&mut DecodedElement> = walls

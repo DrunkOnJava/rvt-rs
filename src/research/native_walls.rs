@@ -613,10 +613,9 @@ pub struct WallReads {
 
 impl WallReads {
     /// The type id ([`crate::native_wall_types::wall_type_functions`]) of each
-    /// of `type_walls`, whether the top of each of `join_walls` is joined
-    /// ([`wall_top_joins`]) and whether each of `bearing_walls` is load bearing
-    /// ([`wall_load_bearing`], RE-429), in one pass over the records of the
-    /// walls not read already. Nothing is read where there are none.
+    /// of `type_walls` and whether the top of each of `join_walls` is joined
+    /// ([`wall_top_joins`]), in one pass over the records of the walls not
+    /// read already. Nothing is read where there are none.
     ///
     /// On Revit 2015 to 2023 this is the read of the wall records that
     /// `read_wall_records`, `attach_wall_type_functions` and
@@ -626,6 +625,17 @@ impl WallReads {
     /// graph, and reads it through [`wall_facts`]. The wall cuts and
     /// [`native_walls_and_top_joins`] read their own selections, in full.
     pub fn read(
+        &mut self,
+        rf: &mut RevitFile,
+        type_walls: &BTreeSet<u64>,
+        join_walls: &BTreeSet<u64>,
+    ) -> anyhow::Result<()> {
+        self.read_with(rf, type_walls, join_walls, &BTreeSet::new())
+    }
+
+    /// [`Self::read`], and whether each of `bearing_walls` is load bearing
+    /// ([`wall_load_bearing`], RE-429) from the same records.
+    fn read_with(
         &mut self,
         rf: &mut RevitFile,
         type_walls: &BTreeSet<u64>,
@@ -705,7 +715,7 @@ impl WallReads {
         rf: &mut RevitFile,
         walls: &BTreeSet<u64>,
     ) -> anyhow::Result<BTreeMap<u64, bool>> {
-        self.read(rf, &BTreeSet::new(), &BTreeSet::new(), walls)?;
+        self.read_with(rf, &BTreeSet::new(), &BTreeSet::new(), walls)?;
         Ok(walls
             .iter()
             .filter_map(|id| Some((*id, *self.bearing.get(id)?)))
@@ -718,7 +728,7 @@ impl WallReads {
         rf: &mut RevitFile,
         walls: &BTreeSet<u64>,
     ) -> anyhow::Result<BTreeMap<u64, bool>> {
-        self.read(rf, &BTreeSet::new(), walls, &BTreeSet::new())?;
+        self.read(rf, &BTreeSet::new(), walls)?;
         Ok(walls
             .iter()
             .filter_map(|id| Some((*id, *self.top_joined.get(id)?)))
@@ -732,7 +742,7 @@ impl WallReads {
         rf: &mut RevitFile,
         walls: &BTreeSet<u64>,
     ) -> anyhow::Result<BTreeMap<u64, i64>> {
-        self.read(rf, walls, &BTreeSet::new(), &BTreeSet::new())?;
+        self.read(rf, walls, &BTreeSet::new())?;
         let wall_type: BTreeMap<u64, u64> = walls
             .iter()
             .filter_map(|id| Some((*id, *self.type_ids.get(id)?)))
