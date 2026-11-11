@@ -161,6 +161,10 @@ wall or covering their pairs, clean or cut, name cuts them or crosses an end of 
 floors' `GrossArea` (RE-249) and,
 where a floor's type has one layer as deep as its extrusion,
 its `Depth` and `GrossVolume`,
+or, on a floor drawn along the plane its shape-edited corners lie in,
+its `Depth`, its type's layers' total thickness times the cosine of the slope,
+and its `GrossVolume`, that times its `GrossArea`
+(RE-298, RE-384, [#1208](https://github.com/DrunkOnJava/rvt-rs/issues/1208)),
 flat roofs written as slabs' `GrossArea`,
 `Depth`,
 `GrossVolume` and,

@@ -1392,6 +1392,7 @@ pub fn append_typed_production_elements(
             &decoded,
             extrusion.as_ref(),
             (solid_shape.is_none() || shaped_floor) && piece_bodies.is_empty(),
+            shaped_floor,
         );
         add_ceiling_quantities(
             &mut reference_sets,
@@ -3574,6 +3575,13 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// `Perimeter` is left out: Revit's export writes it in feet, unscaled, in
 /// a file whose length unit is millimetres (RE-235 §5).
 ///
+/// A floor drawn along the plane of its shape-edited corners (#1384) gets its
+/// `Depth` as its type's layers' total thickness times the cosine of the
+/// slope, and its `GrossVolume` as that times its `GrossArea`: Revit's export
+/// writes the volume of the slab there, which no layer of a sloped floor
+/// holds, on all 8 sloped floors of the BIM4LCA office as built
+/// (RE-298, RE-384, #1208).
+///
 /// Where the floor's type's layers are read and its record holds no step that
 /// cuts it ([`crate::partition_schema_mvp::SLAB_UNCUT_FIELD`]), also its
 /// `NetVolume` (RE-295, #1016), that area times the layers' total thickness:
@@ -3607,6 +3615,7 @@ fn add_slab_gross_area(
     decoded: &DecodedElement,
     extrusion: Option<&Extrusion>,
     single: bool,
+    shaped_floor: bool,
 ) {
     const TOLERANCE_FEET: f64 = 1e-3;
     if ifc_type != "IFCSLAB" || !single {
@@ -3663,7 +3672,34 @@ fn add_slab_gross_area(
     let one_layer = layers
         .as_ref()
         .is_some_and(|layers| layers.layers.len() == 1);
-    let depth_quantity = (level && (roof || one_layer)).then_some(depth);
+    // A floor drawn along the plane of its shape-edited corners: Revit's
+    // export gives its `Depth` the type's layers' total thickness times the
+    // cosine of the slope, and its `GrossVolume` that times its `GrossArea`
+    // (RE-298, RE-384, #1208). A plane with no gradient is a level floor and
+    // keeps the rule below, which reads one layer where Revit does (RE-298).
+    let sloped_depth = if shaped_floor && !roof {
+        let plane = crate::partition_schema_mvp::slab_top_plane_from_fields(&decoded.fields);
+        let thickness = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Float { value, .. }
+                if name == crate::partition_schema_mvp::SLAB_TYPE_THICKNESS_FIELD =>
+            {
+                Some(*value)
+            }
+            _ => None,
+        });
+        match (plane, thickness) {
+            (Some([a, b, _]), Some(thickness)) => {
+                // The gradient whose angle RE-384 writes as `PitchAngle`.
+                let gradient = a.hypot(b);
+                (gradient.is_finite() && gradient > 0.0 && thickness.is_finite() && thickness > 0.0)
+                    .then(|| thickness / (1.0 + gradient * gradient).sqrt())
+            }
+            _ => None,
+        }
+    } else {
+        None
+    };
+    let depth_quantity = sloped_depth.or_else(|| (level && (roof || one_layer)).then_some(depth));
     if let Some(quantity) =
         depth_quantity.filter(|quantity| quantity.is_finite() && *quantity > 0.0)
     {
