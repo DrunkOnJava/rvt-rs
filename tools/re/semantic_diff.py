@@ -67,9 +67,11 @@ POSITION_KEYS = frozenset(("offset", "record_offset"))
 # Einhoven and RE1 (MIT), the BIM4LCA office (CC BY-SA 4.0), puzzbobb's Revit 2025 models (Apache-2.0).
 OPEN_MODELS = ("core-interior", "einhoven", "re1-*", "nordic-office-*", "r2025-*")
 # Every open model a complete run measures: the reference models (tools/ci/measure-reference-models.sh),
-# the BIM4LCA office (`nordic`) and puzzbobb's 24 Revit 2025 models (`r2025`). A check is written only
-# for a run that covers all of them; a model added to a fetcher is added here, or a run is judged on
-# fewer than it measured.
+# the BIM4LCA office (`nordic`: concrete and timber, as built and at permit, and the terrain files) and
+# puzzbobb's 24 Revit 2025 models (`r2025`). A check is written only for a run that covers all of them; a
+# model added to a fetcher is added here and to the dump list of measure-reference-models.sh, or a run is
+# judged on fewer than it measured (the timber office was added to the fetcher on 2026-11-10 and to neither,
+# which made every complete run since NOT MEASURED: its folders matched OPEN_MODELS and held no dump).
 OPEN_MODEL_NAMES = (
     "core-interior",
     "einhoven",
@@ -77,6 +79,8 @@ OPEN_MODEL_NAMES = (
     "nordic-office-permit",
     "nordic-office-terrain-concrete",
     "nordic-office-terrain-timber",
+    "nordic-office-timber-as-built",
+    "nordic-office-timber-permit",
     "r2025-00_Blank",
     "r2025-01_Walls",
     "r2025-02_1Slope",
