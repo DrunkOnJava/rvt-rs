@@ -364,8 +364,6 @@ pub fn attach_scoped_with_control(
     let mut wall_quantities: Vec<(usize, WallMeshQuantities)> = Vec::new();
     // RE-396: the width of each curtain panel drawn from a mesh that is a vertical box.
     let mut plate_widths: Vec<(usize, f64)> = Vec::new();
-    // RE-409: the height of each door's mesh.
-    let mut door_heights: Vec<(usize, f64)> = Vec::new();
     // #1645: the candidates the scene held graphics for, and why each box that
     // keeps its box does.
     let mut seen: BTreeSet<u64> = BTreeSet::new();
@@ -440,10 +438,6 @@ pub fn attach_scoped_with_control(
             let plate_width = volume
                 .filter(|_| ifc_type.eq_ignore_ascii_case("IFCPLATE"))
                 .and_then(|volume| box_plan_width(&vertices, &triangles, volume));
-            let door_height = ifc_type
-                .eq_ignore_ascii_case("IFCDOOR")
-                .then(|| mesh_height(&vertices))
-                .flatten();
             report.replaced += 1;
             report.triangles += triangles.len();
             *solid_shape = Some(SolidShape::TriangulatedFaceSet {
@@ -452,9 +446,6 @@ pub fn attach_scoped_with_control(
             });
             if let Some(volume) = volume {
                 volumes.push((*index, volume));
-            }
-            if let Some(height) = door_height {
-                door_heights.push((*index, height));
             }
             if let Some(width) = plate_width {
                 plate_widths.push((*index, width));
@@ -485,7 +476,6 @@ pub fn attach_scoped_with_control(
     add_mesh_volumes(model, &volumes);
     add_wall_quantities(model, &wall_quantities);
     add_plate_widths(model, &plate_widths);
-    add_door_heights(model, &door_heights);
     // #1645: a candidate the scene held no graphics for keeps its box too.
     for (id, indices) in &by_id {
         if !seen.contains(id) {
@@ -735,48 +725,6 @@ fn add_wall_quantities(model: &mut IfcModel, found: &[(usize, WallMeshQuantities
             add("GrossSideArea", PropertyValue::AreaSquareFeet(gross));
             if let Some(width) = width {
                 add("GrossVolume", PropertyValue::VolumeCubicFeet(width * gross));
-            }
-        }
-    }
-}
-
-/// How far, feet, a door's mesh may differ in height from the size it has and
-/// still be taken for its height (RE-409). It is fitted to a gap in one file's
-/// data and is not a measure of anything about a door: on the BIM4LCA timber
-/// office at permit the 65 doors whose written height is wrong are 0.049 or
-/// 0.148 ft too high, and the 8 whose written height is Revit's and whose mesh
-/// is not are 1.64 or 4.438 ft short of it (so are 4 and 4 on each other office
-/// file, and the housing's hatches). No other project is known to exercise it.
-const DOOR_HEIGHT_REACH_FEET: f64 = 0.2;
-
-/// The extent of `vertices` along Z, feet, where it is some.
-fn mesh_height(vertices: &[[f64; 3]]) -> Option<f64> {
-    let low = vertices.iter().map(|v| v[2]).fold(f64::INFINITY, f64::min);
-    let high = vertices
-        .iter()
-        .map(|v| v[2])
-        .fold(f64::NEG_INFINITY, f64::max);
-    let height = high - low;
-    (height.is_finite() && height > 0.0).then_some(height)
-}
-
-/// Give each door of `heights` (an index into the entities and the height, feet,
-/// of the mesh its body was drawn from) that as its `OverallHeight`, where the
-/// size it has was not read from the outline its symbol cuts and the two are
-/// within [`DOOR_HEIGHT_REACH_FEET`] (RE-409). revit-ifc sizes a door or window
-/// from its symbol (`FamilyInstanceExporter.GetDoorWindowDimensionFromSymbol`,
-/// CLEANROOM.md source 5), and the mesh's height is Revit's on the 65 doors of the
-/// BIM4LCA timber office at permit whose size the opening or the type gives 15 or
-/// 45 mm too high, and on every door of that project whose size is Revit's and whose
-/// mesh is Revit's height. A width stays as it is (the mesh's X is not always the
-/// door's width), a door whose mesh is far from its height (a hatch, the 1.6 and
-/// 4.4 ft short ones of the office) is left as it is, and a door with no size is
-/// given none.
-fn add_door_heights(model: &mut IfcModel, heights: &[(usize, f64)]) {
-    for &(index, height) in heights {
-        if let Some(size) = model.filler_sizes.get_mut(&index) {
-            if !size.cut_loop && (size.height_feet - height).abs() <= DOOR_HEIGHT_REACH_FEET {
-                size.height_feet = height;
             }
         }
     }
