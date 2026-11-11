@@ -170,6 +170,7 @@ fn retain_boundary_points(
             *slot = true;
         }
     }
+    let mut work: u64 = 0;
     for pi in 0..points.len() {
         if used[pi] {
             continue;
@@ -185,7 +186,12 @@ fn retain_boundary_points(
                     t[edge].min(t[(edge + 1) % 3]),
                     t[edge].max(t[(edge + 1) % 3]),
                 );
-                let boundary_line = boundary_edges.contains(&edge_key)
+                work += 1;
+                let on_edge = boundary_edges.contains(&edge_key);
+                if !on_edge {
+                    work += boundary_edges.len() as u64;
+                }
+                let boundary_line = on_edge
                     || boundary_edges.iter().any(|(u, v)| {
                         cross(points[*u as usize], points[*v as usize], points[a]).abs() <= 1e-8
                             && cross(points[*u as usize], points[*v as usize], points[b]).abs()
@@ -229,6 +235,18 @@ fn retain_boundary_points(
         triangles[ti] = first;
         triangles.push(second);
         used[pi] = true;
+    }
+    {
+        // Scratch diagnostic, not for main (#1748): the most work any call does.
+        static MAX_WORK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        if work > MAX_WORK.fetch_max(work, std::sync::atomic::Ordering::Relaxed) {
+            eprintln!(
+                "RETAINWORK work={work} points={} triangles={} edges={}",
+                points.len(),
+                triangles.len(),
+                boundary_edges.len()
+            );
+        }
     }
     Ok(())
 }
