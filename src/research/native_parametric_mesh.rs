@@ -798,31 +798,16 @@ pub fn tessellate_uv(
             let b = a + 1;
             let c = ((j + 1) * stride + i + 1) as u32;
             let d = ((j + 1) * stride + i) as u32;
-            let area = |x: u32, y: u32, z: u32| {
-                let p = vertices[x as usize];
-                let q = vertices[y as usize];
-                let r = vertices[z as usize];
-                let u = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
-                let v = [r[0] - p[0], r[1] - p[1], r[2] - p[2]];
-                (u[1] * v[2] - u[2] * v[1])
-                    .hypot((u[2] * v[0] - u[0] * v[2]).hypot(u[0] * v[1] - u[1] * v[0]))
-            };
-            let collapsed = |x: u32, y: u32| {
-                let p = vertices[x as usize];
-                let q = vertices[y as usize];
-                let d = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
-                d[0] * d[0] + d[1] * d[1] + d[2] * d[2] <= 1e-20
-            };
             let add_triangle =
                 |x: u32, y: u32, z: u32, triangles: &mut Vec<[u32; 3]>| -> Result<()> {
-                    let triangle_area = area(x, y, z);
-                    if triangle_area <= 1e-12 {
-                        ensure!(
-                            collapsed(x, y) || collapsed(y, z) || collapsed(z, x),
-                            "noncollapsed degenerate parametric triangle"
-                        );
-                    } else {
-                        triangles.push(if winding { [x, y, z] } else { [x, z, y] });
+                    match keep_triangle(
+                        vertices[x as usize],
+                        vertices[y as usize],
+                        vertices[z as usize],
+                    ) {
+                        Some(true) => triangles.push(if winding { [x, y, z] } else { [x, z, y] }),
+                        Some(false) => {}
+                        None => anyhow::bail!("noncollapsed degenerate parametric triangle"),
                     }
                     Ok(())
                 };
@@ -839,6 +824,39 @@ pub fn tessellate_uv(
         normals,
         triangles,
     })
+}
+
+/// How long (feet) the longest edge of a triangle with no area may be for it to be
+/// dust. The knots of a face's grid and those of its trim loops can lie a few
+/// millionths of a unit apart, and the cell between two such knots is a sliver of
+/// the surface: the ones the 2023 and 2024 samples and the BIM4LCA offices hold
+/// have no edge over 3e-5 ft. A tenth of the 0.001 ft the scorers compare vertices
+/// at: the crack that dropping such a triangle leaves is narrower than that.
+const DUST_EDGE: f64 = 1e-4;
+
+/// Whether a triangle of a face's cells is kept: `Some(true)` it has area,
+/// `Some(false)` it has none and nothing to lose (an edge collapsed at a pole, or
+/// dust), `None` it has none and an edge longer than dust, a needle, which cells of
+/// a sound surface and trim never hold and the face is refused for.
+fn keep_triangle(p: [f64; 3], q: [f64; 3], r: [f64; 3]) -> Option<bool> {
+    let u = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
+    let v = [r[0] - p[0], r[1] - p[1], r[2] - p[2]];
+    let area = (u[1] * v[2] - u[2] * v[1])
+        .hypot((u[2] * v[0] - u[0] * v[2]).hypot(u[0] * v[1] - u[1] * v[0]));
+    if !area.is_finite() {
+        return None;
+    }
+    if area > 1e-12 {
+        return Some(true);
+    }
+    let square = |x: [f64; 3], y: [f64; 3]| {
+        let d = [y[0] - x[0], y[1] - x[1], y[2] - x[2]];
+        d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
+    };
+    let edges = [square(p, q), square(q, r), square(r, p)];
+    let shortest = edges.iter().copied().fold(f64::INFINITY, f64::min);
+    let longest = edges.iter().copied().fold(0.0, f64::max);
+    (shortest <= 1e-20 || longest <= DUST_EDGE * DUST_EDGE).then_some(false)
 }
 
 /// How close (in parameter units) a trim point must be to a knot, and two parameters
@@ -1161,26 +1179,14 @@ fn tessellate_trimmed(
     let winding = surface.orientation() == orient;
     let mut triangles = Vec::with_capacity(cells.len());
     for [a, b, c] in cells {
-        let (p, q, r) = (
+        match keep_triangle(
             vertices[a as usize],
             vertices[b as usize],
             vertices[c as usize],
-        );
-        let u = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
-        let v = [r[0] - p[0], r[1] - p[1], r[2] - p[2]];
-        let area = (u[1] * v[2] - u[2] * v[1])
-            .hypot((u[2] * v[0] - u[0] * v[2]).hypot(u[0] * v[1] - u[1] * v[0]));
-        if area <= 1e-12 {
-            let collapsed = |x: [f64; 3], y: [f64; 3]| {
-                let d = [y[0] - x[0], y[1] - x[1], y[2] - x[2]];
-                d[0] * d[0] + d[1] * d[1] + d[2] * d[2] <= 1e-20
-            };
-            ensure!(
-                collapsed(p, q) || collapsed(q, r) || collapsed(r, p),
-                "noncollapsed degenerate parametric triangle"
-            );
-        } else {
-            triangles.push(if winding { [a, b, c] } else { [a, c, b] });
+        ) {
+            Some(true) => triangles.push(if winding { [a, b, c] } else { [a, c, b] }),
+            Some(false) => {}
+            None => anyhow::bail!("noncollapsed degenerate parametric triangle"),
         }
     }
     ensure!(
@@ -1196,7 +1202,58 @@ fn tessellate_trimmed(
 
 #[cfg(test)]
 mod tests {
-    use super::{inside_polygon, trimmed_cells};
+    use super::{inside_polygon, keep_triangle, trimmed_cells};
+
+    // How a triangle of a face's cells can be wrong, and the one thing that looks
+    // wrong and is not.
+    #[test]
+    fn a_needle_is_refused_whatever_its_area() {
+        // Three distinct points on one line, 0.01 ft apart: no area, no collapse.
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [0.01, 0., 0.], [0.02, 0., 0.]),
+            None
+        );
+        // A hair 0.01 ft long and 1e-11 ft wide: its area is under the floor too.
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [0.01, 0., 0.], [0.005, 1e-11, 0.]),
+            None
+        );
+    }
+
+    #[test]
+    fn non_finite_points_are_never_kept_or_dropped() {
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [1., 0., 0.], [f64::NAN, 1., 0.]),
+            None
+        );
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [1., 0., 0.], [f64::INFINITY, 1., 0.]),
+            None
+        );
+    }
+
+    #[test]
+    fn dust_and_a_collapsed_pole_are_dropped_and_a_real_triangle_kept() {
+        // The sliver of the BIM4LCA office's 43 toilets: edges 5.6e-8, 1.8e-6, 1.8e-6.
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [1.8e-6, 0., 0.], [0.9e-6, 5.6e-8, 0.]),
+            Some(false)
+        );
+        // A pole: two of the three points coincide, the third a foot away.
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [0., 0., 0.], [1., 0., 0.]),
+            Some(false)
+        );
+        // Dust has to be all dust: one edge over 1e-4 ft keeps a hair a needle.
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [2e-4, 0., 0.], [1e-4, 1e-9, 0.]),
+            None
+        );
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [1., 0., 0.], [0., 1., 0.]),
+            Some(true)
+        );
+    }
 
     fn triangle_area(points: &[[f64; 2]], t: &[u32; 3]) -> f64 {
         let (a, b, c) = (
