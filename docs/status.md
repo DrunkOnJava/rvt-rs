@@ -1334,6 +1334,18 @@ different. A parameter named for it on the element's type is not read. 58 of
 94 exports of the unfiltered run move: every file with structural columns or
 framing (`reports/element-framing/RE-285-structural-load-bearing.md`).
 
+**RE-429 (2026-11-11)** writes a wall's `LoadBearing` as Revit's exporter
+calculates it: true when the Structural box of its native record is set and
+its usage is Bearing, otherwise false (on every release whose wall records
+Measure holds), and a floor's from its Structural box and an unchecked
+stair's as false (Revit 2024 and later); a parameter named for the property
+still replaces it. Against Revit's exports: all 4,253 walls of the BIM4LCA
+models, the R2025 models, RE1 and an IFC2X3 pair counted apart, 294 of 313
+slabs and all 168 stairs, none different, and the 554 walls of the held-out
+models. A stair with a checked
+box, a wall whose usage is Shear or Combined, and floors and stairs before
+Revit 2024 are not measured (`reports/element-framing/RE-429-structural-load-bearing.md`).
+
 **RE-327 (2026-11-04)** rebuilds a family's extrusions from their own records:
 the sketch's `CurveElem` lines and arcs (in the family's coordinates), chained
 into loops, placed in the `SketchPlane`'s frame and swept between the
