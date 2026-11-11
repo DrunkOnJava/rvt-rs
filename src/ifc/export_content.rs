@@ -958,8 +958,9 @@ pub fn append_typed_production_elements(
                 // or its type's (revit-ifc's `IFCExportInfoPair`, CLEANROOM.md
                 // source 5; 89 and 90 on the BIM4LCA housing's four large files,
                 // 36 on its office, and every furniture of the held-out pairs of
-                // 2022, 2024, 2025 and 2026), on the releases of
-                // `FURNITURE_DEFAULT_REVIT_VERSIONS`: its 2027 export writes none.
+                // 2024, 2025 and 2026), on the releases of
+                // `FURNITURE_DEFAULT_REVIT_VERSIONS`: its 2027 export writes none,
+                // and a 2022 file's export parameters are not read.
                 // A value that is no enumerator is left unset: what Revit writes
                 // for one is not measured.
                 (effective.ifc_type == "IFCFURNITURE"
