@@ -135,6 +135,116 @@ pub(super) fn box_plan_width(
     (is_box && dx.min(dy) < dz).then_some(dx.max(dy))
 }
 
+/// Triangles whose doubled area, square feet, is under this have no plane.
+const MIN_TWICE_AREA: f64 = 2e-11;
+
+/// Two triangles lie on one plane where one minus the cosine of their normals
+/// is under this (an angle of 0.26 degrees) and their planes are closer than
+/// [`PLANE_FEET`]: a mesh whose corners are single precision, 3e-5 ft at 300 ft
+/// from the origin, turns the normal of a 0.05 ft face by up to 6e-4 radians.
+const PLANE_COSINE: f64 = 1e-5;
+
+/// How close, feet, two parallel planes are one (0.2 mm).
+const PLANE_FEET: f64 = 7e-4;
+
+/// A plane is parallel to an axis where its normal's cosine with the axis is
+/// under this (0.06 degrees): the axis is the cross product of two noisy
+/// normals, which adds the two errors.
+const PARALLEL_COSINE: f64 = 1e-3;
+
+/// Two planes give an axis where the sine of the angle between their normals is
+/// over this (0.6 degrees); nearer parallel than that, their cross product is
+/// the noise in their normals.
+const AXIS_SINE: f64 = 1e-2;
+
+/// The extents, feet, of the mesh `triangles` make of `vertices` along each
+/// axis it is a prism along, smallest first (RE-418): the planes of its
+/// triangles, all but at most two of them (its ends) parallel to the axis. A
+/// rectangular mullion with a flat or a mitred end is one along its own axis
+/// and, being a box in section, along no other unless it is a box; a box is one
+/// along each of its three. The extent is the distance between the first and
+/// the last of the mesh's corners along the axis, so a mitred end counts at its
+/// longer side.
+///
+/// None where a vertex is not there or not finite, where no triangle has an
+/// area, and where no axis leaves the mesh at two end planes, which a pyramid
+/// or a mesh cut in three directions does not.
+pub(super) fn prism_extents(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -> Vec<f64> {
+    let mut planes: Vec<([f64; 3], f64)> = Vec::new();
+    let mut corners: Vec<[f64; 3]> = Vec::new();
+    for BrepTriangle(a, b, c) in triangles {
+        let (Some(&p), Some(&q), Some(&r)) = (
+            vertices.get(*a as usize),
+            vertices.get(*b as usize),
+            vertices.get(*c as usize),
+        ) else {
+            return Vec::new();
+        };
+        if ![p, q, r]
+            .iter()
+            .flatten()
+            .all(|coordinate| coordinate.is_finite())
+        {
+            return Vec::new();
+        }
+        let normal = cross(sub(q, p), sub(r, p));
+        let twice_area = dot(normal, normal).sqrt();
+        if twice_area < MIN_TWICE_AREA {
+            continue;
+        }
+        let normal = normal.map(|component| component / twice_area);
+        let offset = dot(normal, p);
+        let known = planes.iter().any(|&(other, other_offset)| {
+            let cosine = dot(normal, other);
+            cosine.abs() > 1.0 - PLANE_COSINE
+                && (offset - cosine.signum() * other_offset).abs() < PLANE_FEET
+        });
+        if !known {
+            planes.push((normal, offset));
+        }
+        corners.extend([p, q, r]);
+    }
+    let mut axes: Vec<[f64; 3]> = Vec::new();
+    for (position, (first, _)) in planes.iter().enumerate() {
+        for (second, _) in &planes[position + 1..] {
+            let direction = cross(*first, *second);
+            let length = dot(direction, direction).sqrt();
+            if length < AXIS_SINE {
+                continue;
+            }
+            let axis = direction.map(|component| component / length);
+            if axes
+                .iter()
+                .all(|known| dot(axis, *known).abs() < 1.0 - 1e-6)
+            {
+                axes.push(axis);
+            }
+        }
+    }
+    let mut extents: Vec<f64> = axes
+        .iter()
+        .filter(|axis| {
+            planes
+                .iter()
+                .filter(|(normal, _)| dot(*normal, **axis).abs() > PARALLEL_COSINE)
+                .count()
+                <= 2
+        })
+        .map(|axis| {
+            let (low, high) =
+                corners
+                    .iter()
+                    .fold((f64::INFINITY, f64::NEG_INFINITY), |(low, high), corner| {
+                        let along = dot(*corner, *axis);
+                        (low.min(along), high.max(along))
+                    });
+            high - low
+        })
+        .collect();
+    extents.sort_by(f64::total_cmp);
+    extents
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,5 +437,115 @@ mod tests {
         let (vertices, mut triangles) = box_mesh([0.0, 0.0, 0.0], [0.082, 4.9, 7.9]);
         triangles.push(BrepTriangle(0, 1, 99));
         assert_eq!(box_plan_width(&vertices, &triangles, 1.0), None);
+    }
+
+    /// A rectangular section 1 by 2 ft along z, 10 ft long at x 0 and cut at
+    /// 45 degrees at the top, so 11 ft long at x 1.
+    fn mitred_prism() -> (Vec<[f64; 3]>, Vec<BrepTriangle>) {
+        let (mut vertices, triangles) = box_mesh([0.0, 0.0, 0.0], [1.0, 2.0, 10.0]);
+        // The cube's top corners 5 (1, 0) and 6 (1, 1) in x, y rise by the x.
+        vertices[5][2] = 11.0;
+        vertices[6][2] = 11.0;
+        (vertices, triangles)
+    }
+
+    fn assert_extents(found: Vec<f64>, wanted: &[f64]) {
+        assert_eq!(found.len(), wanted.len(), "{found:?}");
+        for (found, wanted) in found.iter().zip(wanted) {
+            assert!((found - wanted).abs() < 1e-9, "{found} not {wanted}");
+        }
+    }
+
+    #[test]
+    fn a_box_is_a_prism_along_each_of_its_three_axes() {
+        let (vertices, triangles) = box_mesh([10.0, 20.0, 5.0], [0.082, 4.9, 7.9]);
+        assert_extents(prism_extents(&vertices, &triangles), &[0.082, 4.9, 7.9]);
+    }
+
+    #[test]
+    fn a_mitred_end_counts_at_its_longer_side() {
+        let (vertices, triangles) = mitred_prism();
+        let extents = prism_extents(&vertices, &triangles);
+        assert_extents(extents, &[2.0, 11.0]);
+    }
+
+    #[test]
+    fn a_mesh_cut_in_more_than_two_directions_is_no_prism() {
+        // An octahedron: along every direction two of its planes meet in,
+        // four more are not parallel to it.
+        let vertices = vec![
+            [1.0, 0.0, 0.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, -1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, -1.0],
+        ];
+        let mut triangles = Vec::new();
+        for x in [0, 1] {
+            for y in [2, 3] {
+                for z in [4, 5] {
+                    triangles.push(BrepTriangle(x, y, z));
+                }
+            }
+        }
+        assert!(prism_extents(&vertices, &triangles).is_empty());
+    }
+
+    #[test]
+    fn a_vertex_that_is_not_there_or_not_finite_leaves_no_extent() {
+        let (mut vertices, mut triangles) = box_mesh([0.0, 0.0, 0.0], [1.0, 2.0, 10.0]);
+        triangles.push(BrepTriangle(0, 1, 99));
+        assert!(prism_extents(&vertices, &triangles).is_empty());
+        triangles.pop();
+        vertices[3][2] = f64::NAN;
+        assert!(prism_extents(&vertices, &triangles).is_empty());
+    }
+
+    #[test]
+    fn nothing_leaves_no_extent() {
+        assert!(prism_extents(&[], &[]).is_empty());
+        let (vertices, _) = box_mesh([0.0, 0.0, 0.0], [1.0, 2.0, 10.0]);
+        assert!(prism_extents(&vertices, &[]).is_empty());
+    }
+
+    #[test]
+    fn a_triangle_with_no_area_adds_no_plane_and_no_corner() {
+        let (mut vertices, mut triangles) = box_mesh([0.0, 0.0, 0.0], [0.05, 0.1, 3.0]);
+        vertices.push([40.0, 40.0, 40.0]);
+        vertices.push([41.0, 41.0, 41.0]);
+        vertices.push([42.0, 42.0, 42.0]);
+        triangles.push(BrepTriangle(8, 9, 10));
+        assert_extents(prism_extents(&vertices, &triangles), &[0.05, 0.1, 3.0]);
+    }
+
+    #[test]
+    fn corners_off_by_single_precision_noise_still_make_one_plane_a_face() {
+        let (mut vertices, triangles) = box_mesh([0.0, 0.0, 0.0], [0.05, 0.1, 3.0]);
+        for (index, vertex) in vertices.iter_mut().enumerate() {
+            for (axis, coordinate) in vertex.iter_mut().enumerate() {
+                *coordinate += 1e-6 * (((index * 7 + axis * 3) % 5) as f64 - 2.0);
+            }
+        }
+        // The long axis is read to the noise; the short ones are tilted by it
+        // toward the long side and are read to a hundredth of the section.
+        let extents = prism_extents(&vertices, &triangles);
+        assert_eq!(extents.len(), 3, "{extents:?}");
+        assert!((extents[2] - 3.0).abs() < 1e-5, "{extents:?}");
+        assert!((extents[0] - 0.05).abs() < 1e-3, "{extents:?}");
+    }
+
+    #[test]
+    fn a_top_corner_pulled_in_leaves_the_height_no_prism_extent() {
+        // One top corner of the box pulled in 0.4 ft: the top and the side it
+        // sits on are no longer planes, so more than two planes are off the
+        // height's axis.
+        let (mut vertices, triangles) = box_mesh([0.0, 0.0, 0.0], [0.082, 4.9, 7.9]);
+        vertices[6] = [0.082, 4.9 - 0.4, 7.9];
+        let extents = prism_extents(&vertices, &triangles);
+        assert!(
+            extents.iter().all(|extent| (extent - 7.9).abs() > 1e-6),
+            "{extents:?}"
+        );
     }
 }
