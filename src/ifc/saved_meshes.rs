@@ -66,7 +66,7 @@ use super::export_content::{
 use super::mesh_volume::{
     BeamQuantities, ColumnQuantities, MESH_LENGTH_REACH, Placed, Prism, all_faces_flat,
     beam_quantities, box_plan_width, closed_mesh_volume, column_quantities, mullion_surface_area,
-    partner_ends, prism_along,
+    partner_ends, partners_the_boxes_missed, prism_along,
 };
 use super::mesh_wall_quantities::{WallMeshQuantities, wall_mesh_quantities};
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
@@ -1007,8 +1007,11 @@ struct MemberMesh {
 /// it. Where a mullion has a partner at an end that `kept` counts, the count
 /// misses a continuation on another curtain wall, and the mullion gets none:
 /// `kept` must leave every end with a partner (`partner_ends`) among the ends it
-/// does not count, but for the partners the boxes saw at an end they keep, which an
-/// oblique mullion or one across inside keeps (RE-438, RE-439).
+/// does not count, but for the ends at which the boxes saw the partner and kept
+/// the end, as an oblique mullion or one across inside keeps it (RE-438,
+/// RE-439). The mesh's two ends are matched to the boxes' by which side of the
+/// mullion's axis each lies on ([`partners_the_boxes_missed`]), so that a partner
+/// at the end the boxes saw none at is missed whatever lies at the other.
 fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
     let mut held: BTreeMap<usize, usize> = BTreeMap::new();
     for (position, entity) in model.entities.iter().enumerate() {
@@ -1026,12 +1029,8 @@ fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
         };
         let kept = ends.kept;
         // The partners the boxes saw at the ends they keep are no continuation they
-        // missed; a partner beyond them is.
-        let missed = partners
-            .iter()
-            .filter(|partner| **partner)
-            .count()
-            .saturating_sub(usize::from(ends.with_partner));
+        // missed; a partner at any other end is.
+        let missed = partners_the_boxes_missed(&member.placed, partners, ends.partnered);
         if missed > usize::from(2 - kept.min(2)) {
             continue;
         }

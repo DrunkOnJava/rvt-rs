@@ -277,17 +277,18 @@ fn neighbours(
     found
 }
 
-/// How many of a curtain mullion's two end faces its Revit solid keeps, and how
-/// many of those ends have a partner: one that an oblique mullion or a mullion
-/// across holding its point inside keeps (RE-438). The boxes of the wall saw
-/// that partner, so the pass that draws the mullion from its saved mesh does not
-/// take it for a continuation on another curtain wall that they missed (RE-439).
+/// How many of a curtain mullion's two end faces its Revit solid keeps, and which
+/// of those ends have a partner: one that an oblique mullion or a mullion across
+/// holding its point inside keeps (RE-438). The boxes of the wall saw that
+/// partner, so the pass that draws the mullion from its saved mesh does not take
+/// it for a continuation on another curtain wall that they missed (RE-439).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KeptEnds {
     /// 0, 1 or 2.
     pub kept: u8,
-    /// Of the kept ends, how many have a partner: at most `kept`.
-    pub with_partner: u8,
+    /// Whether the end of the box at its `-axis` side, then the end at its `+axis`
+    /// side (the order of `end_points`), is kept and has a partner.
+    pub partnered: [bool; 2],
 }
 
 /// For each mullion of `group`, the mullions of one curtain wall, how many of
@@ -300,7 +301,7 @@ pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
         .collect()
 }
 
-/// [`kept_ends`], with how many of the kept ends of each mullion have a partner
+/// [`kept_ends`], with which of the kept ends of each mullion have a partner
 /// (RE-439).
 pub fn kept_ends_with_partners(group: &[MullionBox]) -> BTreeMap<u32, KeptEnds> {
     if group.len() > MAX_GROUP {
@@ -349,16 +350,13 @@ pub fn kept_ends_with_partners(group: &[MullionBox]) -> BTreeMap<u32, KeptEnds> 
             continue;
         }
         let count = ends.iter().filter(|end| !end.hidden()).count();
-        let with_partner = ends
-            .iter()
-            .filter(|end| !end.hidden() && end.partner)
-            .count();
-        if let (Ok(count), Ok(with_partner)) = (u8::try_from(count), u8::try_from(with_partner)) {
+        let partnered = [0, 1].map(|end| !ends[end].hidden() && ends[end].partner);
+        if let Ok(count) = u8::try_from(count) {
             kept.insert(
                 m.id,
                 KeptEnds {
                     kept: count,
-                    with_partner,
+                    partnered,
                 },
             );
         }
@@ -494,16 +492,18 @@ mod tests {
         assert!(!kept_ends(&[post, bar, brace]).contains_key(&1));
     }
 
-    // How counting the kept ends that have a partner can go wrong (RE-439): a hidden
-    // joint is counted as a kept end with a partner, or the end an oblique mullion
-    // keeps is counted as one with none, which the pass that draws the mullion from
-    // its saved mesh takes for a continuation the boxes missed.
+    // How telling the kept ends that have a partner can go wrong (RE-439): a hidden
+    // joint is told as a kept end with a partner, the end an oblique mullion keeps
+    // is told as one with none (the pass that draws the mullion from its saved mesh
+    // then takes it for a continuation the boxes missed), or the two ends are told
+    // the wrong way round (the pass maps the mesh's ends to them by the side of the
+    // axis each lies on, the `-axis` end first).
     #[test]
     fn the_kept_ends_with_a_partner_are_the_joints_an_oblique_mullion_keeps() {
         let with_partners = |group: &[MullionBox]| {
             kept_ends_with_partners(group)
                 .into_iter()
-                .map(|(id, ends)| (id, (ends.kept, ends.with_partner)))
+                .map(|(id, ends)| (id, (ends.kept, ends.partnered)))
                 .collect::<BTreeMap<_, _>>()
         };
         let lower = mullion(1, [0.0, 0.0, 0.0], 2.0, 0.0, 0.08);
@@ -511,14 +511,19 @@ mod tests {
         // A joint nothing else lies at is hidden: no kept end has a partner.
         assert_eq!(
             with_partners(&[lower.clone(), upper.clone()]),
-            BTreeMap::from([(1, (1, 0)), (2, (1, 0))])
+            BTreeMap::from([(1, (1, [false, false])), (2, (1, [false, false]))])
         );
         // An oblique brace at the joint keeps it: the end of each piece at the joint
-        // is kept and has a partner, and the brace has none.
+        // (the `+axis` end of the lower piece, the `-axis` end of the upper one) is
+        // kept and has a partner, and the brace has none.
         let brace = leaning(3, [0.0, 0.0, 2.0], 2.0, 45.0, 0.08);
         assert_eq!(
             with_partners(&[lower, upper, brace]),
-            BTreeMap::from([(1, (2, 1)), (2, (2, 1)), (3, (2, 0))])
+            BTreeMap::from([
+                (1, (2, [false, true])),
+                (2, (2, [true, false])),
+                (3, (2, [false, false])),
+            ])
         );
     }
 
