@@ -1,5 +1,7 @@
-//! #1693, #1698: what the saved mesh of a beam drawn as a hollow tube gives of
-//! the six base quantities Revit writes.
+//! RE-442 (#1693, #1698): what the saved mesh of a beam drawn as a hollow tube
+//! gives of the six base quantities Revit writes. Measured: within a relative
+//! 1.1e-4 to 4.4e-4 of Revit's on the BIM4LCA office's 8, outside the census's
+//! 1e-5, so nothing is written from it.
 //!
 //! Revit's export writes `Qto_BeamBaseQuantities`' `CrossSectionArea`,
 //! `OuterSurfaceArea`, `GrossSurfaceArea`, `NetSurfaceArea`, `GrossVolume` and
