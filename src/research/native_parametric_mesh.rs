@@ -24,6 +24,11 @@ fn uv_point(v: &serde_json::Value) -> Result<[f64; 2]> {
     Ok(p)
 }
 
+/// The grid a `Face` is meshed on: its surface, the knots along `u` and `v`, the
+/// trim loop in the surface's parameters and the parameter rectangle the face
+/// spans. Public for `probe_1683_ruled_grids`, which prints what sets a ruled
+/// face's cells.
+#[derive(Debug)]
 pub struct FaceGrid {
     pub surface: ParametricSurface,
     pub u: Vec<f64>,
@@ -126,6 +131,9 @@ fn ruled_surface_component(
     Ok((component, refused_before))
 }
 
+/// The grid the face at `fi` is meshed on, or why it is not meshed (a trim that
+/// is not a complete rectangle, a ruled face whose neighbours the graph does not
+/// resolve, a surface that is not read).
 pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     use crate::native_parametric_surface::Curve;
     use crate::native_saved_mesh::pointer;
