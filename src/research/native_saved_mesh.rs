@@ -2792,9 +2792,12 @@ mod tests {
         assert_eq!(rings, PLANAR_FACE_POINT_BUDGET / 4);
     }
 
+    // A face's points, the edges of its rings and the triangles earcut made of them.
+    type Square = (Vec<[f64; 2]>, BTreeSet<(u32, u32)>, Vec<[u32; 3]>);
+
     // A square whose bottom side holds three points that earcut left out, with the
     // triangles on its corners only: the points the boundary search has to put back.
-    fn square_with_a_dropped_side() -> (Vec<[f64; 2]>, BTreeSet<(u32, u32)>, Vec<[u32; 3]>) {
+    fn square_with_a_dropped_side() -> Square {
         let points = vec![
             [0., 0.],
             [0.25, 0.],
