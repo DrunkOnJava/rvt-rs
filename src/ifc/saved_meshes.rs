@@ -424,6 +424,44 @@ pub fn attach_scoped_with_control(
             beam_lines.entry(id).or_default().push(index);
         }
     }
+    // RE-425: the columns whose body is the rectangle their type's section gives
+    // over the record's height (a resolved profile, which the pass leaves alone:
+    // `is_replaceable_box`), whose base quantities their saved mesh gives all the
+    // same. That body is Revit's own form for a plain section and stays so, as a
+    // beam's does.
+    let mut column_rectangles: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
+    for (index, entity) in model.entities.iter().enumerate() {
+        if wholes.contains(&index) {
+            continue;
+        }
+        let IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid: Some(tag),
+            property_set: Some(set),
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let boxed = set.properties.iter().any(|property| {
+            property.name == "BodySource"
+                && matches!(&property.value, PropertyValue::Text(source) if source == RECORD_BBOX_BODY_SOURCE)
+        });
+        let resolved = set.properties.iter().any(|property| {
+            property.name == "ProfileResolved"
+                && matches!(property.value, PropertyValue::Boolean(true))
+        });
+        if !ifc_type.eq_ignore_ascii_case("IFCCOLUMN")
+            || !resolved
+            || !boxed
+            || !scope.includes(ifc_type)
+        {
+            continue;
+        }
+        if let Ok(id) = tag.parse::<u64>() {
+            column_rectangles.entry(id).or_default().push(index);
+        }
+    }
     let hosts = match embed_hosts(rf, model, &by_id) {
         Ok(hosts) => hosts,
         Err(error) => {
@@ -432,7 +470,12 @@ pub fn attach_scoped_with_control(
         }
     };
     report.embed_hosts = hosts.len();
-    if by_id.is_empty() && hosts.is_empty() && walls.is_empty() && beam_lines.is_empty() {
+    if by_id.is_empty()
+        && hosts.is_empty()
+        && walls.is_empty()
+        && beam_lines.is_empty()
+        && column_rectangles.is_empty()
+    {
         for (index, reason) in refusals {
             note_refusal(model, index, reason);
         }
@@ -444,6 +487,7 @@ pub fn attach_scoped_with_control(
             .chain(hosts.keys())
             .chain(walls.keys())
             .chain(beam_lines.keys())
+            .chain(column_rectangles.keys())
             .copied()
             .collect::<BTreeSet<_>>(),
         max_graph_values: 1_000_000,
@@ -498,6 +542,18 @@ pub fn attach_scoped_with_control(
                     .flatten();
                 if let Some(found) = found {
                     beams.push((*index, found));
+                }
+            }
+            if let Some([index]) = column_rectangles
+                .get(&element.identity.element_id)
+                .map(Vec::as_slice)
+            {
+                let found = partial_refusal(&element.meshes)
+                    .is_none()
+                    .then(|| column_mesh_quantities(&element.meshes.primitives))
+                    .flatten();
+                if let Some(found) = found {
+                    columns.push((*index, found));
                 }
             }
             if let Some(&index) = hosts.get(&element.identity.element_id) {
@@ -999,6 +1055,18 @@ fn beam_mesh_quantities(primitives: &[Primitive]) -> Option<BeamQuantities> {
     beam_quantities(&vertices, &triangles)
 }
 
+/// What the saved mesh of a column drawn as its type's rectangle gives of its
+/// base quantities (RE-425), where all its faces are planes and it is one closed
+/// solid that is a prism along the vertical (RE-424). Where the mesh is placed
+/// does not change the lengths, areas and volume.
+fn column_mesh_quantities(primitives: &[Primitive]) -> Option<ColumnQuantities> {
+    if !all_faces_flat(primitives) {
+        return None;
+    }
+    let (vertices, triangles) = local_mesh(primitives, [0.0; 3], None);
+    column_quantities(&vertices, &triangles)
+}
+
 /// Give each beam of `found` (an index into the entities and what its mesh gives
 /// of its base quantities) the quantities Revit's export writes for it, in the
 /// base quantity set it holds or a new one, where that holds none of them
@@ -1089,9 +1157,12 @@ fn add_beam_quantities(model: &mut IfcModel, found: &mut [(usize, BeamQuantities
 /// that holds all three gets the `Length` it lacks; one that holds some of the
 /// three is left as it is, because the cut-column rule writes a
 /// `CrossSectionArea` and no more for a column Revit draws as a cut mesh, which has
-/// no `OuterSurfaceArea` or `GrossVolume` (RE-291, RE-353). The set is there:
-/// [`add_mesh_volumes`] gave every column whose mesh is a closed solid of flat
-/// faces its `NetVolume`. A value a column holds is never replaced.
+/// no `OuterSurfaceArea` or `GrossVolume` (RE-291, RE-353). A column drawn from
+/// its mesh holds the set: [`add_mesh_volumes`] gave every column whose mesh is
+/// a closed solid of flat faces its `NetVolume`. A column that keeps its body,
+/// the rectangle its type gives (RE-425), may hold none, and then gets the set
+/// with all of them, its `NetVolume` the volume of the prism as Revit's is of an
+/// extrusion. A value a column holds is never replaced.
 fn add_column_quantities(model: &mut IfcModel, found: &mut [(usize, ColumnQuantities)]) {
     if found.is_empty() {
         return;
@@ -1106,13 +1177,6 @@ fn add_column_quantities(model: &mut IfcModel, found: &mut [(usize, ColumnQuanti
         }
     }
     for (index, quantities) in found.iter() {
-        let Some(&position) = held.get(index) else {
-            continue;
-        };
-        let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
-        else {
-            continue;
-        };
         let section = [
             (
                 "CrossSectionArea",
@@ -1127,17 +1191,45 @@ fn add_column_quantities(model: &mut IfcModel, found: &mut [(usize, ColumnQuanti
                 PropertyValue::VolumeCubicFeet(quantities.volume),
             ),
         ];
-        let length = (
-            "Length",
-            PropertyValue::PositiveLengthFeet(quantities.length),
-        );
+        let rest = [
+            (
+                "Length",
+                PropertyValue::PositiveLengthFeet(quantities.length),
+            ),
+            (
+                "NetVolume",
+                PropertyValue::VolumeCubicFeet(quantities.volume),
+            ),
+        ];
+        let Some(&position) = held.get(index) else {
+            held.insert(*index, model.entities.len());
+            model.entities.push(IfcEntity::ElementPropertySet {
+                element: *index,
+                set: PropertySet {
+                    name: "Qto_ColumnBaseQuantities".into(),
+                    properties: section
+                        .into_iter()
+                        .chain(rest)
+                        .map(|(name, value)| Property {
+                            name: name.into(),
+                            value,
+                        })
+                        .collect(),
+                },
+            });
+            continue;
+        };
+        let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
+        else {
+            continue;
+        };
         let held_of_three = section
             .iter()
             .filter(|(name, _)| has_property(set, name))
             .count();
         let wanted = match held_of_three {
-            0 => section.into_iter().chain([length]).collect::<Vec<_>>(),
-            3 => vec![length],
+            0 => section.into_iter().chain(rest).collect::<Vec<_>>(),
+            3 => rest.into_iter().collect::<Vec<_>>(),
             _ => continue,
         };
         for (name, value) in wanted {

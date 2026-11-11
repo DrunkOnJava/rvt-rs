@@ -281,6 +281,8 @@ jobs:
       base: ${{ steps.plan.outputs.base }}
       head_sha: ${{ steps.refs.outputs.head }}
       base_sha: ${{ steps.refs.outputs.base }}
+      head_on_main: ${{ steps.refs.outputs.head_on_main }}
+      base_on_main: ${{ steps.refs.outputs.base_on_main }}
     steps:
       # Each ref is resolved to a full SHA once, here, so every shard of a side
       # checks out the same commit even when its branch moves during the run
@@ -309,8 +311,24 @@ jobs:
           }
           head=$(full "$HEAD_REF")
           base=$(full "$BASE_REF")
-          echo "head=$head" >> "$GITHUB_OUTPUT"
-          echo "base=$base" >> "$GITHUB_OUTPUT"
+          # Whether a commit is main's own code: main's tip or an ancestor of it
+          # (the compare API says `identical` or `behind`). The score cache is
+          # saved only by a side whose code is main's, whichever way the commit
+          # was named: a run that pins its base or head to a main SHA, as every
+          # run that compares two commits does, saved nothing before this, so
+          # the cache stayed cold (0 of 4,548 lookups hit in run 42980660819).
+          on_main() {
+            local status
+            [[ "$1" =~ ^[0-9a-f]{40}$ ]] || { echo false; return; }
+            status=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$1" --jq .status 2>/dev/null || true)
+            case "$status" in identical | behind) echo true ;; *) echo false ;; esac
+          }
+          {
+            echo "head=$head"
+            echo "base=$base"
+            echo "head_on_main=$(on_main "$head")"
+            echo "base_on_main=$(on_main "$base")"
+          } >> "$GITHUB_OUTPUT"
           echo "head ${HEAD_REF} -> ${head}; base ${BASE_REF} -> ${base}"
       - id: plan
         shell: bash
@@ -386,11 +404,38 @@ jobs:
                   shards += [shard("samples-" + years.replace(" ", "-"), models="-",
                                    samples=True, years=years)
                              for years in ("2008 2023", "2024 2099")]
+              # The held-out models and racadv-* are never cached (RE-252, #1354), so
+              # each is measured in full on every run, and as one shard each they
+              # set the length of the run: 770 and 899 seconds on the head side of
+              # run 42980660819, where a shard whose steps hit the cache takes 3 to
+              # 5 minutes. Each is cut by name (the held-out ones in four, the
+              # 64 MB single-dwelling house of the flowbim.ee export a shard of its
+              # own, as the remainder still took 454 s of the 10.2 minutes of run
+              # 42997978043); a model that matches none of the named shards falls
+              # into the last, so a model added to a list is measured whatever its
+              # name.
               if flag("HOLDOUT"):
                   # The held-out fetch brings the spent pairs too.
-                  shards.append(shard("held-out", models="holdout-* spent-*", holdout=True))
+                  shards += [
+                      shard("held-out-offices", models="holdout-rvt-holdout-office-*",
+                            holdout=True),
+                      shard("held-out-rvt", models="holdout-rvt-holdout-[0-9]*",
+                            holdout=True),
+                      shard("held-out-house", models="holdout-AA-*", holdout=True),
+                      shard("held-out", models="holdout-* spent-*",
+                            skip="holdout-rvt-holdout-office-* holdout-rvt-holdout-[0-9]* holdout-AA-*",
+                            holdout=True),
+                  ]
               if flag("RACADV"):
-                  shards.append(shard("racadv", models="racadv-*", racadv=True))
+                  shards += [
+                      shard("racadv-2015-2016", models="racadv-2015 racadv-2016",
+                            racadv=True),
+                      shard("racadv-2017-2018", models="racadv-2017 racadv-2018",
+                            racadv=True),
+                      shard("racadv", models="racadv-*",
+                            skip="racadv-2015 racadv-2016 racadv-2017 racadv-2018",
+                            racadv=True),
+                  ]
               skip = " ".join(offices.values()) if flag("NORDIC") else ""
               shards.append(shard("rest", skip=skip, **dict(rest, holdout=False, racadv=False)))
           sides = ["head", "base"] if base else ["head"]
@@ -746,7 +791,8 @@ jobs:
       # scorer or schema step whose every input is as it was in an earlier run
       # takes that run's output. Every run restores the newest cache of its
       # shard; it is saved only where the Rust cache is (the workflow
-      # dispatched from main and the code measured main's, so that code of
+      # dispatched from main and the side's commit on main's history, main's
+      # tip or an ancestor of it however the run named it, so that code of
       # another ref never writes what a later main run reads), or under a name
       # of its own that `score_cache` gives a run from any ref, which main's
       # runs never read. Entries are named by what
@@ -764,7 +810,8 @@ jobs:
         env:
           SCORE_CACHE: ${{ inputs.score_cache }}
           SHARD: ${{ matrix.shard }}
-          SAVE_FROM_MAIN: ${{ github.ref == 'refs/heads/main' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '') }}
+          SIDE: ${{ matrix.side }}
+          SAVE_FROM_MAIN: ${{ github.ref == 'refs/heads/main' && (matrix.side == 'base' && needs.plan.outputs.base_on_main == 'true' || matrix.side != 'base' && needs.plan.outputs.head_on_main == 'true') }}
         run: |
           enabled=true
           save=false
@@ -791,8 +838,17 @@ jobs:
             echo "save=$save"
             echo "prefix=$own$SHARD."
             echo "restore<<END"
+            # A side restores its own side's newest entry first. Head and base
+            # export different files wherever the measured change reaches, so
+            # an entry of the other side hits only for the models both write
+            # alike: a second run restored whichever side saved last, and 8%
+            # of its lookups missed for that reason alone (run 42990521699).
+            echo "$own$SHARD.$SIDE-"
             echo "$own$SHARD."
-            [ "$own" != "$main" ] && echo "$main$SHARD."
+            if [ "$own" != "$main" ]; then
+              echo "$main$SHARD.$SIDE-"
+              echo "$main$SHARD."
+            fi
             echo "END"
           } >> "$GITHUB_OUTPUT"
           if [ "$enabled" = true ]; then
