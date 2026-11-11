@@ -11,7 +11,7 @@
 use super::entities::BrepTriangle;
 use crate::native_saved_mesh::Primitive;
 use crate::vector_math::{cross, dot, sub};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Points this close, feet, are one vertex.
 const WELD_FEET: f64 = 1e-6;
@@ -46,6 +46,20 @@ pub(super) fn all_faces_flat(primitives: &[Primitive]) -> bool {
 /// one that three do, two triangles that wind the same way along an edge, or
 /// no volume at all.
 pub(super) fn closed_mesh_volume(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -> Option<f64> {
+    closed_mesh(vertices, triangles).map(|mesh| mesh.volume)
+}
+
+/// A closed surface a mesh makes (RE-423): its volume, cubic feet, and how many
+/// vertices and triangles it has once welded, which give its Euler characteristic.
+struct ClosedMesh {
+    volume: f64,
+    vertices: usize,
+    triangles: usize,
+}
+
+/// The closed surface `triangles` make of `vertices`, as [`closed_mesh_volume`]
+/// reads it.
+fn closed_mesh(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -> Option<ClosedMesh> {
     let mut welded: HashMap<[i64; 3], u32> = HashMap::new();
     let mut ids = Vec::with_capacity(vertices.len());
     let mut centre = [0.0; 3];
@@ -66,6 +80,8 @@ pub(super) fn closed_mesh_volume(vertices: &[[f64; 3]], triangles: &[BrepTriangl
     let count = vertices.len() as f64;
     centre = centre.map(|sum| sum / count);
     let mut edges: HashMap<(u32, u32), u32> = HashMap::new();
+    let mut used: HashSet<u32> = HashSet::new();
+    let mut counted = 0usize;
     let mut sum = 0.0;
     for BrepTriangle(a, b, c) in triangles {
         let (ia, ib, ic) = (
@@ -76,6 +92,8 @@ pub(super) fn closed_mesh_volume(vertices: &[[f64; 3]], triangles: &[BrepTriangl
         if ia == ib || ib == ic || ic == ia {
             continue;
         }
+        used.extend([ia, ib, ic]);
+        counted += 1;
         for edge in [(ia, ib), (ib, ic), (ic, ia)] {
             *edges.entry(edge).or_insert(0) += 1;
         }
@@ -97,7 +115,11 @@ pub(super) fn closed_mesh_volume(vertices: &[[f64; 3]], triangles: &[BrepTriangl
         return None;
     }
     let volume = sum.abs() / 6.0;
-    (volume.is_finite() && volume > 0.0).then_some(volume)
+    (volume.is_finite() && volume > 0.0).then_some(ClosedMesh {
+        volume,
+        vertices: used.len(),
+        triangles: counted,
+    })
 }
 
 /// How close, relative, the volume of a mesh must be to the product of the
@@ -314,6 +336,140 @@ pub(super) fn mullion_surface_area(prism: &Prism, kept: u8) -> Option<f64> {
     } else {
         None
     }
+}
+
+/// How close, as one minus the cosine, two edges' directions are one (an angle
+/// of 0.26 degrees).
+const EDGE_COSINE: f64 = 1e-5;
+
+/// The most distinct edge directions a mesh may have to be tried as a beam's
+/// axis (RE-423): a box has 3 and a prism over a twelve-sided section about 25.
+/// A mesh with more is a curved or a free-form solid.
+const MAX_AXIS_CANDIDATES: usize = 48;
+
+/// Two prisms' extents are one where they differ by less than this fraction of
+/// the longer.
+const EXTENT_TIE: f64 = 1e-6;
+
+/// How far, as a fraction of the mesh's volume, the volume may be from a
+/// prism's end area times its extent.
+const PRISM_VOLUME_TOLERANCE: f64 = 1e-4;
+
+/// The base quantities of a beam read from the mesh of its body (RE-423),
+/// square and cubic feet.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct BeamQuantities {
+    /// The area of the section the beam is extruded from.
+    pub cross_section_area: f64,
+    /// The area of the faces along the extrusion.
+    pub outer_surface_area: f64,
+    /// The area of all its faces: the faces along it and its two ends.
+    pub surface_area: f64,
+    /// The volume of the solid.
+    pub volume: f64,
+}
+
+/// The distinct directions of the edges of `triangles`, unit vectors with a
+/// direction and its opposite one: the axes a prism may run along, since its
+/// lateral edges run along it. None where a vertex is not there or there are
+/// more than [`MAX_AXIS_CANDIDATES`].
+fn edge_directions(vertices: &[[f64; 3]], triangles: &[BrepTriangle]) -> Option<Vec<[f64; 3]>> {
+    let mut found: Vec<[f64; 3]> = Vec::new();
+    for BrepTriangle(a, b, c) in triangles {
+        let (Some(&p), Some(&q), Some(&r)) = (
+            vertices.get(*a as usize),
+            vertices.get(*b as usize),
+            vertices.get(*c as usize),
+        ) else {
+            return None;
+        };
+        for (from, to) in [(p, q), (q, r), (r, p)] {
+            let edge = sub(to, from);
+            let length = dot(edge, edge).sqrt();
+            if !(length.is_finite() && length > 0.0) {
+                continue;
+            }
+            let unit = edge.map(|component| component / length);
+            if found
+                .iter()
+                .any(|known| dot(*known, unit).abs() > 1.0 - EDGE_COSINE)
+            {
+                continue;
+            }
+            if found.len() == MAX_AXIS_CANDIDATES {
+                return None;
+            }
+            found.push(unit);
+        }
+    }
+    Some(found)
+}
+
+/// The base quantities of a beam from the mesh of its body (RE-423): the
+/// section, the area along it and the volume of the prism the solid is, where it
+/// is one. Revit's export draws a beam as an extrusion of its profile and takes
+/// the quantities from it (revit-ifc's `CreateBeamColumnBaseQuantities`,
+/// CLEANROOM.md source 5): `CrossSectionArea` is the profile's area,
+/// `OuterSurfaceArea` its perimeter times the depth, `GrossSurfaceArea` and
+/// `NetSurfaceArea` that and the two ends, `GrossVolume` and `NetVolume` the
+/// solid's. The extrusion runs along the longest axis the mesh is a prism along
+/// with two flat ends: on all 142 beams of the BIM4LCA housing and office files
+/// the scorer reads, Revit's extrusion is that axis, which is the beam's line
+/// where its ends are square and across it where they are cut.
+///
+/// None where the mesh is not one closed solid with no hole through it (a
+/// hollow section's surfaces are outer and inner, and the outer perimeter is not
+/// told from the mesh), where no axis makes it a prism with two flat ends of one
+/// area, where two axes of one extent do (a cube), or where its volume is not the
+/// end area times the extent.
+pub(super) fn beam_quantities(
+    vertices: &[[f64; 3]],
+    triangles: &[BrepTriangle],
+) -> Option<BeamQuantities> {
+    let closed = closed_mesh(vertices, triangles)?;
+    // A solid with no hole through it has a sphere's Euler characteristic, 2:
+    // vertices minus edges plus faces, and a closed triangle mesh has one and a
+    // half edges to a face.
+    if 2 * closed.vertices as i64 - closed.triangles as i64 != 4 {
+        return None;
+    }
+    let mut best: Option<([f64; 3], Prism)> = None;
+    let mut tied = false;
+    for axis in edge_directions(vertices, triangles)? {
+        let Some(prism) = prism_along(vertices, triangles, axis) else {
+            continue;
+        };
+        let [a, b] = prism.ends;
+        let same = (a.area - b.area).abs() <= END_AREA_TOLERANCE * a.area.max(b.area);
+        if !(a.square && b.square && same && prism.extent > 0.0) {
+            continue;
+        }
+        if let Some((held_axis, held)) = &best {
+            if (prism.extent - held.extent).abs() <= EXTENT_TIE * held.extent {
+                tied |= dot(*held_axis, axis).abs() < 0.999;
+                continue;
+            }
+            if prism.extent < held.extent {
+                continue;
+            }
+        }
+        best = Some((axis, prism));
+        tied = false;
+    }
+    let (_, prism) = best?;
+    if tied {
+        return None;
+    }
+    let end_area = (prism.ends[0].area + prism.ends[1].area) / 2.0;
+    if (closed.volume - end_area * prism.extent).abs() > PRISM_VOLUME_TOLERANCE * closed.volume {
+        return None;
+    }
+    Some(BeamQuantities {
+        cross_section_area: end_area,
+        outer_surface_area: prism.lateral,
+        surface_area: prism.lateral + 2.0 * end_area,
+        volume: closed.volume,
+    })
 }
 
 /// Where a curtain mullion stands, for the test of whether another continues
@@ -883,5 +1039,98 @@ mod tests {
         let point = placed([0.0, 0.0, 1.0], [0.0, 0.0, 2.1], [0.0, 0.0, 2.1]);
         assert_eq!(partner_ends(&[point, upper]), vec![[false, false]; 2]);
         assert!(partner_ends(&[]).is_empty());
+    }
+
+    /// A parallelogram side profile 4 ft along x and 0.2 ft high, its ends slanted
+    /// by 1 ft, extruded 0.05 ft along y: a beam modelled as the side of its
+    /// section, with cut ends. It is a prism along y with two flat ends and along
+    /// x with two slanted ones.
+    fn slanted_beam() -> (Vec<[f64; 3]>, Vec<BrepTriangle>) {
+        let vertices = vec![
+            [0.0, 0.0, 0.0],
+            [4.0, 0.0, 0.0],
+            [5.0, 0.0, 0.2],
+            [1.0, 0.0, 0.2],
+            [0.0, 0.05, 0.0],
+            [4.0, 0.05, 0.0],
+            [5.0, 0.05, 0.2],
+            [1.0, 0.05, 0.2],
+        ];
+        let mut triangles = Vec::new();
+        for face in [
+            &[0, 1, 2, 3][..],
+            &[7, 6, 5, 4],
+            &[0, 4, 5, 1],
+            &[3, 2, 6, 7],
+            &[1, 5, 6, 2],
+            &[0, 3, 7, 4],
+        ] {
+            triangles.extend(fan(face));
+        }
+        (vertices, triangles)
+    }
+
+    #[test]
+    fn a_box_beam_takes_the_sums_of_its_longest_axis_whichever_way_it_lies() {
+        for size in [[0.1, 0.2, 3.0], [3.0, 0.1, 0.2], [0.2, 3.0, 0.1]] {
+            let (vertices, triangles) = box_mesh([1.0, 2.0, 3.0], size);
+            let found = beam_quantities(&vertices, &triangles).unwrap();
+            assert_close(found.cross_section_area, 0.02);
+            assert_close(found.outer_surface_area, 2.0 * (0.1 + 0.2) * 3.0);
+            assert_close(found.surface_area, 2.0 * (0.1 + 0.2) * 3.0 + 0.04);
+            assert_close(found.volume, 0.06);
+        }
+    }
+
+    #[test]
+    fn a_beam_with_slanted_ends_is_read_across_them() {
+        let (vertices, triangles) = slanted_beam();
+        let found = beam_quantities(&vertices, &triangles).unwrap();
+        let perimeter = 8.0 + 2.0 * 1.04_f64.sqrt();
+        assert_close(found.cross_section_area, 0.8);
+        assert_close(found.outer_surface_area, perimeter * 0.05);
+        assert_close(found.surface_area, perimeter * 0.05 + 1.6);
+        assert_close(found.volume, 0.04);
+    }
+
+    #[test]
+    fn a_cube_has_three_axes_of_one_extent_and_is_no_beam() {
+        let (vertices, triangles) = cube();
+        assert_eq!(beam_quantities(&vertices, &triangles), None);
+    }
+
+    #[test]
+    fn a_mesh_that_is_not_closed_is_no_beam() {
+        let (vertices, mut triangles) = box_mesh([0.0; 3], [0.1, 0.2, 3.0]);
+        triangles.pop();
+        assert_eq!(beam_quantities(&vertices, &triangles), None);
+    }
+
+    #[test]
+    fn two_solids_in_one_mesh_are_no_beam() {
+        let (mut vertices, mut triangles) = box_mesh([0.0; 3], [0.1, 0.2, 3.0]);
+        let (more, extra) = box_mesh([5.0, 0.0, 0.0], [0.1, 0.2, 3.0]);
+        let shift = u32::try_from(vertices.len()).unwrap();
+        vertices.extend(more);
+        triangles.extend(
+            extra
+                .into_iter()
+                .map(|BrepTriangle(a, b, c)| BrepTriangle(a + shift, b + shift, c + shift)),
+        );
+        assert_eq!(beam_quantities(&vertices, &triangles), None);
+    }
+
+    #[test]
+    fn a_round_section_with_many_planes_is_no_beam() {
+        let (vertices, triangles) = polygon_prism(40);
+        assert_eq!(beam_quantities(&vertices, &triangles), None);
+    }
+
+    #[test]
+    fn no_triangles_and_a_vertex_that_is_not_there_are_no_beam() {
+        assert_eq!(beam_quantities(&[], &[]), None);
+        let (vertices, mut triangles) = box_mesh([0.0; 3], [0.1, 0.2, 3.0]);
+        triangles.push(BrepTriangle(0, 1, 99));
+        assert_eq!(beam_quantities(&vertices, &triangles), None);
     }
 }
