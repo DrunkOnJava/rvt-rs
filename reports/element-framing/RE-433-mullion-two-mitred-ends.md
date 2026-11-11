@@ -22,8 +22,10 @@ RE-432 makes a continuation hide an end face only where it coincides with it, an
 | written with `kept` 1 | 12 |
 | refused, `kept` none (RE-268 leaves the mullion out) | 595 |
 | **refused at `mullion_surface_area` with `kept` 2** | **131** |
+| never read as a member: its record names no axis (`axis=false`) | 18 |
+| never read as a member: no saved mesh | 2 |
 
-All 131 of the last row are among the 159 mullions with a partner bent off the axis (RE-432): of those 159, 8 are the mullions RE-432 corrects, 131 are these, 18 have `kept` none and 2 have no mesh volume. The timber office as built has 134 of the last row. `mullion_surface_area` returns none where neither end face of the prism is square to the axis: both ends are mitred, as they are on a mullion with a bent joint at each end. RE-404 measured that a mitred end always counts when the other end is flat (184 of the housing's and 58 of the office's permit files') and left two mitred ends unread, for want of a measurement. Revit's own solid leaves out no end face of any of the 159 (RE-432), the 131 included, so the value is the whole surface: the faces along the mullion and both end faces.
+All 131 of the `kept` 2 row are among the 159 mullions with a partner bent off the axis (RE-432): of those 159, 8 are the mullions RE-432 corrects, 131 are these, 18 have `kept` none (they are inside the 595 above, with a record axis and a prism, not the 18 with no axis, which share no mullion with the 159) and 2 have no saved mesh. The timber office as built has 134 of the last row. `mullion_surface_area` returns none where neither end face of the prism is square to the axis: both ends are mitred, as they are on a mullion with a bent joint at each end. RE-404 measured that a mitred end always counts when the other end is flat (184 of the housing's and 58 of the office's permit files') and left two mitred ends unread, for want of a measurement. Revit's own solid leaves out no end face of any of the 159 (RE-432), the 131 included, so the value is the whole surface: the faces along the mullion and both end faces.
 
 ## 3. The change
 
@@ -49,11 +51,11 @@ Held against the rows registered on #1636 (https://github.com/DrunkOnJava/rvt-rs
 | 1 the mullions refused for two mitred ends gain Revit's value | **Held**: +131 on the concrete office as built (9,257 to 9,388) and at permit (9,285 to 9,416), +134 on the timber office as built (7,153 to 7,287) and +132 at permit (7,036 to 7,168), each equal, none different |
 | 2 no census row gains a `different` | **Held**: `NetSurfaceArea` different 0, 0, 2 and 6 before and after; the property census does not move |
 | 3 what moves | **Held**: 528 `NetSurfaceArea` values added, no value changed, no element added or removed, 122 of 126 exports byte-identical |
-| 4 what stays out | **Held**: 615 mullions of the concrete office as built, 615 at permit, 587 and 698 on the timber office stay missing (RE-268 leaves them out, `kept` none) |
+| 4 what stays out | **Held**: the 615 mullions of the concrete office as built that still have no value (595 whose `kept` is none, which RE-268 leaves out, 18 of them with a bent partner; 18 whose record names no axis; 2 with no saved mesh) stay without, 615 at permit, 587 and 698 on the timber office (causes read on the office as built alone); no prism with two mitred ends and `kept` below 2 was written |
 
 ## 5. Not done
 
-- The mullions RE-268 leaves out (`kept` none: 595 of the concrete office as built, with 18 of them bent-partner mullions) stay without a value; what leaves them out is [#1046](https://github.com/DrunkOnJava/rvt-rs/issues/1046)'s remaining mullion work.
+- The 615 mullions of the concrete office as built that still have no value (595 whose `kept` is none, with 18 of them bent-partner mullions; 18 whose record names no axis; 2 with no saved mesh) stay without; what leaves out the `kept` none ones is [#1046](https://github.com/DrunkOnJava/rvt-rs/issues/1046)'s remaining mullion work.
 
 ## 6. Reproduce
 
