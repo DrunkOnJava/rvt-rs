@@ -80,9 +80,15 @@ PREDEFINED_TYPE_REQUIRED = {
 # From this Revit release the occurrence of these entities is written without a
 # `PredefinedType` (#1692, `PREDEFINED_TYPE_LEFT_OUT_CLASSES` in
 # src/ifc/category_map.rs): Revit's own export of the 2027 pairs writes none, so a
-# null there is the rule and not a value the writer dropped.
+# null there is the rule and not a value the writer dropped. The first three are
+# the ones `PREDEFINED_TYPE_REQUIRED` holds of the four the exporter's source
+# leaves out as well (#1716, `PREDEFINED_TYPE_LEFT_OUT_CLASSES_FROM_SOURCE`),
+# which no measured 2027 export holds one of.
 PREDEFINED_TYPE_LEFT_OUT_FROM = 2027
 PREDEFINED_TYPE_LEFT_OUT = {
+    "IfcBeam",
+    "IfcColumn",
+    "IfcCovering",
     "IfcDoor",
     "IfcFurniture",
     "IfcMember",

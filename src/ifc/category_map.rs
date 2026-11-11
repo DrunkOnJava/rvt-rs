@@ -902,7 +902,8 @@ pub fn export_override_applies(revit_class: &str, revit_version: Option<u32>) ->
 }
 
 /// The first release whose saves are written without a `PredefinedType` on the
-/// occurrence of [`PREDEFINED_TYPE_LEFT_OUT_CLASSES`] (#1692). On the two
+/// occurrence of [`PREDEFINED_TYPE_LEFT_OUT_CLASSES`] and
+/// [`PREDEFINED_TYPE_LEFT_OUT_CLASSES_FROM_SOURCE`] (#1692, #1716). On the two
 /// held-out pairs saved by 2027 (hemanth1986's house and office, counts only),
 /// Revit's own export writes none on 71 elements of those ten classes (stairs 1,
 /// stair flights 1, slabs 3, members 2, furniture 12, doors 7, windows 22, walls
@@ -915,12 +916,14 @@ pub fn export_override_applies(revit_class: &str, revit_version: Option<u32>) ->
 pub const PREDEFINED_TYPE_LEFT_OUT_FROM: u32 = 2027;
 
 /// The entities whose occurrence is written without a `PredefinedType` from
-/// [`PREDEFINED_TYPE_LEFT_OUT_FROM`]: the ten classes the 2027 pairs hold and
-/// Revit's export writes none on. A class the pairs do not hold (columns, beams,
-/// coverings, curtain walls, plates, footings, ramps, shading devices, the MEP
-/// terminals ...) is not measured on 2027 and keeps its value; a member is read
-/// on two stringers only, so a mullion is left out with them on the strength of
-/// its class.
+/// [`PREDEFINED_TYPE_LEFT_OUT_FROM`], measured: the ten classes the 2027 pairs
+/// hold and Revit's export writes none on. A class the pairs do not hold
+/// (columns, beams, coverings, curtain walls, plates, footings, ramps, shading
+/// devices, the MEP terminals ...) is not measured on 2027; the ones the
+/// exporter's source leaves out as well are in
+/// [`PREDEFINED_TYPE_LEFT_OUT_CLASSES_FROM_SOURCE`], and the rest keep their
+/// value. A member is read on two stringers only, so a mullion is left out with
+/// them on the strength of its class.
 pub const PREDEFINED_TYPE_LEFT_OUT_CLASSES: [&str; 10] = [
     "IFCDOOR",
     "IFCFURNITURE",
@@ -934,9 +937,29 @@ pub const PREDEFINED_TYPE_LEFT_OUT_CLASSES: [&str; 10] = [
     "IFCWINDOW",
 ];
 
+/// The entities the exporter's source leaves out as well, and no measured 2027
+/// export holds one of (#1716): a beam, a column, a plate and a covering whose
+/// element has a type object. Autodesk's public exporter source (revit-ifc,
+/// `Source/Revit.IFC.Export/Toolkit/IFCInstanceExporter.cs`, tag
+/// `IFC_v27.4.0.30`; CLEANROOM.md source 5, cited and not quoted) writes an
+/// occurrence's `PredefinedType` only where the element has no type object when
+/// it is created, and the creators of these four classes call that helper as the
+/// creators of the ten measured ones do. This is taken from the source and not
+/// from a measured export: the 2027 samples hold beams, columns, plates and
+/// coverings that rvt-rs writes a value on, and no Revit 2027 export of them
+/// exists. The same source leaves out a typed ramp, ramp flight, pile, mechanical
+/// fastener and grid, and rvt-rs writes no `PredefinedType` on any of them (no
+/// mapping row carries one, and none is in `PREDEFINED_TYPE_ENUMERATORS` or an
+/// export-override target), so none is listed. Nor is `IFCCURTAINWALL`: the
+/// source's family-based curtain wall is not the system curtain wall and curtain
+/// panel wall rvt-rs writes as that entity, which keep their value.
+pub const PREDEFINED_TYPE_LEFT_OUT_CLASSES_FROM_SOURCE: [&str; 4] =
+    ["IFCBEAM", "IFCCOLUMN", "IFCCOVERING", "IFCPLATE"];
+
 /// Whether the occurrence of `ifc_type` in a file Revit `revit_version` saved is
-/// written without a `PredefinedType` (#1692): the entity is one of
-/// [`PREDEFINED_TYPE_LEFT_OUT_CLASSES`] and the release
+/// written without a `PredefinedType` (#1692, #1716): the entity is one of
+/// [`PREDEFINED_TYPE_LEFT_OUT_CLASSES`] or
+/// [`PREDEFINED_TYPE_LEFT_OUT_CLASSES_FROM_SOURCE`] and the release
 /// [`PREDEFINED_TYPE_LEFT_OUT_FROM`] or later. The occurrence only: the type
 /// objects, their GlobalIds and the property sets that depend on a predefined type
 /// take the element's value as before, and so does the model; whatever reports
@@ -946,6 +969,7 @@ pub fn predefined_type_left_out(ifc_type: &str, revit_version: Option<u32>) -> b
     revit_version.is_some_and(|version| version >= PREDEFINED_TYPE_LEFT_OUT_FROM)
         && PREDEFINED_TYPE_LEFT_OUT_CLASSES
             .iter()
+            .chain(PREDEFINED_TYPE_LEFT_OUT_CLASSES_FROM_SOURCE.iter())
             .any(|class| class.eq_ignore_ascii_case(ifc_type))
 }
 
