@@ -427,7 +427,22 @@ fn refined_curved_edge(
             center[k] + radius * (cs * x_vec[k] + sn * y_vec[k]) + uv[1] * z_vec[k]
         }))
     };
-    refine_crossing_edge(&evaluate, origin, normal, original)
+    let envelope = cylinder.fields["m_Envelope"]["m_corners"]
+        .as_array()
+        .context("cylinder envelope")?;
+    ensure!(envelope.len() == 2, "cylinder envelope bounds");
+    let corner = |k: usize| -> Result<[f64; 2]> { point::<2>(&envelope[k]) };
+    let (low, high) = (corner(0)?, corner(1)?);
+    // The envelope is made from the samples, and a point of the edge between two
+    // of them can lie a sagitta beyond it: the loop keeps the samples there, and
+    // `cylinder_face` still refuses a loop outside its envelope.
+    Ok(refine_crossing_edge(&evaluate, origin, normal, original)?
+        .into_iter()
+        .filter(|uv| {
+            original.contains(uv)
+                || (0..2).all(|k| uv[k] >= low[k] - 1e-9 && uv[k] <= high[k] + 1e-9)
+        })
+        .collect())
 }
 
 // Refine a particular shared edge in its curved surface's parameter domain.
