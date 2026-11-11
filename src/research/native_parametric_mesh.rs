@@ -45,7 +45,8 @@ fn ruled_surface_component(
     // they cannot taint an otherwise resolvable ruled-surface component.
     let mut adjacency: std::collections::BTreeMap<usize, std::collections::BTreeSet<usize>> =
         std::collections::BTreeMap::new();
-    let mut invalid_by_face = std::collections::BTreeSet::new();
+    let mut invalid_by_face: std::collections::BTreeMap<usize, String> =
+        std::collections::BTreeMap::new();
     for (edge_index, edge) in g
         .objects
         .iter()
@@ -77,7 +78,23 @@ fn ruled_surface_component(
             })
             .collect::<Vec<_>>();
         if faces.len() != 2 || valid_faces.len() != 2 {
-            invalid_by_face.extend(valid_faces);
+            // What the edge's `m_pFace` holds, so that the refusal says which
+            // fault this is (#1683): each entry's class, or none where it is
+            // null or does not resolve.
+            let held = resolved
+                .iter()
+                .map(|target| {
+                    (*target)
+                        .and_then(|target| g.objects.get(target))
+                        .map_or("none", |object| object.class_name.as_str())
+                })
+                .collect::<Vec<_>>()
+                .join(" + ");
+            for face in valid_faces {
+                invalid_by_face
+                    .entry(face)
+                    .or_insert_with(|| format!("m_pFace is {held}"));
+            }
             continue;
         }
         let first = valid_faces[0];
@@ -94,8 +111,11 @@ fn ruled_surface_component(
             }
         }
     }
-    if let Some(face) = component.iter().find(|face| invalid_by_face.contains(face)) {
-        anyhow::bail!("malformed ruled-surface edge is connected to face {face}");
+    if let Some((face, held)) = component
+        .iter()
+        .find_map(|face| invalid_by_face.get(face).map(|held| (face, held)))
+    {
+        anyhow::bail!("malformed ruled-surface edge ({held}) is connected to face {face}");
     }
     Ok(component)
 }
