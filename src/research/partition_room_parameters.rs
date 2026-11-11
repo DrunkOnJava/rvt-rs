@@ -485,6 +485,12 @@ pub fn scan_text_parameter(
 /// exterior (RE-158).
 pub const FUNCTION_PARAMETER: i64 = -1_001_006;
 
+/// BuiltInParameter `FLOOR_PARAM_IS_STRUCTURAL`, the Structural check box of a
+/// floor: 1 checked, 0 not. revit-ifc's `LoadBearingCalculator` (CLEANROOM.md
+/// source 5) takes an element's `LoadBearing` from it whenever the element
+/// holds it, a floor or a stair alike (RE-429).
+pub const FLOOR_STRUCTURAL_PARAMETER: i64 = -1_001_954;
+
 /// Each element of `elements`' value of the integer parameter `parameter`,
 /// by ElementId, on Revit 2024 and later (RE-158): an entry `parameter (i64)
 /// · u32 value` in the element's own data object ([`enclosing_data_object`]).

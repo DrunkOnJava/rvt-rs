@@ -949,6 +949,14 @@ pub const WALL_TOP_JOINED_FIELD: &str = "m_wall_top_joined";
 pub const WALL_TOP_JOIN_RECORD_REVIT_VERSIONS: &[u32] =
     &[2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023];
 
+/// Releases whose walls' `LoadBearing` is written from the Structural box and
+/// usage of their native record (RE-429): the box is set on walls of Revit
+/// 2024 files alone among the models Measure holds, so the rule's true is
+/// measured there, and the walls of the 2018 to 2023 and 2025 to 2027 models it
+/// holds are false in Revit's exports with the box unset. The 2015 to 2023
+/// records are not read for it.
+pub const WALL_LOAD_BEARING_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
+
 /// Field set on a wall whose native record holds no `JoinToRoofGStep`,
 /// `CutPairGStep` or `WallCutoutGStep`
 /// ([`crate::native_walls::native_walls_and_top_joins`], RE-266): its body
