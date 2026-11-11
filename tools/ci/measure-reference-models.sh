@@ -19,7 +19,8 @@
 #     that write the same model hash the same;
 #   - schema.txt: the IFC4 schema's findings on the export (C9), its
 #     attribute counts and IfcOpenShell's validation up to 120 MB, and its
-#     standard property sets against IFC4's definitions (#822);
+#     standard property sets against IFC4's definitions (#822); a run whose
+#     scorers leave `schema` out writes none, for a sample as for a model;
 #   - witness-<artifact>.json: the rvt-rs observation committed under
 #     research/witness/<artifact>/observations/rvt-rs.json;
 #   - <scorer>.txt: each tools/re scorer's output against Revit's export,
@@ -627,9 +628,13 @@ measure_sample() { # sample
   # samples reach (I-shape profiles and profile set usages on the
   # structural samples) is checked somewhere. Attribute counts on every
   # export; IfcOpenShell's full validation on exports up to 120 MB, as
-  # for a reference model, the rest marked as skipped.
+  # for a reference model, the rest marked as skipped. A run that names its
+  # scorers without `schema` (a probe run, `scorers=none`) skips it, as a
+  # reference model does: the EXPRESS rules alone took 170 to 220 s of a large
+  # MEP sample and set the length of such a run's longest shard (run
+  # 42987216721).
   if [ -s "$dir/model.ifc" ]; then
-    schema "$dir" 125829120
+    wanted schema && schema "$dir" 125829120
     grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
     # #1437: every space of the sample's export says what it is.
     wanted space_kinds_vs_ifc && score "$dir/space_kinds_vs_ifc.txt" "$SCORERS/space_kinds_vs_ifc.py" "$dir/model.ifc"
