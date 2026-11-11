@@ -24,7 +24,7 @@ fn uv_point(v: &serde_json::Value) -> Result<[f64; 2]> {
     Ok(p)
 }
 
-pub(crate) struct FaceGrid {
+pub struct FaceGrid {
     pub surface: ParametricSurface,
     pub u: Vec<f64>,
     pub v: Vec<f64>,
@@ -126,7 +126,7 @@ fn ruled_surface_component(
     Ok((component, refused_before))
 }
 
-pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
+pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     use crate::native_parametric_surface::Curve;
     use crate::native_saved_mesh::pointer;
     let f = g.objects.get(fi).context("face index")?;
