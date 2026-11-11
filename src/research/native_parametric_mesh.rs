@@ -654,6 +654,29 @@ pub fn face(g: &ObjectGraph, fi: usize) -> Result<FaceMesh> {
         )?
     };
     // DIAGNOSTIC (scratch branch, not for main): every trimmed face with its data, once (#1737).
+    if grid.rectangular {
+        static SEEN_RECT: std::sync::Mutex<Option<std::collections::HashSet<String>>> =
+            std::sync::Mutex::new(None);
+        let surface_class = crate::native_saved_mesh::pointer(g, fi, &f.fields["m_pSurf"])
+            .ok()
+            .flatten()
+            .map(|si| g.objects[si].class_name.clone())
+            .unwrap_or_default();
+        let line = format!(
+            "DENSITYRECT surf={surface_class} nu={} nv={} tri={} bounds={:?}",
+            grid.u.len(),
+            grid.v.len(),
+            mesh.triangles.len(),
+            grid.bounds,
+        );
+        let mut seen = SEEN_RECT.lock().unwrap();
+        if seen
+            .get_or_insert_with(Default::default)
+            .insert(line.clone())
+        {
+            eprintln!("{line}");
+        }
+    }
     if !grid.rectangular {
         use std::fmt::Write as _;
         static SEEN: std::sync::Mutex<Option<std::collections::HashSet<String>>> =
