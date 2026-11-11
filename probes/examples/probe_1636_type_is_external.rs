@@ -122,7 +122,10 @@ fn main() -> anyhow::Result<()> {
             // Where the ladder's reference list and host fields point (RE-412).
             for (name, value) in &element.fields {
                 let lower = name.to_ascii_lowercase();
-                if lower.contains("host") || lower.contains("ref") || lower.contains("categ") {
+                if ["host", "ref", "categ", "function", "type", "ext"]
+                    .iter()
+                    .any(|key| lower.contains(key))
+                {
                     let shown = format!("{value:?}");
                     println!(
                         "ladder field {name} {}",
