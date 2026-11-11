@@ -396,13 +396,20 @@ pub(crate) fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                     .abs()
                     < 1e-8;
             let twisted = if flat { 0. } else { length(twist) };
-            let n = (twisted / CHORD)
+            // `u` runs along the profiles, `v` between them. The profiles' arcs
+            // ask for steps along `u` alone, and the twist for `twisted / CHORD`
+            // cells in all, however they divide between the two: a face of a long
+            // arc between two straight generators needs its arc's steps and one
+            // cell across, not as many across as along.
+            let cells = twisted / CHORD;
+            let n_u = cells
                 .sqrt()
                 .ceil()
                 .max(range_steps(profile1))
                 .max(range_steps(profile2))
                 .max(1.);
-            (1. / n, 1. / n)
+            let n_v = (cells / n_u).ceil().max(1.);
+            (1. / n_u, 1. / n_v)
         }
     };
     let axis = |k: usize, step: f64| -> Result<Vec<f64>> {
