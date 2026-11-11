@@ -132,11 +132,11 @@ release adds only its notes, witness files, version strings and help text to the
   the pass is not offered there; the 28 samples of Revit 2023 to 2027 take 1.13
   to 1.85 times the time (median 1.39) and 1.42 to 4.38 times the peak memory
   (median 1.87), the most for `rac_basic` 2023 (1.9 s and 200 MiB to 3.4 s and
-  875 MiB). The BIM4LCA office takes 25.4 s and 914 MiB as built against 33.0 s
-  and 1,432 MiB (1.30 and 1.57 times) and 22.5 s and 973 MiB at permit against
-  27.6 s and 1,545 MiB; Snowdon Towers Architectural 17.6 s and 1,073 MiB
-  against 28.0 s and 2,086 MiB (1.60 and 1.94 times), its IFC 37 MB against 189;
-  Core Interior 4.7 s and 305 MiB against 5.3 s and 437 MiB; RE1's four models
+  875 MiB). The BIM4LCA office goes from 25.4 s and 914 MiB to 33.0 s and 1,432
+  MiB as built (1.30 and 1.57 times) and from 22.5 s and 973 MiB to 27.6 s and
+  1,545 MiB at permit; Snowdon Towers Architectural from 17.6 s and 1,073 MiB to
+  28.0 s and 2,086 MiB (1.60 and 1.94 times), its IFC from 37 MB to 189; Core
+  Interior from 4.7 s and 305 MiB to 5.3 s and 437 MiB; RE1's four models
   1.05 to 1.14 times the time and up to 1.60 times the memory; Einhoven and the
   office's two terrain files within 5%. The peak memory still above 0.17.0's is
   #1694.
@@ -148,8 +148,8 @@ release adds only its notes, witness files, version strings and help text to the
 - **A default export of a Revit 2023 to 2027 project draws every element that
   would be a bounding box from the mesh Revit saved for it, where all of the mesh
   decodes (#1191).** Doors and windows alone were until now. The IFC is larger
-  (the BIM4LCA office as built 87 MB against 68, Snowdon Towers Architectural 189 MB
-  against 37), reading the saved graphics takes 1.1 to 1.9 times the time and 1.4 to
+  (the BIM4LCA office as built from 68 MB to 87 MB, Snowdon Towers Architectural from
+  37 MB to 189 MB), reading the saved graphics takes 1.1 to 1.9 times the time and 1.4 to
   4.4 times the peak memory of 0.17.0 on Autodesk's samples of Revit 2023 to 2027 (the
   BIM4LCA office as built 1.3 and 1.6 times; files of Revit 2015 to 2022 take at most
   2% more time), and a very large file may need more memory than before (#1694). `--no-saved-meshes` in `rvt-ifc` and
@@ -361,8 +361,8 @@ See RE-392, RE-393 and RE-394.
   `--no-saved-meshes` keeps the boxes (#1191).** Doors and windows alone were
   until now, and furniture, fixtures, equipment, MEP devices and the rest took
   `--saved-meshes`. The BIM4LCA office as built draws 11,094 of its 11,247 boxed
-  bodies from their meshes, 672,298 triangles against 257,108, and its IFC is
-  87 MB against 68. **Cost:** reading every box's saved graphics takes 1.1 to 1.9
+  bodies from their meshes, 672,298 triangles against 257,108, and its IFC goes
+  from 68 MB to 87 MB. **Cost:** reading every box's saved graphics takes 1.1 to 1.9
   times the time and 1.4 to 4.4 times the peak memory of 0.17.0 on Autodesk's
   samples of Revit 2023 to 2027 (Measure run 42956917709, the median of three
   exports on one runner per file): the office as built goes from 25.4 s and 914
