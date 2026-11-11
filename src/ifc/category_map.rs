@@ -685,6 +685,23 @@ pub fn space_predefined_type_for(value: &str) -> Option<&'static str> {
 /// and stair's own predefined type as well, which is not measured. An
 /// element exported as either through its value takes the target's
 /// default, the one Revit writes on the elements measured.
+///
+/// #1713 adds four more, each measured on the BIM4LCA office (Revit 2024)
+/// against Revit's export of it: `IfcWall`, whose 607 walls Revit writes
+/// `PARTITIONING` (450), `SOLIDWALL` (96), `SHEAR` (53), `PARAPET` (4),
+/// `PLUMBINGWALL` (2) and `NOTDEFINED` (2); `IfcRamp`, whose 5 are
+/// `STRAIGHT_RUN_RAMP`; `IfcLightFixture`, whose 43 are `SECURITYLIGHTING`;
+/// and `IfcPipeSegment`, whose 12 are `GUTTER`. The value is the element's
+/// own before its type's, as RE-45 reads it: Revit writes two type objects
+/// for the wall type `KS-3`, `SOLIDWALL` and `STANDARD`, and types its 4
+/// `SOLIDWALL` walls by the first and its 2 `NOTDEFINED` ones by the second.
+/// The reason `IfcStair` and `IfcDoor` are not listed does not apply to the
+/// four: their elements are measured, and each class is reached by the rows
+/// of one or two Revit categories (Wall and ArcWall, Ramp, LightingFixture,
+/// Pipe and Gutter). A wall with no value keeps the mapping's `NOTDEFINED`,
+/// which is what Revit writes there; a ramp, light fixture or pipe segment
+/// with none keeps `$`, since Revit writes `NOTDEFINED` on some of them and
+/// no 2027 export of the three is measured.
 const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
     (
         "IFCSLAB",
@@ -811,6 +828,57 @@ const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
             "GRILLE",
             "LOUVRE",
             "REGISTER",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCWALL",
+        &[
+            "MOVABLE",
+            "PARAPET",
+            "PARTITIONING",
+            "PLUMBINGWALL",
+            "SHEAR",
+            "SOLIDWALL",
+            "STANDARD",
+            "POLYGONAL",
+            "ELEMENTEDWALL",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCRAMP",
+        &[
+            "STRAIGHT_RUN_RAMP",
+            "TWO_STRAIGHT_RUN_RAMP",
+            "QUARTER_TURN_RAMP",
+            "TWO_QUARTER_TURN_RAMP",
+            "HALF_TURN_RAMP",
+            "SPIRAL_RAMP",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCLIGHTFIXTURE",
+        &[
+            "POINTSOURCE",
+            "DIRECTIONSOURCE",
+            "SECURITYLIGHTING",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCPIPESEGMENT",
+        &[
+            "CULVERT",
+            "FLEXIBLESEGMENT",
+            "RIGIDSEGMENT",
+            "GUTTER",
+            "SPOOL",
             "USERDEFINED",
             "NOTDEFINED",
         ],
