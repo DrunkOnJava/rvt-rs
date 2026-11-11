@@ -19,8 +19,11 @@ that was the level block of its sketch outline, a railing whose parts are
 instances of other elements, an instance forbidden the targets 10, a turned family
 instance, and the ellipses, curved ruled surfaces and rings that repeat their
 first point in the saved graphics are read now (#1612, #1630, #1635, RE-385,
-RE-389, RE-397, RE-401, RE-408). A railing that belongs to a stair is aggregated
-under it, as Revit's export aggregates it (#1624). A wall's `NetVolume` and side
+RE-389, RE-397, RE-401, RE-408). Reading every box's saved graphics costs 1.1 to 1.9
+times the time and 1.4 to 4.4 times the peak memory of 0.17.0 on Autodesk's samples of
+Revit 2023 to 2027 and makes the IFC larger; `--no-saved-meshes` keeps the boxes (#1694).
+A railing that belongs to a stair is aggregated under it, as Revit's export aggregates
+it (#1624). A wall's `NetVolume` and side
 areas, a mullion's `NetVolume` and `NetSurfaceArea`, a panel's `Width`, a roof's
 `GrossArea` and `GrossVolume`, a sloped floor's `PitchAngle` and the properties of
 an opening are written as Revit's export writes them where the BIM4LCA office
@@ -120,14 +123,14 @@ release adds only its notes, witness files, version strings and help text to the
   in the timber office as built, and 9 and 2 fewer floors, roofs and ceilings in
   the timber office at permit and as built; the layers still drawn are as close
   to Revit's as before.
-- Time and memory, from the timing job of Measure run
+- What costs more, time and memory, from the timing job of Measure run
   [42956917709](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42956917709)
   (`rvt-ifc` built at v0.17.0 and at the source of `main` from #1691 on, each
   file exported three times in turn on one runner, the median kept, with the
   peak resident memory of the export): the 30 samples of Revit 2015 to 2022 take
   1.00 to 1.02 times the time and 1.00 to 1.01 times the peak memory, because
   the pass is not offered there; the 28 samples of Revit 2023 to 2027 take 1.13
-  to 1.85 times the time (median 1.39) and 1.41 to 4.38 times the peak memory
+  to 1.85 times the time (median 1.39) and 1.42 to 4.38 times the peak memory
   (median 1.87), the most for `rac_basic` 2023 (1.9 s and 200 MiB to 3.4 s and
   875 MiB). The BIM4LCA office takes 25.4 s and 914 MiB as built against 33.0 s
   and 1,432 MiB (1.30 and 1.57 times) and 22.5 s and 973 MiB at permit against
