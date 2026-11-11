@@ -233,11 +233,16 @@ fn retain_boundary_points(
     Ok(())
 }
 
-/// How far a chord between two of an edge's samples may leave the curved surface
-/// (feet): a quarter of the 0.001 ft bar the scorers hold meshes to (#1706).
+/// How far the chord between two neighbouring points of a crossing edge may leave
+/// the edge (feet): a quarter of the 0.001 ft bar the scorers hold meshes to (#1706).
 const EDGE_SAGITTA: f64 = 2.5e-4;
-/// The most times a span between two samples is halved.
-const EDGE_REFINEMENT_DEPTH: u32 = 6;
+/// The most times a span between two samples is halved. A halving takes off most of a
+/// chord's deviation (a half, not three quarters, where the point found splits a steep
+/// span unevenly), so a smooth edge settles in a dozen; one still above the bound at
+/// the limit never settles.
+const EDGE_REFINEMENT_DEPTH: u32 = 32;
+/// The most points one edge may be given, so that a hostile file cannot ask for more.
+const EDGE_POINT_BUDGET: usize = 100_000;
 /// How close to the plane (feet) a point solved onto it must lie.
 const EDGE_ON_PLANE: f64 = 1e-9;
 
@@ -277,23 +282,41 @@ fn point_distance(a: [f64; 3], b: [f64; 3]) -> f64 {
     (0..3).map(|k| (a[k] - b[k]).powi(2)).sum::<f64>().sqrt()
 }
 
+/// How far `p` is from the chord `a`-`b`, in space.
+fn distance_to_chord(p: [f64; 3], a: [f64; 3], b: [f64; 3]) -> f64 {
+    let ab: [f64; 3] = std::array::from_fn(|k| b[k] - a[k]);
+    let along = (0..3).map(|k| (p[k] - a[k]) * ab[k]).sum::<f64>();
+    let length = (0..3).map(|k| ab[k] * ab[k]).sum::<f64>();
+    let t = if length > 0. {
+        (along / length).clamp(0., 1.)
+    } else {
+        0.
+    };
+    point_distance(p, std::array::from_fn(|k| a[k] + t * ab[k]))
+}
+
 /// The samples of an edge between a plane and a curved face that runs across both
 /// of the curved face's parameters (a slanted plane through a cylinder: an
 /// ellipse), with the points of the edge itself that keep the chord between
-/// neighbours within [`EDGE_SAGITTA`] of the surface put between them (#1706).
+/// neighbours within [`EDGE_SAGITTA`] of the edge put between them (#1706).
 ///
 /// The samples are the graph's, in the curved face's parameters; `evaluate` is
-/// that surface. Where the chord between two samples leaves the surface by more
-/// than the bound at the middle of their parameters, the point of the surface in
-/// the plane at that middle of the parameter that changes more (the other is
-/// solved for, by Newton's method, until the point is within [`EDGE_ON_PLANE`] of
-/// the plane) is put between them and each half is looked at in turn, to
-/// [`EDGE_REFINEMENT_DEPTH`] halvings. A point that does not reach the plane, or
-/// lies away from the span it should be in, or a span that is still above the
-/// bound after the last halving, is an error: the edge keeps being refused as it
-/// was. The plane's polygon and the cylinder's loop both take this list (less the
-/// points beyond the cylinder's envelope, which both leave out), so their
-/// vertices along the edge are the same.
+/// that surface. Between two samples the parameter that changes more is held at
+/// its middle value and the other is solved for, by Newton's method, until the
+/// point of the surface is within [`EDGE_ON_PLANE`] of the plane: a point of the
+/// edge itself. Where it is farther from the chord than the bound it is put
+/// between the samples and each half is looked at in turn, to
+/// [`EDGE_REFINEMENT_DEPTH`] halvings. The chord is judged against the edge and
+/// not against the surface, which a chord leaves by the surface's own curvature
+/// wherever the strips of the curved face are cut finer than that, and an
+/// interval that holds an extremum of the parameter solved for has the edge
+/// outside the samples' own values on both sides. A point that does not reach the
+/// plane, or lies farther from the middle of the chord than the chord is long (the
+/// other branch of the intersection), or a span that is still above the bound after
+/// the last halving, or more points than [`EDGE_POINT_BUDGET`], is an error: the
+/// edge keeps being refused as it was. The plane's polygon and the cylinder's loop
+/// both take this list (less the points beyond the cylinder's envelope, which both
+/// leave out), so their vertices along the edge are the same.
 fn refine_crossing_edge(
     evaluate: &dyn Fn([f64; 2]) -> Result<[f64; 3]>,
     plane_origin: [f64; 3],
@@ -323,36 +346,29 @@ fn bisect_crossing_edge(
     out: &mut Vec<[f64; 2]>,
 ) -> Result<()> {
     let (point_a, point_b) = (evaluate(a)?, evaluate(b)?);
-    let middle = [(a[0] + b[0]) / 2., (a[1] + b[1]) / 2.];
-    let on_surface = evaluate(middle)?;
-    let chord_middle: [f64; 3] = std::array::from_fn(|k| (point_a[k] + point_b[k]) / 2.);
-    let sagitta = point_distance(on_surface, chord_middle);
-    ensure!(sagitta.is_finite(), "edge refinement left the surface");
-    if sagitta <= EDGE_SAGITTA {
+    let chord = point_distance(point_a, point_b);
+    ensure!(chord.is_finite(), "edge refinement left the surface");
+    // Two samples closer than the bound hold the edge between them within it.
+    if chord <= EDGE_SAGITTA {
         return Ok(());
     }
-    // A halving quarters a chord's sagitta, so six bring one of about a foot to
-    // the bound; a span still above it after the last is not held to the bound,
-    // and the edge is refused rather than drawn coarser than that.
-    ensure!(
-        depth < EDGE_REFINEMENT_DEPTH,
-        "edge refinement is still above the bound after {EDGE_REFINEMENT_DEPTH} halvings"
-    );
-    // The parameter that changes more is the one the edge is followed along; the
-    // other is solved so that the point is in the plane.
-    let free = usize::from((b[0] - a[0]).abs() >= (b[1] - a[1]).abs());
+    let chord_middle: [f64; 3] = std::array::from_fn(|k| (point_a[k] + point_b[k]) / 2.);
+    let middle = [(a[0] + b[0]) / 2., (a[1] + b[1]) / 2.];
+    // The parameter that changes more is held at its middle value and the other is
+    // solved so that the point is in the plane: the point of the edge there.
+    let solved = usize::from((b[0] - a[0]).abs() >= (b[1] - a[1]).abs());
     let along = |x: f64| -> [f64; 2] {
         let mut uv = middle;
-        uv[free] = x;
+        uv[solved] = x;
         uv
     };
     let height = |x: f64| -> Result<f64> { Ok(signed(evaluate(along(x))?)) };
-    let mut x = middle[free];
-    let mut solved = false;
+    let mut x = middle[solved];
+    let mut reached = false;
     for _ in 0..30 {
         let value = height(x)?;
         if value.abs() <= EDGE_ON_PLANE {
-            solved = true;
+            reached = true;
             break;
         }
         let step = 1e-6 * (1. + x.abs());
@@ -364,16 +380,28 @@ fn bisect_crossing_edge(
         x -= value / slope;
         ensure!(x.is_finite(), "edge refinement left the parameters");
     }
-    ensure!(solved, "edge refinement did not reach the plane");
-    // The edge passes between the samples through the middle value of the parameter
-    // that was held, so the value solved for lies between the samples' own; the
-    // other branch of the intersection does not.
-    let (low, high) = (a[free].min(b[free]), a[free].max(b[free]));
+    ensure!(reached, "edge refinement did not reach the plane");
+    let exact = along(x);
+    let point = evaluate(exact)?;
+    // The edge between the samples is no farther from the middle of their chord than
+    // the chord is long; the other branch of the intersection is.
     ensure!(
-        x >= low - 1e-9 && x <= high + 1e-9,
+        point_distance(point, chord_middle) <= chord + 1e-6,
         "edge refinement left its span"
     );
-    let exact = along(x);
+    let deviation = distance_to_chord(point, point_a, point_b);
+    ensure!(deviation.is_finite(), "edge refinement left the surface");
+    if deviation <= EDGE_SAGITTA {
+        return Ok(());
+    }
+    ensure!(
+        depth < EDGE_REFINEMENT_DEPTH,
+        "edge refinement is still above the bound after {EDGE_REFINEMENT_DEPTH} halvings"
+    );
+    ensure!(
+        out.len() < EDGE_POINT_BUDGET,
+        "edge refinement point budget exceeded"
+    );
     bisect_crossing_edge(evaluate, signed, a, exact, depth + 1, out)?;
     out.push(exact);
     bisect_crossing_edge(evaluate, signed, exact, b, depth + 1, out)
@@ -1973,10 +2001,11 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EDGE_SAGITTA, isoparametric_axis, normals_follow_winding, point_distance,
+        EDGE_SAGITTA, distance_to_chord, isoparametric_axis, normals_follow_winding,
         refine_crossing_edge, regions_tile, within_envelope,
     };
     use anyhow::Result;
+    use std::f64::consts::{FRAC_PI_2, PI};
 
     const TOLERANCE: f64 = 1e-7;
 
@@ -2231,97 +2260,195 @@ mod tests {
     fn cylinder(uv: [f64; 2]) -> Result<[f64; 3]> {
         Ok([10. + 2. * uv[0].cos(), 20. + 2. * uv[0].sin(), 5. + uv[1]])
     }
-    // The slanted plane z = 5 + 0.5 (x - 10), by a point and a unit normal.
+    // The same of radius 20.
+    fn wide_cylinder(uv: [f64; 2]) -> Result<[f64; 3]> {
+        Ok([10. + 20. * uv[0].cos(), 20. + 20. * uv[0].sin(), 5. + uv[1]])
+    }
+    // The slanted plane z = 5 + 0.5 (x - 10), by a point and a unit normal: it cuts the
+    // cylinder along v = cos u.
     fn slanted_plane() -> ([f64; 3], [f64; 3]) {
         let length = (0.25f64 + 1.).sqrt();
         ([10., 20., 5.], [-0.5 / length, 0., 1. / length])
     }
-    fn height_over_plane(p: [f64; 3]) -> f64 {
-        let (origin, normal) = slanted_plane();
+    // The plane z = 5 + 3 (x - 10): it cuts the cylinder along v = 6 cos u, which is
+    // steeper in v than in u over half of every turn, so the parameter solved for there is u.
+    fn steep_plane() -> ([f64; 3], [f64; 3]) {
+        let length = 10f64.sqrt();
+        ([10., 20., 5.], [-3. / length, 0., 1. / length])
+    }
+    fn height_over(plane: ([f64; 3], [f64; 3]), p: [f64; 3]) -> f64 {
         (0..3)
-            .map(|k| (p[k] - origin[k]) * normal[k])
+            .map(|k| (p[k] - plane.0[k]) * plane.1[k])
             .sum::<f64>()
             .abs()
     }
-    // The cut of that plane across the cylinder from u = 0 to a quarter turn,
-    // where v = 0.5 * 2 cos u, in `count` samples.
+    // The cut of the slanted plane across the cylinder from u = 0 to a quarter turn, in
+    // `count` samples.
     fn cut(count: usize) -> Vec<[f64; 2]> {
         (0..count)
             .map(|i| {
-                let u = std::f64::consts::FRAC_PI_2 * i as f64 / (count - 1) as f64;
+                let u = FRAC_PI_2 * i as f64 / (count - 1) as f64;
                 [u, u.cos()]
             })
             .collect()
     }
+    // A full turn of a cut of height `scale` cos u in `count` samples, with a phase of
+    // 0.37 so that no sample lands on an extremum of the cut.
+    fn turn(count: usize, scale: f64) -> Vec<[f64; 2]> {
+        (0..count)
+            .map(|i| {
+                let u = 2. * PI * (i as f64 + 0.37) / count as f64;
+                [u, scale * u.cos()]
+            })
+            .collect()
+    }
+    // Every point of the true edge between two refined neighbours (v = scale cos u, taken
+    // from the formula and not the solver) is within the bound of the chord that joins them.
+    fn assert_chords_hold_the_edge(refined: &[[f64; 2]], scale: f64) {
+        for pair in refined.windows(2) {
+            let (a, b) = (cylinder(pair[0]).unwrap(), cylinder(pair[1]).unwrap());
+            for step in 0..=400 {
+                let u = pair[0][0] + (pair[1][0] - pair[0][0]) * step as f64 / 400.;
+                let edge = cylinder([u, scale * u.cos()]).unwrap();
+                assert!(
+                    distance_to_chord(edge, a, b) <= EDGE_SAGITTA * 1.05 + 1e-9,
+                    "{pair:?} at u = {u}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn sparse_samples_of_a_slanted_cut_gain_points_on_the_cut() {
-        let (origin, normal) = slanted_plane();
+        let plane = slanted_plane();
         let coarse = cut(2);
-        let refined = refine_crossing_edge(&cylinder, origin, normal, &coarse).unwrap();
+        let refined = refine_crossing_edge(&cylinder, plane.0, plane.1, &coarse).unwrap();
         assert!(refined.len() > 2);
         for uv in &refined {
-            assert!(height_over_plane(cylinder(*uv).unwrap()) < 1e-8, "{uv:?}");
+            assert!(height_over(plane, cylinder(*uv).unwrap()) < 1e-8, "{uv:?}");
         }
-        // Between every two neighbours the chord is within the bound of the
-        // surface at the middle of their parameters.
-        for pair in refined.windows(2) {
-            let (a, b) = (cylinder(pair[0]).unwrap(), cylinder(pair[1]).unwrap());
-            let middle = cylinder([
-                (pair[0][0] + pair[1][0]) / 2.,
-                (pair[0][1] + pair[1][1]) / 2.,
-            ])
-            .unwrap();
-            let chord: [f64; 3] = std::array::from_fn(|k| (a[k] + b[k]) / 2.);
-            assert!(
-                point_distance(middle, chord) <= EDGE_SAGITTA * 1.0001 + 1e-9,
-                "{pair:?}"
-            );
-        }
+        assert_chords_hold_the_edge(&refined, 1.);
         // The samples the graph gave are kept, first and last.
         assert_eq!(refined[0], coarse[0]);
         assert_eq!(*refined.last().unwrap(), coarse[1]);
     }
 
-    // The same cut on a cylinder of radius 20, where a quarter turn is 5.9 ft off its chord.
-    fn wide_cylinder(uv: [f64; 2]) -> Result<[f64; 3]> {
-        Ok([10. + 20. * uv[0].cos(), 20. + 20. * uv[0].sin(), 5. + uv[1]])
+    #[test]
+    fn samples_already_within_the_bound_gain_nothing() {
+        let plane = slanted_plane();
+        let dense = cut(200);
+        assert_eq!(
+            refine_crossing_edge(&cylinder, plane.0, plane.1, &dense).unwrap(),
+            dense
+        );
+        // Two samples closer than the bound hold the edge between them within it.
+        let near = [[2., 2f64.cos()], [2.0001, 2.0001f64.cos()]];
+        assert_eq!(
+            refine_crossing_edge(&cylinder, plane.0, plane.1, &near).unwrap(),
+            near.to_vec()
+        );
     }
 
     #[test]
-    fn a_span_still_above_the_bound_after_the_last_halving_is_refused() {
-        // Six halvings bring it only to 0.0015 ft, above the bound: the edge is
-        // refused rather than drawn coarser than that.
-        let (origin, normal) = slanted_plane();
-        let samples = [[0., 10.], [std::f64::consts::FRAC_PI_2, 0.]];
-        let error = refine_crossing_edge(&wide_cylinder, origin, normal, &samples).unwrap_err();
-        assert!(format!("{error:#}").contains("halvings"), "{error:#}");
-    }
-
-    #[test]
-    fn a_wide_cylinder_with_samples_close_enough_is_refined_within_the_bound() {
-        let (origin, normal) = slanted_plane();
-        let samples: Vec<[f64; 2]> = (0..8)
-            .map(|i| {
-                let u = std::f64::consts::FRAC_PI_2 * i as f64 / 7.;
-                [u, 10. * u.cos()]
-            })
-            .collect();
-        let refined = refine_crossing_edge(&wide_cylinder, origin, normal, &samples).unwrap();
-        assert!(refined.len() > samples.len());
-        for pair in refined.windows(2) {
-            let (a, b) = (
-                wide_cylinder(pair[0]).unwrap(),
-                wide_cylinder(pair[1]).unwrap(),
-            );
-            let middle = wide_cylinder([
-                (pair[0][0] + pair[1][0]) / 2.,
-                (pair[0][1] + pair[1][1]) / 2.,
-            ])
-            .unwrap();
-            let chord: [f64; 3] = std::array::from_fn(|k| (a[k] + b[k]) / 2.);
-            assert!(point_distance(middle, chord) <= EDGE_SAGITTA * 1.0001 + 1e-9);
+    fn a_turn_sampled_off_its_extrema_is_refined_where_the_edge_bulges_past_its_samples() {
+        // A sample interval that holds the extremum of v has the edge past both its
+        // samples, so the value solved for lies outside theirs: such an interval is the
+        // rule on a closed ellipse, and a range test on that value refused every one.
+        let plane = slanted_plane();
+        for count in [8, 12, 24, 48] {
+            let samples = turn(count, 1.);
+            let refined = refine_crossing_edge(&cylinder, plane.0, plane.1, &samples).unwrap();
+            assert!(refined.len() > samples.len(), "{count}");
+            for uv in &refined {
+                assert!(height_over(plane, cylinder(*uv).unwrap()) < 1e-8, "{uv:?}");
+            }
+            assert_chords_hold_the_edge(&refined, 1.);
         }
+    }
+
+    #[test]
+    fn samples_straddling_an_extremum_gain_the_extremum() {
+        let plane = slanted_plane();
+        let samples = [[-PI / 12., (PI / 12.).cos()], [PI / 12., (PI / 12.).cos()]];
+        let refined = refine_crossing_edge(&cylinder, plane.0, plane.1, &samples).unwrap();
+        assert!(
+            refined
+                .iter()
+                .any(|uv| uv[0].abs() < 1e-9 && (uv[1] - 1.).abs() < 1e-9),
+            "{refined:?}"
+        );
+        assert_chords_hold_the_edge(&refined, 1.);
+    }
+
+    #[test]
+    fn a_steep_cut_is_refined_and_holds_the_edge_where_u_is_the_parameter_solved_for() {
+        let plane = steep_plane();
+        for count in [8, 12, 24] {
+            let samples = turn(count, 6.);
+            let refined = refine_crossing_edge(&cylinder, plane.0, plane.1, &samples)
+                .unwrap_or_else(|error| panic!("{count}: {error:#}"));
+            for uv in &refined {
+                assert!(height_over(plane, cylinder(*uv).unwrap()) < 1e-8, "{uv:?}");
+            }
+            assert_chords_hold_the_edge(&refined, 6.);
+        }
+    }
+
+    #[test]
+    fn a_quarter_turn_of_a_wide_cylinder_in_two_samples_is_refined_to_the_bound() {
+        let plane = slanted_plane();
+        let samples = [[0., 10.], [FRAC_PI_2, 0.]];
+        let refined = refine_crossing_edge(&wide_cylinder, plane.0, plane.1, &samples).unwrap();
+        assert!(refined.len() > 100);
+        for uv in &refined {
+            assert!(
+                height_over(plane, wide_cylinder(*uv).unwrap()) < 1e-8,
+                "{uv:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_point_of_the_plane_far_from_the_span_is_refused() {
+        // The plane z = 100 meets the cylinder, a long way above the cut.
+        let error =
+            refine_crossing_edge(&cylinder, [10., 20., 100.], [0., 0., 1.], &cut(2)).unwrap_err();
+        assert!(format!("{error:#}").contains("left its span"), "{error:#}");
+    }
+
+    #[test]
+    fn an_edge_that_never_settles_is_refused() {
+        // A ripple of a millimetre at a million radians to the unit: no chord of it is
+        // within the bound, however often the span is halved.
+        let plane = slanted_plane();
+        let rippled = |uv: [f64; 2]| -> Result<[f64; 3]> {
+            let mut p = cylinder(uv)?;
+            let ripple = 1e-3 * (1e6 * uv[0]).sin();
+            p[0] += ripple * uv[0].cos();
+            p[1] += ripple * uv[0].sin();
+            Ok(p)
+        };
+        assert!(refine_crossing_edge(&rippled, plane.0, plane.1, &cut(2)).is_err());
+    }
+
+    #[test]
+    fn a_surface_that_gives_no_point_stops_the_refinement() {
+        let plane = slanted_plane();
+        let broken = |uv: [f64; 2]| -> Result<[f64; 3]> {
+            if uv[0] > 0.7 && uv[0] < 0.8 {
+                anyhow::bail!("no point")
+            }
+            cylinder(uv)
+        };
+        assert!(refine_crossing_edge(&broken, plane.0, plane.1, &cut(2)).is_err());
+    }
+
+    #[test]
+    fn one_sample_is_no_edge_and_a_surface_of_no_numbers_is_refused() {
+        let plane = slanted_plane();
+        assert!(refine_crossing_edge(&cylinder, plane.0, plane.1, &cut(2)[..1]).is_err());
+        let nan = |_: [f64; 2]| -> Result<[f64; 3]> { Ok([f64::NAN; 3]) };
+        assert!(refine_crossing_edge(&nan, plane.0, plane.1, &cut(2)).is_err());
     }
 
     #[test]
@@ -2338,44 +2465,6 @@ mod tests {
             ([0., 0.], [1., 1.]),
         );
         assert_eq!(outside, vec![[0., 0.], [2., 2.]]);
-    }
-
-    #[test]
-    fn samples_already_within_the_bound_gain_nothing() {
-        let (origin, normal) = slanted_plane();
-        let dense = cut(200);
-        assert_eq!(
-            refine_crossing_edge(&cylinder, origin, normal, &dense).unwrap(),
-            dense
-        );
-    }
-
-    #[test]
-    fn a_point_of_the_plane_far_from_the_span_is_refused() {
-        // The plane z = 100 meets the cylinder, a long way above the cut.
-        let error =
-            refine_crossing_edge(&cylinder, [10., 20., 100.], [0., 0., 1.], &cut(2)).unwrap_err();
-        assert!(format!("{error:#}").contains("left its span"), "{error:#}");
-    }
-
-    #[test]
-    fn a_surface_that_gives_no_point_stops_the_refinement() {
-        let (origin, normal) = slanted_plane();
-        let broken = |uv: [f64; 2]| -> Result<[f64; 3]> {
-            if uv[0] > 0.7 && uv[0] < 0.8 {
-                anyhow::bail!("no point")
-            }
-            cylinder(uv)
-        };
-        assert!(refine_crossing_edge(&broken, origin, normal, &cut(2)).is_err());
-    }
-
-    #[test]
-    fn one_sample_is_no_edge_and_a_surface_of_no_numbers_is_refused() {
-        let (origin, normal) = slanted_plane();
-        assert!(refine_crossing_edge(&cylinder, origin, normal, &cut(2)[..1]).is_err());
-        let nan = |_: [f64; 2]| -> Result<[f64; 3]> { Ok([f64::NAN; 3]) };
-        assert!(refine_crossing_edge(&nan, origin, normal, &cut(2)).is_err());
     }
 
     #[test]

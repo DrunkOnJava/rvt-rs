@@ -8,7 +8,7 @@
   21, `rac_basic` 3, `rme_advanced` and `rme_basic` 8 each, and `rst_basic`
   9 beams. The edge takes, on the plane's polygon and on the cylinder's loop
   alike, the points of the edge itself that keep its chords within 0.00025 ft
-  of the surface. The 102 of the 126 that are not railings are read against
+  of the edge. The 102 of the 126 that are not railings are read against
   Revit's IFC4 export of the model (local only) and agree: 100 building
   element proxies, a slab and a roof within 1% of Revit's volume, with every
   vertex of each body within 0.001 ft of the other's surface on 101 of them
