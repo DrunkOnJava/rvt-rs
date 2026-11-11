@@ -225,11 +225,36 @@ the four levels a file can reach are in the
   (#1598). The two wall rules rest on one wall each, and no 2015 to 2023 curtain
   wall, curtain part, steel beam, duct or wall `Height` of Autodesk's samples is
   scored against a Revit IFC4 export; the notes say which.
+- **0.18.0, 2026-11-11.** Every element that would be a bounding box is drawn
+  from the mesh Revit saved for it, by default on Revit 2023 to 2027, where all
+  of the mesh decodes: walls, roofs, railings, curtain mullions and panels,
+  columns, doors, windows, furniture, fixtures and equipment (#1191). Roofs that
+  were the level block of their sketch outline, railings made of other
+  elements' instances, instances forbidden the targets 10, turned family
+  instances, and the ellipses, curved ruled surfaces and rings of the saved
+  graphics are read now (#1612, #1630, #1635). More of Revit's own export is
+  written for the bodies drawn: a wall's `NetVolume` and side areas, a
+  mullion's `NetVolume` and `NetSurfaceArea`, a panel's `Width`, a roof's
+  `GrossArea` and `GrossVolume`, a sloped floor's `PitchAngle` and the
+  properties of an opening, measured on the BIM4LCA office and the housing, and
+  a round column no longer carries a square's quantities. A railing that
+  belongs to a stair is aggregated under it (#1624), a wall with an edited
+  elevation profile has the openings Revit's export writes (#1607), four more
+  "Export to IFC As" values are acted on (#1636), every type object has a
+  GlobalId of its own (#1667), and a standalone Revit 2020 family with one
+  revolution exports as an `IfcRevolvedAreaSolid` (#156, experimental). Every
+  record box that stays one says why, on every release (#1645). Reading every
+  box's saved graphics costs 1.1 to 1.9 times the time and 1.4 to 4.4 times the
+  peak memory of 0.17.0 on Autodesk's samples of Revit 2023 to 2027 (#1694), and
+  `--no-saved-meshes` keeps the boxes. No roof, beam, slab, footing or stair
+  flight mesh is scored against Revit's export, a mesh is not always Revit's
+  (doors 675 of 681, walls 14 of 18), and the quantity rules were developed on
+  one project; the notes say which.
 
-### 0.18.0: IFC geometry and element data
+### 0.19.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.17.0, moved from the
-0.17.0 milestone when 0.17.0 shipped. Each
+The geometry and element-data work that continues after 0.18.0, moved from the
+0.18.0 milestone when 0.18.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall

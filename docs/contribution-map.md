@@ -13,7 +13,7 @@ AEC users without overstating current capability.
 | Tests | Add fixture assertions that prevent false-positive decode claims | `tests/project_corpus_smoke.rs`, `tests/walker_to_ifc_integration.rs` |
 | Viewer UX | Make unsupported-file states clearer and accessible | `viewer/`, [`docs/viewer-privacy-posture.md`](viewer-privacy-posture.md) |
 
-## Open Remainders (as of 2026-11-09)
+## Open Remainders (as of 2026-11-11)
 
 The issue tracker is the source of truth; this is its state today, by
 milestone, with each issue's own title. Pick one rather than re-opening a
@@ -21,11 +21,12 @@ solved carrier: the reports under `reports/element-framing/` say what each
 negative result ruled out, and [`ROADMAP.md`](../ROADMAP.md) says what each
 milestone is for.
 
-### 0.18.0: IFC geometry and element data
+### 0.19.0: IFC geometry and element data
 
 | Issue | Remainder |
 |---|---|
-| [#1612](https://github.com/DrunkOnJava/rvt-rs/issues/1612) | Revit 2023 to 2025: roofs drawn as their sketch outline's level block are not drawn from their saved meshes, so one project's saves disagree |
+| [#1694](https://github.com/DrunkOnJava/rvt-rs/issues/1694) | Default saved meshes: after #1691 the peak memory is still 1.4 to 4.4 times 0.17.0's on Revit 2023 to 2027 files; where the rest sits |
+| [#1635](https://github.com/DrunkOnJava/rvt-rs/issues/1635) | Railings are written as record boxes, about a thousand times Revit's volume, and now sit inside their stairs |
 | [#1603](https://github.com/DrunkOnJava/rvt-rs/issues/1603) | Revit 2015 to 2023: family instances' materials: 70 windows and 14 railings lack Revit's, the default material is written on 72 elements Revit gives none (Vitoria) |
 | [#1589](https://github.com/DrunkOnJava/rvt-rs/issues/1589) | research(rooms): read the height a room's area is taken at, so stepped rooms get their section's outline (follow-up of #90, RE-374) |
 | [#1584](https://github.com/DrunkOnJava/rvt-rs/issues/1584) | Revit 2015 to 2023 walls: a record's control joins read empty, so Length, side areas, footprint, volumes and angled walls' line bodies stay out (RE-364 section 6, from #1535) |
@@ -38,7 +39,6 @@ milestone is for.
 | [#1479](https://github.com/DrunkOnJava/rvt-rs/issues/1479) | Roofs by extrusion are solids only on Revit 2025: read them on 2024, 2026 and 2027, held to the 2025 save |
 | [#1478](https://github.com/DrunkOnJava/rvt-rs/issues/1478) | Walls under a read roof: cut along its sloped underside, as Revit does (RE-351 follow-up) |
 | [#1474](https://github.com/DrunkOnJava/rvt-rs/issues/1474) | Walls 2056705 and 2056770: Revit cuts their ends back above 182.087 ft and steps them, and neither office file draws that |
-| [#1473](https://github.com/DrunkOnJava/rvt-rs/issues/1473) | A profile-edited wall's sloped top stops at the profile's end: a 0.41 ft stub stays flat, 0.65 ft too high |
 | [#1427](https://github.com/DrunkOnJava/rvt-rs/issues/1427) | Semantic check: recalibrate on real pull requests, and settle fails that noise can cross (#1334 follow-up) |
 | [#1407](https://github.com/DrunkOnJava/rvt-rs/issues/1407) | Wall 2177212: its saved mesh is 0.114 ft shorter than Revit's IFC body (RE-340 follow-up) |
 | [#1357](https://github.com/DrunkOnJava/rvt-rs/issues/1357) | Doors and windows: decode hand flip and facing flip |
@@ -74,7 +74,8 @@ The requirements these serve, each with its bar, status and evidence, are in
 
 | Issue | Remainder |
 |---|---|
-| [#1594](https://github.com/DrunkOnJava/rvt-rs/issues/1594) | research(ifc): a plate type's Tag is an instance's ElementId in Revit's export; rvt-rs writes the type's (follow-up of #1520, RE-367) |
+| [#1693](https://github.com/DrunkOnJava/rvt-rs/issues/1693) | W7: beams' base quantities: rvt-rs writes Length on the beams drawn along their line and none of the other six, on 300 beams of the BIM4LCA files |
+| [#1636](https://github.com/DrunkOnJava/rvt-rs/issues/1636) | List the shipped rules that rest on one project, and the second model that could test each |
 | [#1565](https://github.com/DrunkOnJava/rvt-rs/issues/1565) | W5: a sealed registry for fresh held-out pairs, read only by the final 1.0 check |
 | [#1444](https://github.com/DrunkOnJava/rvt-rs/issues/1444) | rvt-rs reads no reinforcing bars or element assemblies |
 | [#1209](https://github.com/DrunkOnJava/rvt-rs/issues/1209) | W7: coverings' GrossArea on ceilings in pieces and cut ceilings, and the roofing coverings (RE-297) |
