@@ -1125,6 +1125,46 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
             None => break,
         }
     }
+    let (vertices, triangles) = match plane_mesh(&loops, orient, origin, x, y) {
+        Err(error) if error.to_string().starts_with(AREA_MISMATCH) => {
+            // The outline of two lobes that touch at a vertex is one ring that visits
+            // it twice, which earcut covers a sliver beside (#1732): split, once.
+            match split_pinched_rings(&loops) {
+                Some(split) => plane_mesh(&split, orient, origin, x, y).map_err(|_| error)?,
+                None => return Err(error),
+            }
+        }
+        other => other?,
+    };
+    let vertex_count = vertices.len();
+    Ok(Some(FaceMesh {
+        face_index: fi,
+        face_tag: f.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1),
+        render_style_id: crate::native_metadata::identifier(&f.fields["m_renderStyleId"])
+            .context("render style id")?,
+        vertices,
+        triangles,
+        normal,
+        normals: vec![normal; vertex_count],
+        analytic_surface: None,
+        trim_uv: Vec::new(),
+    }))
+}
+
+/// The text a planar face is refused with when its triangles do not add up to its rings' area.
+const AREA_MISMATCH: &str = "triangulated area mismatch";
+
+/// The vertices on the plane (`origin + u x + v y`) and the triangles of a planar face's
+/// rings `loops`, in the plane's own coordinates: every ring at an even nesting depth is
+/// an outer ring and the rings one level in are its holes. The triangles must add up to
+/// the area the rings enclose.
+fn plane_mesh(
+    loops: &[Vec<[f64; 2]>],
+    orient: bool,
+    origin: [f64; 3],
+    x: [f64; 3],
+    y: [f64; 3],
+) -> Result<(Vec<[f64; 3]>, Vec<[u32; 3]>)> {
     // A face can contain multiple disconnected outer rings, with nested holes.
     let depths: Vec<_> = loops
         .iter()
@@ -1208,7 +1248,7 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
         }
         ensure!(
             (sum - expected).abs() <= 1e-7 * expected.max(1.),
-            "triangulated area mismatch: {sum} vs {expected}"
+            "{AREA_MISMATCH}: {sum} vs {expected}"
         );
         for uv in pts {
             vertices.push(std::array::from_fn(|k| {
@@ -1219,19 +1259,48 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
     if triangles.is_empty() {
         bail!("no bounded triangles")
     }
-    let vertex_count = vertices.len();
-    Ok(Some(FaceMesh {
-        face_index: fi,
-        face_tag: f.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1),
-        render_style_id: crate::native_metadata::identifier(&f.fields["m_renderStyleId"])
-            .context("render style id")?,
-        vertices,
-        triangles,
-        normal,
-        normals: vec![normal; vertex_count],
-        analytic_surface: None,
-        trim_uv: Vec::new(),
-    }))
+    Ok((vertices, triangles))
+}
+
+/// The rings of `loops` with each that visits a vertex twice split there into the rings
+/// it is made of (the outline of two lobes that touch at a vertex is one such ring), or
+/// `None` when no ring does. A ring of two points has no area and is dropped; a ring
+/// that starts at the shared vertex is turned to start at the next, so that the nesting
+/// test does not read the point where two rings touch (#1732).
+fn split_pinched_rings(loops: &[Vec<[f64; 2]>]) -> Option<Vec<Vec<[f64; 2]>>> {
+    let mut out = Vec::new();
+    let mut split_any = false;
+    for ring in loops {
+        let mut pending = vec![ring.clone()];
+        while let Some(mut ring) = pending.pop() {
+            ring.dedup_by(|a, b| close(*a, *b));
+            while ring.len() > 1 && close(ring[0], ring[ring.len() - 1]) {
+                ring.pop();
+            }
+            let twice = (0..ring.len()).find_map(|i| {
+                (i + 1..ring.len())
+                    .find(|j| close(ring[i], ring[*j]))
+                    .map(|j| (i, j))
+            });
+            let Some((i, j)) = twice else {
+                if ring.len() >= 3 {
+                    out.push(ring);
+                }
+                continue;
+            };
+            split_any = true;
+            let mut lobe = ring[i..j].to_vec();
+            lobe.rotate_left(1);
+            let mut rest = ring[..i].to_vec();
+            rest.extend_from_slice(&ring[j..]);
+            if i == 0 {
+                rest.rotate_left(1);
+            }
+            pending.push(lobe);
+            pending.push(rest);
+        }
+    }
+    split_any.then_some(out)
 }
 
 /// Tessellate one Face whose saved surface is a bounded cylindrical surface.
@@ -2023,8 +2092,9 @@ fn transform(p: &mut Primitive, m: [[f64; 4]; 4]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EDGE_SAGITTA, EdgeLimits, distance_to_chord, isoparametric_axis, normals_follow_winding,
-        refine_crossing_edge, refine_crossing_edge_within, regions_tile, within_envelope,
+        EDGE_SAGITTA, EdgeLimits, area, distance_to_chord, isoparametric_axis,
+        normals_follow_winding, refine_crossing_edge, refine_crossing_edge_within, regions_tile,
+        split_pinched_rings, within_envelope,
     };
     use anyhow::Result;
     use std::f64::consts::{FRAC_PI_2, PI};
@@ -2518,5 +2588,90 @@ mod tests {
         assert_eq!(isoparametric_axis(&[[0., 1.], [0.5, 1.1], [2., 1.]]), None);
         assert_eq!(isoparametric_axis(&[[0., 1.]]), None);
         assert_eq!(isoparametric_axis(&[]), None);
+    }
+
+    // Two triangles that touch at the crown (1, 1), visited as one ring: the shape of the
+    // outline of the Snowdon sink face of #1732, whose points 10 and 21 are one point.
+    fn lobes() -> Vec<[f64; 2]> {
+        vec![[0., 1.], [0., 0.], [1., 1.], [2., 0.], [2., 1.], [1., 1.]]
+    }
+
+    fn total_area(rings: &[Vec<[f64; 2]>]) -> f64 {
+        rings.iter().map(|ring| area(ring).abs()).sum()
+    }
+
+    #[test]
+    fn a_ring_that_visits_no_vertex_twice_is_not_split() {
+        let square = vec![[0., 0.], [1., 0.], [1., 1.], [0., 1.]];
+        assert!(split_pinched_rings(std::slice::from_ref(&square)).is_none());
+        // Repeating the first point to close the ring, or a point twice in a row, is no pinch.
+        let closed = vec![[0., 0.], [1., 0.], [1., 1.], [0., 1.], [0., 0.]];
+        assert!(split_pinched_rings(&[closed]).is_none());
+        let doubled = vec![[0., 0.], [1., 0.], [1., 0.], [1., 1.], [0., 1.]];
+        assert!(split_pinched_rings(&[doubled]).is_none());
+        assert!(split_pinched_rings(&[]).is_none());
+    }
+
+    #[test]
+    fn two_lobes_touching_at_a_vertex_become_two_rings_that_do_not_start_there() {
+        let rings = split_pinched_rings(&[lobes()]).unwrap();
+        assert_eq!(rings.len(), 2);
+        assert!(rings.iter().all(|ring| ring.len() >= 3));
+        // Neither starts at the crown, where the nesting test would read a boundary point.
+        assert!(rings.iter().all(|ring| ring[0] != [1., 1.]));
+        // The lobes' areas are the whole ring's.
+        assert!((total_area(&rings) - area(&lobes()).abs()).abs() < 1e-12);
+        assert!((total_area(&rings) - 1.).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_ring_that_starts_at_the_shared_vertex_is_split_too() {
+        let ring = vec![[1., 1.], [0., 1.], [0., 0.], [1., 1.], [2., 0.], [2., 1.]];
+        let rings = split_pinched_rings(&[ring]).unwrap();
+        assert_eq!(rings.len(), 2);
+        assert!(
+            rings
+                .iter()
+                .all(|ring| ring.len() >= 3 && ring[0] != [1., 1.])
+        );
+        assert!((total_area(&rings) - 1.).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_spike_out_and_back_leaves_the_ring_without_it() {
+        let ring = vec![[0., 0.], [2., 0.], [2., 2.], [3., 2.], [2., 2.], [0., 2.]];
+        let rings = split_pinched_rings(&[ring]).unwrap();
+        assert_eq!(rings.len(), 1);
+        assert_eq!(rings[0].len(), 4);
+        assert!((total_area(&rings) - 4.).abs() < 1e-12);
+    }
+
+    #[test]
+    fn three_lobes_at_one_vertex_become_three_rings() {
+        let ring = vec![
+            [0., 0.],
+            [1., 0.],
+            [1., 1.],
+            [0., 0.],
+            [-1., 0.],
+            [-1., -1.],
+            [0., 0.],
+            [0., 1.],
+            [-1., 1.],
+        ];
+        let rings = split_pinched_rings(&[ring.clone()]).unwrap();
+        assert_eq!(rings.len(), 3);
+        assert!(
+            rings
+                .iter()
+                .all(|ring| ring.len() == 3 && ring[0] != [0., 0.])
+        );
+        assert!((total_area(&rings) - area(&ring).abs()).abs() < 1e-12);
+        assert!((total_area(&rings) - 1.5).abs() < 1e-12);
+        // Rings that do not pinch pass through beside one that does.
+        let square = vec![[5., 5.], [6., 5.], [6., 6.], [5., 6.]];
+        let both = split_pinched_rings(&[square.clone(), lobes()]).unwrap();
+        assert_eq!(both.len(), 3);
+        assert!(both.contains(&square));
     }
 }
