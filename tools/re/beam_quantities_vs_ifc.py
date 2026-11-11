@@ -209,6 +209,10 @@ def equals(m, quantity, value, profile=None):
     return tuple(found)
 
 
+def ours_has_length(values):
+    return values["Length"] is not None
+
+
 def prism_axes(triangles):
     """Every axis the body is a prism along (at most two of its planes are not parallel to it), longest extent
     first, as (axis, extent, kinds of its two ends)."""
@@ -231,6 +235,14 @@ def prism_axes(triangles):
         if len(ends) <= 2:
             out.append((axis, float(np.ptp(points @ axis)), tuple(ends)))
     return sorted(out, key=lambda a: -a[1])
+
+
+def long_extent(triangles):
+    """The extent of the body along its long axis (the first principal axis of its vertices), in metres."""
+    points = triangles.reshape(-1, 3)
+    centred = points - points.mean(axis=0)
+    _, _, vt = np.linalg.svd(centred, full_matrices=False)
+    return float(np.ptp(points @ vt[0]))
 
 
 def axis_rule(axes, depth):
@@ -274,7 +286,7 @@ def main():
     if not both:
         return 0
     kinds, written, rules, bodies = collections.Counter(), collections.Counter(), collections.Counter(), collections.Counter()
-    choice = collections.Counter()
+    choice, lengths, ratios = collections.Counter(), collections.Counter(), []
     odd = []
     for tag in both:
         r, profile, rb = read(settings, revit[tag], revit_scale)
@@ -291,6 +303,12 @@ def main():
         triangles = mesh(settings, revit[tag])
         axes = prism_axes(triangles) if triangles is not None else []
         choice[(run, axis_rule(axes, depth))] += 1
+        if triangles is not None and r["Length"]:
+            long = long_extent(triangles)
+            same = close(long, r["Length"])
+            lengths[(run, "Length is the body's extent along its long axis" if same else "Length differs from it", "rvt-rs writes it" if ours_has_length(o) else "rvt-rs writes none")] += 1
+            if not same:
+                ratios.append(r["Length"] / long)
         for name in QUANTITIES:
             if r[name] is None:
                 continue
@@ -313,6 +331,12 @@ def main():
     print("Revit's extrusion axis among the axes its body is a prism along (extrusion, (rank by extent, how many axes, the rule)):")
     for key, count in choice.most_common():
         print(f"  {count:5}  {key}")
+    print("Revit's Length against the extent of its own body along its long axis (extrusion, which, whether rvt-rs writes a Length):")
+    for key, count in lengths.most_common():
+        print(f"  {count:5}  {key}")
+    if ratios:
+        ratios.sort()
+        print(f"  where it differs, Revit's Length over the long extent: min {ratios[0]:.6g}, median {ratios[len(ratios) // 2]:.6g}, max {ratios[-1]:.6g}")
     print("rvt-rs's body against Revit's (extrusion, ends of Revit's body, rvt-rs's body source):")
     for key, count in bodies.most_common():
         print(f"  {count:5}  {key}")
