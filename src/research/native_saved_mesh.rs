@@ -1125,6 +1125,18 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
             None => break,
         }
     }
+    {
+        // Scratch diagnostic, not for main (#1748): the most points any planar face holds.
+        static MAX_POINTS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let total: usize = loops.iter().map(Vec::len).sum();
+        if total > MAX_POINTS.fetch_max(total, std::sync::atomic::Ordering::Relaxed) {
+            eprintln!(
+                "PLANARMAX face={fi} points={total} loops={} longest={}",
+                loops.len(),
+                loops.iter().map(Vec::len).max().unwrap_or(0)
+            );
+        }
+    }
     let (vertices, triangles) = match plane_mesh(&loops, orient, origin, x, y) {
         Err(error) if error.to_string().starts_with(AREA_MISMATCH) => {
             // The outline of two lobes that touch at a vertex is one ring that visits
