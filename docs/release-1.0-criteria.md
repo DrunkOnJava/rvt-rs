@@ -229,7 +229,7 @@ The held-out and BIMcollab runs keep quantity counts only, so no property census
 Most instance and type parameters are not ([#35](https://github.com/DrunkOnJava/rvt-rs/issues/35),
 [#155](https://github.com/DrunkOnJava/rvt-rs/issues/155),
 the 0.19.0 milestone)
-Open: windows' `Pset_WindowCommon.FireRating`, whose R2025 values sit under family-parameter ids ([#1507](https://github.com/DrunkOnJava/rvt-rs/issues/1507)), the office's one type-object value Revit's export omits, `Pset_SanitaryTerminalTypeCommon.Reference` ([#792](https://github.com/DrunkOnJava/rvt-rs/issues/792)),
+Open: windows' `Pset_WindowCommon.FireRating`, whose R2025 values sit under the family parameters named `Fire Rating`, which rvt-rs now reads ([#1507](https://github.com/DrunkOnJava/rvt-rs/issues/1507)), the office's one type-object value Revit's export omits, `Pset_SanitaryTerminalTypeCommon.Reference` ([#792](https://github.com/DrunkOnJava/rvt-rs/issues/792)),
 a plate type's `Tag`, which rvt-rs writes as the type's ElementId where Revit's export writes an instance's ([#1594](https://github.com/DrunkOnJava/rvt-rs/issues/1594)),
 the round column's `CrossSectionArea`, `GrossVolume` and `NetVolume`, which are not the circle's (RE-416 takes the square's out of 24 round columns of `rac_advanced`, where Revit's export holds none to score them against), and the one meshed column a cut wall touches (RE-353, [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203)),
 and the remaining values with no rule yet ([#1193](https://github.com/DrunkOnJava/rvt-rs/issues/1193)).
