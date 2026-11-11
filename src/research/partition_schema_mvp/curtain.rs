@@ -100,6 +100,17 @@ pub(super) fn attach_mullion_plain_hosts(rf: &mut RevitFile, products: &mut [Dec
         .filter(|element| element.class == "CurtainWallMullion")
         .filter_map(|element| Some(u64::from(element.id?)))
         .collect();
+    // RE-418: the pass that draws a mullion from its saved mesh takes its length
+    // along the axis its record runs it along, whatever its host.
+    let axes: BTreeMap<u32, [f64; 3]> = products
+        .iter()
+        .filter(|element| element.class == "CurtainWallMullion")
+        .filter_map(|element| {
+            let mullion = mullion_box(element, 0)?;
+            Some((mullion.id, mullion.axes[mullion.along?]))
+        })
+        .collect();
+    rf.remember_mullion_axes(axes);
     let Ok(found) = crate::native_mullion_hosts::mullion_hosts(rf, &mullions) else {
         return;
     };

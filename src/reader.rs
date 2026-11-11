@@ -242,6 +242,10 @@ pub struct RevitFile {
     /// (RE-268), set when the partition's mullions are read, for the pass that
     /// draws their bodies from saved meshes (RE-404).
     mullion_kept_ends: Option<Arc<BTreeMap<u32, u8>>>,
+    /// The unit axis each curtain mullion runs along, in the model's frame, by
+    /// ElementId, set when the partition's mullions are read, for the pass that
+    /// draws them from saved meshes (RE-418).
+    mullion_axes: Option<Arc<BTreeMap<u32, [f64; 3]>>>,
     /// Memoised `Formats/Latest` classes: a dozen partition readers each
     /// read and parsed the schema again for a few class tags.
     schema_classes_memo: Option<Arc<crate::formats::SchemaClasses>>,
@@ -510,6 +514,7 @@ impl RevitFile {
             native_definitions: None,
             native_record_index: None,
             mullion_kept_ends: None,
+            mullion_axes: None,
             schema_classes_memo: None,
             layout_release_memo: None,
             material_names: std::collections::HashMap::new(),
@@ -1033,6 +1038,17 @@ impl RevitFile {
     /// mullions were not read.
     pub(crate) fn mullion_kept_ends(&self) -> Option<Arc<BTreeMap<u32, u8>>> {
         self.mullion_kept_ends.clone()
+    }
+
+    /// Keep the axis each curtain mullion runs along (RE-226, RE-418).
+    pub(crate) fn remember_mullion_axes(&mut self, axes: BTreeMap<u32, [f64; 3]>) {
+        self.mullion_axes = Some(Arc::new(axes));
+    }
+
+    /// The axis each curtain mullion runs along ([`Self::remember_mullion_axes`]),
+    /// or none where the partition's mullions were not read.
+    pub(crate) fn mullion_axes(&self) -> Option<Arc<BTreeMap<u32, [f64; 3]>>> {
+        self.mullion_axes.clone()
     }
 
     /// Keep the record index a native pass recorded (#1032).

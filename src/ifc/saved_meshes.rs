@@ -60,8 +60,8 @@ use super::export_content::{
     SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use super::mesh_volume::{
-    Prism, all_faces_flat, box_plan_width, closed_mesh_volume, mullion_surface_area, own_prism,
-    prisms,
+    MESH_LENGTH_REACH, Placed, Prism, all_faces_flat, box_plan_width, closed_mesh_volume,
+    mullion_surface_area, partner_ends, prism_along,
 };
 use super::mesh_wall_quantities::{WallMeshQuantities, wall_mesh_quantities};
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
@@ -380,8 +380,10 @@ pub fn attach_scoped_with_control(
     };
     // RE-387: the volume of each body drawn from a mesh of flat faces.
     let mut volumes: Vec<(usize, f64)> = Vec::new();
-    // RE-418, RE-404: each curtain member's mesh read as a prism.
+    // RE-418, RE-404: each curtain mullion's mesh read as a prism along its own axis.
     let mut members: Vec<MemberMesh> = Vec::new();
+    // RE-418: the axis each curtain mullion runs along, by ElementId, in the model's frame.
+    let mullion_axes = rf.mullion_axes();
     // RE-404: the end faces each curtain mullion's solid keeps, by ElementId.
     let kept_ends = rf.mullion_kept_ends();
     // RE-416: the volume of each column's mesh, whatever its faces.
@@ -466,10 +468,43 @@ pub fn attach_scoped_with_control(
                 .eq_ignore_ascii_case("IFCCOLUMN")
                 .then(|| oriented_mesh_volume(primitives, *origin))
                 .flatten();
-            let member_prisms = ifc_type
-                .eq_ignore_ascii_case("IFCMEMBER")
-                .then(|| prisms(&vertices, &triangles))
-                .filter(|found| !found.is_empty());
+            // RE-418: the mullion's own axis, from its record, turned into the
+            // element's frame as its mesh is.
+            let member = volume
+                .filter(|_| ifc_type.eq_ignore_ascii_case("IFCMEMBER"))
+                .and_then(|_| {
+                    let id = u32::try_from(element.identity.element_id).ok()?;
+                    let axis = *mullion_axes.as_deref()?.get(&id)?;
+                    let turn = (*rotation_radians).unwrap_or(0.0);
+                    let (sin, cos) = (-turn).sin_cos();
+                    let local = [
+                        axis[0] * cos - axis[1] * sin,
+                        axis[0] * sin + axis[1] * cos,
+                        axis[2],
+                    ];
+                    let prism = prism_along(&vertices, &triangles, local)?;
+                    // The end faces' centres in the model's frame, where mullions
+                    // are compared with one another.
+                    let (sin, cos) = turn.sin_cos();
+                    let world = |p: [f64; 3]| {
+                        [
+                            origin[0] + p[0] * cos - p[1] * sin,
+                            origin[1] + p[0] * sin + p[1] * cos,
+                            origin[2] + p[2],
+                        ]
+                    };
+                    let placed = Placed {
+                        axis,
+                        ends: prism.ends.map(|end| world(end.centre)),
+                    };
+                    let kept = kept_ends.as_deref().and_then(|kept| kept.get(&id).copied());
+                    Some(MemberMesh {
+                        index: *index,
+                        kept,
+                        prism,
+                        placed,
+                    })
+                });
             report.replaced += 1;
             report.triangles += triangles.len();
             *solid_shape = Some(SolidShape::TriangulatedFaceSet {
@@ -478,16 +513,9 @@ pub fn attach_scoped_with_control(
             });
             if let Some(volume) = volume {
                 volumes.push((*index, volume));
-                if let Some(found) = member_prisms {
-                    members.push(MemberMesh {
-                        index: *index,
-                        kept: kept_ends
-                            .as_deref()
-                            .zip(u32::try_from(element.identity.element_id).ok())
-                            .and_then(|(kept, id)| kept.get(&id).copied()),
-                        prisms: found,
-                    });
-                }
+            }
+            if let Some(member) = member {
+                members.push(member);
             }
             if let Some(volume) = column_volume {
                 column_volumes.push((*index, volume));
@@ -664,9 +692,9 @@ fn add_mesh_volumes(
     if volumes.is_empty() {
         return moved;
     }
-    let by_index: BTreeMap<usize, &[Prism]> = members
+    let extents: BTreeMap<usize, f64> = members
         .iter()
-        .map(|member| (member.index, member.prisms.as_slice()))
+        .map(|member| (member.index, member.prism.extent))
         .collect();
     let mut held: BTreeMap<(usize, String), usize> = BTreeMap::new();
     for (position, entity) in model.entities.iter().enumerate() {
@@ -702,8 +730,8 @@ fn add_mesh_volumes(
                         }
                     }
                     if set_name == "Qto_MemberBaseQuantities" {
-                        let found = by_index.get(&index).copied().unwrap_or_default();
-                        if let Some(length) = follow_mesh_over_box(set, volume, found) {
+                        let extent = extents.get(&index).copied();
+                        if let Some(length) = follow_mesh_over_box(set, volume, extent) {
                             moved.push((index, length));
                         }
                     }
@@ -744,11 +772,15 @@ const MESH_LENGTH_MOVES_FEET: f64 = 1e-4;
 /// neighbours leave, is not Revit's, so it is left out (RE-403). Its `Length` is
 /// the extent of the mesh along its own axis (RE-418): Revit's `Length` is the
 /// extent of its own body, which the saved mesh is, and a box that overruns the
-/// solid gives a longer one. The mullion's own prism is the one of `found` whose
-/// extent is within `MESH_LENGTH_REACH` of the box's `Length`, and where there
-/// are several, or none, the written `Length` stays. Returns the new `Length`,
-/// where there is one.
-fn follow_mesh_over_box(set: &mut PropertySet, mesh_volume: f64, found: &[Prism]) -> Option<f64> {
+/// solid gives a longer one. `extent` is that of the mesh along the mullion's own
+/// axis, where it is a prism along it ([`prism_along`]); it replaces the `Length`
+/// where it is within `MESH_LENGTH_REACH` of it, and otherwise the written
+/// `Length` stays. Returns the new `Length`, where there is one.
+fn follow_mesh_over_box(
+    set: &mut PropertySet,
+    mesh_volume: f64,
+    extent: Option<f64>,
+) -> Option<f64> {
     if !(mesh_volume.is_finite() && mesh_volume > 0.0) {
         return None;
     }
@@ -776,24 +808,27 @@ fn follow_mesh_over_box(set: &mut PropertySet, mesh_volume: f64, found: &[Prism]
     let PropertyValue::PositiveLengthFeet(written) = &mut length.value else {
         return None;
     };
-    let extent = own_prism(found, *written)?.extent;
-    if (extent - *written).abs() <= MESH_LENGTH_MOVES_FEET {
+    let extent = extent?;
+    let off = (extent - *written).abs();
+    if off > MESH_LENGTH_REACH * *written || off <= MESH_LENGTH_MOVES_FEET {
         return None;
     }
     *written = extent;
     Some(extent)
 }
 
-/// A curtain member drawn from its saved mesh, closed and of flat faces, read as a
-/// prism (RE-418, RE-404).
+/// A curtain mullion drawn from its saved mesh, closed and of flat faces, read as
+/// a prism along its own axis (RE-418, RE-404).
 struct MemberMesh {
-    /// The member's index into the entities.
+    /// The mullion's index into the entities.
     index: usize,
     /// How many of its two end faces its Revit solid keeps, where its curtain
     /// wall's boxes say (RE-268).
     kept: Option<u8>,
-    /// The ways the mesh is a prism ([`prisms`]).
-    prisms: Vec<Prism>,
+    /// The mesh as a prism along the mullion's axis.
+    prism: Prism,
+    /// Where its two end faces are, in the model's frame.
+    placed: Placed,
 }
 
 /// Give each curtain mullion of `members` that holds no `NetSurfaceArea` the one
@@ -804,7 +839,10 @@ struct MemberMesh {
 /// curtain wall, which is read for a mullion on any host, where the box's own
 /// `NetSurfaceArea` is written only for one on a plain host. A mullion whose
 /// box gave a `NetSurfaceArea` that its mesh did not contradict (RE-403) keeps
-/// it.
+/// it. Where a mullion has a partner at an end that `kept` counts, the count
+/// misses a continuation on another curtain wall, and the mullion gets none:
+/// `kept` must leave every end with a partner (`partner_ends`) among the ends it
+/// does not count.
 fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
     let mut held: BTreeMap<usize, usize> = BTreeMap::new();
     for (position, entity) in model.entities.iter().enumerate() {
@@ -814,10 +852,16 @@ fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
             }
         }
     }
-    for member in members {
+    let placed: Vec<Placed> = members.iter().map(|member| member.placed).collect();
+    let partners = partner_ends(&placed);
+    for (member, partners) in members.iter().zip(partners) {
         let (Some(kept), Some(&position)) = (member.kept, held.get(&member.index)) else {
             continue;
         };
+        let with_partner = partners.iter().filter(|partner| **partner).count();
+        if with_partner > usize::from(2 - kept.min(2)) {
+            continue;
+        }
         let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
         else {
             continue;
@@ -825,19 +869,7 @@ fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
         if has_property(set, "NetSurfaceArea") {
             continue;
         }
-        let length = set
-            .properties
-            .iter()
-            .find_map(|property| match &property.value {
-                PropertyValue::PositiveLengthFeet(length) if property.name == "Length" => {
-                    Some(*length)
-                }
-                _ => None,
-            });
-        let Some(area) = length
-            .and_then(|length| own_prism(&member.prisms, length))
-            .and_then(|prism| mullion_surface_area(prism, kept))
-        else {
+        let Some(area) = mullion_surface_area(&member.prism, kept) else {
             continue;
         };
         set.properties.push(Property {

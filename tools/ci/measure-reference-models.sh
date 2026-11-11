@@ -510,7 +510,7 @@ model_task() { # name rvt ref task
       # BIMcollab or rac_advanced ones, nor a model added later).
       dump=()
       case "$name" in
-        core-interior | einhoven | re1-* | nordic-office-as-built | nordic-office-permit | nordic-office-terrain-* | nordic-office-timber-* | r2025-*)
+        core-interior | einhoven | re1-* | nordic-housing-* | nordic-office-as-built | nordic-office-permit | nordic-office-terrain-* | nordic-office-timber-* | r2025-*)
           dump=(--dump "$dir/mcp-dump.json")
           ;;
       esac
