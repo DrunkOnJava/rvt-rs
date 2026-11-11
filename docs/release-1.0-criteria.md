@@ -103,7 +103,7 @@ railings' `Height` and `Reference`, including where their type holds two names (
 level slabs' `PitchAngle` (RE-238) and the sloped floors' drawn along their shape-edited plane (RE-384),
 pipes' `InvertElevation` (RE-157),
 storeys' `Reference` and `EntranceLevel` (RE-275),
-the `FireExit` and the `Qto_OpeningElementBaseQuantities.Depth` of each opening a door cuts in a second wall, its door's and the extent it is extruded across that wall by (RE-386, RE-338),
+the `FireExit` and the `Qto_OpeningElementBaseQuantities.Depth` and `Height` of each opening a door cuts in a second wall, its door's, the extent it is extruded across that wall by and its outline's height (RE-386, RE-338),
 stairs' `TreadLengthAtInnerSide` and, with `--revit-set-placement`, their `Pset_StairFlightCommon` from their flights (RE-287, [#1186](https://github.com/DrunkOnJava/rvt-rs/issues/1186)),
 stair flights' treads,
 tread lengths,
