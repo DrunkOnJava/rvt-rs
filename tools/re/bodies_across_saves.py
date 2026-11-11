@@ -147,7 +147,10 @@ READERS_YEAR = 2025
 # head 3149973f), and outlines by group. rac_advanced's 8 beams RE-328 drew as boxes
 # along their lines are IfcBeams drawn from their saved meshes since #1191 made the
 # saved mesh the default of every class: 8 on every save of 2025 to 2027 (Measure
-# run 42638677373, the 2025 and 2026 saves).
+# run 42638677373, the 2025 and 2026 saves). rst_basic's 9 beams RE-328 drew as boxes
+# along their lines (`partition_beam_box_along_axis`) stayed boxes because a plane met a
+# cylinder in each along an edge across both its parameters (#1706); that edge is meshed
+# now and they are IfcBeams drawn from their saved meshes, 9 on every save of 2025 to 2027.
 MINIMUMS = {
     "racadvancedsampleproject": {
         BEAMS_AND_LANDINGS: {
@@ -158,7 +161,7 @@ MINIMUMS = {
         STAIR_RUNS: {"partition_stair_run_sketch": 10},
     },
     "rstbasicsampleproject": {
-        BEAMS_AND_LANDINGS: {"partition_beam_axis": 345, "partition_beam_box_along_axis": 9},
+        BEAMS_AND_LANDINGS: {"partition_beam_axis": 345, SAVED_MESH: 9},
         STAIR_RUNS: {"partition_stair_run_sketch": 1},
     },
     "racbasicsampleproject": {STAIR_RUNS: {"partition_stair_run_sketch": 2}},
