@@ -521,6 +521,16 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
 /// of each (`ELEVATOR`). Each takes its own predefined type where it is an
 /// enumerator of the entity ([`override_predefined_type_for`] for the last
 /// two).
+///
+/// #1772 adds `IfcGeographicElement`, which 9 furniture, 9 planting, 3
+/// specialty equipment and 2 floor elements of the BIM4LCA housing terrain
+/// model measured carry, and which Revit's export writes as that entity. Its
+/// `PredefinedType` is the element's own or its type's "IFC Predefined Type"
+/// where that is an `IfcGeographicElementTypeEnum` enumerator (`USERDEFINED`
+/// on 20 of the 23, `NOTDEFINED` on 3). It is limited to those four classes
+/// ([`lookup_export_override_for`]), and an element of one of them that
+/// carries no such value is written with `$`: what Revit writes for one is
+/// not measured.
 pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
     Mapping {
         revit_class: "IfcShadingDevice",
@@ -597,6 +607,11 @@ pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
         ifc_type: "IFCTRANSPORTELEMENT",
         predefined_type: Some("NOTDEFINED"),
     },
+    Mapping {
+        revit_class: "IfcGeographicElement",
+        ifc_type: "IFCGEOGRAPHICELEMENT",
+        predefined_type: None,
+    },
 ];
 
 /// The Revit classes an [`EXPORT_OVERRIDE_TARGETS`] value is acted on for,
@@ -610,6 +625,10 @@ const OVERRIDE_CLASS_LIMITS: &[(&str, &[&str])] = &[
     ("IfcFurniture", &["GenericModel"]),
     ("IfcSolarDevice", &["Roof"]),
     ("IfcTransportElement", &["SpecialtyEquipment"]),
+    (
+        "IfcGeographicElement",
+        &["Floor", "Furniture", "Planting", "SpecialtyEquipment"],
+    ),
 ];
 
 /// [`lookup_export_override`] for an element of `revit_class`: `None` where
@@ -847,7 +866,8 @@ pub fn export_value_is_space(value: &str, revit_class: &str) -> bool {
 
 /// IFC4 `PredefinedType` enumerators of the entities an element reaches
 /// only through its "Export to IFC As" value (RE-417): `IfcSolarDeviceTypeEnum`
-/// and `IfcTransportElementTypeEnum`. They are not in
+/// and `IfcTransportElementTypeEnum`, and `IfcGeographicElementTypeEnum`
+/// (#1772). They are not in
 /// [`PREDEFINED_TYPE_ENUMERATORS`], which would apply the own predefined type of
 /// any element a category maps to them as well, and none is. (`IfcFurniture`,
 /// first here, is in it since RE-419, which measured its own predefined type
@@ -868,6 +888,10 @@ const OVERRIDE_ONLY_ENUMERATORS: &[(&str, &[&str])] = &[
             "USERDEFINED",
             "NOTDEFINED",
         ],
+    ),
+    (
+        "IFCGEOGRAPHICELEMENT",
+        &["TERRAIN", "USERDEFINED", "NOTDEFINED"],
     ),
 ];
 
