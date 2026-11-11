@@ -402,11 +402,35 @@ jobs:
                   shards += [shard("samples-" + years.replace(" ", "-"), models="-",
                                    samples=True, years=years)
                              for years in ("2008 2023", "2024 2099")]
+              # The held-out models and racadv-* are never cached (RE-252, #1354), so
+              # each is measured in full on every run, and as one shard each they
+              # set the length of the run: 770 and 899 seconds on the head side of
+              # run 42980660819, where a shard whose steps hit the cache takes 3 to
+              # 5 minutes. Each is cut in three, by name; a model that matches
+              # neither of the first two held-out shards, or the first two racadv
+              # ones, falls into the third, so a model added to a list is measured
+              # whatever its name.
               if flag("HOLDOUT"):
                   # The held-out fetch brings the spent pairs too.
-                  shards.append(shard("held-out", models="holdout-* spent-*", holdout=True))
+                  shards += [
+                      shard("held-out-offices", models="holdout-rvt-holdout-office-*",
+                            holdout=True),
+                      shard("held-out-rvt", models="holdout-rvt-holdout-[0-9]*",
+                            holdout=True),
+                      shard("held-out", models="holdout-* spent-*",
+                            skip="holdout-rvt-holdout-office-* holdout-rvt-holdout-[0-9]*",
+                            holdout=True),
+                  ]
               if flag("RACADV"):
-                  shards.append(shard("racadv", models="racadv-*", racadv=True))
+                  shards += [
+                      shard("racadv-2015-2016", models="racadv-2015 racadv-2016",
+                            racadv=True),
+                      shard("racadv-2017-2018", models="racadv-2017 racadv-2018",
+                            racadv=True),
+                      shard("racadv", models="racadv-*",
+                            skip="racadv-2015 racadv-2016 racadv-2017 racadv-2018",
+                            racadv=True),
+                  ]
               skip = " ".join(offices.values()) if flag("NORDIC") else ""
               shards.append(shard("rest", skip=skip, **dict(rest, holdout=False, racadv=False)))
           sides = ["head", "base"] if base else ["head"]
