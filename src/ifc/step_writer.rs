@@ -3713,7 +3713,9 @@ impl StepWriter<'_> {
             // rectangles, which Revit's export gives no `Area` on. A notched
             // outline is what is measured; a quadrilateral that is not a
             // rectangle, and every other kind of unfilled opening, stay
-            // without.
+            // without. So does an outline with a corner that is not a right
+            // angle: an arc of the sketch is chords there, whose polygon is
+            // short of the area Revit takes from the curves themselves.
             if number.is_none() && base_quantities_written {
                 let corners = outline_feet
                     .iter()
@@ -3727,7 +3729,10 @@ impl StepWriter<'_> {
                     .sum::<f64>()
                     .abs()
                     / 2.0;
-                if corners > 4 && area > 0.0 {
+                if corners > 4
+                    && area > 0.0
+                    && super::export_content::every_corner_square(outline_feet)
+                {
                     let quantities = PropertySet {
                         name: "Qto_OpeningElementBaseQuantities".into(),
                         properties: vec![super::entities::Property {
