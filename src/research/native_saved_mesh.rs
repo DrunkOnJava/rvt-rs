@@ -38,7 +38,7 @@ pub struct CylinderTessellationProfile {
 impl Default for CylinderTessellationProfile {
     fn default() -> Self {
         Self {
-            chord_error: 0.001,
+            chord_error: 0.005,
             max_v_edge: 1.0,
         }
     }
@@ -256,7 +256,7 @@ fn retain_boundary_points_within(
 
 /// How far the chord between two neighbouring points of a crossing edge may leave
 /// the edge (feet): a quarter of the 0.001 ft bar the scorers hold meshes to (#1706).
-const EDGE_SAGITTA: f64 = 2.5e-4;
+const EDGE_SAGITTA: f64 = 1.25e-03;
 /// The most times a span between two samples is halved. A halving takes off most of a
 /// chord's deviation (a half, not three quarters, where the point found splits a steep
 /// span unevenly), so a smooth edge settles in a dozen; one still above the bound at
