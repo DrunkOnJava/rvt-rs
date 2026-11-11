@@ -39,6 +39,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from saved_meshes_vs_ifc import body_sources  # noqa: E402
 
 LISTED = 6
+ODD = 30
 TOLERANCE = 1e-5
 # The thresholds of src/ifc/mesh_volume.rs's prism_extents, which this mirrors, in metres.
 MIN_TWICE_AREA = 1.8e-12
@@ -227,6 +228,8 @@ def main():
         return 0
     lengths, areas, own = collections.Counter(), collections.Counter(), collections.Counter()
     tally, rows, listed = collections.Counter(), [], collections.Counter()
+    overruns = []
+    bodies, odd = collections.Counter(), []
     for tag in both:
         o, ma = read(settings, ours[tag], ours_scale)
         r, mb = read(settings, revit[tag], revit_scale)
@@ -239,8 +242,15 @@ def main():
             before = word(close(o["Length"], r["Length"]) and close(o["Span"], r["Span"]))
             after = word(close(ma["extent"], r["Length"]) and close(ma["extent"], r["Span"]))
             lengths[(ma["ends"], before + " to " + after)] += 1
+            if before == "different" and after == "equal":
+                overruns.append((o["Length"], r["Length"]))
             written = "absent" if o["NetSurfaceArea"] is None else word(close(o["NetSurfaceArea"], r["NetSurfaceArea"]))
             areas[(ma["ends"], "written " + written, "Revit: " + " | ".join(decompose(ma, r["NetSurfaceArea"])), "ours: " + " | ".join(decompose(ma, o["NetSurfaceArea"])))] += 1
+            same = mb is not None and close(ma["extent"], mb["extent"]) and close(ma["area"], mb["area"]) and close(ma["volume"], mb["volume"])
+            whole = bool(decompose(ma, r["NetSurfaceArea"]))
+            bodies[(ma["ends"], "our body is Revit's" if same else "our body differs", "Revit's NetSurfaceArea is lateral + whole ends" if whole else "not", written)] += 1
+            if not whole and r["NetSurfaceArea"] is not None and len(odd) < ODD:
+                odd.append((tag, src, o, r, ma, mb, revit[tag].Name))
         if mb is not None:
             own[("Revit's Length is its body's extent" if close(r["Length"], mb["extent"]) else "not", ma is not None and close(ma["extent"], mb["extent"]) and close(ma["area"], mb["area"]))] += 1
         kind = (diff, ma["ends"] if ma else None)
@@ -265,9 +275,28 @@ def main():
     print("RE-418, Length and Span from the extent of our body along its axis (ends of our body, written to rule):")
     for key, count in lengths.most_common():
         print(f"  {count:6}  {key}")
+    if overruns:
+        over = [written - revit for written, revit in overruns]
+        share = [(written - revit) / revit for written, revit in overruns]
+        print(
+            f"  the rule moves {len(overruns)} mullions: written minus Revit's Length {min(over):.6g} to {max(over):.6g} m, "
+            f"{min(share):.2%} to {max(share):.2%} of it (Revit's Length {min(r for _, r in overruns):.6g} to {max(r for _, r in overruns):.6g} m)"
+        )
     print("RE-404, Revit's NetSurfaceArea as our body's faces (ends of our body, the written one, what Revit's is, what ours is):")
     for key, count in areas.most_common():
         print(f"  {count:6}  {key}")
+    print("our body against Revit's, and whether Revit's NetSurfaceArea is the body's lateral area and a whole number of its flat ends (ends, body, NetSurfaceArea, written):")
+    for key, count in bodies.most_common():
+        print(f"  {count:6}  {key}")
+    print(f"the first {len(odd)} mullions whose Revit NetSurfaceArea is not the lateral area and a whole number of flat ends:")
+    for tag, src, o, r, ma, mb, name in odd:
+        name = (name or "-").split(":")[1] if ":" in (name or "") else (name or "-")
+        print(f"  mullion {tag} {name!r} src {src} NetSurfaceArea ours {fmt(o['NetSurfaceArea'])} revit {fmt(r['NetSurfaceArea'])} NetVolume ours {fmt(o['NetVolume'])} revit {fmt(r['NetVolume'])} Length ours {fmt(o['Length'])} revit {fmt(r['Length'])}")
+        for label, m in (("ours", ma), ("revit", mb)):
+            if m:
+                print(f"      {label} body: ends {'+'.join(m['ends'])} extent {m['extent']:.6g} area {m['area']:.6g} lateral {m['lateral']:.6g} flat {m['flat']:.6g} mitre {m['mitre']:.6g} volume {m['volume']:.6g} triangles {m['triangles']}")
+            else:
+                print(f"      {label} body: no prism axis near the Length")
     print("Revit's own Length against its body (Length is the extent of its body, our body is the same shape and area):")
     for key, count in own.most_common():
         print(f"  {count:6}  {key}")
