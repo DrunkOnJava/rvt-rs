@@ -3940,10 +3940,11 @@ fn add_stair_flight_quantities(
 /// written only where the two are the same (Griffin, 2026-10-26, RE-252).
 /// Nothing where the thickness is not read.
 /// Add a curtain wall's `Qto_CurtainWallQuantities.Length` to `sets`: its
-/// curve's length ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]), which
-/// revit-ifc's `LengthCalculator` takes from the wall's location curve
-/// (CLEANROOM.md source 5): on all 218 of the BIM4LCA office's straight
-/// curtain walls, as built and at permit (#1016). Nothing on a curved one.
+/// location curve's length ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]),
+/// which revit-ifc's `LengthCalculator` takes from the wall's location curve
+/// (CLEANROOM.md source 5): on all 218 of the BIM4LCA office's curtain walls
+/// whose record holds a straight location curve, as built and at permit
+/// (#1016). Nothing on a curved one, whose location curve is an arc.
 fn add_curtain_wall_length(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     use crate::partition_schema_mvp as mvp;
     if ifc_type != "IFCCURTAINWALL" || decoded.class != mvp::CURTAIN_WALL_CLASS {
