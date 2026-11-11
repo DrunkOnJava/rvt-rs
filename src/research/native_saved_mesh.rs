@@ -2662,7 +2662,7 @@ mod tests {
             [0., 1.],
             [-1., 1.],
         ];
-        let rings = split_pinched_rings(&[ring.clone()]).unwrap();
+        let rings = split_pinched_rings(std::slice::from_ref(&ring)).unwrap();
         assert_eq!(rings.len(), 3);
         assert!(
             rings
