@@ -33,12 +33,22 @@ pub struct FaceGrid {
     pub surface: ParametricSurface,
     pub u: Vec<f64>,
     pub v: Vec<f64>,
+    /// The points of every trim loop, edge after edge: the knots' source.
     pub trim: Vec<[f64; 2]>,
     pub bounds: [[f64; 2]; 2],
+    /// Whether the face's one trim loop is the rectangle `bounds`, so that the grid's
+    /// cells are the face's; then `loops` is empty.
+    pub rectangular: bool,
+    /// Where it is not, each trim loop as a closed polygon in the surface's
+    /// parameters (the first is the outer one, the others holes), its last point not
+    /// repeated; the face is the part of the grid inside them (#1706).
+    pub loops: Vec<Vec<[f64; 2]>>,
 }
 
-// Only complete rectangular boundaries (including analytic collapsed poles)
-// are accepted. Merely lying on the rectangle's perimeter is insufficient.
+// A face whose trim is the complete rectangle of its parameters (including analytic
+// collapsed poles) is meshed on its grid; merely lying on the rectangle's perimeter
+// is insufficient. Any other trim, or several loops, is cut into the grid's cells
+// (`trimmed_cells`, #1706).
 //
 // The component comes back with whether `main`'s guard, which refused one with
 // an edge naming fewer than two faces anywhere in it, would have refused it:
@@ -131,23 +141,20 @@ fn ruled_surface_component(
     Ok((component, refused_before))
 }
 
-/// The grid the face at `fi` is meshed on, or why it is not meshed (a trim that
-/// is not a complete rectangle, a ruled face whose neighbours the graph does not
-/// resolve, a surface that is not read).
-pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
-    use crate::native_parametric_surface::Curve;
+/// The most trim loops a face may hold.
+const MAX_TRIM_LOOPS: usize = 64;
+
+/// The samples of each edge of the loop at `li` of the face `fi`, edge by edge, in the
+/// face's parameters and clamped to the surface's envelope `env`. A loop has at least
+/// `least` edges.
+fn loop_segments(
+    g: &ObjectGraph,
+    fi: usize,
+    li: usize,
+    env: [[f64; 2]; 2],
+    least: usize,
+) -> Result<Vec<Vec<[f64; 2]>>> {
     use crate::native_saved_mesh::pointer;
-    let f = g.objects.get(fi).context("face index")?;
-    ensure!(f.class_name == "Face", "not Face");
-    ensure!(
-        f.fields["m_faceRegions"]
-            .as_array()
-            .is_some_and(Vec::is_empty),
-        "face regions need subdivision"
-    );
-    let si = pointer(g, fi, &f.fields["m_pSurf"])?.context("face surface")?;
-    let surface = ParametricSurface::read(g, si)?;
-    let li = pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?;
     let l = &g.objects[li];
     ensure!(
         ["EdgeLoop", "EdgeLoopWithChainEnvelopes"].contains(&l.class_name.as_str()),
@@ -157,10 +164,6 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     ensure!(
         pointer(g, li, &l.fields["m_pFace"])? == Some(fi),
         "loop owner mismatch"
-    );
-    ensure!(
-        pointer(g, li, &l.fields["m_nextLoop"])?.is_none(),
-        "multiple parametric trim loops unsupported"
     );
     let mut cur = pointer(g, li, &l.fields["m_next"])?.context("empty trim")?;
     let mut seen = std::collections::BTreeSet::new();
@@ -194,12 +197,11 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         segments.push(points);
         cur = pointer(g, cur, &e.fields["m_next"][side])?.context("null trim next")?;
     }
-    ensure!(segments.len() >= 2, "too few parametric edges");
+    ensure!(segments.len() >= least, "too few parametric edges");
     ensure!(
         segments.iter().all(|s: &Vec<_>| !s.is_empty()),
         "empty parametric edge"
     );
-    let env = surface.bounds();
     for segment in &mut segments {
         for p in segment {
             for k in 0..2 {
@@ -211,7 +213,12 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             }
         }
     }
-    let mut closes = false;
+    Ok(segments)
+}
+
+/// Whether the edges of a loop join end to end in model coordinates, either way
+/// round, and close.
+fn loop_closes(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Result<bool> {
     for reverse in [false, true] {
         let first = if reverse {
             *segments[0].last().unwrap()
@@ -243,20 +250,24 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 surface.evaluate(last[0], last[1])?,
             ) < 1e-7
         {
-            closes = true;
-            break;
+            return Ok(true);
         }
     }
-    ensure!(closes, "disconnected parametric trim in model coordinates");
-    let trim = segments.iter().flatten().copied().collect::<Vec<_>>();
-    let min = std::array::from_fn(|k| trim.iter().map(|p| p[k]).fold(f64::INFINITY, f64::min));
-    let max = std::array::from_fn(|k| trim.iter().map(|p| p[k]).fold(f64::NEG_INFINITY, f64::max));
-    ensure!(
-        max[0] > min[0] && max[1] > min[1],
-        "degenerate parametric domain"
-    );
+    Ok(false)
+}
+
+/// Whether the one loop of a face is the rectangle `min`..`max` of its own
+/// parameters: every edge along one of its sides, and the sides covered whole (a
+/// revolution's side may collapse to a pole). `Ok(false)` where an edge crosses
+/// the rectangle; an error where edges lie on the sides and do not cover them.
+fn trim_is_rectangle(
+    surface: &ParametricSurface,
+    segments: &[Vec<[f64; 2]>],
+    min: [f64; 2],
+    max: [f64; 2],
+) -> Result<bool> {
     let mut sides: [Vec<[f64; 2]>; 4] = std::array::from_fn(|_| Vec::new());
-    for seg in &segments {
+    for seg in segments {
         for pair in seg.windows(2) {
             let a = pair[0];
             let b = pair[1];
@@ -272,7 +283,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             } else if (a[0] - min[0]).abs() < 1e-7 && (b[0] - min[0]).abs() < 1e-7 {
                 (3, 1)
             } else {
-                anyhow::bail!("nonrectangular parametric trim");
+                return Ok(false);
             };
             sides[side].push([a[axis].min(b[axis]), a[axis].max(b[axis])]);
         }
@@ -307,6 +318,118 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         }
         ensure!((end - max[axis]).abs() < 1e-7, "incomplete trim perimeter");
     }
+    Ok(true)
+}
+
+/// A loop as a closed polygon in the surface's parameters: each edge's samples in the
+/// direction that continues the one before, and the last point (the first again)
+/// dropped. A join that meets in model coordinates but not in the parameters (the
+/// seam of a revolution, a pole) is refused.
+fn loop_polygon(surface: &ParametricSurface, segments: &[Vec<[f64; 2]>]) -> Result<Vec<[f64; 2]>> {
+    let same =
+        |a: [f64; 2], b: [f64; 2]| (a[0] - b[0]).abs() <= 1e-9 && (a[1] - b[1]).abs() <= 1e-9;
+    for reverse in [false, true] {
+        let mut ring: Vec<[f64; 2]> = if reverse {
+            segments[0].iter().rev().copied().collect()
+        } else {
+            segments[0].clone()
+        };
+        let mut joined = true;
+        for seg in &segments[1..] {
+            let last = *ring.last().unwrap();
+            let p = surface.evaluate(last[0], last[1])?;
+            let (a, b) = (seg[0], *seg.last().unwrap());
+            if distance(p, surface.evaluate(a[0], a[1])?) < 1e-7 {
+                if !same(last, a) {
+                    joined = false;
+                    break;
+                }
+                ring.extend(seg.iter().skip(1).copied());
+            } else if distance(p, surface.evaluate(b[0], b[1])?) < 1e-7 {
+                if !same(last, b) {
+                    joined = false;
+                    break;
+                }
+                ring.extend(seg.iter().rev().skip(1).copied());
+            } else {
+                joined = false;
+                break;
+            }
+        }
+        if !joined {
+            continue;
+        }
+        let (first, last) = (ring[0], *ring.last().unwrap());
+        if same(first, last)
+            && distance(
+                surface.evaluate(first[0], first[1])?,
+                surface.evaluate(last[0], last[1])?,
+            ) < 1e-7
+        {
+            ring.pop();
+            ensure!(ring.len() >= 3, "a trim loop needs three points");
+            return Ok(ring);
+        }
+    }
+    anyhow::bail!("a trim loop does not close in the surface's parameters")
+}
+
+/// The grid the face at `fi` is meshed on, or why it is not meshed (a trim loop
+/// that does not close, a ruled face whose neighbours the graph does not resolve,
+/// a surface that is not read). A face whose one loop is the rectangle of its
+/// parameters is meshed on the grid; any other loop, or several, is cut into its
+/// cells.
+pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
+    use crate::native_parametric_surface::Curve;
+    use crate::native_saved_mesh::pointer;
+    let f = g.objects.get(fi).context("face index")?;
+    ensure!(f.class_name == "Face", "not Face");
+    ensure!(
+        f.fields["m_faceRegions"]
+            .as_array()
+            .is_some_and(Vec::is_empty),
+        "face regions need subdivision"
+    );
+    let si = pointer(g, fi, &f.fields["m_pSurf"])?.context("face surface")?;
+    let surface = ParametricSurface::read(g, si)?;
+    let env = surface.bounds();
+    // Every loop of the face, the first the outer one: [loop][edge][sample] in the
+    // surface's parameters.
+    let mut loops: Vec<Vec<Vec<[f64; 2]>>> = Vec::new();
+    let mut seen_loops = std::collections::BTreeSet::new();
+    let mut next = Some(pointer(g, fi, &f.fields["m_pFirstLoop"])?.context("face loop")?);
+    while let Some(li) = next {
+        ensure!(seen_loops.insert(li), "trim loop cycle");
+        ensure!(loops.len() < MAX_TRIM_LOOPS, "too many trim loops");
+        let segments = loop_segments(g, fi, li, env, if loops.is_empty() { 2 } else { 1 })?;
+        ensure!(
+            loop_closes(&surface, &segments)?,
+            "disconnected parametric trim in model coordinates"
+        );
+        loops.push(segments);
+        next = pointer(g, li, &g.objects[li].fields["m_nextLoop"])?;
+    }
+    let trim = loops
+        .iter()
+        .flatten()
+        .flatten()
+        .copied()
+        .collect::<Vec<_>>();
+    let min = std::array::from_fn(|k| trim.iter().map(|p| p[k]).fold(f64::INFINITY, f64::min));
+    let max = std::array::from_fn(|k| trim.iter().map(|p| p[k]).fold(f64::NEG_INFINITY, f64::max));
+    ensure!(
+        max[0] > min[0] && max[1] > min[1],
+        "degenerate parametric domain"
+    );
+    let rectangular = loops.len() == 1 && trim_is_rectangle(&surface, &loops[0], min, max)?;
+    let polygons = if rectangular {
+        Vec::new()
+    } else {
+        loops
+            .iter()
+            .map(|segments| loop_polygon(&surface, segments))
+            .collect::<Result<Vec<_>>>()?
+    };
     const CHORD: f64 = 0.001;
     let length = |p: [f64; 3]| p.iter().map(|x| x * x).sum::<f64>().sqrt();
     let angular = |r: f64| {
@@ -501,6 +624,8 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         surface,
         trim,
         bounds: [min, max],
+        rectangular,
+        loops: polygons,
     })
 }
 
@@ -508,14 +633,26 @@ pub fn face(g: &ObjectGraph, fi: usize) -> Result<FaceMesh> {
     let grid = face_grid(g, fi)?;
     let f = &g.objects[fi];
     let flags = f.fields["m_faceFlags_v9"].as_u64().context("face flags")?;
-    let mesh = tessellate_uv(
-        &grid.surface,
-        &grid.u,
-        &grid.v,
-        grid.bounds,
-        flags & 2 == 0,
-        2_000_000,
-    )?;
+    let orient = flags & 2 == 0;
+    let mesh = if grid.rectangular {
+        tessellate_uv(
+            &grid.surface,
+            &grid.u,
+            &grid.v,
+            grid.bounds,
+            orient,
+            2_000_000,
+        )?
+    } else {
+        tessellate_trimmed(
+            &grid.surface,
+            &grid.loops,
+            &grid.u,
+            &grid.v,
+            orient,
+            2_000_000,
+        )?
+    };
     Ok(FaceMesh {
         face_index: fi,
         face_tag: f.fields["m_GInfo"]["m_tag"].as_i64().unwrap_or(-1),
@@ -661,31 +798,16 @@ pub fn tessellate_uv(
             let b = a + 1;
             let c = ((j + 1) * stride + i + 1) as u32;
             let d = ((j + 1) * stride + i) as u32;
-            let area = |x: u32, y: u32, z: u32| {
-                let p = vertices[x as usize];
-                let q = vertices[y as usize];
-                let r = vertices[z as usize];
-                let u = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
-                let v = [r[0] - p[0], r[1] - p[1], r[2] - p[2]];
-                (u[1] * v[2] - u[2] * v[1])
-                    .hypot((u[2] * v[0] - u[0] * v[2]).hypot(u[0] * v[1] - u[1] * v[0]))
-            };
-            let collapsed = |x: u32, y: u32| {
-                let p = vertices[x as usize];
-                let q = vertices[y as usize];
-                let d = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
-                d[0] * d[0] + d[1] * d[1] + d[2] * d[2] <= 1e-20
-            };
             let add_triangle =
                 |x: u32, y: u32, z: u32, triangles: &mut Vec<[u32; 3]>| -> Result<()> {
-                    let triangle_area = area(x, y, z);
-                    if triangle_area <= 1e-12 {
-                        ensure!(
-                            collapsed(x, y) || collapsed(y, z) || collapsed(z, x),
-                            "noncollapsed degenerate parametric triangle"
-                        );
-                    } else {
-                        triangles.push(if winding { [x, y, z] } else { [x, z, y] });
+                    match keep_triangle(
+                        vertices[x as usize],
+                        vertices[y as usize],
+                        vertices[z as usize],
+                    ) {
+                        Some(true) => triangles.push(if winding { [x, y, z] } else { [x, z, y] }),
+                        Some(false) => {}
+                        None => anyhow::bail!("noncollapsed degenerate parametric triangle"),
                     }
                     Ok(())
                 };
@@ -702,4 +824,598 @@ pub fn tessellate_uv(
         normals,
         triangles,
     })
+}
+
+/// How long (feet) the longest edge of a triangle with no area may be for it to be
+/// dust. The knots of a face's grid and those of its trim loops can lie a few
+/// millionths of a unit apart, and the cell between two such knots is a sliver of
+/// the surface: the ones the 2023 and 2024 samples and the BIM4LCA offices hold
+/// have no edge over 3e-5 ft. A tenth of the 0.001 ft the scorers compare vertices
+/// at: the crack that dropping such a triangle leaves is narrower than that.
+const DUST_EDGE: f64 = 1e-4;
+/// How short (feet) an edge is to count as collapsed: its two vertices are one
+/// point. A pole is exact, but two parameters that differ by less than the 1e-9 at
+/// which two knots are one can still be two vertices (the rounding that numbers
+/// them falls between), and on a surface of up to 10 ft to the unit they lie up to
+/// 1e-8 ft apart: the ones the 2023 and 2024 samples hold are 1.0e-10 and 6.6e-10.
+const COLLAPSED_EDGE: f64 = 1e-8;
+
+/// Whether a triangle of a face's cells is kept: `Some(true)` it has area,
+/// `Some(false)` it has none and nothing to lose (an edge collapsed at a pole, or
+/// dust), `None` it has none and an edge longer than dust, a needle, which cells of
+/// a sound surface and trim never hold and the face is refused for.
+fn keep_triangle(p: [f64; 3], q: [f64; 3], r: [f64; 3]) -> Option<bool> {
+    let u = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
+    let v = [r[0] - p[0], r[1] - p[1], r[2] - p[2]];
+    let area = (u[1] * v[2] - u[2] * v[1])
+        .hypot((u[2] * v[0] - u[0] * v[2]).hypot(u[0] * v[1] - u[1] * v[0]));
+    if !area.is_finite() {
+        return None;
+    }
+    if area > 1e-12 {
+        return Some(true);
+    }
+    let square = |x: [f64; 3], y: [f64; 3]| {
+        let d = [y[0] - x[0], y[1] - x[1], y[2] - x[2]];
+        d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
+    };
+    let edges = [square(p, q), square(q, r), square(r, p)];
+    let shortest = edges.iter().copied().fold(f64::INFINITY, f64::min);
+    let longest = edges.iter().copied().fold(0.0, f64::max);
+    (shortest <= COLLAPSED_EDGE * COLLAPSED_EDGE || longest <= DUST_EDGE * DUST_EDGE)
+        .then_some(false)
+}
+
+/// How close (in parameter units) a trim point must be to a knot, and two parameters
+/// to be one.
+const KNOT_TOLERANCE: f64 = 1e-9;
+/// Work a hostile file can ask of `trimmed_cells`: strips times trim segments.
+const STRIP_BUDGET: usize = 20_000_000;
+/// The most triangles a trimmed face may come to.
+const TRIANGLE_BUDGET: usize = 4_000_000;
+
+/// The points of a trimmed face in (u, v) and its triangles, by their indices.
+type Cells = (Vec<[f64; 2]>, Vec<[u32; 3]>);
+
+/// One trim segment, oriented so that `u0 < u1`.
+#[derive(Clone, Copy)]
+struct Segment {
+    u0: f64,
+    v0: f64,
+    u1: f64,
+    v1: f64,
+}
+
+impl Segment {
+    /// Where the segment is at `u`, exactly at its ends.
+    fn at(&self, u: f64) -> f64 {
+        if (u - self.u0).abs() <= KNOT_TOLERANCE {
+            self.v0
+        } else if (u - self.u1).abs() <= KNOT_TOLERANCE {
+            self.v1
+        } else {
+            self.v0 + (u - self.u0) * (self.v1 - self.v0) / (self.u1 - self.u0)
+        }
+    }
+}
+
+fn on_knots(knots: &[f64], x: f64) -> bool {
+    let i = knots.partition_point(|k| *k < x - KNOT_TOLERANCE);
+    knots
+        .get(i)
+        .is_some_and(|k| (*k - x).abs() <= KNOT_TOLERANCE)
+}
+
+/// The part of the convex polygon `ring` on one side of `v = at`: `v >= at` where
+/// `lower`, else `v <= at` (Sutherland-Hodgman against one line).
+fn clip_v(ring: &[[f64; 2]], at: f64, lower: bool) -> Vec<[f64; 2]> {
+    let keep = |p: [f64; 2]| if lower { p[1] >= at } else { p[1] <= at };
+    let mut out = Vec::new();
+    for (&a, &b) in ring
+        .iter()
+        .zip(ring.iter().cycle().skip(1))
+        .take(ring.len())
+    {
+        if keep(a) {
+            out.push(a);
+        }
+        if keep(a) != keep(b) {
+            let t = (at - a[1]) / (b[1] - a[1]);
+            out.push([a[0] + t * (b[0] - a[0]), at]);
+        }
+    }
+    out
+}
+
+/// The signed area of a polygon.
+fn polygon_area(ring: &[[f64; 2]]) -> f64 {
+    ring.iter()
+        .zip(ring.iter().cycle().skip(1))
+        .take(ring.len())
+        .map(|(a, b)| (a[0] * b[1] - b[0] * a[1]) / 2.0)
+        .sum()
+}
+
+/// Whether `p` is inside `ring` (even-odd).
+fn inside_polygon(ring: &[[f64; 2]], p: [f64; 2]) -> bool {
+    let mut odd = false;
+    for (&a, &b) in ring
+        .iter()
+        .zip(ring.iter().cycle().skip(1))
+        .take(ring.len())
+    {
+        if (a[1] > p[1]) != (b[1] > p[1])
+            && p[0] < a[0] + (p[1] - a[1]) / (b[1] - a[1]) * (b[0] - a[0])
+        {
+            odd = !odd;
+        }
+    }
+    odd
+}
+
+/// The area the loops enclose, by even-odd: each loop counts for its own area, added
+/// when an even number of the other loops contain it and taken away when an odd
+/// number do, whichever way it turns.
+fn enclosed_area(loops: &[Vec<[f64; 2]>]) -> f64 {
+    loops
+        .iter()
+        .enumerate()
+        .map(|(i, ring)| {
+            // A vertex that is not on another loop says which loops contain this one.
+            let probe = ring
+                .iter()
+                .copied()
+                .find(|p| {
+                    loops.iter().enumerate().all(|(j, other)| {
+                        j == i
+                            || other
+                                .iter()
+                                .zip(other.iter().cycle().skip(1))
+                                .take(other.len())
+                                .all(|(a, b)| point_to_segment(*p, *a, *b) > KNOT_TOLERANCE)
+                    })
+                })
+                .unwrap_or(ring[0]);
+            let depth = loops
+                .iter()
+                .enumerate()
+                .filter(|(j, other)| *j != i && inside_polygon(other, probe))
+                .count();
+            let area = polygon_area(ring).abs();
+            if depth.is_multiple_of(2) { area } else { -area }
+        })
+        .sum()
+}
+
+fn point_to_segment(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    let length = dx * dx + dy * dy;
+    let t = if length > 0. {
+        (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / length).clamp(0., 1.)
+    } else {
+        0.
+    };
+    (p[0] - (a[0] + t * dx)).hypot(p[1] - (a[1] + t * dy))
+}
+
+/// The cells of a face whose trim is not the rectangle of its grid: the region
+/// inside `loops` (every loop closed and its last point not repeated; the holes
+/// are loops inside the first), cut by the grid's `u_knots` into strips and by
+/// `v_knots` across them. Every point of every loop must be on the knots, so
+/// that within a strip each trim segment runs from one side to the other and
+/// the strip's region is a set of trapezoids between them, which the `v_knots`
+/// cut into convex pieces that are fanned into triangles, counter-clockwise in
+/// (u, v). The triangles must cover the area the loops enclose, or the loops
+/// cross each other or themselves. Returns the points in (u, v) and the
+/// triangles (#1706).
+fn trimmed_cells(loops: &[Vec<[f64; 2]>], u_knots: &[f64], v_knots: &[f64]) -> Result<Cells> {
+    ensure!(
+        !loops.is_empty() && loops.iter().all(|ring| ring.len() >= 3),
+        "a trim loop needs three points"
+    );
+    let increasing = |knots: &[f64]| {
+        knots.len() >= 2
+            && knots.iter().all(|k| k.is_finite())
+            && knots.windows(2).all(|w| w[1] > w[0])
+    };
+    ensure!(
+        increasing(u_knots) && increasing(v_knots),
+        "knots must be finite and strictly increasing"
+    );
+    let mut segments = Vec::new();
+    for ring in loops {
+        for (&a, &b) in ring
+            .iter()
+            .zip(ring.iter().cycle().skip(1))
+            .take(ring.len())
+        {
+            ensure!(
+                a.iter().chain(&b).all(|x| x.is_finite()),
+                "nonfinite trim point"
+            );
+            ensure!(
+                on_knots(u_knots, a[0]) && on_knots(v_knots, a[1]),
+                "a trim point is not on the grid's knots"
+            );
+            // A segment along a strip's edge bounds no strip.
+            if (b[0] - a[0]).abs() <= KNOT_TOLERANCE {
+                continue;
+            }
+            let (p, q) = if a[0] < b[0] { (a, b) } else { (b, a) };
+            segments.push(Segment {
+                u0: p[0],
+                v0: p[1],
+                u1: q[0],
+                v1: q[1],
+            });
+        }
+    }
+    let enclosed = enclosed_area(loops);
+    ensure!(
+        (u_knots.len() - 1).saturating_mul(segments.len()) <= STRIP_BUDGET,
+        "trim strip budget exceeded"
+    );
+    let mut points: Vec<[f64; 2]> = Vec::new();
+    let mut triangles: Vec<[u32; 3]> = Vec::new();
+    let mut index: std::collections::HashMap<(i64, i64), u32> = std::collections::HashMap::new();
+    let mut vertex = |p: [f64; 2], points: &mut Vec<[f64; 2]>| -> Result<u32> {
+        let key = ((p[0] * 1e9).round() as i64, (p[1] * 1e9).round() as i64);
+        if let Some(&i) = index.get(&key) {
+            return Ok(i);
+        }
+        let i = u32::try_from(points.len()).context("trim vertex count overflow")?;
+        points.push(p);
+        index.insert(key, i);
+        Ok(i)
+    };
+    let mut covered = 0.0;
+    for w in u_knots.windows(2) {
+        let (left, right) = (w[0], w[1]);
+        // Every point is a knot, so a segment that meets the strip crosses all of it.
+        let mut active: Vec<&Segment> = segments
+            .iter()
+            .filter(|s| s.u0 <= left + KNOT_TOLERANCE && s.u1 >= right - KNOT_TOLERANCE)
+            .collect();
+        if active.is_empty() {
+            continue;
+        }
+        let middle = (left + right) / 2.0;
+        active.sort_by(|a, b| a.at(middle).total_cmp(&b.at(middle)));
+        ensure!(
+            active.len().is_multiple_of(2),
+            "a trim loop is open or crosses itself"
+        );
+        let mut previous_top = (f64::NEG_INFINITY, f64::NEG_INFINITY);
+        for pair in active.chunks_exact(2) {
+            let (low_left, low_right) = (pair[0].at(left), pair[0].at(right));
+            let (high_left, high_right) = (pair[1].at(left), pair[1].at(right));
+            ensure!(
+                high_left >= low_left - KNOT_TOLERANCE
+                    && high_right >= low_right - KNOT_TOLERANCE
+                    && low_left >= previous_top.0 - KNOT_TOLERANCE
+                    && low_right >= previous_top.1 - KNOT_TOLERANCE,
+                "trim segments cross inside a strip"
+            );
+            previous_top = (high_left, high_right);
+            if high_left - low_left <= KNOT_TOLERANCE && high_right - low_right <= KNOT_TOLERANCE {
+                continue;
+            }
+            let trapezoid = [
+                [left, low_left],
+                [right, low_right],
+                [right, high_right],
+                [left, high_left],
+            ];
+            // Cut across at every knot of v inside the trapezoid.
+            let low = low_left.min(low_right);
+            let high = high_left.max(high_right);
+            let mut cuts = vec![low];
+            cuts.extend(
+                v_knots
+                    .iter()
+                    .copied()
+                    .filter(|v| *v > low + KNOT_TOLERANCE && *v < high - KNOT_TOLERANCE),
+            );
+            cuts.push(high);
+            for band in cuts.windows(2) {
+                let mut piece = clip_v(&clip_v(&trapezoid, band[0], true), band[1], false);
+                piece.dedup_by(|a, b| (a[0] - b[0]).abs() <= 1e-12 && (a[1] - b[1]).abs() <= 1e-12);
+                if piece.len() > 1 && {
+                    let (a, b) = (piece[0], piece[piece.len() - 1]);
+                    (a[0] - b[0]).abs() <= 1e-12 && (a[1] - b[1]).abs() <= 1e-12
+                } {
+                    piece.pop();
+                }
+                if piece.len() < 3 {
+                    continue;
+                }
+                let first = vertex(piece[0], &mut points)?;
+                for pair in piece[1..].windows(2) {
+                    let area = ((pair[0][0] - piece[0][0]) * (pair[1][1] - piece[0][1])
+                        - (pair[1][0] - piece[0][0]) * (pair[0][1] - piece[0][1]))
+                        / 2.0;
+                    if area <= 0.0 {
+                        continue;
+                    }
+                    covered += area;
+                    let b = vertex(pair[0], &mut points)?;
+                    let c = vertex(pair[1], &mut points)?;
+                    triangles.push([first, b, c]);
+                }
+                ensure!(
+                    triangles.len() <= TRIANGLE_BUDGET,
+                    "trim triangle count overflow"
+                );
+            }
+        }
+    }
+    ensure!(
+        !triangles.is_empty() && (covered - enclosed).abs() <= 1e-9 * enclosed.abs().max(1e-9),
+        "the trim loops cross each other or themselves"
+    );
+    Ok((points, triangles))
+}
+
+/// The face's cells inside its trim loops (`trimmed_cells`), on the surface. The
+/// triangles turn the way the grid's do for the same orientation.
+fn tessellate_trimmed(
+    surface: &ParametricSurface,
+    loops: &[Vec<[f64; 2]>],
+    u_knots: &[f64],
+    v_knots: &[f64],
+    orient: bool,
+    max_vertices: usize,
+) -> Result<ParametricMesh> {
+    let (points, cells) = trimmed_cells(loops, u_knots, v_knots)?;
+    ensure!(
+        points.len() <= max_vertices && points.len() <= u32::MAX as usize,
+        "parametric mesh vertex budget exceeded"
+    );
+    let mut vertices = Vec::with_capacity(points.len());
+    let mut normals = Vec::with_capacity(points.len());
+    for p in &points {
+        vertices.push(surface.evaluate(p[0], p[1])?);
+        let mut n = surface.normal(p[0], p[1])?;
+        if !orient {
+            for value in &mut n {
+                *value = -*value;
+            }
+        }
+        normals.push(n);
+    }
+    let winding = surface.orientation() == orient;
+    let mut triangles = Vec::with_capacity(cells.len());
+    for [a, b, c] in cells {
+        match keep_triangle(
+            vertices[a as usize],
+            vertices[b as usize],
+            vertices[c as usize],
+        ) {
+            Some(true) => triangles.push(if winding { [a, b, c] } else { [a, c, b] }),
+            Some(false) => {}
+            None => anyhow::bail!("noncollapsed degenerate parametric triangle"),
+        }
+    }
+    ensure!(
+        !triangles.is_empty(),
+        "parametric surface produced no triangles"
+    );
+    Ok(ParametricMesh {
+        vertices,
+        normals,
+        triangles,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{inside_polygon, keep_triangle, trimmed_cells};
+
+    // How a triangle of a face's cells can be wrong, and the one thing that looks
+    // wrong and is not.
+    #[test]
+    fn a_needle_is_refused_whatever_its_area() {
+        // Three distinct points on one line, 0.01 ft apart: no area, no collapse.
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [0.01, 0., 0.], [0.02, 0., 0.]),
+            None
+        );
+        // A hair 0.01 ft long and 1e-11 ft wide: its area is under the floor too.
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [0.01, 0., 0.], [0.005, 1e-11, 0.]),
+            None
+        );
+    }
+
+    #[test]
+    fn non_finite_points_are_never_kept_or_dropped() {
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [1., 0., 0.], [f64::NAN, 1., 0.]),
+            None
+        );
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [1., 0., 0.], [f64::INFINITY, 1., 0.]),
+            None
+        );
+    }
+
+    #[test]
+    fn dust_and_a_collapsed_pole_are_dropped_and_a_real_triangle_kept() {
+        // The sliver of the BIM4LCA office's 43 toilets: edges 5.6e-8, 1.8e-6, 1.8e-6.
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [1.8e-6, 0., 0.], [0.9e-6, 5.6e-8, 0.]),
+            Some(false)
+        );
+        // A pole: two of the three points coincide, the third a foot away.
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [0., 0., 0.], [1., 0., 0.]),
+            Some(false)
+        );
+        // The same where the points are 6.6e-10 ft apart (two parameters one knot
+        // tolerance apart), the third 1.1e-3 ft away: still one point.
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [6.6e-10, 0., 0.], [1.1e-3, 0., 0.]),
+            Some(false)
+        );
+        // A hair 1e-7 ft apart at one end is not one point, and a foot long.
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [1e-7, 0., 0.], [1., 0., 0.]),
+            None
+        );
+        // Dust has to be all dust: one edge over 1e-4 ft keeps a hair a needle.
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [2e-4, 0., 0.], [1e-4, 1e-9, 0.]),
+            None
+        );
+        assert_eq!(
+            keep_triangle([0., 0., 0.], [1., 0., 0.], [0., 1., 0.]),
+            Some(true)
+        );
+    }
+
+    fn triangle_area(points: &[[f64; 2]], t: &[u32; 3]) -> f64 {
+        let (a, b, c) = (
+            points[t[0] as usize],
+            points[t[1] as usize],
+            points[t[2] as usize],
+        );
+        ((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])) / 2.0
+    }
+
+    /// Every triangle turns counter-clockwise and lies inside the loops, and their
+    /// areas add up to `expected`.
+    fn check(
+        loops: &[Vec<[f64; 2]>],
+        u: &[f64],
+        v: &[f64],
+        expected: f64,
+    ) -> (Vec<[f64; 2]>, Vec<[u32; 3]>) {
+        let (points, triangles) = trimmed_cells(loops, u, v).unwrap();
+        let mut total = 0.0;
+        for t in &triangles {
+            assert!(t.iter().all(|i| (*i as usize) < points.len()));
+            let area = triangle_area(&points, t);
+            assert!(area > 0.0, "{t:?} turns clockwise");
+            total += area;
+            let middle = [
+                (points[t[0] as usize][0] + points[t[1] as usize][0] + points[t[2] as usize][0])
+                    / 3.0,
+                (points[t[0] as usize][1] + points[t[1] as usize][1] + points[t[2] as usize][1])
+                    / 3.0,
+            ];
+            let inside = loops
+                .iter()
+                .filter(|ring| inside_polygon(ring, middle))
+                .count()
+                % 2
+                == 1;
+            assert!(inside, "{t:?} lies outside the loops at {middle:?}");
+        }
+        assert!(
+            (total - expected).abs() < 1e-9,
+            "{total} against {expected}"
+        );
+        (points, triangles)
+    }
+
+    #[test]
+    fn an_l_shape_is_covered_once_whichever_way_it_turns() {
+        let ccw = vec![vec![
+            [0., 0.],
+            [2., 0.],
+            [2., 1.],
+            [1., 1.],
+            [1., 2.],
+            [0., 2.],
+        ]];
+        check(&ccw, &[0., 1., 2.], &[0., 1., 2.], 3.0);
+        let cw = vec![vec![
+            [0., 0.],
+            [0., 2.],
+            [1., 2.],
+            [1., 1.],
+            [2., 1.],
+            [2., 0.],
+        ]];
+        check(&cw, &[0., 1., 2.], &[0., 1., 2.], 3.0);
+    }
+
+    #[test]
+    fn a_hole_is_left_out_whichever_way_it_turns() {
+        let outer = vec![[0., 0.], [3., 0.], [3., 3.], [0., 3.]];
+        let against = vec![[1., 1.], [1., 2.], [2., 2.], [2., 1.]];
+        let along = vec![[1., 1.], [2., 1.], [2., 2.], [1., 2.]];
+        let knots = [0., 1., 2., 3.];
+        check(&[outer.clone(), against], &knots, &knots, 8.0);
+        check(&[outer, along], &knots, &knots, 8.0);
+        let ring = vec![
+            vec![[0., 0.], [4., 0.], [4., 4.], [0., 4.]],
+            vec![[2., 1.], [1., 2.], [2., 3.], [3., 2.]],
+        ];
+        let knots = [0., 1., 2., 3., 4.];
+        check(&ring, &knots, &knots, 14.0);
+    }
+
+    #[test]
+    fn a_diagonal_trim_is_cut_at_the_knots_it_crosses() {
+        let triangle = vec![vec![[0., 0.], [2., 0.], [0., 2.]]];
+        let (points, _) = check(&triangle, &[0., 1., 2.], &[0., 1., 2.], 2.0);
+        // The diagonal crosses u = 1 at v = 1 and v = 1 at u = 1: one point, not two.
+        assert!(
+            points
+                .iter()
+                .any(|p| (p[0] - 1.0).abs() < 1e-12 && (p[1] - 1.0).abs() < 1e-12)
+        );
+    }
+
+    #[test]
+    fn a_strip_with_two_bars_gets_two_trapezoids() {
+        // A C opening to the right: right of u = 1 the strips hold a bar below and a bar above.
+        let c = vec![vec![
+            [0., 0.],
+            [3., 0.],
+            [3., 1.],
+            [1., 1.],
+            [1., 2.],
+            [3., 2.],
+            [3., 3.],
+            [0., 3.],
+        ]];
+        check(&c, &[0., 1., 3.], &[0., 1., 2., 3.], 7.0);
+    }
+
+    #[test]
+    fn two_loops_that_share_an_edge_make_one_rectangle() {
+        let two = vec![
+            vec![[0., 0.], [1., 0.], [1., 1.], [0., 1.]],
+            vec![[1., 0.], [2., 0.], [2., 1.], [1., 1.]],
+        ];
+        check(&two, &[0., 1., 2.], &[0., 1.], 2.0);
+    }
+
+    #[test]
+    fn a_rectangle_is_cut_at_every_knot() {
+        let r = vec![vec![[0., 0.], [3., 0.], [3., 2.], [0., 2.]]];
+        let (_, triangles) = check(&r, &[0., 1., 2., 3.], &[0., 1., 2.], 6.0);
+        assert_eq!(triangles.len(), 12);
+    }
+
+    #[test]
+    fn a_loop_that_crosses_itself_is_refused() {
+        let bowtie = vec![vec![[0., 0.], [2., 2.], [2., 0.], [0., 2.]]];
+        assert!(trimmed_cells(&bowtie, &[0., 2.], &[0., 2.]).is_err());
+    }
+
+    #[test]
+    fn a_point_off_the_knots_a_nonfinite_point_and_bad_knots_are_refused() {
+        let off = vec![vec![[0., 0.], [2., 0.], [2.5, 2.], [0., 2.]]];
+        assert!(trimmed_cells(&off, &[0., 2.], &[0., 2.]).is_err());
+        let nan = vec![vec![[0., 0.], [1., 0.], [f64::NAN, 1.]]];
+        assert!(trimmed_cells(&nan, &[0., 1.], &[0., 1.]).is_err());
+        let square = vec![vec![[0., 0.], [1., 0.], [1., 1.], [0., 1.]]];
+        assert!(trimmed_cells(&square, &[0.], &[0., 1.]).is_err());
+        assert!(trimmed_cells(&square, &[1., 0.], &[0., 1.]).is_err());
+        assert!(trimmed_cells(&[vec![[0., 0.], [1., 0.]]], &[0., 1.], &[0., 1.]).is_err());
+        assert!(trimmed_cells(&[], &[0., 1.], &[0., 1.]).is_err());
+    }
 }
