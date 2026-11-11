@@ -3532,6 +3532,14 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// `Width` is its profile's extent, as a floor of one layer's is, and is left
 /// out. All 10 of the office's roofs as built and at permit are Revit's, the
 /// one a hatch cuts (`YP-1`) but for its `NetVolume`.
+///
+/// A roof whose sketch has holes gets its outline's area for `GrossArea`, and
+/// that area times its depth for `GrossVolume`, with the holes left in
+/// (RE-413): Revit's export writes them as openings and takes them off neither,
+/// and takes them off its `NetVolume` alone. A floor's holes are taken off its
+/// `GrossArea` (RE-249). On the BIM4LCA housing as built Revit's `GrossArea`
+/// has the holes off on 8 floors (one or two holes of 0.31 to 4.26 m2) and
+/// leaves them in on its 2 roofs with holes.
 fn add_slab_gross_area(
     sets: &mut Vec<PropertySet>,
     ifc_type: &str,
@@ -3565,6 +3573,14 @@ fn add_slab_gross_area(
     let Some(area) = profile_area(body) else {
         return;
     };
+    // RE-413: a roof's holes are left in its gross quantities. A profile with no
+    // holes has no outline of its own to take (its outline is `area`), so the
+    // fallback changes nothing for it.
+    let gross = if roof {
+        profile_outline_area(body).unwrap_or(area)
+    } else {
+        area
+    };
     let depth = body.height_feet;
     let layers = crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
         .filter(|layers| layers.stacked && !layers.layers.is_empty());
@@ -3579,7 +3595,7 @@ fn add_slab_gross_area(
     }
     let mut properties = vec![Property {
         name: "GrossArea".into(),
-        value: PropertyValue::AreaSquareFeet(area),
+        value: PropertyValue::AreaSquareFeet(gross),
     }];
     // A floor of one layer only: on floors of several layers Revit's
     // exporters disagree (RE-298).
@@ -3596,7 +3612,7 @@ fn add_slab_gross_area(
         });
         properties.push(Property {
             name: "GrossVolume".into(),
-            value: PropertyValue::VolumeCubicFeet(area * quantity),
+            value: PropertyValue::VolumeCubicFeet(gross * quantity),
         });
     }
     let uncut = decoded.fields.iter().any(|(name, value)| {
@@ -3650,6 +3666,18 @@ fn profile_area(body: &Extrusion) -> Option<f64> {
         }
         Some(_) => return None,
     };
+    (area.is_finite() && area > 0.0).then_some(area)
+}
+
+/// The area of the outline of the profile `body` extrudes, its holes not taken
+/// off: `None` unless the profile has some (RE-413).
+fn profile_outline_area(body: &Extrusion) -> Option<f64> {
+    use crate::ifc::from_decoded::polygon_area_sqft;
+    let Some(entities::ProfileDef::ArbitraryWithVoids { points, .. }) = &body.profile_override
+    else {
+        return None;
+    };
+    let area = polygon_area_sqft(points);
     (area.is_finite() && area > 0.0).then_some(area)
 }
 
