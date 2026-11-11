@@ -152,7 +152,15 @@ typed elements of nine classes on the five held-out pairs, counts only, and
 Revit writes none on any of them; #1472; Griffin, 2026-11-09, chose to leave it out
 from 2026 saves only). A save of an earlier release that Revit 2026 or later
 exports has no `ObjectType` in Revit's export either, and rvt-rs writes it there:
-nothing in the file says which exporter will read it. Each
+nothing in the file says which exporter will read it. On 2027 the occurrence of
+a stair, a flight, a slab, a member, furniture, a door, a window, a wall, a
+railing and a roof is written without a `PredefinedType` as well: Revit's export
+of the two held-out 2027 pairs writes none on 71 elements of those classes (counts
+only), where its export of the same projects saved by 2024 to 2026 writes one;
+its proxies (`NOTDEFINED`), openings, spaces and every type object keep theirs,
+and a class the pairs do not hold (columns, beams, coverings, curtain walls,
+plates, MEP terminals ...) is not measured on 2027 and keeps its value (#1692).
+Each
 is held to the same Autodesk project's 2025 save, on the MEP samples too
 (`tools/re/bodies_across_saves.py`, which Measure fails on a difference), and
 not to a Revit export: no held-out model holds a pipe, a duct or a port, and
