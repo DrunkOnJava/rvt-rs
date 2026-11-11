@@ -402,8 +402,12 @@ jobs:
           # seconds are its files' medians, base plus head, times the three
           # rounds, summed from the table of Measure run 41797994751 (the
           # reference models, the four office files, Autodesk's samples; the
-          # housing and the timber office from that of run 42976698994, 563
-          # and 481 seconds). The
+          # housing and the timber office from that of run 42976698994). The
+          # weights were taken again from the tables of runs 42977559276 and
+          # 42983436373 (the mean of base and head, six times): the 2024 samples had
+          # grown to 696 seconds and the 2026 and 2027 ones to about 296, where
+          # four shards of the old weights took 546 to 1,014 seconds, and a fifth
+          # shard takes the longest from 986 to 727 seconds. The
           # four shards of that run ran on four CPUs (two Intel Xeons, an
           # Intel Xeon Platinum and an AMD EPYC), and no runner's rows skew
           # clearly (its units took 0.98 to 1.21 of their time on the one
@@ -417,29 +421,29 @@ jobs:
                      "ARK_NordicLCA_Housing_Timber_BuildingPermit.rvt"]
           timber_office = ["ARK_NordicLCA_Office_Timber_As-Built.rvt",
                            "ARK_NordicLCA_Office_Timber_BuildingPermit.rvt"]
-          units = [("reference models", 71, dict(reference=True))]
+          units = [("reference models", 68, dict(reference=True))]
           if flag("NORDIC"):
-              units.append(("offices", 329, dict(offices=True)))
+              units.append(("offices", 382, dict(offices=True)))
               # The second project's files, scored in the same run (#1694: the
               # timing table left them out, and a change to what the saved-mesh
               # pass reads moves them).
-              units.append(("housing", 563, dict(bim4lca=" ".join(housing))))
-              units.append(("timber office", 481, dict(bim4lca=" ".join(timber_office))))
+              units.append(("housing", 554, dict(bim4lca=" ".join(housing))))
+              units.append(("timber office", 437, dict(bim4lca=" ".join(timber_office))))
           if flag("SAMPLES"):
               years = e["YEARS"].split()
               low = int(years[0]) if years else 0
               high = int(years[1]) if len(years) > 1 else 9999
               for label, first, last, seconds in (
-                  ("samples to 2023", 0, 2023, 461),
-                  ("samples 2024", 2024, 2024, 559),
-                  ("samples 2025", 2025, 2025, 286),
-                  ("samples 2026", 2026, 2026, 216),
-                  ("samples 2027 on", 2027, 9999, 207),
+                  ("samples to 2023", 0, 2023, 421),
+                  ("samples 2024", 2024, 2024, 696),
+                  ("samples 2025", 2025, 2025, 296),
+                  ("samples 2026", 2026, 2026, 296),
+                  ("samples 2027 on", 2027, 9999, 290),
               ):
                   if max(first, low) <= min(last, high):
                       ranges = f"{max(first, low)} {min(last, high)}"
                       units.append((label, seconds, dict(ranges=ranges)))
-          bins = [dict(seconds=0, units=[]) for _ in range(min(4, len(units)))]
+          bins = [dict(seconds=0, units=[]) for _ in range(min(5, len(units)))]
           for unit in sorted(units, key=lambda unit: -unit[1]):
               target = min(bins, key=lambda bin: bin["seconds"])
               target["seconds"] += unit[1]
