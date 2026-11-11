@@ -516,10 +516,11 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
 /// classes they were seen on ([`lookup_export_override_for`]): `IfcSpaceType`,
 /// which the 42 `Turning Free Space` generic models of each file carry as
 /// their own value and Revit writes as `IfcSpace`; `IfcFurniture`, on 3 generic
-/// models of each file (`USERDEFINED`); `IfcSolarDevice`, on 1 roof of each
+/// models of each file (`USERDEFINED`; [`predefined_type_for`] since RE-419); `IfcSolarDevice`, on 1 roof of each
 /// (`SOLARPANEL`); and `IfcTransportElement`, on 1 item of specialty equipment
 /// of each (`ELEVATOR`). Each takes its own predefined type where it is an
-/// enumerator of the entity ([`override_predefined_type_for`]).
+/// enumerator of the entity ([`override_predefined_type_for`] for the last
+/// two).
 pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
     Mapping {
         revit_class: "IfcShadingDevice",
@@ -653,7 +654,9 @@ pub fn space_predefined_type_for(value: &str) -> Option<&'static str> {
 /// `IfcCoveringTypeEnum`, `IfcShadingDeviceTypeEnum`, `IfcRoofTypeEnum`,
 /// `IfcWasteTerminalTypeEnum`, `IfcElectricApplianceTypeEnum`,
 /// `IfcFireSuppressionTerminalTypeEnum`, `IfcSanitaryTerminalTypeEnum`,
-/// `IfcAirTerminalTypeEnum`). `IfcStair` and `IfcDoor`, honoured as targets
+/// `IfcAirTerminalTypeEnum`) and of `IfcFurniture`, whose own predefined type
+/// every furniture and casework element takes where it is an enumerator
+/// (`IfcFurnitureTypeEnum`, RE-419). `IfcStair` and `IfcDoor`, honoured as targets
 /// since #792, are not listed, because listing them would apply every door's
 /// and stair's own predefined type as well, which is not measured. An
 /// element exported as either through its value takes the target's
@@ -788,6 +791,20 @@ const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
             "NOTDEFINED",
         ],
     ),
+    (
+        "IFCFURNITURE",
+        &[
+            "CHAIR",
+            "TABLE",
+            "DESK",
+            "BED",
+            "FILECABINET",
+            "SHELF",
+            "SOFA",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
 ];
 
 /// The IFC4 enumerator `value` names for `ifc_type`'s `PredefinedType`
@@ -814,27 +831,13 @@ pub fn export_value_is_space(value: &str, revit_class: &str) -> bool {
 }
 
 /// IFC4 `PredefinedType` enumerators of the entities an element reaches
-/// only through its "Export to IFC As" value (RE-417): `IfcFurnitureTypeEnum`,
-/// `IfcSolarDeviceTypeEnum` and `IfcTransportElementTypeEnum`. They are not in
-/// [`PREDEFINED_TYPE_ENUMERATORS`], because listing them there would apply the
-/// own predefined type of every furniture element as well, which is not
-/// measured; an element whose category already maps to the entity keeps the
-/// mapping's default.
+/// only through its "Export to IFC As" value (RE-417): `IfcSolarDeviceTypeEnum`
+/// and `IfcTransportElementTypeEnum`. They are not in
+/// [`PREDEFINED_TYPE_ENUMERATORS`], which would apply the own predefined type of
+/// any element a category maps to them as well, and none is. (`IfcFurniture`,
+/// first here, is in it since RE-419, which measured its own predefined type
+/// on the BIM4LCA housing and office.)
 const OVERRIDE_ONLY_ENUMERATORS: &[(&str, &[&str])] = &[
-    (
-        "IFCFURNITURE",
-        &[
-            "CHAIR",
-            "TABLE",
-            "DESK",
-            "BED",
-            "FILECABINET",
-            "SHELF",
-            "SOFA",
-            "USERDEFINED",
-            "NOTDEFINED",
-        ],
-    ),
     (
         "IFCSOLARDEVICE",
         &["SOLARCOLLECTOR", "SOLARPANEL", "USERDEFINED", "NOTDEFINED"],
