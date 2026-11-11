@@ -56,8 +56,8 @@ Autodesk's six 2015 sample projects, where previews and PartAtom are not
 measured. On Revit 2024 and 2025 project files it reads
 the building: each element's ElementId, category, name, type (written as
 an IFC type object of its Revit type, RE-110), storey, materials, layers,
-GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226) and, where the boxes of their wall's mullions say which ends Revit's solid keeps, `NetSurfaceArea` (RE-268, RE-400, RE-403), walls'
-`ExtendToStructure` (RE-228), railings' `Height` (RE-231), stair flights' treads, nosing and run type
+GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226) and, where the boxes of their wall's mullions say which ends Revit's solid keeps, `NetSurfaceArea` (RE-268, RE-400, RE-403, RE-432, RE-433, RE-436), walls'
+`ExtendToStructure` (RE-228), railings' `Height` and `Reference` (RE-231, RE-431), stair flights' treads, nosing and run type
 and landings' type (RE-92) and the parameters named for a standard property
 set's property (RE-194), and a body that is exact where the element's
 data is decoded and its bounding box where it is not. It writes that as IFC4,
@@ -159,7 +159,12 @@ of the two held-out 2027 pairs writes none on 71 elements of those classes (coun
 only), where its export of the same projects saved by 2024 to 2026 writes one;
 its proxies (`NOTDEFINED`), openings, spaces and every type object keep theirs,
 and a class the pairs do not hold (columns, beams, coverings, curtain walls,
-plates, MEP terminals ...) is not measured on 2027 and keeps its value (#1692). The exporter's
+plates, MEP terminals ...) is not measured on 2027 (#1692). A typed beam, column,
+plate and covering is left out as well, taken from the exporter's source and not
+from a measured export: no Revit 2027 export holds one of them, and the 2027
+samples hold beams, columns, plates and coverings that rvt-rs writes a value on
+(#1716). A curtain wall, a footing, a ramp, a shading device and the MEP
+terminals keep their value. The exporter's
 public source writes an occurrence's `PredefinedType` only where the element has no type
 object when it is created, and only from its tag `v27.3.0.12` (not in `v27.0.1.1` and
 earlier), so what decides is the exporter's build and not the save's release: a Revit 2027
@@ -1333,6 +1338,19 @@ Revit 2023 file) 8 of 8 beams and columns for `IsExternal` and 9 of 9 for
 different. A parameter named for it on the element's type is not read. 58 of
 94 exports of the unfiltered run move: every file with structural columns or
 framing (`reports/element-framing/RE-285-structural-load-bearing.md`).
+
+**RE-429 (2026-11-11)** writes a wall's `LoadBearing` as Revit's exporter
+calculates it: true when the Structural box of its native record is set and
+its usage is Bearing, otherwise false, and a floor's from its Structural box
+and an unchecked stair's as false, all on Revit 2024 and later; a parameter
+named for the property still replaces it. Against Revit's exports: 4,006 of
+4,253 walls of the BIM4LCA models, the R2025 models and RE1, 294 of 313 slabs
+and all 168 stairs, none different, and the 138 walls of the held-out models
+of Revit 2024 to 2027. A stair with a checked box, a wall whose usage is Shear
+or Combined, and walls, floors and stairs before Revit 2024 are left without
+(the older models show only the false state, so nothing is written for them;
+Vitoria's 247 walls are the ones the census counts apart)
+(`reports/element-framing/RE-429-structural-load-bearing.md`).
 
 **RE-327 (2026-11-04)** rebuilds a family's extrusions from their own records:
 the sketch's `CurveElem` lines and arcs (in the family's coordinates), chained

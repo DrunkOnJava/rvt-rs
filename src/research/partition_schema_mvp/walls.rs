@@ -1012,6 +1012,49 @@ pub(super) fn read_wall_records(
     let _ = reads.read(rf, &type_walls, &join_walls);
 }
 
+/// Give each of `walls` the `LoadBearing` revit-ifc's `LoadBearingCalculator`
+/// (CLEANROOM.md source 5) calculates for a wall, whether its `StructuralUsage`
+/// is `Bearing` ([`crate::native_walls::wall_load_bearing`], RE-429), from the
+/// members of its native record, on the releases in
+/// [`WALL_LOAD_BEARING_REVIT_VERSIONS`]. A wall that already has a
+/// [`LOAD_BEARING_FIELD`] keeps it, and a parameter named for the property
+/// replaces it in the export ([`attach_named_parameters`]).
+pub(super) fn attach_wall_load_bearing<'a>(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    walls: impl IntoIterator<Item = &'a mut DecodedElement>,
+    reads: &mut crate::native_walls::WallReads,
+) {
+    if !WALL_LOAD_BEARING_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let mut walls: Vec<&mut DecodedElement> = walls
+        .into_iter()
+        .filter(|wall| {
+            !wall
+                .fields
+                .iter()
+                .any(|(name, _)| name == LOAD_BEARING_FIELD)
+        })
+        .collect();
+    let ids: BTreeSet<u64> = walls
+        .iter()
+        .filter_map(|wall| wall.id.map(u64::from))
+        .collect();
+    if ids.is_empty() {
+        return;
+    }
+    let Ok(bearing) = reads.load_bearing(rf, &ids) else {
+        return;
+    };
+    for wall in walls.iter_mut() {
+        if let Some(&flag) = wall.id.and_then(|id| bearing.get(&u64::from(id))) {
+            wall.fields
+                .push((LOAD_BEARING_FIELD.into(), InstanceField::Bool(flag)));
+        }
+    }
+}
+
 /// Give each of `walls` whether its top is joined to a roof or floor
 /// ([`WALL_TOP_JOINED_FIELD`], RE-228) from its native record, on the
 /// releases in [`WALL_TOP_JOIN_RECORD_REVIT_VERSIONS`], whose walls come from
@@ -1096,6 +1139,7 @@ pub(super) fn attach_wall_layers(
     // joins to or cuts it (RE-266).
     let crate::native_walls::WallRecords {
         walls: native,
+        located_lines,
         top_joined,
         uncut,
         top_cutters,
@@ -1448,7 +1492,7 @@ pub(super) fn attach_wall_layers(
         // the rule takes a wall with none listed as joined to nothing, so its
         // `Length` is left out.
         if !crate::partition_element_records_2023::is_32bit_release(revit_version) {
-            attach_wall_lengths(walls, &native);
+            attach_wall_lengths(walls, &native, &located_lines);
         }
     }
 }

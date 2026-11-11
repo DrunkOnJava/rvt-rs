@@ -311,6 +311,50 @@ pub(super) fn attach_load_bearing<'a>(elements: impl IntoIterator<Item = &'a mut
     }
 }
 
+/// Give each of `elements` that holds the Structural check box
+/// (`FLOOR_PARAM_IS_STRUCTURAL`,
+/// [`crate::partition_room_parameters::FLOOR_STRUCTURAL_PARAMETER`]) the
+/// `LoadBearing` revit-ifc's `LoadBearingCalculator` (CLEANROOM.md source 5)
+/// takes from it, on Revit 2024 and later (RE-429). Unchecked is false for any
+/// element; checked is true for a floor alone, the one class Revit's exports
+/// of the BIM4LCA housing and the held-out models hold checked boxes on (the
+/// housing's stairs hold only unchecked ones), so a checked stair gets none.
+/// An element that already has a [`LOAD_BEARING_FIELD`] keeps it, and a
+/// parameter named for the property replaces it in the export as it does every
+/// value ([`attach_named_parameters`]).
+pub(super) fn attach_structural_load_bearing<'a>(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    elements: impl IntoIterator<Item = &'a mut DecodedElement>,
+) {
+    use crate::partition_room_parameters as prp;
+    let mut elements: Vec<&mut DecodedElement> = elements
+        .into_iter()
+        .filter(|element| {
+            !element
+                .fields
+                .iter()
+                .any(|(name, _)| name == LOAD_BEARING_FIELD)
+        })
+        .collect();
+    let ids: BTreeSet<u32> = elements.iter().filter_map(|element| element.id).collect();
+    let boxes =
+        prp::scan_integer_parameter(rf, revit_version, &ids, prp::FLOOR_STRUCTURAL_PARAMETER);
+    for element in elements.iter_mut() {
+        let Some(&checked) = element.id.and_then(|id| boxes.get(&id)) else {
+            continue;
+        };
+        let bearing = match checked {
+            0 => false,
+            1 if element.class == "Floor" => true,
+            _ => continue,
+        };
+        element
+            .fields
+            .push((LOAD_BEARING_FIELD.into(), InstanceField::Bool(bearing)));
+    }
+}
+
 /// Give each of `elements` the `IsExternal` revit-ifc calculates for it
 /// ([`calculated_is_external`], [`IS_EXTERNAL_FIELD`]) on the releases that
 /// read elements from their element records (RE-283): where a

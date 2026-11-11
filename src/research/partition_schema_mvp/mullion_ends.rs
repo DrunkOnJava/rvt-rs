@@ -10,7 +10,12 @@
 //! `TOLERANCE_FEET`) is one of:
 //!
 //! - its partner: it runs the same way with an end at `p` and its body on the
-//!   far side, the mullion's continuation;
+//!   far side, the mullion's continuation, coinciding with it (RE-432: a
+//!   continuation bent off the axis by two degrees does not hide the end, and
+//!   Revit's value counts the end of all 159 of the BIM4LCA office's mullions
+//!   that have one; RE-436: nor does one of another section, whose end face
+//!   is not the mullion's, and Revit's value counts the end of both pieces
+//!   where a 50 x 50 mm and a 150 x 50 mm mullion meet);
 //! - across it, with `p` on its axis (centre) or off its axis and off its side
 //!   faces (inside), where it covers `p`; or across it with `p` on a side face,
 //!   where the end only butts against it;
@@ -41,11 +46,30 @@ const TOLERANCE_FEET: f64 = 0.01;
 const NEAR_FEET: f64 = 0.2;
 /// Two axes whose cosine is above this run the same way.
 const PARALLEL: f64 = 0.999;
+/// Two axes whose cosine is above this coincide (about a quarter of a degree),
+/// so that the end of one meets the end of the other face to face (RE-432):
+/// every partner that hides an end of the BIM4LCA office's mullions is within
+/// 0.01 degrees, and the ones that do not are bent by 1.8 degrees or more.
+const COLLINEAR: f64 = 0.99999;
 /// Two axes whose cosine is below this run across each other.
 const ACROSS: f64 = 0.01;
 /// A curtain wall with more mullions than this is left unread: the ends of each
 /// are compared with every other mullion of the wall.
 const MAX_GROUP: usize = 4096;
+
+/// Whether the section of `o` is that of `m` (RE-436): `o`'s extent along each of
+/// `m`'s two sides across the mullion is `m`'s half extent there, to
+/// `TOLERANCE_FEET`. The two run along the one axis, so only the sides across
+/// count.
+fn same_section(m: &MullionBox, along: usize, o: &MullionBox, o_along: usize) -> bool {
+    (0..3).filter(|side| *side != along).all(|side| {
+        let reach: f64 = (0..3)
+            .filter(|other| *other != o_along)
+            .map(|other| dot(m.axes[side], o.axes[other]).abs() * o.half[other])
+            .sum();
+        (reach - m.half[side]).abs() <= TOLERANCE_FEET
+    })
+}
 
 /// The box of a curtain mullion: its centre, three unit axes with the
 /// half-extent along each (model feet), and the index of the axis it runs
@@ -201,7 +225,10 @@ fn neighbours(
                 Some(index) => {
                     let far = ends[1 - index].0;
                     if dot(sub(far, p), out) > TOLERANCE_FEET {
-                        found.partner = true;
+                        // A continuation bent off the axis covers none of the
+                        // end face, and one of another section is not the end
+                        // face: nothing hides it (RE-432, RE-436).
+                        found.partner |= cosine > COLLINEAR && same_section(m, along, o, o_along);
                     } else {
                         found.same = true;
                         found.unreliable |= o.odd;
@@ -285,4 +312,59 @@ pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
         }
     }
     kept
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A vertical mullion's box whose bottom end is at `from`, `length` feet long,
+    /// leaning `degrees` off the vertical in the x-z plane, with a square section
+    /// of half side `side`.
+    fn mullion(id: u32, from: [f64; 3], length: f64, degrees: f64, side: f64) -> MullionBox {
+        let angle = degrees.to_radians();
+        let axis = [angle.sin(), 0.0, angle.cos()];
+        MullionBox {
+            id,
+            kind: 1,
+            centre: [
+                from[0] + 0.5 * length * axis[0],
+                from[1],
+                from[2] + 0.5 * length * axis[2],
+            ],
+            axes: [axis, [angle.cos(), 0.0, -angle.sin()], [0.0, 1.0, 0.0]],
+            half: [0.5 * length, side, side],
+            along: Some(0),
+            odd: false,
+        }
+    }
+
+    #[test]
+    fn a_continuation_hides_the_end_it_coincides_with_and_a_bent_one_does_not() {
+        let lower = mullion(1, [0.0, 0.0, 0.0], 2.0, 0.0, 0.08);
+        let kept = |degrees: f64| {
+            kept_ends(&[
+                lower.clone(),
+                mullion(2, [0.0, 0.0, 2.0], 2.0, degrees, 0.08),
+            ])
+        };
+        // Face to face: each loses the end it meets.
+        assert_eq!(kept(0.0), BTreeMap::from([(1, 1), (2, 1)]));
+        assert_eq!(kept(0.01), BTreeMap::from([(1, 1), (2, 1)]));
+        // Bent by two degrees (the BIM4LCA office's, RE-432): both ends stay.
+        assert_eq!(kept(2.0), BTreeMap::from([(1, 2), (2, 2)]));
+    }
+
+    #[test]
+    fn a_continuation_of_another_section_hides_no_end() {
+        let lower = mullion(1, [0.0, 0.0, 0.0], 2.0, 0.0, 0.08);
+        let kept =
+            |side: f64| kept_ends(&[lower.clone(), mullion(2, [0.0, 0.0, 2.0], 2.0, 0.0, side)]);
+        assert_eq!(kept(0.08), BTreeMap::from([(1, 1), (2, 1)]));
+        // A section 0.17 ft wider on a side (the 50 x 50 and 150 x 50 mm pieces of
+        // the BIM4LCA timber office, RE-436): its end face is not the mullion's.
+        assert_eq!(kept(0.25), BTreeMap::from([(1, 2), (2, 2)]));
+        // A section that differs by less than the 3 mm the boxes are read to is one.
+        assert_eq!(kept(0.085), BTreeMap::from([(1, 1), (2, 1)]));
+    }
 }

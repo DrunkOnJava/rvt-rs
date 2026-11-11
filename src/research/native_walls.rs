@@ -323,6 +323,12 @@ const BOUNDED_STEPS: [&str; 2] = ["JoinToRoofGStep", "CleanPairGStep"];
 pub struct WallRecords {
     /// [`native_walls`].
     pub walls: BTreeMap<u64, NativeWall>,
+    /// The location curve of each wall whose record holds one that
+    /// `VWallDriver.m_pCrv` names but which `walls` leaves out because the
+    /// record holds another curve besides it: its start and its end, plan
+    /// model feet. A curtain wall is not cut back at its joins, so its
+    /// `Length` is this curve's (RE-252).
+    pub located_lines: BTreeMap<u64, ([f64; 2], [f64; 2])>,
     /// Whether each wall's top is joined to a roof or floor.
     pub top_joined: BTreeMap<u64, bool>,
     /// The walls nothing is joined to or cuts.
@@ -534,11 +540,18 @@ fn is_top_joined(graph: &crate::native_parameters::ObjectGraph) -> bool {
 }
 
 /// The fields of an `SWall` and an `ArcWall` graph that [`wall_facts`] reads
-/// (`wall_type_id`: `m_WallAttributesId`; `is_top_joined`: `m_baseOrTop`),
+/// (`wall_type_id`: `m_WallAttributesId`; `is_top_joined`: `m_baseOrTop`;
+/// `wall_load_bearing`: `m_isStructuralSignificant`, `m_wallStructuralUsage`),
 /// and `m_id`, which the check of a record against its identity reads.
 /// [`WallReads::read`] builds no other field of those graphs (#1335), so a field
 /// either function comes to read must be added here.
-pub const WALL_READ_FIELDS: &[&str] = &["m_id", "m_WallAttributesId", "m_baseOrTop"];
+pub const WALL_READ_FIELDS: &[&str] = &[
+    "m_id",
+    "m_WallAttributesId",
+    "m_baseOrTop",
+    "m_isStructuralSignificant",
+    "m_wallStructuralUsage",
+];
 
 /// What [`WallReads::read`] takes from the graph of a wall's record.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -547,6 +560,8 @@ pub struct WallFacts {
     pub type_id: Option<u64>,
     /// Whether a roof or floor is joined to the wall's top (`is_top_joined`).
     pub top_joined: bool,
+    /// Whether Revit calls the wall load bearing (`wall_load_bearing`).
+    pub load_bearing: Option<bool>,
 }
 
 /// [`WallFacts`] of a wall's graph: the only reader of the graph
@@ -556,7 +571,23 @@ pub fn wall_facts(graph: &crate::native_parameters::ObjectGraph) -> WallFacts {
     WallFacts {
         type_id: wall_type_id(graph),
         top_joined: is_top_joined(graph),
+        load_bearing: wall_load_bearing(graph),
     }
+}
+
+/// Whether Revit's exporter calls the wall load bearing, which is `Wall.StructuralUsage`
+/// being `Bearing` (revit-ifc's `LoadBearingCalculator`, CLEANROOM.md source 5):
+/// the wall's Structural box is set (`m_isStructuralSignificant`) and its usage
+/// is Bearing (`m_wallStructuralUsage` 1, the value every wall of the BIM4LCA
+/// housing holds whether or not its box is set). `None` where the record holds
+/// either member as anything but a number or a Yes/No, RE-429.
+pub fn wall_load_bearing(graph: &crate::native_parameters::ObjectGraph) -> Option<bool> {
+    let root = &graph.objects.first()?.fields;
+    let integer = |name: &str| match root.get(name)? {
+        Value::Bool(flag) => Some(i64::from(*flag)),
+        other => other.as_i64(),
+    };
+    Some(integer("m_isStructuralSignificant")? == 1 && integer("m_wallStructuralUsage")? == 1)
 }
 
 /// The fields [`WallReads::read`] builds of a record of `class`
@@ -582,6 +613,8 @@ pub struct WallReads {
     top_joins_read: BTreeSet<u64>,
     functions: BTreeMap<u64, i64>,
     functions_read: BTreeSet<u64>,
+    bearing: BTreeMap<u64, bool>,
+    bearing_read: BTreeSet<u64>,
 }
 
 impl WallReads {
@@ -603,6 +636,18 @@ impl WallReads {
         type_walls: &BTreeSet<u64>,
         join_walls: &BTreeSet<u64>,
     ) -> anyhow::Result<()> {
+        self.read_with(rf, type_walls, join_walls, &BTreeSet::new())
+    }
+
+    /// [`Self::read`], and whether each of `bearing_walls` is load bearing
+    /// ([`wall_load_bearing`], RE-429) from the same records.
+    fn read_with(
+        &mut self,
+        rf: &mut RevitFile,
+        type_walls: &BTreeSet<u64>,
+        join_walls: &BTreeSet<u64>,
+        bearing_walls: &BTreeSet<u64>,
+    ) -> anyhow::Result<()> {
         let types: BTreeSet<u64> = type_walls
             .difference(&self.type_ids_read)
             .copied()
@@ -611,7 +656,16 @@ impl WallReads {
             .difference(&self.top_joins_read)
             .copied()
             .collect();
-        let selected: BTreeSet<u64> = types.union(&joins).copied().collect();
+        let bearings: BTreeSet<u64> = bearing_walls
+            .difference(&self.bearing_read)
+            .copied()
+            .collect();
+        let selected: BTreeSet<u64> = types
+            .iter()
+            .chain(&joins)
+            .chain(&bearings)
+            .copied()
+            .collect();
         if selected.is_empty() {
             return Ok(());
         }
@@ -624,6 +678,7 @@ impl WallReads {
         };
         let mut type_ids: BTreeMap<u64, u64> = BTreeMap::new();
         let mut top_joined: BTreeMap<u64, bool> = BTreeMap::new();
+        let mut bearing: BTreeMap<u64, bool> = BTreeMap::new();
         extract_graphs(rf, &options, |record| {
             let Some(graph) = record.graph.as_ref() else {
                 return Ok(());
@@ -640,13 +695,37 @@ impl WallReads {
             {
                 top_joined.insert(id, facts.top_joined);
             }
+            if bearings.contains(&id)
+                && matches!(record.class_name.as_deref(), Some("SWall" | "ArcWall"))
+            {
+                if let Some(load_bearing) = facts.load_bearing {
+                    bearing.insert(id, load_bearing);
+                }
+            }
             Ok(())
         })?;
         self.type_ids.extend(type_ids);
         self.type_ids_read.extend(types);
         self.top_joined.extend(top_joined);
         self.top_joins_read.extend(joins);
+        self.bearing.extend(bearing);
+        self.bearing_read.extend(bearings);
         Ok(())
+    }
+
+    /// [`wall_load_bearing`] of each of `walls` whose `SWall` or `ArcWall`
+    /// record holds both members it reads, reading only the walls not read
+    /// already (RE-429).
+    pub fn load_bearing(
+        &mut self,
+        rf: &mut RevitFile,
+        walls: &BTreeSet<u64>,
+    ) -> anyhow::Result<BTreeMap<u64, bool>> {
+        self.read_with(rf, &BTreeSet::new(), &BTreeSet::new(), walls)?;
+        Ok(walls
+            .iter()
+            .filter_map(|id| Some((*id, *self.bearing.get(id)?)))
+            .collect())
     }
 
     /// [`wall_top_joins`], reading only the walls not read already.
@@ -740,6 +819,7 @@ pub fn native_walls_and_top_joins_into(
     let mut functions: BTreeMap<u64, i64> = BTreeMap::new();
     let mut functions_read: BTreeSet<u64> = BTreeSet::new();
     let mut top_joined: BTreeMap<u64, bool> = BTreeMap::new();
+    let mut bearing: BTreeMap<u64, bool> = BTreeMap::new();
     let mut uncut: BTreeSet<u64> = BTreeSet::new();
     let mut top_cutters: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut base_cutters: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
@@ -755,6 +835,7 @@ pub fn native_walls_and_top_joins_into(
         ..Options::default()
     };
     let mut found: BTreeMap<u64, (NativeWall, Option<u64>)> = BTreeMap::new();
+    let mut located_lines: BTreeMap<u64, ([f64; 2], [f64; 2])> = BTreeMap::new();
     let mut types: BTreeMap<u64, [f64; 2]> = BTreeMap::new();
     extract_graphs(rf, &options, |record| {
         if let Some(graph) = record.graph.as_ref() {
@@ -789,6 +870,9 @@ pub fn native_walls_and_top_joins_into(
             return Ok(());
         }
         top_joined.insert(id, is_top_joined(graph));
+        if let Some(load_bearing) = wall_load_bearing(graph) {
+            bearing.insert(id, load_bearing);
+        }
         if !graph.objects.iter().any(|object| {
             matches!(
                 object.class_name.as_str(),
@@ -954,8 +1038,18 @@ pub fn native_walls_and_top_joins_into(
             let type_id = root.and_then(|fields| element_id(fields.get("m_WallAttributesId")?));
             (wall, type_id)
         });
-        if let Some(read) = read {
-            found.insert(id, read);
+        match read {
+            Some(read) => {
+                found.insert(id, read);
+            }
+            // A record holding another curve besides the one `m_pCrv` names
+            // gives no wall, but the curve it names is still the wall's
+            // location curve, which a curtain wall's `Length` is (RE-252).
+            None => {
+                if let Some(line) = location_curve(graph) {
+                    located_lines.insert(id, line);
+                }
+            }
         }
         Ok(())
     })?;
@@ -985,6 +1079,8 @@ pub fn native_walls_and_top_joins_into(
     reads.type_ids_read.extend(walls.iter().copied());
     reads.functions.extend(functions);
     reads.functions_read.extend(functions_read);
+    reads.bearing.extend(bearing);
+    reads.bearing_read.extend(walls.iter().copied());
     let walls = found
         .into_iter()
         .map(|(id, (mut wall, type_id))| {
@@ -995,6 +1091,7 @@ pub fn native_walls_and_top_joins_into(
         .collect();
     Ok(WallRecords {
         walls,
+        located_lines,
         top_joined,
         uncut,
         top_cutters,

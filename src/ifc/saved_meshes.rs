@@ -658,6 +658,7 @@ pub fn attach_scoped_with_control(
                     let placed = Placed {
                         axis,
                         ends: prism.ends.map(|end| world(end.centre)),
+                        areas: prism.ends.map(|end| end.area),
                     };
                     let kept = kept_ends.as_deref().and_then(|kept| kept.get(&id).copied());
                     Some(MemberMesh {

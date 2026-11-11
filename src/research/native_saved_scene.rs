@@ -22,8 +22,17 @@ use std::sync::Mutex;
 /// included, and `m_id`. A decode that keeps a field reads it, and checks it, as
 /// the full decode does, so a graph that is refused is refused for the same
 /// reason; what is left out reads as absent. A reader added to those modules
-/// that takes another field of these graphs must add its name here: Measure's
-/// `ifc.sha256` of the 126 exports moves when it does not.
+/// that takes another field of these graphs must add its name here: CI fails
+/// when the names differ (`tools/ci/saved-graphics-fields.py` holds the `m_`
+/// literals of the seven modules against this list), and Measure's
+/// `ifc.sha256` of the 126 exports moves when it does not, on the routes an
+/// export reads. One reader depends on how many fields an object holds and not
+/// on a name, which that check cannot see: `default_representation` in
+/// `native_graphics_traversal` reads a pre-2023 `InstanceInfo` with no
+/// `m_GRepId` as the default representation only if it holds exactly `m_Trf`,
+/// `m_symbolId` and `m_cda`, so a fourth field a build declares outside this
+/// list would change its reading (RE-342; the 30 sample projects of 2015 to
+/// 2022 declare exactly those three, and no export reads that route).
 pub const SAVED_GRAPHICS_FIELDS: &[&str] = &[
     "m_3x3",
     "m_Envelope",
@@ -420,8 +429,12 @@ fn extract_impl(
 const BATCH_BODY_BUDGET: usize = 2_000_000;
 /// The graph objects of the owners that name nothing that are held at once
 /// while they are meshed: the buffer is meshed and let go when it holds this
-/// many (the same 95 MiB or so as a batch of symbols).
-const OWNER_OBJECT_BUDGET: usize = 20_000;
+/// many, about 24 MiB at 4.8 KiB an object. At 20,000 (about 95 MiB) it was the
+/// pass's peak on Core Interior, whose walls fill it: 5,000 took 82 MiB off that
+/// file's export and 44 to 46 off the BIM4LCA office's, at no cost in time, since
+/// the owners are read once however often the buffer is meshed (#1694). A file
+/// small enough that its owners never fill it is not moved.
+const OWNER_OBJECT_BUDGET: usize = 5_000;
 /// An owner as a batch is planned: the first shared symbol it names (the
 /// order owners naming the same one together), its id, and the shared symbols
 /// it names itself.

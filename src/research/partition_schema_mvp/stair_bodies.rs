@@ -492,6 +492,8 @@ pub(super) fn offset_angle(radius: f64, offset: f64) -> Option<f64> {
 /// climbing clockwise, Revit's export runs each tread on past the next riser
 /// line, under the tread above, to a line parallel to it at the type's
 /// nosing length; a run with a nosing that is not measured so keeps its box.
+/// The run also takes its number of treads, which Revit's export writes as
+/// the flight's `Pset_StairFlightCommon.NumberOfTreads` (RE-287).
 pub(super) fn attach_spiral_run_bodies(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -569,6 +571,17 @@ pub(super) fn attach_spiral_run_bodies(
             continue;
         };
         let sign = if clockwise { -1.0 } else { 1.0 };
+        // Revit's export gives the flight the number of its run's treads as
+        // `Pset_StairFlightCommon.NumberOfTreads` (RE-287), which a spiral
+        // run's plan, an arc, does not let the run's ends give.
+        element.fields.push((
+            STAIR_TREAD_COUNT_FIELD.into(),
+            InstanceField::Integer {
+                value: run.treads.len() as i64,
+                signed: false,
+                size: 4,
+            },
+        ));
         let treads: Vec<InstanceField> = run
             .treads
             .iter()
