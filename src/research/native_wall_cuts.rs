@@ -181,6 +181,47 @@ fn read_wall_cut_steps(
     Ok(out)
 }
 
+/// The walls of `walls` whose native record was read and holds no base join, no
+/// `JoinToRoofGStep` whose `m_baseOrTop` is 0 (#1046). Revit's export gives a
+/// wall whose body is a vertical prism less its openings the areas of its sides
+/// only where its base is not attached: all 170 such walls of the BIM4LCA
+/// office as built and at building permit, and none of the 5 that are. A wall
+/// whose record is not read, one whose record holds such a step, and one whose
+/// step does not say whether it joins the base or the top, is left out, so the
+/// set never names a wall that may be attached at its base.
+pub fn walls_with_no_base_join(
+    rf: &mut RevitFile,
+    walls: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeSet<u64>> {
+    if walls.is_empty() {
+        return Ok(BTreeSet::new());
+    }
+    let options = native_document::Options {
+        selected_ids: walls.clone(),
+        ..native_document::Options::default()
+    };
+    let mut read: BTreeSet<u64> = BTreeSet::new();
+    let mut attached: BTreeSet<u64> = BTreeSet::new();
+    native_document::extract_graphs(rf, &options, |record| {
+        if !matches!(record.class_name.as_deref(), Some("SWall" | "ArcWall")) {
+            return Ok(());
+        }
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        read.insert(id);
+        if graph.objects.iter().any(|object| {
+            object.class_name == "JoinToRoofGStep"
+                && object.fields.get("m_baseOrTop").and_then(Value::as_i64) != Some(1)
+        }) {
+            attached.insert(id);
+        }
+        Ok(())
+    })?;
+    Ok(read.difference(&attached).copied().collect())
+}
+
 /// For each of `ids` (rectangular wall openings' ElementIds), the box of the
 /// two corners its `RectOpeningData.m_aPoint` saves, `[min_x, min_y, min_z,
 /// max_x, max_y, max_z]` in feet: the opening's rectangle in the plane of
