@@ -259,12 +259,39 @@ fn neighbours(
                 .filter(|i| *i != o_along)
                 .map(|i| dot(axis, o.axes[i]).abs() * o.half[i])
                 .sum();
+            // Debug: whether o's face under p covers the whole end face of m.
+            let normal_k = (0..3)
+                .max_by(|a, b| {
+                    dot(o.axes[*a], axis)
+                        .abs()
+                        .total_cmp(&dot(o.axes[*b], axis).abs())
+                })
+                .unwrap_or(0);
+            let mut covers = true;
+            let mut shape = String::new();
+            for k in (0..3).filter(|k| *k != normal_k) {
+                let c = dot(sub(p, o.centre), o.axes[k]).abs();
+                let r: f64 = (0..3)
+                    .filter(|s| *s != along)
+                    .map(|s| dot(m.axes[s], o.axes[k]).abs() * m.half[s])
+                    .sum();
+                covers &= c + r <= o.half[k] + TOLERANCE_FEET;
+                shape.push_str(&format!(" k{}:c={:.3},r={:.3},h={:.3}", k, c, r, o.half[k]));
+            }
+            eprintln!(
+                "mullion-ac {} p={:.3?} o={} offset={:.4} reach={:.4} covers={} normal_k={} o_along={}{}",
+                m.id, p, o.id, offset, reach, covers, normal_k, o_along, shape
+            );
             if offset < TOLERANCE_FEET {
                 found.centre = true;
             } else if (offset - reach).abs() >= TOLERANCE_FEET {
                 found.inside = true;
             }
         } else {
+            eprintln!(
+                "mullion-ob {} p={:.3?} o={} cos={:.5}",
+                m.id, p, o.id, cosine
+            );
             found.oblique = true;
         }
     }
@@ -300,13 +327,18 @@ pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
                 if n.unreliable { "U" } else { "-" },
             )
         };
+        let pts = end_points(m, along);
         eprintln!(
-            "mullion-kd {} ends {} {} odd={} kind={}",
+            "mullion-kd {} ends {} {} odd={} kind={} p0={:.3?} p1={:.3?} half={:.4?} along={}",
             m.id,
             flags(&ends[0]),
             flags(&ends[1]),
             m.odd,
-            m.kind
+            m.kind,
+            pts[0].0,
+            pts[1].0,
+            m.half,
+            along
         );
         if ends.iter().any(|end| end.unread()) {
             left_out.insert(m.id);
