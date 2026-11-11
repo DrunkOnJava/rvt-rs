@@ -994,7 +994,7 @@ fn follow_mesh_over_box(
 struct MemberMesh {
     /// The mullion's index into the entities.
     index: usize,
-    /// How many of its two end faces its Revit solid keeps, and how many of those
+    /// How many of its two end faces its Revit solid keeps, and which of those
     /// ends have a partner, where its curtain wall's boxes say (RE-268, RE-439).
     kept: Option<crate::partition_schema_mvp::KeptEnds>,
     /// The mesh as a prism along the mullion's axis.
