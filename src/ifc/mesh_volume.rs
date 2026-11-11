@@ -237,7 +237,7 @@ pub(super) fn prism_along(
         }
         let normal = normal.map(|component| component / twice_area);
         let offset = dot(normal, p);
-        let known = planes.iter_mut().find(|(other, other_offset, ..)| {
+        let known = planes.iter().position(|(other, other_offset, ..)| {
             let cosine = dot(normal, *other);
             cosine.abs() > 1.0 - PLANE_COSINE
                 && (offset - cosine.signum() * *other_offset).abs() < PLANE_FEET
@@ -249,7 +249,8 @@ pub(super) fn prism_along(
             (p[2] + q[2] + r[2]) / 3.0 * area,
         ];
         match known {
-            Some(plane) => {
+            Some(position) => {
+                let plane = &mut planes[position];
                 plane.2 += area;
                 for (sum, part) in plane.3.iter_mut().zip(moment) {
                     *sum += part;
@@ -343,8 +344,7 @@ const PARTNER_COSINE: f64 = 0.999;
 pub(super) fn partner_ends(placed: &[Placed]) -> Vec<[bool; 2]> {
     const CELL: f64 = 0.1;
     let cell = |point: [f64; 3]| point.map(|coordinate| (coordinate / CELL).floor() as i64);
-    let mut grid: std::collections::HashMap<[i64; 3], Vec<(usize, usize)>> =
-        std::collections::HashMap::new();
+    let mut grid: HashMap<[i64; 3], Vec<(usize, usize)>> = HashMap::new();
     for (index, mullion) in placed.iter().enumerate() {
         for (end, point) in mullion.ends.iter().enumerate() {
             grid.entry(cell(*point)).or_default().push((index, end));
