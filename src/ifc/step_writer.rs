@@ -3574,6 +3574,17 @@ impl StepWriter<'_> {
         // geometry below.
         let host_references = super::host_references(model);
 
+        // #1016: whether rvt-rs writes the base quantities at all, which
+        // `--no-base-quantities` stops by emptying every `Qto_` set, as
+        // Revit's export made with "Export base quantities" off holds no
+        // opening quantity either (RE-242).
+        let base_quantities_written = model.entities.iter().any(|entity| match entity {
+            super::entities::IfcEntity::ElementPropertySet { set, .. } => {
+                set.name.starts_with("Qto_") && !set.properties.is_empty()
+            }
+            _ => false,
+        });
+
         // RE-151 (#227): an opening nothing fills, a hole in a floor's sketch.
         // As in Revit's export it is placed in its host's frame, its outline
         // extruded up through the host, and it voids the host without being
@@ -3690,6 +3701,53 @@ impl StepWriter<'_> {
                         &set,
                         &gid(&["property-set", opening_gid.as_str(), set_name]),
                         &gid(&["defines-by-properties", opening_gid.as_str(), set_name]),
+                    );
+                }
+            }
+            // RE-151, RE-244: Revit's export gives an opening a floor's
+            // sketch makes its `Area`, its outline's, where that outline is
+            // not a rectangle, and its `Width` and `Height` where it is: on
+            // the office as built the 36 such openings are the 5 whose outline
+            // has a notch, whose `Area` this is to 1e-6 m2, and the 31
+            // rectangles, which Revit's export gives no `Area` on. A notched
+            // outline is what is measured; a quadrilateral that is not a
+            // rectangle, and every other kind of unfilled opening, stay
+            // without.
+            if number.is_none() && base_quantities_written {
+                let corners = outline_feet
+                    .iter()
+                    .zip(outline_feet.iter().cycle().skip(1))
+                    .filter(|(from, to)| from != to)
+                    .count();
+                let area = outline_feet
+                    .iter()
+                    .zip(outline_feet.iter().cycle().skip(1))
+                    .map(|(from, to)| from.0 * to.1 - to.0 * from.1)
+                    .sum::<f64>()
+                    .abs()
+                    / 2.0;
+                if corners > 4 && area > 0.0 {
+                    let quantities = PropertySet {
+                        name: "Qto_OpeningElementBaseQuantities".into(),
+                        properties: vec![super::entities::Property {
+                            name: "Area".into(),
+                            value: super::entities::PropertyValue::AreaSquareFeet(area),
+                        }],
+                    };
+                    self.emit_property_set(
+                        owner_hist,
+                        opening_id,
+                        &quantities,
+                        &gid(&[
+                            "property-set",
+                            opening_gid.as_str(),
+                            "Qto_OpeningElementBaseQuantities",
+                        ]),
+                        &gid(&[
+                            "defines-by-properties",
+                            opening_gid.as_str(),
+                            "Qto_OpeningElementBaseQuantities",
+                        ]),
                     );
                 }
             }
