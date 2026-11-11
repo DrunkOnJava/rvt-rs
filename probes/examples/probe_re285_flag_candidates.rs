@@ -45,13 +45,21 @@ fn run(path: &str) -> anyhow::Result<()> {
         .collect();
     let saved = read(&mut rf, &declared)?;
     let mut lines = 0usize;
+    let mut classes: std::collections::BTreeMap<String, usize> = Default::default();
     for (id, parameters) in &saved.elements {
         let class = parameters
             .iter()
             .find(|p| p.level == ParameterLevel::Instance)
             .map(|p| p.source_class.as_str())
             .unwrap_or("?");
-        if !matches!(class, "SWall" | "ArcWall" | "Floor" | "FamilyInstance") {
+        *classes.entry(class.to_string()).or_insert(0usize) += 1;
+        // `Wall` is the class of a 2024 file's walls (RE-429): the RE-285 list
+        // named the 32-bit releases' `SWall` and `ArcWall` alone, so a wall's
+        // Structural Usage was never scored against Revit's `LoadBearing`.
+        if !matches!(
+            class,
+            "SWall" | "ArcWall" | "Wall" | "Floor" | "FamilyInstance"
+        ) {
             continue;
         }
         for parameter in parameters {
@@ -96,5 +104,6 @@ fn run(path: &str) -> anyhow::Result<()> {
         "native readers: flag candidates release {release}: elements with parameters {}, integer built-in values {lines}",
         saved.elements.len()
     );
+    println!("native readers: flag candidates classes with saved parameters: {classes:?}");
     Ok(())
 }
