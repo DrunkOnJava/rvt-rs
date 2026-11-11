@@ -26,8 +26,10 @@ The key is a sha256 over:
     writes to ifc.sha256), so a rebuild that writes the same model hits;
   - the scorer and every module of tools/re and tools/ci it can reach, by
     import, importlib path or name (a module it only mentions is included),
-    and every file under tools/re and tools/ci that is not Python (the Measure
-    script, the requirements, the schemas), whichever the scorer reads;
+    and every file under tools/re and tools/ci that is neither Python nor a shell
+    script (the requirements, the schemas), whichever the scorer reads (a shell
+    script, such as the Measure script, can change a step's output only through
+    the arguments, the environment and the files the key already hashes);
   - the value of every environment variable the closure reads, except the two
     that only size the mesh cache (RVT_MESH_CACHE, RVT_MESH_WORKERS);
   - the files a scorer reads that its arguments do not name (EXTRA_INPUTS);
@@ -358,7 +360,12 @@ def fingerprint():
             for base, names, files in os.walk(directory):
                 names.sort()
                 for name in sorted(files):
-                    if not name.endswith(".py") and "__pycache__" not in base:
+                    # A shell script (the Measure driver, the scrub, the sealing and
+                    # change-scope scripts) can change a step's output only through its
+                    # arguments, its environment and the files it is given, which the key
+                    # hashes itself; hashing the scripts too reset every entry on one in
+                    # six commits of main (25 of 153 in 72 hours changed one).
+                    if not name.endswith((".py", ".sh")) and "__pycache__" not in base:
                         path = os.path.join(base, name)
                         with open(path, "rb") as handle:
                             others.append(f"{os.path.relpath(path, os.path.dirname(CI_DIR))} {sha(handle.read())}")

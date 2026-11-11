@@ -732,8 +732,12 @@ writes the cached output and a `<step> cached` line to the model's
   lines, which carry the export time, so a rebuild that writes the same model
   hits; Revit's export; the glTF; the validation findings); the scorer and
   every module of `tools/re` and `tools/ci` it reaches by import, importlib
-  path or name, and every file of `tools/re` and `tools/ci` that is not Python
-  (the Measure script, the requirements, the schemas); the value of every
+  path or name, and every file of `tools/re` and `tools/ci` that is neither Python
+  nor a shell script (the requirements, the schemas: a shell script, such as the
+  Measure script, changes a step's output only through its arguments, its
+  environment and the files it is given, which the key hashes itself, and
+  hashing the scripts reset every entry on 25 of 153 commits of `main` in 72
+  hours); the value of every
   environment variable the scorers read (apart from the two that size the mesh
   cache), which is `PSETS_MISSING` for `psets_vs_ifc` and `qtos_vs_ifc`; the
   files a scorer reads that its arguments do not name (`qtos_vs_ifc`'s
@@ -781,10 +785,13 @@ writes the cached output and a `<step> cached` line to the model's
   in a shard (the Build job runs them, on a runner that holds no score cache),
   but its binaries and a probe's scorers do, with the cache writable. It is
   saved only where rust-cache is saved: the
-  workflow dispatched from `main` and the side measuring `main`'s own code
-  (`inputs.ref` empty, or `base` `main`), because code of any
-  other ref runs on the runner and must not write what a later `main` run
-  reads. A pull request run, and a run of any other ref, only reads. Keying on
+  workflow dispatched from `main` and a side whose commit is on `main`'s
+  history (`main`'s tip or an ancestor of it, whether the run named it `main`,
+  left `ref` empty or gave its SHA: the plan job asks the compare API), because
+  code of any other ref runs on the runner and must not write what a later
+  `main` run reads. (Until a run that pinned its base to a SHA saved nothing,
+  the cache of runs 42980660819 and 42983301930 was cold: 0 of 4,548 lookups
+  hit.) A pull request run, and a run of any other ref, only reads. Keying on
   the scorers makes an entry reachable only by a run whose scorers, files and
   libraries hash alike, but that is not safe by construction: code of the
   measured ref that runs in the shard (its binaries, a probe's scorers) could

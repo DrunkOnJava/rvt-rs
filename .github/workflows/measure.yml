@@ -281,6 +281,8 @@ jobs:
       base: ${{ steps.plan.outputs.base }}
       head_sha: ${{ steps.refs.outputs.head }}
       base_sha: ${{ steps.refs.outputs.base }}
+      head_on_main: ${{ steps.refs.outputs.head_on_main }}
+      base_on_main: ${{ steps.refs.outputs.base_on_main }}
     steps:
       # Each ref is resolved to a full SHA once, here, so every shard of a side
       # checks out the same commit even when its branch moves during the run
@@ -309,8 +311,22 @@ jobs:
           }
           head=$(full "$HEAD_REF")
           base=$(full "$BASE_REF")
+          # Whether a commit is main's own code: main's tip or an ancestor of it
+          # (the compare API says `identical` or `behind`). The score cache is
+          # saved only by a side whose code is main's, whichever way the commit
+          # was named: a run that pins its base or head to a main SHA, as every
+          # run that compares two commits does, saved nothing before this, so
+          # the cache stayed cold (0 of 4,548 lookups hit in run 42980660819).
+          on_main() {
+            local status
+            [[ "$1" =~ ^[0-9a-f]{40}$ ]] || { echo false; return; }
+            status=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$1" --jq .status 2>/dev/null || true)
+            case "$status" in identical | behind) echo true ;; *) echo false ;; esac
+          }
           echo "head=$head" >> "$GITHUB_OUTPUT"
           echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head_on_main=$(on_main "$head")" >> "$GITHUB_OUTPUT"
+          echo "base_on_main=$(on_main "$base")" >> "$GITHUB_OUTPUT"
           echo "head ${HEAD_REF} -> ${head}; base ${BASE_REF} -> ${base}"
       - id: plan
         shell: bash
@@ -728,7 +744,8 @@ jobs:
       # scorer or schema step whose every input is as it was in an earlier run
       # takes that run's output. Every run restores the newest cache of its
       # shard; it is saved only where the Rust cache is (the workflow
-      # dispatched from main and the code measured main's, so that code of
+      # dispatched from main and the side's commit on main's history, main's
+      # tip or an ancestor of it however the run named it, so that code of
       # another ref never writes what a later main run reads), or under a name
       # of its own that `score_cache` gives a run from any ref, which main's
       # runs never read. Entries are named by what
@@ -746,7 +763,7 @@ jobs:
         env:
           SCORE_CACHE: ${{ inputs.score_cache }}
           SHARD: ${{ matrix.shard }}
-          SAVE_FROM_MAIN: ${{ github.ref == 'refs/heads/main' && (matrix.side == 'base' && (inputs.base == '' || inputs.base == 'main') || matrix.side != 'base' && inputs.ref == '') }}
+          SAVE_FROM_MAIN: ${{ github.ref == 'refs/heads/main' && (matrix.side == 'base' && needs.plan.outputs.base_on_main == 'true' || matrix.side != 'base' && needs.plan.outputs.head_on_main == 'true') }}
         run: |
           enabled=true
           save=false
