@@ -64,7 +64,33 @@ On the eight large files that is 266 of the 284 beams on each of the six quantit
 
 **What is left.** The 8 tubes' six quantities need the profile with its voids and rounded corners (Revit's are 0.01% to 0.03% off the faces of its tessellated body), which the mesh does not give. Beams drawn from a saved mesh carry no `Length`, `Roll`, `Slope` or `Span` (28 of the timber housing's 41, 7 of the timber office's 71): #1697. A beam's body that is not Revit's solid (the tubes, 20 of the concrete housing's 22 beams, 10 of the timber housing's 41) is untouched by this change: #1698.
 
-## 5. Reproduce
+## 5. What it costs
+
+The quantities come from the beams' saved graphics, which the saved-mesh pass reads, and that costs time and memory on some files. Measure run [42972934548](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42972934548) (`timing`: base `47aa70be` and head `e10641ce` built once and timed in turn on one runner per file, three rounds, 68 files; peak memory is GNU time's `%M`) reads 11 files above the noise and 57 within it:
+
+| file | time, base to head | peak memory, base to head |
+|---|---|---|
+| `rst_basic` 2023 | 1,131 to 1,454 ms (+29%) | 147 to 314 MiB (2.1 times) |
+| `rst_basic` 2024 | 1,258 to 1,528 ms (+21%) | 143 to 326 MiB (2.3 times) |
+| `rst_basic` 2025 | 1,197 to 1,480 ms (+24%) | 143 to 326 MiB (2.3 times) |
+| `rst_basic` 2026 | 1,186 to 1,480 ms (+25%) | 143 to 326 MiB (2.3 times) |
+| `rst_basic` 2027 | 1,527 to 1,851 ms (+21%) | 144 to 327 MiB (2.3 times) |
+| `rac_advanced` 2023 | 5,410 to 6,269 ms (+16%) | 557 to 1,010 MiB (1.8 times) |
+| `rac_advanced` 2024 | 6,217 to 7,216 ms (+16%) | 579 to 1,090 MiB (1.9 times) |
+| `rac_advanced` 2025 | 5,873 to 6,743 ms (+15%) | 567 to 1,081 MiB (1.9 times) |
+| `rac_advanced` 2026 | 5,744 to 6,621 ms (+15%) | 562 to 1,075 MiB (1.9 times) |
+| `rac_advanced` 2027 | 6,808 to 7,729 ms (+14%) | 566 to 1,077 MiB (1.9 times) |
+| Snowdon Towers Structural 2024 | 3,767 to 6,383 ms (+69%) | 494 to 1,224 MiB (2.5 times) |
+
+The other 57 read 0.99 to 1.01 in time and 0.96 to 1.00 in peak memory: Core Interior, the concrete office's two states (33.1 s to 33.1 s and 27.8 s to 27.7 s; 1,439 to 1,440 MiB and 1,550 to 1,552 MiB) and its two terrain files, RE1's four models, Einhoven, and 47 Autodesk samples (all of 2015 to 2022, which the pass does not read, and the rest of 2023 to 2027).
+
+**The pass ran in all 11 before this change.** Their `body_sources` hold `saved_graphics_mesh` bodies at the base commit (5,123 to 5,225 in `rac_advanced`, 67 to 91 in `rst_basic`, 83 in Snowdon Towers Structural), so what is added is the reading of the beams' graphics, not the pass beginning. The 2024 saves read 29, 345 and 923 beams drawn along their axes (`partition_beam_axis`), of which 12, 171 and 32 gain quantities. Why that costs what it does is not established: the time added is 0.9 to 1.0 s on `rac_advanced`'s 29 beams, 0.3 s on `rst_basic`'s 345 and 2.6 s on Snowdon's 923, so it does not scale with the beams read, and no profile by stage has been taken. [#1694](https://github.com/DrunkOnJava/rvt-rs/issues/1694) tracks the pass's peak memory; these 11 files are a second set of numbers for it.
+
+**Not measured.** Measure's timing table holds the reference models, the office's four files and the samples. The BIM4LCA housing and timber office, on which the quantities are scored, are not in it, and neither is a structural model larger than Snowdon Towers Structural.
+
+**Opting out.** `--no-saved-meshes` runs no pass, so it leaves out the six quantities and this cost with the rest of the pass.
+
+## 6. Reproduce
 
 ```bash
 gh workflow run measure.yml --ref feat/1693-beam-quantities -f ref=781ed0cd1a4508d32b6260508d094b5190c36e43 -f base=5d291201904b9e61d8ce62c3201308a152d4c65a \
@@ -74,6 +100,8 @@ gh workflow run measure.yml --ref feat/1693-beam-quantities -f ref=<head> -f bas
 
 The scorers: `python3 tools/re/beam_quantities_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc>` (Measure 42967412141: `-f nordic=true -f scorers=beam_quantities_vs_ifc -f "models=nordic-housing-concrete-as-built ..."`), and `python3 tools/re/beam_added_quantities.py <before.ifc> <after.ifc>` for the exports a run keeps.
 
-## 6. Sources
+The timing of section 5: `gh workflow run measure.yml --ref feat/1693-beam-quantities -f ref=e10641ce4d037de4900605beb3375dbfe5482670 -f base=47aa70bedff92f93ebb118e0773134be2a5e9c9a -f nordic=true -f samples=true -f timing=true`.
+
+## 7. Sources
 
 RE-353 (revit-ifc's `PropertyUtil.CreateBeamColumnBaseQuantities`, CLEANROOM.md source 5), RE-387, RE-388, RE-404, RE-418. No Autodesk source was read.
