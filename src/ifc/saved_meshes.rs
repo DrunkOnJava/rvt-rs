@@ -55,9 +55,9 @@ use super::entities::{BrepTriangle, IfcEntity, Property, PropertySet, PropertyVa
 use super::export_content::{
     BEAM_BOX_BODY_SOURCE, INSTANCE_TURNED_BODY_SOURCE, RECORD_BBOX_BODY_SOURCE,
     SAVED_MESH_ELEMENT_ID_SHARED, SAVED_MESH_NO_GRAPHICS, SAVED_MESH_NO_MESH,
-    SAVED_MESH_NO_TRIANGLES, SAVED_MESH_PARTIAL_PREFIX, SAVED_MESH_REFUSAL_PROPERTY,
-    SLAB_SHAPE_REFUSAL_PROPERTY, SPACE_OUTLINE_SAVED_MESH, SPACE_OUTLINE_SOURCE_PROPERTY,
-    WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
+    SAVED_MESH_NO_TRIANGLES, SAVED_MESH_NOT_CANDIDATE_PREFIX, SAVED_MESH_PARTIAL_PREFIX,
+    SAVED_MESH_REFUSAL_PROPERTY, SLAB_SHAPE_REFUSAL_PROPERTY, SPACE_OUTLINE_SAVED_MESH,
+    SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
 use super::mesh_volume::{all_faces_flat, box_plan_width, closed_mesh_volume};
 use super::mesh_wall_quantities::{WallMeshQuantities, wall_mesh_quantities};
@@ -264,23 +264,20 @@ pub fn attach_scoped_with_control(
             _ => None,
         })
         .collect();
+    // #1645: why each box that keeps its box does; a box the pass does not take
+    // as a candidate says so before it looks at any saved graphics.
+    let mut refusals: Vec<(usize, String)> = Vec::new();
     for (index, entity) in model.entities.iter().enumerate() {
-        if wholes.contains(&index) {
-            continue;
-        }
         let IfcEntity::BuildingElement {
             ifc_type,
-            type_guid: Some(tag),
+            type_guid,
             property_set: Some(set),
-            location_feet: Some(_),
+            location_feet,
             ..
         } = entity
         else {
             continue;
         };
-        if !scope.includes(ifc_type) {
-            continue;
-        }
         let text = |name: &str| {
             set.properties.iter().find_map(|p| match &p.value {
                 PropertyValue::Text(t) if p.name == name => Some(t.as_str()),
@@ -305,11 +302,28 @@ pub fn attach_scoped_with_control(
         {
             continue;
         }
-        let Ok(id) = tag.parse::<u64>() else {
-            continue;
+        let id = type_guid.as_deref().and_then(|tag| tag.parse::<u64>().ok());
+        let not_taken = if wholes.contains(&index) {
+            Some("whole_drawn_by_its_parts")
+        } else if location_feet.is_none() {
+            Some("no_location")
+        } else if id.is_none() {
+            Some("no_element_id")
+        } else if !scope.includes(ifc_type) {
+            Some("class_not_in_scope")
+        } else {
+            None
         };
-        report.candidates += 1;
-        by_id.entry(id).or_default().push(index);
+        match (id, not_taken) {
+            (Some(id), None) => {
+                report.candidates += 1;
+                by_id.entry(id).or_default().push(index);
+            }
+            (_, Some(why)) => {
+                refusals.push((index, format!("{SAVED_MESH_NOT_CANDIDATE_PREFIX}{why}")));
+            }
+            (None, None) => {}
+        }
     }
     // RE-388: the walls whose quantities their saved mesh gives, whether or not
     // the wall's own body is drawn from it.
@@ -344,6 +358,9 @@ pub fn attach_scoped_with_control(
     };
     report.embed_hosts = hosts.len();
     if by_id.is_empty() && hosts.is_empty() && walls.is_empty() {
+        for (index, reason) in refusals {
+            note_refusal(model, index, reason);
+        }
         return Ok(report);
     }
     let options = crate::native_document::Options {
@@ -364,10 +381,8 @@ pub fn attach_scoped_with_control(
     let mut wall_quantities: Vec<(usize, WallMeshQuantities)> = Vec::new();
     // RE-396: the width of each curtain panel drawn from a mesh that is a vertical box.
     let mut plate_widths: Vec<(usize, f64)> = Vec::new();
-    // #1645: the candidates the scene held graphics for, and why each box that
-    // keeps its box does.
+    // #1645: the candidates the scene held graphics for.
     let mut seen: BTreeSet<u64> = BTreeSet::new();
-    let mut refusals: Vec<(usize, String)> = Vec::new();
     // Each element is taken as it is meshed and its decoded graphs freed with
     // its batch of shared symbols, rather than all held until the last one is
     // meshed (#1075).

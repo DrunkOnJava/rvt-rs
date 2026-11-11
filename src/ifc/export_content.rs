@@ -5057,7 +5057,8 @@ pub const SLAB_SHAPE_REFUSAL_PROPERTY: &str = "SlabShapeRefusal";
 /// [`SAVED_MESH_NO_GRAPHICS`], [`SAVED_MESH_NO_MESH`],
 /// [`SAVED_MESH_NO_TRIANGLES`], [`SAVED_MESH_ELEMENT_ID_SHARED`], or
 /// [`SAVED_MESH_PARTIAL_PREFIX`] followed by the decoder diagnostics that left
-/// the mesh partial (RE-224), with their digits written as `#`.
+/// the mesh partial (RE-224), with their digits written as `#`, or
+/// [`SAVED_MESH_NOT_CANDIDATE_PREFIX`] and why the pass did not look.
 pub const SAVED_MESH_REFUSAL_PROPERTY: &str = "SavedMeshRefusal";
 
 /// [`SAVED_MESH_REFUSAL_PROPERTY`] of an element the file holds no saved
@@ -5079,6 +5080,13 @@ pub const SAVED_MESH_ELEMENT_ID_SHARED: &str = "element_id_shared";
 /// The start of the [`SAVED_MESH_REFUSAL_PROPERTY`] of an element whose saved
 /// graphics did not decode whole.
 pub const SAVED_MESH_PARTIAL_PREFIX: &str = "partial: ";
+
+/// The start of the [`SAVED_MESH_REFUSAL_PROPERTY`] of a box body the pass did
+/// not take as a candidate, so that it looked at no saved graphics (#1645):
+/// followed by `whole_drawn_by_its_parts` (a stair or curtain wall whose parts
+/// draw it), `no_location`, `no_element_id` (its Tag is no ElementId) or
+/// `class_not_in_scope` (a caller asked for the doors and windows only).
+pub const SAVED_MESH_NOT_CANDIDATE_PREFIX: &str = "not_a_candidate: ";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] that says why a wall
 /// whose base join names a floor with shape-edited corners keeps the base of
