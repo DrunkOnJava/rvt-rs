@@ -578,17 +578,25 @@ pub(super) fn column_quantities(
 }
 
 /// Where a curtain mullion stands, for the test of whether another continues
-/// it (RE-404): the unit axis it runs along and the centres of its two end
-/// faces, in one frame for all of them, feet.
+/// it (RE-404): the unit axis it runs along, the centres of its two end
+/// faces, in one frame for all of them, feet, and the areas of those faces,
+/// square feet (RE-436).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct Placed {
     pub axis: [f64; 3],
     pub ends: [[f64; 3]; 2],
+    pub areas: [f64; 2],
 }
 
 /// How close, feet, an end must be to another mullion's end for the other to be
 /// its partner (about 1 cm): the two meet end to end.
 const PARTNER_FEET: f64 = 0.033;
+
+/// How far, as a fraction of the larger, the areas of the two end faces that meet
+/// may differ and the ends still be of one section (RE-436): a 50 x 50 mm
+/// mullion's face is a third of a 150 x 50 mm one's, and a mitre the two pieces
+/// share changes both alike.
+const SAME_SECTION_AREA: f64 = 1e-3;
 
 /// The cosine of the angle between two axes over which the mullions coincide
 /// (about a quarter of a degree, RE-432): a continuation bent off the axis by
@@ -643,6 +651,9 @@ pub(super) fn partner_ends(placed: &[Placed]) -> Vec<[bool; 2]> {
                                 let beyond = sub(neighbour.ends[1 - other_end], point);
                                 other != index
                                     && dot(mullion.axis, neighbour.axis).abs() > PARTNER_COSINE
+                                    && (mullion.areas[end] - neighbour.areas[other_end]).abs()
+                                        <= SAME_SECTION_AREA
+                                            * mullion.areas[end].max(neighbour.areas[other_end])
                                     && dot(near, near).sqrt() < PARTNER_FEET
                                     && dot(beyond, outward) > PARTNER_FEET
                             })
@@ -1114,6 +1125,7 @@ mod tests {
         Placed {
             axis,
             ends: [from, to],
+            areas: [0.0025; 2],
         }
     }
 
@@ -1167,6 +1179,29 @@ mod tests {
         // A hundredth of a degree off it still meets the end face to face.
         assert_eq!(
             partner_ends(&[lower, continuation(0.01)]),
+            vec![[false, true], [true, false]]
+        );
+    }
+
+    #[test]
+    fn a_continuation_of_another_section_is_no_partner_but_one_of_the_same_is() {
+        let lower = placed([0.0, 0.0, 1.0], [0.0, 0.0, 0.0], [0.0, 0.0, 2.1]);
+        let upper = |area: f64| Placed {
+            areas: [area; 2],
+            ..placed([0.0, 0.0, 1.0], [0.0, 0.0, 2.1], [0.0, 0.0, 2.5])
+        };
+        // A 150 x 50 mm face (0.0075) on a 50 x 50 mm one (0.0025): not the same end face.
+        assert_eq!(
+            partner_ends(&[lower, upper(0.0075)]),
+            vec![[false, false]; 2]
+        );
+        assert_eq!(
+            partner_ends(&[lower, upper(0.0025)]),
+            vec![[false, true], [true, false]]
+        );
+        // The same section with a face a hundredth of a percent different (a shared mitre).
+        assert_eq!(
+            partner_ends(&[lower, upper(0.002_500_2)]),
             vec![[false, true], [true, false]]
         );
     }

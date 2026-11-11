@@ -56,7 +56,7 @@ Autodesk's six 2015 sample projects, where previews and PartAtom are not
 measured. On Revit 2024 and 2025 project files it reads
 the building: each element's ElementId, category, name, type (written as
 an IFC type object of its Revit type, RE-110), storey, materials, layers,
-GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226) and, where the boxes of their wall's mullions say which ends Revit's solid keeps, `NetSurfaceArea` (RE-268, RE-400, RE-403, RE-432), walls'
+GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226) and, where the boxes of their wall's mullions say which ends Revit's solid keeps, `NetSurfaceArea` (RE-268, RE-400, RE-403, RE-432, RE-433, RE-436), walls'
 `ExtendToStructure` (RE-228), railings' `Height` and `Reference` (RE-231, RE-431), stair flights' treads, nosing and run type
 and landings' type (RE-92) and the parameters named for a standard property
 set's property (RE-194), and a body that is exact where the element's
@@ -159,7 +159,12 @@ of the two held-out 2027 pairs writes none on 71 elements of those classes (coun
 only), where its export of the same projects saved by 2024 to 2026 writes one;
 its proxies (`NOTDEFINED`), openings, spaces and every type object keep theirs,
 and a class the pairs do not hold (columns, beams, coverings, curtain walls,
-plates, MEP terminals ...) is not measured on 2027 and keeps its value (#1692). The exporter's
+plates, MEP terminals ...) is not measured on 2027 (#1692). A typed beam, column,
+plate and covering is left out as well, taken from the exporter's source and not
+from a measured export: no Revit 2027 export holds one of them, and the 2027
+samples hold beams, columns, plates and coverings that rvt-rs writes a value on
+(#1716). A curtain wall, a footing, a ramp, a shading device and the MEP
+terminals keep their value. The exporter's
 public source writes an occurrence's `PredefinedType` only where the element has no type
 object when it is created, and only from its tag `v27.3.0.12` (not in `v27.0.1.1` and
 earlier), so what decides is the exporter's build and not the save's release: a Revit 2027
