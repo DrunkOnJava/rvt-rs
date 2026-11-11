@@ -7,6 +7,9 @@ between the body's lowest and highest point is tested against the wall's IfcOpen
 are explained is a prism less its openings.
 
 Usage: wall_prism_after_openings.py <revit.ifc> [tolerance in file length units, default 2.0]
+   or, as a Measure scorer: wall_prism_after_openings.py <rvt-rs.ifc> <revit.ifc> (the first is not read)
+
+Ends with one JSON line per wall that has a quantity set (`rows:`): its Tag, the kind of its set and the class of its body.
 """
 import collections
 import math
@@ -14,7 +17,9 @@ import re
 import sys
 
 LINE = re.compile(r"^#(\d+)\s*=\s*([A-Z0-9_]+)\s*\((.*)\);\s*$")
-TOL = float(sys.argv[2]) if len(sys.argv) > 2 else 2.0
+AS_SCORER = len(sys.argv) > 2 and sys.argv[2].lower().endswith(".ifc")
+REVIT = sys.argv[2] if AS_SCORER else sys.argv[1]
+TOL = float(sys.argv[2]) if len(sys.argv) > 2 and not AS_SCORER else 2.0
 
 
 def split_top(s):
@@ -53,7 +58,7 @@ def nums(s):
 
 SKIP = {"IFCPROPERTYSINGLEVALUE", "IFCPROPERTYSET", "IFCSTYLEDITEM", "IFCMEMBER", "IFCPLATE"}
 ent = {}
-for raw in open(sys.argv[1], errors="replace"):
+for raw in open(REVIT, errors="replace"):
     m = LINE.match(raw)
     if m and m.group(2) not in SKIP:
         ent[int(m.group(1))] = (m.group(2), m.group(3))
@@ -191,6 +196,7 @@ def normal(poly):
 
 
 rows = []
+others = []
 for i, (t, a) in ent.items():
     if t not in ("IFCWALL", "IFCWALLSTANDARDCASE") or i not in qsets:
         continue
@@ -198,6 +204,7 @@ for i, (t, a) in ent.items():
     kind = "full" if "GrossSideArea" in qsets[i] else "volume-only"
     items = body_items(refs(args[6])[0]) if refs(args[6]) else []
     if len(items) != 1 or ent[items[0]][0] != "IFCPOLYGONALFACESET":
+        others.append({"tag": args[7].strip("'"), "kind": kind, "cls": "several-items" if len(items) != 1 else "other-body"})
         continue
     fa = A(items[0])
     pts = [tuple(float(v) for v in p.split(",")) for p in re.findall(r"\(([-0-9.eE+,]+)\)", ent[refs(fa[0])[0]][1])]
@@ -214,6 +221,7 @@ for i, (t, a) in ent.items():
         elif abs(n[2]) > 1e-6:
             sloped += 1
     if sloped:
+        others.append({"tag": args[7].strip("'"), "kind": kind, "cls": "sloped"})
         continue
     boxes = [b for b in (opening_box(o, refs(args[5])[0]) for o in voids.get(i, [])) if b]
     unexplained = 0
@@ -246,6 +254,15 @@ for r in rows:
         print("  ", r)
 
 import json, os
+
+def row_class(r):
+    return "prism" if r["mids"] == 0 else "less-openings" if r["unexplained"] == 0 else "unexplained"
+
+print("\nrows:")
+for r in rows:
+    print(json.dumps({"tag": r["tag"], "kind": r["kind"], "cls": row_class(r), "openings": r["openings"]}))
+for r in others:
+    print(json.dumps(r))
 if os.environ.get("ROWS_OUT"):
     with open(os.environ["ROWS_OUT"], "w") as handle:
         for r in rows:
