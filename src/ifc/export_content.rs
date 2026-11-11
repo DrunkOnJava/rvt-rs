@@ -1371,7 +1371,12 @@ pub fn append_typed_production_elements(
             extrusion.as_ref(),
             solid_shape.as_ref(),
         );
-        add_beam_length(&mut reference_sets, &ifc_type, property_set.as_ref());
+        add_beam_length(
+            &mut reference_sets,
+            &ifc_type,
+            property_set.as_ref(),
+            &decoded,
+        );
         add_beam_span(&mut reference_sets, &ifc_type);
         add_beam_slope(&mut reference_sets, &ifc_type, &decoded);
         add_beam_roll(&mut reference_sets, &ifc_type, &decoded);
@@ -3373,31 +3378,50 @@ fn add_body_quantities(
 }
 
 /// Add a beam's `Qto_BeamBaseQuantities.Length` to `sets` (#1016): the
-/// length of the location line it is drawn along (RE-49, its record set's
-/// `AxisLength`), where its body is that line's box
-/// ([`BEAM_AXIS_BODY_SOURCE`]), whose ends lie in the beam's record box:
-/// Revit's export writes it as its body's extrusion length, the line's on
-/// each of the BIM4LCA office's 8 beams. Its areas and volumes are left out:
-/// that box is not the beam's section.
-fn add_beam_length(sets: &mut Vec<PropertySet>, ifc_type: &str, record: Option<&PropertySet>) {
+/// length of its location line (RE-49, RE-428). Revit's export writes it as the
+/// length of the beam's `Axis` curve: on each of the BIM4LCA office's 8 beams,
+/// which are drawn along the line, and on 291 of 291 beams with a line in the
+/// office and the housing, whether Revit draws the beam as an extrusion along the
+/// line, across it, or as a mesh (#1697). The line is the record set's
+/// `AxisLength` where the body is that line's box ([`BEAM_AXIS_BODY_SOURCE`]), and
+/// otherwise the line of the beam's element data that lies inside its record box
+/// ([`crate::partition_schema_mvp::beam_line_from_fields`]), whatever the body is
+/// drawn from: a box along the line that is longer than it
+/// ([`BEAM_BOX_BODY_SOURCE`]), or a saved mesh. A beam with no line gets none.
+/// Its areas and volumes are left out here: that box is not the beam's section.
+fn add_beam_length(
+    sets: &mut Vec<PropertySet>,
+    ifc_type: &str,
+    record: Option<&PropertySet>,
+    decoded: &DecodedElement,
+) {
     if ifc_type != "IFCBEAM" {
         return;
     }
-    let Some(record) = record else {
-        return;
-    };
-    let along_axis = record.properties.iter().any(|property| {
-        property.name == "BodySource"
-            && matches!(&property.value, PropertyValue::Text(text) if text == BEAM_AXIS_BODY_SOURCE)
-    });
-    let length = record
-        .properties
-        .iter()
-        .find_map(|property| match &property.value {
-            PropertyValue::LengthFeet(feet) if property.name == "AxisLength" => Some(*feet),
-            _ => None,
+    let along_axis_length = record
+        .filter(|record| {
+            record.properties.iter().any(|property| {
+                property.name == "BodySource"
+                    && matches!(&property.value, PropertyValue::Text(text) if text == BEAM_AXIS_BODY_SOURCE)
+            })
+        })
+        .and_then(|record| {
+            record
+                .properties
+                .iter()
+                .find_map(|property| match &property.value {
+                    PropertyValue::LengthFeet(feet) if property.name == "AxisLength" => Some(*feet),
+                    _ => None,
+                })
         });
-    let (true, Some(length)) = (along_axis, length) else {
+    let Some(length) = along_axis_length.or_else(|| {
+        crate::partition_schema_mvp::beam_line_from_fields(&decoded.fields).map(|(start, end)| {
+            (0..3)
+                .map(|axis| (end[axis] - start[axis]).powi(2))
+                .sum::<f64>()
+                .sqrt()
+        })
+    }) else {
         return;
     };
     if !(length.is_finite() && length > 0.0) {
@@ -3416,10 +3440,10 @@ fn add_beam_length(sets: &mut Vec<PropertySet>, ifc_type: &str, record: Option<&
 /// `SpanCalculator` (CLEANROOM.md source 5) takes it, where no parameter
 /// gives it, from the length of the extrusion the beam is exported as, the
 /// length `Qto_BeamBaseQuantities.Length` holds ([`add_beam_length`]), which
-/// is the line the beam is drawn along (RE-49). Revit's export writes the
-/// two equal on each of the BIM4LCA office's 8 beams, as built and at
-/// permit. Written only where `sets` holds that `Length`, so a beam Revit
-/// draws another way, whose export has no extrusion length, gets none.
+/// is the line of the beam (RE-49, RE-428). Revit's export writes the two equal
+/// on every beam of the BIM4LCA office and housing that has a line (291 of 291,
+/// as built and at permit). Written only where `sets` holds that `Length`, so a
+/// beam with no line gets none.
 fn add_beam_span(sets: &mut Vec<PropertySet>, ifc_type: &str) {
     if ifc_type != "IFCBEAM" {
         return;
@@ -3462,37 +3486,43 @@ fn add_beam_common(sets: &mut Vec<PropertySet>, property: Property) {
     }
 }
 
-/// Add a level beam's `Pset_BeamCommon.Slope` 0 to `sets` (W7): revit-ifc's
+/// Add a beam's `Pset_BeamCommon.Slope` to `sets` (W7): revit-ifc's
 /// `SlopeCalculator` (CLEANROOM.md source 5) takes the slope of a beam it
 /// exports as an extrusion, where no parameter named `Slope` gives it, from
 /// the extrusion's own slope where there is one, and otherwise as the angle
-/// between its location line and the horizontal, 0 for a line in the plan.
-/// Only a beam written with the extrusion length of [`add_beam_length`]
-/// whose location line does not leave the horizontal (its direction's
-/// vertical share below [`crate::partition_beam_axes::HORIZONTAL_EPS`]) gets
-/// it: a sloped beam's value comes from the extrusion's slope, which is not
-/// measured, so it gets none. Revit's export writes 0 on each of the BIM4LCA
-/// office's 8 beams, as built and at permit, all level.
+/// between its location line and the horizontal, 0 for a line in the plan. The
+/// angle is that of the beam's location line (the line of its record set where
+/// one is drawn along, else [`crate::partition_schema_mvp::beam_line_from_fields`]),
+/// its vertical rise over its horizontal run, 0 where its direction's vertical
+/// share is below [`crate::partition_beam_axes::HORIZONTAL_EPS`]. Only a beam
+/// written with the length of [`add_beam_length`] gets it. Revit's export writes
+/// that angle on each of the 291 beams with a line in the BIM4LCA office and
+/// housing, 36 of them sloped (3.586 degrees on a housing's 9), and 0 on each
+/// of the 255 level ones (#1697, RE-428); before it only a level beam got it, 0.
 fn add_beam_slope(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     if ifc_type != "IFCBEAM" || beam_extrusion_length(sets).is_none() {
         return;
     }
-    let Some((start, end)) = crate::partition_schema_mvp::beam_axis_from_fields(&decoded.fields)
+    let Some((start, end)) = crate::partition_schema_mvp::beam_line_from_fields(&decoded.fields)
+        .or_else(|| crate::partition_schema_mvp::beam_axis_from_fields(&decoded.fields))
     else {
         return;
     };
     let delta = [end[0] - start[0], end[1] - start[1], end[2] - start[2]];
     let length = (delta[0] * delta[0] + delta[1] * delta[1] + delta[2] * delta[2]).sqrt();
-    if !(length.is_finite() && length > 0.0)
-        || (delta[2] / length).abs() > crate::partition_beam_axes::HORIZONTAL_EPS
-    {
+    if !(length.is_finite() && length > 0.0) {
         return;
     }
+    let slope = if (delta[2] / length).abs() > crate::partition_beam_axes::HORIZONTAL_EPS {
+        delta[2].abs().atan2(delta[0].hypot(delta[1]))
+    } else {
+        0.0
+    };
     add_beam_common(
         sets,
         Property {
             name: "Slope".into(),
-            value: PropertyValue::AngleRadians(0.0),
+            value: PropertyValue::AngleRadians(slope),
         },
     );
 }
@@ -3502,10 +3532,11 @@ fn add_beam_slope(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Decoded
 /// the beam's Cross-Section Rotation parameter, in radians, whatever its
 /// value. rvt-rs reads that rotation from the beam's native record
 /// ([`crate::partition_schema_mvp::BEAM_ROTATION_FIELD`]) and writes the roll
-/// of a beam whose rotation is exactly 0, as it is on each of the BIM4LCA
-/// office's 8 beams, as built and at permit, on beams written with the
-/// extrusion length of [`add_beam_length`]. A rotated beam gets none: no
-/// measured beam is rotated, so its roll is not measured.
+/// of a beam whose rotation is exactly 0, as it is on each of the 291 beams
+/// with a line in the BIM4LCA office and housing, as built and at permit, on
+/// beams written with the length of [`add_beam_length`] (#1697, RE-428). A
+/// rotated beam gets none: no measured beam is rotated, so its roll is not
+/// measured.
 fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     if ifc_type != "IFCBEAM" || beam_extrusion_length(sets).is_none() {
         return;
@@ -5580,11 +5611,12 @@ pub const BEAM_AXIS_BODY_SOURCE: &str = "partition_beam_axis";
 ///   and `BodyLength`, the body's, which is the record box's length along the
 ///   line, with `SectionWidth` and `SectionDepth`.
 ///
-/// It is not [`BEAM_AXIS_BODY_SOURCE`]: no Revit export measures a beam longer
-/// than its line, so it gets none of the quantities that source's beams get
-/// (`Qto_BeamBaseQuantities.Length`, and from it `Pset_BeamCommon.Span`,
-/// `Slope` and `Roll`), and no I section. A saved mesh that decodes whole
-/// still replaces it under `--saved-meshes`.
+/// It is not [`BEAM_AXIS_BODY_SOURCE`]: its body is longer than the beam's line,
+/// so it gets no I section. Its `Qto_BeamBaseQuantities.Length`, and from it
+/// `Pset_BeamCommon.Span`, `Slope` and `Roll`, are the line's, as for every beam
+/// that has one: Revit's export writes the line's length on all 39 such beams of
+/// the BIM4LCA housing (#1697, RE-428). A saved mesh that decodes whole still
+/// replaces it under `--saved-meshes`.
 pub const BEAM_BOX_BODY_SOURCE: &str = "partition_beam_box_along_axis";
 
 /// A sloped beam's body: its section swept along its centreline, with the

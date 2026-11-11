@@ -215,7 +215,8 @@ def equal_values(answer, written):
 # ---- the IFC side -------------------------------------------------------------------------------
 
 
-def unwrap(value, metres):
+def unwrap(value, metres, radians=None):
+    """A value in metres and, where `radians` (radians per unit of the file's plane angle unit) is given, radians."""
     if value is None:
         return None
     raw = value.wrappedValue
@@ -223,18 +224,20 @@ def unwrap(value, metres):
         raw = list(raw)
     if "LengthMeasure" in value.is_a() and number(raw):
         raw = raw * metres
+    if radians is not None and "PlaneAngleMeasure" in value.is_a() and number(raw):
+        raw = raw * radians
     return raw
 
 
-def written_property(prop, metres):
+def written_property(prop, metres, radians=None):
     """(name, IfcValue type in capitals or None, value) of a property of a set."""
     if prop.is_a("IfcPropertySingleValue"):
         value = prop.NominalValue
-        return prop.Name, (value.is_a().upper() if value is not None else None), unwrap(value, metres)
+        return prop.Name, (value.is_a().upper() if value is not None else None), unwrap(value, metres, radians)
     if prop.is_a("IfcPropertyEnumeratedValue"):
-        return prop.Name, None, [unwrap(v, metres) for v in prop.EnumerationValues or ()]
+        return prop.Name, None, [unwrap(v, metres, radians) for v in prop.EnumerationValues or ()]
     if prop.is_a("IfcPropertyListValue"):
-        return prop.Name, None, [unwrap(v, metres) for v in prop.ListValues or ()]
+        return prop.Name, None, [unwrap(v, metres, radians) for v in prop.ListValues or ()]
     return prop.Name, prop.is_a().upper(), None
 
 
@@ -247,22 +250,22 @@ def written_quantity(quantity, scales):
     return quantity.Name, quantity.is_a().upper(), None if raw is None or scale is None else float(raw) * scale
 
 
-def written_set(definition, metres, scales):
+def written_set(definition, metres, scales, radians=None):
     """{name, kind, properties: [(name, type, value)]} of a property set or quantity set."""
     if definition.is_a("IfcElementQuantity"):
         items = [written_quantity(q, scales) for q in definition.Quantities or ()]
         return {"name": definition.Name, "kind": "quantities", "properties": items}
     if definition.is_a("IfcPropertySet"):
-        items = [written_property(p, metres) for p in definition.HasProperties or ()]
+        items = [written_property(p, metres, radians) for p in definition.HasProperties or ()]
         return {"name": definition.Name, "kind": "properties", "properties": items}
     return None
 
 
-def object_sets(obj, metres, scales):
+def object_sets(obj, metres, scales, radians=None):
     out = []
     for rel in obj.IsDefinedBy or ():
         if rel.is_a("IfcRelDefinesByProperties"):
-            found = written_set(rel.RelatingPropertyDefinition, metres, scales)
+            found = written_set(rel.RelatingPropertyDefinition, metres, scales, radians)
             if found:
                 out.append(found)
     return out
@@ -1152,7 +1155,8 @@ def oracle_values(report, answers, revit_file, revit):
             continue
         elements += 1
         theirs = {}
-        for item in object_sets(product, metres, scales):
+        # Revit's plane angles in radians, as the answers give them (psets_vs_ifc does the same).
+        for item in object_sets(product, metres, scales, radians):
             for name, kind, value in item["properties"]:
                 theirs[(item["name"], name)] = (kind, value, item["kind"])
         seen = set()

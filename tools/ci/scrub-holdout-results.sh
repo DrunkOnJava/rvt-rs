@@ -118,6 +118,9 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
     for f in "$dir"probe_score*.txt; do
       [ -f "$f" ] || continue
       grep -E '^native levels: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # tools/re/beam_lines_vs_ifc.py (#1697): counts beside fixed words and the
+      # export's units, never an ElementId; its `--list` lines are dropped.
+      grep -E "^beam lines: [A-Za-z0-9 _:.,;()=#<>/+'-]+$" "$f" || true
       grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^category census[A-Za-z ]*: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^re363 [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
