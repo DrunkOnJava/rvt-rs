@@ -4,6 +4,8 @@
   axis plus the end faces its solid keeps (RE-268's count, now read for a
   mullion on any host, where the box's own value was written only on a plain
   one); a mullion with a mitred end gets its lateral area plus the mitre face,
-  and the flat end where that is kept. Revit's export writes the same on the
-  mullions of the BIM4LCA housing and office whose body rvt-rs draws from the
-  mesh Revit saved.
+  and the flat end where that is kept. A mullion with a partner (a piece of the
+  same run that meets its end) at an end that count keeps is given none, since the
+  count reads the boxes of one curtain wall and misses a continuation on another.
+  Revit's export writes the same on the mullions of the BIM4LCA housing and
+  office whose body rvt-rs draws from the mesh Revit saved.

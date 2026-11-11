@@ -3,7 +3,7 @@
 **Date:** 2026-11-11
 **Issues:** #1046 (curtain mullion quantities), #1636 (second-project measurement); follows RE-268 (which ends Revit's solid keeps), RE-403 (the box is not the solid), RE-387 (the mesh's volume) and RE-418 (the mesh's length)
 **Artefacts:** the BIM4LCA office at building permit, in concrete and in timber, and the housing's four large files (Revit 2024, Revit's IFC4 exports), as Measure fetches them. Never stored.
-**Runs:** Measure [42946015504](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42946015504) (the scorer `tools/re/mullion_profiles_vs_ifc.py` at `b98bc2e2dcd7c5b2dd1dc5d0f33b2ee96d4fc1b6`, on `main` at `0649e224b96285c2bced628c5379bdd4be924727`) for section 1
+**Runs:** Measure [42946015504](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42946015504) (the scorer `tools/re/mullion_profiles_vs_ifc.py` at `b98bc2e2575d6de675e34a25e9b6f50de3518fff`, on `main` at `0649e224b96285c2bced628c5379bdd4be924727`) for section 1
 **Status:** pending the change's own measurement (section 3); the finding of section 1 is measured.
 
 ## 1. What Revit's `NetSurfaceArea` is, against rvt-rs's body
@@ -26,7 +26,11 @@
 
 ## 2. The rule
 
-A curtain mullion drawn from its saved mesh (a closed mesh of flat faces) that holds no `NetSurfaceArea` gets `mesh_volume::mullion_surface_area` of its own prism (the one whose extent is within 35% of its `Length`, where there is exactly one) and of `kept`, the end faces RE-268 reads for it: the lateral area plus `kept` of its two flat ends of one area each; or, of a flat and a mitred end, the lateral area plus the mitre face and, where `kept` is 2, the flat end, and none where `kept` is 0. `kept` is read for a mullion on any host (it is kept in the file's memo as the partition's mullions are read, `RevitFile::mullion_kept_ends`); until now it was written to a mullion's record only where its host is plain, and the box's own `NetSurfaceArea` only there too.
+A curtain mullion drawn from its saved mesh (a closed mesh of flat faces) that holds no `NetSurfaceArea` gets `mesh_volume::mullion_surface_area` of the prism its mesh is along the axis its record runs it along (RE-418's `prism_along`) and of `kept`, the end faces RE-268 reads for it: the lateral area plus `kept` of its two flat ends of one area each; or, of a flat and a mitred end, the lateral area plus the mitre face and, where `kept` is 2, the flat end, and none where `kept` is 0. `kept` is read for a mullion on any host (it is kept in the file's memo as the partition's mullions are read, `RevitFile::mullion_kept_ends`); until now it was written to a mullion's record only where its host is plain, and the box's own `NetSurfaceArea` only there too.
+
+**The first version was wrong on four mullions of the timber office at permit.** Measure 42947332778 (the first version, `fe2246850fc720052cf5de67cdeaa994dcf9d12e`, kept under `refs/archive/2026-11-11/cited/fe2246850fc7`) read `equal` on 1,622 more mullions on each of the concrete office's two files and on 1,646 and 1,622 more on the timber office's two, and on all 184 mitred mullions of the housing; the concrete office stayed at 0 different. The timber office at permit went from 5 to 9 different: tags 2495554, 3022734, 3481354 and 3481512, vertical 2.1 m mullions, written 0.7704 m2 where Revit's is 0.7632, one end face (0.0072 m2) too many. Each stands under a 0.4 m piece of the same section whose end face is exactly its own (end to end at 65.82 ft, and the other three likewise): a partner, which hides the end in Revit's solid. RE-268 reads the ends from the boxes of one curtain wall (`m_hostId`), and a continuation on another wall is not in its group, so it counted both ends (`kept` 2).
+
+`mesh_volume::partner_ends` finds a partner in the meshes themselves, whatever the wall: another mullion running the same way (cosine over 0.999) with an end within 1 cm of the end and its body beyond it. A mullion gets no `NetSurfaceArea` where it has a partner at an end that `kept` counts, that is where it has more partners than `2 - kept`. The check can only take a value away from what `kept` alone would write.
 
 ## 3. Measured: the change
 
