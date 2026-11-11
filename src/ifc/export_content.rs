@@ -3158,15 +3158,18 @@ fn add_railing_length(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Dec
     });
 }
 
-/// Add a space's `Qto_SpaceBaseQuantities.Height` to `sets`, its room's
-/// height (RE-255).
+/// Add a space's `Qto_SpaceBaseQuantities.Height` to `sets`: its room's height
+/// (RE-255), or an Area's, the height of its body, from its Level up to the
+/// Level above (RE-317), which its reader gives on the releases Revit's export
+/// is measured on.
 fn add_space_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     if ifc_type != "IFCSPACE" {
         return;
     }
     let Some(height) = decoded.fields.iter().find_map(|(name, value)| match value {
         InstanceField::Float { value, .. }
-            if name == crate::partition_schema_mvp::ROOM_HEIGHT_FIELD =>
+            if name == crate::partition_schema_mvp::ROOM_HEIGHT_FIELD
+                || name == crate::partition_area_records::AREA_SPACE_HEIGHT_FIELD =>
         {
             Some(*value)
         }
