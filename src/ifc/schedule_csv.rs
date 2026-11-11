@@ -282,7 +282,18 @@ pub fn elements_csv(model: &IfcModel, options: &CsvOptions) -> String {
         let cells = vec![
             text(type_guid.as_deref().unwrap_or_default()),
             text(ifc_type),
-            text(predefined_type.as_deref().unwrap_or_default()),
+            // What the export writes on the occurrence (#1692).
+            text(
+                predefined_type
+                    .as_deref()
+                    .filter(|_| {
+                        !super::category_map::predefined_type_left_out(
+                            ifc_type,
+                            model.global_ids.revit_version,
+                        )
+                    })
+                    .unwrap_or_default(),
+            ),
             text(name),
             text(storey.map(|s| s.name.as_str()).unwrap_or_default()),
             length(storey.map(|s| s.elevation_feet)),

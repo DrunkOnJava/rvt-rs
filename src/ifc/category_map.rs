@@ -901,6 +901,54 @@ pub fn export_override_applies(revit_class: &str, revit_version: Option<u32>) ->
     ) && revit_version == Some(2024))
 }
 
+/// The first release whose saves are written without a `PredefinedType` on the
+/// occurrence of [`PREDEFINED_TYPE_LEFT_OUT_CLASSES`] (#1692). On the two
+/// held-out pairs saved by 2027 (hemanth1986's house and office, counts only),
+/// Revit's own export writes none on 71 elements of those ten classes (stairs 1,
+/// stair flights 1, slabs 3, members 2, furniture 12, doors 7, windows 22, walls
+/// 19, railings 2, roofs 2), where its export of the same projects saved by 2024
+/// to 2026 writes one on each (`DOOR`, `WINDOW`, `FLOOR`, `STRINGER`,
+/// `NOTDEFINED` ...). It still writes one on the 88 building element proxies
+/// (`NOTDEFINED`), the 29 opening elements (`OPENING`), the 8 spaces
+/// (`NOTDEFINED`) and on every type object, which are as before. A 2027 save can
+/// only be exported by Revit 2027 or later, as #1472 found for `ObjectType`.
+pub const PREDEFINED_TYPE_LEFT_OUT_FROM: u32 = 2027;
+
+/// The entities whose occurrence is written without a `PredefinedType` from
+/// [`PREDEFINED_TYPE_LEFT_OUT_FROM`]: the ten classes the 2027 pairs hold and
+/// Revit's export writes none on. A class the pairs do not hold (columns, beams,
+/// coverings, curtain walls, plates, footings, ramps, shading devices, the MEP
+/// terminals ...) is not measured on 2027 and keeps its value; a member is read
+/// on two stringers only, so a mullion is left out with them on the strength of
+/// its class.
+pub const PREDEFINED_TYPE_LEFT_OUT_CLASSES: [&str; 10] = [
+    "IFCDOOR",
+    "IFCFURNITURE",
+    "IFCMEMBER",
+    "IFCRAILING",
+    "IFCROOF",
+    "IFCSLAB",
+    "IFCSTAIR",
+    "IFCSTAIRFLIGHT",
+    "IFCWALL",
+    "IFCWINDOW",
+];
+
+/// Whether the occurrence of `ifc_type` in a file Revit `revit_version` saved is
+/// written without a `PredefinedType` (#1692): the entity is one of
+/// [`PREDEFINED_TYPE_LEFT_OUT_CLASSES`] and the release
+/// [`PREDEFINED_TYPE_LEFT_OUT_FROM`] or later. The occurrence only: the type
+/// objects, their GlobalIds and the property sets that depend on a predefined type
+/// take the element's value as before, and so does the model; whatever reports
+/// the `PredefinedType` an element has in the export (the writer, the viewer's
+/// panel, the schedule, the MCP server) asks here, so that they agree.
+pub fn predefined_type_left_out(ifc_type: &str, revit_version: Option<u32>) -> bool {
+    revit_version.is_some_and(|version| version >= PREDEFINED_TYPE_LEFT_OUT_FROM)
+        && PREDEFINED_TYPE_LEFT_OUT_CLASSES
+            .iter()
+            .any(|class| class.eq_ignore_ascii_case(ifc_type))
+}
+
 /// Look up the IFC entity type a "IFC Export As" override value names.
 ///
 /// The comparison is case-insensitive because the parameter value is

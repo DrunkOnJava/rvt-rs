@@ -340,39 +340,6 @@ const PORT_TYPES: [&str; 5] = ["CABLE", "CABLECARRIER", "DUCT", "PIPE", "NOTDEFI
 /// is written with (RE-371).
 const PORT_SYSTEM_TYPES: [&str; 3] = ["VENTILATION", "EXHAUST", "HEATING"];
 
-/// The first release whose saves are written without a `PredefinedType` on the
-/// occurrence of [`PREDEFINED_TYPE_LEFT_OUT_CLASSES`] (#1692). On the two
-/// held-out pairs saved by 2027 (hemanth1986's house and office, counts only),
-/// Revit's own export writes none on 71 elements of those ten classes (stairs 1,
-/// stair flights 1, slabs 3, members 2, furniture 12, doors 7, windows 22, walls
-/// 19, railings 2, roofs 2), where its export of the same projects saved by 2024
-/// to 2026 writes one on each (`DOOR`, `WINDOW`, `FLOOR`, `STRINGER`,
-/// `NOTDEFINED` ...). It still writes one on the 88 building element proxies
-/// (`NOTDEFINED`), the 29 opening elements (`OPENING`), the 8 spaces
-/// (`NOTDEFINED`) and on every type object, which are as before. A 2027 save can
-/// only be exported by Revit 2027 or later, as #1472 found for `ObjectType`.
-const PREDEFINED_TYPE_LEFT_OUT_FROM: u32 = 2027;
-
-/// The entities whose occurrence is written without a `PredefinedType` from
-/// [`PREDEFINED_TYPE_LEFT_OUT_FROM`]: the ten classes the 2027 pairs hold and
-/// Revit's export writes none on. A class the pairs do not hold (columns, beams,
-/// coverings, curtain walls, plates, footings, ramps, shading devices, the MEP
-/// terminals ...) is not measured on 2027 and keeps its value; a member is read
-/// on two stringers only, so a mullion is left out with them on the strength of
-/// its class.
-const PREDEFINED_TYPE_LEFT_OUT_CLASSES: [&str; 10] = [
-    "IFCDOOR",
-    "IFCFURNITURE",
-    "IFCMEMBER",
-    "IFCRAILING",
-    "IFCROOF",
-    "IFCSLAB",
-    "IFCSTAIR",
-    "IFCSTAIRFLIGHT",
-    "IFCWALL",
-    "IFCWINDOW",
-];
-
 /// `raw` as a token of `allowed`, an IFC4 enumeration, or `None`.
 fn step_enum_of(raw: &str, allowed: &[&str]) -> Option<String> {
     step_enum_token(raw).filter(|token| allowed.contains(&token.as_str()))
@@ -3308,11 +3275,10 @@ impl StepWriter<'_> {
                 // still state theirs: `type_objects` takes the enumerator from
                 // the element as before, so the types, their GlobalIds and the
                 // property sets that depend on it do not change.
-                let predefined_left_out = model
-                    .global_ids
-                    .revit_version
-                    .is_some_and(|version| version >= PREDEFINED_TYPE_LEFT_OUT_FROM)
-                    && PREDEFINED_TYPE_LEFT_OUT_CLASSES.contains(&ifc_upper.as_str());
+                let predefined_left_out = super::category_map::predefined_type_left_out(
+                    &ifc_upper,
+                    model.global_ids.revit_version,
+                );
                 let predefined = predefined_type.as_deref().filter(|token| {
                     !predefined_left_out
                         && !(token.eq_ignore_ascii_case("USERDEFINED") && object_type_quoted == "$")

@@ -159,7 +159,9 @@ of the two held-out 2027 pairs writes none on 71 elements of those classes (coun
 only), where its export of the same projects saved by 2024 to 2026 writes one;
 its proxies (`NOTDEFINED`), openings, spaces and every type object keep theirs,
 and a class the pairs do not hold (columns, beams, coverings, curtain walls,
-plates, MEP terminals ...) is not measured on 2027 and keeps its value (#1692).
+plates, MEP terminals ...) is not measured on 2027 and keeps its value (#1692). The
+viewer's element panel, the schedule CSV and the MCP server report what the export
+writes, so they say none for those elements as well.
 Each
 is held to the same Autodesk project's 2025 save, on the MEP samples too
 (`tools/re/bodies_across_saves.py`, which Measure fails on a difference), and
