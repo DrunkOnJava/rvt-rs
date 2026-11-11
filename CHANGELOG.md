@@ -29,11 +29,14 @@ A wall with an edited elevation profile has the openings Revit's export writes
 for it. Four more "Export to IFC As" values are acted on (#1636), every type
 object has a GlobalId of its own (#1667), and a standalone Revit 2020 family with
 one revolution exports as an `IfcRevolvedAreaSolid` (#156, experimental). Every
-box that stays one says why, on every release: its `SavedMeshRefusal` property and
-`exported.saved_mesh_refusals` give the reason (#1645). mahach666, RvtIO's
-maintainer, linked the shadow cutout steps to the steps they mirror (#1165) and
-offered the weld passes and the round-column rule measured under RE-410 and
-RE-411; thanks.
+record box, beam box and turned box that stays one says why, on every release: its
+`SavedMeshRefusal` property and `exported.saved_mesh_refusals` give the reason
+(#1645); a mullion or panel drawn as its oriented box has none yet (#1689). puzzbobb wrote the
+turned-instance and curved-surface mesh reads (#1620) and the correction of a
+family type table's warning (#1633), BIM4GIB the standalone family revolutions
+(#1632) and their measurement (#1628), and mahach666, RvtIO's maintainer, linked
+the shadow cutout steps to the steps they mirror (#1165) and offered the weld
+passes and the round-column rule measured under RE-410 and RE-411; thanks.
 
 Not measured, and said in each entry: no roof, beam, slab, footing or stair flight
 mesh is among the bodies scored against Revit's export on 31 models, so the roofs
@@ -54,7 +57,86 @@ exercises its rule. A mullion's `NetSurfaceArea` rests on the one model whose
 Revit export writes it, and 263 mullions of the office whose count still gets 7
 wrong stay out (RE-400).
 
-<!-- MEASURED: replaced once Measure run 42949360321 is read -->
+Measured against 0.17.0 on the reference models, the BIM4LCA office and housing,
+the Revit 2025 models, Autodesk's sample projects of every release, the held-out
+models, `rac_advanced`'s IFC2X3 pairs and BIMcollab's model (Measure run
+[42949360321](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42949360321),
+`main` at 83347260, 126 exports; #1691 moves none of them, run
+[42954375538](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42954375538), and the
+release adds only its notes, witness files, version strings and help text to them):
+
+- 123 of the 126 exports move. The 3 that do not are the Revit 2025 models
+  `00_Blank`, `01_Walls` and `11_RoofByExtrusion`. On the 45 of Revit 2015 to
+  2022 no census line moves but the plate types written with no `Tag` (0 to 5 on
+  `rac_advanced`'s six saves and on the held-out Vitoria project, #1594); their
+  exports move by the `SavedMeshRefusal` each box body gains (68,579 on the 31
+  that report diagnostics, as many as their box bodies; the other 14 are counts
+  only).
+- On the BIM4LCA office the quantities Revit writes that rvt-rs writes equal go
+  from 29,761 to 34,281 of 39,754 as built (missing 9,992 to 5,472) and from
+  30,037 to 34,616 of 40,006 at building permit (9,968 to 5,389), "different"
+  staying at 1 on each and rvt-rs's own at 0: the mullions' `NetVolume` 7,795 to
+  9,678 of 10,003 and `NetSurfaceArea` 6,606 to 7,532 as built, the panels'
+  `NetVolume` 0 to 260 of 260 and `Width` 0 to 257 of 257, the walls' `NetVolume`
+  100 to 519 of 607, `NetSideArea` 100 to 303 of 579 and `Height` 132 to 306 of
+  579. The property values equal go from 44,422 to 44,492 of 45,798 as built and
+  from 44,571 to 44,648 of 45,957 at permit (the openings' `Reference` 12,787 to
+  12,824, their `FireExit` 0 to 25, the floors' `PitchAngle` 54 to 62), "different"
+  unchanged at 1. The bodies still drawn as their record box fall from 10,679 to
+  168 as built. On its two terrain files the quantities equal go from 16 of 44 to 25
+  of 45 on each.
+- On the timber office the quantities equal go from 22,868 of 33,796 to 27,253 of
+  33,800 as built (different 8 to 3) and from 22,335 of 33,659 to 26,782 of
+  33,663 at permit (different 145 to 71); the property values different stay at
+  101 at permit.
+- On the housing's four large files the quantities equal go from 3,059 of 5,268
+  to 3,636 of 5,358 and from 2,800 of 4,972 to 3,598 of 5,062 in concrete (as
+  built, at permit) and from 2,699 of 5,788 to 3,909 of 5,872 and from 2,658 of
+  5,580 to 3,863 of 5,664 in timber (the totals rise with the objects #1636
+  writes), and "different" from 131, 169, 170 and 109 to 0, 4, 0 and 0; the quantities
+  rvt-rs writes that Revit does not fall from 38, 2, 28 and 15 to 7, 0, 2 and 2,
+  and the property values it writes that Revit does not from 167, 163, 168 and
+  163 to 31, 27, 32 and 27.
+- On puzzbobb's 24 Revit 2025 models the quantities equal go from 878 to 993 of
+  1,411, none different, and the property values are as in 0.17.0. On RE1 the
+  bodies still drawn as their record box fall from 52 to 3 (Architecture), 49 to
+  2 (Electrical), 43 to 0 (Mechanical) and 60 to 0 (Plumbing), Einhoven's from 9
+  to 0, and the values are as in 0.17.0; Core Interior draws none as a box in
+  either release and writes no property set or quantity, as before.
+- On Autodesk's 28 sample projects of Revit 2023 to 2027 the bodies still drawn
+  as their record box fall from 78,310 to 3,584 (Snowdon Towers' five, from 9,953
+  to 1,111); no sample of Revit 2015 to 2022 changes a body (67,661 boxes, each
+  now with its reason).
+- On the held-out files of Revit 2023 to 2027, counts only, 11 move: the
+  quantities equal go from 845 to 1,056, "different" stays at 16 and missing
+  falls from 2,593 to 2,380.
+- What got worse (Measure's comparison lists 0 census regressions and 19 body
+  lines): the volume of a stair that aggregates its railings, which read as their
+  record boxes where their mesh is not whole (#1624, RE-303): 13 stairs of the
+  office, the worst 6.0 to 911.9 ft3 as built against Revit's 7.2, and the Revit
+  2025 spiral stair of `17_Rooms_Stairs_Spiral`, 683.7 to 1,365.1 ft3 against
+  Revit's 58.9. A wall or floor drawn from its saved mesh is drawn whole, not in
+  layers, in the glTF: 3 fewer walls in the concrete office at permit and 1 fewer
+  in the timber office as built, and 9 and 2 fewer floors, roofs and ceilings in
+  the timber office at permit and as built; the layers still drawn are as close
+  to Revit's as before.
+- Time and memory, from the timing job of Measure run
+  [42956917709](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42956917709)
+  (`rvt-ifc` built at v0.17.0 and at the source of `main` from #1691 on, each
+  file exported three times in turn on one runner, the median kept, with the
+  peak resident memory of the export): the 30 samples of Revit 2015 to 2022 take
+  1.00 to 1.02 times the time and 1.00 to 1.01 times the peak memory, because
+  the pass is not offered there; the 28 samples of Revit 2023 to 2027 take 1.13
+  to 1.85 times the time (median 1.39) and 1.41 to 4.38 times the peak memory
+  (median 1.87), the most for `rac_basic` 2023 (1.9 s and 200 MiB to 3.4 s and
+  875 MiB). The BIM4LCA office takes 25.4 s and 914 MiB as built against 33.0 s
+  and 1,432 MiB (1.30 and 1.57 times) and 22.5 s and 973 MiB at permit against
+  27.6 s and 1,545 MiB; Snowdon Towers Architectural 17.6 s and 1,073 MiB
+  against 28.0 s and 2,086 MiB (1.60 and 1.94 times), its IFC 37 MB against 189;
+  Core Interior 4.7 s and 305 MiB against 5.3 s and 437 MiB; RE1's four models
+  1.05 to 1.14 times the time and up to 1.60 times the memory; Einhoven and the
+  office's two terrain files within 5%. The peak memory still above 0.17.0's is
+  #1694.
 
 ### Upgrading from 0.17
 
@@ -63,9 +145,11 @@ wrong stay out (RE-400).
 - **A default export of a Revit 2023 to 2027 project draws every element that
   would be a bounding box from the mesh Revit saved for it, where all of the mesh
   decodes (#1191).** Doors and windows alone were until now. The IFC is larger
-  (the BIM4LCA office as built 83 MB against 68), reading the saved graphics takes
-  1% to 17% more time and up to 59% more peak memory on one runner, and a very large
-  file may need more memory than before. `--no-saved-meshes` in `rvt-ifc` and
+  (the BIM4LCA office as built 87 MB against 68, Snowdon Towers Architectural 189 MB
+  against 37), reading the saved graphics takes 1.1 to 1.9 times the time and 1.4 to
+  4.4 times the peak memory of 0.17.0 on Autodesk's samples of Revit 2023 to 2027 (the
+  BIM4LCA office as built 1.3 and 1.6 times; files of Revit 2015 to 2022 take at most
+  2% more time), and a very large file may need more memory than before (#1694). `--no-saved-meshes` in `rvt-ifc` and
   `rvt-gltf`, `saved_meshes=False` in Python, `saved_meshes: "off"` in the MCP
   server, `ExportOptions::with_saved_meshes(SavedMeshChoice::Off)` in the Rust
   library, `savedMeshes: false` in the wasm binding and the viewer's option or
@@ -83,8 +167,8 @@ wrong stay out (RE-400).
   are drawn from their meshes (RE-408, RE-385).
 - On Revit 2024 to 2027 a railing that belongs to a stair is aggregated under that
   stair's `IfcStair` instead of standing alone (#1624).
-- Every box that stays one has a `SavedMeshRefusal` property in its
-  `RvtElementRecordGeometry` set, on every release, and
+- Every record box, beam box or turned box that stays one has a `SavedMeshRefusal`
+  property in its `RvtElementRecordGeometry` set, on every release, and
   `exported.saved_mesh_refusals` counts them by reason: `no_saved_graphics`,
   `no_saved_mesh`, `no_triangles`, `element_id_shared`, `partial: ` and the
   diagnostics, `not_a_candidate: ` and `not_offered: ` (#1645). A reader of the
@@ -273,19 +357,24 @@ See RE-392, RE-393 and RE-394.
   decodes, in `rvt-ifc`, `rvt-gltf`, Python, the MCP server and the viewer;
   `--no-saved-meshes` keeps the boxes (#1191).** Doors and windows alone were
   until now, and furniture, fixtures, equipment, MEP devices and the rest took
-  `--saved-meshes`. The BIM4LCA office as built draws 11,078 of its 11,246
-  boxed bodies from their meshes, 568,885 triangles against 257,108, and its
-  IFC is 83 MB against 68. **Cost:** reading every box's saved graphics takes
-  1% to 17% more time and up to 59% more peak memory on one runner (Measure run
-  42614230465, median of 3): the office as built 24.4 s and 1,423 MiB against
-  21.2 s and 913 MiB, RE1 Electrical 1.94 s and 264 MiB against 1.75 s and 166
-  MiB, and Core Interior 4.28 s and 305 MiB against 4.23 s and 305 MiB. In the
-  viewer's Playwright measurement (viewer tests run 42631322761, one open
-  each) the wasm memory with the meshes on is the boxes' on Einhoven (17 MiB),
-  RE1 Mechanical (68) and Plumbing (54), 16 MiB more on Core Interior (308 to
-  324, as with doors and windows alone), 21 MiB more on RE1 Architecture (96 to
+  `--saved-meshes`. The BIM4LCA office as built draws 11,094 of its 11,247 boxed
+  bodies from their meshes, 672,298 triangles against 257,108, and its IFC is
+  87 MB against 68. **Cost:** reading every box's saved graphics takes 1.1 to 1.9
+  times the time and 1.4 to 4.4 times the peak memory of 0.17.0 on Autodesk's
+  samples of Revit 2023 to 2027 (Measure run 42956917709, the median of three
+  exports on one runner per file): the office as built goes from 25.4 s and 914
+  MiB to 33.0 s and 1,432 MiB, Snowdon Towers Architectural from 17.6 s and
+  1,073 MiB to 28.0 s and 2,086 MiB (its IFC 189 MB against 37), Core Interior
+  from 4.7 s and 305 MiB to 5.3 s and 437 MiB, and RE1 Electrical from 1.9 s and
+  165 MiB to 2.1 s and 264 MiB; files of Revit 2015 to 2022 are not offered the
+  pass and take at most 2% more time (#1694). In the
+  viewer's Playwright measurement (Deploy viewer run 42957158734 on `main` at
+  979ec428, one open each, the release WASM) the wasm memory with the meshes on
+  is the boxes' on Einhoven (17 MiB), RE1 Mechanical (68) and Plumbing (54), 75
+  MiB more on Core Interior (308 to 383), 21 MiB more on RE1 Architecture (96 to
   118) and 52 MiB more on RE1 Electrical (161 to 213), and the wasm open call
-  takes at most 0.52 s longer (RE1 Electrical). **Not every
+  takes at most 0.40 s longer (RE1 Architecture; Core Interior's took 1.8 s
+  less). **Not every
   mesh is Revit's:** of the bodies scored on 31 models (Measure run
   42612357300) 17 classes have every vertex of Revit's export within 0.001 ft
   of the mesh, but doors are 675 of 681, sanitary terminals 68 of 94, flow
@@ -405,15 +494,17 @@ See RE-392, RE-393 and RE-394.
   box and not only the candidates whose saved graphics were read. No body is
   drawn differently.
 
-- **Every box says why, on every release (#1645).** An element drawn as a record
-  box, a beam's box or a turned box that no saved-mesh pass was offered (a
+- **Every record box, beam box and turned box says why, on every release (#1645).**
+  An element drawn as a record box, a beam's box or a turned box that no saved-mesh pass was offered (a
   Revit 2008 to 2022 file, whose saved graphics are not read; a caller that
   turned the pass off; a file whose release could not be read; a pass that
   stopped on an error) now has `not_offered: ` and the reason
   (`release_outside_2023_to_2027`, `saved_meshes_off`, `release_not_read`,
   `pass_failed`) as its `SavedMeshRefusal`, so that
-  `exported.saved_mesh_refusals` counts every such box on every release. No body
-  is drawn differently, and the files of Revit 2023 to 2027 do not change.
+  `exported.saved_mesh_refusals` counts every such box on every release. A mullion
+  or panel turned or tilted off the model's axes and drawn as its oriented box
+  (RE-106) is not offered the pass and has no reason yet (#1689). No body is
+  drawn differently, and the files of Revit 2023 to 2027 do not change.
 
 - **An instance visible in the normal draw and forbidden the targets 10 is drawn
   (#1645, RE-408).** The saved-graphics walk refused any `GInstance` whose
@@ -472,6 +563,20 @@ See RE-392, RE-393 and RE-394.
   findings in IfcOpenShell's validation, one for each repeat. The first of them
   keeps the fallback and each later one takes a GlobalId that carries its place
   in the list.
+
+- **The saved-mesh pass no longer holds every wall's graph at once (#1690).** It
+  read every owner's graph first and held all of them until the last batch was
+  meshed, and since RE-388 the owners include every wall, whose graph is about
+  1.6 MiB (#1429): the default export of a Revit 2023 to 2027 file took 1.4 to 4.4
+  times the peak memory of 0.17.0 (Core Interior 305 to 647 MiB, Snowdon Towers
+  Architectural 1,072 to 3,964). The owners that name nothing, walls among them,
+  are now let go after that first read and read again in one further pass that
+  meshes a buffer of about 20,000 graph objects at a time. No body changes: all
+  126 exports of Measure's models are byte-identical to what they were. The peak
+  falls to 437 MiB on Core Interior, 1,432 on the BIM4LCA office as built and
+  2,086 on Snowdon Towers Architectural, at 1% to 3% more time; it is still 1.4,
+  1.6 and 1.9 times 0.17.0's, and 4.4 times on the small samples of Revit 2023 to
+  2027 (`rac_basic` 2023: 200 to 875 MiB), which this did not move (#1694).
 
 - **`rvt-ifc --mode typed-no-geometry` keeps the `PitchAngle` of a floor drawn
   along its shape-edited plane (RE-384).** The geometry modes write it
