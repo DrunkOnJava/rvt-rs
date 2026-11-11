@@ -177,6 +177,13 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
            on && /^  Qto_[A-Za-z]+\.[A-Za-z]+: [0-9]+$/ { sub(/^  /, ""); print "extra " $0; next }
            on && !/^ / { on = 0 }' "$f"
     done
+    # tools/re/predefined_types_vs_ifc.py (RE-419): each class's summary line, counts and
+    # enumerator names beside an IFC class name, never a Tag; the lines under it that name
+    # a Tag are dropped.
+    for f in "$dir"predefined_types_vs_ifc.txt; do
+      [ -f "$f" ] || continue
+      grep -E "^Ifc[A-Za-z0-9]+: [0-9]+ in both; same [0-9]+, differs [0-9]+, unset in rvt-rs [0-9]+, NOTDEFINED where Revit writes none [0-9]+; Revit's: \{(('[A-Z_0-9-]+': [0-9]+)(, )?)*\}$" "$f" | sed 's/^/predefined types: /' || true
+    done
     for f in "$dir"names_vs_ifc.txt; do
       [ -f "$f" ] || continue
       grep -E '^ +[0-9]+  (system family|family instance|[a-z ]+) \| Ifc[A-Za-z]+ \| Name (equal|differs) \| ObjectType (equal|differs)$' "$f" | sed 's/^/names: /' || true
