@@ -139,7 +139,8 @@ pub(super) fn without_bodiless_family_spaces(
         .filter(|element| {
             element.fields.iter().any(|(name, value)| {
                 matches!(value, InstanceField::String(entity)
-                    if name == IFC_EXPORT_AS_FIELD && entity.trim().eq_ignore_ascii_case("IfcSpace"))
+                    if name == IFC_EXPORT_AS_FIELD
+                        && crate::ifc::category_map::export_value_is_space(entity, &element.class))
             })
         })
         .filter_map(|element| element.id.map(u64::from))

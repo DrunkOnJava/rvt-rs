@@ -510,6 +510,16 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
 /// and which Revit writes as `IfcSpace .USERDEFINED.` typed by an
 /// `IfcSpaceType` named after the family type ([`space_predefined_type_for`]).
 /// A Room, Area or Space is a space already and keeps its own mapping.
+///
+/// RE-417 adds four more, proven on the four large files of the BIM4LCA
+/// housing (Revit 2024) against Revit's export of each, and limited to the
+/// classes they were seen on ([`lookup_export_override_for`]): `IfcSpaceType`,
+/// which the 42 `Turning Free Space` generic models of each file carry as
+/// their own value and Revit writes as `IfcSpace`; `IfcFurniture`, on 3 generic
+/// models of each file (`USERDEFINED`); `IfcSolarDevice`, on 1 roof of each
+/// (`SOLARPANEL`); and `IfcTransportElement`, on 1 item of specialty equipment
+/// of each (`ELEVATOR`). Each takes its own predefined type where it is an
+/// enumerator of the entity ([`override_predefined_type_for`]).
 pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
     Mapping {
         revit_class: "IfcShadingDevice",
@@ -566,7 +576,53 @@ pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
         ifc_type: "IFCSPACE",
         predefined_type: Some("NOTDEFINED"),
     },
+    Mapping {
+        revit_class: "IfcSpaceType",
+        ifc_type: "IFCSPACE",
+        predefined_type: Some("NOTDEFINED"),
+    },
+    Mapping {
+        revit_class: "IfcFurniture",
+        ifc_type: "IFCFURNITURE",
+        predefined_type: Some("NOTDEFINED"),
+    },
+    Mapping {
+        revit_class: "IfcSolarDevice",
+        ifc_type: "IFCSOLARDEVICE",
+        predefined_type: Some("NOTDEFINED"),
+    },
+    Mapping {
+        revit_class: "IfcTransportElement",
+        ifc_type: "IFCTRANSPORTELEMENT",
+        predefined_type: Some("NOTDEFINED"),
+    },
 ];
+
+/// The Revit classes an [`EXPORT_OVERRIDE_TARGETS`] value is acted on for,
+/// where it is proven on some and not on others (RE-417). Revit's exporter
+/// takes the entity from the value on any product (`ExporterUtil.GetExportType`
+/// restricts it to `IfcProduct`, CLEANROOM.md source 5), so the limit is what
+/// has been measured and not what Revit does; a value with no entry here is
+/// acted on for every class, as before.
+const OVERRIDE_CLASS_LIMITS: &[(&str, &[&str])] = &[
+    ("IfcSpaceType", &["GenericModel"]),
+    ("IfcFurniture", &["GenericModel"]),
+    ("IfcSolarDevice", &["Roof"]),
+    ("IfcTransportElement", &["SpecialtyEquipment"]),
+];
+
+/// [`lookup_export_override`] for an element of `revit_class`: `None` where
+/// the value is limited to other classes (`OVERRIDE_CLASS_LIMITS`).
+pub fn lookup_export_override_for(value: &str, revit_class: &str) -> Option<&'static Mapping> {
+    let target = lookup_export_override(value)?;
+    let limited = OVERRIDE_CLASS_LIMITS
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case(value.trim()));
+    match limited {
+        Some((_, classes)) if !classes.contains(&revit_class) => None,
+        _ => Some(target),
+    }
+}
 
 /// The IFC4 `IfcSpaceTypeEnum` enumerator `value` names, for an element
 /// written as `IfcSpace` through its own "Export to IFC As" value (#763):
@@ -741,6 +797,68 @@ const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
 pub fn predefined_type_for(ifc_type: &str, value: &str) -> Option<&'static str> {
     let value = value.trim();
     PREDEFINED_TYPE_ENUMERATORS
+        .iter()
+        .find(|(entity, _)| *entity == ifc_type)?
+        .1
+        .iter()
+        .copied()
+        .find(|enumerator| enumerator.eq_ignore_ascii_case(value))
+}
+
+/// Whether an "Export to IFC As" value writes an element of `revit_class` as
+/// an `IfcSpace` (#763, RE-417): `IfcSpace`, and `IfcSpaceType` on a generic
+/// model.
+pub fn export_value_is_space(value: &str, revit_class: &str) -> bool {
+    lookup_export_override_for(value, revit_class)
+        .is_some_and(|target| target.ifc_type == "IFCSPACE")
+}
+
+/// IFC4 `PredefinedType` enumerators of the entities an element reaches
+/// only through its "Export to IFC As" value (RE-417): `IfcFurnitureTypeEnum`,
+/// `IfcSolarDeviceTypeEnum` and `IfcTransportElementTypeEnum`. They are not in
+/// [`PREDEFINED_TYPE_ENUMERATORS`], because listing them there would apply the
+/// own predefined type of every furniture element as well, which is not
+/// measured; an element whose category already maps to the entity keeps the
+/// mapping's default.
+const OVERRIDE_ONLY_ENUMERATORS: &[(&str, &[&str])] = &[
+    (
+        "IFCFURNITURE",
+        &[
+            "CHAIR",
+            "TABLE",
+            "DESK",
+            "BED",
+            "FILECABINET",
+            "SHELF",
+            "SOFA",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCSOLARDEVICE",
+        &["SOLARCOLLECTOR", "SOLARPANEL", "USERDEFINED", "NOTDEFINED"],
+    ),
+    (
+        "IFCTRANSPORTELEMENT",
+        &[
+            "ELEVATOR",
+            "ESCALATOR",
+            "MOVINGWALKWAY",
+            "CRANEWAY",
+            "LIFTINGGEAR",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+];
+
+/// The IFC4 enumerator `value` names for the `PredefinedType` of an element
+/// redirected to `ifc_type` by its "Export to IFC As" value, where that entity
+/// is one of `OVERRIDE_ONLY_ENUMERATORS` (RE-417); `None` otherwise.
+pub fn override_predefined_type_for(ifc_type: &str, value: &str) -> Option<&'static str> {
+    let value = value.trim();
+    OVERRIDE_ONLY_ENUMERATORS
         .iter()
         .find(|(entity, _)| *entity == ifc_type)?
         .1
