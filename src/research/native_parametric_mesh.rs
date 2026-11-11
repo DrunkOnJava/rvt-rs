@@ -1175,9 +1175,24 @@ fn tessellate_trimmed(
                 let d = [y[0] - x[0], y[1] - x[1], y[2] - x[2]];
                 d[0] * d[0] + d[1] * d[1] + d[2] * d[2] <= 1e-20
             };
+            let dist = |x: [f64; 3], y: [f64; 3]| {
+                ((y[0] - x[0]).powi(2) + (y[1] - x[1]).powi(2) + (y[2] - x[2]).powi(2)).sqrt()
+            };
+            let kind = match surface {
+                ParametricSurface::SurfRev { .. } => "SurfRev",
+                ParametricSurface::ConeSurf { .. } => "ConeSurf",
+                ParametricSurface::RuledSurf { .. } => "RuledSurf",
+            };
             ensure!(
                 collapsed(p, q) || collapsed(q, r) || collapsed(r, p),
-                "noncollapsed degenerate parametric triangle"
+                "DETAIL {kind} area {area:.3e} edges {:.3e} {:.3e} {:.3e} uv {:.6?} {:.6?} {:.6?} of {} cells",
+                dist(p, q),
+                dist(q, r),
+                dist(r, p),
+                points[a as usize],
+                points[b as usize],
+                points[c as usize],
+                points.len()
             );
         } else {
             triangles.push(if winding { [a, b, c] } else { [a, c, b] });
