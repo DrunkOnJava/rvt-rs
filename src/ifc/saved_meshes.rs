@@ -59,7 +59,9 @@ use super::export_content::{
     SAVED_MESH_REFUSAL_PROPERTY, SLAB_SHAPE_REFUSAL_PROPERTY, SPACE_OUTLINE_SAVED_MESH,
     SPACE_OUTLINE_SOURCE_PROPERTY, WALL_BASE_SOURCE_PROPERTY, WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE,
 };
-use super::mesh_volume::{all_faces_flat, box_plan_width, closed_mesh_volume, prism_extents};
+use super::mesh_volume::{
+    MESH_LENGTH_REACH, all_faces_flat, box_plan_width, closed_mesh_volume, extent_along,
+};
 use super::mesh_wall_quantities::{WallMeshQuantities, wall_mesh_quantities};
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
 use crate::native_wall_cuts::WallCutKind;
@@ -377,8 +379,10 @@ pub fn attach_scoped_with_control(
     };
     // RE-387: the volume of each body drawn from a mesh of flat faces.
     let mut volumes: Vec<(usize, f64)> = Vec::new();
-    // RE-418: the extents of each curtain member's mesh along the axes it is a prism along.
-    let mut member_extents: Vec<(usize, Vec<f64>)> = Vec::new();
+    // RE-418: the extent of each curtain mullion's mesh along its own axis.
+    let mut member_extents: Vec<(usize, f64)> = Vec::new();
+    // RE-418: the axis each curtain mullion runs along, by ElementId, in the model's frame.
+    let mullion_axes = rf.mullion_axes();
     // RE-416: the volume of each column's mesh, whatever its faces.
     let mut column_volumes: Vec<(usize, f64)> = Vec::new();
     // RE-388: what the mesh of each wall gives of its quantities.
@@ -461,10 +465,22 @@ pub fn attach_scoped_with_control(
                 .eq_ignore_ascii_case("IFCCOLUMN")
                 .then(|| oriented_mesh_volume(primitives, *origin))
                 .flatten();
-            let extents = ifc_type
-                .eq_ignore_ascii_case("IFCMEMBER")
-                .then(|| prism_extents(&vertices, &triangles))
-                .filter(|extents| !extents.is_empty());
+            // RE-418: the mullion's own axis, from its record, turned into the
+            // element's frame as its mesh is.
+            let member_extent = volume
+                .filter(|_| ifc_type.eq_ignore_ascii_case("IFCMEMBER"))
+                .and_then(|_| {
+                    let axis = mullion_axes
+                        .as_deref()?
+                        .get(&u32::try_from(element.identity.element_id).ok()?)?;
+                    let (sin, cos) = (-(*rotation_radians).unwrap_or(0.0)).sin_cos();
+                    let local = [
+                        axis[0] * cos - axis[1] * sin,
+                        axis[0] * sin + axis[1] * cos,
+                        axis[2],
+                    ];
+                    extent_along(&vertices, &triangles, local)
+                });
             report.replaced += 1;
             report.triangles += triangles.len();
             *solid_shape = Some(SolidShape::TriangulatedFaceSet {
@@ -474,8 +490,8 @@ pub fn attach_scoped_with_control(
             if let Some(volume) = volume {
                 volumes.push((*index, volume));
             }
-            if let Some(extents) = extents {
-                member_extents.push((*index, extents));
+            if let Some(extent) = member_extent {
+                member_extents.push((*index, extent));
             }
             if let Some(volume) = column_volume {
                 column_volumes.push((*index, volume));
@@ -640,22 +656,19 @@ fn drop_column_box_quantities(model: &mut IfcModel, found: &[(usize, f64)]) {
 /// element (RE-387); a body of another entity gets none. A curtain mullion
 /// whose `NetVolume` the box gave and whose mesh has another volume is not an
 /// extrusion of its box, and takes the mesh's (RE-403) and the mesh's length
-/// (RE-418): the mullions of `extents` (an index into the entities and the
-/// extents of its mesh along the axes it is a prism along) whose `Length` it
-/// changed are returned with the new one, for [`follow_mesh_span`].
+/// (RE-418): the mullions of `extents` (an index into the entities and the extent
+/// of its mesh along its own axis) whose `Length` it changed are returned with
+/// the new one, for [`follow_mesh_span`].
 fn add_mesh_volumes(
     model: &mut IfcModel,
     volumes: &[(usize, f64)],
-    extents: &[(usize, Vec<f64>)],
+    extents: &[(usize, f64)],
 ) -> Vec<(usize, f64)> {
     let mut moved = Vec::new();
     if volumes.is_empty() {
         return moved;
     }
-    let extents: BTreeMap<usize, &[f64]> = extents
-        .iter()
-        .map(|(index, extents)| (*index, extents.as_slice()))
-        .collect();
+    let extents: BTreeMap<usize, f64> = extents.iter().copied().collect();
     let mut held: BTreeMap<(usize, String), usize> = BTreeMap::new();
     for (position, entity) in model.entities.iter().enumerate() {
         if let IfcEntity::ElementPropertySet { element, set } = entity {
@@ -690,8 +703,8 @@ fn add_mesh_volumes(
                         }
                     }
                     if set_name == "Qto_MemberBaseQuantities" {
-                        let extents = extents.get(&index).copied().unwrap_or_default();
-                        if let Some(length) = follow_mesh_over_box(set, volume, extents) {
+                        let extent = extents.get(&index).copied();
+                        if let Some(length) = follow_mesh_over_box(set, volume, extent) {
                             moved.push((index, length));
                         }
                     }
@@ -719,13 +732,6 @@ fn add_mesh_volumes(
 /// 3.7%.
 const BOX_MESH_VOLUME_TOLERANCE: f64 = 1e-3;
 
-/// How far, as a fraction of a mullion's written `Length`, the extent of its mesh
-/// along an axis it is a prism along may be from it and be the mullion's own
-/// length (RE-418): the box overruns the solid by up to 14% on the 49 mullions
-/// of the BIM4LCA timber office at permit that it moves, and no other side of a
-/// mullion's section comes within 35% of its length.
-const MESH_LENGTH_REACH: f64 = 0.35;
-
 /// How far, feet, the extent of a mullion's mesh must differ from its written
 /// `Length` to replace it (RE-418): the mesh's corners are single precision,
 /// which moves an extent by 1e-5 ft, and the box overruns the solid by 0.03 ft
@@ -739,11 +745,15 @@ const MESH_LENGTH_MOVES_FEET: f64 = 1e-4;
 /// neighbours leave, is not Revit's, so it is left out (RE-403). Its `Length` is
 /// the extent of the mesh along its own axis (RE-418): Revit's `Length` is the
 /// extent of its own body, which the saved mesh is, and a box that overruns the
-/// solid gives a longer one. `extents` are those of the mesh along each axis it
-/// is a prism along; the mullion's is the one extent within
-/// [`MESH_LENGTH_REACH`] of the box's `Length`, and where several are, or none,
-/// the written `Length` stays. Returns the new `Length`, where there is one.
-fn follow_mesh_over_box(set: &mut PropertySet, mesh_volume: f64, extents: &[f64]) -> Option<f64> {
+/// solid gives a longer one. `extent` is that of the mesh along the mullion's own
+/// axis, where it is a prism along it ([`extent_along`]); it replaces the `Length`
+/// where it is within `MESH_LENGTH_REACH` of it, and otherwise the written
+/// `Length` stays. Returns the new `Length`, where there is one.
+fn follow_mesh_over_box(
+    set: &mut PropertySet,
+    mesh_volume: f64,
+    extent: Option<f64>,
+) -> Option<f64> {
     if !(mesh_volume.is_finite() && mesh_volume > 0.0) {
         return None;
     }
@@ -771,14 +781,9 @@ fn follow_mesh_over_box(set: &mut PropertySet, mesh_volume: f64, extents: &[f64]
     let PropertyValue::PositiveLengthFeet(written) = &mut length.value else {
         return None;
     };
-    let mut near = extents
-        .iter()
-        .copied()
-        .filter(|extent| (extent - *written).abs() <= MESH_LENGTH_REACH * *written);
-    let (extent, None) = (near.next()?, near.next()) else {
-        return None;
-    };
-    if (extent - *written).abs() <= MESH_LENGTH_MOVES_FEET {
+    let extent = extent?;
+    let off = (extent - *written).abs();
+    if off > MESH_LENGTH_REACH * *written || off <= MESH_LENGTH_MOVES_FEET {
         return None;
     }
     *written = extent;
