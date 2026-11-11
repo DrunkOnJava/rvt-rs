@@ -23,6 +23,12 @@ It comes as command-line tools, a Rust library, Python bindings and a browser vi
 
 Support depends on the Revit release, the file type and the feature. Opening a file and reading its metadata does not mean its elements or geometry can be recovered, and every export comes with diagnostics that say what was approximated or left out: check them before relying on an export for measurement or coordination. The figures in [`docs/evidence.md`](docs/evidence.md) compare rvt-rs's export with Revit's own IFC export of the same file, element by element, and [`docs/support-matrix.json`](docs/support-matrix.json) records each capability with its evidence and its status ceiling. A "Measure run" is a run of the repository's [Measure workflow](.github/workflows/measure.yml), which exports the redistributable reference models on GitHub's runners and scores them against Revit's own exports with the scorers in `tools/re/`; an RE number is a report in [`reports/element-framing/`](reports/element-framing/). Every number on this page and on the [supported profile](docs/supported-profile.md) names the model it was measured on and says "local only" or "not shared" when nobody else can fetch that model; [`docs/reference-models.md`](docs/reference-models.md#model-index) lists the models and how to [re-run the numbers](docs/reference-models.md#re-run-the-numbers) on the ones anyone can fetch (nobody has yet re-run these pages' figures from that command and compared them), and CI checks the rule on both pages.
 
+On the public Revit 2023 basic MEP sample, saved point/arc ruled patches
+recover 107 bodies previously drawn as boxes (local measurement: within
+0.963 mm of native IFC; the stricter 0.001 ft shape threshold is not met).
+Only unit-envelope rectangular patches are admitted; see
+[RE-443](reports/element-framing/RE-443-collapsed-ruled-profiles.md).
+
 ## Support by Revit release
 
 Each row is rendered from [`docs/support-matrix.json`](docs/support-matrix.json), and CI fails when this table and the matrix disagree. "Projects" is the matrix's status for the release's project element records, "What a project gives" the capability it rates, and "Families" the status of the release's family files (metadata, previews and schema). The status words are the matrix's own: verified, partial, experimental, unsupported and unknown.

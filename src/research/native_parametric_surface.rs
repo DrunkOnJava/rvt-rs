@@ -99,6 +99,8 @@ pub fn ruled_surface_point(g: &ObjectGraph, si: usize, u: f64, v: f64) -> Result
 
 #[derive(Debug, Clone)]
 pub enum Curve {
+    /// RE-443: a null ruled-profile pointer's separately saved point.
+    Point(Point),
     Line {
         origin: Point,
         direction: Point,
@@ -193,6 +195,7 @@ impl Curve {
     /// The point at `t`.
     pub(crate) fn eval(&self, t: f64) -> Point {
         match self {
+            Self::Point(point) => *point,
             Self::Line {
                 origin, direction, ..
             } => add(*origin, mul(*direction, t)),
@@ -222,6 +225,7 @@ impl Curve {
     /// The parameter range.
     pub fn range(&self) -> [f64; 2] {
         match self {
+            Self::Point(_) => [0., 1.],
             Self::Line { range, .. } | Self::Arc { range, .. } | Self::Ellipse { range, .. } => {
                 *range
             }
@@ -229,6 +233,7 @@ impl Curve {
     }
     fn derivative(&self, t: f64) -> Point {
         match self {
+            Self::Point(_) => [0.; 3],
             Self::Line { direction, .. } => *direction,
             Self::Arc { x, y, radius, .. } => {
                 mul(add(mul(*x, -t.sin()), mul(*y, t.cos())), *radius)
@@ -301,14 +306,34 @@ impl ParametricSurface {
                     profile,
                 })
             }
-            "RuledSurf" => Ok(Self::RuledSurf {
-                envelope,
-                orient: s.fields["m_orientFlag"]
-                    .as_bool()
-                    .context("surface orientation")?,
-                profile1: Curve::read(g, target(g, si, &s.fields["m_pProfileCurve1"])?)?,
-                profile2: Curve::read(g, target(g, si, &s.fields["m_pProfileCurve2"])?)?,
-            }),
+            "RuledSurf" => {
+                let profile = |name: &str, point_name: &str| -> Result<Curve> {
+                    match crate::native_saved_mesh::pointer(g, si, &s.fields[name])? {
+                        Some(index) => Curve::read(g, index),
+                        None => Ok(Curve::Point(p(&s.fields[point_name], point_name)?)),
+                    }
+                };
+                let profile1 = profile("m_pProfileCurve1", "m_Point1")?;
+                let profile2 = profile("m_pProfileCurve2", "m_Point2")?;
+                if matches!(profile1, Curve::Point(_)) || matches!(profile2, Curve::Point(_)) {
+                    ensure!(
+                        matches!(
+                            (&profile1, &profile2),
+                            (Curve::Point(_), Curve::Arc { .. })
+                                | (Curve::Arc { .. }, Curve::Point(_))
+                        ) && envelope == [[0., 0.], [1., 1.]],
+                        "unqualified collapsed ruled profiles"
+                    );
+                }
+                Ok(Self::RuledSurf {
+                    envelope,
+                    orient: s.fields["m_orientFlag"]
+                        .as_bool()
+                        .context("surface orientation")?,
+                    profile1,
+                    profile2,
+                })
+            }
             "ConeSurf" => {
                 let (x, y, z) = basis(&s.fields)?;
                 let half_angle = s.fields["m_halfAngle"]
@@ -497,10 +522,17 @@ impl ParametricSurface {
         let t2 = r2[0] + u * (r2[1] - r2[0]);
         let p1 = profile1.eval(t1);
         let p2 = profile2.eval(t2);
-        let du = add(
+        let mut du = add(
             mul(profile1.derivative(t1), (1. - v) * (r1[1] - r1[0])),
             mul(profile2.derivative(t2), v * (r2[1] - r2[0])),
         );
+        // Remove the vanishing positive factor at the collapsed end. The
+        // one-sided limiting normal still depends on the arc parameter u.
+        if matches!(profile1, Curve::Point(_)) {
+            du = mul(profile2.derivative(t2), r2[1] - r2[0]);
+        } else if matches!(profile2, Curve::Point(_)) {
+            du = mul(profile1.derivative(t1), r1[1] - r1[0]);
+        }
         let dv = sub(p2, p1);
         let n = cross(du, dv);
         ensure!(

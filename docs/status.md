@@ -230,6 +230,19 @@ profiles are not decoded, and rvt-rs does not edit Revit model data.
 
 **What a space is.** Each `IfcSpace` says what it is in `RvtElementRecordGeometry.SpaceKind` (#1437): `room`, `area` (a Revit Area), `mep_space` (a Revit Space) or `family_instance` (any other element, a family instance or a mass in the files measured, that its "Export to IFC As" writes as a space), taken from the Revit class of the record it was read from. No `mep_space` is written today: rvt-rs reads no Revit Space from a file's partition records, which says what rvt-rs writes and not what the files hold. It is the property to read to tell an Area from a room; `SpaceOutlineSource` says only where an outline came from, and its values change with the rules that read outlines, so an importer does not filter on them. The same value is `space_kind` in the MCP server's `list_rooms` and the room schedule's last column. A space whose property set is not `RvtElementRecordGeometry` (in principle a wall or floor read through the schema walker) has no `SpaceKind` and is counted (`exported.spaces_without_kind`, zero on every model measured); `tools/re/space_kinds_vs_ifc.py` checks every export Measure and CI make. On Measure run 42027776156 (head 04d1b101) the 117 models and samples exported held 4,453 `IfcSpace`s, all with a `SpaceKind` (3,733 rooms, 628 Areas, 92 family instances, no `mep_space`), and the scorer passes on all 117: no space without a kind, no `area` outside the Area outline sources and no other kind inside them. See [rooms](rooms.md).
 
+### Saved point/arc ruled surfaces (RE-443)
+
+A zero ruled-profile pointer selects its separately saved point. The reader
+admits point/arc patches with a unit envelope and rectangular trim only.
+On the public Autodesk Revit 2023 basic MEP sample, a local run recovers 105
+duct fittings and two sanitary terminals: 107 bodies within 0.963 mm and
+0.179% volume of native IFC in the default comparison. None meets the
+stricter 0.001 ft two-way threshold with default reference tessellation;
+fine reference tessellation brings 105 inside it, with two sanitary
+junction residuals still present. Other combinations, envelopes and trims
+remain refused. [RE-443](../reports/element-framing/RE-443-collapsed-ruled-profiles.md)
+has the bytes, pinned reference and replay; this is not a full Measure run.
+
 ## Finding history
 
 The paragraphs below record, finding by finding, how that came to be. They

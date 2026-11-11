@@ -41,6 +41,7 @@ fn angular(r: f64) -> f64 {
 fn range_steps(curve: &Curve) -> f64 {
     let r = curve.range();
     match curve {
+        Curve::Point(_) => 1.,
         Curve::Line { .. } => 1.,
         Curve::Arc { radius, .. } => ((r[1] - r[0]).abs() / angular(*radius)).ceil(),
         Curve::Ellipse { x_len, y_len, .. } => {
@@ -51,6 +52,7 @@ fn range_steps(curve: &Curve) -> f64 {
 
 fn kind(curve: &Curve) -> String {
     match curve {
+        Curve::Point(_) => "point".into(),
         Curve::Line { .. } => "line".into(),
         Curve::Arc { radius, range, .. } => {
             format!(

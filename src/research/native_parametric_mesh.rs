@@ -271,6 +271,7 @@ fn trim_is_rectangle(
     min: [f64; 2],
     max: [f64; 2],
 ) -> Result<bool> {
+    use crate::native_parametric_surface::Curve;
     let mut sides: [Vec<[f64; 2]>; 4] = std::array::from_fn(|_| Vec::new());
     for seg in segments {
         for pair in seg.windows(2) {
@@ -296,13 +297,17 @@ fn trim_is_rectangle(
     for (side, intervals) in sides.iter_mut().enumerate() {
         let axis = if side % 2 == 0 { 0 } else { 1 };
         if intervals.is_empty() {
-            // A revolution's horizontal UV edge can collapse to a pole. The
-            // half-turn distance is exactly twice the profile's radial norm.
+            // A revolution's pole, or the explicitly saved point at one
+            // end of a ruled patch, collapses a horizontal UV side.
+            let v = if side == 0 { min[1] } else { max[1] };
+            let ruled_pole = matches!(&surface,
+                ParametricSurface::RuledSurf { profile1: Curve::Point(_), .. } if v == 0.)
+                || matches!(&surface,
+                    ParametricSurface::RuledSurf { profile2: Curve::Point(_), .. } if v == 1.);
             ensure!(
-                axis == 0 && matches!(surface, ParametricSurface::SurfRev { .. }),
+                axis == 0 && (matches!(surface, ParametricSurface::SurfRev { .. }) || ruled_pole),
                 "missing rectangular trim side"
             );
-            let v = if side == 0 { min[1] } else { max[1] };
             let a = surface.evaluate(min[0], v)?;
             let b = surface.evaluate((min[0] + max[0]) * 0.5, v)?;
             let c = surface.evaluate(max[0], v)?;
@@ -482,6 +487,22 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         "degenerate parametric domain"
     );
     let rectangular = loops.len() == 1 && trim_is_rectangle(&surface, &loops[0], min, max)?;
+    // RE-443 measured only rectangular point/arc patches. The general trim
+    // reader (RE-430) must not widen that new surface's measured boundary.
+    let collapsed = matches!(
+        &surface,
+        ParametricSurface::RuledSurf {
+            profile1: Curve::Point(_),
+            ..
+        } | ParametricSurface::RuledSurf {
+            profile2: Curve::Point(_),
+            ..
+        }
+    );
+    ensure!(
+        !collapsed || rectangular,
+        "unqualified collapsed ruled trim"
+    );
     let polygons = if rectangular {
         Vec::new()
     } else {
@@ -497,6 +518,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     };
     let (du, dv) = match &surface {
         ParametricSurface::SurfRev { profile, .. } => match profile {
+            Curve::Point(_) => anyhow::bail!("point revolution profile is unqualified"),
             Curve::Line {
                 origin, direction, ..
             } => {
@@ -575,6 +597,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                             }
                         };
                         let steps = match c {
+                            Curve::Point(_) => 1.,
                             Curve::Line { .. } => length(chord).ceil(),
                             Curve::Arc { radius, .. } => {
                                 ((r[1] - r[0]).abs() / angular(*radius)).ceil()
@@ -606,6 +629,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
                 let range_steps = |c: &Curve| -> f64 {
                     let r = c.range();
                     match c {
+                        Curve::Point(_) => 1.,
                         Curve::Line { .. } => 1.,
                         Curve::Arc { radius, .. } => {
                             ((r[1] - r[0]).abs() / angular(*radius)).ceil()
