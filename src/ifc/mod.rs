@@ -818,9 +818,11 @@ pub struct ExportedModelDiagnostics {
     /// pass that draws a box from the mesh Revit saved for it, why that mesh
     /// was not used, by reason: the `SavedMeshRefusal` property of each
     /// (#1645): `no_saved_graphics`, `no_saved_mesh`, `no_triangles`,
-    /// `element_id_shared`, or `partial: ` and the decoder diagnostics that
+    /// `element_id_shared`, `partial: ` and the decoder diagnostics that
     /// left the mesh partial (RE-224), their digits written as `#` and joined
-    /// by `; `.
+    /// by `; `, or `not_a_candidate: ` and why the pass did not look at the
+    /// element's saved graphics (`whole_drawn_by_its_parts`, `no_location`,
+    /// `no_element_id`, `class_not_in_scope`).
     #[serde(default)]
     pub saved_mesh_refusals: std::collections::BTreeMap<String, usize>,
     /// Of the exported walls whose base join names a floor, roof or ceiling
