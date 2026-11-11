@@ -1,11 +1,21 @@
-- **A ruled-surface component is refused only where a ruled face borders an edge
-  that names fewer than two faces (#1683, RE-422).** The guard that makes the
-  ruled faces of a component share one grid refused the whole component for an
-  edge of any of its faces that named one face and nothing on its other side,
-  which kept four roofs of Snowdon Towers Architectural (Revit 2024) as the level
-  block of their sketch outline: their ruled faces are closed, and the open edges
-  are on the planes and the cylinder of their sides. A ruled face's neighbours
-  are the faces its own edges name, so such an edge cannot join two ruled faces.
-  The refusal that remains reads `malformed ruled-surface edge (m_pFace is
-  <class> + <class>) is connected to face #`, each entry the class its pointer
-  resolves to or `none`. Measured numbers follow the run.
+- **Four of Autodesk's Snowdon Towers Architectural's six block roofs are drawn
+  from their saved meshes (Revit 2024; #1683, RE-422).** Each stayed the level
+  block of its sketch outline, 33% to 133% over Revit's volume, because a
+  ruled-surface component was refused whenever one of its edges named fewer than
+  two faces. The roofs' ruled faces are closed; the open edges are on the planes
+  and the cylinder beside them, which cannot join two ruled faces, so a component
+  is refused now only where a ruled face of it borders such an edge. The four are
+  within 0.11% of Revit's volume with every vertex of Revit's body within
+  0.000358 ft of their surface, in 198,762 triangles. A component the old guard
+  refused takes a grid per face, and a face between two straight profiles a
+  quarter of the cells the shared grid asked (a bilinear patch leaves its two
+  triangles by one quarter of its twist over the cell count; the first version
+  drew the roofs in 1,510,643 triangles where Revit's own bodies are 1,259, 138,
+  240 and 192). A component the old guard accepted keeps its grid, so 124 of 126
+  exports of Measure's models are byte-identical; the other two are Snowdon
+  Towers Architectural and Snowdon Towers Structural, whose 43 footings
+  take a saved mesh in place of their record box (Structural has no Revit IFC4
+  export; the VIM export of the model scores them: the height of all 43 equals
+  Revit's to 0.00001 m, the volume reads within 0.56%, the VIM's coarser
+  tessellation). Two roofs stay blocks, each with its decoder diagnostic
+  (#1706).
