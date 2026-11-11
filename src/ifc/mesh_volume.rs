@@ -353,8 +353,11 @@ const END_AREA_TOLERANCE: f64 = 1e-4;
 /// of them count. Of a mitred end and a flat one, the mitred end always counts
 /// (on every one of the 184 of the BIM4LCA housing's four large files and the
 /// 58 of the office's two permit files) and the flat one where `kept` is 2; a
-/// mullion with a mitred end and `kept` 0 contradicts that and gets none. A
-/// prism with any other ends gets none.
+/// mullion with a mitred end and `kept` 0 contradicts that and gets none. Of two
+/// mitred ends, which a bent joint at each end makes, both count and `kept` must
+/// be 2 (RE-433: Revit's value counts every end of all 159 of the BIM4LCA
+/// office's mullions that have a bent partner, the 131 of them with two mitred
+/// ends included). A prism with any other ends gets none.
 pub(super) fn mullion_surface_area(prism: &Prism, kept: u8) -> Option<f64> {
     let [a, b] = prism.ends;
     if a.square && b.square {
@@ -364,6 +367,8 @@ pub(super) fn mullion_surface_area(prism: &Prism, kept: u8) -> Option<f64> {
         let (flat, mitre) = if a.square { (a, b) } else { (b, a) };
         let flat = if kept == 2 { flat.area } else { 0.0 };
         Some(prism.lateral + mitre.area + flat)
+    } else if !a.square && !b.square && kept == 2 {
+        Some(prism.lateral + a.area + b.area)
     } else {
         None
     }
@@ -1093,9 +1098,16 @@ mod tests {
     }
 
     #[test]
-    fn two_mitred_ends_are_not_read() {
-        let two_mitres = prism(0.2, [(false, 0.007), (false, 0.007)]);
-        assert!(mullion_surface_area(&two_mitres, 2).is_none());
+    fn two_mitred_ends_count_where_both_are_kept_and_are_not_read_otherwise() {
+        let two_mitres = prism(0.2, [(false, 0.007), (false, 0.0071)]);
+        // A mitred end always counts, so a mullion with two of them and an end
+        // hidden contradicts it.
+        assert!(mullion_surface_area(&two_mitres, 0).is_none());
+        assert!(mullion_surface_area(&two_mitres, 1).is_none());
+        assert_close(mullion_surface_area(&two_mitres, 2).unwrap(), 0.2141);
+        // A flat end and a mitred one with no end kept is none, as before.
+        let one_flat = prism(0.2, [(true, 0.005), (false, 0.007)]);
+        assert!(mullion_surface_area(&one_flat, 0).is_none());
     }
 
     fn placed(axis: [f64; 3], from: [f64; 3], to: [f64; 3]) -> Placed {
