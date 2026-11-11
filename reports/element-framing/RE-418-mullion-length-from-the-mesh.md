@@ -3,8 +3,8 @@
 **Date:** 2026-11-10
 **Issues:** #1046 (curtain mullion quantities), #1636 (second-project measurement); follows RE-403 (the box is not the solid), RE-387 (the mesh's volume) and RE-268 (kept end faces)
 **Artefacts:** the BIM4LCA office at building permit, in concrete and in timber, and the housing in its four large files (Revit 2024, Revit's IFC4 exports), as Measure fetches them. Never stored.
-**Runs:** Measure [42943892070](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42943892070) (the scorer `tools/re/mullion_profiles_vs_ifc.py` at `e24fe0903abe134ec10719e458a6b7b94d7307ff`, on `main` at `9bf2ccf801e1bf9eec6967f4d3b46a35818af4ee`) for section 1
-**Status:** pending the change's own measurement (section 3); the finding of sections 1 and 2 is measured.
+**Runs:** Measure [42943892070](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42943892070) (the scorer `tools/re/mullion_profiles_vs_ifc.py` at `e24fe0903abe134ec10719e458a6b7b94d7307ff`, kept under `refs/archive/2026-11-11/cited/e24fe0903abe`, on `main` at `9bf2ccf801e1bf9eec6967f4d3b46a35818af4ee`) for section 1; [42946108250](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42946108250) (unfiltered, head `c4e7e54d1ba2c24d6c4246705da5cffaf93b00fb`, kept under `refs/archive/2026-11-11/cited/c4e7e54d1ba2`, against `main` at `134db9761fc48eaf4eceefb3f37e7591e7ec5e29`) for section 3; [42948431190](https://github.com/DrunkOnJava/rvt-rs/actions/runs/42948431190) (the Autodesk samples with both sides' exports kept) for section 4
+**Status:** Positive. 49 of the 71 mullions of the BIM4LCA timber office at permit whose `Length` differs from Revit's now equal it, and so does their `Span`; 5 of the 126 exports move and the other 121 are byte-identical.
 
 ## 1. What the scorer found
 
@@ -25,10 +25,32 @@
 
 `saved_meshes::follow_mesh_over_box` (RE-403) already replaces a curtain mullion's box `NetVolume` with its mesh's where the two differ by more than 0.1%, and takes out the box's `NetSurfaceArea`. Where it does, the mesh is not an extrusion of the box, and the box's length is not the solid's either: the mullion's `Length` becomes the one extent of its mesh, along the axes it is a prism along (`mesh_volume::prism_extents`), that lies within 35% of the written `Length`; where there are two such, or none, the written `Length` stays. A `Span` follows its `Length`, as it does at the record. A difference under 1e-4 ft (the mesh's corners are single precision) leaves the written value alone.
 
-## 3. Measured: the change
+## 3. Measured: every model
 
-Pending: the unfiltered Measure of the change against `main`, which this section reports.
+Unfiltered Measure 42946108250, every flag, 126 models on each side: 121 exports are byte-identical and 5 move, the timber office at permit and the four `rac_advanced` saves of Revit 2024 to 2027 (section 4). The row registered on #1636 before the run held on all three points. Its second named the timber office as built as the one other model I expected to move; it does not (it is byte-identical), and the four `rac_advanced` saves, which the row did not name, move.
 
-## 4. Sources
+| timber office at permit | before | after |
+|---|---:|---:|
+| `Qto_MemberBaseQuantities.Length` equal / different / missing | 7,801 / 53 / 18 | 7,850 / 4 / 18 |
+| `Pset_MemberCommon.Span` equal / different / missing | 7,801 / 53 / 18 | 7,850 / 4 / 18 |
+| quantities Revit writes that rvt-rs writes: different | 71 | 22 |
+| property values: different | 101 | 52 |
+
+Every other line of `qtos_vs_ifc` and `psets_vs_ifc` is identical. The 49 are written 0.01 m to 0.279 m over Revit's (0.49% to 14.3%): ten mullions of one type at 2.23 m against 1.951 m (ElementIds 3076107 to 3076116), two at 2.28 m against 2.001 m (3076105 and 3076106), one at 2.0 m against 1.951 m (3520147) and 36 more. The 4 that still differ and the 18 with no `Length` are the 22 of section 1 that the rule does not touch. The `same-project gates` check passed on the head (15 samples held to their earlier saves, and the Areas on 4 saves and on the 2021 save).
+
+## 4. The `rac_advanced` saves
+
+Autodesk's `rac_advanced` sample holds curtain mullions too, and its four saves of Revit 2024 to 2027 move: Measure holds no Revit export of them, so the change is not scored there. Run 42948431190 kept both sides' exports (the 58 Autodesk samples, `scorers=none`): section 4 of this report is completed from `tools/re/ifc_element_diff.py` once it reads.
+
+## 5. Reproduce
+
+```bash
+gh workflow run measure.yml --ref fix/1046-mullion-axial-extent -f ref=c4e7e54d1ba2c24d6c4246705da5cffaf93b00fb -f base=134db9761fc48eaf4eceefb3f37e7591e7ec5e29 \
+  -f nordic=true -f samples=true -f r2025=true -f holdout=true -f bimcollab=true -f racadv=true
+```
+
+The scorer of section 1: `python3 tools/re/mullion_profiles_vs_ifc.py <rvt-rs.ifc> <revit-export.ifc>` (its Measure runs are 42943892070 and 42946015504).
+
+## 6. Sources
 
 RE-243, RE-268, RE-387, RE-403. revit-ifc's `PropertyUtil.CreateBeamColumnBaseQuantities` as RE-353 read it (CLEANROOM.md source 5). No Autodesk source was read.
