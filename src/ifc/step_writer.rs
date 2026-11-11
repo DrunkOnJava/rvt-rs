@@ -412,6 +412,7 @@ fn type_entity_for(ifc_upper: &str, predefined: Option<&str>) -> Option<(String,
         | "IFCSANITARYTERMINAL"
         | "IFCWASTETERMINAL"
         | "IFCFIRESUPPRESSIONTERMINAL"
+        | "IFCSOLARDEVICE"
         | "IFCTRANSPORTELEMENT" => pt,
         _ => return None,
     };
@@ -740,6 +741,7 @@ fn revit_ifc_type_entity_name(step_name: &str) -> Option<&'static str> {
         "IFCSANITARYTERMINALTYPE" => "IfcSanitaryTerminalType",
         "IFCWASTETERMINALTYPE" => "IfcWasteTerminalType",
         "IFCFIRESUPPRESSIONTERMINALTYPE" => "IfcFireSuppressionTerminalType",
+        "IFCSOLARDEVICETYPE" => "IfcSolarDeviceType",
         "IFCTRANSPORTELEMENTTYPE" => "IfcTransportElementType",
         "IFCSPACETYPE" => "IfcSpaceType",
         _ => return None,
