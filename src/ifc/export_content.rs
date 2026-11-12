@@ -6771,6 +6771,12 @@ const WALL_AXIS_BOX_TOLERANCE_FEET: f64 = 1e-6;
 /// record box for the box to set its length.
 const WALL_BOX_CLOSURE_FEET: f64 = 1e-4;
 
+/// How far a wall's line may drift across a model axis, end to end, and still
+/// take its record box's extent along that axis (#1806): a line drawn along
+/// an axis drifts by a rounding error over its length, which a test of its
+/// direction scales by the length.
+const WALL_AXIS_DRIFT_FEET: f64 = 1e-6;
+
 /// A wall's body from its centreline (RE-54): a rectangle its type's
 /// thickness across, centred on the line.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -6793,15 +6799,16 @@ struct WallCentrelineBody {
 /// Across the wall, the body is the type's thickness centred on the line.
 /// Along it:
 /// - an axis-parallel wall keeps the box's extent, which its joins trimmed
-///   (RE-26). A line whose ends lie within `WALL_AXIS_BOX_TOLERANCE_FEET` of
-///   each other across a model axis is axis-parallel, however slightly it
-///   drifts. A box thinner than the type is a wall Revit cut, and keeps the
-///   box.
+///   (RE-26). A box thinner than the type is a wall Revit cut, and keeps
+///   the box.
 /// - a wall at an angle is the rectangle the box closes on, when one of the
 ///   type's thickness along the line fits the box exactly and is centred on
-///   the line; otherwise it runs from one end of its line to the other,
-///   unless the box is more than twice the wall's thickness (at least a
-///   foot) wider than that rectangle's.
+///   the line; otherwise, where its ends lie within [`WALL_AXIS_DRIFT_FEET`]
+///   of each other across a model axis, it keeps the box's extent along that
+///   axis as an axis-parallel wall does, centred where the box's centre falls
+///   on the line, at the line's own angle; otherwise it runs from one end of
+///   its line to the other, unless the box is more than twice the wall's
+///   thickness (at least a foot) wider than that rectangle's.
 /// - an end at a butt join its join lists decide reaches half the other
 ///   wall's thickness past the line's end, or stops that far short of it
 ///   (RE-70), for either kind of wall; an end at a T joint stops that far
@@ -6842,10 +6849,7 @@ fn wall_centreline_body(
         let at = (low + high) / 2.0;
         ([sx + ux * at, sy + uy * at], high - low)
     };
-    // A line drawn axis-parallel can drift a hair across the axis over its
-    // length. Its unit vector divides that drift by the length, so a 1e-9
-    // test on it is a test of the angle; the ends in feet test the drift.
-    if (ey - sy).abs() <= WALL_AXIS_BOX_TOLERANCE_FEET {
+    if uy.abs() <= 1e-9 {
         let (centre, run) = joined([x, sy], width);
         return (!thinner(depth)).then_some(WallCentrelineBody {
             centre,
@@ -6856,7 +6860,7 @@ fn wall_centreline_body(
             join_reach_feet: axis.join_reach_feet,
         });
     }
-    if (ex - sx).abs() <= WALL_AXIS_BOX_TOLERANCE_FEET {
+    if ux.abs() <= 1e-9 {
         let (centre, run) = joined([sx, y], depth);
         return (!thinner(width)).then_some(WallCentrelineBody {
             centre,
@@ -6884,15 +6888,36 @@ fn wall_centreline_body(
         if axis.box_must_close {
             return None;
         }
-        // A box far wider than the line's own rectangle holds a body that
-        // is not that rectangle: a leaning or profiled wall.
-        let limit = 2.0 * thickness.max(1.0);
-        let excess_width = width - (length * ux.abs() + thickness * uy.abs());
-        let excess_depth = depth - (length * uy.abs() + thickness * ux.abs());
-        if excess_width > limit || excess_depth > limit {
-            return None;
+        // #1806: a line drawn along a model axis that drifts a hair off it is
+        // an axis-parallel wall whose box closure divides by that drift. It
+        // keeps the box's extent along the axis, which its joins trimmed,
+        // and the line's own angle, which the flip of a door or window set in
+        // it is read against: on the axis itself that flip comes out
+        // otherwise for a window centred on the line.
+        let along = if (ey - sy).abs() <= WALL_AXIS_DRIFT_FEET {
+            Some((width, depth))
+        } else if (ex - sx).abs() <= WALL_AXIS_DRIFT_FEET {
+            Some((depth, width))
+        } else {
+            None
+        };
+        if let Some((run, across)) = along {
+            if thinner(across) {
+                return None;
+            }
+            let at = (x - sx) * ux + (y - sy) * uy;
+            ([sx + ux * at, sy + uy * at], run)
+        } else {
+            // A box far wider than the line's own rectangle holds a body that
+            // is not that rectangle: a leaning or profiled wall.
+            let limit = 2.0 * thickness.max(1.0);
+            let excess_width = width - (length * ux.abs() + thickness * uy.abs());
+            let excess_depth = depth - (length * uy.abs() + thickness * ux.abs());
+            if excess_width > limit || excess_depth > limit {
+                return None;
+            }
+            ([mx, my], length)
         }
-        ([mx, my], length)
     };
     let (centre, run) = joined(centre, run);
     Some(WallCentrelineBody {
@@ -6953,10 +6978,8 @@ fn tapered_wall_solid(
     }
     let along = [(axis.end[0] - sx) / length, (axis.end[1] - sy) / length];
     // The body's run: the rectangle's width, unless an axis-parallel body
-    // runs along the model's Y axis, which is the branch
-    // `wall_centreline_body` took for it.
-    let along_y = (axis.end[1] - sy).abs() > WALL_AXIS_BOX_TOLERANCE_FEET;
-    let run = if body.rotation.is_none() && along_y {
+    // runs along the model's Y axis.
+    let run = if body.rotation.is_none() && along[1].abs() > 1e-9 {
         body.depth_feet
     } else {
         body.width_feet
@@ -7019,11 +7042,10 @@ fn layered_wall_profile(
     {
         return None;
     }
-    let along_y = (axis.end[1] - sy).abs() > WALL_AXIS_BOX_TOLERANCE_FEET;
-    let run = if body.rotation.is_none() && along_y {
-        body.depth_feet
-    } else {
+    let run = if body.rotation.is_some() || along[1].abs() <= 1e-9 {
         body.width_feet
+    } else {
+        body.depth_feet
     };
     let middle = (body.centre[0] - sx) * along[0] + (body.centre[1] - sy) * along[1];
     let [start, end] = &ends.reach_feet;
