@@ -864,3 +864,107 @@ fn partition_scan_tag_in_the_last_three_bytes_does_not_panic() {
         });
     }
 }
+
+// ---- research::native_form_geometry::walk -> native_document::group_records (#1815) ----
+
+/// A native record group whose length field is `0xFFFF_FFF5` puts the record's
+/// end within 4 of `usize::MAX` on a 32-bit target, where the dual-length
+/// check's `end + 4` overflowed: a panic under overflow checks (CI's i686 job
+/// runs this file) and an out-of-range slice without them (wasm32, which the
+/// viewer runs). On 64-bit the group is refused cleanly before and after the
+/// fix; the walk's counts show the file reached `group_records`.
+#[test]
+fn native_group_record_length_overflow_does_not_panic() {
+    use rvt::research::native_form_geometry;
+
+    const CHANNEL: u64 = 101;
+
+    // `Formats/Latest` as the native schema registry reads it: four classes,
+    // tags 12 to 15, each with a parent reference to tag 0 and no fields, then
+    // eight zero bytes.
+    let mut schema = Vec::new();
+    for name in [
+        "ContentMarker",
+        "ContentKey",
+        "SegmentMarker",
+        "SegmentCheckback",
+    ] {
+        schema.extend_from_slice(&0u16.to_le_bytes());
+        schema.extend_from_slice(&(name.len() as u16).to_le_bytes());
+        schema.extend_from_slice(name.as_bytes());
+        schema.extend_from_slice(&0u16.to_le_bytes());
+        schema.extend_from_slice(&0u32.to_le_bytes());
+        schema.extend_from_slice(&0u32.to_le_bytes());
+        schema.extend_from_slice(&0u32.to_le_bytes());
+    }
+    schema.extend_from_slice(&[0u8; 8]);
+
+    // One channel-101 group of 2023 framing: a 4-byte id, a length field of
+    // 0xFFFF_FFF5 and the 4 bytes a record would repeat its length in.
+    let mut group = Vec::new();
+    group.extend_from_slice(&0u32.to_le_bytes());
+    group.extend_from_slice(&0xFFFF_FFF5u32.to_le_bytes());
+    group.extend_from_slice(&0u32.to_le_bytes());
+    let member = rvt::compression::gzip_member_encode(&group).expect("encode the group");
+
+    // The partition: an 8-byte prefix, one segment (SegmentMarker, one member,
+    // no continuation) holding the group, then the opaque terminal
+    // (ContentMarker, token 0, count u32::MAX).
+    let mut partition = vec![0u8; 8];
+    partition.extend_from_slice(&14u16.to_le_bytes());
+    partition.extend_from_slice(&4u32.to_le_bytes());
+    partition.extend_from_slice(&1u32.to_le_bytes());
+    partition.extend_from_slice(&(8 + member.len() as u32).to_le_bytes());
+    partition.extend_from_slice(&(group.len() as u32).to_le_bytes());
+    partition.extend_from_slice(&CHANNEL.to_le_bytes());
+    partition.extend_from_slice(&member);
+    partition.extend_from_slice(&12u16.to_le_bytes());
+    partition.extend_from_slice(&0u32.to_le_bytes());
+    partition.extend_from_slice(&u32::MAX.to_le_bytes());
+
+    // A 2023 save, as BasicFileInfo's UTF-16LE text names it.
+    let basic_file_info: Vec<u8> = "2023  20230101_0000(x64)"
+        .encode_utf16()
+        .flat_map(u16::to_le_bytes)
+        .collect();
+
+    let file = compound_file(&[
+        ("/BasicFileInfo", basic_file_info),
+        (
+            "/Formats/Latest",
+            rvt::compression::gzip_member_encode(&schema).expect("encode the schema"),
+        ),
+        ("/Partitions/66", partition),
+    ]);
+
+    assert_no_panic("native group record length 0xFFFFFFF5", &file, |bytes| {
+        let mut rf = RevitFile::open_bytes(bytes.to_vec()).expect("open the crafted file");
+        let document = native_form_geometry::open(&mut rf).expect("a 2023 schema and partition");
+        assert_eq!(document.release, 2023);
+        let walked = native_form_geometry::walk(&mut rf, &document, &[CHANNEL], |_| Ok(()))
+            .expect("the partition walks to its terminal");
+        // The group reached `group_records` and was refused there.
+        assert_eq!((walked.groups, walked.unframed_groups), (1, 1));
+    });
+}
+
+/// An MS-CFB file holding `streams`, built in memory, with the storages their
+/// paths name created first.
+fn compound_file(streams: &[(&str, Vec<u8>)]) -> Vec<u8> {
+    use std::io::Write;
+
+    let mut file = cfb::CompoundFile::create(std::io::Cursor::new(Vec::new()))
+        .expect("create a compound file");
+    for (path, data) in streams {
+        let parent = std::path::Path::new(path)
+            .parent()
+            .filter(|parent| *parent != std::path::Path::new("/"));
+        if let Some(parent) = parent {
+            file.create_storage_all(parent).expect("create the storage");
+        }
+        let mut stream = file.create_stream(path).expect("create the stream");
+        stream.write_all(data).expect("write the stream");
+    }
+    file.flush().expect("flush the compound file");
+    file.into_inner().into_inner()
+}
