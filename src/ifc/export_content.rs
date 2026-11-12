@@ -3831,6 +3831,7 @@ pub(super) fn square_corner_count(points: &[(f64, f64)]) -> Option<usize> {
             return None;
         }
         let (dot, cross) = (u.0 * v.0 + u.1 * v.1, u.0 * v.1 - u.1 * v.0);
+        crate::research::threshold_census::note(cross / scale);
         if cross.abs() <= STRAIGHT * scale && dot > 0.0 {
             continue;
         }
@@ -6542,7 +6543,7 @@ fn arrow_roof_hip_ambiguous(ring: &[(f64, f64)], sloped: &[usize]) -> bool {
         }
     };
     let mut met: Vec<usize> = Vec::new();
-    for i in (0..n).filter(|&i| turn(i) < -1e-9) {
+    for i in (0..n).filter(|&i| crate::research::threshold_census::note(turn(i)) < -1e-9) {
         let (p, c, q) = (ring[(i + n - 1) % n], ring[i], ring[(i + 1) % n]);
         for d in [(c.0 - p.0, c.1 - p.1), (c.0 - q.0, c.1 - q.1)] {
             // The nearest edge the extension of a reflex edge reaches: its
@@ -6580,7 +6581,10 @@ fn arrow_roof_hip_ambiguous(ring: &[(f64, f64)], sloped: &[usize]) -> bool {
     met.into_iter().any(|k| {
         [(k, (k + n - 1) % n), ((k + 1) % n, (k + 1) % n)]
             .into_iter()
-            .any(|(vertex, other)| turn(vertex) > 1e-9 && sloped.contains(&other))
+            .any(|(vertex, other)| {
+                crate::research::threshold_census::note(turn(vertex)) > 1e-9
+                    && sloped.contains(&other)
+            })
     })
 }
 

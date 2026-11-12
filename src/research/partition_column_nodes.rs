@@ -87,6 +87,18 @@ fn plan_equal(a: &[f64; 6], b: &[f64; 6], tolerance: f64) -> bool {
         .all(|&i| (a[i] - b[i]).abs() < tolerance)
 }
 
+// #1825's census: the largest plan difference `plan_equal` tests, NaN kept.
+fn plan_gap(a: &[f64; 6], b: &[f64; 6]) -> f64 {
+    [0, 1, 3, 4].iter().fold(0.0, |most: f64, &i| {
+        let gap = (a[i] - b[i]).abs();
+        if gap.is_nan() || most.is_nan() {
+            f64::NAN
+        } else {
+            most.max(gap)
+        }
+    })
+}
+
 /// The bottom, in feet, of each column in `targets` (ElementId -> record box)
 /// that a geometry node gives and agrees on.
 pub fn column_bottoms(rf: &mut RevitFile, targets: &BTreeMap<u32, [f64; 6]>) -> BTreeMap<u32, f64> {
@@ -97,6 +109,7 @@ pub fn column_bottoms(rf: &mut RevitFile, targets: &BTreeMap<u32, [f64; 6]>) -> 
             let bottoms: Vec<f64> = nodes
                 .iter()
                 .filter(|(first, second)| {
+                    crate::research::threshold_census::note(plan_gap(first, second));
                     plan_equal(first, second, 1e-9)
                         && plan_equal(second, record, PLAN_TOLERANCE_FEET)
                         && (second[5] - record[5]).abs() < TOLERANCE_FEET
@@ -133,6 +146,7 @@ pub fn column_cut_extents(
             let (_, first) = nodes.first()?;
             let (bottom, top) = (first[2], first[5]);
             let agree = nodes.iter().all(|(own, after)| {
+                crate::research::threshold_census::note(plan_gap(own, after));
                 plan_equal(own, after, 1e-9)
                     && plan_equal(after, record, PLAN_TOLERANCE_FEET)
                     && (after[2] - bottom).abs() < TOLERANCE_FEET

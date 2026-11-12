@@ -1309,7 +1309,10 @@ impl StepWriter<'_> {
                     .map(|(x, y)| (*x * 0.3048, *y * 0.3048))
                     .collect();
                 if let (Some(first), Some(last)) = (pts.first().copied(), pts.last().copied()) {
-                    if (first.0 - last.0).abs().max((first.1 - last.1).abs()) > 1e-9_f64 {
+                    if crate::research::threshold_census::note(
+                        (first.0 - last.0).abs().max((first.1 - last.1).abs()),
+                    ) > 1e-9_f64
+                    {
                         pts.push(first);
                     }
                 }
@@ -1428,7 +1431,10 @@ impl StepWriter<'_> {
             .map(|(x, y)| (*x * 0.3048, *y * 0.3048))
             .collect();
         if let (Some(first), Some(last)) = (metres.first().copied(), metres.last().copied()) {
-            if (first.0 - last.0).abs().max((first.1 - last.1).abs()) > 1e-9_f64 {
+            if crate::research::threshold_census::note(
+                (first.0 - last.0).abs().max((first.1 - last.1).abs()),
+            ) > 1e-9_f64
+            {
                 metres.push(first);
             }
         }

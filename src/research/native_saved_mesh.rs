@@ -556,8 +556,16 @@ fn within_envelope(
     refined
         .into_iter()
         .filter(|uv| {
-            original.contains(uv)
-                || (0..2).all(|k| uv[k] >= low[k] - 1e-9 && uv[k] <= high[k] + 1e-9)
+            original.contains(uv) || {
+                // #1825's census: how far inside the envelope the sample
+                // lies, negative outside.
+                crate::research::threshold_census::note(
+                    (0..2)
+                        .map(|k| (uv[k] - low[k]).min(high[k] - uv[k]))
+                        .fold(f64::INFINITY, f64::min),
+                );
+                (0..2).all(|k| uv[k] >= low[k] - 1e-9 && uv[k] <= high[k] + 1e-9)
+            }
         })
         .collect()
 }

@@ -346,14 +346,18 @@ fn clip_convex(subject: &[Point2], clip: &[Point2]) -> Ring {
 /// counter-clockwise `clip`: where `clip` does not reach it, the piece
 /// whole.
 fn subtract_convex(piece: &[Point2], clip: &[Point2]) -> Vec<Ring> {
-    if area(&clip_convex(piece, clip)).abs() <= PIECE_ROUNDING_SQUARE_FEET {
+    if crate::research::threshold_census::note(area(&clip_convex(piece, clip))).abs()
+        <= PIECE_ROUNDING_SQUARE_FEET
+    {
         return vec![piece.to_vec()];
     }
     let mut outside = Vec::new();
     let mut inside: Ring = piece.to_vec();
     for (&a, &b) in clip.iter().zip(clip.iter().cycle().skip(1)) {
         let part = half_plane(&inside, a, b, false);
-        if part.len() >= 3 && area(&part) > PIECE_ROUNDING_SQUARE_FEET {
+        if part.len() >= 3
+            && crate::research::threshold_census::note(area(&part)) > PIECE_ROUNDING_SQUARE_FEET
+        {
             outside.push(part);
         }
         inside = half_plane(&inside, a, b, true);
@@ -395,7 +399,14 @@ fn tidy(mut ring: Ring) -> Ring {
 /// Whether the counter-clockwise `ring` turns left at every corner.
 fn is_convex(ring: &[Point2]) -> bool {
     let n = ring.len();
-    n >= 3 && (0..n).all(|i| side_of(ring[i], ring[(i + 1) % n], ring[(i + 2) % n]) >= -1e-9)
+    n >= 3
+        && (0..n).all(|i| {
+            crate::research::threshold_census::note(side_of(
+                ring[i],
+                ring[(i + 1) % n],
+                ring[(i + 2) % n],
+            )) >= -1e-9
+        })
 }
 
 /// The convex pieces `a` and `b` make together, where they share an edge
@@ -537,7 +548,9 @@ fn steps(wall: &Wall, levels: &[(f64, Vec<&Cutter>)], neighbours: &[&Wall]) -> O
     for (level, group) in levels {
         for cutter in group {
             for triangle in &cutter.outline {
-                if overlap(wall, triangle) <= PIECE_ROUNDING_SQUARE_FEET {
+                if crate::research::threshold_census::note(overlap(wall, triangle))
+                    <= PIECE_ROUNDING_SQUARE_FEET
+                {
                     continue;
                 }
                 let clip = counter_clockwise(triangle.to_vec());
@@ -553,7 +566,9 @@ fn steps(wall: &Wall, levels: &[(f64, Vec<&Cutter>)], neighbours: &[&Wall]) -> O
         let mut held: Vec<Ring> = Vec::new();
         for cutter in group {
             for triangle in &cutter.cutouts {
-                if overlap(wall, triangle) <= PIECE_ROUNDING_SQUARE_FEET {
+                if crate::research::threshold_census::note(overlap(wall, triangle))
+                    <= PIECE_ROUNDING_SQUARE_FEET
+                {
                     continue;
                 }
                 if !alone {
@@ -563,7 +578,11 @@ fn steps(wall: &Wall, levels: &[(f64, Vec<&Cutter>)], neighbours: &[&Wall]) -> O
                 let mut parts: Vec<Ring> = base
                     .iter()
                     .map(|piece| clip_convex(piece, &clip))
-                    .filter(|part| part.len() >= 3 && area(part) > PIECE_ROUNDING_SQUARE_FEET)
+                    .filter(|part| {
+                        part.len() >= 3
+                            && crate::research::threshold_census::note(area(part))
+                                > PIECE_ROUNDING_SQUARE_FEET
+                    })
                     .collect();
                 for other in pieces.iter().chain(held.iter()) {
                     parts = parts
@@ -1090,13 +1109,17 @@ fn covered_pieces(cutter: &Cutter, wall: &Wall) -> Option<Vec<Ring>> {
     let base = convex_pieces(&wall.plan)?;
     let mut inside: Vec<Ring> = Vec::new();
     for triangle in &cutter.outline {
-        if overlap(wall, triangle) <= PIECE_ROUNDING_SQUARE_FEET {
+        if crate::research::threshold_census::note(overlap(wall, triangle))
+            <= PIECE_ROUNDING_SQUARE_FEET
+        {
             continue;
         }
         let clip = counter_clockwise(triangle.to_vec());
         for piece in &base {
             let part = clip_convex(piece, &clip);
-            if part.len() >= 3 && area(&part) > PIECE_ROUNDING_SQUARE_FEET {
+            if part.len() >= 3
+                && crate::research::threshold_census::note(area(&part)) > PIECE_ROUNDING_SQUARE_FEET
+            {
                 inside.push(part);
             }
         }
@@ -1546,7 +1569,9 @@ fn base_cut_piece(
         let mut outside: Vec<Ring> = vec![convex.clone()];
         for clip in covered {
             let part = clip_convex(&convex, clip);
-            if part.len() >= 3 && area(&part) > PIECE_ROUNDING_SQUARE_FEET {
+            if part.len() >= 3
+                && crate::research::threshold_census::note(area(&part)) > PIECE_ROUNDING_SQUARE_FEET
+            {
                 held += area(&part);
                 items.push(base_cut_item(cut, &local(&part), *top, placement, base)?);
             }
@@ -1556,7 +1581,9 @@ fn base_cut_piece(
                 .collect();
         }
         for part in &outside {
-            if part.len() >= 3 && area(part) > PIECE_ROUNDING_SQUARE_FEET {
+            if part.len() >= 3
+                && crate::research::threshold_census::note(area(part)) > PIECE_ROUNDING_SQUARE_FEET
+            {
                 held += area(part);
                 items.push(SolidShape::PlacedExtrusion {
                     profile: ProfileDef::ArbitraryClosed {
@@ -2139,7 +2166,10 @@ fn standing(rings: &[&Ring], long: usize, at_low: bool, strip: (f64, f64)) -> St
     let mut polygons: Vec<Ring> = Vec::new();
     for ring in rings {
         let part = clip_convex(ring, &clip);
-        if part.len() < 3 || area(&part).abs() <= PIECE_ROUNDING_SQUARE_FEET {
+        if part.len() < 3
+            || crate::research::threshold_census::note(area(&part)).abs()
+                <= PIECE_ROUNDING_SQUARE_FEET
+        {
             continue;
         }
         let b = bounds(ring);

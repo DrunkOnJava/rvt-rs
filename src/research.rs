@@ -102,6 +102,7 @@
 //! - [`rect_opening_index`]: Revit 2024's 60 B rows RE-15 read as a wall-opening index, which name system elements, not openings (RE-376)
 //! - [`revit_global_ids`]: The IFC `GlobalId` Revit's own exporter gives an element, rebuilt from the file (RE-48)
 //! - [`schema_registry`]: Forward-only Formats/Latest registry framing, without byte-name scanning
+//! - [`threshold_census`]: How close each near-zero geometric test's value comes to its threshold (#1825)
 // Tracker: D20, B66, B44, B33, M3-03, M3-04, B54, B59, B43, L5B-10.
 
 pub mod element_record_beam_cuts;
@@ -185,3 +186,4 @@ pub mod partition_type_records;
 pub mod rect_opening_index;
 pub mod revit_global_ids;
 pub mod schema_registry;
+pub mod threshold_census;

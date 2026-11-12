@@ -967,7 +967,9 @@ fn merge_collinear(points: &[(f64, f64)]) -> Vec<(f64, f64)> {
         let second = (next.0 - current.0, next.1 - current.1);
         let cross = first.0 * second.1 - first.1 * second.0;
         let scale = first.0.hypot(first.1) * second.0.hypot(second.1);
-        if scale > 0.0 && (cross / scale).abs() < COLLINEAR_EPS {
+        if scale > 0.0
+            && crate::research::threshold_census::note(cross / scale).abs() < COLLINEAR_EPS
+        {
             continue;
         }
         out.push(current);
