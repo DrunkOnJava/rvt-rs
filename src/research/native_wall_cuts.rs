@@ -66,15 +66,7 @@ pub fn wall_cut_steps(
     if walls.is_empty() {
         return Ok(BTreeMap::new());
     }
-    let missing: BTreeSet<u64> = walls
-        .difference(&rf.wall_cut_steps_asked)
-        .copied()
-        .collect();
-    if !missing.is_empty() {
-        let read = read_wall_cut_steps(rf, &missing)?;
-        rf.wall_cut_steps_asked.extend(missing);
-        rf.wall_cut_steps_memo.extend(read);
-    }
+    remember_wall_records(rf, walls)?;
     Ok(walls
         .iter()
         .filter_map(|id| {
@@ -129,12 +121,40 @@ pub fn resolve_shadow_steps(steps: &mut BTreeMap<u64, Vec<WallCutStep>>) {
     }
 }
 
-/// The steps of the native records of `walls`, read now.
-fn read_wall_cut_steps(
-    rf: &mut RevitFile,
-    walls: &BTreeSet<u64>,
-) -> anyhow::Result<BTreeMap<u64, Vec<WallCutStep>>> {
+/// Reads the native records of those of `walls` not asked for before, in one
+/// walk, and keeps what it gives on the file's handle: each wall's cut steps
+/// and whether its record holds a base join. The openings the walls carry and
+/// the walls drawn from their saved mesh ask for the same records, and a walk
+/// of them is a pass over the file, so no caller makes a second one.
+fn remember_wall_records(rf: &mut RevitFile, walls: &BTreeSet<u64>) -> anyhow::Result<()> {
+    let missing: BTreeSet<u64> = walls
+        .difference(&rf.wall_cut_steps_asked)
+        .copied()
+        .collect();
+    if missing.is_empty() {
+        return Ok(());
+    }
+    let read = read_wall_records(rf, &missing)?;
+    rf.wall_cut_steps_asked.extend(missing);
+    rf.wall_cut_steps_memo.extend(read.steps);
+    rf.wall_no_base_join_memo.extend(read.no_base_join);
+    Ok(())
+}
+
+/// What one walk of walls' native records gives.
+struct WallRecords {
+    /// The cut steps of each wall whose record was read.
+    steps: BTreeMap<u64, Vec<WallCutStep>>,
+    /// The walls whose record was read as a wall's and holds no base join.
+    no_base_join: BTreeSet<u64>,
+}
+
+/// The steps of the native records of `walls` and which of them hold no base
+/// join, read now.
+fn read_wall_records(rf: &mut RevitFile, walls: &BTreeSet<u64>) -> anyhow::Result<WallRecords> {
     let mut out: BTreeMap<u64, Vec<WallCutStep>> = BTreeMap::new();
+    let mut read: BTreeSet<u64> = BTreeSet::new();
+    let mut attached: BTreeSet<u64> = BTreeSet::new();
     let options = native_document::Options {
         selected_ids: walls.clone(),
         ..native_document::Options::default()
@@ -143,6 +163,18 @@ fn read_wall_cut_steps(
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
         };
+        // #1046: a base join is a `JoinToRoofGStep` that does not say it joins
+        // the top, in any record read as this wall's.
+        if matches!(record.class_name.as_deref(), Some("SWall" | "ArcWall")) {
+            let id = record.identity.element_id;
+            read.insert(id);
+            if graph.objects.iter().any(|object| {
+                object.class_name == "JoinToRoofGStep"
+                    && object.fields.get("m_baseOrTop").and_then(Value::as_i64) != Some(1)
+            }) {
+                attached.insert(id);
+            }
+        }
         let mut steps = Vec::new();
         for object in &graph.objects {
             let kind = match object.class_name.as_str() {
@@ -178,7 +210,10 @@ fn read_wall_cut_steps(
         out.entry(record.identity.element_id).or_insert(steps);
         Ok(())
     })?;
-    Ok(out)
+    Ok(WallRecords {
+        steps: out,
+        no_base_join: read.difference(&attached).copied().collect(),
+    })
 }
 
 /// The walls of `walls` whose native record was read and holds no base join, no
@@ -188,7 +223,8 @@ fn read_wall_cut_steps(
 /// office as built and at building permit, and none of the 5 that are. A wall
 /// whose record is not read, one whose record holds such a step, and one whose
 /// step does not say whether it joins the base or the top, is left out, so the
-/// set never names a wall that may be attached at its base.
+/// set never names a wall that may be attached at its base. The records are the
+/// ones [`wall_cut_steps`] reads, in the same walk, once for the file's handle.
 pub fn walls_with_no_base_join(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
@@ -196,30 +232,11 @@ pub fn walls_with_no_base_join(
     if walls.is_empty() {
         return Ok(BTreeSet::new());
     }
-    let options = native_document::Options {
-        selected_ids: walls.clone(),
-        ..native_document::Options::default()
-    };
-    let mut read: BTreeSet<u64> = BTreeSet::new();
-    let mut attached: BTreeSet<u64> = BTreeSet::new();
-    native_document::extract_graphs(rf, &options, |record| {
-        if !matches!(record.class_name.as_deref(), Some("SWall" | "ArcWall")) {
-            return Ok(());
-        }
-        let Some(graph) = record.graph.as_ref() else {
-            return Ok(());
-        };
-        let id = record.identity.element_id;
-        read.insert(id);
-        if graph.objects.iter().any(|object| {
-            object.class_name == "JoinToRoofGStep"
-                && object.fields.get("m_baseOrTop").and_then(Value::as_i64) != Some(1)
-        }) {
-            attached.insert(id);
-        }
-        Ok(())
-    })?;
-    Ok(read.difference(&attached).copied().collect())
+    remember_wall_records(rf, walls)?;
+    Ok(walls
+        .intersection(&rf.wall_no_base_join_memo)
+        .copied()
+        .collect())
 }
 
 /// For each of `ids` (rectangular wall openings' ElementIds), the box of the
