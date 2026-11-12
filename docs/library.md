@@ -130,6 +130,12 @@ cargo build --release
 # Compare two versions of the same file (cross-version byte diff)
 ./target/release/rvt-diff --decompress 2018.rfa 2024.rfa
 
+# Two saves of one project, element by element: what was added, removed or
+# changed (class, storey, type, material, placement, body, properties), keyed
+# by the GlobalId the IFC export writes (#1843). Compare with one build: a
+# change in how rvt-rs reads a file shows as a change too.
+./target/release/rvt-diff --elements monday.rvt tuesday.rvt --json changes.json
+
 # Dump the full class schema (4,126 classes and 11,562 fields on a Revit 2024 file)
 ./target/release/rvt-schema my-project.rvt
 

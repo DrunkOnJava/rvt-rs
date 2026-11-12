@@ -1,23 +1,34 @@
-//! `rvt-diff` — compare two Revit files stream-by-stream.
+//! `rvt-diff` — compare two Revit files stream-by-stream, or element by
+//! element.
 //!
 //! Take two (or more)
 //! versions of the *same logical* content and identify what's invariant
 //! vs what changes. The invariant bytes are format structure; the varying
 //! bytes are payload. This is the delta-analysis step that makes object
 //! graph inference tractable without a spec.
+//!
+//! With `--elements`, two files are exported as `rvt-ifc` exports them and
+//! compared by the GlobalId of each element the export writes
+//! ([`rvt::ifc::element_diff`], #1843): the elements added, removed and
+//! changed, and for each changed one the fields that differ. `--json` writes
+//! it all (`docs/schemas/rvt-diff-elements.schema.json`).
 
 use clap::Parser;
+use rvt::ifc::element_diff::{ElementDiff, ElementState, diff_elements, element_states};
 use rvt::{RevitFile, compression};
-use std::path::PathBuf;
+use serde::Serialize;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 #[derive(Parser, Debug)]
 #[command(
     name = "rvt-diff",
     version,
-    about = "Compare Revit files stream-by-stream",
+    about = "Compare Revit files stream-by-stream, or two saves element by element (--elements)",
     after_help = "Examples:\n  \
-        rvt-diff before.rvt after.rvt --decompress"
+        rvt-diff before.rvt after.rvt --decompress\n  \
+        rvt-diff --elements monday.rvt tuesday.rvt --json changes.json"
 )]
 struct Cli {
     /// Two or more Revit files to compare.
@@ -31,12 +42,37 @@ struct Cli {
     /// Bytes to show per differing region.
     #[arg(long = "preview", default_value_t = 32)]
     preview: usize,
+
+    /// Compare exactly two files element by element: export each as rvt-ifc
+    /// does and key the elements by the GlobalId the export writes. Lists the
+    /// elements added, removed and changed, with the fields that changed.
+    #[arg(long)]
+    elements: bool,
+
+    /// With --elements, write the whole comparison as JSON to this path
+    /// (docs/schemas/rvt-diff-elements.schema.json).
+    #[arg(long, value_name = "PATH", requires = "elements")]
+    json: Option<PathBuf>,
+
+    /// With --elements, the most elements of each kind the summary lists.
+    #[arg(long, default_value_t = 20)]
+    limit: usize,
+
+    /// With --elements, scrub user names, paths and e-mail addresses from
+    /// every name and text value printed or written (`rvt::redact`).
+    #[arg(long, requires = "elements")]
+    redact: bool,
 }
 
 fn main() -> ExitCode {
     rvt::cli::exit_quietly_on_broken_pipe();
     let cli = Cli::parse();
-    match run(cli) {
+    let result = if cli.elements {
+        run_elements(&cli)
+    } else {
+        run(cli)
+    };
+    match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {e}");
@@ -171,4 +207,181 @@ fn run(cli: Cli) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// What `--json` writes: the two files by name, and the comparison.
+#[derive(Serialize)]
+struct ElementReport<'a> {
+    left: String,
+    right: String,
+    #[serde(flatten)]
+    diff: &'a ElementDiff,
+}
+
+fn run_elements(cli: &Cli) -> anyhow::Result<()> {
+    let [left, right] = cli.files.as_slice() else {
+        anyhow::bail!("--elements compares exactly two files");
+    };
+    let mut diff = diff_elements(&export_states(left)?, &export_states(right)?);
+    if cli.redact {
+        redact_diff(&mut diff);
+    }
+    let label = |path: &Path| {
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if cli.redact {
+            rvt::redact::redact_sensitive(&name)
+        } else {
+            name
+        }
+    };
+    let (left_label, right_label) = (label(left.as_path()), label(right.as_path()));
+    print_summary(&diff, &left_label, &right_label, cli.limit);
+    if let Some(path) = &cli.json {
+        let report = ElementReport {
+            left: left_label,
+            right: right_label,
+            diff: &diff,
+        };
+        std::fs::write(path, serde_json::to_vec_pretty(&report)?)?;
+    }
+    Ok(())
+}
+
+/// The elements `path`'s default IFC export writes. A stream a resource limit
+/// kept out is said on stderr, since what it holds is then missing from the
+/// comparison.
+fn export_states(path: &Path) -> anyhow::Result<Vec<ElementState>> {
+    let mut rf = RevitFile::open_with_limits(path, rvt::cli::open_limits(None, None, false))?;
+    let run = rvt::ifc::run_export(&mut rf, &rvt::ifc::ExportOptions::default())?;
+    if !run.unread.is_empty() {
+        eprintln!(
+            "rvt-diff: {}: {} stream(s) not read whole, so the comparison is missing what they hold:",
+            path.display(),
+            run.unread.len()
+        );
+        for line in rvt::cli::unread_stream_report(&run.unread) {
+            eprintln!("{line}");
+        }
+    }
+    Ok(element_states(&run.model))
+}
+
+fn redact_diff(diff: &mut ElementDiff) {
+    fn text(value: &mut String) {
+        *value = rvt::redact::redact_sensitive(value);
+    }
+    fn state(state: &mut ElementState) {
+        text(&mut state.name);
+        for value in [&mut state.storey, &mut state.type_name, &mut state.material]
+            .into_iter()
+            .flatten()
+        {
+            text(value);
+        }
+        for value in state.properties.values_mut() {
+            json(value);
+        }
+    }
+    fn json(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::String(inner) => text(inner),
+            serde_json::Value::Array(items) => items.iter_mut().for_each(json),
+            serde_json::Value::Object(fields) => fields.values_mut().for_each(json),
+            _ => {}
+        }
+    }
+    diff.added.iter_mut().for_each(state);
+    diff.removed.iter_mut().for_each(state);
+    for change in &mut diff.changed {
+        text(&mut change.name);
+        for field in &mut change.changes {
+            json(&mut field.left);
+            json(&mut field.right);
+        }
+    }
+}
+
+fn print_summary(diff: &ElementDiff, left: &str, right: &str, limit: usize) {
+    println!("=== elements: {left} -> {right} ===");
+    println!(
+        "  {} elements in {left}, {} in {right}: {} added, {} removed, {} changed, {} unchanged",
+        diff.left_elements,
+        diff.right_elements,
+        diff.added.len(),
+        diff.removed.len(),
+        diff.changed.len(),
+        diff.unchanged
+    );
+    let by_type = |states: &[ElementState]| {
+        let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+        for state in states {
+            *counts.entry(state.ifc_type.as_str()).or_default() += 1;
+        }
+        counts
+            .iter()
+            .map(|(kind, count)| format!("{kind} {count}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    for (heading, states) in [("added", &diff.added), ("removed", &diff.removed)] {
+        if states.is_empty() {
+            continue;
+        }
+        println!("\n{heading}: {}", by_type(states.as_slice()));
+        for state in states.iter().take(limit) {
+            println!(
+                "  {} {:<16} {} {}",
+                state.global_id,
+                state.ifc_type,
+                state.tag.as_deref().unwrap_or("-"),
+                state.name
+            );
+        }
+        if states.len() > limit {
+            println!("  ... {} more", states.len() - limit);
+        }
+    }
+    if !diff.changed.is_empty() {
+        let mut fields: BTreeMap<&str, usize> = BTreeMap::new();
+        for change in &diff.changed {
+            let mut seen = std::collections::BTreeSet::new();
+            for field in &change.changes {
+                let kind = if field.field.starts_with("property:") {
+                    "properties"
+                } else {
+                    field.field.as_str()
+                };
+                if seen.insert(kind) {
+                    *fields.entry(kind).or_default() += 1;
+                }
+            }
+        }
+        let fields = fields
+            .iter()
+            .map(|(field, count)| format!("{field} {count}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        println!("\nchanged, elements by field: {fields}");
+        for change in diff.changed.iter().take(limit) {
+            let names = change
+                .changes
+                .iter()
+                .map(|field| field.field.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            println!(
+                "  {} {:<16} {} {}: {names}",
+                change.global_id,
+                change.ifc_type,
+                change.tag.as_deref().unwrap_or("-"),
+                change.name
+            );
+        }
+        if diff.changed.len() > limit {
+            println!("  ... {} more", diff.changed.len() - limit);
+        }
+    }
 }

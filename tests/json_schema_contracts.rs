@@ -227,6 +227,7 @@ fn checked_in_schemas_are_valid_json_schema_documents() {
         "analyze.schema.json",
         "inspect.schema.json",
         "ifc-compare.schema.json",
+        "rvt-diff-elements.schema.json",
         "schema-table.schema.json",
         "corpus-doctor.schema.json",
     ] {
@@ -549,6 +550,64 @@ fn tier1_report_clis_validate_against_their_schemas() {
     let compare: Value = serde_json::from_str(&text).expect("parse the comparison report");
     validate(&load_schema("ifc-compare.schema.json"), &compare)
         .expect("ifc-compare schema validation");
+
+    // rvt-diff --elements (#1843): a file against itself changes nothing,
+    // and between two projects every element of each is counted once.
+    let elements = |left: &Path, right: &Path| -> Value {
+        let report = std::env::temp_dir().join(format!(
+            "rvt-diff-elements-contract-{}.json",
+            std::process::id()
+        ));
+        let output = Command::new(env!("CARGO_BIN_EXE_rvt-diff"))
+            .arg("--elements")
+            .arg(left)
+            .arg(right)
+            .arg("--json")
+            .arg(&report)
+            .output()
+            .expect("run rvt-diff --elements");
+        assert!(
+            output.status.success(),
+            "rvt-diff --elements failed\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let text = std::fs::read_to_string(&report).expect("read the element comparison");
+        let _ = std::fs::remove_file(&report);
+        let value: Value = serde_json::from_str(&text).expect("parse the element comparison");
+        validate(&load_schema("rvt-diff-elements.schema.json"), &value)
+            .expect("rvt-diff-elements schema validation");
+        value
+    };
+    let count = |value: &Value, key: &str| -> u64 {
+        value[key].as_array().map_or_else(
+            || value[key].as_u64().unwrap_or(0),
+            |items| items.len() as u64,
+        )
+    };
+    let same = elements(fixture.as_path(), fixture.as_path());
+    assert_eq!(
+        (
+            count(&same, "added"),
+            count(&same, "removed"),
+            count(&same, "changed")
+        ),
+        (0, 0, 0),
+        "a file against itself: {same}"
+    );
+    assert_eq!(count(&same, "unchanged"), count(&same, "left_elements"));
+    let mep = root.join("corpus/tier1/mep-2024/mep-2024.rvt");
+    let other = elements(fixture.as_path(), mep.as_path());
+    let in_both = count(&other, "changed") + count(&other, "unchanged");
+    assert_eq!(
+        count(&other, "left_elements"),
+        count(&other, "removed") + in_both,
+        "every element of the first file is removed, changed or unchanged: {other}"
+    );
+    assert_eq!(
+        count(&other, "right_elements"),
+        count(&other, "added") + in_both,
+        "every element of the second file is added, changed or unchanged: {other}"
+    );
 }
 
 #[test]
