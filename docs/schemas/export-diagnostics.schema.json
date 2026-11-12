@@ -198,15 +198,22 @@
         },
         "recovered_unit_identifiers": {
           "type": "array",
-          "description": "Best-effort project unit identifiers selected from Revit autodesk.unit.* records and threaded into IfcUnitAssignment.",
+          "description": "The display units of length, area, volume, angle, mass and time, as the project's UnitsElem (or the agreeing format maps of its string records) sets them (RE-445). They describe the source model; the IFC's values and unit assignment are SI.",
           "items": {
             "type": "string"
           }
         },
         "unknown_unit_identifiers": {
           "type": "array",
-          "description": "Observed autodesk.unit.* identifiers that did not map to a known IFC unit emission.",
+          "description": "Those of the six display units no IFC unit is known for.",
           "items": {
+            "type": "string"
+          }
+        },
+        "project_display_units": {
+          "type": "object",
+          "description": "The display unit of every spec the project lists, by the spec's ForgeTypeId (RE-445). Absent where none was read.",
+          "additionalProperties": {
             "type": "string"
           }
         },

@@ -13,7 +13,7 @@ AEC users without overstating current capability.
 | Tests | Add fixture assertions that prevent false-positive decode claims | `tests/project_corpus_smoke.rs`, `tests/walker_to_ifc_integration.rs` |
 | Viewer UX | Make unsupported-file states clearer and accessible | `viewer/`, [`docs/viewer-privacy-posture.md`](viewer-privacy-posture.md) |
 
-## Open Remainders (as of 2026-11-11)
+## Open Remainders (as of 2026-11-12)
 
 The issue tracker is the source of truth; this is its state today, by
 milestone, with each issue's own title. Pick one rather than re-opening a
@@ -21,11 +21,13 @@ solved carrier: the reports under `reports/element-framing/` say what each
 negative result ruled out, and [`ROADMAP.md`](../ROADMAP.md) says what each
 milestone is for.
 
-### 0.19.0: IFC geometry and element data
+### 0.20.0: IFC geometry and element data
 
 | Issue | Remainder |
 |---|---|
-| [#1694](https://github.com/DrunkOnJava/rvt-rs/issues/1694) | Default saved meshes: after #1691 the peak memory is still 1.4 to 4.4 times 0.17.0's on Revit 2023 to 2027 files; where the rest sits |
+| [#1712](https://github.com/DrunkOnJava/rvt-rs/issues/1712) | volume_readings: a round bar cut at a slant has elliptical end faces, which the shell reading leaves as another reason |
+| [#1706](https://github.com/DrunkOnJava/rvt-rs/issues/1706) | Snowdon Towers Architectural: roofs 1916596 and 964559 stay level blocks (a plane edge across a curved face that is not isoparametric; a cylinder face with several trim loops) |
+| [#1694](https://github.com/DrunkOnJava/rvt-rs/issues/1694) | Default saved meshes: after #1800 the peak memory is a median 0.64 times 0.18.0's but still up to 1.69 times 0.17.0's on Revit 2023 to 2027 files; the inflated partitions the handle keeps are 36% to 43% of the largest files' peak |
 | [#1635](https://github.com/DrunkOnJava/rvt-rs/issues/1635) | Railings are written as record boxes, about a thousand times Revit's volume, and now sit inside their stairs |
 | [#1603](https://github.com/DrunkOnJava/rvt-rs/issues/1603) | Revit 2015 to 2023: family instances' materials: 70 windows and 14 railings lack Revit's, the default material is written on 72 elements Revit gives none (Vitoria) |
 | [#1589](https://github.com/DrunkOnJava/rvt-rs/issues/1589) | research(rooms): read the height a room's area is taken at, so stepped rooms get their section's outline (follow-up of #90, RE-374) |
@@ -74,14 +76,13 @@ The requirements these serve, each with its bar, status and evidence, are in
 
 | Issue | Remainder |
 |---|---|
-| [#1693](https://github.com/DrunkOnJava/rvt-rs/issues/1693) | W7: beams' base quantities: rvt-rs writes Length on the beams drawn along their line and none of the other six, on 300 beams of the BIM4LCA files |
+| [#1710](https://github.com/DrunkOnJava/rvt-rs/issues/1710) | W7: columns whose body is the type's rectangle where Revit's section is not one (4 chamfered housing columns, 32 MEP struts), and 2 timber-office Lengths that differ |
 | [#1636](https://github.com/DrunkOnJava/rvt-rs/issues/1636) | List the shipped rules that rest on one project, and the second model that could test each |
 | [#1565](https://github.com/DrunkOnJava/rvt-rs/issues/1565) | W5: a sealed registry for fresh held-out pairs, read only by the final 1.0 check |
 | [#1444](https://github.com/DrunkOnJava/rvt-rs/issues/1444) | rvt-rs reads no reinforcing bars or element assemblies |
 | [#1209](https://github.com/DrunkOnJava/rvt-rs/issues/1209) | W7: coverings' GrossArea on ceilings in pieces and cut ceilings, and the roofing coverings (RE-297) |
 | [#1208](https://github.com/DrunkOnJava/rvt-rs/issues/1208) | W7: single-layer slabs' Width and Length, sloped floors' Depth and the stair landings' volume (RE-295, RE-298) |
 | [#1207](https://github.com/DrunkOnJava/rvt-rs/issues/1207) | W7: spaces' GrossVolume, stepped rooms' NetVolume and Revit 25's area quantities (RE-296) |
-| [#1203](https://github.com/DrunkOnJava/rvt-rs/issues/1203) | W7: the round column and the meshed columns' values, and the section check on box-drawn columns |
 | [#1193](https://github.com/DrunkOnJava/rvt-rs/issues/1193) | W7: the BIM4LCA office's remaining property values without a rule (column Slope, opening Reference, mullion Span, sloped slab PitchAngle) |
 | [#1192](https://github.com/DrunkOnJava/rvt-rs/issues/1192) | W10: check that every number in the README and the supported profile names its model |
 | [#1191](https://github.com/DrunkOnJava/rvt-rs/issues/1191) | W6: draw family instances from their saved meshes by default (decode the remaining saved-graphics faces) |

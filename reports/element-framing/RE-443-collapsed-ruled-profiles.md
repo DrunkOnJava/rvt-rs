@@ -18,7 +18,7 @@ boxes and are negative controls. The byte investigation covers 76 distinct
 source patches in seven symbols, including the refused terminals. Default
 IFC export changes from 176 to 71 bounding-box bodies and from 5,179 to
 5,284 saved-mesh bodies, compared with base
-`09b18bd338b8c2fdb9a7d29943970735d416a73c`. The body remains an
+`97397b9eebc05d3dc6ccb386bbf9e45f0ebaf6af`. The body remains an
 `IfcTriangulatedFaceSet`; this does not introduce an analytic IFC surface.
 
 The admitted combination is exactly point/arc or arc/point with surface
@@ -192,7 +192,7 @@ are written under `--work`. No Revit installation or automation is needed.
 
 ## Regression comparison
 
-Against `09b18bd3`, 12 project models were exported before and after:
+Against `97397b9e`, 12 project models were exported before and after:
 Autodesk 2023 structural basic, architectural advanced/basic, public MEP and
 Golden Nugget; Autodesk 2025 electrical, facades and architectural; BIM4LCA
 concrete office as built and timber housing at permit; RE1 Mechanical and
@@ -331,3 +331,23 @@ positive targets. The default and fine native replays score those 105 only;
 both terminal controls keep boxes with the named refusal. The 608 graph
 refusals and all 107 IFC-class override controls pass. These are local checks
 of the category revision, not a new unfiltered Measure result.
+
+## Upstream refresh (2026-11-12)
+
+After the category restriction in `070a1436`, merge upstream
+`97397b9eebc05d3dc6ccb386bbf9e45f0ebaf6af`. The only conflict was the two
+independent reconnaissance addenda; both are retained. The new upstream
+project-unit and type-layer changes are preserved, and no collapsed-profile
+rule, admission condition, tessellation choice or replay bound changes.
+
+Fresh comparisons against that upstream base reproduce the 12-project and
+six-family result above: 105 recovered MEP fittings, eight other project
+IFCs byte-identical, three changing only the same 6, 9 and 15 refusal notes,
+and all six REV/ARC outputs byte-identical. The five focused exports
+(MEP 2023/2024, HVAC 2024, architectural basic 2024 and the office) are also
+byte-identical to `070a1436`, so their reported costs remain unchanged.
+HVAC retains 32 recovered fittings and both MEP terminal controls keep boxes.
+The complete default/fine native replay, all 608 graph refusals and the
+IFC-class override controls reproduce the preceding category-revision
+results exactly. These remain local checks; the merged head needs a fresh
+unfiltered Measure against `97397b9e`.

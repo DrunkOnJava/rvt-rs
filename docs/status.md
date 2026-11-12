@@ -1247,6 +1247,20 @@ and earlier write every room, as every element: both phase rules start at
 Revit 2016 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
+**RE-445 (2026-11-11)** reads the project's display units from its
+`UnitsElem` record: from Revit 2021 its `AUnits.m_formatOptionsMap` gives
+every spec its display unit (133 to 150 specs on the corpus), and a family's
+document inside the project keeps a `UnitsElem` of its own, named by
+`m_famId`. The diagnostics report the units of length, area, volume, angle,
+mass and time in `recovered_unit_identifiers` and every spec's in
+`project_display_units`; Core Interior and Snowdon Towers read feet and
+fractional inches where the old count of unit strings gave metres. A family
+the native walk does not read takes its units from its string records where
+their maps agree (Autodesk's sample families of 2021 to 2027). Revit 2015 to
+2020 keep an array without spec names, which is not read. The IFC is
+unchanged: values and unit assignment stay SI
+(`reports/element-framing/RE-445-project-display-units.md`).
+
 **#1359 (2026-11-05)** gives the rooms a fallback, a choice by Griffin. An
 outside importer reported Autodesk's `rac_basic_sample_project` going from 14
 rooms to 0 between 0.13.0 and 0.14.0, and the cause is the RE-326 rule: all 14
@@ -1521,39 +1535,60 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.18.0** (2026-11-11) is the latest release: crates.io (`rvt` and
+- **v0.19.0** (2026-11-12) is the latest release: crates.io (`rvt` and
   `rvt-rs-mcp`, both published from the tag), the `rvt` wheels and sdist on
   PyPI, GitHub Release archives for Linux, macOS and Windows, and the
   container image, each checked from its published artifacts
   ([`install.md`](install.md)); docs.rs had built `rvt` when they were checked
   (`rvt-rs-mcp` is a binary crate with no documentation there). A default
-  export of a Revit 2023 to 2027 project draws every element that would be a
-  bounding box from the mesh Revit saved for it, where all of the mesh decodes
-  (#1191): walls, roofs, railings, curtain mullions and panels, columns, doors,
-  windows, furniture, fixtures and equipment. A roof that was the level block
-  of its sketch outline, a railing whose parts are instances of other elements,
-  an instance forbidden the targets 10, a turned family instance, and the
-  ellipses, curved ruled surfaces and rings that repeat their first point in
-  the saved graphics are read now. The export writes more of what Revit's own
-  writes for the bodies it draws: a wall's `NetVolume` and side areas, a
-  mullion's `NetVolume` and `NetSurfaceArea`, a panel's `Width`, a roof's
-  `GrossArea` and `GrossVolume`, a sloped floor's `PitchAngle` and the
-  properties of an opening, where the BIM4LCA office and the housing show it;
-  a round column no longer carries a square's quantities. A railing that
-  belongs to a stair is aggregated under it, a wall with an edited elevation
-  profile has the openings Revit's export writes, four more "Export to IFC As"
-  values are acted on, every type object has a GlobalId of its own, and a
-  standalone Revit 2020 family with one revolution exports as an
+  export of a Revit 2023 to 2027 project takes much of the time and memory
+  0.18.0's saved-mesh default cost back: Autodesk's 28 samples take a median
+  0.64 times 0.18.0's peak memory (0.29 to 1.18) and 0.89 times its time (0.76
+  to 1.27), and against 0.17.0 1.04 to 1.92 times the time and 1.04 to 1.69
+  times the peak memory (#1694); what is left of the peak on the largest files
+  is the inflated partitions the handle keeps. More elements are drawn from
+  their saved meshes (faces where a plane meets a cylinder, holed or
+  non-rectangular trims, plane rings that visit a vertex twice, four of Snowdon
+  Towers Architectural's six block roofs, the curtain mullions and panels that
+  were turned boxes), which makes the IFC of those files larger (the BIM4LCA
+  office as built 87.5 to 113.7 MB, Snowdon Towers Architectural 189.1 to 257.8
+  MB, `rac_advanced` +69% to +75%) and of others smaller (Snowdon Towers
+  Electrical -12.6%). The export writes more of what Revit's own writes for
+  the bodies it draws: a beam's six base quantities and its `Length`, `Span`,
+  `Slope` and `Roll`, a column's `Length`, `CrossSectionArea`,
+  `OuterSurfaceArea` and `GrossVolume`, a hollow section's `NetVolume`, a
+  curtain mullion's `NetVolume`, `NetSurfaceArea` and `Length`, a wall's side
+  areas, gross volume and height where it is a prism less its openings, a
+  proxy's `NetVolume`, and `LoadBearing` on walls, floors and stairs of Revit
+  2024 and later. Furniture, railings, walls, ramps, light fixtures and pipe
+  segments carry Revit's `PredefinedType`, and a Revit 2027 save is written
+  without one on the classes whose exporter leaves it off; an element framed in
+  several partitions is read from its newest frame; an element whose "Export to
+  IFC As" names `IfcGeographicElement` is one; and a planar face of more than
+  10,000 points or 250 million search steps is refused and keeps its box. The
+  quantity rules for beams, columns, mullions and walls were developed on, and
+  are scored against, the one project with a Revit export that holds them (the
+  BIM4LCA office and housing, Revit 2024), so the beams, columns, mullions and
+  walls of every other model gain them unscored; a mesh is not always Revit's
+  (the 24 railings newly drawn read about 1.2 times Revit's volume); the
+  `PredefinedType` rule for beams, columns, plates and coverings of a Revit 2027
+  save follows Autodesk's exporter source and no measured 2027 export.
+  `[0.19.0]` in [`CHANGELOG.md`](../CHANGELOG.md) gives what each change
+  measures and what it does not.
+- **v0.18.0** (2026-11-11): published on every channel, each checked from its
+  published artifacts. A default export of a Revit 2023 to 2027 project drew
+  every element that would be a bounding box from the mesh Revit saved for it,
+  where all of the mesh decodes (#1191), at 1.1 to 1.9 times the time and 1.4
+  to 4.4 times the peak memory of 0.17.0 on Autodesk's samples (0.19.0 takes
+  much of that back, above), and a railing that belongs to a stair was
+  aggregated under it, a wall with an edited elevation profile had the openings
+  Revit's export writes, every type object had a GlobalId of its own, and a
+  standalone Revit 2020 family with one revolution exported as an
   `IfcRevolvedAreaSolid` (experimental). Every record box that stays one says
-  why (`SavedMeshRefusal`). Reading every box's saved graphics takes 1.1 to 1.9
-  times the time and 1.4 to 4.4 times the peak memory of 0.17.0 on Autodesk's
-  samples of Revit 2023 to 2027 and makes the IFC larger; `--no-saved-meshes`
-  keeps the boxes (#1694). No roof, beam, slab, footing or stair flight mesh is
-  among the bodies scored against Revit's export on 31 models, so the roofs
-  drawn from their meshes rest on Snowdon Towers Architectural (local only),
-  the T and U roof of puzzbobb's Revit 2025 models and the same-project gates;
-  a mesh is not always Revit's (doors 675 of 681, walls 14 of 18), and a stair
-  that aggregates its railings has more volume than Revit's where a railing is
+  why (`SavedMeshRefusal`). No roof, beam, slab, footing or stair flight mesh
+  was among the bodies scored against Revit's export on 31 models, a mesh was
+  not always Revit's (doors 675 of 681, walls 14 of 18), and a stair that
+  aggregates its railings has more volume than Revit's where a railing is
   still its record box (RE-303). `[0.18.0]` in
   [`CHANGELOG.md`](../CHANGELOG.md) gives what each change measures and what it
   does not.
@@ -1688,7 +1723,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.18.0 has, and is ahead of it by the fragments
+- `main` has everything v0.19.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is

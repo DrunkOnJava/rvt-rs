@@ -251,6 +251,10 @@ pub struct RevitFile {
     /// read and parsed the schema again for a few class tags.
     schema_classes_memo: Option<Arc<crate::formats::SchemaClasses>>,
     layout_release_memo: Option<u32>,
+    /// Memoised display units of the project's `UnitsElem` (RE-445): the
+    /// export's model and its diagnostics both ask for them.
+    project_units_memo:
+        Option<Arc<Result<Option<crate::native_project_units::ProjectUnits>, String>>>,
     /// Memoised material names (RE-58, RE-203), by release and the hash of
     /// the declared ids they were read for: half a dozen material steps of
     /// an export each asked for them.
@@ -522,6 +526,7 @@ impl RevitFile {
             mullion_axes: None,
             schema_classes_memo: None,
             layout_release_memo: None,
+            project_units_memo: None,
             material_names: std::collections::HashMap::new(),
             material_appearances: std::collections::HashMap::new(),
             category_style_materials: None,
@@ -1482,6 +1487,19 @@ impl RevitFile {
             (number(a), a).cmp(&(number(b), b))
         });
         names
+    }
+
+    /// The project's display unit for every spec, from its `UnitsElem`,
+    /// memoised ([`crate::native_project_units::resolve`], RE-445).
+    pub(crate) fn project_units(
+        &mut self,
+    ) -> Arc<Result<Option<crate::native_project_units::ProjectUnits>, String>> {
+        if let Some(cached) = &self.project_units_memo {
+            return Arc::clone(cached);
+        }
+        let units = Arc::new(crate::native_project_units::resolve(self));
+        self.project_units_memo = Some(Arc::clone(&units));
+        units
     }
 
     /// String records extracted from the `Partitions/NN` stream, memoised.
