@@ -1095,9 +1095,11 @@ pub fn native_walls_and_top_joins_into(
     reads.bearing_read.extend(walls.iter().copied());
     // The top joins too: on Revit 2015 to 2023, `read_wall_records` and
     // `attach_wall_top_joins` ask for them next, and would otherwise read every
-    // wall's record again for this one member (#1824).
+    // wall's record again for this one member (#1824). Only the walls it found
+    // one for count as read: a wall whose whole graph did not decode (over the
+    // value budget, say) is left to the projected read, which builds far less.
     reads.top_joined.extend(&top_joined);
-    reads.top_joins_read.extend(walls.iter().copied());
+    reads.top_joins_read.extend(top_joined.keys().copied());
     let walls = found
         .into_iter()
         .map(|(id, (mut wall, type_id))| {
