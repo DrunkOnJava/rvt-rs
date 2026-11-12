@@ -66,7 +66,19 @@ fn run() -> anyhow::Result<()> {
     );
 
     for name in &streams {
-        let safe = name.replace('/', "_");
+        // The name is the file's own. The cfb crate refuses `\`, `:` and `!`
+        // in it; a character Windows refuses in a file name would fail the
+        // write and stop the dump there, so it becomes `_` as `/` does.
+        let safe: String = name
+            .chars()
+            .map(|c| {
+                if c == '/' || c.is_control() || matches!(c, '<' | '>' | '"' | '|' | '?' | '*') {
+                    '_'
+                } else {
+                    c
+                }
+            })
+            .collect();
         let raw = rf.read_stream(name)?;
 
         let decoded = if raw.is_empty() {
