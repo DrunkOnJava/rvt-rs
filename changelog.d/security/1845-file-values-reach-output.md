@@ -11,4 +11,11 @@
   from it becomes infinite. A sum of stair counts that would overflow
   leaves the property out. The glTF and the plan SVG, which had no check of
   their own, now draw an element whose transform or outline is not finite
-  as no geometry. No real file of the measured corpus changes.
+  as no geometry.
+- **A stair run reads its own "begin" and "end with riser" settings where a
+  NaN came first in its data (#1845).** A NaN passed the test that matches
+  the run's record to its sketch, so the first run of each of
+  `rac_advanced` 2024's five stairs took its settings from the wrong bytes:
+  it had 14 treads, not 12, and was drawn from its saved mesh, not its
+  sketch. On the held-out Revit 2024 model, the run this moves now has
+  Revit's tread count, length and net volume.
