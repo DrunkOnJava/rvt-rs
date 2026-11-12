@@ -132,7 +132,10 @@ fn decode_increment_rows(value: &crate::graph_value::Fv) -> Result<Vec<Increment
         ensure!(
             greatest_episode >= previous
                 && greatest_episode >= -1
-                && total_episodes >= u64::try_from(greatest_episode + 1)?,
+                && greatest_episode
+                    .checked_add(1)
+                    .and_then(|episodes| u64::try_from(episodes).ok())
+                    .is_some_and(|episodes| total_episodes >= episodes),
             "invalid increment episode range"
         );
         previous = greatest_episode;
@@ -545,7 +548,8 @@ pub fn parse(index: &[u8], registry: &Registry, episodes: &[String]) -> Result<P
         );
         let reverse = episodes
             .len()
-            .checked_sub(creation_episode as usize + 1)
+            .checked_sub(creation_episode as usize)
+            .and_then(|after| after.checked_sub(1))
             .ok_or_else(|| anyhow::anyhow!("creation episode outside history for {element_id}"))?;
         let unique_id = format!("{}-{original_id_suffix:08x}", episodes[reverse]);
         let raw_fields = row

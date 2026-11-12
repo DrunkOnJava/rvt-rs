@@ -102,7 +102,11 @@ fn shell_widths(structure: &Fv) -> Option<[f64; 2]> {
         .collect::<Option<_>>()?;
     let count = |name: &str| usize::try_from(structure.get(name)?.as_u64()?).ok();
     let (exterior, interior) = (count("m_numShellLayersExt")?, count("m_numShellLayersInt")?);
-    if exterior + interior > widths.len() || widths.iter().any(|w| !w.is_finite() || *w < 0.0) {
+    if exterior
+        .checked_add(interior)
+        .is_none_or(|shells| shells > widths.len())
+        || widths.iter().any(|w| !w.is_finite() || *w < 0.0)
+    {
         return None;
     }
     Some([

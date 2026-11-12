@@ -80,7 +80,8 @@ fn circuit_number(object: &[u8]) -> Option<String> {
     let marker = memchr::memmem::find(object, &CIRCUIT_MARKER)? + CIRCUIT_MARKER.len() - 1;
     let list = marker + CIRCUIT_LIST_OFFSET;
     let count = le_bytes::u32_at(object, list)? as usize;
-    let units = string_at(object, list + 4 + count.checked_mul(CIRCUIT_ENTRY_BYTES)?)?;
+    let number_at = (list + 4).checked_add(count.checked_mul(CIRCUIT_ENTRY_BYTES)?)?;
+    let units = string_at(object, number_at)?;
     if units.is_empty() {
         return Some(UNNAMED_CIRCUIT.into());
     }

@@ -561,12 +561,15 @@ pub fn native_stair_counts(
                     flag(fields, "m_endWithRiser"),
                 ) {
                     let height_feet = top_elevation - bottom_elevation;
-                    if top > base && height_feet > 0.0 {
+                    if let Some(risers) = top
+                        .checked_sub(base)
+                        .filter(|&risers| risers > 0 && height_feet > 0.0)
+                    {
                         run_counts.insert(
                             id,
                             NativeRunCounts {
                                 stair,
-                                risers: top - base,
+                                risers,
                                 height_feet,
                                 begin_with_riser,
                                 end_with_riser,
@@ -998,7 +1001,10 @@ pub fn railing_records(
                 else {
                     return Ok(());
                 };
-                if !stairs.contains(&stair) || top <= base || top_z - bottom_z <= 0.0 {
+                let Some(risers) = top.checked_sub(base).filter(|&risers| risers > 0) else {
+                    return Ok(());
+                };
+                if !stairs.contains(&stair) || top_z - bottom_z <= 0.0 {
                     return Ok(());
                 }
                 let treads: Vec<&Fv> = graph
@@ -1019,7 +1025,7 @@ pub fn railing_records(
                     .and_then(|t| point(t, "m_runDirProj"))
                     .and_then(unit_plan)
                 {
-                    runs.push((stair, top - base, direction));
+                    runs.push((stair, risers, direction));
                 }
             }
             _ if sketches.contains(&id) => {
