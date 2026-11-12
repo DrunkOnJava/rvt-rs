@@ -12,11 +12,18 @@
 //! prints those counts and times one walk of the file that inflates every
 //! segment, as an uncached read does.
 //!
+//! It then makes the export `rvt-ifc` makes with no flags and prints the bytes
+//! its native walks inflated themselves rather than take from the handle's
+//! copies (`native_document::walk_inflated_bytes`), which only the
+//! saved-graphics pass does, over the file's inflated bytes: how many whole
+//! walks of the file the pass costs.
+//!
 //! Output:
 //!   partition <n> channel <c> groups=<n> keyed=<n> bytes=<n> largest=<n> records=<n>
 //!   channel <c> partitions=<n> groups=<n> keyed=<n> bytes=<n> largest=<n> records=<n>
 //!   channel <c> group_bytes p50=<n> p90=<n> p99=<n> max=<n>
 //!   file partitions=<n> segments=<n> groups=<n> inflated_bytes=<n> walk_ms=<n>
+//!   export pass_inflated_bytes=<n> over_file=<ratio> export_ms=<n>
 //!
 //! `keyed` counts groups inside a keyed content block (an embedded family's
 //! document), which no native read decodes. `records` counts a group's records
@@ -167,6 +174,23 @@ fn main() -> anyhow::Result<()> {
     println!(
         "file partitions={} segments={segments} groups={groups} inflated_bytes={inflated} walk_ms={walk_ms}",
         names.len()
+    );
+    // The export rvt-ifc makes with no flags, on a handle of its own: what its
+    // native walks inflate themselves, rather than take from the handle's
+    // copies, is what the saved-graphics pass inflates (#1694).
+    let mut export = RevitFile::open_with_limits(&path, rvt::cli::open_limits(None, None, false))?;
+    let before = native_document::walk_inflated_bytes();
+    let started = Instant::now();
+    rvt::ifc::run_export_with_limits(
+        &mut export,
+        &rvt::ifc::ExportOptions::default(),
+        rvt::walker::WalkerLimits::default(),
+    )?;
+    let export_ms = started.elapsed().as_millis();
+    let pass = native_document::walk_inflated_bytes() - before;
+    println!(
+        "export pass_inflated_bytes={pass} over_file={:.3} export_ms={export_ms}",
+        pass as f64 / inflated.max(1) as f64
     );
     Ok(())
 }

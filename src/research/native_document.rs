@@ -123,7 +123,11 @@ pub struct Options {
     /// for each batch of owners, and the copies it would keep are 36% to 43% of
     /// the peak resident memory of the largest files at that stage (#1694); a
     /// walk without them inflates each partition it visits again, and finds the
-    /// same records. Off by default: the other readers share the copy.
+    /// same records. Where the handle has a record index of the read's channel,
+    /// it inflates only the groups of each partition that hold a record the
+    /// read selects, a copy of it included: on the largest files one partition
+    /// holds nearly every group, so the index alone leaves nothing to skip
+    /// (#1694). Off by default: the other readers share the copy.
     pub uncached_partitions: bool,
 }
 /// The default [`Options::max_group_bytes`]: one reassembled continuation
@@ -750,6 +754,32 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
 #[derive(Debug)]
 pub struct RecordIndex {
     records: Vec<IndexedRecord>,
+    /// Where the group of each record of `records`, in the same order, starts
+    /// in its partition's stored bytes ([`GroupSource::first_marker_offset`]):
+    /// a walk that inflates the partition again inflates only the groups that
+    /// hold the records it reads ([`Options::uncached_partitions`], #1694).
+    group_starts: Vec<usize>,
+}
+
+thread_local! {
+    static WALK_INFLATED_BYTES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// The bytes the native record walks of this thread have inflated
+/// themselves since it started, rather than taken from the handle's inflated
+/// copies ([`Options::uncached_partitions`]): what the saved-graphics pass
+/// inflates, for a probe that sets it beside the file's inflated bytes (#1694).
+pub fn walk_inflated_bytes() -> u64 {
+    WALK_INFLATED_BYTES.with(std::cell::Cell::get)
+}
+
+/// Counts a walk's [`native_segments::Statistics::inflated_bytes`] in [`walk_inflated_bytes`]
+/// where it walked without the handle's copy.
+fn count_walk(inflated: Option<&compression::InflatedStream>, stats: &native_segments::Statistics) {
+    if inflated.is_none() {
+        WALK_INFLATED_BYTES
+            .with(|total| total.set(total.get().saturating_add(stats.inflated_bytes)));
+    }
 }
 
 /// One record of a [`RecordIndex`]: its channel, ElementId, partition, the
@@ -963,10 +993,18 @@ fn extract_records(
             && unread.is_empty()
     });
     let record_index = channel.and_then(|channel| file.native_record_index_of(channel));
-    let mut indexed: Option<Vec<IndexedRecord>> =
-        (channel.is_some() && record_index.is_none()).then(Vec::new);
+    let mut indexed: Option<(Vec<IndexedRecord>, Vec<usize>)> =
+        (channel.is_some() && record_index.is_none()).then(Default::default);
+    // #1694: a read that walks without the handle's copies inflates only the
+    // groups that hold a selected record, each copy of it, as the index names
+    // them: an id's other copies decide which one is current, as they do in a
+    // walk of every group. `None` inflates every group.
+    let mut wanted_groups: Option<BTreeSet<(u32, usize)>> = None;
     let walked: Option<BTreeSet<u32>> = record_index.as_ref().map(|record_index| {
-        for &(channel, id, partition, tag, _) in &record_index.records {
+        let mut groups = BTreeSet::new();
+        for (&(channel, id, partition, tag, _), &group) in
+            record_index.records.iter().zip(&record_index.group_starts)
+        {
             if !options.channels.contains(&channel) {
                 continue;
             }
@@ -977,8 +1015,10 @@ fn extract_records(
                     .is_some_and(|class| options.selected_classes.contains(&class.name));
             if selected.contains(&id) || by_class {
                 holders.entry((channel, id)).or_default().insert(partition);
+                groups.insert((partition, group));
             }
         }
+        wanted_groups = options.uncached_partitions.then_some(groups);
         holders.values().flatten().copied().collect()
     });
     for name in names.iter().filter(|_| walked.is_none()) {
@@ -987,7 +1027,7 @@ fn extract_records(
             continue;
         };
         let inflated = shared_inflated(file, name, options);
-        native_segments::walk_inflated(
+        let stats = native_segments::walk_inflated(
             &prepared,
             inflated.as_deref(),
             registry,
@@ -998,12 +1038,13 @@ fn extract_records(
                 }
                 for (id, pos, start, end) in group_records(source, bytes, version)? {
                     let body = &bytes[start..end];
-                    if let Some(indexed) = indexed.as_mut() {
+                    if let Some((indexed, group_starts)) = indexed.as_mut() {
                         let tag = le_bytes::u16_at(body, 0);
                         let at = source
                             .inflated_offset
                             .and_then(|base| base.checked_add(pos));
                         indexed.push((source.channel, id, partition, tag, at));
+                        group_starts.push(source.first_marker_offset);
                     }
                     if is_selected(id, body) {
                         holders
@@ -1015,9 +1056,16 @@ fn extract_records(
                 Ok(())
             },
         )?;
+        count_walk(inflated.as_deref(), &stats);
     }
-    if let (Some(records), Some(channel)) = (indexed, channel) {
-        file.remember_native_record_index(channel, RecordIndex { records });
+    if let (Some((records, group_starts)), Some(channel)) = (indexed, channel) {
+        file.remember_native_record_index(
+            channel,
+            RecordIndex {
+                records,
+                group_starts,
+            },
+        );
     }
     // The class plans of the pass's decodes, made once for each class (#1335).
     let mut plans = native_parameters::PlanCache::default();
@@ -1040,11 +1088,24 @@ fn extract_records(
             continue;
         };
         let inflated = shared_inflated(file, &name, options);
-        let stats = native_segments::walk_inflated(
+        // The embedded-content groups the walk does not inflate, counted as
+        // the walk of every group counts them.
+        let mut refused_content_groups = 0;
+        let stats = native_segments::walk_selected(
             &prepared,
             inflated.as_deref(),
             registry,
             walk_budget(max_group_bytes, options, inflated.as_deref()),
+            |source| {
+                let Some(wanted) = &wanted_groups else {
+                    return true;
+                };
+                if source.content_key.is_some() {
+                    refused_content_groups += 1;
+                    return false;
+                }
+                wanted.contains(&(partition, source.first_marker_offset))
+            },
             |source, bytes| {
                 if source.content_key.is_some() {
                     summary.skipped_embedded_content_groups += 1;
@@ -1328,6 +1389,8 @@ fn extract_records(
                 Ok(())
             },
         )?;
+        summary.skipped_embedded_content_groups += refused_content_groups;
+        count_walk(inflated.as_deref(), &stats);
         summary.partitions.insert(name, stats);
     }
     for (element_id, source) in native_notes {
