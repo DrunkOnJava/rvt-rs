@@ -24,12 +24,19 @@
 //!   mullion that lies over it counts for nothing at `p` (RE-400), when its
 //!   box is its solid, which a box with a section that most boxes of its type
 //!   do not have is not (RE-403);
-//! - neither along nor across it (oblique): the end's join is not read.
+//! - neither along nor across it (oblique).
 //!
-//! An end is hidden when it has a partner and nothing across covers `p`, or
-//! when a mullion across covers `p` and it has no partner. A mullion whose
-//! axis is not known, or one of whose ends has a mullion across it that holds
-//! `p` inside its box or one that is oblique to it, is left out. So is a mullion
+//! An end with a partner is hidden unless another mullion lies at `p`, one
+//! oblique to it or one across that holds `p` inside its box, which makes it
+//! kept; a mullion across centred on `p` leaves it hidden (RE-438). An end
+//! with no partner is hidden when a mullion across is centred on `p`, and kept
+//! otherwise, an oblique mullion at it changing nothing (RE-438: on the
+//! BIM4LCA concrete office as built Revit counts all 50 ends that have only an
+//! oblique neighbour, all 76 that have a partner and one, and all 52 that have
+//! a partner and a mullion across inside). A mullion whose axis is not known,
+//! or one of whose ends has no partner and a mullion across that holds `p`
+//! inside its box (Revit counts 14 such ends and hides 5 that read alike), or
+//! an oblique mullion where one across holds `p`, is left out. So is a mullion
 //! with an end that meets, within `NEAR_FEET`, a mullion that is left out or
 //! overlapped, unless it is overlapped itself, and a mullion with another
 //! lying over one of its ends whose section is not the usual one of its type:
@@ -103,9 +110,12 @@ struct Neighbours {
 
 impl Neighbours {
     /// An end whose join is not read: a mullion across it holds `p` inside its
-    /// box, or one runs oblique to it.
+    /// box and the end has no partner (Revit counts such an end on some
+    /// mullions and hides it on others that read alike, RE-438), or a mullion
+    /// oblique to it lies where one across holds `p` (no end of the BIM4LCA
+    /// offices has both).
     fn unread(&self) -> bool {
-        self.inside || self.oblique
+        (self.inside && !self.partner) || (self.oblique && (self.centre || self.inside))
     }
 
     /// An end with a mullion lying over it, which counts for nothing at `p`.
@@ -113,8 +123,18 @@ impl Neighbours {
         self.same || self.parallel_in
     }
 
+    /// Whether the end is hidden: its partner hides it unless another mullion
+    /// lies at `p` that is not the partner's, an oblique one or one across that
+    /// holds `p` inside its box (RE-438: Revit counts all 128 such ends of the
+    /// BIM4LCA concrete office as built, and hides the 4 of the timber office at
+    /// permit where the mullion across is centred on `p`); with no partner, a
+    /// mullion across centred on `p` hides it.
     fn hidden(&self) -> bool {
-        self.partner != (self.centre || self.inside)
+        if self.partner {
+            !(self.inside || self.oblique)
+        } else {
+            self.centre
+        }
     }
 }
 
@@ -257,10 +277,33 @@ fn neighbours(
     found
 }
 
+/// How many of a curtain mullion's two end faces its Revit solid keeps, and which
+/// of those ends have a partner: one that an oblique mullion or a mullion across
+/// holding its point inside keeps (RE-438). The boxes of the wall saw that
+/// partner, so the pass that draws the mullion from its saved mesh does not take
+/// it for a continuation on another curtain wall that they missed (RE-439).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeptEnds {
+    /// 0, 1 or 2.
+    pub kept: u8,
+    /// Whether the end of the box at its `-axis` side, then the end at its `+axis`
+    /// side (the order of `end_points`), is kept and has a partner.
+    pub partnered: [bool; 2],
+}
+
 /// For each mullion of `group`, the mullions of one curtain wall, how many of
 /// its two end faces its Revit solid keeps (0, 1 or 2); a mullion left out has
 /// none.
 pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
+    kept_ends_with_partners(group)
+        .into_iter()
+        .map(|(id, ends)| (id, ends.kept))
+        .collect()
+}
+
+/// [`kept_ends`], with which of the kept ends of each mullion have a partner
+/// (RE-439).
+pub fn kept_ends_with_partners(group: &[MullionBox]) -> BTreeMap<u32, KeptEnds> {
     if group.len() > MAX_GROUP {
         return BTreeMap::new();
     }
@@ -284,7 +327,7 @@ pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
         }
         found.insert(m.id, (along, ends));
     }
-    let mut kept = BTreeMap::new();
+    let mut kept: BTreeMap<u32, KeptEnds> = BTreeMap::new();
     for m in group {
         let Some((along, ends)) = found.get(&m.id) else {
             continue;
@@ -307,8 +350,15 @@ pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
             continue;
         }
         let count = ends.iter().filter(|end| !end.hidden()).count();
+        let partnered = [0, 1].map(|end| !ends[end].hidden() && ends[end].partner);
         if let Ok(count) = u8::try_from(count) {
-            kept.insert(m.id, count);
+            kept.insert(
+                m.id,
+                KeptEnds {
+                    kept: count,
+                    partnered,
+                },
+            );
         }
     }
     kept
@@ -353,6 +403,128 @@ mod tests {
         assert_eq!(kept(0.01), BTreeMap::from([(1, 1), (2, 1)]));
         // Bent by two degrees (the BIM4LCA office's, RE-432): both ends stay.
         assert_eq!(kept(2.0), BTreeMap::from([(1, 2), (2, 2)]));
+    }
+
+    /// A horizontal mullion along y, `length` feet long and centred on `centre`,
+    /// with a square section of half side `side`.
+    fn across(id: u32, centre: [f64; 3], length: f64, side: f64) -> MullionBox {
+        MullionBox {
+            id,
+            kind: 1,
+            centre,
+            axes: [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]],
+            half: [0.5 * length, side, side],
+            along: Some(0),
+            odd: false,
+        }
+    }
+
+    /// A mullion whose end is at `from`, `length` feet long, leaning `degrees` off
+    /// the vertical towards +y in the y-z plane.
+    fn leaning(id: u32, from: [f64; 3], length: f64, degrees: f64, side: f64) -> MullionBox {
+        let angle = degrees.to_radians();
+        let axis = [0.0, angle.sin(), angle.cos()];
+        MullionBox {
+            id,
+            kind: 1,
+            centre: [
+                from[0],
+                from[1] + 0.5 * length * axis[1],
+                from[2] + 0.5 * length * axis[2],
+            ],
+            axes: [axis, [1.0, 0.0, 0.0], [0.0, angle.cos(), -angle.sin()]],
+            half: [0.5 * length, side, side],
+            along: Some(0),
+            odd: false,
+        }
+    }
+
+    // How reading the ends beside an oblique mullion or a mullion across can go wrong
+    // (RE-438): a joint centred under a bar counted whole although Revit hides it, a
+    // partner end kept or left out for what lies beside it, and an end read where
+    // Revit's count is not told by what the boxes show.
+    #[test]
+    fn a_partner_end_with_a_mullion_across_centred_on_it_is_hidden() {
+        // Two pieces of one line meet at the middle of a bar that crosses them: the
+        // chain of 50 x 50 mm mullions of the BIM4LCA timber office at permit.
+        let lower = mullion(1, [0.0, 0.0, 0.0], 2.0, 0.0, 0.08);
+        let upper = mullion(2, [0.0, 0.0, 2.0], 2.0, 0.0, 0.08);
+        let bar = across(3, [0.0, 0.0, 2.0], 4.0, 0.08);
+        assert_eq!(
+            kept_ends(&[lower, upper, bar]),
+            BTreeMap::from([(1, 1), (2, 1), (3, 2)])
+        );
+    }
+
+    #[test]
+    fn an_oblique_mullion_keeps_a_partner_end_and_does_not_leave_the_mullion_out() {
+        let lower = mullion(1, [0.0, 0.0, 0.0], 2.0, 0.0, 0.08);
+        let upper = mullion(2, [0.0, 0.0, 2.0], 2.0, 0.0, 0.08);
+        let brace = leaning(3, [0.0, 0.0, 2.0], 2.0, 45.0, 0.08);
+        // The joint's end of each piece counts, and the brace, which has only oblique
+        // neighbours, is read like a mullion with none.
+        assert_eq!(
+            kept_ends(&[lower, upper, brace]),
+            BTreeMap::from([(1, 2), (2, 2), (3, 2)])
+        );
+    }
+
+    #[test]
+    fn a_mullion_across_inside_leaves_an_unpartnered_end_unread_and_a_partnered_one_kept() {
+        // A bar whose face holds the joint 0.04 ft off its middle.
+        let bar = across(3, [0.0, 0.0, 2.04], 4.0, 0.08);
+        let lower = mullion(1, [0.0, 0.0, 0.0], 2.0, 0.0, 0.08);
+        assert!(!kept_ends(&[lower.clone(), bar.clone()]).contains_key(&1));
+        let upper = mullion(2, [0.0, 0.0, 2.0], 2.0, 0.0, 0.08);
+        assert_eq!(
+            kept_ends(&[lower, upper, bar]),
+            BTreeMap::from([(1, 2), (2, 2), (3, 2)])
+        );
+    }
+
+    #[test]
+    fn an_oblique_mullion_where_one_across_is_centred_is_not_read() {
+        // Revit's count of such an end is not told by the boxes (no end of the
+        // BIM4LCA offices has both): the mullion is left out as before.
+        let post = mullion(1, [0.0, 0.0, 0.0], 2.0, 0.0, 0.08);
+        let bar = across(2, [0.0, 0.0, 2.0], 4.0, 0.08);
+        let brace = leaning(3, [0.0, 0.0, 2.0], 2.0, 45.0, 0.08);
+        assert!(!kept_ends(&[post, bar, brace]).contains_key(&1));
+    }
+
+    // How telling the kept ends that have a partner can go wrong (RE-439): a hidden
+    // joint is told as a kept end with a partner, the end an oblique mullion keeps
+    // is told as one with none (the pass that draws the mullion from its saved mesh
+    // then takes it for a continuation the boxes missed), or the two ends are told
+    // the wrong way round (the pass maps the mesh's ends to them by the side of the
+    // axis each lies on, the `-axis` end first).
+    #[test]
+    fn the_kept_ends_with_a_partner_are_the_joints_an_oblique_mullion_keeps() {
+        let with_partners = |group: &[MullionBox]| {
+            kept_ends_with_partners(group)
+                .into_iter()
+                .map(|(id, ends)| (id, (ends.kept, ends.partnered)))
+                .collect::<BTreeMap<_, _>>()
+        };
+        let lower = mullion(1, [0.0, 0.0, 0.0], 2.0, 0.0, 0.08);
+        let upper = mullion(2, [0.0, 0.0, 2.0], 2.0, 0.0, 0.08);
+        // A joint nothing else lies at is hidden: no kept end has a partner.
+        assert_eq!(
+            with_partners(&[lower.clone(), upper.clone()]),
+            BTreeMap::from([(1, (1, [false, false])), (2, (1, [false, false]))])
+        );
+        // An oblique brace at the joint keeps it: the end of each piece at the joint
+        // (the `+axis` end of the lower piece, the `-axis` end of the upper one) is
+        // kept and has a partner, and the brace has none.
+        let brace = leaning(3, [0.0, 0.0, 2.0], 2.0, 45.0, 0.08);
+        assert_eq!(
+            with_partners(&[lower, upper, brace]),
+            BTreeMap::from([
+                (1, (2, [false, true])),
+                (2, (2, [true, false])),
+                (3, (2, [false, false])),
+            ])
+        );
     }
 
     #[test]

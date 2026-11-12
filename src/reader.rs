@@ -238,10 +238,11 @@ pub struct RevitFile {
     /// native pass walked every partition again to find its records.
     native_record_index: Option<Arc<crate::native_document::RecordIndex>>,
     /// How many of its two end faces the Revit solid of each curtain mullion
-    /// keeps, by ElementId, where the boxes of its curtain wall's mullions say
-    /// (RE-268), set when the partition's mullions are read, for the pass that
-    /// draws their bodies from saved meshes (RE-404).
-    mullion_kept_ends: Option<Arc<BTreeMap<u32, u8>>>,
+    /// keeps, and how many of those ends have a partner, by ElementId, where the
+    /// boxes of its curtain wall's mullions say (RE-268, RE-439), set when the
+    /// partition's mullions are read, for the pass that draws their bodies from
+    /// saved meshes (RE-404).
+    mullion_kept_ends: Option<Arc<BTreeMap<u32, crate::partition_schema_mvp::KeptEnds>>>,
     /// The unit axis each curtain mullion runs along, in the model's frame, by
     /// ElementId, set when the partition's mullions are read, for the pass that
     /// draws them from saved meshes (RE-418).
@@ -1029,14 +1030,19 @@ impl RevitFile {
     }
 
     /// Keep the end faces each curtain mullion's solid keeps (RE-268, RE-404).
-    pub(crate) fn remember_mullion_kept_ends(&mut self, kept: BTreeMap<u32, u8>) {
+    pub(crate) fn remember_mullion_kept_ends(
+        &mut self,
+        kept: BTreeMap<u32, crate::partition_schema_mvp::KeptEnds>,
+    ) {
         self.mullion_kept_ends = Some(Arc::new(kept));
     }
 
     /// The kept end faces of each curtain mullion
     /// ([`Self::remember_mullion_kept_ends`]), or none where the partition's
     /// mullions were not read.
-    pub(crate) fn mullion_kept_ends(&self) -> Option<Arc<BTreeMap<u32, u8>>> {
+    pub(crate) fn mullion_kept_ends(
+        &self,
+    ) -> Option<Arc<BTreeMap<u32, crate::partition_schema_mvp::KeptEnds>>> {
         self.mullion_kept_ends.clone()
     }
 
