@@ -33,7 +33,7 @@
 use crate::ifc::element_provenance::{CopyRule, SourcePart, ValueSource};
 use crate::le_bytes;
 use crate::{Result, RevitFile};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Releases where this layout is measured: the RE1 models (2025), and the
 /// BIM4LCA office (2024), whose 12 pipes and their 24 ports it places as
@@ -85,6 +85,19 @@ const CELL_FEET: f64 = 1.0;
 
 /// Most cells one box may cover; a box spanning more is not indexed.
 const MAX_CELLS_PER_PIPE: i64 = 4096;
+
+/// Most cells a partition's boxes may cover together: a thousand boxes at
+/// [`MAX_CELLS_PER_PIPE`]. Each box was bounded and their sum was not, so a
+/// crafted file's boxes filled the grid without end (#1833). Past it the grid
+/// is not built and the partition's pipes get no points.
+const MAX_GRID_CELLS: i64 = 1024 * MAX_CELLS_PER_PIPE;
+
+/// Most box or end tests one scan of a partition's connector entries may
+/// make, each entry against what lies near it: a million entries each near a
+/// hundred. A crafted file stacked every box or end in one cell, entries ×
+/// boxes (#1833). Past it the scan gives nothing for the file rather than
+/// what it found first, since a match it never reached could decide a pipe.
+pub(crate) const MAX_CONNECTOR_TESTS: usize = 100_000_000;
 
 /// A pipe's cylinder: its axis and outside radius, model feet.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -208,18 +221,20 @@ pub(crate) fn holds(bbox: &[f64; 6], point: [f64; 3]) -> bool {
 /// [`POINT_TOLERANCE_FEET`], so a point is tested against the boxes of its
 /// own cell rather than all of them. A box covering more than
 /// [`MAX_CELLS_PER_PIPE`] cells, or with a coordinate that is not finite, is
-/// not indexed but listed in `oversized`.
+/// not indexed but listed in `oversized`; `None` where the boxes together
+/// cover more than [`MAX_GRID_CELLS`].
 pub(crate) struct BoxGrid {
     cells: HashMap<[i64; 3], Vec<usize>>,
     pub(crate) oversized: Vec<usize>,
 }
 
 impl BoxGrid {
-    pub(crate) fn new<'a>(boxes: impl IntoIterator<Item = &'a [f64; 6]>) -> Self {
+    pub(crate) fn new<'a>(boxes: impl IntoIterator<Item = &'a [f64; 6]>) -> Option<Self> {
         let mut grid = BoxGrid {
             cells: HashMap::new(),
             oversized: Vec::new(),
         };
+        let mut filled: i64 = 0;
         for (index, bbox) in boxes.into_iter().enumerate() {
             let first = [0, 1, 2].map(|axis| cell(bbox[axis] - POINT_TOLERANCE_FEET));
             let last = [0, 1, 2].map(|axis| cell(bbox[axis + 3] + POINT_TOLERANCE_FEET));
@@ -238,6 +253,10 @@ impl BoxGrid {
                 grid.oversized.push(index);
                 continue;
             }
+            filled = filled.saturating_add(cells);
+            if filled > MAX_GRID_CELLS {
+                return None;
+            }
             for x in first[0]..=last[0] {
                 for y in first[1]..=last[1] {
                     for z in first[2]..=last[2] {
@@ -246,7 +265,7 @@ impl BoxGrid {
                 }
             }
         }
-        grid
+        Some(grid)
     }
 
     /// The indexed boxes whose cells include `point`'s, in index order: every
@@ -299,16 +318,26 @@ fn connector_points(
         Vec::new()
     };
     // A pipe whose box is not indexed gets no points.
-    let grid = BoxGrid::new(boxes.iter().map(|(_, bbox)| bbox));
+    let Some(grid) = BoxGrid::new(boxes.iter().map(|(_, bbox)| bbox)) else {
+        return (found, offsets);
+    };
     if grid.cells.is_empty() {
         return (found, offsets);
     }
     let marker = ENTRY_MARKER;
+    let mut tests = 0usize;
     for at in memchr::memmem::find_iter(buf, marker.as_slice()) {
         let Some(point) = entry_point(buf, at) else {
             continue;
         };
-        for &index in grid.near(point) {
+        let near = grid.near(point);
+        tests = tests.saturating_add(near.len());
+        if tests > MAX_CONNECTOR_TESTS {
+            found.iter_mut().for_each(Vec::clear);
+            offsets.iter_mut().for_each(Vec::clear);
+            return (found, offsets);
+        }
+        for &index in near {
             let inside = holds(&boxes[index].1, point);
             let points = &mut found[index];
             if inside
@@ -355,6 +384,11 @@ pub fn scan_pipe_end_keys(
     if !supports_revit_version(revit_version) {
         return Ok(out);
     }
+    // The keys each end holds, beside the list that keeps their order: a
+    // search of the list for each new key was quadratic in an end's entries
+    // (#1833).
+    let mut held: HashSet<(u32, usize, EntryKey)> = HashSet::new();
+    let mut tests = 0usize;
     for (stream, ends) in pipes {
         let Ok(inflated) = rf.inflated_partition(stream) else {
             continue;
@@ -396,6 +430,10 @@ pub fn scan_pipe_end_keys(
             if candidates.is_empty() {
                 continue;
             }
+            tests = tests.saturating_add(candidates.len());
+            if tests > MAX_CONNECTOR_TESTS {
+                return Ok(BTreeMap::new());
+            }
             let Some(element) = at
                 .checked_sub(12)
                 .and_then(|from| le_bytes::u64_at(buf, from))
@@ -410,9 +448,8 @@ pub fn scan_pipe_end_keys(
             };
             for &&(id, slot, end) in &candidates {
                 if (0..3).all(|axis| (point[axis] - end[axis]).abs() <= SAME_POINT_FEET) {
-                    let keys = &mut out.entry(id).or_default()[slot];
-                    if !keys.contains(&(element, index)) {
-                        keys.push((element, index));
+                    if held.insert((id, slot, (element, index))) {
+                        out.entry(id).or_default()[slot].push((element, index));
                     }
                 }
             }

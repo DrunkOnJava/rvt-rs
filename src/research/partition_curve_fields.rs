@@ -24,7 +24,7 @@
 //! fields do not tell a round duct from a square one.
 
 use crate::le_bytes;
-use crate::partition_pipe_axes::{BoxGrid, holds};
+use crate::partition_pipe_axes::{BoxGrid, MAX_CONNECTOR_TESTS, holds};
 use crate::{Result, RevitFile};
 use std::collections::BTreeMap;
 
@@ -215,6 +215,12 @@ pub fn scan_curve_fields(
     anchor.extend_from_slice(&[0xff; 4]);
     anchor.extend_from_slice(&manager.wrapping_add(1).to_le_bytes());
     let mut found: BTreeMap<u32, Option<CurveFields>> = BTreeMap::new();
+    // Each window's entries and the boxes each is tested against, counted:
+    // a crafted file put an anchor every 10 bytes, each window rescanning the
+    // next 2 KB, and stacked boxes too large to index, anchors × boxes
+    // (#1833). Past the budget the file gives no curve fields, as an unread
+    // stream gives none.
+    let tests = std::cell::Cell::new(0usize);
     for (stream, boxes) in curves {
         let Ok(inflated) = rf.inflated_partition(stream) else {
             continue;
@@ -226,7 +232,9 @@ pub fn scan_curve_fields(
         }
         // Only the boxes near a point, and those too large to index, can
         // hold it within the tolerance.
-        let grid = BoxGrid::new(boxes.iter().map(|(_, bbox)| bbox));
+        let Some(grid) = BoxGrid::new(boxes.iter().map(|(_, bbox)| bbox)) else {
+            continue;
+        };
         let candidates = |point: [f64; 3]| {
             grid.near(point)
                 .iter()
@@ -242,10 +250,18 @@ pub fn scan_curve_fields(
         for &at in &anchors {
             let window = &buf[at + 1..buf.len().min(at + ANCHOR_WINDOW + 4)];
             let points: Vec<[f64; 3]> = memchr::memmem::find_iter(window, &1u32.to_le_bytes())
+                .inspect(|_| tests.set(tests.get().saturating_add(1)))
                 .filter_map(|offset| entry_point(buf, at + 1 + offset))
-                .filter(|point| candidates(*point).any(|(_, bbox)| holds(bbox, *point)))
+                .filter(|point| {
+                    let near = grid.near(*point).len() + grid.oversized.len();
+                    tests.set(tests.get().saturating_add(near));
+                    candidates(*point).any(|(_, bbox)| holds(bbox, *point))
+                })
                 .take(2)
                 .collect();
+            if tests.get() > MAX_CONNECTOR_TESTS {
+                return Ok(BTreeMap::new());
+            }
             if points.is_empty() {
                 continue;
             }
