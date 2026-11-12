@@ -66,8 +66,8 @@ struct Cli {
 
     /// Keep every element as its record's bounding box, and the walls that
     /// embed a curtain wall as their record's body, instead of the mesh Revit
-    /// saved for them. Reading every box's saved graphics takes 1.1 to 1.9 times
-    /// the time and 1.4 to 4.4 times the peak memory of 0.17.0 on Autodesk's
+    /// saved for them. Reading every box's saved graphics takes 1.04 to 1.92 times
+    /// the time and 1.04 to 1.69 times the peak memory of 0.17.0 on Autodesk's
     /// samples of Revit 2023 to 2027 (#1191, #1694).
     #[arg(long)]
     no_saved_meshes: bool,
