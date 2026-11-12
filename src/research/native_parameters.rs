@@ -487,16 +487,60 @@ struct ClassPlan {
     /// The fields the plan was made for, where it was made for a projected
     /// decode.
     keep: Option<Vec<String>>,
-    /// The keys of the fields an object built under this plan holds, in the
-    /// order a `serde_json` map iterates them, shared by every object of the
-    /// plan and of any other plan with the same keys (#1694).
+    /// The object an inline object, or any object of a decode that is not
+    /// projected, is built as: every field the chain reads (#1694).
+    full: View,
+    /// The object the top object of a projected decode is built as: the fields
+    /// in `kept` only. Made only for a plan made for a projected decode.
+    projected: Option<View>,
+}
+/// The keys of the fields an object built from a chain of classes holds, and
+/// where each field's value goes (#1694).
+#[derive(Debug)]
+struct View {
+    /// The keys, in the order a `serde_json` map iterates them, shared by every
+    /// object of the view and of any other view with the same keys.
     names: Names,
     /// For each field of each class of the chain, the position of its key in
     /// `names`, or `usize::MAX` where the object holds no such field.
     slots: Vec<Vec<usize>>,
-    /// Whether two fields of the objects built under this plan share a key, so
+    /// Whether two fields of the objects built under this view share a key, so
     /// that a decode that builds one must notice the second where it reads it.
     ambiguous: bool,
+}
+impl View {
+    /// The view of the fields `wanted(distance, field_index)` picks out of
+    /// `lineage`, whose keys are `keys`.
+    fn new(
+        lineage: &[&Class],
+        keys: &[Vec<String>],
+        wanted: impl Fn(usize, usize) -> bool,
+    ) -> View {
+        let mut included: Vec<(&str, usize, usize)> = Vec::new();
+        for (distance, c) in lineage.iter().enumerate() {
+            for field_index in 0..c.fields.len() {
+                if wanted(distance, field_index) {
+                    included.push((keys[distance][field_index].as_str(), distance, field_index));
+                }
+            }
+        }
+        let mut sorted: Vec<&str> = included.iter().map(|(key, _, _)| *key).collect();
+        sorted.sort_unstable();
+        sorted.dedup();
+        let ambiguous = sorted.len() != included.len();
+        let mut slots: Vec<Vec<usize>> = lineage
+            .iter()
+            .map(|c| vec![usize::MAX; c.fields.len()])
+            .collect();
+        for (key, distance, field_index) in &included {
+            slots[*distance][*field_index] = sorted.binary_search(key).unwrap_or(usize::MAX);
+        }
+        View {
+            names: intern_names(&sorted),
+            slots,
+            ambiguous,
+        }
+    }
 }
 impl ClassPlan {
     /// What the plan costs a [`PlanCache`]: its entry, a unit for each field
@@ -743,15 +787,21 @@ impl<'a> Cursor<'a> {
         let plan = self.plan(tag, depth)?;
         let registry = self.registry;
         let project = BUILD && top && self.keep.is_some();
-        // The object's values in the order of the plan's names, each at the slot
+        // Only the top object of a projected decode holds the kept fields alone;
+        // an inline object holds every field it reads.
+        let view = match &plan.projected {
+            Some(projected) if project => projected,
+            _ => &plan.full,
+        };
+        // The object's values in the order of the view's names, each at the slot
         // of its field's key (#1694).
         let mut built: Vec<Fv> = if BUILD {
-            vec![Fv::Null; plan.names.len()]
+            vec![Fv::Null; view.names.len()]
         } else {
             Vec::new()
         };
         let mut filled: Option<Vec<bool>> =
-            (BUILD && plan.ambiguous).then(|| vec![false; plan.names.len()]);
+            (BUILD && view.ambiguous).then(|| vec![false; view.names.len()]);
         for (distance, class_tag) in plan.lineage.iter().enumerate().rev() {
             let c = registry
                 .class(*class_tag)
@@ -789,7 +839,7 @@ impl<'a> Cursor<'a> {
                     });
                 }
                 if kept {
-                    let slot = plan.slots[distance][field_index];
+                    let slot = view.slots[distance][field_index];
                     if let Some(filled) = filled.as_mut() {
                         ensure!(
                             !filled.get(slot).copied().unwrap_or(false),
@@ -818,7 +868,7 @@ impl<'a> Cursor<'a> {
         }
         Ok(if BUILD {
             Fv::Object(Box::new(crate::graph_value::Obj::from_parts(
-                plan.names.clone(),
+                view.names.clone(),
                 built.into_boxed_slice(),
             )))
         } else {
@@ -979,33 +1029,16 @@ impl<'a> Cursor<'a> {
         } else {
             None
         };
-        // The keys of the fields an object is built with, sorted as a map sorts
-        // them, and the position of each field's key among them (#1694).
-        let mut included: Vec<(&str, usize, usize)> = Vec::new();
-        for (distance, c) in lineage.iter().enumerate() {
-            for (field_index, f) in c.fields.iter().enumerate() {
-                let wanted = if self.keep.is_some() {
-                    kept[distance][field_index]
-                } else {
-                    f.uninterpreted_flags & 2 == 0
-                };
-                if wanted {
-                    included.push((keys[distance][field_index].as_str(), distance, field_index));
-                }
-            }
-        }
-        let mut sorted: Vec<&str> = included.iter().map(|(key, _, _)| *key).collect();
-        sorted.sort_unstable();
-        sorted.dedup();
-        let ambiguous = sorted.len() != included.len();
-        let mut slots: Vec<Vec<usize>> = lineage
-            .iter()
-            .map(|c| vec![usize::MAX; c.fields.len()])
-            .collect();
-        for (key, distance, field_index) in &included {
-            slots[*distance][*field_index] = sorted.binary_search(key).unwrap_or(usize::MAX);
-        }
-        let names = intern_names(&sorted);
+        // The objects the plan builds: every field read, and, for the top object of
+        // a projected decode, the kept fields alone (#1694).
+        let full = View::new(&lineage, &keys, |distance, field_index| {
+            lineage[distance].fields[field_index].uninterpreted_flags & 2 == 0
+        });
+        let projected = self.keep.is_some().then(|| {
+            View::new(&lineage, &keys, |distance, field_index| {
+                kept[distance][field_index]
+            })
+        });
         let plan = Rc::new(ClassPlan {
             lineage: lineage.iter().map(|c| c.tag).collect(),
             keys,
@@ -1014,9 +1047,8 @@ impl<'a> Cursor<'a> {
             keep: self
                 .keep
                 .map(|keep| keep.iter().map(|field| (*field).to_string()).collect()),
-            names,
-            slots,
-            ambiguous,
+            full,
+            projected,
         });
         // A plan is kept only while the cache's cost stays within its limit:
         // one that would pass it empties the cache, and one dearer than the
