@@ -127,16 +127,20 @@ fn main() -> anyhow::Result<()> {
         ..Options::default()
     };
     let mut usage: BTreeMap<u64, Option<u64>> = BTreeMap::new();
-    extract_graphs(&mut open(model)?, &options, |record| {
-        let value = record
-            .graph
-            .as_ref()
-            .and_then(|graph| graph.objects.first())
-            .and_then(|root| root.fields.get("m_structUsage"))
-            .and_then(|value| value.as_u64());
-        usage.insert(record.identity.element_id, value);
-        Ok(())
-    })?;
+    // An empty selection selects every record, not none: Snowdon Towers'
+    // MEP models write no framing and read 12,679 to 25,738 records here.
+    if !written.is_empty() {
+        extract_graphs(&mut open(model)?, &options, |record| {
+            let value = record
+                .graph
+                .as_ref()
+                .and_then(|graph| graph.objects.first())
+                .and_then(|root| root.fields.get("m_structUsage"))
+                .and_then(|value| value.as_u64());
+            usage.insert(record.identity.element_id, value);
+            Ok(())
+        })?;
+    }
 
     let without = usage.values().filter(|value| value.is_none()).count();
     println!(
