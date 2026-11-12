@@ -734,13 +734,16 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
     file.remember_native_definitions(key, Arc::clone(&pass));
     Ok(pass)
 }
-/// Every current or historical record of every partition in [`Options`]'
-/// default channels (#1032): its channel, ElementId, partition and the class
-/// tag its body opens with. The first pass with the default channels and
-/// budgets records it while it walks every partition for its own records,
-/// and the handle keeps it; every later such pass finds the partitions
-/// holding its selected records from it, rather than walking every
-/// partition for them, and walks only those partitions.
+/// Every current or historical record of every partition in one channel
+/// (#1032): its channel, ElementId, partition and the class tag its body opens
+/// with. The first pass that reads that channel alone, with the default group
+/// budget and every partition read, records it while it walks every
+/// partition for its own records, whatever it selects, and the handle keeps
+/// it, one for each channel. Every later such pass of the
+/// channel finds the partitions holding its selected records from it, rather
+/// than walking every partition for them, and walks only those partitions.
+/// Channel 102 holds the elements' records and 103 their saved graphics
+/// (#1694).
 #[derive(Debug)]
 pub struct RecordIndex {
     records: Vec<IndexedRecord>,
@@ -944,16 +947,21 @@ fn extract_records(
     // `rac_advanced`). A first pass finds the partitions that hold each
     // selected element's records.
     let mut holders: BTreeMap<(u64, u64), BTreeSet<u32>> = BTreeMap::new();
-    // #1032: with the default budgets the handle's record index answers
-    // this without a walk, and the walk below visits only the partitions
-    // holding a selected record.
+    // #1032: with the default budgets the handle's record index of the one
+    // channel a read selects answers this without a walk, and the walk below
+    // visits only the partitions holding a selected record. Each channel has
+    // an index of its own: the saved-graphics pass reads channel 103 alone,
+    // and with the elements' index only, each of its reads walked every
+    // partition twice whatever it selected (#1694).
     let defaults = Options::default();
-    let indexable = options.max_group_bytes == defaults.max_group_bytes
-        && options.channels == defaults.channels
-        && unread.is_empty();
-    let record_index = indexable.then(|| file.native_record_index()).flatten();
+    let channel = options.channels.first().copied().filter(|_| {
+        options.channels.len() == 1
+            && options.max_group_bytes == defaults.max_group_bytes
+            && unread.is_empty()
+    });
+    let record_index = channel.and_then(|channel| file.native_record_index_of(channel));
     let mut indexed: Option<Vec<IndexedRecord>> =
-        (indexable && record_index.is_none()).then(Vec::new);
+        (channel.is_some() && record_index.is_none()).then(Vec::new);
     let walked: Option<BTreeSet<u32>> = record_index.as_ref().map(|record_index| {
         for &(channel, id, partition, tag, _) in &record_index.records {
             if !options.channels.contains(&channel) {
@@ -1009,8 +1017,8 @@ fn extract_records(
             },
         )?;
     }
-    if let Some(records) = indexed {
-        file.remember_native_record_index(RecordIndex { records });
+    if let (Some(records), Some(channel)) = (indexed, channel) {
+        file.remember_native_record_index(channel, RecordIndex { records });
     }
     // The class plans of the pass's decodes, made once for each class (#1335).
     let mut plans = native_parameters::PlanCache::default();

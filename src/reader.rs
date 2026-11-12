@@ -234,9 +234,11 @@ pub struct RevitFile {
         crate::native_document::DefinitionKey,
         Arc<crate::native_document::DefinitionPass>,
     )>,
-    /// Memoised index of every native record's partitions (#1032): each
-    /// native pass walked every partition again to find its records.
-    native_record_index: Option<Arc<crate::native_document::RecordIndex>>,
+    /// Memoised index of every native record's partitions, one for each
+    /// channel a pass reads alone (#1032): each native pass walked every
+    /// partition again to find its records. 102 holds the elements' records,
+    /// 103 their saved graphics (#1694).
+    native_record_indexes: BTreeMap<u64, Arc<crate::native_document::RecordIndex>>,
     /// How many of its two end faces the Revit solid of each curtain mullion
     /// keeps, and how many of those ends have a partner, by ElementId, where the
     /// boxes of its curtain wall's mullions say (RE-268, RE-439), set when the
@@ -521,7 +523,7 @@ impl RevitFile {
             native_preamble: None,
             native_preamble_deferred: 0,
             native_definitions: None,
-            native_record_index: None,
+            native_record_indexes: BTreeMap::new(),
             mullion_kept_ends: None,
             mullion_axes: None,
             schema_classes_memo: None,
@@ -1033,10 +1035,20 @@ impl RevitFile {
         self.native_definitions = Some((key, pass));
     }
 
-    /// Where every native record is (`crate::native_document::RecordIndex`),
-    /// once a native pass has recorded it (#1032).
+    /// Where every native element record is
+    /// (`crate::native_document::RecordIndex`), once a native pass has
+    /// recorded it (#1032).
     pub(crate) fn native_record_index(&self) -> Option<Arc<crate::native_document::RecordIndex>> {
-        self.native_record_index.clone()
+        self.native_record_index_of(102)
+    }
+
+    /// Where every native record of `channel` is, once a native pass that
+    /// read that channel alone has recorded it (#1032, #1694).
+    pub(crate) fn native_record_index_of(
+        &self,
+        channel: u64,
+    ) -> Option<Arc<crate::native_document::RecordIndex>> {
+        self.native_record_indexes.get(&channel).cloned()
     }
 
     /// Keep the end faces each curtain mullion's solid keeps (RE-268, RE-404).
@@ -1067,12 +1079,13 @@ impl RevitFile {
         self.mullion_axes.clone()
     }
 
-    /// Keep the record index a native pass recorded (#1032).
+    /// Keep the record index of `channel` a native pass recorded (#1032).
     pub(crate) fn remember_native_record_index(
         &mut self,
+        channel: u64,
         index: crate::native_document::RecordIndex,
     ) {
-        self.native_record_index = Some(Arc::new(index));
+        self.native_record_indexes.insert(channel, Arc::new(index));
     }
 
     /// ElementIds `research::partition_element_records::assign_second_prologue_ids`
