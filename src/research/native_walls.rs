@@ -597,6 +597,17 @@ fn wall_read_fields(class: &str) -> Option<&'static [&'static str]> {
     }
 }
 
+thread_local! {
+    static WALL_READ_PASSES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// The passes over the file [`WallReads`] has made on this thread since it
+/// started: a probe sets it beside an export to see whether a reader found its
+/// walls' facts already read (#1824).
+pub fn wall_read_passes() -> u64 {
+    WALL_READ_PASSES.with(std::cell::Cell::get)
+}
+
 /// What reads of walls' native records have found, kept so that the reader
 /// of the same walls that follows finds it rather than reading the records
 /// again (#1237: each read is a pass over the file, and on a Revit 2015 to
@@ -667,6 +678,7 @@ impl WallReads {
         if selected.is_empty() {
             return Ok(());
         }
+        WALL_READ_PASSES.with(|passes| passes.set(passes.get() + 1));
         let options = Options {
             selected_ids: selected,
             releases: crate::native_document::NATIVE_RELEASES,
@@ -804,7 +816,9 @@ pub fn native_walls_and_top_joins(
 
 /// [`native_walls_and_top_joins`], leaving in `reads` what the same records
 /// give a reader of the walls' types: each of `walls`' type ids, and the
-/// Function of each `BasicWallType` record the read takes besides (#1237).
+/// Function of each `BasicWallType` record the read takes besides (#1237);
+/// and what they give [`WallReads::top_joins`] and [`WallReads::load_bearing`]
+/// (#1824).
 pub fn native_walls_and_top_joins_into(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
@@ -1079,6 +1093,11 @@ pub fn native_walls_and_top_joins_into(
     reads.functions_read.extend(functions_read);
     reads.bearing.extend(bearing);
     reads.bearing_read.extend(walls.iter().copied());
+    // The top joins too: on Revit 2015 to 2023, `read_wall_records` and
+    // `attach_wall_top_joins` ask for them next, and would otherwise read every
+    // wall's record again for this one member (#1824).
+    reads.top_joined.extend(&top_joined);
+    reads.top_joins_read.extend(walls.iter().copied());
     let walls = found
         .into_iter()
         .map(|(id, (mut wall, type_id))| {
