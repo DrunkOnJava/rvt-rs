@@ -279,6 +279,10 @@ pub struct RevitFile {
     /// the same records.
     pub(crate) wall_cut_steps_memo: BTreeMap<u64, Vec<crate::native_wall_cuts::WallCutStep>>,
     pub(crate) wall_cut_steps_asked: BTreeSet<u64>,
+    /// Of the walls in `wall_cut_steps_asked`, those whose record was read as a
+    /// wall's and holds no base join (#1046): the same walk of the records
+    /// gives it (`research::native_wall_cuts::walls_with_no_base_join`).
+    pub(crate) wall_no_base_join_memo: BTreeSet<u64>,
     /// Family instances written as spaces that were left out because their
     /// family draws no model form (RE-312, #1262), by class.
     bodiless_family_spaces: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
@@ -526,6 +530,7 @@ impl RevitFile {
             disagreeing_type_texts: BTreeSet::new(),
             wall_cut_steps_memo: BTreeMap::new(),
             wall_cut_steps_asked: BTreeSet::new(),
+            wall_no_base_join_memo: BTreeSet::new(),
             bodiless_family_spaces: BTreeMap::new(),
             bodiless_family_space_error: None,
             invisible_type_instances: BTreeMap::new(),

@@ -3778,13 +3778,13 @@ fn profile_outline_area(body: &Extrusion) -> Option<f64> {
 /// The length of the outline of the profile `body` extrudes, its holes not
 /// taken in: `None` for a profile with holes or another shape (RE-235 §5),
 /// and for an outline with a corner that is not a right angle
-/// ([`every_corner_square`]): a sketch arc reaches the outline as chords,
+/// ([`square_corner_count`]): a sketch arc reaches the outline as chords,
 /// whose length is short of the arc's.
 fn profile_outline_length(body: &Extrusion) -> Option<f64> {
     let Some(entities::ProfileDef::ArbitraryClosed { points }) = &body.profile_override else {
         return None;
     };
-    if points.len() < 3 || !every_corner_square(points) {
+    if square_corner_count(points).is_none_or(|corners| corners < 4) {
         return None;
     }
     let mut length = 0.0;
@@ -3795,13 +3795,15 @@ fn profile_outline_length(body: &Extrusion) -> Option<f64> {
     (length.is_finite() && length > 0.0).then_some(length)
 }
 
-/// Whether every corner of the closed outline `points` is a right angle. A
-/// sketch arc reaches an outline as chords within 0.0005 ft of it, and no
-/// corner between two such chords is square, so an outline that passes holds
-/// no arc and its polygon's length and area are its sketch's own. A point the
-/// outline runs straight through is no corner; fewer than four corners is no
-/// such outline.
-pub(super) fn every_corner_square(points: &[(f64, f64)]) -> bool {
+/// The number of corners of the closed outline `points` where every one of
+/// them is a right angle, and `None` where one is not. A sketch arc reaches an
+/// outline as chords within 0.0005 ft of it, and no corner between two such
+/// chords is square, so an outline that has a count holds no arc and its
+/// polygon's length and area are its sketch's own. A point the outline runs
+/// straight through is no corner (a rectangle one of whose edges is two
+/// sketch lines has four), a repeated point and the closing one are dropped,
+/// and a spike is a corner that is not square.
+pub(super) fn square_corner_count(points: &[(f64, f64)]) -> Option<usize> {
     // How far from zero a corner's cosine and a straight joint's sine may be.
     const SQUARE: f64 = 1e-6;
     const STRAIGHT: f64 = 1e-9;
@@ -3817,31 +3819,27 @@ pub(super) fn every_corner_square(points: &[(f64, f64)]) -> bool {
     let count = ring.len();
     let mut corners = 0usize;
     for index in 0..count {
-        let (Some(&before), Some(&at), Some(&after)) = (
-            ring.get((index + count - 1) % count),
-            ring.get(index),
-            ring.get((index + 1) % count),
-        ) else {
-            return false;
-        };
+        let before = ring.get((index + count - 1) % count)?;
+        let at = ring.get(index)?;
+        let after = ring.get((index + 1) % count)?;
         let (u, v) = (
             (at.0 - before.0, at.1 - before.1),
             (after.0 - at.0, after.1 - at.1),
         );
         let scale = u.0.hypot(u.1) * v.0.hypot(v.1);
         if !(scale.is_finite() && scale > 0.0) {
-            return false;
+            return None;
         }
         let (dot, cross) = (u.0 * v.0 + u.1 * v.1, u.0 * v.1 - u.1 * v.0);
         if cross.abs() <= STRAIGHT * scale && dot > 0.0 {
             continue;
         }
         if dot.abs() > SQUARE * scale {
-            return false;
+            return None;
         }
         corners += 1;
     }
-    corners >= 4
+    Some(corners)
 }
 
 /// The area and the length of the outline and hole of a hollow section
@@ -8625,4 +8623,106 @@ fn floor_boundary_annotation_from_decoded(decoded: &DecodedElement) -> Option<Pr
             },
         ],
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::square_corner_count;
+
+    /// A square with one corner rounded by a quarter circle of radius 1,
+    /// the arc as `chords` chords, which is how a sketch arc reaches an
+    /// outline.
+    fn rounded_square(chords: usize) -> Vec<(f64, f64)> {
+        let mut points = vec![(0.0, 0.0), (4.0, 0.0), (4.0, 3.0)];
+        for step in 1..=chords {
+            let angle = std::f64::consts::FRAC_PI_2 * step as f64 / chords as f64;
+            points.push((3.0 + angle.cos(), 3.0 + angle.sin()));
+        }
+        points.push((0.0, 4.0));
+        points
+    }
+
+    #[test]
+    fn an_arc_of_chords_is_refused() {
+        for chords in [2, 8, 64, 1024] {
+            assert_eq!(
+                square_corner_count(&rounded_square(chords)),
+                None,
+                "{chords} chords"
+            );
+        }
+    }
+
+    #[test]
+    fn a_slanted_edge_is_refused() {
+        assert_eq!(
+            square_corner_count(&[(0.0, 0.0), (4.0, 0.0), (5.0, 3.0), (0.0, 3.0)]),
+            None
+        );
+        assert_eq!(
+            square_corner_count(&[(0.0, 0.0), (4.0, 0.0), (0.0, 3.0)]),
+            None
+        );
+    }
+
+    #[test]
+    fn a_spike_is_refused() {
+        let spike = [
+            (0.0, 0.0),
+            (4.0, 0.0),
+            (4.0, 3.0),
+            (2.0, 3.0),
+            (2.0, 5.0),
+            (2.0, 3.0),
+            (0.0, 3.0),
+        ];
+        assert_eq!(square_corner_count(&spike), None);
+    }
+
+    #[test]
+    fn a_rectangle_with_a_collinear_joint_has_four_corners() {
+        let split = [(0.0, 0.0), (2.0, 0.0), (4.0, 0.0), (4.0, 3.0), (0.0, 3.0)];
+        assert_eq!(square_corner_count(&split), Some(4));
+    }
+
+    #[test]
+    fn a_repeated_point_and_the_closing_point_are_dropped() {
+        let closed = [
+            (0.0, 0.0),
+            (4.0, 0.0),
+            (4.0, 0.0),
+            (4.0, 3.0),
+            (0.0, 3.0),
+            (0.0, 0.0),
+        ];
+        assert_eq!(square_corner_count(&closed), Some(4));
+    }
+
+    #[test]
+    fn an_l_has_six_corners_at_any_turn_and_either_winding() {
+        let l = [
+            (0.0, 0.0),
+            (4.0, 0.0),
+            (4.0, 2.0),
+            (2.0, 2.0),
+            (2.0, 4.0),
+            (0.0, 4.0),
+        ];
+        assert_eq!(square_corner_count(&l), Some(6));
+        let reversed: Vec<(f64, f64)> = l.iter().rev().copied().collect();
+        assert_eq!(square_corner_count(&reversed), Some(6));
+        let (sin, cos) = 0.5_f64.sin_cos();
+        let turned: Vec<(f64, f64)> = l
+            .iter()
+            .map(|&(x, y)| (1e4 + x * cos - y * sin, -2e3 + x * sin + y * cos))
+            .collect();
+        assert_eq!(square_corner_count(&turned), Some(6));
+    }
+
+    #[test]
+    fn no_outline_has_no_corner() {
+        assert_eq!(square_corner_count(&[]), Some(0));
+        assert_eq!(square_corner_count(&[(1.0, 1.0)]), None);
+        assert_eq!(square_corner_count(&[(0.0, 0.0), (1.0, 0.0)]), None);
+    }
 }
