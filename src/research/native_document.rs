@@ -116,6 +116,15 @@ pub struct Options {
     /// definitions pass, which [`extract`] makes first, sets its own function
     /// whatever this is.
     pub graph_fields: Option<GraphFields>,
+    /// Walk each partition's stored segments, inflating each as it is met,
+    /// instead of taking its members from the handle's inflated copy
+    /// ([`RevitFile::inflated_partition`]), which the handle then never holds
+    /// for this read. The saved-graphics pass walks the same partitions once
+    /// for each batch of owners, and the copies it would keep are 36% to 43% of
+    /// the peak resident memory of the largest files at that stage (#1694); a
+    /// walk without them inflates each partition it visits again, and finds the
+    /// same records. Off by default: the other readers share the copy.
+    pub uncached_partitions: bool,
 }
 /// The default [`Options::max_group_bytes`]: one reassembled continuation
 /// group's bytes.
@@ -150,6 +159,35 @@ pub(crate) fn partition_budget(
     }
 }
 
+/// The handle's inflated copy of partition `name` for a walk, unless the
+/// read walks the stored segments ([`Options::uncached_partitions`]) or the
+/// partition does not inflate (then the walk inflates what it can).
+fn shared_inflated(
+    file: &mut RevitFile,
+    name: &str,
+    options: &Options,
+) -> Option<Arc<compression::InflatedStream>> {
+    if options.uncached_partitions {
+        return None;
+    }
+    file.inflated_partition(name).ok()
+}
+
+/// The group budget of one walk. Without the handle's copy the walk does not
+/// know the partition's inflated size, and a group is never larger than it,
+/// so the read's whole budget stands where [`partition_budget`] would narrow it.
+fn walk_budget(
+    max_group_bytes: usize,
+    options: &Options,
+    inflated: Option<&compression::InflatedStream>,
+) -> usize {
+    if options.uncached_partitions {
+        max_group_bytes
+    } else {
+        partition_budget(max_group_bytes, options.max_group_bytes, inflated)
+    }
+}
+
 impl Default for Options {
     fn default() -> Self {
         Self {
@@ -168,6 +206,7 @@ impl Default for Options {
             value_source: None,
             deferred_history_episodes: false,
             graph_fields: None,
+            uncached_partitions: false,
         }
     }
 }
@@ -617,6 +656,7 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
         value_source: _,
         deferred_history_episodes,
         graph_fields: _,
+        uncached_partitions: _,
     } = options;
     let key: DefinitionKey = (
         *max_group_bytes,
@@ -941,16 +981,12 @@ fn extract_records(
         let Some(prepared) = read_partition(file, name)? else {
             continue;
         };
-        let inflated = file.inflated_partition(name).ok();
+        let inflated = shared_inflated(file, name, options);
         native_segments::walk_inflated(
             &prepared,
             inflated.as_deref(),
             registry,
-            partition_budget(
-                max_group_bytes,
-                options.max_group_bytes,
-                inflated.as_deref(),
-            ),
+            walk_budget(max_group_bytes, options, inflated.as_deref()),
             |source, bytes| {
                 if source.content_key.is_some() || !options.channels.contains(&source.channel) {
                     return Ok(());
@@ -998,16 +1034,12 @@ fn extract_records(
         let Some(prepared) = read_partition(file, &name)? else {
             continue;
         };
-        let inflated = file.inflated_partition(&name).ok();
+        let inflated = shared_inflated(file, &name, options);
         let stats = native_segments::walk_inflated(
             &prepared,
             inflated.as_deref(),
             registry,
-            partition_budget(
-                max_group_bytes,
-                options.max_group_bytes,
-                inflated.as_deref(),
-            ),
+            walk_budget(max_group_bytes, options, inflated.as_deref()),
             |source, bytes| {
                 if source.content_key.is_some() {
                     summary.skipped_embedded_content_groups += 1;

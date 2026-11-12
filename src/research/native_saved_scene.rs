@@ -595,6 +595,11 @@ pub fn extract_in_batches_with_control(
     opts.channels = BTreeSet::from([103]);
     opts.record_extras = true;
     opts.graph_fields = Some(saved_graphics_fields);
+    // The pass walks the partitions once for each batch it reads. It inflates
+    // them as it walks and the handle keeps no copy of them, which at this
+    // stage was 36% to 43% of the largest files' peak resident memory (#1694).
+    opts.uncached_partitions = true;
+    file.release_inflated_partitions();
     // Everything each owner's graph names. An owner can name another owner,
     // whose own symbols its mesh then reaches, as the one-shot read finds them
     // by reading every record's references.
