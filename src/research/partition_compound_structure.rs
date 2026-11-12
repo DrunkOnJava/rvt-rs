@@ -304,7 +304,7 @@ enum CopyChoice<'a> {
     Current(&'a LayerCopy),
     /// The copies disagree and nothing says which is current, or the current
     /// partition's copies disagree among themselves.
-    None,
+    Refused,
 }
 
 /// The copy of a type's layers to take among its decoded `copies`, in partition
@@ -317,13 +317,13 @@ enum CopyChoice<'a> {
 /// layers Revit's export gives, and a guess among copies is refused.
 fn choose_copy(copies: &[LayerCopy], current: Option<u32>) -> CopyChoice<'_> {
     let Some(first) = copies.first() else {
-        return CopyChoice::None;
+        return CopyChoice::Refused;
     };
     if copies.iter().all(|(_, _, layers)| *layers == first.2) {
         return CopyChoice::Agreeing(first);
     }
     let Some(current) = current else {
-        return CopyChoice::None;
+        return CopyChoice::Refused;
     };
     let mut in_current = copies
         .iter()
@@ -332,13 +332,13 @@ fn choose_copy(copies: &[LayerCopy], current: Option<u32>) -> CopyChoice<'_> {
         Some(pick) if in_current.all(|(_, _, layers)| *layers == pick.2) => {
             CopyChoice::Current(pick)
         }
-        _ => CopyChoice::None,
+        _ => CopyChoice::Refused,
     }
 }
 
 /// The layers of each type in `types`, by ElementId, from each type's own
 /// data. A type whose copies in the partitions disagree takes its current
-/// partition's copy ([`choose_copy`]: the partition the element index routes it
+/// partition's copy (`choose_copy`: the partition the element index routes it
 /// to, else the latest that holds a copy,
 /// [`crate::native_document::current_partitions`], RE-145, RE-216) and is
 /// dropped where that copy is not one list; empty for a release the layout is
@@ -441,7 +441,7 @@ pub fn scan_type_layers(
                 }
                 kept.insert(*id, layers.clone());
             }
-            CopyChoice::None => {}
+            CopyChoice::Refused => {}
         }
     }
     if recording {
@@ -1141,13 +1141,13 @@ mod tests {
             choose_copy(&copies, Some(410)),
             CopyChoice::Agreeing(&copies[0])
         );
-        assert_eq!(choose_copy(&[], Some(410)), CopyChoice::None);
+        assert_eq!(choose_copy(&[], Some(410)), CopyChoice::Refused);
     }
 
     #[test]
     fn copies_that_disagree_with_no_routing_take_none() {
         let copies = [(374, 10, older()), (410, 20, newer())];
-        assert_eq!(choose_copy(&copies, None), CopyChoice::None);
+        assert_eq!(choose_copy(&copies, None), CopyChoice::Refused);
     }
 
     #[test]
@@ -1166,13 +1166,13 @@ mod tests {
     #[test]
     fn a_routed_partition_without_a_decoded_copy_takes_none() {
         let copies = [(374, 10, older()), (410, 20, newer())];
-        assert_eq!(choose_copy(&copies, Some(442)), CopyChoice::None);
+        assert_eq!(choose_copy(&copies, Some(442)), CopyChoice::Refused);
     }
 
     #[test]
     fn a_routed_partition_whose_copies_disagree_takes_none() {
         let copies = [(374, 10, older()), (410, 20, newer()), (410, 90, older())];
-        assert_eq!(choose_copy(&copies, Some(410)), CopyChoice::None);
+        assert_eq!(choose_copy(&copies, Some(410)), CopyChoice::Refused);
         let same = [(374, 10, older()), (410, 20, newer()), (410, 90, newer())];
         assert_eq!(choose_copy(&same, Some(410)), CopyChoice::Current(&same[1]));
     }
