@@ -229,8 +229,11 @@ fn cut_box(graph: &ObjectGraph) -> Option<String> {
         let Some(geometry) = graph.objects.get(index) else {
             continue;
         };
-        let fields = geometry.fields.to_json();
-        let Some(faces) = fields.get("m_pFaces").and_then(Value::as_array) else {
+        let Some(faces) = geometry
+            .fields
+            .get("m_pFaces")
+            .and_then(rvt::research::graph_value::Fv::as_array)
+        else {
             continue;
         };
         for item in faces {
