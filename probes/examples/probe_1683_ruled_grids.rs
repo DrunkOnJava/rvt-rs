@@ -41,6 +41,7 @@ fn angular(r: f64) -> f64 {
 fn range_steps(curve: &Curve) -> f64 {
     let r = curve.range();
     match curve {
+        Curve::Point(_) => 1.,
         Curve::Line { .. } => 1.,
         Curve::Arc { radius, .. } => ((r[1] - r[0]).abs() / angular(*radius)).ceil(),
         Curve::Ellipse { x_len, y_len, .. } => {
@@ -51,6 +52,7 @@ fn range_steps(curve: &Curve) -> f64 {
 
 fn kind(curve: &Curve) -> String {
     match curve {
+        Curve::Point(_) => "point".into(),
         Curve::Line { .. } => "line".into(),
         Curve::Arc { radius, range, .. } => {
             format!(
@@ -153,6 +155,7 @@ fn formula(surface: &ParametricSurface) -> Option<((f64, f64), f64, bool)> {
     let normal_length = length(normal);
     let flat = normal_length > 0.
         && (twist.iter().zip(normal).map(|(t, n)| t * n).sum::<f64>() / normal_length).abs() < 1e-8;
+    let collapsed = matches!(profile1, Curve::Point(_)) || matches!(profile2, Curve::Point(_));
     let twisted = if flat { 0. } else { length(twist) };
     let cells = twisted / CHORD;
     let n_u = cells
@@ -161,7 +164,11 @@ fn formula(surface: &ParametricSurface) -> Option<((f64, f64), f64, bool)> {
         .max(range_steps(profile1))
         .max(range_steps(profile2))
         .max(1.);
-    let n_v = (cells / n_u).ceil().max(1.);
+    let n_v = if collapsed {
+        1.
+    } else {
+        (cells / n_u).ceil().max(1.)
+    };
     Some(((n_u, n_v), length(twist), flat))
 }
 

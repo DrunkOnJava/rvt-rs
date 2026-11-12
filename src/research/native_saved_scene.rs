@@ -38,6 +38,8 @@ pub const SAVED_GRAPHICS_FIELDS: &[&str] = &[
     "m_Envelope",
     "m_GInfo",
     "m_GRepId",
+    "m_Point1",
+    "m_Point2",
     "m_Trf",
     "m_bHasScale",
     "m_bIsNestedDetailFamily",
