@@ -3585,7 +3585,7 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// `Depth`, the one layer's thickness of a floor of one layer, and its
 /// `GrossVolume`, the area times it. A floor of several layers gets neither:
 /// the office's export (24.0.5) gives it its bottom layer's thickness, a
-/// newer exporter (26.4) another value (RE-298). Its
+/// newer exporter (26.4) another value (RE-298). A floor's
 /// `Perimeter` is left out: Revit's export writes it in feet, unscaled, in
 /// a file whose length unit is millimetres (RE-235 §5).
 ///
@@ -3605,6 +3605,13 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// sketch's outline, gets the same from its layers (RE-298): its `Depth` is
 /// the extrusion's, the layers' total, whatever their number, and its
 /// `NetVolume`, when its record holds no cutting step, the area times it. Its
+/// `Perimeter`, the length of the outline of that profile, is written too:
+/// Revit's export writes a roof's in the file's unit, unlike a floor's
+/// (RE-235 §5), and on all 10 of the office's roofs it is that outline's
+/// length. A roof whose profile has holes gets none: whether the export
+/// counts a hole's outline in the value is unmeasured, and the housing's 2
+/// roofs with holes are left out. Nor does one whose outline has a corner
+/// that is not a right angle: an arc of its sketch is chords there. Its
 /// `Width` is its profile's extent, as a floor of one layer's is, and is left
 /// out. All 10 of the office's roofs as built and at permit are Revit's, the
 /// one a hatch cuts (`YP-1`) but for its `NetVolume`.
@@ -3673,6 +3680,17 @@ fn add_slab_gross_area(
         name: "GrossArea".into(),
         value: PropertyValue::AreaSquareFeet(gross),
     }];
+    // A roof's `Perimeter` is its profile's outline length in the file's unit,
+    // not the floor's value in feet, and Revit writes it on every roof it
+    // writes the area on (RE-235 §5).
+    if roof {
+        if let Some(perimeter) = profile_outline_length(body) {
+            properties.push(Property {
+                name: "Perimeter".into(),
+                value: PropertyValue::PositiveLengthFeet(perimeter),
+            });
+        }
+    }
     // A floor of one layer only: on floors of several layers Revit's
     // exporters disagree (RE-298).
     let one_layer = layers
@@ -3755,6 +3773,75 @@ fn profile_outline_area(body: &Extrusion) -> Option<f64> {
     };
     let area = polygon_area_sqft(points);
     (area.is_finite() && area > 0.0).then_some(area)
+}
+
+/// The length of the outline of the profile `body` extrudes, its holes not
+/// taken in: `None` for a profile with holes or another shape (RE-235 §5),
+/// and for an outline with a corner that is not a right angle
+/// ([`every_corner_square`]): a sketch arc reaches the outline as chords,
+/// whose length is short of the arc's.
+fn profile_outline_length(body: &Extrusion) -> Option<f64> {
+    let Some(entities::ProfileDef::ArbitraryClosed { points }) = &body.profile_override else {
+        return None;
+    };
+    if points.len() < 3 || !every_corner_square(points) {
+        return None;
+    }
+    let mut length = 0.0;
+    for (index, &(x, y)) in points.iter().enumerate() {
+        let (next_x, next_y) = *points.get((index + 1) % points.len())?;
+        length += (next_x - x).hypot(next_y - y);
+    }
+    (length.is_finite() && length > 0.0).then_some(length)
+}
+
+/// Whether every corner of the closed outline `points` is a right angle. A
+/// sketch arc reaches an outline as chords within 0.0005 ft of it, and no
+/// corner between two such chords is square, so an outline that passes holds
+/// no arc and its polygon's length and area are its sketch's own. A point the
+/// outline runs straight through is no corner; fewer than four corners is no
+/// such outline.
+pub(super) fn every_corner_square(points: &[(f64, f64)]) -> bool {
+    // How far from zero a corner's cosine and a straight joint's sine may be.
+    const SQUARE: f64 = 1e-6;
+    const STRAIGHT: f64 = 1e-9;
+    let mut ring: Vec<(f64, f64)> = Vec::with_capacity(points.len());
+    for &point in points {
+        if ring.last() != Some(&point) {
+            ring.push(point);
+        }
+    }
+    if ring.len() > 1 && ring.first() == ring.last() {
+        ring.pop();
+    }
+    let count = ring.len();
+    let mut corners = 0usize;
+    for index in 0..count {
+        let (Some(&before), Some(&at), Some(&after)) = (
+            ring.get((index + count - 1) % count),
+            ring.get(index),
+            ring.get((index + 1) % count),
+        ) else {
+            return false;
+        };
+        let (u, v) = (
+            (at.0 - before.0, at.1 - before.1),
+            (after.0 - at.0, after.1 - at.1),
+        );
+        let scale = u.0.hypot(u.1) * v.0.hypot(v.1);
+        if !(scale.is_finite() && scale > 0.0) {
+            return false;
+        }
+        let (dot, cross) = (u.0 * v.0 + u.1 * v.1, u.0 * v.1 - u.1 * v.0);
+        if cross.abs() <= STRAIGHT * scale && dot > 0.0 {
+            continue;
+        }
+        if dot.abs() > SQUARE * scale {
+            return false;
+        }
+        corners += 1;
+    }
+    corners >= 4
 }
 
 /// The area and the length of the outline and hole of a hollow section
