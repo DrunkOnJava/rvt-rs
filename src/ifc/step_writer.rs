@@ -2544,11 +2544,16 @@ impl StepWriter<'_> {
                 let colour_id = self.id();
                 self.emit_entity(colour_id, format!("IFCCOLOURRGB($,{r:.6},{g:.6},{b:.6})"));
                 let rendering_id = self.id();
-                let transparency = mat.transparency.unwrap_or(0.0);
+                // A colour can be read without its transparency (the two are
+                // separate fields of a decoded material): the optional attribute
+                // is then left unset rather than written as opaque (#1820).
+                let transparency = mat
+                    .transparency
+                    .map_or_else(|| "$".to_string(), |t| format!("{t:.6}"));
                 self.emit_entity(
                     rendering_id,
                     format!(
-                        "IFCSURFACESTYLERENDERING(#{colour_id},{transparency:.6},$,$,$,$,$,$,.FLAT.)"
+                        "IFCSURFACESTYLERENDERING(#{colour_id},{transparency},$,$,$,$,$,$,.FLAT.)"
                     ),
                 );
                 let style_id = self.id();
