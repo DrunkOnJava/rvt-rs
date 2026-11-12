@@ -46,7 +46,7 @@ use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_stairs::{native_run_shapes, native_stair_counts};
 
 fn pair(value: Option<&Fv>) -> Option<(f64, f64)> {
-    match value?.as_array()?.as_slice() {
+    match value?.as_array()? {
         [a, b] => Some((a.as_f64()?, b.as_f64()?)),
         _ => None,
     }
@@ -185,7 +185,7 @@ fn main() -> anyhow::Result<()> {
                         let origin = object.fields.get("m_origin").and_then(Fv::as_array);
                         let dir = object.fields.get("m_dirVec").and_then(Fv::as_array);
                         if let (Some(o), Some(d)) = (origin, dir) {
-                            let point = |v: &Vec<Fv>| {
+                            let point = |v: &[Fv]| {
                                 [
                                     v.first().and_then(Fv::as_f64).unwrap_or(f64::NAN),
                                     v.get(1).and_then(Fv::as_f64).unwrap_or(f64::NAN),
@@ -195,7 +195,7 @@ fn main() -> anyhow::Result<()> {
                                 .entry(id)
                                 .or_default()
                                 .push((point(o), point(d)));
-                            let at = |v: &Vec<Fv>, i: usize| {
+                            let at = |v: &[Fv], i: usize| {
                                 v.get(i).and_then(Fv::as_f64).unwrap_or(f64::NAN)
                             };
                             println!(

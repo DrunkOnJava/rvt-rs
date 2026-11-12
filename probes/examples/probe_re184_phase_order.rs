@@ -44,7 +44,7 @@ fn probe(path: &str) -> anyhow::Result<()> {
         let Some(object) = record.graph.as_ref().and_then(|g| g.objects.first()) else {
             return Ok(());
         };
-        let fields = serde_json::to_value(&object.fields)?;
+        let fields = object.fields.clone();
         let class = record.class_name.clone().unwrap_or_default();
         match class.as_str() {
             "AllProjectPhases" if id_at(&fields, "/m_famId/m_id/m_id64") == Some(-1) => {

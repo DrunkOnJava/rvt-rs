@@ -226,7 +226,7 @@ fn history(rf: &mut RevitFile, registry: &Registry, tally: &mut Tally) {
             Ok(root) => {
                 let pointers = root.fields["m_episodeList"]["m_oEpisodes"]
                     .as_array()
-                    .map(Vec::len);
+                    .map(<[Fv]>::len);
                 match pointers {
                     Some(n) => tally.add(format!("history deferred episode pointers {n}"), 1),
                     None => tally.add("history deferred episode pointers absent", 1),

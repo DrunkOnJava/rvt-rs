@@ -8,7 +8,7 @@ use rvt::research::{
     native_form_geometry::{self, Curve, FormDocument},
     native_parameters::{self, ObjectGraph},
 };
-use serde_json::json;
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::{
     fs,
@@ -28,6 +28,14 @@ fn digest(path: &Path) -> Result<String> {
         hash.update(&buf[..n]);
     }
     Ok(hash.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Change an object's fields as JSON and put them back as the graph's own value.
+fn edit(fields: &mut Fv, change: impl FnOnce(&mut Value) -> Result<()>) -> Result<()> {
+    let mut json = fields.to_json();
+    change(&mut json)?;
+    *fields = Fv::from_value(&json);
+    Ok(())
 }
 
 fn mutate(records: &mut Vec<(u64, ObjectGraph)>, case: &str) -> Result<()> {
@@ -55,7 +63,10 @@ fn mutate(records: &mut Vec<(u64, ObjectGraph)>, case: &str) -> Result<()> {
         return Ok(());
     }
     if case == "void" {
-        records[form].1.objects[0].fields["m_cutting"] = json!(true);
+        edit(&mut records[form].1.objects[0].fields, |f| {
+            f["m_cutting"] = json!(true);
+            Ok(())
+        })?;
         return Ok(());
     }
     if case == "duplicate_angle" {
@@ -65,17 +76,21 @@ fn mutate(records: &mut Vec<(u64, ObjectGraph)>, case: &str) -> Result<()> {
             .iter_mut()
             .find(|o| o.class_name == "ParamValueSetDouble")
             .context("no parameters")?;
-        let set = p.fields["m_paramSet"]
-            .as_array_mut()
-            .context("parameter array")?;
-        set.push(set[0].clone());
+        edit(&mut p.fields, |f| {
+            let set = f["m_paramSet"].as_array_mut().context("parameter array")?;
+            set.push(set[0].clone());
+            Ok(())
+        })?;
         return Ok(());
     }
     if case == "no_axis" {
         for (_, g) in records {
             for o in &mut g.objects {
                 if o.class_name == "RevolutionCurveData" {
-                    o.fields["m_axis"] = json!(false);
+                    edit(&mut o.fields, |f| {
+                        f["m_axis"] = json!(false);
+                        Ok(())
+                    })?;
                 }
             }
         }
@@ -99,23 +114,32 @@ fn mutate(records: &mut Vec<(u64, ObjectGraph)>, case: &str) -> Result<()> {
             let end = curve.fields["m_endParams"][1]
                 .as_f64()
                 .context("curve end parameter")?;
-            curve.fields["m_endParams"][1] = json!(end - 1e-5);
+            edit(&mut curve.fields, |f| {
+                f["m_endParams"][1] = json!(end - 1e-5);
+                Ok(())
+            })?;
         }
         "flipped_curve" => {
-            graph
+            let driver = graph
                 .objects
                 .iter_mut()
                 .find(|o| o.class_name == "CurveElemDriver")
-                .context("driver")?
-                .fields["m_flip"] = json!(true);
+                .context("driver")?;
+            edit(&mut driver.fields, |f| {
+                f["m_flip"] = json!(true);
+                Ok(())
+            })?;
         }
         "old_axis" => {
-            graph
+            let data = graph
                 .objects
                 .iter_mut()
                 .find(|o| o.class_name == "RevolutionCurveData")
-                .context("data")?
-                .fields["m_bOldAxis"] = json!(true);
+                .context("data")?;
+            edit(&mut data.fields, |f| {
+                f["m_bOldAxis"] = json!(true);
+                Ok(())
+            })?;
         }
         "missing_driver_edge" => {
             let driver = graph
@@ -137,9 +161,18 @@ fn mutate(records: &mut Vec<(u64, ObjectGraph)>, case: &str) -> Result<()> {
                 .find(|o| o.class_name == "GArc")
                 .context("arc case needs curved fixture")?;
             match case {
-                "negative_radius" => arc.fields["m_radius"] = json!(-1.0),
-                "nonunit_arc" => arc.fields["m_xVec"] = json!([2.0, 0.0, 0.0]),
-                "filled_arc" => arc.fields["m_bFilled"] = json!(true),
+                "negative_radius" => edit(&mut arc.fields, |f| {
+                    f["m_radius"] = json!(-1.0);
+                    Ok(())
+                })?,
+                "nonunit_arc" => edit(&mut arc.fields, |f| {
+                    f["m_xVec"] = json!([2.0, 0.0, 0.0]);
+                    Ok(())
+                })?,
+                "filled_arc" => edit(&mut arc.fields, |f| {
+                    f["m_bFilled"] = json!(true);
+                    Ok(())
+                })?,
                 _ => arc.class_name = "GEllipse".into(),
             }
         }
@@ -148,7 +181,7 @@ fn mutate(records: &mut Vec<(u64, ObjectGraph)>, case: &str) -> Result<()> {
     Ok(())
 }
 
-fn curve_json(curve: &Curve) -> Fv {
+fn curve_json(curve: &Curve) -> Value {
     match curve {
         Curve::Line { from, to } => json!({"kind":"line","from":from,"to":to}),
         Curve::Arc {

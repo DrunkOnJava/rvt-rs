@@ -119,7 +119,7 @@ fn token_of(item: &Fv) -> Option<u64> {
 fn layout(field: &Field, value: &Fv) -> std::result::Result<(), String> {
     match (field.base, field.modifier) {
         (0x0a, 0) => match value.get("class_name") {
-            Some(Fv::String(_)) => Ok(()),
+            Some(Fv::Str(_)) => Ok(()),
             _ => Err("the u16 names no class".into()),
         },
         (0x0e, 0x13) | (0x0e, 0x53) | (0x0e, 0x54) => {
@@ -160,13 +160,10 @@ fn kind(value: &Fv) -> String {
     match value {
         Fv::Null => "null".into(),
         Fv::Bool(_) => "bool".into(),
-        Fv::Number(_) => "number".into(),
-        Fv::String(_) => "string".into(),
+        Fv::U64(_) | Fv::I64(_) | Fv::F64(_) => "number".into(),
+        Fv::Str(_) => "string".into(),
         Fv::Array(items) => format!("array[{}]", items.len()),
-        Fv::Object(map) => format!(
-            "object{{{}}}",
-            map.keys().cloned().collect::<Vec<_>>().join(",")
-        ),
+        Fv::Object(map) => format!("object{{{}}}", map.keys().collect::<Vec<_>>().join(",")),
     }
 }
 

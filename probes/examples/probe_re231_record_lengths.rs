@@ -103,7 +103,7 @@ fn main() -> anyhow::Result<()> {
                     continue;
                 };
                 for (name, value) in fields {
-                    if let (Fv::Number(_), Some(number)) =
+                    if let (Fv::U64(_) | Fv::I64(_) | Fv::F64(_), Some(number)) =
                         (value, value.as_f64().filter(|v| v.is_finite()))
                     {
                         found.push((format!("{label}.{name}"), number));

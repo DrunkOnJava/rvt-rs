@@ -91,11 +91,11 @@ impl Obj {
     }
 
     /// The fields, name and value, in order.
-    pub fn iter(&self) -> impl Iterator<Item = (&str, &Fv)> {
-        self.names
-            .iter()
-            .map(|name| &**name)
-            .zip(self.values.iter())
+    pub fn iter(&self) -> ObjIter<'_> {
+        ObjIter {
+            names: self.names.iter(),
+            values: self.values.iter(),
+        }
     }
 
     /// The names of the fields, in order.
@@ -111,6 +111,51 @@ impl Obj {
     /// Whether there is no field.
     pub fn is_empty(&self) -> bool {
         self.names.is_empty()
+    }
+}
+
+/// The fields of an [`Obj`], name and value, in order.
+#[derive(Debug, Clone)]
+pub struct ObjIter<'a> {
+    names: std::slice::Iter<'a, Box<str>>,
+    values: std::slice::Iter<'a, Fv>,
+}
+
+impl<'a> Iterator for ObjIter<'a> {
+    type Item = (&'a str, &'a Fv);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some((&**self.names.next()?, self.values.next()?))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.names.size_hint()
+    }
+}
+
+impl DoubleEndedIterator for ObjIter<'_> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        Some((&**self.names.next_back()?, self.values.next_back()?))
+    }
+}
+
+impl ExactSizeIterator for ObjIter<'_> {}
+
+impl<'a> IntoIterator for &'a Obj {
+    type Item = (&'a str, &'a Fv);
+    type IntoIter = ObjIter<'a>;
+
+    fn into_iter(self) -> ObjIter<'a> {
+        self.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Box<Obj> {
+    type Item = (&'a str, &'a Fv);
+    type IntoIter = ObjIter<'a>;
+
+    fn into_iter(self) -> ObjIter<'a> {
+        self.iter()
     }
 }
 
@@ -359,6 +404,21 @@ impl Fv {
 
     pub fn is_number(&self) -> bool {
         matches!(self, Fv::U64(_) | Fv::I64(_) | Fv::F64(_))
+    }
+
+    /// Whether the number is an integer that fits `i64`, as `serde_json` tests it.
+    pub fn is_i64(&self) -> bool {
+        self.as_i64().is_some()
+    }
+
+    /// Whether the number is a non-negative integer.
+    pub fn is_u64(&self) -> bool {
+        matches!(self, Fv::U64(_))
+    }
+
+    /// Whether the number is a float.
+    pub fn is_f64(&self) -> bool {
+        matches!(self, Fv::F64(_))
     }
 
     pub fn is_string(&self) -> bool {

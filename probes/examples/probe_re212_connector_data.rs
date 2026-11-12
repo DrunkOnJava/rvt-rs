@@ -62,7 +62,7 @@ fn main() -> anyhow::Result<()> {
         };
         let id = record.identity.element_id;
         if shown.insert(class.to_string()) {
-            let names: Vec<&String> = root
+            let names: Vec<&str> = root
                 .fields
                 .as_object()
                 .map(|o| o.keys().collect())
@@ -88,7 +88,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         if class == "FamilyInstance" {
-            let place: serde_json::Map<String, Fv> = [
+            let place: serde_json::Map<String, serde_json::Value> = [
                 "m_instOrigin",
                 "m_RefDir",
                 "m_zAxis",
@@ -98,7 +98,7 @@ fn main() -> anyhow::Result<()> {
                 "m_mirrored",
             ]
             .iter()
-            .filter_map(|name| Some((name.to_string(), root.fields.get(*name)?.clone())))
+            .filter_map(|name| Some((name.to_string(), root.fields.get(*name)?.to_json())))
             .collect();
             println!("place {id} {}", serde_json::to_string(&place)?);
         }

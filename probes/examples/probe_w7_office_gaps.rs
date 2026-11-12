@@ -15,23 +15,22 @@
 //!   cargo run --profile ci -p rvt-probes --example probe_w7_office_gaps -- MODEL.rvt
 
 use rvt::RevitFile;
-use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Options};
 use rvt::research::native_element_parameters;
 use rvt::research::partition_level_records::recover_partition_levels;
 use rvt::research::partition_room_parameters::find_parameter_definitions;
 use rvt::research::partition_schema_mvp::recover_partition_schema_mvp;
 use rvt::walker::WalkerLimits;
-use serde_json::{Map, json};
+use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
 const MAX_DEPTH: usize = 5;
 const MAX_OBJECTS: usize = 120;
 
 /// The scalars and short scalar arrays of a JSON value, by dotted path.
-fn flatten(prefix: &str, value: &Fv, depth: usize, out: &mut Map<String, Fv>) {
+fn flatten(prefix: &str, value: &Value, depth: usize, out: &mut Map<String, Value>) {
     match value {
-        Fv::Object(map) => {
+        Value::Object(map) => {
             if depth == 0 {
                 return;
             }
@@ -44,7 +43,7 @@ fn flatten(prefix: &str, value: &Fv, depth: usize, out: &mut Map<String, Fv>) {
                 flatten(&name, inner, depth - 1, out);
             }
         }
-        Fv::Array(items) => {
+        Value::Array(items) => {
             let flat = items
                 .iter()
                 .all(|item| !item.is_object() && !item.is_array());
@@ -152,7 +151,7 @@ fn main() -> anyhow::Result<()> {
 
     let parameters = native_element_parameters::read(&mut rf, &ids)?;
     for (id, list) in &parameters.elements {
-        let entries: Vec<Fv> = list
+        let entries: Vec<Value> = list
             .iter()
             .filter_map(|parameter| serde_json::to_value(parameter).ok())
             .collect();
@@ -175,7 +174,7 @@ fn main() -> anyhow::Result<()> {
                 .as_ref()
                 .and_then(|graph| graph.objects.first())
                 .and_then(|root| root.fields.pointer("/m_attrId/m_id/m_id64"))
-                .and_then(Fv::as_u64);
+                .and_then(Value::as_u64);
             if let Some(type_id) = type_id {
                 level_types.insert(type_id);
             }
@@ -187,7 +186,7 @@ fn main() -> anyhow::Result<()> {
     if !level_types.is_empty() {
         let type_parameters = native_element_parameters::read(&mut rf, &level_types)?;
         for (id, list) in &type_parameters.elements {
-            let entries: Vec<Fv> = list
+            let entries: Vec<Value> = list
                 .iter()
                 .filter_map(|parameter| serde_json::to_value(parameter).ok())
                 .collect();

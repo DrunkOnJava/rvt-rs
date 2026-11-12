@@ -65,7 +65,6 @@ use anyhow::{Context, Result};
 use rvt::RevitFile;
 use rvt::ifc::entities::{IfcEntity, PropertySet};
 use rvt::ifc::{ExportOptions, run_export_with_limits};
-use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{NATIVE_RELEASES, Options, extract_graphs};
 use rvt::research::native_walls::native_walls_and_top_joins;
 use rvt::research::partition_element_records as per;
@@ -73,7 +72,7 @@ use rvt::research::partition_element_records_2023 as per32;
 use rvt::research::partition_level_records::recover_partition_levels;
 use rvt::research::partition_schema_mvp::recover_partition_schema_mvp;
 use rvt::walker::{InstanceField, WalkerLimits};
-use serde_json::{Map, json};
+use serde_json::{Map, Value, json};
 
 const WALLS: [u32; 16] = [
     428588, 428745, 430064, 506386, 234869, 429964, 430318, 430361, 430412, 430859, 497540, 506797,
@@ -103,14 +102,14 @@ fn fnv(text: &str) -> u64 {
 }
 
 /// `value`, an array longer than `LONG_ARRAY` replaced by its length and a hash.
-fn compact(value: Fv) -> Fv {
+fn compact(value: Value) -> Value {
     match value {
-        Fv::Array(items) if items.len() > LONG_ARRAY => {
-            let hash = fnv(&Fv::Array(items.clone()).to_string());
+        Value::Array(items) if items.len() > LONG_ARRAY => {
+            let hash = fnv(&Value::Array(items.clone()).to_string());
             json!({ "len": items.len(), "fnv": format!("{hash:016x}") })
         }
-        Fv::Array(items) => Fv::Array(items.into_iter().map(compact).collect()),
-        Fv::Object(members) => Fv::Object(
+        Value::Array(items) => Value::Array(items.into_iter().map(compact).collect()),
+        Value::Object(members) => Value::Object(
             members
                 .into_iter()
                 .map(|(name, member)| (name, compact(member)))
@@ -120,7 +119,7 @@ fn compact(value: Fv) -> Fv {
     }
 }
 
-fn clip(value: Fv) -> Fv {
+fn clip(value: Value) -> Value {
     let text = value.to_string();
     if text.len() <= CLIP {
         value
@@ -130,7 +129,7 @@ fn clip(value: Fv) -> Fv {
 }
 
 /// An object's members without pointers, history tables as their length.
-fn trimmed(fields: &Fv) -> Fv {
+fn trimmed(fields: &Value) -> Value {
     let Some(members) = fields.as_object() else {
         return clip(fields.clone());
     };
@@ -139,24 +138,24 @@ fn trimmed(fields: &Fv) -> Fv {
         if name.ends_with("HistTable") {
             kept.insert(
                 format!("{name}#"),
-                Fv::from(member.as_array().map_or(0, Vec::len)),
+                Value::from(member.as_array().map_or(0, Vec::len)),
             );
         } else if member.get("pointer_token").is_none() {
             kept.insert(name.clone(), member.clone());
         }
     }
-    clip(Fv::Object(kept))
+    clip(Value::Object(kept))
 }
 
-fn field_json(field: &InstanceField) -> Fv {
+fn field_json(field: &InstanceField) -> Value {
     match field {
         InstanceField::Float { value, .. } => json!(value),
         InstanceField::Integer { value, .. } => json!(value),
         InstanceField::Bool(value) => json!(value),
         InstanceField::ElementId { id, .. } => json!(id),
         InstanceField::String(text) => json!(text),
-        InstanceField::Vector(items) => Fv::Array(items.iter().map(field_json).collect()),
-        _ => Fv::Null,
+        InstanceField::Vector(items) => Value::Array(items.iter().map(field_json).collect()),
+        _ => Value::Null,
     }
 }
 
@@ -171,7 +170,7 @@ fn tag_of(entity: &IfcEntity) -> Option<u32> {
 }
 
 /// A property set's properties as a name to value object.
-fn flat(set: &Option<PropertySet>) -> Map<String, Fv> {
+fn flat(set: &Option<PropertySet>) -> Map<String, Value> {
     let mut out = Map::new();
     if let Some(set) = set {
         for property in &set.properties {
@@ -184,16 +183,16 @@ fn flat(set: &Option<PropertySet>) -> Map<String, Fv> {
 }
 
 /// The ElementIds a wall's `TopCoverElementId` and `TopCoverElementIds` name.
-fn covers_of(props: &Map<String, Fv>) -> Vec<u32> {
+fn covers_of(props: &Map<String, Value>) -> Vec<u32> {
     let mut out = Vec::new();
     if let Some(id) = props
         .get("TopCoverElementId")
-        .and_then(Fv::as_u64)
+        .and_then(Value::as_u64)
         .and_then(|id| u32::try_from(id).ok())
     {
         out.push(id);
     }
-    if let Some(text) = props.get("TopCoverElementIds").and_then(Fv::as_str) {
+    if let Some(text) = props.get("TopCoverElementIds").and_then(Value::as_str) {
         out.extend(text.split(',').filter_map(|id| id.parse::<u32>().ok()));
     }
     out
@@ -238,7 +237,7 @@ fn main() -> Result<()> {
                 "levels": levels
                     .iter()
                     .map(|level| json!([level.element_id, level.name, level.elevation_feet]))
-                    .collect::<Vec<Fv>>(),
+                    .collect::<Vec<Value>>(),
             })
         ),
         Err(error) => println!(
@@ -287,7 +286,7 @@ fn main() -> Result<()> {
                 let Some(id) = wall.id.filter(|id| WALLS.contains(id)) else {
                     continue;
                 };
-                let fields: Vec<Fv> = wall
+                let fields: Vec<Value> = wall
                     .fields
                     .iter()
                     .filter(|(name, _)| {
@@ -300,7 +299,7 @@ fn main() -> Result<()> {
                     .collect();
                 println!(
                     "{}",
-                    json!({ "kind": "decoded", "id": id, "fields": compact(Fv::Array(fields)) })
+                    json!({ "kind": "decoded", "id": id, "fields": compact(Value::Array(fields)) })
                 );
             }
         }
@@ -366,7 +365,7 @@ fn main() -> Result<()> {
         let Some(root) = graph.objects.first() else {
             return Ok(());
         };
-        let steps: Vec<Fv> = graph
+        let steps: Vec<Value> = graph
             .objects
             .iter()
             .skip(1)
@@ -400,10 +399,10 @@ fn main() -> Result<()> {
 
     let model =
         run_export_with_limits(&mut rf, &ExportOptions::default(), WalkerLimits::default())?.model;
-    let mut sets: BTreeMap<usize, Vec<Fv>> = BTreeMap::new();
+    let mut sets: BTreeMap<usize, Vec<Value>> = BTreeMap::new();
     for entity in &model.entities {
         if let IfcEntity::ElementPropertySet { element, set } = entity {
-            let properties: Map<String, Fv> = set
+            let properties: Map<String, Value> = set
                 .properties
                 .iter()
                 .map(|property| {

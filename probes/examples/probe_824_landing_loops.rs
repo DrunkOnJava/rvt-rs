@@ -31,7 +31,7 @@ use rvt::research::native_saved_mesh::pointer;
 
 fn point(value: Option<&Fv>) -> Option<[f64; 3]> {
     let items = value?.as_array()?;
-    let [x, y, z] = items.as_slice() else {
+    let [x, y, z] = items else {
         return None;
     };
     Some([x.as_f64()?, y.as_f64()?, z.as_f64()?])
@@ -66,7 +66,7 @@ fn main() -> anyhow::Result<()> {
                 .fields
                 .get("m_curves")
                 .and_then(Fv::as_array)
-                .cloned()
+                .map(<[Fv]>::to_vec)
                 .unwrap_or_default();
             println!(
                 "loop {id} {index} open {} curves {}",
@@ -86,7 +86,7 @@ fn main() -> anyhow::Result<()> {
                         let origin = point(found.fields.get("m_origin"))?;
                         let direction = point(found.fields.get("m_dirVec"))?;
                         let params = found.fields.get("m_endParams")?.as_array()?;
-                        let [a, b] = params.as_slice() else {
+                        let [a, b] = params else {
                             return None;
                         };
                         let at = |t: f64| [0, 1, 2].map(|i| origin[i] + direction[i] * t);

@@ -190,7 +190,6 @@ fn scan(owner: u64, record: &Record, kinds: &mut BTreeMap<String, Kind>, other_p
             .fields
             .get("m_interiorEdgePnts")
             .and_then(Fv::as_array)
-            .map(Vec::as_slice)
             .unwrap_or(&[])
         {
             match uv(sample) {

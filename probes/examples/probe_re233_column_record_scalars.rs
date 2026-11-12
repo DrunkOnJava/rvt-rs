@@ -31,9 +31,9 @@ const OBJECTS: usize = 400;
 
 fn scalar(value: &Fv) -> Option<String> {
     match value {
-        Fv::Number(n) => Some(n.to_string()),
+        n @ (Fv::U64(_) | Fv::I64(_) | Fv::F64(_)) => Some(n.to_string()),
         Fv::Bool(b) => Some(b.to_string()),
-        Fv::String(s) if s.len() <= 40 => Some(s.replace(' ', "_")),
+        Fv::Str(s) if s.len() <= 40 => Some(s.replace(' ', "_")),
         Fv::Object(_) => value
             .pointer("/m_id/m_id64")
             .and_then(Fv::as_i64)

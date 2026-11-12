@@ -37,7 +37,7 @@ fn element_id(value: &Fv) -> Option<u64> {
 
 fn triple(value: Option<&Fv>) -> Option<[f64; 3]> {
     let items = value?.as_array()?;
-    let [a, b, c] = items.as_slice() else {
+    let [a, b, c] = items else {
         return None;
     };
     Some([a.as_f64()?, b.as_f64()?, c.as_f64()?])
@@ -45,7 +45,7 @@ fn triple(value: Option<&Fv>) -> Option<[f64; 3]> {
 
 fn pair(value: Option<&Fv>) -> Option<[f64; 2]> {
     let items = value?.as_array()?;
-    let [a, b] = items.as_slice() else {
+    let [a, b] = items else {
         return None;
     };
     Some([a.as_f64()?, b.as_f64()?])

@@ -28,13 +28,12 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use rvt::RevitFile;
-use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, Record, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_saved_mesh::{face, pointer};
 use rvt::research::native_symbol_cuts::instance_cut_loops;
 use rvt::research::partition_element_records::{self as per};
-use serde_json::Map;
+use serde_json::{Map, Value};
 
 const WALLS: [&str; 2] = ["SWall", "ArcWall"];
 const SLABS: [&str; 5] = [
@@ -57,7 +56,7 @@ fn clip(text: String) -> String {
     }
 }
 
-fn trimmed(fields: &Fv) -> String {
+fn trimmed(fields: &Value) -> String {
     let Some(members) = fields.as_object() else {
         return clip(fields.to_string());
     };
@@ -65,12 +64,12 @@ fn trimmed(fields: &Fv) -> String {
     for (name, member) in members {
         if name.ends_with("HistTable") {
             let count = member.as_array().map_or(0, Vec::len);
-            kept.insert(format!("{name}#"), Fv::from(count));
+            kept.insert(format!("{name}#"), Value::from(count));
         } else if member.get("pointer_token").is_none() {
             kept.insert(name.clone(), member.clone());
         }
     }
-    clip(Fv::Object(kept).to_string())
+    clip(Value::Object(kept).to_string())
 }
 
 /// `#id -> (entity, args)` for every line of a STEP file.
@@ -195,7 +194,7 @@ fn read_export(step: &str) -> Export {
     }
 }
 
-fn dump(id: u64, class: &str, objects: &[(&str, &Fv)], all: bool) {
+fn dump(id: u64, class: &str, objects: &[(&str, &Value)], all: bool) {
     if let Some((_, root)) = objects.first() {
         println!("rec {id} {class} root {}", trimmed(root));
     }
@@ -230,7 +229,7 @@ fn cut_box(graph: &ObjectGraph) -> Option<String> {
         let Some(geometry) = graph.objects.get(index) else {
             continue;
         };
-        let Some(faces) = geometry.fields.get("m_pFaces").and_then(Fv::as_array) else {
+        let Some(faces) = geometry.fields.get("m_pFaces").and_then(Value::as_array) else {
             continue;
         };
         for item in faces {
@@ -352,7 +351,7 @@ fn probe(path: &str) -> Result<()> {
             return Ok(());
         };
         let id = record.identity.element_id;
-        let objects: Vec<(&str, &Fv)> = graph
+        let objects: Vec<(&str, &Value)> = graph
             .objects
             .iter()
             .map(|object| (object.class_name.as_str(), &object.fields))
@@ -366,7 +365,7 @@ fn probe(path: &str) -> Result<()> {
                 .iter()
                 .find(|object| object.class_name == "InstanceInfo")
                 .and_then(|object| object.fields.pointer("/m_symbolId/m_id/m_id64"))
-                .and_then(Fv::as_u64);
+                .and_then(Value::as_u64);
             symbols.extend(symbol);
         }
         let all = if structural {
@@ -385,10 +384,13 @@ fn probe(path: &str) -> Result<()> {
         };
         for &(object, fields) in &objects {
             if object == "WallRectOpeningGStep" {
-                if let Some(cutter) = fields.pointer("/m_instId/m_id/m_id64").and_then(Fv::as_u64) {
+                if let Some(cutter) = fields
+                    .pointer("/m_instId/m_id/m_id64")
+                    .and_then(Value::as_u64)
+                {
                     println!(
                         "rectstep {id} {cutter} {}",
-                        fields.get("m_bCutSomething").unwrap_or(&Fv::Null)
+                        fields.get("m_bCutSomething").unwrap_or(&Value::Null)
                     );
                     rects.insert(cutter);
                 }

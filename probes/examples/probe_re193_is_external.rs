@@ -98,7 +98,7 @@ fn wall_types(rf: &mut RevitFile, walls: &BTreeSet<u64>) -> anyhow::Result<WallT
             };
             let id = record.identity.element_id;
             for object in &graph.objects {
-                let fields = serde_json::to_value(&object.fields)?;
+                let fields = object.fields.clone();
                 if let Some(t) = field(&fields, "m_WallAttributesId").and_then(element_id) {
                     out.wall_type.entry(id).or_insert(t);
                 }

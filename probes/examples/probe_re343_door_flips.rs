@@ -54,7 +54,6 @@ use rvt::RevitFile;
 use rvt::elements::openings::Door;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
-use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{NATIVE_RELEASES, Options, extract_graphs};
 use rvt::research::native_walls::native_walls;
 use rvt::research::partition_instance_transforms::{instance_transform, scan_instance_transforms};
@@ -63,7 +62,7 @@ use rvt::research::partition_schema_mvp::{
     OPENING_FACING_FIELDS, OPENING_FLIP_FIELDS, OPENING_PLACEMENT_ORIGIN_FIELDS,
 };
 use rvt::walker::{InstanceField, iter_elements};
-use serde_json::json;
+use serde_json::{Value, json};
 
 const SEARCH: usize = 0x4000;
 const TOLERANCE: f64 = 1e-9;
@@ -146,7 +145,7 @@ fn tag_of(entity: &IfcEntity) -> Option<u32> {
 }
 
 /// `value`, or its length where it prints longer than `LONG_VALUE`.
-fn shortened(value: &Fv) -> Fv {
+fn shortened(value: &Value) -> Value {
     let text = value.to_string();
     if text.len() > LONG_VALUE {
         json!({ "long": text.len() })
@@ -157,7 +156,7 @@ fn shortened(value: &Fv) -> Fv {
 
 /// The ElementId the native record's `m_hostId` names, where it names one
 /// (RE-361): a door's or window's stored host, whether or not rvt-rs binds it.
-fn stored_host(records: &[Fv]) -> Option<u64> {
+fn stored_host(records: &[Value]) -> Option<u64> {
     records
         .first()?
         .get("root")?
@@ -170,13 +169,13 @@ fn stored_host(records: &[Fv]) -> Option<u64> {
 
 /// A record's root fields whose names speak of a flip, a mirror, a hand, a
 /// facing, an orientation, an axis or a placement, for the compact form.
-fn flag_fields(record: &Fv) -> Fv {
+fn flag_fields(record: &Value) -> Value {
     const WORDS: [&str; 10] = [
         "flip", "mirror", "hand", "facing", "orient", "refdir", "zaxis", "inst", "host", "symbol",
     ];
-    let kept: serde_json::Map<String, Fv> = record
+    let kept: serde_json::Map<String, Value> = record
         .get("root")
-        .and_then(Fv::as_object)
+        .and_then(Value::as_object)
         .map(|fields| {
             fields
                 .iter()
@@ -235,7 +234,7 @@ fn main() -> anyhow::Result<()> {
 
     // The fields the decoded Door and Window records carry for the flips and
     // the facing (RE-343, RE-87), as `iter_elements` gives them.
-    let mut decoded: BTreeMap<u32, serde_json::Map<String, Fv>> = BTreeMap::new();
+    let mut decoded: BTreeMap<u32, serde_json::Map<String, Value>> = BTreeMap::new();
     for element in iter_elements(&mut rf)? {
         let Some(id) = element.id.filter(|id| ids.contains(id)) else {
             continue;
@@ -279,7 +278,7 @@ fn main() -> anyhow::Result<()> {
     let read = scan_instance_transforms(&mut rf, version, &ids)?;
 
     // Every element-data copy of each door and window.
-    let mut copies: BTreeMap<u32, Vec<Fv>> = BTreeMap::new();
+    let mut copies: BTreeMap<u32, Vec<Value>> = BTreeMap::new();
     if let Some(header) = element_data_header(version) {
         for stream in rf.partition_stream_names() {
             let Ok(inflated) = rf.inflated_partition(&stream) else {
@@ -321,9 +320,9 @@ fn main() -> anyhow::Result<()> {
     }
 
     // The native `FamilyInstance` record of each door and window.
-    let mut records: BTreeMap<u32, Vec<Fv>> = BTreeMap::new();
-    let mut objects: BTreeMap<u32, Vec<Fv>> = BTreeMap::new();
-    let mut infos: BTreeMap<u32, Vec<Fv>> = BTreeMap::new();
+    let mut records: BTreeMap<u32, Vec<Value>> = BTreeMap::new();
+    let mut objects: BTreeMap<u32, Vec<Value>> = BTreeMap::new();
+    let mut infos: BTreeMap<u32, Vec<Value>> = BTreeMap::new();
     let mut shown: BTreeSet<String> = BTreeSet::new();
     let options = Options {
         selected_ids: ids.iter().map(|&id| u64::from(id)).collect(),
@@ -355,7 +354,7 @@ fn main() -> anyhow::Result<()> {
         if class != "FamilyInstance" {
             return Ok(());
         }
-        let fields: serde_json::Map<String, Fv> = root
+        let fields: serde_json::Map<String, Value> = root
             .fields
             .as_object()
             .map(|fields| {
@@ -372,7 +371,7 @@ fn main() -> anyhow::Result<()> {
         let others = objects.entry(id).or_default();
         for object in graph.objects.iter().skip(1) {
             if object.class_name == "InstanceInfo" {
-                let info: serde_json::Map<String, Fv> = object
+                let info: serde_json::Map<String, Value> = object
                     .fields
                     .as_object()
                     .map(|fields| {
@@ -382,7 +381,7 @@ fn main() -> anyhow::Result<()> {
                             .collect()
                     })
                     .unwrap_or_default();
-                infos.entry(id).or_default().push(Fv::Object(info));
+                infos.entry(id).or_default().push(Value::Object(info));
                 continue;
             }
             if object.class_name.starts_with('G') && object.class_name != "GInstance" {

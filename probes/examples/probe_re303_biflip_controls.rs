@@ -58,7 +58,7 @@ fn polymesh(
         return "no topology".into();
     };
     let f = &topology.fields;
-    let len = |key: &str| f[key].as_array().map_or(0, Vec::len);
+    let len = |key: &str| f[key].as_array().map_or(0, <[Fv]>::len);
     format!(
         "flag={} points={} normals={} facets={}",
         f["m_normalsFlag"],
@@ -117,7 +117,7 @@ fn main() -> anyhow::Result<()> {
             let keys: Vec<&str> = object
                 .fields
                 .as_object()
-                .map(|map| map.keys().map(String::as_str).collect())
+                .map(|map| map.keys().collect())
                 .unwrap_or_default();
             *field_sets.entry(keys.join(",")).or_default() += 1;
             let parent_classes: Vec<&str> = in_edges

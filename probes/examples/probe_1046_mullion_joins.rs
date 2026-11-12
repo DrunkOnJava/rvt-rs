@@ -65,11 +65,7 @@ fn id_of(value: Option<&Fv>) -> Option<u64> {
 }
 
 fn list<'a>(value: &'a Fv, key: &str) -> &'a [Fv] {
-    value
-        .get(key)
-        .and_then(Fv::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or(&[])
+    value.get(key).and_then(Fv::as_array).unwrap_or(&[])
 }
 
 fn number(value: &Fv, key: &str) -> String {
@@ -238,9 +234,11 @@ fn main() -> anyhow::Result<()> {
             let id = record.identity.element_id;
             if class == "CurtainGridLine" {
                 let root = &graph.objects[0];
-                let mut fields = root.fields.clone();
+                let mut fields = root.fields.to_json();
                 if let Some(map) = fields.as_object_mut() {
-                    map.retain(|_, value| !value.is_object() || link(value).is_some());
+                    map.retain(|_, value| {
+                        !value.is_object() || link(&Fv::from_value(value)).is_some()
+                    });
                 }
                 println!(
                     "gl {id} {} {}",

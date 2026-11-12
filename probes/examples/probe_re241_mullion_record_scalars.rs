@@ -47,9 +47,9 @@ const HOST_OBJECTS: usize = 20;
 
 fn scalar(value: &Fv) -> Option<String> {
     match value {
-        Fv::Number(n) => Some(n.to_string()),
+        n @ (Fv::U64(_) | Fv::I64(_) | Fv::F64(_)) => Some(n.to_string()),
         Fv::Bool(b) => Some(b.to_string()),
-        Fv::String(s) if s.len() <= 40 => Some(s.replace(' ', "_")),
+        Fv::Str(s) if s.len() <= 40 => Some(s.replace(' ', "_")),
         Fv::Object(_) => value
             .pointer("/m_id/m_id64")
             .and_then(Fv::as_i64)
@@ -202,8 +202,8 @@ fn main() -> anyhow::Result<()> {
             .filter_map(|parameter| {
                 let value = match &parameter.value {
                     Fv::Bool(b) => b.to_string(),
-                    Fv::String(text) if text.len() <= 40 => text.replace(' ', "_"),
-                    Fv::Number(n) => n.to_string(),
+                    Fv::Str(text) if text.len() <= 40 => text.replace(' ', "_"),
+                    n @ (Fv::U64(_) | Fv::I64(_) | Fv::F64(_)) => n.to_string(),
                     _ => return None,
                 };
                 Some(format!("HP.{}={value}", parameter.parameter_id))

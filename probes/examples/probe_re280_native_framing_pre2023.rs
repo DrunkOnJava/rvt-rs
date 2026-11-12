@@ -48,7 +48,6 @@ use anyhow::Result;
 use rvt::RevitFile;
 use rvt::compression::{has_gzip_magic, inflate_at, prepare_stream_for_inflate};
 use rvt::elem_table;
-use rvt::research::graph_value::Fv;
 use rvt::research::native_extensible_storage::Catalog;
 use rvt::research::native_parameters::{GraphLimits, GraphObject};
 use rvt::research::schema_registry::{Class, Field, Registry};
@@ -56,7 +55,7 @@ use rvt::research::{
     native_document, native_element, native_es_catalog, native_index, native_metadata,
     native_parameter_definitions, native_parameters, native_segments, schema_registry,
 };
-use serde_json::{Map, json};
+use serde_json::{Map, Value, json};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::hash::{Hash, Hasher};
@@ -95,7 +94,7 @@ impl Out {
         println!("native framing: {}{}", self.tag, scrub(text.as_ref()));
     }
 
-    fn detail(&self, value: Fv) {
+    fn detail(&self, value: Value) {
         println!("{value}");
     }
 }
@@ -249,19 +248,19 @@ fn describe_class(registry: &Registry, class: &Class) -> String {
 
 /// A record's JSON with what differs between any two saves left out: the
 /// offsets, the pointer tokens and the class tags (named by their class).
-fn normalize(registry: &Registry, value: &Fv) -> Fv {
+fn normalize(registry: &Registry, value: &Value) -> Value {
     match value {
-        Fv::Object(map) => {
+        Value::Object(map) => {
             if map.contains_key("pointer_token") {
                 let label: String = match map
                     .get("class_tag")
-                    .and_then(Fv::as_u64)
+                    .and_then(Value::as_u64)
                     .and_then(|t| u16::try_from(t).ok())
                 {
                     Some(tag) => registry
                         .class(tag)
                         .map_or("?".to_string(), |c| c.name.clone()),
-                    None if map.get("pointer_token").and_then(Fv::as_u64) == Some(0) => {
+                    None if map.get("pointer_token").and_then(Value::as_u64) == Some(0) => {
                         "null".to_string()
                     }
                     None => "external".to_string(),
@@ -279,16 +278,16 @@ fn normalize(registry: &Registry, value: &Fv) -> Fv {
                 }
                 out.insert(key.clone(), normalize(registry, inner));
             }
-            Fv::Object(out)
+            Value::Object(out)
         }
-        Fv::Array(items) => Fv::Array(items.iter().map(|v| normalize(registry, v)).collect()),
+        Value::Array(items) => Value::Array(items.iter().map(|v| normalize(registry, v)).collect()),
         other => other.clone(),
     }
 }
 
 /// An identifier as the native readers read it: through `m_id` and `m_id64`
 /// wrappers to the integer.
-fn identifier(value: &Fv) -> Option<i64> {
+fn identifier(value: &Value) -> Option<i64> {
     if let Some(n) = value.as_i64() {
         return Some(n);
     }
@@ -298,7 +297,7 @@ fn identifier(value: &Fv) -> Option<i64> {
         .and_then(identifier)
 }
 
-fn owner_id(fields: &Fv) -> Option<i64> {
+fn owner_id(fields: &Value) -> Option<i64> {
     fields.get("m_id").and_then(identifier)
 }
 
@@ -575,7 +574,7 @@ struct Ctx<'a> {
 
 fn fingerprint(registry: &Registry, object: &GraphObject) -> Obj {
     let mut fields = BTreeMap::new();
-    if let Fv::Object(map) = &object.fields {
+    if let Value::Object(map) = &object.fields {
         for (name, value) in map {
             let text = normalize(registry, value).to_string();
             fields.insert(
@@ -606,7 +605,7 @@ fn base_from_graph(root: &GraphObject) -> Result<BaseScalars, String> {
     let flag = |name: &str| {
         fields
             .get(name)
-            .and_then(Fv::as_bool)
+            .and_then(Value::as_bool)
             .ok_or_else(|| format!("no {name}"))
     };
     Ok(BaseScalars {

@@ -26,20 +26,19 @@
 //!   cargo run --profile ci -p rvt-probes --example probe_re326_phase_census -- MODEL.rvt ...
 
 use rvt::RevitFile;
-use rvt::research::graph_value::Fv;
 use rvt::research::native_document;
-use serde_json::json;
+use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
 type Group = (String, i64, i64);
 
 /// An ElementId field's value, as either shape the schema saves it.
-fn ident(value: &Fv) -> Option<i64> {
+fn ident(value: &Value) -> Option<i64> {
     let identifier = value.get("m_id")?;
     identifier
         .get("m_id64")
         .or_else(|| identifier.get("m_id"))
-        .and_then(Fv::as_i64)
+        .and_then(Value::as_i64)
 }
 
 fn probe(path: &str) -> anyhow::Result<()> {
@@ -92,7 +91,7 @@ fn probe(path: &str) -> anyhow::Result<()> {
         Ok(())
     })?;
     let order = order.unwrap_or_default();
-    let phase_list: Vec<Fv> = order.iter().map(|id| json!([id, names.get(id)])).collect();
+    let phase_list: Vec<Value> = order.iter().map(|id| json!([id, names.get(id)])).collect();
     let phased: usize = groups.values().map(Vec::len).sum();
     println!(
         "{}",

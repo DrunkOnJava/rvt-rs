@@ -26,11 +26,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract};
 use rvt::research::native_element_parameters;
-use serde_json::Value;
 
-fn number(value: &Value) -> Option<String> {
+fn number(value: &Fv) -> Option<String> {
     value
         .as_f64()
         .filter(|n| n.is_finite())
@@ -39,19 +39,19 @@ fn number(value: &Value) -> Option<String> {
 
 /// Every number in `value`, its path below `label` joined with `.`; arrays of
 /// up to 4 numbers as `label[i]`.
-fn numbers(label: &str, value: &Value, out: &mut Vec<String>) {
+fn numbers(label: &str, value: &Fv, out: &mut Vec<String>) {
     match value {
-        Value::Number(_) => {
+        Fv::U64(_) | Fv::I64(_) | Fv::F64(_) => {
             if let Some(n) = number(value) {
                 out.push(format!("{label}={n}"));
             }
         }
-        Value::Object(map) => {
+        Fv::Object(map) => {
             for (name, inner) in map {
                 numbers(&format!("{label}.{name}"), inner, out);
             }
         }
-        Value::Array(items) if items.len() <= 4 => {
+        Fv::Array(items) if items.len() <= 4 => {
             for (i, inner) in items.iter().enumerate() {
                 numbers(&format!("{label}[{i}]"), inner, out);
             }

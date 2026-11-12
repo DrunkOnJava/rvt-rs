@@ -333,7 +333,7 @@ fn analyse(id: u64, records: &BTreeMap<u64, Record>, out: &mut Analysis) {
         }
         let faces = obj.fields["m_pFaces"]
             .as_array()
-            .cloned()
+            .map(<[Fv]>::to_vec)
             .unwrap_or_default();
         let mut first_error: Option<String> = None;
         for ptr in &faces {

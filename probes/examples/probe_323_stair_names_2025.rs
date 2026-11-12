@@ -34,8 +34,8 @@ fn members(fields: &Fv, held: &mut BTreeSet<u64>) -> String {
         .into_iter()
         .flat_map(|members| members.iter())
         .filter_map(|(name, value)| match value {
-            Fv::Number(_) | Fv::Bool(_) => Some(format!("{name}={value}")),
-            Fv::String(text) => Some(format!("{name}={}", text.replace(' ', "_"))),
+            Fv::U64(_) | Fv::I64(_) | Fv::F64(_) | Fv::Bool(_) => Some(format!("{name}={value}")),
+            Fv::Str(text) => Some(format!("{name}={}", text.replace(' ', "_"))),
             _ => {
                 let id = value.get("m_id")?.get("m_id64")?.as_u64()?;
                 held.insert(id);

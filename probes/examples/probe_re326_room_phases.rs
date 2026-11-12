@@ -45,11 +45,10 @@
 //!   cargo run --profile ci -p rvt-probes --example probe_re326_room_phases -- MODEL.rvt ...
 
 use rvt::RevitFile;
-use rvt::research::graph_value::Fv;
 use rvt::research::native_document;
 use rvt::research::partition_schema_mvp::{ROOM_NUMBER_FIELD, recover_partition_schema_mvp};
 use rvt::walker::{DecodedElement, InstanceField, WalkerLimits};
-use serde_json::json;
+use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The IfcGUID built-in parameter.
@@ -57,18 +56,18 @@ const IFC_GUID_PARAMETER: i64 = -1_019_000;
 
 /// An ElementId field's value, as either shape the schema saves it:
 /// `{"m_id":{"m_id64":n}}` from Revit 2024, `{"m_id":{"m_id":n}}` before.
-fn ident(value: &Fv) -> Option<i64> {
+fn ident(value: &Value) -> Option<i64> {
     let identifier = value.get("m_id")?;
     identifier
         .get("m_id64")
         .or_else(|| identifier.get("m_id"))
-        .and_then(Fv::as_i64)
+        .and_then(Value::as_i64)
 }
 
 /// Every ElementId-shaped value under `value`, with its path.
-fn identifiers(value: &Fv, path: &str, out: &mut Vec<(String, i64)>) {
+fn identifiers(value: &Value, path: &str, out: &mut Vec<(String, i64)>) {
     match value {
-        Fv::Object(map) => {
+        Value::Object(map) => {
             if map.len() == 1 {
                 if let Some(id) = ident(value) {
                     out.push((path.to_string(), id));
@@ -79,7 +78,7 @@ fn identifiers(value: &Fv, path: &str, out: &mut Vec<(String, i64)>) {
                 identifiers(child, &format!("{path}/{key}"), out);
             }
         }
-        Fv::Array(items) => {
+        Value::Array(items) => {
             for (index, child) in items.iter().enumerate() {
                 identifiers(child, &format!("{path}/{index}"), out);
             }
@@ -179,7 +178,7 @@ fn probe(path: &str) -> anyhow::Result<()> {
         };
     let global_ids = rvt::research::revit_global_ids::revit_global_ids(&mut rf).unwrap_or_default();
 
-    let phase_list: Vec<Fv> = order.iter().map(|id| json!([id, names.get(id)])).collect();
+    let phase_list: Vec<Value> = order.iter().map(|id| json!([id, names.get(id)])).collect();
     println!(
         "{}",
         json!({

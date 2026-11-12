@@ -30,8 +30,8 @@
 use std::collections::BTreeSet;
 
 use rvt::RevitFile;
-use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
+use serde_json::Value;
 
 const FIELDS: [&str; 5] = [
     "m_pCutLoops",
@@ -41,21 +41,21 @@ const FIELDS: [&str; 5] = [
     "m_closurePlanes",
 ];
 
-fn element_id(value: &Fv) -> Option<i64> {
+fn element_id(value: &Value) -> Option<i64> {
     value.get("m_id")?.get("m_id64")?.as_i64()
 }
 
-fn empty(value: &Fv) -> bool {
+fn empty(value: &Value) -> bool {
     match value {
-        Fv::Null => true,
-        Fv::Array(items) => items.is_empty(),
-        Fv::Object(map) => map.is_empty() || map.values().all(empty),
+        Value::Null => true,
+        Value::Array(items) => items.is_empty(),
+        Value::Object(map) => map.is_empty() || map.values().all(empty),
         _ => false,
     }
 }
 
 /// The root's fields that hold an ElementId anywhere in their value.
-fn id_fields(fields: &Fv) -> serde_json::Map<String, Fv> {
+fn id_fields(fields: &Value) -> serde_json::Map<String, Value> {
     fields
         .as_object()
         .into_iter()
@@ -66,19 +66,19 @@ fn id_fields(fields: &Fv) -> serde_json::Map<String, Fv> {
 }
 
 /// Every `m_id64` in `value` other than -1.
-fn ids_in(value: &Fv, out: &mut BTreeSet<i64>) {
+fn ids_in(value: &Value, out: &mut BTreeSet<i64>) {
     match value {
-        Fv::Object(map) => {
+        Value::Object(map) => {
             if let Some(id) = map
                 .get("m_id64")
-                .and_then(Fv::as_i64)
+                .and_then(Value::as_i64)
                 .filter(|id| *id != -1)
             {
                 out.insert(id);
             }
             map.values().for_each(|v| ids_in(v, out));
         }
-        Fv::Array(items) => items.iter().for_each(|v| ids_in(v, out)),
+        Value::Array(items) => items.iter().for_each(|v| ids_in(v, out)),
         _ => {}
     }
 }
@@ -98,7 +98,7 @@ fn main() -> anyhow::Result<()> {
         let Some(root) = graph.objects.first() else {
             return Ok(());
         };
-        let loops = root.fields.get("m_pCutLoops").unwrap_or(&Fv::Null);
+        let loops = root.fields.get("m_pCutLoops").unwrap_or(&Value::Null);
         if empty(loops) {
             return Ok(());
         }
@@ -108,7 +108,7 @@ fn main() -> anyhow::Result<()> {
             cut_symbols.insert(id);
         }
         let family = root.fields.get("m_familyId").and_then(element_id);
-        let cut: serde_json::Map<String, Fv> = FIELDS
+        let cut: serde_json::Map<String, Value> = FIELDS
             .iter()
             .filter_map(|name| Some((name.to_string(), root.fields.get(*name)?.clone())))
             .collect();

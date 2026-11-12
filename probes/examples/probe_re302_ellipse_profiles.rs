@@ -62,7 +62,7 @@ fn main() -> anyhow::Result<()> {
             let keys: Vec<&str> = object
                 .fields
                 .as_object()
-                .map(|map| map.keys().map(String::as_str).collect())
+                .map(|map| map.keys().collect())
                 .unwrap_or_default();
             *field_sets.entry(keys.join(",")).or_default() += 1;
             let parent_classes: Vec<&str> = in_edges

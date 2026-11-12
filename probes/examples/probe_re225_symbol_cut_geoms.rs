@@ -53,7 +53,7 @@ struct CutGeometry {
 fn pointers(value: &Fv, out: &mut Vec<Fv>) {
     match value {
         Fv::Object(map) if map.contains_key("pointer_token") => out.push(value.clone()),
-        Fv::Object(map) => map.values().for_each(|v| pointers(v, out)),
+        Fv::Object(map) => map.values().iter().for_each(|v| pointers(v, out)),
         Fv::Array(items) => items.iter().for_each(|v| pointers(v, out)),
         _ => {}
     }
@@ -190,7 +190,7 @@ fn main() -> anyhow::Result<()> {
                 .first()
                 .and_then(|root| root.fields.get("m_pCutLoops"))
                 .and_then(Fv::as_array)
-                .map_or(0, Vec::len);
+                .map_or(0, <[Fv]>::len);
             symbols.insert(id, (loop_count, cut_geometry(graph)));
         } else if ids.contains(&id) {
             if let Some(symbol) = graph

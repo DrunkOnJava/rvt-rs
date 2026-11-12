@@ -154,7 +154,9 @@ fn main() -> anyhow::Result<()> {
             if face.class_name != "Face" {
                 continue;
             }
-            let regions = face.fields["m_faceRegions"].as_array().map_or(0, Vec::len);
+            let regions = face.fields["m_faceRegions"]
+                .as_array()
+                .map_or(0, <[Fv]>::len);
             *histogram.entry(regions).or_default() += 1;
             if regions == 0 {
                 without += 1;

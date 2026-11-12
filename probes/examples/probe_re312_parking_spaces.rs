@@ -80,7 +80,7 @@ fn flatten(prefix: &str, value: &Fv, out: &mut Vec<(String, String)>) {
                 let joined: Vec<String> = items
                     .iter()
                     .map(|item| match item {
-                        Fv::String(s) => text(s),
+                        Fv::Str(s) => text(s),
                         other => other.to_string(),
                     })
                     .collect();
@@ -89,19 +89,19 @@ fn flatten(prefix: &str, value: &Fv, out: &mut Vec<(String, String)>) {
                 out.push((format!("{prefix}.len"), items.len().to_string()));
             }
         }
-        Fv::String(s) => out.push((prefix.to_string(), text(s))),
+        Fv::Str(s) => out.push((prefix.to_string(), text(s))),
         other => out.push((prefix.to_string(), other.to_string())),
     }
 }
 
 fn integers(value: &Fv, out: &mut BTreeSet<u64>) {
     match value {
-        Fv::Number(n) => {
+        n @ (Fv::U64(_) | Fv::I64(_) | Fv::F64(_)) => {
             if let Some(v) = n.as_u64() {
                 out.insert(v);
             }
         }
-        Fv::Object(map) => map.values().for_each(|inner| integers(inner, out)),
+        Fv::Object(map) => map.values().iter().for_each(|inner| integers(inner, out)),
         Fv::Array(items) => items.iter().for_each(|inner| integers(inner, out)),
         _ => {}
     }

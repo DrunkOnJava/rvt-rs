@@ -265,7 +265,7 @@ fn element(
             let pieces_before = pieces.len();
             let faces = obj.fields["m_pFaces"]
                 .as_array()
-                .cloned()
+                .map(<[Fv]>::to_vec)
                 .unwrap_or_default();
             for ptr in &faces {
                 let Ok(Some(fi)) = pointer(sg, oi, ptr) else {

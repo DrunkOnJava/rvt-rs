@@ -199,8 +199,8 @@ fn flatten(prefix: &str, value: &Fv, depth: usize, out: &mut Vec<(String, String
     match value {
         Fv::Null => {}
         Fv::Bool(b) => out.push((prefix.to_string(), b.to_string())),
-        Fv::Number(n) => out.push((prefix.to_string(), n.to_string())),
-        Fv::String(text) => out.push((prefix.to_string(), tidy(text))),
+        n @ (Fv::U64(_) | Fv::I64(_) | Fv::F64(_)) => out.push((prefix.to_string(), n.to_string())),
+        Fv::Str(text) => out.push((prefix.to_string(), tidy(text))),
         Fv::Array(items) => {
             out.push((format!("{prefix}[]"), items.len().to_string()));
             if depth < 3 && items.len() <= 8 {

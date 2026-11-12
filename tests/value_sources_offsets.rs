@@ -1556,7 +1556,7 @@ struct SourceValues {
     unread: usize,
     gap_values: usize,
     gap_elements: usize,
-    rows: Vec<rvt::research::graph_value::Fv>,
+    rows: Vec<serde_json::Value>,
 }
 
 /// #1498: every written value of a `*Source` property has a row in

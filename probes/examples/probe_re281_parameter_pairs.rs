@@ -25,8 +25,8 @@
 
 use rvt::RevitFile;
 use rvt::elem_table;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_element_parameters::{ElementParameter, read};
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 type Key = (String, String, String, String);
@@ -67,7 +67,7 @@ fn key(parameter: &ElementParameter) -> Key {
     )
 }
 
-fn keyed(parameters: &[ElementParameter]) -> BTreeMap<Key, &Value> {
+fn keyed(parameters: &[ElementParameter]) -> BTreeMap<Key, &Fv> {
     let mut out = BTreeMap::new();
     for parameter in parameters {
         out.entry(key(parameter)).or_insert(&parameter.value);

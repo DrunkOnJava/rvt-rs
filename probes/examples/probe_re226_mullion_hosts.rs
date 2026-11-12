@@ -43,8 +43,8 @@ fn described(fields: &Fv) -> String {
             WORDS.iter().any(|w| lower.contains(w))
         })
         .filter_map(|(name, value)| match value {
-            Fv::Number(_) | Fv::Bool(_) => Some(format!("{name}={value}")),
-            Fv::String(text) => Some(format!("{name}={}", text.replace(' ', "_"))),
+            Fv::U64(_) | Fv::I64(_) | Fv::F64(_) | Fv::Bool(_) => Some(format!("{name}={value}")),
+            Fv::Str(text) => Some(format!("{name}={}", text.replace(' ', "_"))),
             Fv::Array(items) => Some(format!("{name}=[{}]", items.len())),
             _ => element_id(value).map(|id| format!("{name}=@{id}")),
         })

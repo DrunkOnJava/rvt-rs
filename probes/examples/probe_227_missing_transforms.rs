@@ -181,7 +181,7 @@ fn main() -> anyhow::Result<()> {
         let Some(root) = graph.objects.first() else {
             return Ok(());
         };
-        let place: serde_json::Map<String, Fv> = [
+        let place: serde_json::Map<String, serde_json::Value> = [
             "m_instOrigin",
             "m_RefDir",
             "m_zAxis",
@@ -191,7 +191,7 @@ fn main() -> anyhow::Result<()> {
             "m_insertOrientation",
         ]
         .iter()
-        .filter_map(|name| Some((name.to_string(), root.fields.get(*name)?.clone())))
+        .filter_map(|name| Some((name.to_string(), root.fields.get(*name)?.to_json())))
         .collect();
         println!(
             "place {} {} {}",
