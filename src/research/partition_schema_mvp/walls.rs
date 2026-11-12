@@ -1139,6 +1139,7 @@ pub(super) fn attach_wall_layers(
     // joins to or cuts it (RE-266).
     let crate::native_walls::WallRecords {
         walls: native,
+        located_lines,
         top_joined,
         uncut,
         top_cutters,
@@ -1491,7 +1492,7 @@ pub(super) fn attach_wall_layers(
         // the rule takes a wall with none listed as joined to nothing, so its
         // `Length` is left out.
         if !crate::partition_element_records_2023::is_32bit_release(revit_version) {
-            attach_wall_lengths(walls, &native);
+            attach_wall_lengths(walls, &native, &located_lines);
         }
     }
 }

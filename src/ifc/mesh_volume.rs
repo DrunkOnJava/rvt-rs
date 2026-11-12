@@ -353,8 +353,11 @@ const END_AREA_TOLERANCE: f64 = 1e-4;
 /// of them count. Of a mitred end and a flat one, the mitred end always counts
 /// (on every one of the 184 of the BIM4LCA housing's four large files and the
 /// 58 of the office's two permit files) and the flat one where `kept` is 2; a
-/// mullion with a mitred end and `kept` 0 contradicts that and gets none. A
-/// prism with any other ends gets none.
+/// mullion with a mitred end and `kept` 0 contradicts that and gets none. Of two
+/// mitred ends, which a bent joint at each end makes, both count and `kept` must
+/// be 2 (RE-433: Revit's value counts every end of all 159 of the BIM4LCA
+/// office's mullions that have a bent partner, the 131 of them with two mitred
+/// ends included). A prism with any other ends gets none.
 pub(super) fn mullion_surface_area(prism: &Prism, kept: u8) -> Option<f64> {
     let [a, b] = prism.ends;
     if a.square && b.square {
@@ -364,6 +367,8 @@ pub(super) fn mullion_surface_area(prism: &Prism, kept: u8) -> Option<f64> {
         let (flat, mitre) = if a.square { (a, b) } else { (b, a) };
         let flat = if kept == 2 { flat.area } else { 0.0 };
         Some(prism.lateral + mitre.area + flat)
+    } else if !a.square && !b.square && kept == 2 {
+        Some(prism.lateral + a.area + b.area)
     } else {
         None
     }
@@ -573,21 +578,32 @@ pub(super) fn column_quantities(
 }
 
 /// Where a curtain mullion stands, for the test of whether another continues
-/// it (RE-404): the unit axis it runs along and the centres of its two end
-/// faces, in one frame for all of them, feet.
+/// it (RE-404): the unit axis it runs along, the centres of its two end
+/// faces, in one frame for all of them, feet, and the areas of those faces,
+/// square feet (RE-436).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(super) struct Placed {
     pub axis: [f64; 3],
     pub ends: [[f64; 3]; 2],
+    pub areas: [f64; 2],
 }
 
 /// How close, feet, an end must be to another mullion's end for the other to be
 /// its partner (about 1 cm): the two meet end to end.
 const PARTNER_FEET: f64 = 0.033;
 
-/// The cosine of the angle between two axes over which the mullions run the same
-/// way.
-const PARTNER_COSINE: f64 = 0.999;
+/// How far, as a fraction of the larger, the areas of the two end faces that meet
+/// may differ and the ends still be of one section (RE-436): a 50 x 50 mm
+/// mullion's face is a third of a 150 x 50 mm one's, and a mitre the two pieces
+/// share changes both alike.
+const SAME_SECTION_AREA: f64 = 1e-3;
+
+/// The cosine of the angle between two axes over which the mullions coincide
+/// (about a quarter of a degree, RE-432): a continuation bent off the axis by
+/// two degrees leaves the end face counted in Revit's value, on all 159 of the
+/// BIM4LCA office's mullions that have one, while every partner that hides an
+/// end is within 0.01 degrees.
+const PARTNER_COSINE: f64 = 0.99999;
 
 /// For each mullion of `placed`, at each of its two ends, whether another
 /// mullion continues it there (RE-404): one that runs the same way, has an end
@@ -635,6 +651,9 @@ pub(super) fn partner_ends(placed: &[Placed]) -> Vec<[bool; 2]> {
                                 let beyond = sub(neighbour.ends[1 - other_end], point);
                                 other != index
                                     && dot(mullion.axis, neighbour.axis).abs() > PARTNER_COSINE
+                                    && (mullion.areas[end] - neighbour.areas[other_end]).abs()
+                                        <= SAME_SECTION_AREA
+                                            * mullion.areas[end].max(neighbour.areas[other_end])
                                     && dot(near, near).sqrt() < PARTNER_FEET
                                     && dot(beyond, outward) > PARTNER_FEET
                             })
@@ -644,6 +663,40 @@ pub(super) fn partner_ends(placed: &[Placed]) -> Vec<[bool; 2]> {
             })
         })
         .collect()
+}
+
+/// How far apart, along its axis, a mullion's two ends must be, feet, to be told
+/// apart by the side of the axis each lies on.
+const MIN_SPAN_FEET: f64 = 1e-6;
+
+/// How many of the ends of a mullion that have a partner in `partners`
+/// ([`partner_ends`]) are not an end its curtain wall's boxes kept with a partner
+/// they saw (`seen`: the end at the `-axis` side of the box, then the one at its
+/// `+axis` side, RE-439): each is a continuation the boxes missed, and the count
+/// of kept ends they read is wrong at it. The mesh's two ends come in the order
+/// its planes were found, not along the axis, so each is told by which side of the
+/// other it lies along `placed.axis`, the axis the boxes' ends are told by; two
+/// ends with no length between them are not told apart, and each partner is
+/// counted as missed.
+pub(super) fn partners_the_boxes_missed(
+    placed: &Placed,
+    partners: [bool; 2],
+    seen: [bool; 2],
+) -> usize {
+    let along = dot(sub(placed.ends[1], placed.ends[0]), placed.axis);
+    [0usize, 1]
+        .into_iter()
+        .filter(|&end| {
+            let side = if along > MIN_SPAN_FEET {
+                Some(end)
+            } else if along < -MIN_SPAN_FEET {
+                Some(1 - end)
+            } else {
+                None
+            };
+            partners[end] && !side.is_some_and(|side| seen[side])
+        })
+        .count()
 }
 
 #[cfg(test)]
@@ -1090,15 +1143,23 @@ mod tests {
     }
 
     #[test]
-    fn two_mitred_ends_are_not_read() {
-        let two_mitres = prism(0.2, [(false, 0.007), (false, 0.007)]);
-        assert!(mullion_surface_area(&two_mitres, 2).is_none());
+    fn two_mitred_ends_count_where_both_are_kept_and_are_not_read_otherwise() {
+        let two_mitres = prism(0.2, [(false, 0.007), (false, 0.0071)]);
+        // A mitred end always counts, so a mullion with two of them and an end
+        // hidden contradicts it.
+        assert!(mullion_surface_area(&two_mitres, 0).is_none());
+        assert!(mullion_surface_area(&two_mitres, 1).is_none());
+        assert_close(mullion_surface_area(&two_mitres, 2).unwrap(), 0.2141);
+        // A flat end and a mitred one with no end kept is none, as before.
+        let one_flat = prism(0.2, [(true, 0.005), (false, 0.007)]);
+        assert!(mullion_surface_area(&one_flat, 0).is_none());
     }
 
     fn placed(axis: [f64; 3], from: [f64; 3], to: [f64; 3]) -> Placed {
         Placed {
             axis,
             ends: [from, to],
+            areas: [0.0025; 2],
         }
     }
 
@@ -1130,6 +1191,124 @@ mod tests {
         // Stands 10 cm above the end.
         let gap = placed([0.0, 0.0, 1.0], [0.0, 0.0, 2.2], [0.0, 0.0, 2.6]);
         assert_eq!(partner_ends(&[lower, gap]), vec![[false, false]; 2]);
+    }
+
+    #[test]
+    fn a_continuation_bent_off_the_axis_is_no_partner_but_a_hair_off_it_is() {
+        let lower = placed([0.0, 0.0, 1.0], [0.0, 0.0, 0.0], [0.0, 0.0, 2.1]);
+        let continuation = |degrees: f64| {
+            let angle = degrees.to_radians();
+            let axis = [angle.sin(), 0.0, angle.cos()];
+            placed(
+                axis,
+                [0.0, 0.0, 2.1],
+                [0.4 * axis[0], 0.0, 2.1 + 0.4 * axis[2]],
+            )
+        };
+        // Two degrees off the axis (cosine 0.9994): it covers none of the end face.
+        assert_eq!(
+            partner_ends(&[lower, continuation(2.0)]),
+            vec![[false, false]; 2]
+        );
+        // A hundredth of a degree off it still meets the end face to face.
+        assert_eq!(
+            partner_ends(&[lower, continuation(0.01)]),
+            vec![[false, true], [true, false]]
+        );
+    }
+
+    #[test]
+    fn a_continuation_of_another_section_is_no_partner_but_one_of_the_same_is() {
+        let lower = placed([0.0, 0.0, 1.0], [0.0, 0.0, 0.0], [0.0, 0.0, 2.1]);
+        let upper = |area: f64| Placed {
+            areas: [area; 2],
+            ..placed([0.0, 0.0, 1.0], [0.0, 0.0, 2.1], [0.0, 0.0, 2.5])
+        };
+        // A 150 x 50 mm face (0.0075) on a 50 x 50 mm one (0.0025): not the same end face.
+        assert_eq!(
+            partner_ends(&[lower, upper(0.0075)]),
+            vec![[false, false]; 2]
+        );
+        assert_eq!(
+            partner_ends(&[lower, upper(0.0025)]),
+            vec![[false, true], [true, false]]
+        );
+        // The same section with a face a hundredth of a percent different (a shared mitre).
+        assert_eq!(
+            partner_ends(&[lower, upper(0.002_500_2)]),
+            vec![[false, true], [true, false]]
+        );
+    }
+
+    // How reading a partner as one the boxes saw can go wrong (RE-439): a partner at
+    // an end the boxes kept with none is taken for theirs because another end has
+    // one (a count cannot tell), or the mesh's ends are matched to the boxes' by
+    // the order they come in, which is the order their planes were found.
+    #[test]
+    fn a_partner_at_an_end_the_boxes_kept_with_one_is_no_continuation_they_missed() {
+        let lower = placed([0.0, 0.0, 1.0], [0.0, 0.0, 0.0], [0.0, 0.0, 2.1]);
+        // The boxes kept the upper end with a partner: the mesh's there is theirs.
+        assert_eq!(
+            partners_the_boxes_missed(&lower, [false, true], [false, true]),
+            0
+        );
+        // A partner at the end they kept with none is one they missed, though they
+        // saw one at the other end: the counts of partners alone are equal.
+        assert_eq!(
+            partners_the_boxes_missed(&lower, [true, false], [false, true]),
+            1
+        );
+        // Both ends have one in the mesh and the boxes saw the upper only.
+        assert_eq!(
+            partners_the_boxes_missed(&lower, [true, true], [false, true]),
+            1
+        );
+        // None in the mesh, none missed, whatever the boxes saw.
+        assert_eq!(
+            partners_the_boxes_missed(&lower, [false, false], [true, true]),
+            0
+        );
+    }
+
+    #[test]
+    fn the_meshs_ends_are_told_by_the_axis_and_not_by_the_order_they_come_in() {
+        // The mesh lists the upper end first.
+        let reversed = placed([0.0, 0.0, 1.0], [0.0, 0.0, 2.1], [0.0, 0.0, 0.0]);
+        // Its partner is at the upper end, which the boxes kept with one (their
+        // `+axis` end), and then at the lower end, which they did not.
+        assert_eq!(
+            partners_the_boxes_missed(&reversed, [true, false], [false, true]),
+            0
+        );
+        assert_eq!(
+            partners_the_boxes_missed(&reversed, [true, false], [true, false]),
+            1
+        );
+        // An axis that runs the other way turns the boxes' sides over.
+        let flipped = placed([0.0, 0.0, -1.0], [0.0, 0.0, 0.0], [0.0, 0.0, 2.1]);
+        assert_eq!(
+            partners_the_boxes_missed(&flipped, [false, true], [true, false]),
+            0
+        );
+        assert_eq!(
+            partners_the_boxes_missed(&flipped, [false, true], [false, true]),
+            1
+        );
+    }
+
+    #[test]
+    fn ends_with_no_length_between_them_are_not_told_apart_and_a_partner_is_missed() {
+        let point = placed([0.0, 0.0, 1.0], [0.0, 0.0, 2.1], [0.0, 0.0, 2.1]);
+        assert_eq!(
+            partners_the_boxes_missed(&point, [true, false], [true, true]),
+            1
+        );
+        // Ends across the axis, none along it, are no better.
+        let across = placed([0.0, 0.0, 1.0], [0.0, 0.0, 2.1], [0.4, 0.0, 2.1]);
+        assert_eq!(
+            partners_the_boxes_missed(&across, [false, true], [true, true]),
+            1
+        );
     }
 
     #[test]
