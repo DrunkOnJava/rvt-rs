@@ -27,8 +27,10 @@ answer. New issues arrive from the issue forms with `needs-triage`.
    probe=<name>` (with `--ref <branch>` for a probe not yet on `main`)
    builds the probe for Windows, macOS and Linux, and the run
    keeps each binary with its SHA-256 as an artifact. Link the run: downloading
-   it needs a GitHub login. Ask only for probes whose output names no element
-   or person (#1838).
+   it needs a GitHub login. The binaries are unsigned, so on macOS the reporter
+   clears the download's quarantine first (`xattr -d com.apple.quarantine
+   <probe>`). Ask only for probes whose output names no element or person
+   (#1838).
 
 ### Labels
 
