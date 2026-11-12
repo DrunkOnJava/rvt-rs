@@ -8,6 +8,49 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.14.1] — 2026-11-12
+
+0.14.1 is a patch release of 0.14 for users who compare rvt-rs's output
+exactly and so cannot move to 0.15 or later, whose exports differ (#1808). It
+lowers the peak memory of the saved-mesh pass and changes no export: each
+file it writes equals 0.14.0's except for the rvt-rs version it records,
+`0.14.1`, in the header's `FILE_NAME` and in `IfcApplication`. 0.19.0 stays
+the latest release.
+
+### Fixed
+
+- The saved-mesh pass reads each owner's graph with the batch it is meshed
+  in and frees it with that batch, so it no longer holds every owner's graph
+  at once (#1429, #1690). This backports #1691 and the owner freeing of
+  #1441 from 0.15. It keeps 0.14.0's plan of the batches: #1441's plan
+  raised the 2023 `rac_basic` sample's peak from 537 to 790 MiB.
+
+### Security
+
+- `rvt-rs-mcp` builds with rmcp 3.9.0 (RUSTSEC-2026-0462).
+
+### Measured
+
+Against 0.14.0 on 112 models: the reference models, Autodesk's sample
+projects of every year, the BIM4LCA offices, BIMcollab's Revit 2015 model,
+the R2025 set and the held-out models. The runs are Measure 43315345839 (the
+default export) and 43315354501 (`--saved-meshes`, timed). Both measured
+`f6c4458f`, this release's code without its version bump, against v0.14.0.
+- 112 of 112 exports and 93 of 93 diagnostics files equal 0.14.0's in each
+  run, and so does every scorer output.
+- With `--saved-meshes`, no file's peak memory is above 0.14.0's. The 2023
+  `rac_basic` sample peaks at 523 MiB (537 on 0.14.0), and Snowdon Towers
+  Architectural at 1,892 MiB (2,846).
+- Over the 28 samples of Revit 2023 to 2027, the median time is 1.01 of
+  0.14.0's, and no file takes more than 1.06.
+- The BIM4LCA offices peak at 0.90 and 0.97 of 0.14.0's. Before the runs we
+  set the bar at 0.80 or less on both, and neither met it: their peak is held
+  by the export model, 0.7 to 0.85 GiB before the saved-mesh pass starts,
+  which this release does not change.
+- #1808's reporter measured their own earlier port of #1691, not this
+  release's code: 6.8 GB down to 1.8 GB on their model, with an identical
+  output. 0.14.1 itself has not been run on that model.
+
 ## [0.14.0] — 2026-11-04
 
 0.14.0 adds `rvt-rs-mcp`, a local, read-only MCP server that answers an
