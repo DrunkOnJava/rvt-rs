@@ -295,7 +295,10 @@ fn synthetic_project_emits_valid_ifc4() {
             MaterialInfo {
                 name: "Concrete".into(),
                 color_packed: Some(0x00AAAAAA), // light grey
-                transparency: Some(0.0),
+                // Not read, as a decoded material's can be: the surface style
+                // leaves it unset, and CI's IfcOpenShell job validates that
+                // (#1820).
+                transparency: None,
             },
             // material_index 1: windows
             MaterialInfo {
@@ -425,6 +428,17 @@ fn synthetic_project_emits_valid_ifc4() {
     );
     assert!(step.contains("Concrete"), "concrete material name");
     assert!(step.contains("Glass - Tinted"), "glass material name");
+    // Concrete's transparency was not read: unset, not opaque (#1820). Glass's
+    // was, and is written as read.
+    assert_eq!(
+        step.matches(",$,$,$,$,$,$,$,.FLAT.)").count(),
+        1,
+        "one surface style with its transparency unset"
+    );
+    assert!(
+        step.contains(",0.600000,$,$,$,$,$,$,.FLAT.)"),
+        "glass's transparency as read"
+    );
 
     // --- Property sets attached to wall + window ---
     // North Wall carries RvtWall (BaseOffset, TopOffset,

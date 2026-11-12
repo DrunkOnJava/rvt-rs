@@ -711,6 +711,15 @@
       "user_impact": "Use Revit/API exporters or wait for MVP milestones when evidence lands."
     },
     {
+      "id": "view-graphics-overrides",
+      "area": "ifc",
+      "name": "A view's visibility and graphics overrides (per-view colour and transparency)",
+      "status": "unsupported",
+      "evidence": "#1812; Autodesk revit-ifc (source 5): BodyExporter.GetBestColourAndOpacity and CategoryUtil; src/ifc/gltf.rs MaterialExtras; docs/viewer-api.md",
+      "notes": "Not read, and outside the export contract. Revit's own IFC export does not apply them either: it takes an element's colour and transparency from its material, else its category's material, never a view's overrides. The IFC writes a surface style only for a material whose colour was read, with that material's transparency, and leaves the transparency unset ($) where none was read (#1820). In the GLB, each material's extras.colourSource and extras.alphaSource say whether its colour and its alpha are the file's (\"file\") or rvt-rs's (\"rvt-rs\": the category palette, the grey of a material whose colour was not read, the opaque alpha of one whose transparency was not read).",
+      "user_impact": "An element a view draws translucent exports in its material's colour and transparency. A consumer storing colour or opacity as model data should keep only GLB values marked \"file\"."
+    },
+    {
       "id": "browser-viewer",
       "area": "viewer",
       "name": "Zero-upload browser viewer",

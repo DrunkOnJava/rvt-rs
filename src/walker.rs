@@ -2471,8 +2471,11 @@ fn read_field(
                 return None;
             }
             let elem_size = 6;
-            let col_bytes = 4 + count * elem_size;
-            let total = 2 * col_bytes;
+            // A caller that raises `max_container_records` lets the file's count reach
+            // a size whose bytes overflow a 32-bit `usize`: fail closed, as
+            // `trial_walk_checked` does for the same wire shape (#1815).
+            let col_bytes = count.checked_mul(elem_size)?.checked_add(4)?;
+            let total = col_bytes.checked_mul(2)?;
             if bytes.len() < total {
                 return None;
             }

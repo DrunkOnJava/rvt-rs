@@ -69,6 +69,28 @@ if grep -vxF -f head-api.txt base-api.txt > removed-api.txt; then
     cat removed-api.txt
     breaking=1
 fi
+# What the head adds is not breaking, but it is API kept through 1.x once it
+# ships (RELEASE.md, "What 1.0 keeps stable"): a `pub` that should have been
+# `pub(crate)` is caught here rather than by a careful read (#1813). Reported,
+# never failed.
+if grep -vxF -f base-api.txt head-api.txt > added-api.txt; then
+    added=$(grep -c '' added-api.txt)
+    echo "Public items the head adds ($added):"
+    cat added-api.txt
+    echo "::notice::This change adds $added public item(s) to the stable rvt API; the semver checks job's log and summary list them."
+    if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+        {
+            echo "### Public items this change adds to the stable rvt API ($added)"
+            echo
+            echo "Not breaking, but kept through 1.x once released: check each is meant to be public."
+            echo
+            echo '```'
+            head -n 200 added-api.txt
+            [ "$added" -gt 200 ] && echo "... and $((added - 200)) more (the job log has them all)"
+            echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+    fi
+fi
 
 # The other stable surfaces (RELEASE.md, "What 1.0 keeps stable"), each
 # against the base's: the wasm bindings the viewer calls, the Python
