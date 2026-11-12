@@ -2,7 +2,9 @@
 //!
 //! Each returns `None` when the value would run past the end of `buf`,
 //! including for an offset near `usize::MAX`, and never panics: the
-//! parsers read offsets out of the file itself.
+//! parsers read offsets out of the file itself. The float reads also return
+//! `None` for a number no model holds ([`physical`]), as for one that is not
+//! there: every reader of a stored float takes it through them.
 
 pub(crate) fn u16_at(buf: &[u8], at: usize) -> Option<u16> {
     Some(u16::from_le_bytes(*buf.get(at..)?.first_chunk()?))
@@ -21,11 +23,11 @@ pub(crate) fn i64_at(buf: &[u8], at: usize) -> Option<i64> {
 }
 
 pub(crate) fn f32_at(buf: &[u8], at: usize) -> Option<f32> {
-    Some(f32::from_le_bytes(*buf.get(at..)?.first_chunk()?))
+    Some(f32::from_le_bytes(*buf.get(at..)?.first_chunk()?)).filter(|v| physical(f64::from(*v)))
 }
 
 pub(crate) fn f64_at(buf: &[u8], at: usize) -> Option<f64> {
-    Some(f64::from_le_bytes(*buf.get(at..)?.first_chunk()?))
+    Some(f64::from_le_bytes(*buf.get(at..)?.first_chunk()?)).filter(|v| physical(*v))
 }
 
 /// The largest magnitude a stored double may have and still be read as a
@@ -37,9 +39,9 @@ pub(crate) fn f64_at(buf: &[u8], at: usize) -> Option<f64> {
 pub(crate) const MAX_MAGNITUDE: f64 = 1e30;
 
 /// Whether a stored double is a number a model can hold: finite and within
-/// [`MAX_MAGNITUDE`]. Every decode of a stored double into a value the
-/// exports read goes through it: the walker's floats, the native graph's
-/// numbers and the element records' boxes.
+/// [`MAX_MAGNITUDE`]. Every decode of a stored float goes through it: the
+/// reads here ([`f64_at`], [`f32_at`]), which every partition scanner uses,
+/// the walker's floats and the native graphs' numbers (`Fv::from_f64`).
 pub(crate) fn physical(value: f64) -> bool {
     value.abs() <= MAX_MAGNITUDE
 }
