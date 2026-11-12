@@ -397,10 +397,10 @@ fn mesh_buffer(
 /// decoded a batch at a time, with the owners that name them meshed against
 /// the batch. A batch holds the symbols of owners next to each other by
 /// symbol, as many as hold about 20,000 graph objects (`BATCH_OBJECT_BUDGET`)
-/// by the size of the batch before: only a batch of symbols sizes the next.
-/// The owners that name only other owners are meshed first among them, in a
-/// batch that reads no symbol of its own but one that an owner it names
-/// names. An owner that names nothing and that another owner names is read
+/// by the size of the batch before. The owners that name only other owners
+/// sort first and are meshed in the first batch, with the symbols that the
+/// owners they name name. An owner that names nothing and that another owner
+/// names is read
 /// with the batch that needs it, and kept as the others named are, though its
 /// graph is not counted in the batch.
 ///
@@ -528,10 +528,11 @@ pub fn extract_in_batches_with_control(
         let mut ids = Vec::new();
         let mut symbols = BTreeSet::<u64>::new();
         while let Some((_, id, own)) = named.get(next) {
-            // The owners that name no symbol sort first and make a batch that
-            // reads none, so that their graphs are gone before any symbol is.
-            let ends_symbol_free = symbols.is_empty() && !own.is_empty();
-            if !ids.is_empty() && (ends_symbol_free || symbols.union(own).count() > limit) {
+            // The owners that name no symbol sort first and share the first
+            // batch, as in 0.14.0. A batch of their own, with only batches of
+            // symbols sizing the next, raised the 2023 rac_basic sample's peak
+            // from 537 to 790 MiB (#1808).
+            if !ids.is_empty() && symbols.union(own).count() > limit {
                 break;
             }
             ids.push(*id);
@@ -624,11 +625,8 @@ pub fn extract_in_batches_with_control(
         for element in elements {
             visit(element)?;
         }
-        // Only a batch of symbols sizes the next one.
-        if !symbols.is_empty() {
-            limit = (BATCH_OBJECT_BUDGET.saturating_mul(shared.len().max(1)) / objects.max(1))
-                .clamp(MIN_BATCH_SYMBOLS, MAX_BATCH_SYMBOLS);
-        }
+        limit = (BATCH_OBJECT_BUDGET.saturating_mul(shared.len().max(1)) / objects.max(1))
+            .clamp(MIN_BATCH_SYMBOLS, MAX_BATCH_SYMBOLS);
         // The batch's owners are meshed: their graphs go with its symbols,
         // those another owner names excepted.
         let meshed: Vec<Record> = ids
