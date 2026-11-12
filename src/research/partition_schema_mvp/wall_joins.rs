@@ -200,6 +200,56 @@ pub(super) fn attach_wall_lengths(
     }
 }
 
+/// Mark each end of a wall with a centreline whose join (its native record's
+/// `m_controlJoinsSet`, [`crate::native_walls::NativeWall::joins`]) names a
+/// wall this reader gives no centreline ([`WALL_END_UNLINED_JOIN_FIELDS`],
+/// #1806, RE-447). Its line cannot be trimmed to that wall, and the record
+/// box's end, which the join trimmed, is Revit's there. An end whose join
+/// lists are several, or whose native curve does not lie on the wall's
+/// line, is not marked.
+pub(super) fn attach_unlined_join_ends(
+    walls: &mut [DecodedElement],
+    native: &BTreeMap<u64, crate::native_walls::NativeWall>,
+) {
+    let unlined: BTreeSet<u64> = walls
+        .iter()
+        .filter(|wall| wall_axis_from_fields(&wall.fields).is_none())
+        .filter_map(|wall| wall.id.map(u64::from))
+        .collect();
+    let near = |a: [f64; 2], b: [f64; 2]| {
+        (a[0] - b[0]).hypot(a[1] - b[1]) <= NATIVE_WALL_LINE_TOLERANCE_FEET
+    };
+    for wall in walls.iter_mut() {
+        let Some(id) = wall.id.map(u64::from) else {
+            continue;
+        };
+        let (Some(axis), Some(curve)) = (wall_axis_from_fields(&wall.fields), native.get(&id))
+        else {
+            continue;
+        };
+        let ends = if near(curve.start, axis.start) && near(curve.end, axis.end) {
+            [0, 1]
+        } else if near(curve.start, axis.end) && near(curve.end, axis.start) {
+            [1, 0]
+        } else {
+            continue;
+        };
+        for (slot, end) in ends.into_iter().enumerate() {
+            let names_unlined = curve.joins[end].as_ref().is_some_and(|joined| {
+                joined
+                    .iter()
+                    .any(|&(other, _)| other != id && unlined.contains(&other))
+            });
+            if names_unlined {
+                wall.fields.push((
+                    WALL_END_UNLINED_JOIN_FIELDS[slot].into(),
+                    InstanceField::Bool(true),
+                ));
+            }
+        }
+    }
+}
+
 /// At each end of a wall with a centreline where its native record says
 /// another wall meets that end with its middle, the body stops half that
 /// wall's thickness short ([`crate::native_walls::tee_reach`], RE-222),

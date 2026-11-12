@@ -967,6 +967,12 @@ pub const WALL_UNCUT_FIELD: &str = "m_wall_uncut";
 /// closes on, on the releases with no cross-section word (RE-364).
 pub const WALL_AXIS_BOX_MUST_CLOSE_FIELD: &str = "m_wall_axis_box_must_close";
 
+/// Fields marking a wall's start and its end where the join there (its
+/// native record's `m_controlJoinsSet`) names a wall the partition reader
+/// gives no centreline (#1806, RE-447).
+pub const WALL_END_UNLINED_JOIN_FIELDS: [&str; 2] =
+    ["m_wall_start_unlined_join", "m_wall_end_unlined_join"];
+
 /// Field holding, as a vector of ElementIds, the elements a wall's top join
 /// (`JoinToRoofGStep` with `m_baseOrTop` 1) and its `CutPairGStep`s name
 /// ([`crate::native_walls::WallRecords::top_cutters`], RE-267): the floors,

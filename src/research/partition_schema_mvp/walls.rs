@@ -18,6 +18,9 @@ pub struct WallAxis {
     /// Whether an angled wall's body must be the rectangle its box closes on
     /// (RE-364): on Revit 2015 to 2020 nothing marks a slanted wall.
     pub box_must_close: bool,
+    /// Whether the join at its start and at its end names a wall with no
+    /// centreline ([`WALL_END_UNLINED_JOIN_FIELDS`], #1806).
+    pub unlined_join_ends: [bool; 2],
 }
 
 /// The centreline and thickness [`WALL_AXIS_START_FIELDS`],
@@ -39,6 +42,11 @@ pub fn wall_axis_from_fields(fields: &[(String, InstanceField)]) -> Option<WallA
         join_reach_feet: WALL_JOIN_REACH_FIELDS.map(float),
         box_must_close: fields.iter().any(|(name, value)| {
             name == WALL_AXIS_BOX_MUST_CLOSE_FIELD && matches!(value, InstanceField::Bool(true))
+        }),
+        unlined_join_ends: WALL_END_UNLINED_JOIN_FIELDS.map(|wanted| {
+            fields
+                .iter()
+                .any(|(name, value)| name == wanted && matches!(value, InstanceField::Bool(true)))
         }),
     })
 }
@@ -1487,6 +1495,7 @@ pub(super) fn attach_wall_layers(
     if centreline_bodies {
         attach_wall_butt_joins(rf, revit_version, walls, &layers, &native);
         attach_native_tee_reaches(walls, &native);
+        attach_unlined_join_ends(walls, &native);
         attach_wall_corner_reaches(walls, &layers, &native);
         // A 2015 to 2023 record is read without its control joins (RE-364), and
         // the rule takes a wall with none listed as joined to nothing, so its

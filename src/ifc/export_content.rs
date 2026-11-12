@@ -6803,12 +6803,12 @@ struct WallCentrelineBody {
 ///   the box.
 /// - a wall at an angle is the rectangle the box closes on, when one of the
 ///   type's thickness along the line fits the box exactly and is centred on
-///   the line; otherwise, where its ends lie within [`WALL_AXIS_DRIFT_FEET`]
-///   of each other across a model axis, it keeps the box's extent along that
-///   axis as an axis-parallel wall does, centred where the box's centre falls
-///   on the line, at the line's own angle; otherwise it runs from one end of
-///   its line to the other, unless the box is more than twice the wall's
-///   thickness (at least a foot) wider than that rectangle's.
+///   the line; otherwise it runs from one end of its line to the other,
+///   unless the box is more than twice the wall's thickness (at least a
+///   foot) wider than that rectangle's. Where its ends lie within
+///   [`WALL_AXIS_DRIFT_FEET`] of each other across a model axis, an end whose
+///   join names a wall with no centreline (`unlined_join_ends`) takes the
+///   box's end along that axis instead of the line's.
 /// - an end at a butt join its join lists decide reaches half the other
 ///   wall's thickness past the line's end, or stops that far short of it
 ///   (RE-70), for either kind of wall; an end at a T joint stops that far
@@ -6889,24 +6889,34 @@ fn wall_centreline_body(
             return None;
         }
         // #1806: a line drawn along a model axis that drifts a hair off it is
-        // an axis-parallel wall whose box closure divides by that drift. It
-        // keeps the box's extent along the axis, which its joins trimmed,
-        // and the line's own angle, which the flip of a door or window set in
-        // it is read against: on the axis itself that flip comes out
-        // otherwise for a window centred on the line.
+        // an axis-parallel wall whose box closure divides by that drift, so
+        // it runs from one end of its line to the other. At an end whose join
+        // names a wall with no centreline the line cannot be trimmed to that
+        // wall, and the box's end, which the join trimmed, is Revit's; at
+        // every other end the line's is nearer Revit's than the box's (#1814).
+        // The body keeps the line's own angle, which the flip of a door or
+        // window set in it is read against.
         let along = if (ey - sy).abs() <= WALL_AXIS_DRIFT_FEET {
             Some((width, depth))
         } else if (ex - sx).abs() <= WALL_AXIS_DRIFT_FEET {
             Some((depth, width))
         } else {
             None
-        };
+        }
+        .filter(|_| axis.unlined_join_ends.contains(&true));
         if let Some((run, across)) = along {
             if thinner(across) {
                 return None;
             }
             let at = (x - sx) * ux + (y - sy) * uy;
-            ([sx + ux * at, sy + uy * at], run)
+            let [start_box, end_box] = axis.unlined_join_ends;
+            let low = if start_box { at - run / 2.0 } else { 0.0 };
+            let high = if end_box { at + run / 2.0 } else { length };
+            if high - low <= WALL_AXIS_BOX_TOLERANCE_FEET {
+                return None;
+            }
+            let middle = (low + high) / 2.0;
+            ([sx + ux * middle, sy + uy * middle], high - low)
         } else {
             // A box far wider than the line's own rectangle holds a body that
             // is not that rectangle: a leaning or profiled wall.
