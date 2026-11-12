@@ -47,7 +47,7 @@ The measured detail behind each row is in [`docs/evidence.md`](docs/evidence.md)
 
 ## Install and quick start
 
-This README ships with [v0.14.1](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.14.1) (2026-11-12), a patch release of 0.14 for users who need 0.14's output exactly: it lowers the saved-mesh pass's peak memory and changes no export. Newer releases, whose output differs, are on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases). Install 0.14.1 with any of:
+This README ships with [v0.14.1](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.14.1) (2026-11-12), a patch release of 0.14 for users who need 0.14's output exactly: it lowers the saved-mesh pass's peak memory, and its exports differ from 0.14.0's only in the rvt-rs version they record (`0.14.1` in the header's `FILE_NAME` and in `IfcApplication`). Newer releases, whose output differs, are on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases). Install 0.14.1 with any of:
 
 - the prebuilt Linux, macOS and Windows binaries on [its release page](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.14.1), or the container image `ghcr.io/drunkonjava/rvt-rs:0.14.1`;
 - `cargo install rvt --version 0.14.1 --locked`;

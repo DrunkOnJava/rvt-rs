@@ -431,8 +431,10 @@ jobs:
           # A pre-release (v0.3.0-rc1) never moves `latest`, and neither does a
           # patch to an older line (0.14.1 after 0.19.0, #1808): only the highest
           # released version takes it.
+          # Only vX.Y.Z tags count: a pre-release or a stray `v` tag (`vscode`)
+          # would otherwise sort above every version and hold `latest` for good.
           highest="$(git ls-remote --tags --refs "https://github.com/${GITHUB_REPOSITORY}" 'v*' \
-            | sed 's#.*refs/tags/v##' | grep -v -- '-' | sort -V | tail -n 1)"
+            | sed 's#.*refs/tags/v##' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
           if [[ -n "${TAG_INPUT}" && "${version}" != *-* && "${version}" == "${highest}" ]]; then
             tags="${tags},${image}:latest"
           fi
@@ -616,8 +618,9 @@ jobs:
           (cd dist && sha256sum -c SHA256SUMS)
           # GitHub marks a new release Latest unless told not to: a patch to an
           # older line (0.14.1 after 0.19.0, #1808) must leave the mark where it is.
+          # Only vX.Y.Z tags count, as in the image's tags above.
           highest="$(git ls-remote --tags --refs "https://github.com/${GITHUB_REPOSITORY}" 'v*' \
-            | sed 's#.*refs/tags/##' | grep -v -- '-' | sort -V | tail -n 1)"
+            | sed 's#.*refs/tags/##' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
           latest=false
           if [[ "${TAG}" == "${highest}" ]]; then
             latest=true
