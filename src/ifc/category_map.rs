@@ -521,6 +521,16 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
 /// of each (`ELEVATOR`). Each takes its own predefined type where it is an
 /// enumerator of the entity ([`override_predefined_type_for`] for the last
 /// two).
+///
+/// #1772 adds `IfcGeographicElement`, which 9 furniture, 9 planting, 3
+/// specialty equipment and 2 floor elements of the BIM4LCA housing terrain
+/// model measured carry, and which Revit's export writes as that entity. Its
+/// `PredefinedType` is the element's own or its type's "IFC Predefined Type"
+/// where that is an `IfcGeographicElementTypeEnum` enumerator (`USERDEFINED`
+/// on 20 of the 23, `NOTDEFINED` on 3). It is limited to those four classes
+/// ([`lookup_export_override_for`]), and an element of one of them that
+/// carries no such value is written with `$`: what Revit writes for one is
+/// not measured.
 pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
     Mapping {
         revit_class: "IfcShadingDevice",
@@ -597,6 +607,11 @@ pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
         ifc_type: "IFCTRANSPORTELEMENT",
         predefined_type: Some("NOTDEFINED"),
     },
+    Mapping {
+        revit_class: "IfcGeographicElement",
+        ifc_type: "IFCGEOGRAPHICELEMENT",
+        predefined_type: None,
+    },
 ];
 
 /// The Revit classes an [`EXPORT_OVERRIDE_TARGETS`] value is acted on for,
@@ -610,6 +625,10 @@ const OVERRIDE_CLASS_LIMITS: &[(&str, &[&str])] = &[
     ("IfcFurniture", &["GenericModel"]),
     ("IfcSolarDevice", &["Roof"]),
     ("IfcTransportElement", &["SpecialtyEquipment"]),
+    (
+        "IfcGeographicElement",
+        &["Floor", "Furniture", "Planting", "SpecialtyEquipment"],
+    ),
 ];
 
 /// [`lookup_export_override`] for an element of `revit_class`: `None` where
@@ -666,6 +685,23 @@ pub fn space_predefined_type_for(value: &str) -> Option<&'static str> {
 /// and stair's own predefined type as well, which is not measured. An
 /// element exported as either through its value takes the target's
 /// default, the one Revit writes on the elements measured.
+///
+/// #1713 adds four more, each measured on the BIM4LCA office (Revit 2024)
+/// against Revit's export of it: `IfcWall`, whose 607 walls Revit writes
+/// `PARTITIONING` (450), `SOLIDWALL` (96), `SHEAR` (53), `PARAPET` (4),
+/// `PLUMBINGWALL` (2) and `NOTDEFINED` (2); `IfcRamp`, whose 5 are
+/// `STRAIGHT_RUN_RAMP`; `IfcLightFixture`, whose 43 are `SECURITYLIGHTING`;
+/// and `IfcPipeSegment`, whose 12 are `GUTTER`. The value is the element's
+/// own before its type's, as RE-45 reads it: Revit writes two type objects
+/// for the wall type `KS-3`, `SOLIDWALL` and `STANDARD`, and types its 4
+/// `SOLIDWALL` walls by the first and its 2 `NOTDEFINED` ones by the second.
+/// The reason `IfcStair` and `IfcDoor` are not listed does not apply to the
+/// four: their elements are measured, and each class is reached by the rows
+/// of one or two Revit categories (Wall and ArcWall, Ramp, LightingFixture,
+/// Pipe and Gutter). A wall with no value keeps the mapping's `NOTDEFINED`,
+/// which is what Revit writes there; a ramp, light fixture or pipe segment
+/// with none keeps `$`, since Revit writes `NOTDEFINED` on some of them and
+/// no 2027 export of the three is measured.
 const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
     (
         "IFCSLAB",
@@ -797,6 +833,57 @@ const PREDEFINED_TYPE_ENUMERATORS: &[(&str, &[&str])] = &[
         ],
     ),
     (
+        "IFCWALL",
+        &[
+            "MOVABLE",
+            "PARAPET",
+            "PARTITIONING",
+            "PLUMBINGWALL",
+            "SHEAR",
+            "SOLIDWALL",
+            "STANDARD",
+            "POLYGONAL",
+            "ELEMENTEDWALL",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCRAMP",
+        &[
+            "STRAIGHT_RUN_RAMP",
+            "TWO_STRAIGHT_RUN_RAMP",
+            "QUARTER_TURN_RAMP",
+            "TWO_QUARTER_TURN_RAMP",
+            "HALF_TURN_RAMP",
+            "SPIRAL_RAMP",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCLIGHTFIXTURE",
+        &[
+            "POINTSOURCE",
+            "DIRECTIONSOURCE",
+            "SECURITYLIGHTING",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
+        "IFCPIPESEGMENT",
+        &[
+            "CULVERT",
+            "FLEXIBLESEGMENT",
+            "RIGIDSEGMENT",
+            "GUTTER",
+            "SPOOL",
+            "USERDEFINED",
+            "NOTDEFINED",
+        ],
+    ),
+    (
         "IFCFURNITURE",
         &[
             "CHAIR",
@@ -847,7 +934,8 @@ pub fn export_value_is_space(value: &str, revit_class: &str) -> bool {
 
 /// IFC4 `PredefinedType` enumerators of the entities an element reaches
 /// only through its "Export to IFC As" value (RE-417): `IfcSolarDeviceTypeEnum`
-/// and `IfcTransportElementTypeEnum`. They are not in
+/// and `IfcTransportElementTypeEnum`, and `IfcGeographicElementTypeEnum`
+/// (#1772). They are not in
 /// [`PREDEFINED_TYPE_ENUMERATORS`], which would apply the own predefined type of
 /// any element a category maps to them as well, and none is. (`IfcFurniture`,
 /// first here, is in it since RE-419, which measured its own predefined type
@@ -868,6 +956,10 @@ const OVERRIDE_ONLY_ENUMERATORS: &[(&str, &[&str])] = &[
             "USERDEFINED",
             "NOTDEFINED",
         ],
+    ),
+    (
+        "IFCGEOGRAPHICELEMENT",
+        &["TERRAIN", "USERDEFINED", "NOTDEFINED"],
     ),
 ];
 
