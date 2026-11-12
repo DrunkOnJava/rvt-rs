@@ -6793,8 +6793,10 @@ struct WallCentrelineBody {
 /// Across the wall, the body is the type's thickness centred on the line.
 /// Along it:
 /// - an axis-parallel wall keeps the box's extent, which its joins trimmed
-///   (RE-26). A box thinner than the type is a wall Revit cut, and keeps
-///   the box.
+///   (RE-26). A line whose ends lie within `WALL_AXIS_BOX_TOLERANCE_FEET` of
+///   each other across a model axis is axis-parallel, however slightly it
+///   drifts. A box thinner than the type is a wall Revit cut, and keeps the
+///   box.
 /// - a wall at an angle is the rectangle the box closes on, when one of the
 ///   type's thickness along the line fits the box exactly and is centred on
 ///   the line; otherwise it runs from one end of its line to the other,
@@ -6840,7 +6842,10 @@ fn wall_centreline_body(
         let at = (low + high) / 2.0;
         ([sx + ux * at, sy + uy * at], high - low)
     };
-    if uy.abs() <= 1e-9 {
+    // A line drawn axis-parallel can drift a hair across the axis over its
+    // length. Its unit vector divides that drift by the length, so a 1e-9
+    // test on it is a test of the angle; the ends in feet test the drift.
+    if (ey - sy).abs() <= WALL_AXIS_BOX_TOLERANCE_FEET {
         let (centre, run) = joined([x, sy], width);
         return (!thinner(depth)).then_some(WallCentrelineBody {
             centre,
@@ -6851,7 +6856,7 @@ fn wall_centreline_body(
             join_reach_feet: axis.join_reach_feet,
         });
     }
-    if ux.abs() <= 1e-9 {
+    if (ex - sx).abs() <= WALL_AXIS_BOX_TOLERANCE_FEET {
         let (centre, run) = joined([sx, y], depth);
         return (!thinner(width)).then_some(WallCentrelineBody {
             centre,
@@ -6948,8 +6953,10 @@ fn tapered_wall_solid(
     }
     let along = [(axis.end[0] - sx) / length, (axis.end[1] - sy) / length];
     // The body's run: the rectangle's width, unless an axis-parallel body
-    // runs along the model's Y axis.
-    let run = if body.rotation.is_none() && along[1].abs() > 1e-9 {
+    // runs along the model's Y axis, which is the branch
+    // `wall_centreline_body` took for it.
+    let along_y = (axis.end[1] - sy).abs() > WALL_AXIS_BOX_TOLERANCE_FEET;
+    let run = if body.rotation.is_none() && along_y {
         body.depth_feet
     } else {
         body.width_feet
@@ -7012,10 +7019,11 @@ fn layered_wall_profile(
     {
         return None;
     }
-    let run = if body.rotation.is_some() || along[1].abs() <= 1e-9 {
-        body.width_feet
-    } else {
+    let along_y = (axis.end[1] - sy).abs() > WALL_AXIS_BOX_TOLERANCE_FEET;
+    let run = if body.rotation.is_none() && along_y {
         body.depth_feet
+    } else {
+        body.width_feet
     };
     let middle = (body.centre[0] - sx) * along[0] + (body.centre[1] - sy) * along[1];
     let [start, end] = &ends.reach_feet;
