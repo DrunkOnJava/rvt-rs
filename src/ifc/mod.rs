@@ -445,6 +445,26 @@ pub struct RoomPhaseFallback {
 const UNAPPLIED_EXPORT_VALUES: &str = "so each keeps its category's entity (#792):";
 
 impl ExportDiagnostics {
+    /// Whether the export is missing part of the file: a resource limit kept
+    /// a stream from being read whole ([`UNREAD_STREAMS_REASON`], #1075), or
+    /// a reader stopped at its work budget ([`WORK_BUDGET_REASON`], #1833).
+    /// `rvt-ifc`, `rvt-gltf`, Python's `write_ifc` and the MCP server's
+    /// exports write nothing then unless a partial export is allowed.
+    pub fn is_partial(&self) -> bool {
+        self.skipped
+            .iter()
+            .any(|item| item.reason == UNREAD_STREAMS_REASON || item.reason == WORK_BUDGET_REASON)
+    }
+
+    /// The readers that stopped at a work budget ([`WORK_BUDGET_REASON`],
+    /// #1833), by name, with how often; `None` when none did.
+    pub fn work_budget_stops(&self) -> Option<&std::collections::BTreeMap<String, usize>> {
+        self.skipped
+            .iter()
+            .find(|item| item.reason == WORK_BUDGET_REASON)
+            .map(|item| &item.classes)
+    }
+
     /// Replace every name these diagnostics take from the project, so they
     /// can be posted publicly: the file name and the project name become
     /// [`crate::redact::ANONYMIZED`], the levels' and the material sample's
@@ -1485,7 +1505,11 @@ fn export_rvt_doc(
     control: &crate::control::WalkerControl,
 ) -> Result<IfcModel> {
     rf.report_partition_inflates_to(control);
+    // A reader that stops at its work budget while the model is built is
+    // kept with the file, where the diagnostics read it (#1833).
+    let stops = crate::budget::Notes::open();
     let result = export_rvt_doc_reporting(rf, mode, quality_mode, walker_limits, control);
+    rf.keep_budget_stops(stops.close());
     rf.stop_reporting_partition_inflates();
     result
 }
@@ -1497,8 +1521,6 @@ fn export_rvt_doc_reporting(
     walker_limits: crate::walker::WalkerLimits,
     control: &crate::control::WalkerControl,
 ) -> Result<IfcModel> {
-    // The readers' work-budget stops are this export's from here on.
-    crate::budget::reset();
     let policy = ExportContentPolicy::for_quality_mode(quality_mode);
     // Identity from PartAtom if present; fall back to the file name in
     // BasicFileInfo's original path.
@@ -4909,6 +4931,7 @@ pub(crate) fn build_export_diagnostics_and_decisions(
         room_phase_fallback,
     };
     record_unread_streams(&mut diagnostics, rf.unread_streams());
+    record_work_budget_stops(&mut diagnostics, rf.budget_stops());
     (diagnostics, decisions)
 }
 
@@ -5018,11 +5041,6 @@ const WORK_BUDGET_WARNING: &str = "Work budget reached: ";
 /// place of any an earlier call wrote. The export built every element it
 /// could without them, so what they hold is missing; call this again after
 /// a later step (saved meshes, Revit property sets) has read more streams.
-///
-/// It also puts in the readers that stopped at a work budget since the
-/// export began (#1833, #1845): one skipped item ([`WORK_BUDGET_REASON`])
-/// counting them by reader, and a warning per reader. Each left out what was
-/// past its budget, as a stream a limit kept out is left out.
 pub fn record_unread_streams(
     diagnostics: &mut ExportDiagnostics,
     unread: &[crate::reader::UnreadStream],
@@ -5051,13 +5069,24 @@ pub fn record_unread_streams(
             ));
         }
     }
+    diagnostics.confidence.warning_count = diagnostics.warnings.len();
+}
+
+/// Put the readers that stopped at a work budget under this handle
+/// ([`crate::RevitFile::budget_stops`], #1833, #1845) into `diagnostics`:
+/// one skipped item ([`WORK_BUDGET_REASON`]) counting the stops by reader,
+/// and a warning per reader, in place of any an earlier call wrote. Each
+/// left out what was past its budget, as a stream a limit kept out is.
+pub(crate) fn record_work_budget_stops(
+    diagnostics: &mut ExportDiagnostics,
+    stopped: &crate::budget::Stops,
+) {
     diagnostics
         .skipped
         .retain(|item| item.reason != WORK_BUDGET_REASON);
     diagnostics
         .warnings
         .retain(|warning| !warning.starts_with(WORK_BUDGET_WARNING));
-    let stopped = crate::budget::stopped_so_far();
     if !stopped.is_empty() {
         diagnostics.skipped.push(SkippedExportItem {
             phase: None,
@@ -5069,7 +5098,7 @@ pub fn record_unread_streams(
                 .collect(),
             sample_names: Vec::new(),
         });
-        for (what, times) in &stopped {
+        for (what, times) in stopped {
             diagnostics.warnings.push(format!(
                 "{WORK_BUDGET_WARNING}{what} stopped {times} time(s) at its work budget, and what it would have read is missing from the export. No real model is known to reach one; a file built to make the reader do unbounded work does."
             ));

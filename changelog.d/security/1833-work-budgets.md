@@ -1,13 +1,17 @@
 - **A crafted file can no longer hang a read of pipe connectors, MEP curve
   fields, room parameters, room solids, sketch loops or empty saved-mesh
   faces (#1833).** Each did work that grew with the square or more of a
-  count the file sets. Each now either finds its answer through an index
-  built once (room parameters through the stream's listed data objects,
-  room solids for the rooms alone, empty faces from one walk of each graph,
-  a pipe end's keys through a set), or counts its work against a budget no
-  real model comes near and, past it, leaves the element as an unread
-  stream leaves it, and the export's diagnostics say so: a
-  `work_budget_reached` skipped item counting each reader's stops, and a
-  `Work budget reached:` warning per reader. The memo of element-data
-  header positions is held under 64 MiB, and the memo of inflated
-  partitions under 16 GiB. No real file of the measured corpus changes.
+  count the file sets. Each now finds its answer through an index built
+  once, or counts its work against a budget no real model comes near.
+  Room parameters go through the stream's listed data objects, each
+  checksum read from sums kept along the stream. Room solids are kept for
+  the stream's rooms alone. Empty faces come from one walk of each graph,
+  and a pipe end's keys through a set. Past a budget the reader leaves the
+  element as an unread stream leaves it, and the export says so: a
+  `work_budget_reached` skipped item counting each reader's stops, a
+  `Work budget reached:` warning per reader, and from `rvt-ifc`,
+  `rvt-gltf`, Python's `write_ifc` and the MCP server's exports, no file
+  unless a partial export is allowed (exit status 3 from the CLIs). The
+  memo of element-data header positions is held under 64 MiB, and the memo
+  of inflated partitions under 16 GiB. No real file of the measured corpus
+  changes.

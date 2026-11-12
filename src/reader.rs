@@ -301,6 +301,9 @@ pub struct RevitFile {
     category_style_materials: Option<Arc<BTreeMap<i64, BTreeSet<u32>>>>,
     /// Streams a resource limit kept from being read whole (#1075).
     unread_streams: Vec<UnreadStream>,
+    /// The readers that stopped at a work budget under this handle's walk
+    /// or exports, with how often (#1833, [`crate::budget`]).
+    budget_stops: crate::budget::Stops,
     /// Doors and windows written as such though their type's record was not
     /// read (#1247).
     unread_type_doors_windows: BTreeSet<u32>,
@@ -566,6 +569,7 @@ impl RevitFile {
             material_appearances: std::collections::HashMap::new(),
             category_style_materials: None,
             unread_streams: Vec::new(),
+            budget_stops: crate::budget::Stops::new(),
             unread_type_doors_windows: BTreeSet::new(),
             disagreeing_type_texts: BTreeSet::new(),
             wall_cut_steps_memo: BTreeMap::new(),
@@ -585,6 +589,22 @@ impl RevitFile {
     /// anything produced from this handle is missing what they hold.
     pub fn unread_streams(&self) -> &[UnreadStream] {
         &self.unread_streams
+    }
+
+    /// The readers that stopped at a work budget since this handle was
+    /// opened, with how often (#1833): what was past each budget is missing
+    /// from anything produced from this handle, as an unread stream's
+    /// content is.
+    pub(crate) fn budget_stops(&self) -> &crate::budget::Stops {
+        &self.budget_stops
+    }
+
+    /// Keep the stops collected under work done for this handle
+    /// ([`crate::budget::Notes`]).
+    pub(crate) fn keep_budget_stops(&mut self, stops: crate::budget::Stops) {
+        for (what, times) in stops {
+            *self.budget_stops.entry(what).or_insert(0) += times;
+        }
     }
 
     /// The doors and windows this handle's export wrote as doors and

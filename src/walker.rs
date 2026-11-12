@@ -1469,6 +1469,23 @@ pub(crate) fn walk_shared(
         control.report(Stage::PartitionScan, 1, Some(1));
         return Ok(elements);
     }
+    // A partition reader under the walk that stops at its work budget is
+    // kept with the file beside the elements, so an export that reads the
+    // walk back still reports the stop (#1833).
+    let stops = crate::budget::Notes::open();
+    let walked = walk_uncached(rf, min_score, limits, control);
+    rf.keep_budget_stops(stops.close());
+    walked
+}
+
+/// [`walk_shared`] when the handle holds no walk for `min_score` and
+/// `limits`: the walk itself, memoised on the handle.
+fn walk_uncached(
+    rf: &mut RevitFile,
+    min_score: i64,
+    limits: WalkerLimits,
+    control: &WalkerControl,
+) -> Result<std::sync::Arc<Vec<DecodedElement>>> {
     control.report(Stage::SchemaParse, 0, None);
     // #1075: both inflates run under the handle's limits, and a limit that
     // stops one is recorded on the handle before the walk fails.
