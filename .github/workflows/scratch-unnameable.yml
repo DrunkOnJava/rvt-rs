@@ -22,7 +22,8 @@ jobs:
           grep -E '^error' -A 3 a.log | head -60 || true
       - name: Make Fv and Obj crate-private, see who hands them out
         run: |
-          sed -i 's/^pub enum Fv {/pub(crate) enum Fv {/; s/^pub struct Obj {/pub(crate) struct Obj {/' src/research/graph_value.rs
+          sed -i -E 's/^pub (enum|struct|trait|type|fn|const|static) /pub(crate) \1 /' src/research/graph_value.rs
+          grep -n '^pub' src/research/graph_value.rs | head
           RUSTFLAGS="-W private_interfaces -W private_bounds" cargo +stable check --lib --bins > b.log 2>&1 || true
           echo "B: log lines $(wc -l < b.log)"
-          grep -E '^(warning|error)' -A 8 b.log | head -200 || true
+          grep -E '^(warning|error)' -A 10 b.log | head -260 || true
