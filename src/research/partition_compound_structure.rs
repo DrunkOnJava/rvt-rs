@@ -337,12 +337,12 @@ fn choose_copy(copies: &[LayerCopy], current: Option<u32>) -> CopyChoice<'_> {
 }
 
 /// The layers of each type in `types`, by ElementId, from each type's own
-/// data. A type whose copies in the partitions disagree takes its current
-/// partition's copy (`choose_copy`: the partition the element index routes it
-/// to, else the latest that holds a copy,
+/// data. On Revit 2024 and later a type whose copies in the partitions disagree
+/// takes its current partition's copy (`choose_copy`: the partition the element
+/// index routes it to, else the latest that holds a copy,
 /// [`crate::native_document::current_partitions`], RE-145, RE-216) and is
-/// dropped where that copy is not one list; empty for a release the layout is
-/// not measured on.
+/// dropped where that copy is not one list; on Revit 2008 to 2023 such a type
+/// is dropped. Empty for a release the layout is not measured on.
 pub fn scan_type_layers(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -411,12 +411,21 @@ pub fn scan_type_layers(
         // The scan met the streams in name order, which is not partition order.
         held.sort_by_key(|(partition, hit, _)| (*partition, *hit));
     }
-    let disagreeing: BTreeMap<u32, BTreeSet<u32>> = copies
-        .iter()
-        .filter(|(_, held)| held.iter().any(|(_, _, layers)| *layers != held[0].2))
-        .filter_map(|(id, _)| Some((*id, holders.get(id)?.clone())))
-        .collect();
-    let current = crate::native_document::current_partitions(rf, &disagreeing);
+    // Measured on Revit 2024 and later only (the 64-bit layout): on the one
+    // held-out file of Revit 2008 to 2023 that has such a type (Revit 2020)
+    // the current copy gives five floors layers of Revit's widths and, on four
+    // of them, materials Revit's export does not give, so there a type whose
+    // copies disagree stays dropped (RE-446).
+    let current = if layout.wide_ids {
+        let disagreeing: BTreeMap<u32, BTreeSet<u32>> = copies
+            .iter()
+            .filter(|(_, held)| held.iter().any(|(_, _, layers)| *layers != held[0].2))
+            .filter_map(|(id, _)| Some((*id, holders.get(id)?.clone())))
+            .collect();
+        crate::native_document::current_partitions(rf, &disagreeing)
+    } else {
+        BTreeMap::new()
+    };
     let mut kept: BTreeMap<u32, Vec<CompoundLayer>> = BTreeMap::new();
     let mut agreeing: Vec<u32> = Vec::new();
     let mut taken_current: Vec<(u32, crate::ifc::element_provenance::ValueSource)> = Vec::new();
