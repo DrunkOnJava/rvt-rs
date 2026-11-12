@@ -1150,7 +1150,16 @@ pub(super) fn attach_wall_layers(
         end_joins,
     } = if centreline_bodies {
         let ids: BTreeSet<u64> = wall_ids.iter().map(|&id| u64::from(id)).collect();
-        crate::native_walls::native_walls_and_top_joins_into(rf, &ids, reads).unwrap_or_default()
+        // A wall with no type in the export draws no body here, but the readers
+        // after this one ask every wall's type id, top join and load bearing:
+        // it is read in the same pass for those alone, not in one more (#1824).
+        let typeless: BTreeSet<u64> = walls
+            .iter()
+            .filter(|wall| type_of(wall).is_none())
+            .filter_map(|wall| wall.id.map(u64::from))
+            .collect();
+        crate::native_walls::native_walls_and_top_joins_into(rf, &ids, &typeless, reads)
+            .unwrap_or_default()
     } else {
         Default::default()
     };
