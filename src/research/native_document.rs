@@ -635,7 +635,16 @@ pub(crate) fn definition_captions(
 pub(crate) struct DefinitionPass {
     registry: crate::native_parameter_definitions::Registry,
     diagnostics: BTreeMap<u64, String>,
+    /// What each `UnitsElem` it decoded gives the project's display units, in
+    /// walk order ([`crate::native_project_units::units_of`]): the pass decodes
+    /// every one a read of the units with the same budgets would (#1816).
+    units: Vec<UnitsOutcome>,
 }
+
+/// One `UnitsElem`'s [`crate::native_project_units::units_of`], its error
+/// kept as the text `{:#}` gives.
+pub(crate) type UnitsOutcome =
+    std::result::Result<(bool, Option<crate::native_project_units::ProjectUnits>), String>;
 
 /// The [`Options`] a [`DefinitionPass`] depends on: its budgets, graph
 /// classes, releases and whether deferred history episodes are read (it sets
@@ -649,12 +658,8 @@ pub(crate) type DefinitionKey = (
     bool,
 );
 
-/// The handle's [`DefinitionPass`] for `options`, read if it has none.
-fn definition_pass(
-    file: &mut RevitFile,
-    options: &Options,
-    caller: &'static std::panic::Location<'static>,
-) -> Result<Arc<DefinitionPass>> {
+/// The [`DefinitionKey`] of `options`.
+fn definition_key(options: &Options) -> DefinitionKey {
     // Every field is named, so a new one has to be put in the key or left out
     // of it on purpose: the selections and channel are the pass's own, and
     // the filter applies after it.
@@ -676,14 +681,38 @@ fn definition_pass(
         graph_fields: _,
         uncached_partitions: _,
     } = options;
-    let key: DefinitionKey = (
+    (
         *max_group_bytes,
         *max_graph_values,
         *max_graph_objects,
         graph_classes.clone(),
         releases.clone(),
         *deferred_history_episodes,
-    );
+    )
+}
+
+/// The `UnitsElem` outcomes of the [`DefinitionPass`] the handle holds for
+/// `options`, without reading one where it holds none: a read of the units
+/// alone costs less than the pass (#1816).
+#[track_caller]
+pub(crate) fn held_definition_units(
+    file: &RevitFile,
+    options: &Options,
+) -> Option<Vec<UnitsOutcome>> {
+    let pass = file.native_definitions(&definition_key(options))?;
+    // A read the held pass answers makes no pass of its own; the ledger
+    // still names it, so its account of who reads the definitions is whole.
+    note_event("definitions held", std::panic::Location::caller());
+    Some(pass.units.clone())
+}
+
+/// The handle's [`DefinitionPass`] for `options`, read if it has none.
+fn definition_pass(
+    file: &mut RevitFile,
+    options: &Options,
+    caller: &'static std::panic::Location<'static>,
+) -> Result<Arc<DefinitionPass>> {
+    let key = definition_key(options);
     if let Some(cached) = file.native_definitions(&key) {
         note_event("definitions held", caller);
         return Ok(cached);
@@ -697,6 +726,7 @@ fn definition_pass(
     // decodes only schema-declared definition owners; selected output still streams.
     let mut definitions = crate::native_parameter_definitions::Registry::default();
     let mut diagnostics = BTreeMap::new();
+    let mut units = Vec::new();
     let mut definition_options = options.clone();
     definition_options.selected_ids.clear();
     definition_options.selected_classes.clear();
@@ -725,6 +755,13 @@ fn definition_pass(
                                 .first()
                                 .is_some_and(|root| root.class_name == "UnitsElem") =>
                         {
+                            units.push(
+                                crate::native_project_units::units_of(
+                                    &graph.objects[0],
+                                    record.identity.element_id,
+                                )
+                                .map_err(|error| format!("{error:#}")),
+                            );
                             definitions.ingest_units(graph)
                         }
                         Some(graph)
@@ -767,6 +804,7 @@ fn definition_pass(
     let pass = Arc::new(DefinitionPass {
         registry: definitions,
         diagnostics,
+        units,
     });
     file.remember_native_definitions(key, Arc::clone(&pass));
     Ok(pass)

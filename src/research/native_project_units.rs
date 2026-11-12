@@ -105,38 +105,38 @@ pub fn read(rf: &mut RevitFile) -> Result<Option<ProjectUnits>> {
         releases: native_document::NATIVE_RELEASES,
         ..native_document::Options::default()
     };
-    // Each UnitsElem's units, with whether `m_famId` names a family.
-    let mut found: Vec<(bool, Option<ProjectUnits>)> = Vec::new();
-    native_document::extract_graphs(rf, &options, |record| {
-        let Some(graph) = record.graph.as_ref() else {
-            return Ok(());
+    // Each UnitsElem's units, with whether `m_famId` names a family. The
+    // definitions pass of a read with these budgets decodes every UnitsElem
+    // this read would, in the same order, so where the handle holds one its
+    // outcomes are taken rather than walking the file again (#1816). Its
+    // first error stops the read, as an error stops the read's own walk.
+    let found: Vec<(bool, Option<ProjectUnits>)> =
+        match native_document::held_definition_units(rf, &options) {
+            Some(outcomes) => {
+                count_read(0);
+                outcomes
+                    .into_iter()
+                    .map(|outcome| outcome.map_err(anyhow::Error::msg))
+                    .collect::<Result<_>>()?
+            }
+            None => {
+                count_read(1);
+                let mut found = Vec::new();
+                native_document::extract_graphs(rf, &options, |record| {
+                    let Some(root) = record
+                        .graph
+                        .as_ref()
+                        .and_then(|graph| graph.objects.first())
+                        .filter(|root| root.class_name == "UnitsElem")
+                    else {
+                        return Ok(());
+                    };
+                    found.push(units_of(root, record.identity.element_id)?);
+                    Ok(())
+                })?;
+                found
+            }
         };
-        let Some(root) = graph
-            .objects
-            .first()
-            .filter(|r| r.class_name == "UnitsElem")
-        else {
-            return Ok(());
-        };
-        let of_family = root
-            .fields
-            .get("m_famId")
-            .and_then(identifier_i64)
-            .is_some_and(|family| family != -1);
-        let units = root
-            .fields
-            .get("m_units")
-            .ok_or_else(|| anyhow!("UnitsElem {} has no m_units", record.identity.element_id))?;
-        let read = if let Some(pairs) = units.get("m_formatOptionsMap") {
-            Some(forge(pairs)?)
-        } else if units.get("m_formatOptionsArr").is_some() {
-            None
-        } else {
-            return Err(anyhow!("AUnits holds neither a format map nor an array"));
-        };
-        found.push((of_family, read));
-        Ok(())
-    })?;
     // The record with `m_famId` unset is the project's. A family file has
     // none such: its one UnitsElem names the family the file is.
     let project: Vec<_> = found.iter().filter(|(of_family, _)| !of_family).collect();
@@ -158,6 +158,51 @@ pub fn read(rf: &mut RevitFile) -> Result<Option<ProjectUnits>> {
         }
     };
     Ok(chosen)
+}
+
+/// What one `UnitsElem` record gives [`read`]: whether its `m_famId` names a
+/// family, and its units, `None` where they are in the array of Revit 2015
+/// to 2020.
+pub(crate) fn units_of(
+    root: &crate::native_parameters::GraphObject,
+    element_id: u64,
+) -> Result<(bool, Option<ProjectUnits>)> {
+    let of_family = root
+        .fields
+        .get("m_famId")
+        .and_then(identifier_i64)
+        .is_some_and(|family| family != -1);
+    let units = root
+        .fields
+        .get("m_units")
+        .ok_or_else(|| anyhow!("UnitsElem {element_id} has no m_units"))?;
+    let read = if let Some(pairs) = units.get("m_formatOptionsMap") {
+        Some(forge(pairs)?)
+    } else if units.get("m_formatOptionsArr").is_some() {
+        None
+    } else {
+        return Err(anyhow!("AUnits holds neither a format map nor an array"));
+    };
+    Ok((of_family, read))
+}
+
+thread_local! {
+    static READS: std::cell::Cell<[u64; 2]> = const { std::cell::Cell::new([0, 0]) };
+}
+
+fn count_read(own_pass: usize) {
+    READS.with(|reads| {
+        let mut counts = reads.get();
+        counts[own_pass] += 1;
+        reads.set(counts);
+    });
+}
+
+/// How many [`read`]s on this thread took the units from a definitions pass
+/// the handle held, and how many walked the file for them (#1816).
+pub fn read_counts() -> (u64, u64) {
+    let [held, walked] = READS.with(std::cell::Cell::get);
+    (held, walked)
 }
 
 /// The units of an `AUnits.m_formatOptionsMap`: `first` is the spec,
