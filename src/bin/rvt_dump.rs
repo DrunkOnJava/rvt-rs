@@ -16,6 +16,7 @@
 
 use clap::Parser;
 use rvt::{RevitFile, compression};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -65,20 +66,9 @@ fn run() -> anyhow::Result<()> {
         cli.file.display()
     );
 
+    let mut taken = HashSet::new();
     for name in &streams {
-        // The name is the file's own. The cfb crate refuses `\`, `:` and `!`
-        // in it; a character Windows refuses in a file name would fail the
-        // write and stop the dump there, so it becomes `_` as `/` does.
-        let safe: String = name
-            .chars()
-            .map(|c| {
-                if c == '/' || c.is_control() || matches!(c, '<' | '>' | '"' | '|' | '?' | '*') {
-                    '_'
-                } else {
-                    c
-                }
-            })
-            .collect();
+        let safe = file_stem_for(name, &mut taken);
         let raw = rf.read_stream(name)?;
 
         let decoded = if raw.is_empty() {
@@ -182,6 +172,53 @@ fn undecoded(name: &str, stored: &[u8]) -> Undecoded {
     } else {
         Undecoded::Failed
     }
+}
+
+/// The file name, less its extension, that stream `name` is written under
+/// in `--out`: one no other stream of the dump has (`taken`, lowercased, as a
+/// case-insensitive file system compares names) and that Windows accepts.
+///
+/// The name is the file's own. The cfb crate refuses `\`, `:` and `!` in it,
+/// so it cannot leave `--out`. Otherwise:
+/// - `/`, a control character and `<>"|?*`, which Windows refuses in a file
+///   name and which would fail the write and stop the dump, become `_`;
+/// - a device name Windows reserves (`CON`, `NUL`, `COM1` and the like,
+///   whatever follows its first `.`) takes a `_` in front;
+/// - a name another stream already has takes `~2`, `~3` and so on, where the
+///   later write would have replaced the earlier silently.
+///
+/// A trailing dot or space cannot end the file name: `.decomp` or `.raw`
+/// follows it.
+fn file_stem_for(name: &str, taken: &mut HashSet<String>) -> String {
+    let mut stem: String = name
+        .chars()
+        .map(|c| {
+            if c == '/' || c.is_control() || matches!(c, '<' | '>' | '"' | '|' | '?' | '*') {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let device = stem
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end()
+        .to_ascii_uppercase();
+    let numbered = device.len() == 4
+        && (device.starts_with("COM") || device.starts_with("LPT"))
+        && device.ends_with(|c: char| c.is_ascii_digit());
+    if numbered || matches!(device.as_str(), "CON" | "PRN" | "AUX" | "NUL") {
+        stem.insert(0, '_');
+    }
+    let mut unique = stem.clone();
+    let mut repeat = 1;
+    while !taken.insert(unique.to_lowercase()) {
+        repeat += 1;
+        unique = format!("{stem}~{repeat}");
+    }
+    unique
 }
 
 fn short_path(p: &Path) -> String {
