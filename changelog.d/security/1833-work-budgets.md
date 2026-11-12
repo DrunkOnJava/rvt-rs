@@ -7,4 +7,5 @@
   a pipe end's keys through a set), or counts its work against a budget no
   real model comes near and, past it, leaves the element as an unread
   stream leaves it. The memo of element-data header positions is held
-  under 64 MiB, and the memo of inflated partitions under 16 GiB. No real file of the measured corpus changes.
+  under 64 MiB, and the memo of inflated partitions under 16 GiB. No real
+  file of the measured corpus changes.

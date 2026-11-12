@@ -249,6 +249,8 @@ impl Registry {
     /// and this is the only reader of either: a field read here must be added
     /// to the list, or it reads as absent.
     pub fn ingest_binding_context(&mut self, graph: &ObjectGraph) -> Result<()> {
+        // What the seal matched may change: a later match reads afresh.
+        self.sealed = None;
         let root = graph
             .objects
             .first()
@@ -434,6 +436,8 @@ impl Registry {
         Ok(())
     }
     pub fn insert(&mut self, mut definition: Definition) -> Result<()> {
+        // What the seal matched may change: a later match reads afresh.
+        self.sealed = None;
         enrich_unit(&mut definition, &self.unit_formats);
         if let Some(existing) = self.definitions.get(&definition.parameter_id) {
             ensure!(

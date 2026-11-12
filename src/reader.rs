@@ -189,7 +189,7 @@ pub struct RevitFile {
     /// Every `Partitions/*` stream inflated so far, held or not: the
     /// progress count, which a count of `inflated`'s keys would lower each
     /// time the memo is let go.
-    partitions_inflated: std::collections::BTreeSet<String>,
+    partitions_inflated: BTreeSet<String>,
     /// Memoised `Partitions/NN` string-record extraction. The UTF-16
     /// decode over the whole partition is the single most expensive
     /// step after inflate, and unit recovery, storey names and the
@@ -536,7 +536,7 @@ impl RevitFile {
             limits,
             inflated: std::collections::HashMap::new(),
             inflated_bytes: 0,
-            partitions_inflated: std::collections::BTreeSet::new(),
+            partitions_inflated: BTreeSet::new(),
             partition_strings: None,
             second_prologue_ids: None,
             element_names: None,
@@ -1027,7 +1027,7 @@ impl RevitFile {
         let inflated = self.inflated_partition(name)?;
         let hits =
             Arc::new(memchr::memmem::find_iter(inflated.bytes(), header).collect::<Vec<_>>());
-        let added = hits.len().saturating_mul(std::mem::size_of::<usize>());
+        let added = hits.len().saturating_mul(size_of::<usize>());
         if self.header_hits_bytes.saturating_add(added) > HEADER_HITS_BUDGET_BYTES {
             self.header_hits.clear();
             self.header_hits_bytes = 0;

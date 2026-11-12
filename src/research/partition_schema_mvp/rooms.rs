@@ -120,8 +120,7 @@ pub(super) fn attach_room_outlines(
     // room took 1.2 s on Autodesk's 2025 rme_advanced sample.
     let mut solids = std::collections::HashMap::new();
     // The rooms of each stream, whose headers alone are kept (#1833).
-    let mut wanted: std::collections::HashMap<_, std::collections::BTreeSet<u64>> =
-        std::collections::HashMap::new();
+    let mut wanted: std::collections::HashMap<_, BTreeSet<u64>> = std::collections::HashMap::new();
     for room in rooms.iter() {
         if let (Some(id), Some(stream)) = (room.id, element_source_stream(room)) {
             wanted.entry(stream).or_default().insert(u64::from(id));
