@@ -543,8 +543,10 @@ pub fn extract(
     emit: impl FnMut(Record) -> Result<()>,
 ) -> Result<Summary> {
     let caller = std::panic::Location::caller();
-    let started = recording().then(std::time::Instant::now);
     let pass = definition_pass(file, options, caller)?;
+    // Started after the definitions, whose walk notes its own time when it
+    // makes them: one walk is counted once.
+    let started = recording().then(std::time::Instant::now);
     let definitions = &pass.registry;
     let defined = options.definition_filter.is_none_or(|accepts| {
         definitions
