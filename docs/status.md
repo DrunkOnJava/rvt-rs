@@ -1229,7 +1229,7 @@ and earlier write every room, as every element: both phase rules start at
 Revit 2016 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
-**RE-439 (2026-11-11)** reads the project's display units from its
+**RE-445 (2026-11-11)** reads the project's display units from its
 `UnitsElem` record: from Revit 2021 its `AUnits.m_formatOptionsMap` gives
 every spec its display unit (133 to 150 specs on the corpus), and a family's
 document inside the project keeps a `UnitsElem` of its own, named by
@@ -1241,7 +1241,7 @@ the native walk does not read takes its units from its string records where
 their maps agree (Autodesk's sample families of 2021 to 2027). Revit 2015 to
 2020 keep an array without spec names, which is not read. The IFC is
 unchanged: values and unit assignment stay SI
-(`reports/element-framing/RE-439-project-display-units.md`).
+(`reports/element-framing/RE-445-project-display-units.md`).
 
 **#1359 (2026-11-05)** gives the rooms a fallback, a choice by Griffin. An
 outside importer reported Autodesk's `rac_basic_sample_project` going from 14

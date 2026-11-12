@@ -82,7 +82,7 @@
 //! - [`native_parametric_mesh`]: Bounded UV-grid meshing for decoded parametric surfaces
 //! - [`native_parametric_surface`]: Typed evaluators for the non-planar surfaces observed in saved graphs
 //! - [`native_phases`]: The project's phase order, and the elements a last-phase export leaves out (RE-184, #328)
-//! - [`native_project_units`]: The project's display unit for every spec, from its `UnitsElem` (RE-439)
+//! - [`native_project_units`]: The project's display unit for every spec, from its `UnitsElem` (RE-445)
 //! - [`native_rendered_content`]: Family types whose family is rendered content (RE-202, #355)
 //! - [`native_saved_mesh`]: Tessellation of bounded saved planar and cylindrical BRep faces
 //! - [`native_saved_scene`]: Current native saved-graphics extraction with explicit shared-symbol closure

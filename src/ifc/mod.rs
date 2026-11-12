@@ -700,11 +700,11 @@ pub struct DecodedExportDiagnostics {
     #[serde(default = "default_min_element_confidence_serde")]
     pub min_element_confidence: f32,
     /// The display units of length, area, volume, angle, mass and time, as
-    /// the project's `UnitsElem` sets them (RE-439).
+    /// the project's `UnitsElem` sets them (RE-445).
     pub recovered_unit_identifiers: Vec<String>,
     /// Those of the six whose unit no IFC unit is known for.
     pub unknown_unit_identifiers: Vec<String>,
-    /// The display unit of every spec the project lists, by spec (RE-439).
+    /// The display unit of every spec the project lists, by spec (RE-445).
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub project_display_units: std::collections::BTreeMap<String, String>,
     /// The length of each exported wall's native curve, feet, by ElementId
@@ -3835,13 +3835,13 @@ struct RecoveredProjectUnits {
     /// The display units of the six specs the IFC assigns a unit to that
     /// no IFC unit is known for.
     unknown_identifiers: Vec<String>,
-    /// The display unit of every spec the project lists (RE-439).
+    /// The display unit of every spec the project lists (RE-445).
     display_units: std::collections::BTreeMap<String, String>,
     /// Why the project's `UnitsElem` was not read, where it was not.
     read_error: Option<String>,
 }
 
-/// The spec whose display unit each IFC unit type takes (RE-439). Mass is
+/// The spec whose display unit each IFC unit type takes (RE-445). Mass is
 /// the structural spec, the one Revit's Project Units list under Common
 /// beside length, area, volume, angle and time.
 const IFC_UNIT_SPECS: [(entities::IfcUnitType, &str); 6] = [
@@ -3856,7 +3856,7 @@ const IFC_UNIT_SPECS: [(entities::IfcUnitType, &str); 6] = [
     (entities::IfcUnitType::Time, "autodesk.spec.aec:time"),
 ];
 
-/// The project's display units, from its `UnitsElem` (RE-439): each IFC
+/// The project's display units, from its `UnitsElem` (RE-445): each IFC
 /// unit type takes the unit of its spec. Values are still written in SI
 /// units, as the IFC's unit assignment declares them; these describe the
 /// source model.
@@ -4686,7 +4686,7 @@ pub(crate) fn build_export_diagnostics_and_decisions(
     }
     if let Some(error) = &recovered_units.read_error {
         warnings.push(format!(
-            "The project's display units were not read: {error} (RE-439)."
+            "The project's display units were not read: {error} (RE-445)."
         ));
     }
     if !recovered_units.unknown_identifiers.is_empty() {

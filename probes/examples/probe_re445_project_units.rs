@@ -1,4 +1,4 @@
-//! RE-439: a project's display units are its `UnitsElem`'s format map.
+//! RE-445: a project's display units are its `UnitsElem`'s format map.
 //!
 //! FACT: from Revit 2021 the project's `UnitsElem` (`m_famId` unset) holds
 //! `m_units.m_formatOptionsMap`, one entry per spec: the spec's `ForgeTypeId`
@@ -17,7 +17,7 @@
 //! `UnitsElem` map, and what `native_project_units::resolve` returns.
 //!
 //! Usage:
-//!   cargo run --profile ci -p rvt-probes --example probe_re439_project_units -- FILE.rvt...
+//!   cargo run --profile ci -p rvt-probes --example probe_re445_project_units -- FILE.rvt...
 
 use rvt::RevitFile;
 use rvt::research::{native_document, native_project_units};

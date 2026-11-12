@@ -1,5 +1,5 @@
 //! A project's display units, as its Project Units dialog sets them
-//! (RE-439).
+//! (RE-445).
 //!
 //! A document holds one `UnitsElem` record. Its `m_units` field is an
 //! `AUnits` object with one `FormatOptions` per spec. From Revit 2021 the
@@ -162,7 +162,7 @@ pub fn read(rf: &mut RevitFile) -> Result<Option<ProjectUnits>> {
 
 /// The units of an `AUnits.m_formatOptionsMap`: `first` is the spec,
 /// `second` its `FormatOptions`.
-fn forge(pairs: &serde_json::Value) -> Result<ProjectUnits> {
+fn forge(pairs: &crate::research::graph_value::Fv) -> Result<ProjectUnits> {
     let pairs = pairs
         .as_array()
         .ok_or_else(|| anyhow!("m_formatOptionsMap is not a list"))?;

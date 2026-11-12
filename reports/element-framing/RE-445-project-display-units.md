@@ -1,9 +1,9 @@
-# RE-439: a project's display units are its `UnitsElem`'s format map
+# RE-445: a project's display units are its `UnitsElem`'s format map
 
 **Date:** 2026-11-11
 **Issues:** follows #403 (IFC-40, the unit assignment) and IFC-39 (`ForgeUnit`); the warning the web viewer shows on Core Interior
 **Artefacts:** `2024_Core_Interior.rvt` (MIT, `magnetar-io/revit-test-datasets`, pinned in `research/witness-registry.json`); Autodesk's sample projects of 2019 to 2027 (`research/autodesk-sample-projects.tsv`) and sample families of 2016 to 2026 (`phi-ag/rvt`); Snowdon Towers 2024 and 2025; and, local only, the RE1 models, the R2025 models, Golden Nugget, Autodesk's Japanese samples and Revit_IFC5_Einhoven: 131 files in all
-**Probe:** `probes/examples/probe_re439_project_units.rs`
+**Probe:** `probes/examples/probe_re445_project_units.rs`
 **Status:** positive. The project's display unit of every spec is read on all 103 files of Revit 2021 to 2027 the native walk reads, and on the 8 sample families of 2021 to 2027 it does not, from their string records. No IFC changes.
 
 ## 1. The question
@@ -43,7 +43,7 @@ Runs cannot replace the walk on a project: the partition keeps older copies of t
 
 ## 6. Across the corpus
 
-`probe_re439_project_units` on 131 files:
+`probe_re445_project_units` on 131 files:
 
 | what is read | files | units of the six |
 |---|---:|---|

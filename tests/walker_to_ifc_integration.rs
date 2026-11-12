@@ -158,7 +158,7 @@ fn export_diagnostics_sidecar_reports_default_ifc_readiness() -> Result<()> {
             .recovered_unit_identifiers
             .iter()
             .any(|unit| unit == "autodesk.unit.unit:millimeters-1.0.1"),
-        "2024 family corpus should report its own length unit, millimetres (RE-439)"
+        "2024 family corpus should report its own length unit, millimetres (RE-445)"
     );
     assert!(
         !diagnostics

@@ -251,7 +251,7 @@ pub struct RevitFile {
     /// read and parsed the schema again for a few class tags.
     schema_classes_memo: Option<Arc<crate::formats::SchemaClasses>>,
     layout_release_memo: Option<u32>,
-    /// Memoised display units of the project's `UnitsElem` (RE-439): the
+    /// Memoised display units of the project's `UnitsElem` (RE-445): the
     /// export's model and its diagnostics both ask for them.
     project_units_memo:
         Option<Arc<Result<Option<crate::native_project_units::ProjectUnits>, String>>>,
@@ -1462,7 +1462,7 @@ impl RevitFile {
     }
 
     /// The project's display unit for every spec, from its `UnitsElem`,
-    /// memoised ([`crate::native_project_units::resolve`], RE-439).
+    /// memoised ([`crate::native_project_units::resolve`], RE-445).
     pub(crate) fn project_units(
         &mut self,
     ) -> Arc<Result<Option<crate::native_project_units::ProjectUnits>, String>> {

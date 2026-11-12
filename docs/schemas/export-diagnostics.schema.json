@@ -198,7 +198,7 @@
         },
         "recovered_unit_identifiers": {
           "type": "array",
-          "description": "The display units of length, area, volume, angle, mass and time, as the project's UnitsElem (or the agreeing format maps of its string records) sets them (RE-439). They describe the source model; the IFC's values and unit assignment are SI.",
+          "description": "The display units of length, area, volume, angle, mass and time, as the project's UnitsElem (or the agreeing format maps of its string records) sets them (RE-445). They describe the source model; the IFC's values and unit assignment are SI.",
           "items": {
             "type": "string"
           }
@@ -212,7 +212,7 @@
         },
         "project_display_units": {
           "type": "object",
-          "description": "The display unit of every spec the project lists, by the spec's ForgeTypeId (RE-439). Absent where none was read.",
+          "description": "The display unit of every spec the project lists, by the spec's ForgeTypeId (RE-445). Absent where none was read.",
           "additionalProperties": {
             "type": "string"
           }
