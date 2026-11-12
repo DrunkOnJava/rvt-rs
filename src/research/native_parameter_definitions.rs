@@ -6,7 +6,7 @@ use crate::native_metadata::{FamilyParameterSlots, identifier};
 use crate::native_parameters::ObjectGraph;
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Definition {
@@ -178,6 +178,10 @@ pub fn project(graph: &ObjectGraph) -> Result<Option<Definition>> {
     }))
 }
 
+/// Each (category, binding kind)'s matching binding keys, or the message
+/// their match fails with.
+type SealedBindings = BTreeMap<(i64, i64), std::result::Result<Vec<i64>, String>>;
+
 #[derive(Debug, Default, Serialize)]
 pub struct Registry {
     pub definitions: BTreeMap<i64, Definition>,
@@ -187,6 +191,13 @@ pub struct Registry {
     pub bindings: BTreeMap<i64, Binding>,
     pub family_categories: BTreeMap<i64, i64>,
     pub symbol_families: BTreeMap<i64, i64>,
+    /// Each (category, binding kind)'s matching bindings, by key, or the
+    /// message the match fails with, made once the registry is complete
+    /// ([`Registry::seal_bindings`]): every record of a category matched
+    /// every binding again and rebuilt each definition's backlinks, records ×
+    /// bindings × backlinks (#1833).
+    #[serde(skip)]
+    sealed: Option<SealedBindings>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Binding {
@@ -242,6 +253,8 @@ impl Registry {
     /// and this is the only reader of either: a field read here must be added
     /// to the list, or it reads as absent.
     pub fn ingest_binding_context(&mut self, graph: &ObjectGraph) -> Result<()> {
+        // What the seal matched may change: a later match reads afresh.
+        self.sealed = None;
         let root = graph
             .objects
             .first()
@@ -303,14 +316,50 @@ impl Registry {
             }
             _ => return Ok(Vec::new()),
         };
-        let Some(category) = self.family_categories.get(&family) else {
+        let Some(&category) = self.family_categories.get(&family) else {
             return Ok(Vec::new());
         };
-        let mut result = Vec::new();
-        for binding in self
+        match &self.sealed {
+            Some(sealed) => match sealed.get(&(category, kind)) {
+                Some(Ok(keys)) => Ok(keys.iter().map(|key| &self.bindings[key]).collect()),
+                Some(Err(message)) => Err(anyhow::anyhow!("{message}")),
+                None => Ok(Vec::new()),
+            },
+            None => Ok(self
+                .bindings_matching(category, kind)?
+                .into_iter()
+                .map(|key| &self.bindings[&key])
+                .collect()),
+        }
+    }
+    /// Seal the registry once every definition and binding is in: each
+    /// (category, kind) a binding names is matched once, and
+    /// [`Registry::matching_bindings`] reads the answer.
+    pub fn seal_bindings(&mut self) {
+        let kinds: BTreeSet<(i64, i64)> = self
             .bindings
             .values()
-            .filter(|b| b.category_id == *category && b.elem_or_symbol == kind)
+            .map(|b| (b.category_id, b.elem_or_symbol))
+            .collect();
+        let sealed = kinds
+            .into_iter()
+            .map(|(category, kind)| {
+                let found = self
+                    .bindings_matching(category, kind)
+                    .map_err(|error| error.to_string());
+                ((category, kind), found)
+            })
+            .collect();
+        self.sealed = Some(sealed);
+    }
+    /// The keys of the bindings of `category` and `kind`, each checked
+    /// against its definition's backlinks, in key order.
+    fn bindings_matching(&self, category: i64, kind: i64) -> Result<Vec<i64>> {
+        let mut result = Vec::new();
+        for (key, binding) in self
+            .bindings
+            .iter()
+            .filter(|(_, b)| b.category_id == category && b.elem_or_symbol == kind)
         {
             let Some(definition) = self.definitions.get(&binding.parameter_id) else {
                 continue;
@@ -327,7 +376,7 @@ impl Registry {
                 backlinks.contains(&binding.binding_id),
                 "parameter binding lacks definition backlink"
             );
-            result.push(binding);
+            result.push(*key);
         }
         Ok(result)
     }
@@ -398,6 +447,8 @@ impl Registry {
         Ok(())
     }
     pub fn insert(&mut self, mut definition: Definition) -> Result<()> {
+        // What the seal matched may change: a later match reads afresh.
+        self.sealed = None;
         enrich_unit(&mut definition, &self.unit_formats);
         if let Some(existing) = self.definitions.get(&definition.parameter_id) {
             ensure!(

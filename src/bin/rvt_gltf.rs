@@ -30,9 +30,9 @@ use std::process::ExitCode;
     after_help = "Examples:\n  \
         rvt-gltf model.rvt                      writes model.glb next to the input\n  \
         rvt-gltf model.rvt -o viewer/model.glb --verbose\n\n\
-        Exit status 3: a resource limit kept part of the file from being read, so\n\
-        no glb was written. Re-run with --large-model, or --allow-partial to write\n\
-        it anyway."
+        Exit status 3: a resource limit kept part of the file from being read, or\n\
+        a reader stopped at its work budget, so no glb was written. Re-run with\n\
+        --large-model for a stream, or --allow-partial to write it anyway."
 )]
 struct Cli {
     /// Revit file to convert (.rvt / .rfa / .rte / .rft).
@@ -97,7 +97,7 @@ struct Cli {
     large_model: bool,
 
     /// Write the glb even when a resource limit kept part of the file from
-    /// being read.
+    /// being read, or a reader stopped at its work budget.
     #[arg(long)]
     allow_partial: bool,
 }
@@ -203,13 +203,24 @@ fn run(cli: &Cli) -> Result<(), Failure> {
         eprintln!("rvt-gltf: {note}");
     }
     let model = run.model;
-    if !run.unread.is_empty() {
-        eprintln!(
-            "rvt-gltf: {} stream(s) not read whole, so the model is missing what they hold:",
-            run.unread.len()
-        );
-        for line in rvt::cli::unread_stream_report(&run.unread) {
-            eprintln!("{line}");
+    if run.diagnostics.is_partial() {
+        if !run.unread.is_empty() {
+            eprintln!(
+                "rvt-gltf: {} stream(s) not read whole, so the model is missing what they hold:",
+                run.unread.len()
+            );
+            for line in rvt::cli::unread_stream_report(&run.unread) {
+                eprintln!("{line}");
+            }
+        }
+        if let Some(stops) = run.diagnostics.work_budget_stops() {
+            eprintln!(
+                "rvt-gltf: {} reader(s) stopped at a work budget, so the model is missing what they would have read:",
+                stops.len()
+            );
+            for line in rvt::cli::work_budget_report(stops) {
+                eprintln!("{line}");
+            }
         }
         if !cli.allow_partial {
             return Err(Failure::PartialRead);

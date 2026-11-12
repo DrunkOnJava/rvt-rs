@@ -356,11 +356,19 @@ pub fn enclosing_data_object(buf: &[u8], at: usize) -> Option<u32> {
 
 /// Every verified data object in `buf` (RE-153), with its header's offset,
 /// in one pass: a header is tried only where its zero word, its size and the
-/// size that ends its payload agree, before its Adler-32 is computed. Use it
+/// size that ends its payload agree, before its Adler-32 is checked. Use it
 /// where [`enclosing_data_object`] would be called for many offsets of one
 /// buffer, each a backward search of up to [`DATA_OBJECT_SEARCH`] bytes.
 pub fn data_objects(buf: &[u8]) -> Vec<(usize, DataObject)> {
     let u32_at = |p: usize| le_bytes::u32_at(buf, p).unwrap_or(0);
+    // A header that passes those checks and fails its Adler-32 is common: on
+    // Core Interior's largest partition such headers cover the stream 32
+    // times over, one of them 94 MB of its 99 MB, and a crafted stream can
+    // overlap them without end (#1833). Read from sums kept along the
+    // stream, each header's Adler-32 costs at most two blocks of it, whatever
+    // its size, so the pass is linear and finds the objects a full Adler-32
+    // of each payload finds.
+    let sums = RangeAdler::new(buf);
     let mut out = Vec::new();
     let mut p = 0;
     while p + DATA_OBJECT_HEADER <= buf.len() {
@@ -368,18 +376,100 @@ pub fn data_objects(buf: &[u8]) -> Vec<(usize, DataObject)> {
         // On a 32-bit target a size read from arbitrary bytes can carry the
         // end past `usize::MAX` (#836); such an object cannot be in `buf`.
         let end = (p + DATA_OBJECT_HEADER).checked_add(size);
-        let plausible = end.is_some_and(|end| {
-            u32_at(p + 4) == 0 && size >= 4 && end <= buf.len() && u32_at(end - 4) as usize == size
+        let object = end.filter(|&end| {
+            u32_at(p + 4) == 0
+                && size >= 4
+                && end <= buf.len()
+                && u32_at(end - 4) as usize == size
+                // The sum covers the class word and the payload less its last
+                // 4 bytes, which lie together.
+                && sums.adler32(p + 16, end - 4) == u32_at(p + 8)
         });
-        match plausible.then(|| verified_data_object(buf, p)).flatten() {
-            Some(object) => {
+        match object {
+            Some(end) => {
+                let object = DataObject {
+                    element_id: u32_at(p),
+                    class: u32_at(p + 16),
+                    end,
+                };
                 out.push((p, object));
-                p = object.end;
+                p = end;
             }
             None => p += 1,
         }
     }
     out
+}
+
+/// Adler-32's modulus.
+const ADLER_MOD: u64 = 65_521;
+/// Bytes between the sums [`RangeAdler`] keeps.
+const ADLER_BLOCK: usize = 256;
+
+/// The Adler-32 of any range of a buffer, from the sum of its bytes and of
+/// each byte times its offset, kept modulo [`ADLER_MOD`] at every
+/// [`ADLER_BLOCK`] bytes (8 bytes kept for 256 read).
+///
+/// Adler-32 over `n` bytes `d` from `s` is `A = 1 + Σd` and `B = n + Σ(e -
+/// i)·d[i]` with `e = s + n`, both modulo 65521, so both follow from those
+/// two sums at `s` and at `e`.
+struct RangeAdler<'a> {
+    buf: &'a [u8],
+    /// At each multiple of [`ADLER_BLOCK`], and at the end: (Σd, Σi·d) of
+    /// the bytes before it, each under [`ADLER_MOD`].
+    marks: Vec<(u32, u32)>,
+}
+
+impl<'a> RangeAdler<'a> {
+    fn new(buf: &'a [u8]) -> Self {
+        let mut marks = Vec::with_capacity(buf.len() / ADLER_BLOCK + 2);
+        let (mut sum, mut weighted) = (0u64, 0u64);
+        marks.push((0, 0));
+        for (block, bytes) in buf.chunks(ADLER_BLOCK).enumerate() {
+            let (block_sum, block_weighted) = block_sums(bytes);
+            let base = (block * ADLER_BLOCK) as u64 % ADLER_MOD;
+            sum = (sum + block_sum) % ADLER_MOD;
+            weighted = (weighted + base * block_sum + block_weighted) % ADLER_MOD;
+            marks.push((sum as u32, weighted as u32));
+        }
+        Self { buf, marks }
+    }
+
+    /// (Σd, Σi·d) of the bytes before offset `at`, modulo [`ADLER_MOD`].
+    fn before(&self, at: usize) -> (u64, u64) {
+        let block = at / ADLER_BLOCK;
+        let start = block * ADLER_BLOCK;
+        let (sum, weighted) = self.marks[block];
+        let (tail_sum, tail_weighted) = block_sums(&self.buf[start..at]);
+        let base = start as u64 % ADLER_MOD;
+        (
+            (u64::from(sum) + tail_sum) % ADLER_MOD,
+            (u64::from(weighted) + base * tail_sum + tail_weighted) % ADLER_MOD,
+        )
+    }
+
+    /// The Adler-32 of `buf[start..end]`.
+    fn adler32(&self, start: usize, end: usize) -> u32 {
+        let (sum_start, weighted_start) = self.before(start);
+        let (sum_end, weighted_end) = self.before(end);
+        let sum = (sum_end + ADLER_MOD - sum_start) % ADLER_MOD;
+        let weighted = (weighted_end + ADLER_MOD - weighted_start) % ADLER_MOD;
+        let a = (1 + sum) % ADLER_MOD;
+        let len = (end - start) as u64 % ADLER_MOD;
+        let b = (len + (end as u64 % ADLER_MOD) * sum + ADLER_MOD - weighted) % ADLER_MOD;
+        ((b << 16) | a) as u32
+    }
+}
+
+/// Σd and Σk·d over at most [`ADLER_BLOCK`] bytes, `k` from 0: under 2^16
+/// and 2^24, so neither needs a modulus.
+fn block_sums(bytes: &[u8]) -> (u64, u64) {
+    let (mut sum, mut weighted) = (0u32, 0u32);
+    for (k, &byte) in bytes.iter().enumerate() {
+        sum += u32::from(byte);
+        weighted += k as u32 * u32::from(byte);
+    }
+    (u64::from(sum), u64::from(weighted))
 }
 
 /// A data object whose header starts at a known offset (RE-153).
@@ -454,7 +544,13 @@ pub fn scan_text_parameter(
     let tag = parameter.to_le_bytes();
     let mut found = LatestCopy::default();
     for stream in rf.partition_stream_names() {
-        let Ok(inflated) = rf.inflated_partition(&stream) else {
+        // Each hit's owner from the stream's data objects, listed once: a
+        // backward search of up to `DATA_OBJECT_SEARCH` bytes for every hit
+        // cost hits × 200,000 steps (#1833).
+        let (Ok(inflated), Ok(objects)) = (
+            rf.inflated_partition(&stream),
+            rf.memoised_partition_data_objects(&stream),
+        ) else {
             continue;
         };
         let partition = partition_number(&stream);
@@ -467,7 +563,7 @@ pub fn scan_text_parameter(
                     None => continue,
                 },
             };
-            let Some(element) = enclosing_data_object(buf, hit).filter(|id| elements.contains(id))
+            let Some(element) = data_object_owner(&objects, hit).filter(|id| elements.contains(id))
             else {
                 continue;
             };
@@ -510,7 +606,13 @@ pub fn scan_integer_parameter(
     let tag = parameter.to_le_bytes();
     let mut found = LatestCopy::default();
     for stream in rf.partition_stream_names() {
-        let Ok(inflated) = rf.inflated_partition(&stream) else {
+        // Each hit's owner from the stream's data objects, listed once: a
+        // backward search of up to `DATA_OBJECT_SEARCH` bytes for every hit
+        // cost hits × 200,000 steps (#1833).
+        let (Ok(inflated), Ok(objects)) = (
+            rf.inflated_partition(&stream),
+            rf.memoised_partition_data_objects(&stream),
+        ) else {
             continue;
         };
         let partition = partition_number(&stream);
@@ -519,7 +621,7 @@ pub fn scan_integer_parameter(
             let Some(value) = le_bytes::u32_at(buf, hit + tag.len()) else {
                 continue;
             };
-            let Some(element) = enclosing_data_object(buf, hit).filter(|id| elements.contains(id))
+            let Some(element) = data_object_owner(&objects, hit).filter(|id| elements.contains(id))
             else {
                 continue;
             };
@@ -702,7 +804,13 @@ pub fn find_parameter_definitions(rf: &mut RevitFile, revit_version: u32) -> BTr
         .collect();
     let mut found: BTreeMap<String, Option<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
-        let Ok(inflated) = rf.inflated_partition(&stream) else {
+        // Each hit's owner from the stream's data objects, listed once: a
+        // backward search of up to `DATA_OBJECT_SEARCH` bytes for every hit
+        // cost hits × 200,000 steps (#1833).
+        let (Ok(inflated), Ok(objects)) = (
+            rf.inflated_partition(&stream),
+            rf.memoised_partition_data_objects(&stream),
+        ) else {
             continue;
         };
         let buf = inflated.bytes();
@@ -714,7 +822,7 @@ pub fn find_parameter_definitions(rf: &mut RevitFile, revit_version: u32) -> BTr
             let name = (after..after + PARAMETER_NAME_WINDOW).find_map(|at| {
                 utf16_entry(buf, at, 256).filter(|name| name.encode_utf16().count() >= 2)
             });
-            let (Some(name), Some(id)) = (name, enclosing_data_object(buf, hit)) else {
+            let (Some(name), Some(id)) = (name, data_object_owner(&objects, hit)) else {
                 continue;
             };
             match found.get_mut(&name) {

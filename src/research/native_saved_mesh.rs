@@ -2094,6 +2094,9 @@ fn graphics_impl<'a>(
         ..Default::default()
     };
     let mut pointer_indices = BTreeMap::new();
+    // Each owner graph's empty-trim evidence, from one walk of it: the walk
+    // for each unbounded face cost faces × objects (#1833).
+    let mut empty_trims = BTreeMap::new();
     for selected in selection.selected {
         let g = match selected.source_owner_id {
             None => g,
@@ -2151,7 +2154,12 @@ fn graphics_impl<'a>(
                             })
                         }
                         None => {
-                            if crate::native_empty_faces::is_observed_empty_trim_face(g, fi) {
+                            let empty_trim = empty_trims
+                                .entry(selected.source_owner_id)
+                                .or_insert_with(|| {
+                                    crate::native_empty_faces::EmptyTrimIndex::new(g)
+                                });
+                            if empty_trim.is_observed_empty_trim_face(g, fi) {
                                 out.empty_trim_faces += 1;
                             } else {
                                 out.unbounded_faces += 1;

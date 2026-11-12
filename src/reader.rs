@@ -40,6 +40,26 @@ pub const DEFAULT_MAX_FILE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// multi-GB allocation.
 pub const DEFAULT_MAX_STREAM_BYTES: u64 = 256 * 1024 * 1024;
 
+/// The most inflated bytes the handle's partition memo holds at once
+/// ([`RevitFile::inflated_partition`]). Each stream is capped, at 1 GiB by
+/// default, but not their sum, so a crafted file of many streams held every
+/// one (#1833). No real file comes near 16 GiB: the 1.13 GB client model
+/// peaks at 5.1 GB in all (docs/viewer-api.md). Past it the memo is let go
+/// whole before the next stream joins it; a reader keeps the `Arc` it was
+/// given, and a later ask inflates again, so no output changes (Griffin,
+/// 2026-11-12, "Bound it at 16 GiB").
+const INFLATED_MEMO_BUDGET_BYTES: u64 = 16 << 30;
+
+/// The most bytes the memo of [`RevitFile::header_hits`] holds at once. A hit
+/// is a `usize`, and a partition carrying the ten-byte element-data header
+/// every ten bytes is held again at 0.8 of its size, for each (stream,
+/// header), for the handle's life (#1833). RE-144 counts the header's places
+/// on the reference models at 50,951 (Core Interior, every partition), 40,149
+/// (RE1 Architecture) and 5,277 (Einhoven): 0.4 MiB at most, and this is 165
+/// times that. Past it the memo is dropped whole; a reader keeps the `Arc` it
+/// was given and a later ask searches again, so no output changes.
+const HEADER_HITS_BUDGET_BYTES: usize = 64 * 1024 * 1024;
+
 /// Limits applied when opening a Revit file. Protects against
 /// pathological or hostile input that would otherwise force
 /// unbounded memory allocation.
@@ -163,6 +183,13 @@ pub struct RevitFile {
     /// the handle — `RevitFile` never writes — so one inflate serves
     /// all of them.
     inflated: std::collections::HashMap<String, Arc<compression::InflatedStream>>,
+    /// The inflated bytes `inflated` holds, kept under
+    /// [`INFLATED_MEMO_BUDGET_BYTES`].
+    inflated_bytes: u64,
+    /// Every `Partitions/*` stream inflated so far, held or not: the
+    /// progress count, which a count of `inflated`'s keys would lower each
+    /// time the memo is let go.
+    partitions_inflated: BTreeSet<String>,
     /// Memoised `Partitions/NN` string-record extraction. The UTF-16
     /// decode over the whole partition is the single most expensive
     /// step after inflate, and unit recovery, storey names and the
@@ -219,6 +246,9 @@ pub struct RevitFile {
     /// and header: a dozen element-data readers each searched every partition
     /// for the release's header.
     header_hits: std::collections::HashMap<(String, Vec<u8>), Arc<Vec<usize>>>,
+    /// The bytes `header_hits` holds, one `usize` a hit, kept under
+    /// [`HEADER_HITS_BUDGET_BYTES`].
+    header_hits_bytes: usize,
     /// Memoised native extraction preamble: each native consumer read
     /// the schema, the element index and the increments again.
     // Tracker: B82.
@@ -271,6 +301,9 @@ pub struct RevitFile {
     category_style_materials: Option<Arc<BTreeMap<i64, BTreeSet<u32>>>>,
     /// Streams a resource limit kept from being read whole (#1075).
     unread_streams: Vec<UnreadStream>,
+    /// The readers that stopped at a work budget under this handle's walk
+    /// or exports, with how often (#1833, [`crate::budget`]).
+    budget_stops: crate::budget::Stops,
     /// Doors and windows written as such though their type's record was not
     /// read (#1247).
     unread_type_doors_windows: BTreeSet<u32>,
@@ -505,6 +538,8 @@ impl RevitFile {
             cfb,
             limits,
             inflated: std::collections::HashMap::new(),
+            inflated_bytes: 0,
+            partitions_inflated: BTreeSet::new(),
             partition_strings: None,
             second_prologue_ids: None,
             element_names: None,
@@ -520,6 +555,7 @@ impl RevitFile {
             partition_progress: None,
             data_objects: std::collections::HashMap::new(),
             header_hits: std::collections::HashMap::new(),
+            header_hits_bytes: 0,
             native_preamble: None,
             native_preamble_deferred: 0,
             native_definitions: None,
@@ -533,6 +569,7 @@ impl RevitFile {
             material_appearances: std::collections::HashMap::new(),
             category_style_materials: None,
             unread_streams: Vec::new(),
+            budget_stops: crate::budget::Stops::new(),
             unread_type_doors_windows: BTreeSet::new(),
             disagreeing_type_texts: BTreeSet::new(),
             wall_cut_steps_memo: BTreeMap::new(),
@@ -552,6 +589,22 @@ impl RevitFile {
     /// anything produced from this handle is missing what they hold.
     pub fn unread_streams(&self) -> &[UnreadStream] {
         &self.unread_streams
+    }
+
+    /// The readers that stopped at a work budget since this handle was
+    /// opened, with how often (#1833): what was past each budget is missing
+    /// from anything produced from this handle, as an unread stream's
+    /// content is.
+    pub(crate) fn budget_stops(&self) -> &crate::budget::Stops {
+        &self.budget_stops
+    }
+
+    /// Keep the stops collected under work done for this handle
+    /// ([`crate::budget::Notes`]).
+    pub(crate) fn keep_budget_stops(&mut self, stops: crate::budget::Stops) {
+        for (what, times) in stops {
+            *self.budget_stops.entry(what).or_insert(0) += times;
+        }
     }
 
     /// The doors and windows this handle's export wrote as doors and
@@ -867,6 +920,7 @@ impl RevitFile {
     /// do not hold them at the peak (#1694).
     pub(crate) fn release_inflated_partitions(&mut self) {
         self.inflated.clear();
+        self.inflated_bytes = 0;
     }
 
     /// Read and inflate every gzip member of `name`, memoised.
@@ -907,14 +961,19 @@ impl RevitFile {
             });
         }
         let inflated = Arc::new(inflated);
+        let added = inflated.bytes().len() as u64;
+        if self.inflated_bytes.saturating_add(added) > INFLATED_MEMO_BUDGET_BYTES {
+            self.inflated.clear();
+            self.inflated_bytes = 0;
+        }
+        self.inflated_bytes = self.inflated_bytes.saturating_add(added);
         self.inflated
             .insert(name.to_string(), Arc::clone(&inflated));
+        if name.starts_with("Partitions/") {
+            self.partitions_inflated.insert(name.to_string());
+        }
         if let Some((control, total)) = &self.partition_progress {
-            let done = self
-                .inflated
-                .keys()
-                .filter(|key| key.starts_with("Partitions/"))
-                .count() as u64;
+            let done = self.partitions_inflated.len() as u64;
             control.report(
                 crate::control::Stage::PartitionScan,
                 done.min(*total),
@@ -988,6 +1047,12 @@ impl RevitFile {
         let inflated = self.inflated_partition(name)?;
         let hits =
             Arc::new(memchr::memmem::find_iter(inflated.bytes(), header).collect::<Vec<_>>());
+        let added = hits.len().saturating_mul(size_of::<usize>());
+        if self.header_hits_bytes.saturating_add(added) > HEADER_HITS_BUDGET_BYTES {
+            self.header_hits.clear();
+            self.header_hits_bytes = 0;
+        }
+        self.header_hits_bytes = self.header_hits_bytes.saturating_add(added);
         self.header_hits.insert(key, Arc::clone(&hits));
         Ok(hits)
     }

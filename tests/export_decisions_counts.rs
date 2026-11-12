@@ -42,7 +42,7 @@ use crate::element_parameters::nordic_dir;
 use rvt::RevitFile;
 use rvt::ifc::element_provenance;
 use rvt::ifc::export_decisions::ExportDecision;
-use rvt::ifc::{ExportOptions, UNREAD_STREAMS_REASON, run_export};
+use rvt::ifc::{ExportOptions, UNREAD_STREAMS_REASON, WORK_BUDGET_REASON, run_export};
 use rvt::research::partition_element_records::carries_no_element_id;
 use rvt::walker::WalkerLimits;
 use serde_json::json;
@@ -240,7 +240,7 @@ fn check_model(model: &str, path: &Path, case: Option<&Case>) {
     let mut classes: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
     let mut phases: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
     for item in &on.diagnostics.skipped {
-        if item.reason == UNREAD_STREAMS_REASON {
+        if item.reason == UNREAD_STREAMS_REASON || item.reason == WORK_BUDGET_REASON {
             continue;
         }
         *aggregate.entry(item.reason.clone()).or_default() += item.count;

@@ -84,3 +84,19 @@ pub fn unread_stream_report(unread: &[crate::reader::UnreadStream]) -> Vec<Strin
     );
     lines
 }
+
+/// The lines a CLI prints when readers stopped at a work budget (#1833), one
+/// per reader with how often, then how to go on
+/// ([`crate::ifc::ExportDiagnostics::work_budget_stops`]). No option raises a
+/// work budget.
+pub fn work_budget_report(stops: &std::collections::BTreeMap<String, usize>) -> Vec<String> {
+    let mut lines: Vec<String> = stops
+        .iter()
+        .map(|(reader, times)| format!("  {reader} stopped {times} time(s)"))
+        .collect();
+    lines.push(
+        "  No option raises a work budget: only a file built to make a reader do unbounded work is known to reach one. --allow-partial writes the incomplete output anyway."
+            .to_string(),
+    );
+    lines
+}

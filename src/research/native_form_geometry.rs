@@ -1001,6 +1001,81 @@ impl ExtrusionSolid {
         }
         out
     }
+
+    /// [`Self::surface_samples`]' points without making them: their count,
+    /// and any one of them by its place in that order.
+    fn surface_plan(&self, per_curve: usize) -> SurfacePlan<'_> {
+        let per_curve = per_curve.max(1);
+        let curves: Vec<&Curve> = self
+            .profile
+            .loops
+            .iter()
+            .flat_map(|l| l.curves.iter())
+            .collect();
+        let (x_lo, x_hi) = self.profile.range_along([1.0, 0.0]);
+        let (y_lo, y_hi) = self.profile.range_along([0.0, 1.0]);
+        let n = 16;
+        let mut inside = Vec::new();
+        for i in 0..n {
+            for j in 0..n {
+                let p = [
+                    x_lo + (x_hi - x_lo) * (i as f64 + 0.5) / n as f64,
+                    y_lo + (y_hi - y_lo) * (j as f64 + 0.5) / n as f64,
+                ];
+                if self.profile.signed_distance(p) < 0.0 {
+                    inside.push(p);
+                }
+            }
+        }
+        SurfacePlan {
+            solid: self,
+            curves,
+            per_curve,
+            inside,
+        }
+    }
+}
+
+/// [`ExtrusionSolid::surface_samples`] of one solid, any one of them found by
+/// its place: the mesh comparison takes one in a stride of them, and making
+/// every one held millions of points for a crafted family (#1833).
+struct SurfacePlan<'s> {
+    solid: &'s ExtrusionSolid,
+    curves: Vec<&'s Curve>,
+    per_curve: usize,
+    inside: Vec<V2>,
+}
+
+impl SurfacePlan<'_> {
+    /// Three heights at each of a curve's `per_curve + 1` places.
+    fn on_curves(&self) -> usize {
+        self.curves.len().saturating_mul((self.per_curve + 1) * 3)
+    }
+
+    fn len(&self) -> usize {
+        self.on_curves().saturating_add(self.inside.len() * 2)
+    }
+
+    /// The sample at `index`, in [`ExtrusionSolid::surface_samples`]' order.
+    fn sample(&self, index: usize) -> V3 {
+        let solid = self.solid;
+        let middle = (solid.low + solid.high) / 2.0;
+        if index < self.on_curves() {
+            let per_point = (self.per_curve + 1) * 3;
+            let (curve, rest) = (index / per_point, index % per_point);
+            let p = self.curves[curve].point_at((rest / 3) as f64 / self.per_curve as f64);
+            solid.world(p, [solid.low, middle, solid.high][rest % 3])
+        } else {
+            let at = index - self.on_curves();
+            let p = self.inside[at / 2];
+            let level = if at.is_multiple_of(2) {
+                solid.low
+            } else {
+                solid.high
+            };
+            solid.world(p, level)
+        }
+    }
 }
 
 /// An extrusion as its records describe it.
@@ -1693,19 +1768,31 @@ pub fn mesh_agreement(
                 .fold(f64::INFINITY, f64::min)
         })
         .fold(0.0, f64::max);
-    let samples: Vec<V3> = solids.iter().flat_map(|s| s.surface_samples(12)).collect();
-    let budget = (MESH_PAIR_BUDGET / corners.len()).clamp(50, 4000);
-    let stride = (samples.len() / budget).max(1);
-    let surface_max = samples
+    // The samples `surface_samples` gives, one in `stride` of them as before,
+    // made by their place rather than all made first (#1833).
+    let plans: Vec<SurfacePlan<'_>> = solids.iter().map(|s| s.surface_plan(12)).collect();
+    let count = plans
         .iter()
-        .step_by(stride)
-        .map(|p| {
-            corners
+        .map(SurfacePlan::len)
+        .fold(0usize, usize::saturating_add);
+    let budget = (MESH_PAIR_BUDGET / corners.len()).clamp(50, 4000);
+    let stride = (count / budget).max(1);
+    let mut surface_max = 0.0_f64;
+    let mut base = 0usize;
+    let mut next = 0usize;
+    for plan in &plans {
+        let end = base.saturating_add(plan.len());
+        while next < end {
+            let p = plan.sample(next - base);
+            let near = corners
                 .iter()
-                .map(|[a, b, c]| triangle_distance(*p, *a, *b, *c))
-                .fold(f64::INFINITY, f64::min)
-        })
-        .fold(0.0, f64::max);
+                .map(|[a, b, c]| triangle_distance(p, *a, *b, *c))
+                .fold(f64::INFINITY, f64::min);
+            surface_max = surface_max.max(near);
+            next = next.saturating_add(stride);
+        }
+        base = end;
+    }
     Some(MeshAgreement {
         volume_deficit: volume - mesh_volume,
         mesh_volume,
