@@ -1,21 +1,24 @@
-//! #1812: where the colour and alpha of each material in the GLB come from.
+//! #1812: where the colour and the alpha of each material in the GLB come
+//! from.
 //!
 //! FACT under test: `gltf::build_gltf` marks every material's
-//! `extras.colourSource`:
-//! - `"file"` where its base colour and alpha are the Revit material's own;
-//! - `"rvt-rs"` where rvt-rs chose them: the category colour of an element with
-//!   no material of its own, or the grey of a material whose colour was not
-//!   read.
+//! `extras.colourSource` and `extras.alphaSource`, each:
+//! - `"file"` where the value is the Revit material's own (the alpha being one
+//!   minus its transparency);
+//! - `"rvt-rs"` where rvt-rs chose it: the category colour and alpha of an
+//!   element with no material of its own, the grey of a material whose colour
+//!   was not read, or the opaque 1 of one whose transparency was not read.
 //!
 //! The probe makes the GLB `rvt-gltf` makes with no flags. It counts the
-//! materials, and the element primitives drawn in them, by source and by
-//! whether they are translucent (alpha below 1). A material with no mark, or a
-//! category material marked other than `"rvt-rs"`, is a failure.
+//! materials, and the element primitives drawn in them, by the two marks
+//! (`<colour>/<alpha>`) and by whether they are translucent (alpha below 1).
+//! A material with no mark, or a category material with either mark other
+//! than `"rvt-rs"`, is a failure.
 //!
 //! Output:
-//!   materials source=<s> translucent=<n> opaque=<n>
-//!   primitives source=<s> translucent=<n> opaque=<n>
-//!   category <name> primitives=<n> alpha=<a> source=<s>
+//!   materials source=<colour>/<alpha> translucent=<n> opaque=<n>
+//!   primitives source=<colour>/<alpha> translucent=<n> opaque=<n>
+//!   category <name> primitives=<n> alpha=<a> source=<colour>/<alpha>
 //!   failures unmarked=<n> category_not_rvt_rs=<n>
 //!
 //! Usage:
@@ -24,13 +27,13 @@
 use std::collections::BTreeMap;
 
 use rvt::RevitFile;
-use rvt::ifc::gltf::{COLOUR_FROM_RVT_RS, Material, build_gltf};
+use rvt::ifc::gltf::{Material, SOURCE_RVT_RS, build_gltf};
 
-fn source(material: &Material) -> &str {
-    material
-        .extras
-        .as_ref()
-        .map_or("-", |extras| extras.colour_source.as_str())
+fn source(material: &Material) -> String {
+    material.extras.as_ref().map_or_else(
+        || "-".to_string(),
+        |extras| format!("{}/{}", extras.colour_source, extras.alpha_source),
+    )
 }
 
 fn translucent(material: &Material) -> bool {
@@ -51,11 +54,11 @@ fn main() -> anyhow::Result<()> {
     )?;
     let (doc, _) = build_gltf(&run.model);
 
-    let mut materials: BTreeMap<&str, [u64; 2]> = BTreeMap::new();
+    let mut materials: BTreeMap<String, [u64; 2]> = BTreeMap::new();
     for material in &doc.materials {
         materials.entry(source(material)).or_default()[usize::from(!translucent(material))] += 1;
     }
-    let mut primitives: BTreeMap<&str, [u64; 2]> = BTreeMap::new();
+    let mut primitives: BTreeMap<String, [u64; 2]> = BTreeMap::new();
     let mut categories: BTreeMap<usize, u64> = BTreeMap::new();
     for node in doc.nodes.iter().filter(|node| node.extras.is_some()) {
         let Some(mesh) = node.mesh.and_then(|index| doc.meshes.get(index)) else {
@@ -85,7 +88,9 @@ fn main() -> anyhow::Result<()> {
     let mut category_not_rvt_rs = 0;
     for (index, count) in &categories {
         let material = &doc.materials[*index];
-        if source(material) != COLOUR_FROM_RVT_RS {
+        if !material.extras.as_ref().is_some_and(|extras| {
+            extras.colour_source == SOURCE_RVT_RS && extras.alpha_source == SOURCE_RVT_RS
+        }) {
             category_not_rvt_rs += 1;
         }
         println!(
