@@ -26,8 +26,7 @@
 //! `unstable-research`, where this module is private, CI's default-features
 //! step would list them as reachable. No stable item names any of them: with
 //! every top-level item made crate-private the public API compiled without a
-//! `private_interfaces` or `private_bounds` finding (scratch run 43142640265's
-//! sibling, #1694).
+//! `private_interfaces` or `private_bounds` finding (#1694).
 
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
