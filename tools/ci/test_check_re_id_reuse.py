@@ -22,6 +22,28 @@ class Reused(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertIn("#1600", problems[0])
 
+    def test_the_report_of_the_pull_request_this_one_is_stacked_on_is_not_a_clash(self):
+        # A stacked pull request carries its base's commits: the base's report is in
+        # its file list at the same path, and its own report takes the next id.
+        mine = [P + "RE-438-ends.md", P + "RE-439-mesh.md"]
+        self.assertEqual(c.reused(mine, mine, {1771: [P + "RE-438-ends.md"]}), [])
+
+    def test_a_stacked_pull_request_that_adds_another_report_under_the_base_id_fails(self):
+        # The base's file is no clash, but a second file under its id is a second
+        # report under one id.
+        mine = [P + "RE-438-ends.md", P + "RE-438-other.md"]
+        problems = c.reused(mine, mine, {1771: [P + "RE-438-ends.md"]})
+        self.assertEqual(len(problems), 1)
+        self.assertIn("names 2 new reports", problems[0])
+
+    def test_an_earlier_pull_request_with_the_id_at_another_path_still_fails_beside_a_shared_one(self):
+        # Stacked on #1771 for RE-438, and RE-439 clashes with a different pull request.
+        mine = [P + "RE-438-ends.md", P + "RE-439-mesh.md"]
+        earlier = {1771: [P + "RE-438-ends.md"], 1780: [P + "RE-439-else.md"]}
+        problems = c.reused(mine, mine, earlier)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("#1780", problems[0])
+
     def test_a_free_id_passes(self):
         self.assertEqual(c.reused([P + "RE-397-x.md"], [P + "RE-396-p.md", P + "RE-397-x.md"], {1620: [P + "RE-385-z.md"]}), [])
 

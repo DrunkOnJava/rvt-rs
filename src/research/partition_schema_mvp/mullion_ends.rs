@@ -277,10 +277,33 @@ fn neighbours(
     found
 }
 
+/// How many of a curtain mullion's two end faces its Revit solid keeps, and which
+/// of those ends have a partner: one that an oblique mullion or a mullion across
+/// holding its point inside keeps (RE-438). The boxes of the wall saw that
+/// partner, so the pass that draws the mullion from its saved mesh does not take
+/// it for a continuation on another curtain wall that they missed (RE-439).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KeptEnds {
+    /// 0, 1 or 2.
+    pub kept: u8,
+    /// Whether the end of the box at its `-axis` side, then the end at its `+axis`
+    /// side (the order of `end_points`), is kept and has a partner.
+    pub partnered: [bool; 2],
+}
+
 /// For each mullion of `group`, the mullions of one curtain wall, how many of
 /// its two end faces its Revit solid keeps (0, 1 or 2); a mullion left out has
 /// none.
 pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
+    kept_ends_with_partners(group)
+        .into_iter()
+        .map(|(id, ends)| (id, ends.kept))
+        .collect()
+}
+
+/// [`kept_ends`], with which of the kept ends of each mullion have a partner
+/// (RE-439).
+pub fn kept_ends_with_partners(group: &[MullionBox]) -> BTreeMap<u32, KeptEnds> {
     if group.len() > MAX_GROUP {
         return BTreeMap::new();
     }
@@ -304,7 +327,7 @@ pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
         }
         found.insert(m.id, (along, ends));
     }
-    let mut kept = BTreeMap::new();
+    let mut kept: BTreeMap<u32, KeptEnds> = BTreeMap::new();
     for m in group {
         let Some((along, ends)) = found.get(&m.id) else {
             continue;
@@ -327,8 +350,15 @@ pub fn kept_ends(group: &[MullionBox]) -> BTreeMap<u32, u8> {
             continue;
         }
         let count = ends.iter().filter(|end| !end.hidden()).count();
+        let partnered = [0, 1].map(|end| !ends[end].hidden() && ends[end].partner);
         if let Ok(count) = u8::try_from(count) {
-            kept.insert(m.id, count);
+            kept.insert(
+                m.id,
+                KeptEnds {
+                    kept: count,
+                    partnered,
+                },
+            );
         }
     }
     kept
@@ -460,6 +490,41 @@ mod tests {
         let bar = across(2, [0.0, 0.0, 2.0], 4.0, 0.08);
         let brace = leaning(3, [0.0, 0.0, 2.0], 2.0, 45.0, 0.08);
         assert!(!kept_ends(&[post, bar, brace]).contains_key(&1));
+    }
+
+    // How telling the kept ends that have a partner can go wrong (RE-439): a hidden
+    // joint is told as a kept end with a partner, the end an oblique mullion keeps
+    // is told as one with none (the pass that draws the mullion from its saved mesh
+    // then takes it for a continuation the boxes missed), or the two ends are told
+    // the wrong way round (the pass maps the mesh's ends to them by the side of the
+    // axis each lies on, the `-axis` end first).
+    #[test]
+    fn the_kept_ends_with_a_partner_are_the_joints_an_oblique_mullion_keeps() {
+        let with_partners = |group: &[MullionBox]| {
+            kept_ends_with_partners(group)
+                .into_iter()
+                .map(|(id, ends)| (id, (ends.kept, ends.partnered)))
+                .collect::<BTreeMap<_, _>>()
+        };
+        let lower = mullion(1, [0.0, 0.0, 0.0], 2.0, 0.0, 0.08);
+        let upper = mullion(2, [0.0, 0.0, 2.0], 2.0, 0.0, 0.08);
+        // A joint nothing else lies at is hidden: no kept end has a partner.
+        assert_eq!(
+            with_partners(&[lower.clone(), upper.clone()]),
+            BTreeMap::from([(1, (1, [false, false])), (2, (1, [false, false]))])
+        );
+        // An oblique brace at the joint keeps it: the end of each piece at the joint
+        // (the `+axis` end of the lower piece, the `-axis` end of the upper one) is
+        // kept and has a partner, and the brace has none.
+        let brace = leaning(3, [0.0, 0.0, 2.0], 2.0, 45.0, 0.08);
+        assert_eq!(
+            with_partners(&[lower, upper, brace]),
+            BTreeMap::from([
+                (1, (2, [false, true])),
+                (2, (2, [true, false])),
+                (3, (2, [false, false])),
+            ])
+        );
     }
 
     #[test]

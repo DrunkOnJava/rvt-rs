@@ -14,4 +14,4 @@
   mullions being Revit's. 9 of 126 exports move, by that value alone (the
   offices, 32 mullions of each `rac_advanced` save, 24 of Snowdon Towers
   Architectural); the 70 and 69 mullions whose partner end an oblique mullion
-  keeps wait for the mesh path (#1790).
+  keeps get none here (#1790, RE-439).

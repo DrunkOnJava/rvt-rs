@@ -66,7 +66,7 @@ use super::export_content::{
 use super::mesh_volume::{
     BeamQuantities, ColumnQuantities, MESH_LENGTH_REACH, Placed, Prism, all_faces_flat,
     beam_quantities, box_plan_width, closed_mesh_volume, column_quantities, mullion_surface_area,
-    partner_ends, prism_along,
+    partner_ends, partners_the_boxes_missed, prism_along,
 };
 use super::mesh_wall_quantities::{WallMeshQuantities, wall_mesh_quantities};
 use crate::native_saved_mesh::{GraphicsMeshes, Primitive};
@@ -842,8 +842,14 @@ fn drop_column_box_quantities(model: &mut IfcModel, found: &[(usize, f64)]) {
 /// the BIM4LCA office at building permit that it draws as a cut mesh, and the
 /// volume alone does not tell them from the rest ([`add_column_quantities`]
 /// gives it where the mesh is a vertical prism, RE-424). A curtain mullion, a curtain
-/// panel and a column are the entities measured equal to Revit's on every
-/// element (RE-387); a body of another entity gets none. A curtain mullion
+/// panel and a column are the entities measured equal to Revit's on every element
+/// (RE-387), and a building element proxy since (256 values on 26 models with a
+/// Revit export, eight held-out pairs of 2024 to 2027 among them, none different:
+/// Measure run 43086493417); a body of another entity gets none. A proxy's saved
+/// mesh is a tessellation wherever its solid has a curved face, which
+/// [`all_faces_flat`] refuses, so on the BIM4LCA office as built 8 of its 12
+/// proxies take Revit's `NetVolume` and the ones drawn from a profile with rounded
+/// folds get none. A curtain mullion
 /// whose `NetVolume` the box gave and whose mesh has another volume is not an
 /// extrusion of its box, and takes the mesh's (RE-403) and the mesh's length
 /// (RE-418): the mullions of `members` whose `Length` it changed are returned with
@@ -877,6 +883,7 @@ fn add_mesh_volumes(
             "IFCMEMBER" => ("Qto_MemberBaseQuantities", &["NetVolume"]),
             "IFCPLATE" => ("Qto_PlateBaseQuantities", &["NetVolume"]),
             "IFCCOLUMN" => ("Qto_ColumnBaseQuantities", &["NetVolume"]),
+            "IFCBUILDINGELEMENTPROXY" => ("Qto_BuildingElementProxyQuantities", &["NetVolume"]),
             _ => continue,
         };
         let volume_property = |name: &str| Property {
@@ -987,9 +994,9 @@ fn follow_mesh_over_box(
 struct MemberMesh {
     /// The mullion's index into the entities.
     index: usize,
-    /// How many of its two end faces its Revit solid keeps, where its curtain
-    /// wall's boxes say (RE-268).
-    kept: Option<u8>,
+    /// How many of its two end faces its Revit solid keeps, and which of those
+    /// ends have a partner, where its curtain wall's boxes say (RE-268, RE-439).
+    kept: Option<crate::partition_schema_mvp::KeptEnds>,
     /// The mesh as a prism along the mullion's axis.
     prism: Prism,
     /// Where its two end faces are, in the model's frame.
@@ -1007,7 +1014,11 @@ struct MemberMesh {
 /// it. Where a mullion has a partner at an end that `kept` counts, the count
 /// misses a continuation on another curtain wall, and the mullion gets none:
 /// `kept` must leave every end with a partner (`partner_ends`) among the ends it
-/// does not count.
+/// does not count, but for the ends at which the boxes saw the partner and kept
+/// the end, as an oblique mullion or one across inside keeps it (RE-438,
+/// RE-439). The mesh's two ends are matched to the boxes' by which side of the
+/// mullion's axis each lies on ([`partners_the_boxes_missed`]), so that a partner
+/// at the end the boxes saw none at is missed whatever lies at the other.
 fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
     let mut held: BTreeMap<usize, usize> = BTreeMap::new();
     for (position, entity) in model.entities.iter().enumerate() {
@@ -1020,11 +1031,14 @@ fn add_mullion_surface_areas(model: &mut IfcModel, members: &[MemberMesh]) {
     let placed: Vec<Placed> = members.iter().map(|member| member.placed).collect();
     let partners = partner_ends(&placed);
     for (member, partners) in members.iter().zip(partners) {
-        let (Some(kept), Some(&position)) = (member.kept, held.get(&member.index)) else {
+        let (Some(ends), Some(&position)) = (member.kept, held.get(&member.index)) else {
             continue;
         };
-        let with_partner = partners.iter().filter(|partner| **partner).count();
-        if with_partner > usize::from(2 - kept.min(2)) {
+        let kept = ends.kept;
+        // The partners the boxes saw at the ends they keep are no continuation they
+        // missed; a partner at any other end is.
+        let missed = partners_the_boxes_missed(&member.placed, partners, ends.partnered);
+        if missed > usize::from(2 - kept.min(2)) {
             continue;
         }
         let Some(IfcEntity::ElementPropertySet { set, .. }) = model.entities.get_mut(position)
