@@ -1,0 +1,29 @@
+name: Install wasm-pack and wasm-bindgen
+description: >-
+  Install wasm-pack and the prebuilt wasm-bindgen CLI of the version Cargo.lock
+  pins, so that wasm-pack finds it on PATH instead of fetching it. Run it in a
+  job with the repository checked out, after the Rust toolchain is installed.
+# #1457: three copies (viewer-test.yml, deploy-viewer.yml, publish.yml). wasm-pack
+# fetches the wasm-bindgen CLI that Cargo.lock pins at build time, from GitHub
+# and then by `cargo install`, which retries for seconds: a 40 s DNS outage
+# failed both and turned main red (CI run 41954251714). The prebuilt binary of
+# the locked version is installed here by install-action, which retries each
+# download for about a minute, and wasm-pack uses the one it finds on PATH.
+runs:
+  using: composite
+  steps:
+    - name: Locked wasm-bindgen version
+      id: wasm-bindgen
+      shell: bash
+      run: |
+        set -euo pipefail
+        version=$(awk '/^name = "wasm-bindgen"$/ { getline; gsub(/version = |"/, ""); print; exit }' Cargo.lock)
+        if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "::error::no wasm-bindgen version in Cargo.lock (read '${version}')"
+          exit 1
+        fi
+        echo "version=${version}" >> "$GITHUB_OUTPUT"
+    - name: Install wasm-pack and wasm-bindgen
+      uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
+      with:
+        tool: wasm-pack@0.14.0,wasm-bindgen@${{ steps.wasm-bindgen.outputs.version }}
