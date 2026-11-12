@@ -4678,19 +4678,29 @@ fn add_piece_sets(
     entities: &mut Vec<entities::IfcEntity>,
     pieces_of: Vec<(usize, std::ops::Range<usize>)>,
 ) {
+    // Each owner's sets, as entity indices in order, found once: each element
+    // in pieces scanned every entity for its sets, elements × entities
+    // (#1845). A set given to a piece is added as it is pushed, as the scan
+    // would have seen it.
+    let mut sets_of: std::collections::HashMap<usize, Vec<usize>> = Default::default();
+    for (index, entity) in entities.iter().enumerate() {
+        if let entities::IfcEntity::ElementPropertySet { element, .. } = entity {
+            sets_of.entry(*element).or_default().push(index);
+        }
+    }
     for (element, pieces) in pieces_of {
-        let sets: Vec<PropertySet> = entities
-            .iter()
-            .filter_map(|entity| match entity {
-                entities::IfcEntity::ElementPropertySet {
-                    element: owner,
-                    set,
-                } if *owner == element => Some(set.clone()),
+        let sets: Vec<PropertySet> = sets_of
+            .get(&element)
+            .into_iter()
+            .flatten()
+            .filter_map(|&index| match &entities[index] {
+                entities::IfcEntity::ElementPropertySet { set, .. } => Some(set.clone()),
                 _ => None,
             })
             .collect();
         for piece in pieces {
             for set in &sets {
+                sets_of.entry(piece).or_default().push(entities.len());
                 entities.push(entities::IfcEntity::ElementPropertySet {
                     element: piece,
                     set: set.clone(),

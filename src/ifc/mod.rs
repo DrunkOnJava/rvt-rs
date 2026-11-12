@@ -2907,6 +2907,22 @@ fn attach_hosted_cut_openings(rf: &mut crate::RevitFile, entities: &mut Vec<enti
     let mut cut_counts: std::collections::BTreeMap<usize, u32> = Default::default();
     let mut cuts = cuts;
     cuts.sort_by_key(|cut| std::cmp::Reverse(cut.instance));
+    // The one building element carrying each tag (`None` where several do),
+    // found once: each cut scanned every entity for its host, cuts × entities
+    // (#1845). The openings join `entities` only after the loop.
+    let mut holders: std::collections::HashMap<&str, Option<usize>> = Default::default();
+    for (index, entity) in entities.iter().enumerate() {
+        if let entities::IfcEntity::BuildingElement {
+            type_guid: Some(held),
+            ..
+        } = entity
+        {
+            holders
+                .entry(held.as_str())
+                .and_modify(|holder| *holder = None)
+                .or_insert(Some(index));
+        }
+    }
     for cut in cuts {
         let Some(transform) = u32::try_from(cut.instance)
             .ok()
@@ -2918,12 +2934,10 @@ fn attach_hosted_cut_openings(rf: &mut crate::RevitFile, entities: &mut Vec<enti
             continue;
         };
         let tag = cut.host.to_string();
-        let mut hosts = entities.iter().enumerate().filter(|(_, entity)| {
-            matches!(entity, entities::IfcEntity::BuildingElement { type_guid: Some(held), .. } if *held == tag)
-        });
-        let (Some((host, entity)), None) = (hosts.next(), hosts.next()) else {
+        let Some(&Some(host)) = holders.get(tag.as_str()) else {
             continue;
         };
+        let entity = &entities[host];
         let entities::IfcEntity::BuildingElement {
             name,
             location_feet: Some([x, y, z]),
