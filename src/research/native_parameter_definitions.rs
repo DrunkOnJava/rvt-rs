@@ -375,6 +375,13 @@ impl Registry {
             self.unit_formats.is_empty() || self.unit_formats == formats,
             "conflicting native unit registries"
         );
+        // A second registry equal to the first changes nothing: a definition
+        // inserted since was enriched against the same formats (`insert`), and
+        // the built-in ones join after the walk. Enriching every definition
+        // again for each `UnitsElem` record was records × definitions (#1833).
+        if self.unit_formats == formats {
+            return Ok(());
+        }
         self.unit_formats = formats;
         for definition in self.definitions.values_mut() {
             enrich_unit(definition, &self.unit_formats);
