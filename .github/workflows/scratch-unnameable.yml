@@ -15,15 +15,20 @@ jobs:
           persist-credentials: false
       - name: Toolchain
         run: rustup toolchain install stable --profile minimal
-      - name: The CI step
+      - name: The default-features CI step
         run: |
           RUSTFLAGS="-D warnings -D unnameable_types" cargo +stable check --lib --bins > a.log 2>&1 || true
           echo "A: errors $(grep -c '^error' a.log || true)"
-          grep -E '^error' -A 3 a.log | head -60 || true
-      - name: Make Fv and Obj crate-private, see who hands them out
+          grep -E '^error' -A 3 a.log | head -40 || true
+      - name: Clippy, every target and feature
         run: |
-          sed -i -E 's/^pub (enum|struct|trait|type|fn|const|static) /pub(crate) \1 /' src/research/graph_value.rs
-          grep -n '^pub' src/research/graph_value.rs | head
-          RUSTFLAGS="-W private_interfaces -W private_bounds" cargo +stable check --lib --bins > b.log 2>&1 || true
-          echo "B: log lines $(wc -l < b.log)"
-          grep -E '^(warning|error)' -A 10 b.log | head -260 || true
+          rustup component add clippy --toolchain stable
+          cargo +stable clippy --keep-going --workspace --all-targets --all-features --message-format short -- -D warnings > c.log 2>&1 || true
+          echo "C: findings $(grep -c -E '(^|: )(error|warning)' c.log || true)"
+          grep -E '(^|: )(error|warning)' c.log | head -60 || true
+      - name: Rustdoc and the module tests
+        run: |
+          RUSTDOCFLAGS="-D warnings" cargo +stable doc --no-deps --lib > d.log 2>&1 || true
+          echo "D: doc findings $(grep -c -E '^(error|warning)' d.log || true)"
+          cargo +stable test --lib graph_value > t.log 2>&1 || true
+          grep -E 'test result|FAILED|panicked' t.log | head -10 || true
