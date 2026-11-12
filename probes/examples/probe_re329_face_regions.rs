@@ -27,12 +27,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, Record, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_saved_mesh::pointer;
-use serde_json::Value;
 
-fn identifier(value: &Value) -> Option<i64> {
+fn identifier(value: &Fv) -> Option<i64> {
     if let Some(n) = value.as_i64() {
         return Some(n);
     }
@@ -57,15 +57,15 @@ fn describe(g: &ObjectGraph, oi: usize, depth: usize) -> String {
     format!("{}#{oi}{{{}}}", o.class_name, parts.join(" "))
 }
 
-fn value_text(g: &ObjectGraph, oi: usize, v: &Value, depth: usize) -> String {
+fn value_text(g: &ObjectGraph, oi: usize, v: &Fv, depth: usize) -> String {
     match v {
-        Value::Object(m) if m.contains_key("pointer_token") => match pointer(g, oi, v) {
+        Fv::Object(m) if m.contains_key("pointer_token") => match pointer(g, oi, v) {
             Ok(Some(t)) if depth > 0 => describe(g, t, depth - 1),
             Ok(Some(t)) => format!("->{}#{t}", g.objects[t].class_name),
             Ok(None) => "null".into(),
             Err(_) => "->?".into(),
         },
-        Value::Array(a) => {
+        Fv::Array(a) => {
             let items: Vec<String> = a
                 .iter()
                 .take(8)
@@ -78,7 +78,7 @@ fn value_text(g: &ObjectGraph, oi: usize, v: &Value, depth: usize) -> String {
             };
             format!("[{}{more}]", items.join(","))
         }
-        Value::Object(m) => {
+        Fv::Object(m) => {
             let items: Vec<String> = m
                 .iter()
                 .map(|(k, x)| format!("{k}:{}", value_text(g, oi, x, depth)))
@@ -154,7 +154,9 @@ fn main() -> anyhow::Result<()> {
             if face.class_name != "Face" {
                 continue;
             }
-            let regions = face.fields["m_faceRegions"].as_array().map_or(0, Vec::len);
+            let regions = face.fields["m_faceRegions"]
+                .as_array()
+                .map_or(0, <[Fv]>::len);
             *histogram.entry(regions).or_default() += 1;
             if regions == 0 {
                 without += 1;

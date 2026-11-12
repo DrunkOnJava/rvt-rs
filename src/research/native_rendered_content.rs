@@ -54,7 +54,7 @@ pub fn rendered_content_types(
             .and_then(|graph| graph.objects.first())
             .filter(|root| root.class_name == "Family")
             .and_then(|root| root.fields.get("m_eRenderModelType"))
-            .and_then(serde_json::Value::as_i64);
+            .and_then(crate::graph_value::Fv::as_i64);
         if render_type == Some(RENDERED_CONTENT) {
             rendered.insert(record.identity.element_id);
         }

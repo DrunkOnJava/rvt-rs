@@ -10,6 +10,7 @@
 use anyhow::{Context, Result, ensure};
 use rvt::RevitFile;
 use rvt::research::{
+    graph_value::Fv,
     native_document::{Options, extract_graphs},
     native_parameters::ObjectGraph,
     native_parametric_mesh::face_grid,
@@ -40,10 +41,12 @@ fn nonrectangular_control(g: &ObjectGraph, fi: usize) -> Result<String> {
             if pointer(g, ei, value)? != Some(fi) {
                 continue;
             }
-            let mut changed: ObjectGraph = serde_json::from_value(serde_json::to_value(g)?)?;
-            let mut sample = edge.fields["m_firstAndLastEdgePnts"][0].clone();
+            let mut changed = g.clone();
+            let mut fields = edge.fields.to_json();
+            let mut sample = fields["m_firstAndLastEdgePnts"][0].clone();
             sample["uv"][side] = json!([0.37, 0.41]);
-            changed.objects[ei].fields["m_interiorEdgePnts"] = json!([sample]);
+            fields["m_interiorEdgePnts"] = json!([sample]);
+            changed.objects[ei].fields = Fv::from_value(&fields);
             let error = face_grid(&changed, fi)
                 .err()
                 .context("accepted nonrectangular collapsed trim")?
@@ -69,8 +72,8 @@ fn controls(g: &ObjectGraph, si: usize, side: usize, partner: usize) -> Result<V
         "point-line",
         "point-ellipse",
     ] {
-        let mut changed: ObjectGraph = serde_json::from_value(serde_json::to_value(g)?)?;
-        let fields = &mut changed.objects[si].fields;
+        let mut changed = g.clone();
+        let mut fields = changed.objects[si].fields.to_json();
         match case {
             "missing point" => {
                 fields
@@ -88,16 +91,19 @@ fn controls(g: &ObjectGraph, si: usize, side: usize, partner: usize) -> Result<V
             "clipped envelope" => fields["m_Envelope"]["m_corners"][1][1] = json!(0.9),
             "point-line" => {
                 changed.objects[partner].class_name = "GLine".into();
-                changed.objects[partner].fields =
-                    json!({"m_origin":[0,0,0],"m_dirVec":[1,0,0],"m_endParams":[0,1]});
+                changed.objects[partner].fields = Fv::from_value(
+                    &json!({"m_origin":[0,0,0],"m_dirVec":[1,0,0],"m_endParams":[0,1]}),
+                );
             }
             _ => {
                 changed.objects[partner].class_name = "GEllipse".into();
-                let f = &mut changed.objects[partner].fields;
+                let mut f = changed.objects[partner].fields.to_json();
                 f["m_xLen"] = f["m_radius"].clone();
                 f["m_yLen"] = f["m_radius"].clone();
+                changed.objects[partner].fields = Fv::from_value(&f);
             }
         }
+        changed.objects[si].fields = Fv::from_value(&fields);
         let error = ParametricSurface::read(&changed, si)
             .err()
             .with_context(|| format!("accepted {case}"))?;
@@ -132,7 +138,7 @@ fn main() -> Result<()> {
             let f = &object.fields;
             let nulls: Vec<usize> = [1, 2]
                 .into_iter()
-                .filter(|s| f[format!("m_pProfileCurve{s}")]["pointer_token"] == 0)
+                .filter(|s| f[format!("m_pProfileCurve{s}")]["pointer_token"].as_u64() == Some(0))
                 .collect();
             if nulls.is_empty() {
                 continue;
@@ -159,7 +165,7 @@ fn main() -> Result<()> {
                 f64::from_le_bytes(point_bytes[i * 8..i * 8 + 8].try_into().unwrap())
             });
             ensure!(
-                json!(point) == f[format!("m_Point{side}")],
+                json!(point) == f[format!("m_Point{side}")].to_json(),
                 "point bytes differ"
             );
             let surface = ParametricSurface::read(g, si)?;
@@ -180,7 +186,7 @@ fn main() -> Result<()> {
                 if obj.class_name == "Face" && pointer(g, fi, &obj.fields["m_pSurf"])? == Some(si) {
                     let mesh = face(g, fi)?.context("missing face mesh")?;
                     let grid = face_grid(g, fi)?;
-                    faces.push(json!({"face":fi,"vertices":mesh.vertices.len(),"triangles":mesh.triangles.len(),"bounds":grid.bounds,"rectangular":grid.rectangular,"nonrectangular_refusal":nonrectangular_control(g,fi)?}));
+                    faces.push(json!({"face":fi,"vertices":mesh.vertices.len(),"triangles":mesh.triangles.len(),"u_knots":grid.u.len(),"v_knots":grid.v.len(),"bounds":grid.bounds,"rectangular":grid.rectangular,"nonrectangular_refusal":nonrectangular_control(g,fi)?}));
                 }
             }
             ensure!(!faces.is_empty(), "no face for surface");

@@ -31,11 +31,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_saved_scene;
-use serde_json::Value;
 
-fn element_id(value: &Value) -> Option<u64> {
+fn element_id(value: &Fv) -> Option<u64> {
     value
         .pointer("/m_id/m_id64")?
         .as_i64()

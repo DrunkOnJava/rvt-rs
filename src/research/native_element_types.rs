@@ -58,7 +58,7 @@ pub fn system_type_names(
                 .iter()
                 .find(|object| object.class_name == "SymbolInfo")
                 .and_then(|object| object.fields.get("m_name"))
-                .and_then(serde_json::Value::as_str)
+                .and_then(crate::graph_value::Fv::as_str)
                 .filter(|name| !name.is_empty())
                 .map(|name| (name.to_string(), kind.3));
             agree(&mut names, id, name);

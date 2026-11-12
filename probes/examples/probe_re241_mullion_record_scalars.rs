@@ -36,23 +36,23 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::{native_element_parameters, native_wall_types};
-use serde_json::Value;
 
 const OBJECTS: usize = 400;
 const TYPE_OBJECTS: usize = 60;
 const HOST_OBJECTS: usize = 20;
 
-fn scalar(value: &Value) -> Option<String> {
+fn scalar(value: &Fv) -> Option<String> {
     match value {
-        Value::Number(n) => Some(n.to_string()),
-        Value::Bool(b) => Some(b.to_string()),
-        Value::String(s) if s.len() <= 40 => Some(s.replace(' ', "_")),
-        Value::Object(_) => value
+        n @ (Fv::U64(_) | Fv::I64(_) | Fv::F64(_)) => Some(n.to_string()),
+        Fv::Bool(b) => Some(b.to_string()),
+        Fv::Str(s) if s.len() <= 40 => Some(s.replace(' ', "_")),
+        Fv::Object(_) => value
             .pointer("/m_id/m_id64")
-            .and_then(Value::as_i64)
+            .and_then(Fv::as_i64)
             .map(|id| format!("@{}", id.signum())),
         _ => None,
     }
@@ -201,9 +201,9 @@ fn main() -> anyhow::Result<()> {
             .flatten()
             .filter_map(|parameter| {
                 let value = match &parameter.value {
-                    Value::Bool(b) => b.to_string(),
-                    Value::String(text) if text.len() <= 40 => text.replace(' ', "_"),
-                    Value::Number(n) => n.to_string(),
+                    Fv::Bool(b) => b.to_string(),
+                    Fv::Str(text) if text.len() <= 40 => text.replace(' ', "_"),
+                    n @ (Fv::U64(_) | Fv::I64(_) | Fv::F64(_)) => n.to_string(),
                     _ => return None,
                 };
                 Some(format!("HP.{}={value}", parameter.parameter_id))

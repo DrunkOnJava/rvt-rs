@@ -150,7 +150,7 @@ pub(crate) fn revit_values(step: &str) -> BTreeMap<u64, BTreeMap<String, Written
 /// Whether rvt-rs's value is the one Revit writes.
 fn equal(ours: &ElementParameter, written: &Written) -> bool {
     match (written, &ours.value) {
-        (Written::Boolean(b), serde_json::Value::Bool(v)) => b == v,
+        (Written::Boolean(b), rvt::research::graph_value::Fv::Bool(v)) => b == v,
         (Written::Boolean(b), v) => v.as_i64().is_some_and(|n| (n != 0) == *b),
         (Written::Integer(n), v) => v.as_i64() == Some(*n),
         (Written::Text(t), v) => v.as_str() == Some(t.as_str()),

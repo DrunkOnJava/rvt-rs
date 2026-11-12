@@ -112,10 +112,10 @@ struct Document {
 }
 
 /// `{"m_id":{"m_id64":n}}` as `n`.
-fn element_id(value: Option<&serde_json::Value>) -> Option<i64> {
+fn element_id(value: Option<&crate::graph_value::Fv>) -> Option<i64> {
     value
         .and_then(|v| v.pointer("/m_id/m_id64"))
-        .and_then(serde_json::Value::as_i64)
+        .and_then(crate::graph_value::Fv::as_i64)
 }
 
 /// A graph's `FamilyParams` values: parameter ElementId and `m_int`.
@@ -220,7 +220,7 @@ fn read_documents(
                             cutting: root
                                 .fields
                                 .get("m_cutting")
-                                .and_then(serde_json::Value::as_bool)
+                                .and_then(crate::graph_value::Fv::as_bool)
                                 .unwrap_or(false),
                             visible: stored_visible(&graph),
                             bound,

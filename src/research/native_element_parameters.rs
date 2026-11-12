@@ -28,11 +28,11 @@
 //! Revit 2015 to 2027, as [`crate::native_document::extract`] reads them (RE-280).
 
 use crate::RevitFile;
+use crate::graph_value::Fv;
 use crate::native_document::{self, Options};
 use crate::native_parameter_definitions::Definition;
 use anyhow::Result;
 use serde::Serialize;
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Where a parameter is defined.
@@ -73,7 +73,7 @@ pub struct ElementParameter {
     pub spec_type_id: Option<String>,
     pub group_type_id: Option<String>,
     /// The saved value, in internal units; a Yes/No value as a boolean.
-    pub value: Value,
+    pub value: Fv,
     pub si_value: Option<f64>,
     pub si_unit: Option<&'static str>,
     /// The name of the material or family type an ElementId value names.
@@ -103,7 +103,7 @@ pub struct ElementParameters {
 impl ElementParameters {
     /// An element's parameters as the JSON entries `rvt-elements` and
     /// Python's `decoded_elements()` list, none for an id not read.
-    pub fn json_entries(&self, id: Option<u32>) -> Vec<Value> {
+    pub fn json_entries(&self, id: Option<u32>) -> Vec<serde_json::Value> {
         id.and_then(|id| self.elements.get(&u64::from(id)))
             .into_iter()
             .flatten()
@@ -265,7 +265,7 @@ fn read_selected(
                     .iter()
                     .find(|object| object.class_name == class)
                     .and_then(|object| object.fields.get(field))
-                    .and_then(Value::as_str)
+                    .and_then(Fv::as_str)
                     .map(str::to_string)
             };
             match root.class_name.as_str() {
@@ -303,7 +303,7 @@ fn read_selected(
                 .map(|definition| (definition.parameter_id, definition))
                 .collect();
             let class_name = root.class_name.clone();
-            let entry = |parameter_id: i64, storage_type: &str, raw: &Value| {
+            let entry = |parameter_id: i64, storage_type: &str, raw: &Fv| {
                 parameter(
                     parameter_id,
                     storage_type,
@@ -328,7 +328,7 @@ fn read_selected(
                 let is_instance = definitions
                     .get(&value.parameter_id)
                     .and_then(|definition| definition.owner_fields.get("m_instanceParam"))
-                    .and_then(Value::as_bool)
+                    .and_then(Fv::as_bool)
                     == Some(true);
                 if is_instance {
                     instance_defaults.insert(value.parameter_id);
@@ -459,7 +459,7 @@ fn read_selected(
 fn parameter(
     parameter_id: i64,
     storage_type: &str,
-    raw: &Value,
+    raw: &Fv,
     definition: Option<&Definition>,
     source_element_id: i64,
     source_class: &str,
@@ -474,9 +474,7 @@ fn parameter(
     };
     let spec = definition.and_then(|definition| definition.spec_type_id.clone());
     let value = match (spec.as_deref(), raw.as_i64()) {
-        (Some(spec), Some(n)) if spec.starts_with("autodesk.spec:spec.bool-") => {
-            Value::Bool(n != 0)
-        }
+        (Some(spec), Some(n)) if spec.starts_with("autodesk.spec:spec.bool-") => Fv::Bool(n != 0),
         _ => raw.clone(),
     };
     let (si_value, si_unit) = match (spec.as_deref(), raw.as_f64()) {

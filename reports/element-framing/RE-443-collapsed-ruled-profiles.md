@@ -2,7 +2,8 @@
 
 2026-11-11. Positive, bounded to a point and an arc, a unit envelope and a
 rectangular trim. Public RVT bytes and Revit's own IFC confirm the rule.
-Measurements below are local runs, not a Measure workflow run.
+Native-reference measurements below are local runs against a reference that
+is **not shared**. The separate Measure findings are attributed below.
 
 ## Finding and scope
 
@@ -84,6 +85,12 @@ These are graph mutations of the measured file, not invented positive files.
 
 ## Native reference and body measurements
 
+**Not shared:** redistribution terms for this export of Autodesk's sample
+have not been established. The public archive was withdrawn on 2026-11-12;
+the manifest retains its hashes and size, but no download URL. The figures
+below are retained as local measurements, not publicly reproducible native
+comparisons. The source RVT and byte probe remain publicly reproducible.
+
 The pinned RVT was exported without saving it, using Revit **23.1.90.15**,
 IFC exporter **23.4.1.0**, IFC4 Design Transfer View, a fresh Fine 3D view,
 no section box, `TessellationLevelOfDetail=1`, `UseActiveViewGeometry=true`
@@ -102,7 +109,8 @@ out. It is not presented as an untouched full-project export.
 | Reference IFC | 281892 | `4faf2915673bcb3ff48137b1ee7350449afef141a0e4ab2f6c8c760e7c874cf5` |
 | Reference ZIP | 52288 | `77322bed93a88f027f473cd71578fa27aaeabf9402eaab99a445a1a138d6f93a` |
 
-The replay reads the emitted triangle coordinates directly, preserving
+The table below records the revised one-cell generator grid measured on
+2026-11-12. The replay reads the emitted triangle coordinates directly, preserving
 coincident parts, and meshes the native reference with the repository-pinned
 IfcOpenShell 0.9.0.post1. Both are transformed to their site frame. Every
 unique vertex and every triangle centroid is scored against the other
@@ -112,10 +120,10 @@ abort the replay rather than disappearing from the denominator.
 
 | Native reference tessellation | Bodies | Maximum two-way sampled distance | Maximum relative volume difference |
 |---|---:|---:|---:|
-| Default (primary comparison) | 107 | 0.962523 mm | 0.178475% |
-| Fine, supplementary: duct fittings | 105 | 0.131547 mm | See all-body maximum below |
+| Default (primary comparison) | 107 | 0.720662 mm | 0.178479% |
+| Fine, supplementary: duct fittings | 105 | 0.131137 mm | See all-body maximum below |
 | Fine, supplementary: sanitary terminals | 2 | 0.720662 mm | See all-body maximum below |
-| Fine, supplementary: all | 107 | 0.720662 mm | 0.019159% |
+| Fine, supplementary: all | 107 | 0.720662 mm | 0.019083% |
 
 **None of the 107 bodies passes the strict 0.001 ft two-way threshold in
 the default comparison.** Fine reference tessellation brings 105 of 107
@@ -132,19 +140,30 @@ native export calls the sanitary elements `IfcFlowTerminal`.
 ## Reproduce without Revit
 
 Use the checkout containing this report and record its immutable commit
-with `git rev-parse HEAD` alongside the output. The replay fetches the
-source and native-reference archive from the URLs in the JSON pin.
+with `git rev-parse HEAD` alongside the output. Download the RVT from the
+Autodesk URL above and verify its size and SHA-256 against the manifest.
+The byte probe needs only that public source:
 
 ```sh
 cargo build --locked --profile ci --bin rvt-ifc
 cargo build --locked --profile ci -p rvt-probes --example probe_collapsed_ruled
-python3 -m pip install --require-hashes -r tools/ci/requirements-ifc.txt
-python3 tools/re/replay_collapsed_ruled.py --work target/collapsed-ruled
+cargo run --locked --profile ci -p rvt-probes --example probe_collapsed_ruled -- /path/to/rmebasicsampleproject.rvt
 ```
 
-The sample downloads on demand with exact size and SHA-256 checks. The ZIP
-and its IFC member are checked too. `--reference-zip` and `--sample` accept
-already downloaded copies but still verify their pins. `--rvt-ifc` and
+The native comparison additionally requires a local copy of the **not shared**
+reference archive matching the retained hash. It cannot be reproduced from
+public downloads alone:
+
+```sh
+python3 -m pip install --require-hashes -r tools/ci/requirements-ifc.txt
+python3 tools/re/replay_collapsed_ruled.py --work target/collapsed-ruled \
+  --reference-zip /path/to/collapsed-ruled-native-v1.zip
+```
+
+The sample downloads on demand with exact size and SHA-256 checks. The local
+ZIP and its IFC member are checked too. Omitting `--reference-zip` fails
+explicitly without downloading a reference. `--sample` accepts a local RVT
+but still verifies its pin. `--rvt-ifc` and
 `--probe` override binary
 paths when using a separate Cargo target directory. Add `--fine` for the
 slower supplementary run. Scoring uses up to four processes by default;
@@ -166,5 +185,97 @@ This local selection is not the full upstream Measure corpus.
 
 All six existing REV-A, REV-B, REV-BT, ARC-A, ARC-B and ARC-BT IFC outputs
 are byte-identical to the base, including the unsupported partial-arc cases.
-The input files' hashes are unchanged. The public replay starts from a fresh
-Autodesk download and independently reproduces the 107-body measurement.
+The input files' hashes are unchanged. Before the reference was withdrawn,
+a fresh-download replay reproduced the 107-body measurement. It now requires
+the not-shared reference locally.
+
+## Maintainer's Measure of the reviewed head (2026-11-12)
+
+The maintainer compared `3d3caf78` with `3abb42f0` in unfiltered Measure
+[43133538738](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43133538738)
+and retained exports in filtered run
+[43140323326](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43140323326).
+His [read of the results](https://github.com/DrunkOnJava/rvt-rs/pull/1797#issuecomment-6812683878)
+reports 108 of 127 exports byte-identical, ten gaining saved bodies, and nine
+changing refusal-note text only. The new basic MEP save gains the 107 bodies;
+Snowdon Towers HVAC gains 32 duct fittings. Office and architectural-basic
+body sources, meshes and placements remain unchanged. Same-project gates
+pass for 15 samples; the semantic check is NOT MEASURED on the measurement
+branch by design. A held-out download failure passed on rerun.
+
+Measure has no Revit IFC export of these samples. It confirms the export
+scope and body-source changes, not the native-reference accuracy figures.
+
+On that head, the 2024 basic MEP IFC grows from 103.5 to 159.2 MB, with
+1,633,146 triangles in the 107 new face sets (15,263 on average; 15,588
+maximum). Snowdon Towers HVAC grows from 65.5 to 69.4 MB for 32 new bodies
+(3,610 triangles on average). These are the maintainer's measurements of
+the original grid, before the point-profile subdivision revision below.
+
+
+## Point-profile subdivision revision (2026-11-12)
+
+The original ruled grid subdivided both directions. For a point/arc patch,
+every generator from the arc to the point is straight. A strip between two
+arc samples is planar, so subdividing it along the generator adds triangles
+without reducing the arc's chord error. The point-profile path now takes
+one cell in `v`, retaining the reviewed `u` grid and all trim knots. It still
+resolves the face's ruled component before choosing a grid; unresolved
+neighbours and every existing admission refusal remain in force. Other
+ruled faces keep their original grid.
+
+An arc-only `u` grid was tried but not retained: native tag 419137 exceeded
+the existing fine-reference bounds (0.2655 mm and 0.02724% volume). Keeping
+the reviewed arc sampling removes the redundant generator subdivisions
+without relaxing any measured bound. The graph reader and both probes use
+the `Fv` fields introduced by #1800; mutable probe controls convert to JSON
+only at the mutation boundary.
+
+
+All 76 measured source faces now have two `v` knots; their combined triangle
+count falls from 87,596 to 1,852. Local builds on upstream
+`09b18bd338b8c2fdb9a7d29943970735d416a73c` compare the reviewed subdivision
+with this revision. Both the 2023 and 2024 basic MEP saves retain all 107
+recovered bodies, whose combined triangle count falls from 1,633,146 to
+66,098 (15,263 to 618 on average; maximum 15,588 to 859). Their placements,
+body sources and refusal notes are unchanged, and no other representation
+changes.
+
+| Local export | Base without point profiles | Reviewed grid | Revised grid |
+|---|---:|---:|---:|
+| Basic MEP 2023 | 101,091,346 bytes | 156,722,967 bytes | 105,088,486 bytes |
+| Basic MEP 2024 | 103,550,587 bytes | 159,182,251 bytes | 107,547,770 bytes |
+| Snowdon Towers HVAC 2024 | 65,514,494 bytes | 69,364,648 bytes | 65,858,488 bytes |
+
+HVAC retains its 32 recovered duct fittings: 115,512 triangles become 5,856
+(3,610 to 183 on average; maximum 4,748 to 212). Its other representations,
+placements, body sources and refusals are unchanged. The 2024 inputs and
+BIM4LCA office are the public files pinned by the existing research manifests.
+
+The default native-reference maximum sampled distance was 0.962523 mm
+with the reviewed grid and is 0.720662 mm with the revision. Removing grid
+vertices changes the vertices and triangle centroids the scorer samples;
+this lower sampled maximum is not proof of a more accurate underlying
+surface. No replay bound was relaxed. All 107 bodies still miss the strict
+0.001 ft threshold with default reference tessellation; fine tessellation
+still puts the 105 fittings inside it, leaving the two sanitary residuals.
+
+Using `tools/re/mesh_tjunctions.py` at its 0.003 ft tolerance on the 107 MEP
+bodies, the near-edge junction count falls from 30,308 to four; no individual
+body's count increases. This is the helper's geometric diagnostic, not a
+claim that every body is watertight or that the sanitary junction residual
+is fixed.
+
+
+The fresh 12-project comparison against `09b18bd3` reproduces the original
+scope: only the intended 107 MEP bodies change representation; eight other
+IFCs are byte-identical and three change only the same 6, 9 and 15 refusal
+notes. All six existing REV/ARC outputs are byte-identical to that base,
+including the partial-arc refusals, and all source hashes are unchanged.
+In the focused comparison, architectural basic 2024 and the BIM4LCA office
+are byte-identical between the reviewed and revised grids. HVAC's recovered
+bodies have zero counted junctions, down from 2,572, with none increasing.
+
+These are local revision checks, not a new unfiltered Measure result. The
+maintainer's previous corpus verdict and its native-reference limitation
+remain attributed to the reviewed head above.

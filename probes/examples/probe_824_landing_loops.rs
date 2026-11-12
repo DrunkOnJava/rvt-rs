@@ -25,13 +25,13 @@
 use std::collections::BTreeSet;
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_saved_mesh::pointer;
-use serde_json::Value;
 
-fn point(value: Option<&Value>) -> Option<[f64; 3]> {
+fn point(value: Option<&Fv>) -> Option<[f64; 3]> {
     let items = value?.as_array()?;
-    let [x, y, z] = items.as_slice() else {
+    let [x, y, z] = items else {
         return None;
     };
     Some([x.as_f64()?, y.as_f64()?, z.as_f64()?])
@@ -65,12 +65,12 @@ fn main() -> anyhow::Result<()> {
             let curves = object
                 .fields
                 .get("m_curves")
-                .and_then(Value::as_array)
-                .cloned()
+                .and_then(Fv::as_array)
+                .map(<[Fv]>::to_vec)
                 .unwrap_or_default();
             println!(
                 "loop {id} {index} open {} curves {}",
-                object.fields.get("m_open").unwrap_or(&Value::Null),
+                object.fields.get("m_open").unwrap_or(&Fv::Null),
                 curves.len()
             );
             for curve in &curves {
@@ -86,7 +86,7 @@ fn main() -> anyhow::Result<()> {
                         let origin = point(found.fields.get("m_origin"))?;
                         let direction = point(found.fields.get("m_dirVec"))?;
                         let params = found.fields.get("m_endParams")?.as_array()?;
-                        let [a, b] = params.as_slice() else {
+                        let [a, b] = params else {
                             return None;
                         };
                         let at = |t: f64| [0, 1, 2].map(|i| origin[i] + direction[i] * t);

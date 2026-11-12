@@ -101,7 +101,7 @@ fn probe(path: &str) -> Result<()> {
             let Some(cutter) = object
                 .fields
                 .pointer("/m_instId/m_id/m_id64")
-                .and_then(Value::as_u64)
+                .and_then(rvt::research::graph_value::Fv::as_u64)
             else {
                 continue;
             };
@@ -123,7 +123,7 @@ fn probe(path: &str) -> Result<()> {
                 println!(
                     "wobj {wall} {index} {} {}",
                     object.class_name,
-                    object_digest(&object.fields)
+                    object_digest(&object.fields.to_json())
                 );
                 if CASES.contains(&wall) {
                     println!(
@@ -149,7 +149,7 @@ fn probe(path: &str) -> Result<()> {
                     "cobj {} {index} {} {}",
                     record.identity.element_id,
                     object.class_name,
-                    object_digest(&object.fields)
+                    object_digest(&object.fields.to_json())
                 );
                 if CASES.contains(&record.identity.element_id) {
                     println!(

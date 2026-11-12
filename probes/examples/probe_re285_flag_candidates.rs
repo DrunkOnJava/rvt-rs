@@ -90,7 +90,7 @@ fn run(path: &str) -> anyhow::Result<()> {
                 continue;
             }
             let value = match &parameter.value {
-                serde_json::Value::Bool(flag) => i64::from(*flag),
+                rvt::research::graph_value::Fv::Bool(flag) => i64::from(*flag),
                 other => match other.as_i64() {
                     Some(value) => value,
                     None => continue,
@@ -131,7 +131,7 @@ fn run(path: &str) -> anyhow::Result<()> {
         walls += 1;
         for (name, value) in root {
             let value = match value {
-                serde_json::Value::Bool(flag) => i64::from(*flag),
+                rvt::research::graph_value::Fv::Bool(flag) => i64::from(*flag),
                 other => match other.as_i64() {
                     Some(value) => value,
                     None => continue,
@@ -147,7 +147,7 @@ fn run(path: &str) -> anyhow::Result<()> {
         // usage `Bearing` (1): printed as one member so the scorer holds the
         // rule itself, in every model, against Revit's value.
         let integer = |name: &str| match root.get(name) {
-            Some(serde_json::Value::Bool(flag)) => Some(i64::from(*flag)),
+            Some(rvt::research::graph_value::Fv::Bool(flag)) => Some(i64::from(*flag)),
             Some(other) => other.as_i64(),
             None => None,
         };

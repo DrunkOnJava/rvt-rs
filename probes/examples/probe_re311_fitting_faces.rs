@@ -35,13 +35,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, Record, extract_graphs};
 use rvt::research::native_graphics_traversal::{
     GraphicsTransform, select_graphics_with_resolver_at_detail,
 };
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_saved_mesh::{self, pointer};
-use serde_json::Value;
 
 /// Elements of RE1-Plumbing and RE1-Mechanical whose bodies are dumped at
 /// every detail level: welded elbows of three sizes, two welded tees, the
@@ -87,7 +87,7 @@ fn determinant(m: &GraphicsTransform) -> f64 {
         + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
 }
 
-fn p3(v: &Value) -> Option<Vec3> {
+fn p3(v: &Fv) -> Option<Vec3> {
     let a = v.as_array()?;
     if a.len() != 3 {
         return None;
@@ -95,7 +95,7 @@ fn p3(v: &Value) -> Option<Vec3> {
     Some([a[0].as_f64()?, a[1].as_f64()?, a[2].as_f64()?])
 }
 
-fn identifier(value: &Value) -> Option<i64> {
+fn identifier(value: &Fv) -> Option<i64> {
     if let Some(n) = value.as_i64() {
         return Some(n);
     }
@@ -176,15 +176,15 @@ fn describe(g: &ObjectGraph, oi: usize, depth: usize) -> String {
     format!("{}#{oi}{{{}}}", o.class_name, parts.join(" "))
 }
 
-fn value_text(g: &ObjectGraph, oi: usize, v: &Value, depth: usize) -> String {
+fn value_text(g: &ObjectGraph, oi: usize, v: &Fv, depth: usize) -> String {
     match v {
-        Value::Object(m) if m.contains_key("pointer_token") => match pointer(g, oi, v) {
+        Fv::Object(m) if m.contains_key("pointer_token") => match pointer(g, oi, v) {
             Ok(Some(t)) if depth > 0 => describe(g, t, depth - 1),
             Ok(Some(t)) => format!("->{}#{t}", g.objects[t].class_name),
             Ok(None) => "null".into(),
             Err(_) => "->?".into(),
         },
-        Value::Array(a) => {
+        Fv::Array(a) => {
             let items: Vec<String> = a
                 .iter()
                 .take(8)
@@ -197,7 +197,7 @@ fn value_text(g: &ObjectGraph, oi: usize, v: &Value, depth: usize) -> String {
             };
             format!("[{}{more}]", items.join(","))
         }
-        Value::Object(m) => {
+        Fv::Object(m) => {
             let items: Vec<String> = m
                 .iter()
                 .map(|(k, x)| format!("{k}:{}", value_text(g, oi, x, depth)))
@@ -265,7 +265,7 @@ fn element(
             let pieces_before = pieces.len();
             let faces = obj.fields["m_pFaces"]
                 .as_array()
-                .cloned()
+                .map(<[Fv]>::to_vec)
                 .unwrap_or_default();
             for ptr in &faces {
                 let Ok(Some(fi)) = pointer(sg, oi, ptr) else {

@@ -56,7 +56,7 @@ Autodesk's six 2015 sample projects, where previews and PartAtom are not
 measured. On Revit 2024 and 2025 project files it reads
 the building: each element's ElementId, category, name, type (written as
 an IFC type object of its Revit type, RE-110), storey, materials, layers,
-GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226) and, where the boxes of their wall's mullions say which ends Revit's solid keeps, `NetSurfaceArea` (RE-268, RE-400, RE-403, RE-432, RE-433, RE-436, RE-438), walls'
+GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226) and, where the boxes of their wall's mullions say which ends Revit's solid keeps, `NetSurfaceArea` (RE-268, RE-400, RE-403, RE-432, RE-433, RE-436, RE-438, RE-439, RE-441), walls'
 `ExtendToStructure` (RE-228), railings' `Height` and `Reference` (RE-231, RE-431), stair flights' treads, nosing and run type
 and landings' type (RE-92) and the parameters named for a standard property
 set's property (RE-194), and a body that is exact where the element's
@@ -235,13 +235,16 @@ profiles are not decoded, and rvt-rs does not edit Revit model data.
 A zero ruled-profile pointer selects its separately saved point. The reader
 admits point/arc patches with a unit envelope and rectangular trim only.
 On the public Autodesk Revit 2023 basic MEP sample, a local run recovers 105
-duct fittings and two sanitary terminals: 107 bodies within 0.963 mm and
+duct fittings and two sanitary terminals: 107 bodies within 0.721 mm and
 0.179% volume of native IFC in the default comparison. None meets the
 stricter 0.001 ft two-way threshold with default reference tessellation;
 fine reference tessellation brings 105 inside it, with two sanitary
 junction residuals still present. Other combinations, envelopes and trims
 remain refused. [RE-443](../reports/element-framing/RE-443-collapsed-ruled-profiles.md)
-has the bytes, pinned reference and replay; this is not a full Measure run.
+has the bytes, reference hashes and local replay. The native reference is
+not shared because redistribution terms are not established; these accuracy
+figures are local measurements, separate from the maintainer's Measure of
+the body-source changes.
 
 ## Finding history
 

@@ -60,7 +60,7 @@ fn revit_joins(step: &str) -> BTreeSet<Join> {
         .collect()
 }
 
-fn as_u64(value: &serde_json::Value) -> Option<u64> {
+fn as_u64(value: &rvt::research::graph_value::Fv) -> Option<u64> {
     value
         .as_u64()
         .or_else(|| value.get("m_id").and_then(as_u64))
@@ -103,7 +103,7 @@ fn main() -> anyhow::Result<()> {
         for (position, connector) in connectors.iter().enumerate() {
             if let Some(fields) = connector.fields.as_object() {
                 for name in fields.keys() {
-                    *connector_fields.entry(name.clone()).or_default() += 1;
+                    *connector_fields.entry(name.to_string()).or_default() += 1;
                 }
             }
             if shown < SHOWN {
@@ -125,7 +125,7 @@ fn main() -> anyhow::Result<()> {
                 .fields
                 .get("m_arrRefs")
                 .and_then(|refs| refs.as_array())
-                .cloned()
+                .map(<[rvt::research::graph_value::Fv]>::to_vec)
                 .unwrap_or_default();
             for reference in refs {
                 if reference.get("m_connType").and_then(|v| v.as_u64()) != Some(1) {

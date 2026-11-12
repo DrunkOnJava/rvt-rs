@@ -28,7 +28,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// An `Identifier` as an ElementId, read as 8 bytes from Revit 2024 and 4
 /// before (RE-371).
-fn element_id(value: &serde_json::Value) -> Option<u64> {
+fn element_id(value: &crate::graph_value::Fv) -> Option<u64> {
     identifier_i64(value).and_then(|id| u64::try_from(id).ok())
 }
 
@@ -163,9 +163,9 @@ pub struct ConnectorFrame {
 
 /// A `m_trf` value as a [`ConnectorFrame`]; `None` unless its point is
 /// finite and its axis a unit vector.
-fn connector_frame(trf: &serde_json::Value) -> Option<ConnectorFrame> {
+fn connector_frame(trf: &crate::graph_value::Fv) -> Option<ConnectorFrame> {
     let origin = finite_triple(trf.get("m_or")?)?;
-    let [r0, r1, r2] = trf.get("m_3x3")?.as_array()?.as_slice() else {
+    let [r0, r1, r2] = trf.get("m_3x3")?.as_array()? else {
         return None;
     };
     let rows = [finite_triple(r0)?, finite_triple(r1)?, finite_triple(r2)?];
@@ -340,7 +340,7 @@ pub fn connector_ports(
                 let Some(root) = graph.objects.first() else {
                     return Ok(());
                 };
-                let entries: Vec<&serde_json::Value> = root
+                let entries: Vec<&crate::graph_value::Fv> = root
                     .fields
                     .get("m_arrConnectorData")
                     .and_then(|entries| entries.as_array())
@@ -469,7 +469,7 @@ pub fn family_instance_joins(
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
         };
-        let index_of = |value: Option<&serde_json::Value>| {
+        let index_of = |value: Option<&crate::graph_value::Fv>| {
             value
                 .and_then(|index| index.as_u64())
                 .and_then(|index| u32::try_from(index).ok())

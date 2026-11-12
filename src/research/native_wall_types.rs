@@ -33,7 +33,7 @@ pub(crate) fn type_function(graph: &ObjectGraph) -> Option<i64> {
         object
             .fields
             .get("m_function")
-            .and_then(serde_json::Value::as_i64)
+            .and_then(crate::graph_value::Fv::as_i64)
     })
 }
 

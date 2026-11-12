@@ -6,13 +6,15 @@
     "bytes": 30797824
   },
   "reference": {
+    "availability": "not shared",
+    "redistribution_terms": "not established",
     "file": "native-mep-107.ifc",
     "sha256": "4faf2915673bcb3ff48137b1ee7350449afef141a0e4ab2f6c8c760e7c874cf5",
     "bytes": 281892,
     "original_native_sha256": "629bf5a6e29865eba806d810d10f013c82ecc75588c68b429ce1c20a4e160cda"
   },
   "archive": {
-    "url": "https://github.com/BIM4GIB/rvt-rs/releases/download/collapsed-ruled-v1/collapsed-ruled-native-v1.zip",
+    "availability": "not shared",
     "sha256": "77322bed93a88f027f473cd71578fa27aaeabf9402eaab99a445a1a138d6f93a",
     "bytes": 52288
   },

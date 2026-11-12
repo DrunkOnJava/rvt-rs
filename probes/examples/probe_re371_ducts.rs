@@ -37,13 +37,13 @@
 //! ```
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document as nd;
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::partition_schema_mvp::{
     TYPE_NAME_FIELD, curve_size_from_fields, duct_ends_from_fields, recover_partition_schema_mvp,
 };
 use rvt::walker::{InstanceField, WalkerLimits};
-use serde_json::Value;
 use std::collections::BTreeMap;
 
 fn main() {
@@ -109,7 +109,7 @@ fn print_exported(rf: &mut RevitFile) {
 }
 
 /// The one object of `class` in `graph`.
-fn only<'a>(graph: &'a ObjectGraph, class: &str) -> Option<&'a Value> {
+fn only<'a>(graph: &'a ObjectGraph, class: &str) -> Option<&'a Fv> {
     let mut found = graph
         .objects
         .iter()
@@ -121,16 +121,16 @@ fn only<'a>(graph: &'a ObjectGraph, class: &str) -> Option<&'a Value> {
 }
 
 /// An `Identifier`: 8 bytes from Revit 2024 (`m_id64`), 4 before (`m_id`).
-fn id_of(value: Option<&Value>) -> Option<i64> {
+fn id_of(value: Option<&Fv>) -> Option<i64> {
     let identifier = value?.get("m_id")?;
     identifier
         .get("m_id64")
         .or_else(|| identifier.get("m_id"))
-        .and_then(Value::as_i64)
+        .and_then(Fv::as_i64)
 }
 
-fn numbers(value: Option<&Value>) -> Option<Vec<f64>> {
-    value?.as_array()?.iter().map(Value::as_f64).collect()
+fn numbers(value: Option<&Fv>) -> Option<Vec<f64>> {
+    value?.as_array()?.iter().map(Fv::as_f64).collect()
 }
 
 fn print_native(rf: &mut RevitFile) {
@@ -160,7 +160,7 @@ fn print_native(rf: &mut RevitFile) {
         if class == "AbsDuctType" {
             if let Some(name) = only(graph, "SymbolInfo")
                 .and_then(|info| info.get("m_name"))
-                .and_then(Value::as_str)
+                .and_then(Fv::as_str)
             {
                 type_names.insert(id, name.to_string());
             }
@@ -203,7 +203,7 @@ fn print_native(rf: &mut RevitFile) {
             let Some(index) = calculation
                 .fields
                 .pointer("/m_pConnector/pointer_token")
-                .and_then(Value::as_u64)
+                .and_then(Fv::as_u64)
                 .and_then(|token| index_of_token.get(&token))
             else {
                 continue;
@@ -212,7 +212,7 @@ fn print_native(rf: &mut RevitFile) {
                 calculation
                     .fields
                     .get(name)
-                    .and_then(Value::as_i64)
+                    .and_then(Fv::as_i64)
                     .map_or_else(|| "-".to_string(), |v| v.to_string())
             };
             ports.insert(
@@ -224,7 +224,7 @@ fn print_native(rf: &mut RevitFile) {
                     calculation
                         .fields
                         .get("m_dFlow")
-                        .and_then(Value::as_f64)
+                        .and_then(Fv::as_f64)
                         .map_or_else(|| "-".to_string(), |v| format!("{v:.6}")),
                     positions
                         .get(index)
@@ -255,12 +255,12 @@ fn print_native(rf: &mut RevitFile) {
         });
         let float = |name: &str| {
             root.get(name)
-                .and_then(Value::as_f64)
+                .and_then(Fv::as_f64)
                 .map_or_else(|| "-".to_string(), |v| format!("{v:.6}"))
         };
         let int = |name: &str| {
             root.get(name)
-                .and_then(Value::as_i64)
+                .and_then(Fv::as_i64)
                 .map_or_else(|| "-".to_string(), |v| v.to_string())
         };
         let normal = numbers(root.get("m_vNormal"))

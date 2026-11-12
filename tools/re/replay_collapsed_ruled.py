@@ -3,8 +3,10 @@
 
 Build rvt-ifc and probe_collapsed_ruled with --profile ci. Install the repository's
 tools/ci/requirements-ifc.txt. Then:
-  python3 tools/re/replay_collapsed_ruled.py --work target/collapsed-ruled
-Use --reference-zip for a local copy of the pinned native-reference archive.
+  python3 tools/re/replay_collapsed_ruled.py --work target/collapsed-ruled \
+    --reference-zip /path/to/collapsed-ruled-native-v1.zip
+The native reference is not shared: redistribution terms are not established.
+Its hashes and the local measurements are retained; no reference is downloaded.
 --fine adds the slower, supplementary fine-reference measurement; the default
 measurement remains the verdict for saved meshes, as in Measure.
 """
@@ -168,7 +170,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work', type=Path, required=True)
     parser.add_argument('--sample', type=Path)
-    parser.add_argument('--reference-zip', type=Path)
+    parser.add_argument('--reference-zip', type=Path,
+                        help='Required local reference archive; not shared (redistribution terms not established).')
     suffix = '.exe' if os.name == 'nt' else ''
     parser.add_argument('--rvt-ifc', type=Path, default=ROOT/'target/ci'/f'rvt-ifc{suffix}')
     parser.add_argument('--probe', type=Path, default=ROOT/'target/ci/examples'/f'probe_collapsed_ruled{suffix}')
@@ -180,8 +183,10 @@ def main():
     result_path = args.work/'verification.json'
     # A failed rerun must not leave an earlier success looking current.
     result_path.unlink(missing_ok=True)
+    if args.reference_zip is None:
+        parser.error('The native reference is not shared: redistribution terms are not established. Supply a local --reference-zip; its hash must match research/collapsed-ruled.json.')
     sample = verified(args.sample, PIN['source']) if args.sample else fetch(args.work/'sample.rvt', PIN['source'])
-    archive = verified(args.reference_zip, PIN['archive']) if args.reference_zip else fetch(args.work/'reference.zip', PIN['archive'])
+    archive = verified(args.reference_zip, PIN['archive'])
     with zipfile.ZipFile(archive) as packed:
         member = packed.getinfo(PIN['reference']['file'])
         if member.file_size != PIN['reference']['bytes']:

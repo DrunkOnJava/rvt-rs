@@ -137,9 +137,9 @@ pub(super) fn attach_is_external(
 }
 
 /// Whether `value` is a Yes/No parameter's: a boolean, or a 0 or 1.
-fn yes_no(value: &serde_json::Value) -> Option<bool> {
+fn yes_no(value: &crate::graph_value::Fv) -> Option<bool> {
     match value {
-        serde_json::Value::Bool(flag) => Some(*flag),
+        crate::graph_value::Fv::Bool(flag) => Some(*flag),
         other => match other.as_i64() {
             Some(0) => Some(false),
             Some(1) => Some(true),
@@ -152,7 +152,7 @@ fn yes_no(value: &serde_json::Value) -> Option<bool> {
 /// `kind`, as [`attach_named_parameters`] reads it from the partition data.
 fn named_field(
     kind: crate::ifc::standard_property_sets::StandardPropertyKind,
-    value: &serde_json::Value,
+    value: &crate::graph_value::Fv,
 ) -> Option<InstanceField> {
     use crate::ifc::standard_property_sets::StandardPropertyKind as Kind;
     match kind {
@@ -217,8 +217,8 @@ pub(super) fn attach_native_named_parameters<'a>(
         let Some(parameters) = element.id.and_then(|id| saved.elements.get(&u64::from(id))) else {
             continue;
         };
-        let mut qualified: Vec<(String, Kind, &serde_json::Value)> = Vec::new();
-        let mut bare: Vec<(String, Kind, &serde_json::Value)> = Vec::new();
+        let mut qualified: Vec<(String, Kind, &crate::graph_value::Fv)> = Vec::new();
+        let mut bare: Vec<(String, Kind, &crate::graph_value::Fv)> = Vec::new();
         let mut flags: Vec<(String, bool)> = Vec::new();
         for parameter in parameters {
             let Some(name) = parameter.name.as_deref() else {
