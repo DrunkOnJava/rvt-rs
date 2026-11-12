@@ -7,7 +7,11 @@ name: Probe binaries
 # release. The binaries can be downloaded from the run by anyone signed in to
 # GitHub, for the artifacts' retention, with a SHA256SUMS file beside each.
 #
-#   gh workflow run probe-binaries.yml -f probe=probe_re35_record_wrapper [-f ref=<sha>]
+#   gh workflow run probe-binaries.yml -f probe=probe_re35_record_wrapper [--ref <branch or tag>]
+#
+# It builds the dispatched ref, the one `--ref` names. There is no input for
+# another ref: code checked out from an input would run where the default
+# branch's caches can be written (CodeQL's cache-poisoning rule).
 
 on:
   workflow_dispatch:
@@ -15,10 +19,6 @@ on:
       probe:
         description: The probe to build, its file name under probes/examples without .rs (e.g. probe_re35_record_wrapper)
         required: true
-      ref:
-        description: Branch, tag or SHA to build it from (default the dispatched ref)
-        required: false
-        default: ""
   # A change to this workflow builds #1838's probe, so the pull request shows
   # it working end to end.
   pull_request:
@@ -53,7 +53,6 @@ jobs:
         run: git config --global core.autocrlf false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref }}
           persist-credentials: false
       # The name reaches a path and a cargo argument: only a probe that exists
       # at the ref, by a plain file name.
