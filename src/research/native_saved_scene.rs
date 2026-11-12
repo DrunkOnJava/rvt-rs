@@ -540,11 +540,7 @@ pub fn extract_in_batches_with_control(
         }
         // The batch's owners are meshed: their graphs go with its symbols,
         // those another owner names excepted.
-        let meshed: Vec<Record> = ids
-            .iter()
-            .filter(|id| !named_owners.contains(*id))
-            .filter_map(|id| owners.remove(id))
-            .collect();
+        let meshed: Vec<Record> = Vec::new();
         // Freeing the decoded graphs takes seconds on large models: do it
         // aside where there are threads.
         if workers() > 1 {
