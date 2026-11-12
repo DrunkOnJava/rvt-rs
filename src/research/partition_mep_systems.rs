@@ -12,7 +12,7 @@
 // Tracker: B33.
 
 use crate::le_bytes;
-use crate::partition_room_parameters::{DATA_OBJECT_HEADER, verified_data_object};
+use crate::partition_room_parameters::DATA_OBJECT_HEADER;
 use crate::{Result, RevitFile};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -119,18 +119,16 @@ pub fn scan_mep_systems(
         let Ok(inflated) = rf.inflated_partition(stream) else {
             continue;
         };
+        let Ok(objects) = rf.memoised_partition_data_objects(stream) else {
+            continue;
+        };
         let buf = inflated.bytes();
+        // From the stream's listed data objects: verifying the object around
+        // each place its class word occurs cost an Adler-32 of its payload
+        // every time, quadratic on a crafted stream (#1833). On every corpus
+        // file each object so verified is a listed one.
         for (&tag, class) in &tags {
-            for hit in memchr::memmem::find_iter(buf, &tag.to_le_bytes()) {
-                let Some(p) = hit.checked_sub(16) else {
-                    continue;
-                };
-                let Some(object) = verified_data_object(buf, p) else {
-                    continue;
-                };
-                if object.class & 0xffff != tag {
-                    continue;
-                }
+            for &(p, object) in objects.iter().filter(|(_, object)| object.class == tag) {
                 let name = if class == "RbsElectricalSystem" {
                     circuit_number(&buf[p..object.end])
                 } else {
