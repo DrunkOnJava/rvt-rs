@@ -615,6 +615,10 @@ const PARTNER_COSINE: f64 = 0.99999;
 /// stands on, and Revit's value counts one.
 pub(super) fn partner_ends(placed: &[Placed]) -> Vec<[bool; 2]> {
     const CELL: f64 = 0.1;
+    // A curtain grid node holds a few mullion ends in one cell; a crafted file
+    // put every end in one, and each end then tested all of them, n² (#1845).
+    // A cell holding more is no evidence: its ends are continued by none.
+    const MAX_ENDS_PER_CELL: usize = 64;
     let cell = |point: [f64; 3]| point.map(|coordinate| (coordinate / CELL).floor() as i64);
     let mut grid: HashMap<[i64; 3], Vec<(usize, usize)>> = HashMap::new();
     for (index, mullion) in placed.iter().enumerate() {
@@ -643,6 +647,7 @@ pub(super) fn partner_ends(placed: &[Placed]) -> Vec<[bool; 2]> {
                                 cy.saturating_add(dy),
                                 cz.saturating_add(dz),
                             ])
+                            .filter(|ends| ends.len() <= MAX_ENDS_PER_CELL)
                             .into_iter()
                             .flatten()
                             .any(|&(other, other_end)| {

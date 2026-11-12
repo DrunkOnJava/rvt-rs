@@ -1746,22 +1746,34 @@ impl StepWriter<'_> {
                 let rest: Vec<usize> = rest.iter().map(|(id, _)| *id).collect();
                 (self.emit_union(*first, &rest), "CSG")
             }
-            SolidShape::BooleanResult {
-                op,
-                operand_a,
-                operand_b,
-            } => {
-                // Recursively emit operands, then wrap in
-                // IFCBOOLEANRESULT(op, first, second). Nested
-                // booleans compose naturally.
-                let (a_id, _rep_a) = self.emit_solid_shape(operand_a, solid_position, z_axis, true);
-                let (b_id, _rep_b) = self.emit_solid_shape(operand_b, solid_position, z_axis, true);
-                let solid_id = self.id();
-                self.emit_entity(
-                    solid_id,
-                    format!("IFCBOOLEANRESULT({},#{a_id},#{b_id})", op.as_step_keyword()),
-                );
-                (solid_id, "CSG")
+            SolidShape::BooleanResult { .. } => {
+                // Each operand, then IFCBOOLEANRESULT(op, first, second). A
+                // wall's profile cuts nest one level per cut down the first
+                // operand (#1845), so the chain is walked as a loop, writing
+                // in the order recursion did: the innermost first operand,
+                // then each level's second operand and its result.
+                let mut chain = Vec::new();
+                let mut at = shape;
+                while let SolidShape::BooleanResult {
+                    op,
+                    operand_a,
+                    operand_b,
+                } = at
+                {
+                    chain.push((op, operand_b.as_ref()));
+                    at = operand_a.as_ref();
+                }
+                let (mut a_id, _) = self.emit_solid_shape(at, solid_position, z_axis, true);
+                for (op, operand_b) in chain.into_iter().rev() {
+                    let (b_id, _) = self.emit_solid_shape(operand_b, solid_position, z_axis, true);
+                    let solid_id = self.id();
+                    self.emit_entity(
+                        solid_id,
+                        format!("IFCBOOLEANRESULT({},#{a_id},#{b_id})", op.as_step_keyword()),
+                    );
+                    a_id = solid_id;
+                }
+                (a_id, "CSG")
             }
             SolidShape::FacetedBrep {
                 vertices_feet,
