@@ -112,6 +112,100 @@ fn controls(g: &ObjectGraph, si: usize, side: usize, partner: usize) -> Result<V
     Ok(out)
 }
 
+// Use the real pinned records, but deliberately swap their export classes.
+// Admission must follow the source BuiltInCategory, not these IFC labels.
+fn category_controls(file: &mut RevitFile) -> Result<Value> {
+    use rvt::ifc::{
+        RvtDocExporter,
+        entities::{IfcEntity, PropertyValue},
+        saved_meshes,
+    };
+    let pin: Value = serde_json::from_str(include_str!("../../research/collapsed-ruled.json"))?;
+    let targets: BTreeSet<&str> = pin["targets"]
+        .as_array()
+        .context("targets")?
+        .iter()
+        .map(|v| v.as_str().context("target tag"))
+        .collect::<Result<_>>()?;
+    let refusals: BTreeSet<&str> = pin["refusal_controls"]
+        .as_array()
+        .context("refusals")?
+        .iter()
+        .map(|v| v["tag"].as_str().context("refused tag"))
+        .collect::<Result<_>>()?;
+    ensure!(
+        targets.len() == 105 && refusals.len() == 2 && targets.is_disjoint(&refusals),
+        "category control selection"
+    );
+    let mut model =
+        RvtDocExporter.export_with_limits(file, rvt::walker::WalkerLimits::default())?;
+    for entity in &mut model.entities {
+        if let IfcEntity::BuildingElement {
+            ifc_type,
+            type_guid: Some(tag),
+            ..
+        } = entity
+        {
+            if targets.contains(tag.as_str()) {
+                *ifc_type = "IFCBUILDINGELEMENTPROXY".into();
+            }
+            if refusals.contains(tag.as_str()) {
+                *ifc_type = "IFCDUCTFITTING".into();
+            }
+        }
+    }
+    saved_meshes::attach(file, &mut model)?;
+    let mut admitted = BTreeSet::new();
+    let mut refused = BTreeSet::new();
+    for entity in &model.entities {
+        let IfcEntity::BuildingElement {
+            type_guid: Some(tag),
+            property_set: Some(set),
+            ..
+        } = entity
+        else {
+            continue;
+        };
+        let text = |name: &str| {
+            set.properties.iter().find_map(|p| match &p.value {
+                PropertyValue::Text(value) if p.name == name => Some(value.as_str()),
+                _ => None,
+            })
+        };
+        if targets.contains(tag.as_str()) {
+            ensure!(
+                text("BodySource") == Some("saved_graphics_mesh"),
+                "overridden fitting refused: {tag}"
+            );
+            ensure!(admitted.insert(tag.as_str()), "duplicate fitting: {tag}");
+        }
+        if refusals.contains(tag.as_str()) {
+            ensure!(
+                text("BodySource") == Some("partition_element_record_bbox"),
+                "overridden terminal admitted: {tag}"
+            );
+            let expected = pin["refusal_controls"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["tag"] == *tag)
+                .unwrap();
+            ensure!(
+                text("SavedMeshRefusal") == expected["reason"].as_str(),
+                "terminal refusal: {tag}"
+            );
+            ensure!(refused.insert(tag.as_str()), "duplicate terminal: {tag}");
+        }
+    }
+    ensure!(
+        admitted == targets && refused == refusals,
+        "missing category controls"
+    );
+    Ok(
+        json!({"fittings_with_proxy_class_admitted":admitted.len(),"terminals_with_duct_class_refused":refused.len()}),
+    )
+}
+
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     ensure!(args.len() == 2, "usage: probe_collapsed_ruled <sample.rvt>");
@@ -200,10 +294,11 @@ fn main() -> Result<()> {
         "expected 76 measured surfaces, got {}",
         rows.len()
     );
+    let categories = category_controls(&mut file)?;
     println!(
         "{}",
         serde_json::to_string(
-            &json!({"file_sha256":digest,"records":seen.len(),"surfaces":rows.len(),"rows":rows})
+            &json!({"file_sha256":digest,"records":seen.len(),"surfaces":rows.len(),"rows":rows,"category_controls":categories})
         )?
     );
     Ok(())

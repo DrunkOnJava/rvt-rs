@@ -233,18 +233,20 @@ profiles are not decoded, and rvt-rs does not edit Revit model data.
 ### Saved point/arc ruled surfaces (RE-443)
 
 A zero ruled-profile pointer selects its separately saved point. The reader
-admits point/arc patches with a unit envelope and rectangular trim only.
-On the public Autodesk Revit 2023 basic MEP sample, a local run recovers 105
-duct fittings and two sanitary terminals: 107 bodies within 0.721 mm and
-0.179% volume of native IFC in the default comparison. None meets the
-stricter 0.001 ft two-way threshold with default reference tessellation;
-fine reference tessellation brings 105 inside it, with two sanitary
-junction residuals still present. Other combinations, envelopes and trims
-remain refused. [RE-443](../reports/element-framing/RE-443-collapsed-ruled-profiles.md)
-has the bytes, reference hashes and local replay. The native reference is
-not shared because redistribution terms are not established; these accuracy
-figures are local measurements, separate from the maintainer's Measure of
-the body-source changes.
+admits point/arc patches with a unit envelope and rectangular trim; bodies
+holding these patches qualify only by the source record's duct-fitting
+category. On the public Autodesk Revit 2023 basic MEP sample, a local run
+recovers 105 duct fittings within 0.697 mm and 0.179% volume of native IFC
+in the default comparison. None meets the stricter 0.001 ft two-way
+threshold with default reference tessellation; all 105 do with fine
+reference tessellation. Two sanitary terminals still miss it with fine
+tessellation and remain boxes with an explicit refusal. They are negative
+controls, not exported saved meshes. Other combinations, envelopes, trims
+and categories remain refused. [RE-443](../reports/element-framing/RE-443-collapsed-ruled-profiles.md)
+has the bytes, category-override controls, reference hashes and local replay.
+The native reference is not shared because redistribution terms are not
+established; these accuracy figures are local measurements, separate from
+the maintainer's Measure of the body-source changes.
 
 ## Finding history
 

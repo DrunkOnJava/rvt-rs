@@ -1,7 +1,7 @@
 # RE-443: a zero ruled-profile pointer selects its saved point
 
-2026-11-11. Positive, bounded to a point and an arc, a unit envelope and a
-rectangular trim. Public RVT bytes and Revit's own IFC confirm the rule.
+2026-11-11; admission narrowed 2026-11-12. Positive, bounded to a point and
+an arc, a unit envelope, a rectangular trim and the source duct-fitting category. Public RVT bytes and Revit's own IFC confirm the rule.
 Native-reference measurements below are local runs against a reference that
 is **not shared**. The separate Measure findings are attributed below.
 
@@ -12,11 +12,13 @@ pointer. Its corresponding `m_Point1` or `m_Point2` is then the constant
 profile at that end of the surface. The old reader required two curves and
 refused the whole saved body when one of these patches occurred.
 
-On Autodesk's public Revit 2023 basic MEP project, this recovers **107
-bodies: 105 duct fittings and two sanitary terminals**. They use 76 distinct
-source patches in seven symbols. Default IFC export changes from 176 to 69
-bounding-box bodies and from 5,179 to 5,286 saved-mesh bodies, compared with
-base `3abb42f0fc9e2dc913f46e93e1ef03590d6e552f`. The body remains an
+On Autodesk's public Revit 2023 basic MEP project, this recovers **105 duct
+fittings**. Two sanitary terminals, **543319 and 593903**, keep their record
+boxes and are negative controls. The byte investigation covers 76 distinct
+source patches in seven symbols, including the refused terminals. Default
+IFC export changes from 176 to 71 bounding-box bodies and from 5,179 to
+5,284 saved-mesh bodies, compared with base
+`09b18bd338b8c2fdb9a7d29943970735d416a73c`. The body remains an
 `IfcTriangulatedFaceSet`; this does not introduce an analytic IFC surface.
 
 The admitted combination is exactly point/arc or arc/point with surface
@@ -24,7 +26,15 @@ envelope `[[0,0],[1,1]]` and a single rectangular face trim. Other combinations,
 both pointers zero, missing or invalid points, unresolved nonzero pointers,
 clipped envelopes and nonrectangular or holed trims remain refused. RE-430's
 general trim reader does not widen this new surface's measured scope.
-Standalone family revolutions and their partial-arc refusals are unchanged.
+A complete body containing a collapsed ruled patch is admitted only when its
+own element record's `m_builtinCategory` is `OST_DUCT_FITTING` (-2008010).
+The exporter reads that category from the existing production walk; it does
+not use an IFC class, fixture id or family name. Missing or conflicting
+categories fail closed. Other categories keep their existing body with
+`SavedMeshRefusal = collapsed ruled profile outside the measured duct fittings`.
+An already-partial body retains its existing decoder refusal. An attach
+without a production walk cannot qualify a collapsed body. Unrelated saved
+meshes, standalone family revolutions and partial-arc refusals are unchanged.
 
 ## Input and byte witness
 
@@ -35,7 +45,8 @@ The source is downloaded directly from Autodesk; no RVT is redistributed:
 - SHA-256: `5b2331579140cc621d23b5642d24b2b7bbb6727e26610156962909d725e44e6a`
 
 `research/collapsed-ruled.json` pins this file, all seven source-record body
-hashes, the 107 target element ids and the native-reference package.
+hashes, the 105 positive target ids, two terminal refusal controls and the
+native-reference package.
 `probe_collapsed_ruled` emits every surface's stream, record location,
 body-relative offsets, raw bytes, decoded values and refusal controls.
 
@@ -82,6 +93,12 @@ envelope, point/line and point/ellipse. One additional mutation of each face
 moves an interior trim sample off the rectangle and must fail with
 `unqualified collapsed ruled trim`. **608 refusal controls pass**.
 These are graph mutations of the measured file, not invented positive files.
+The same probe changes all 105 fittings' IFC classes to building-element
+proxies and the two terminals' IFC classes to duct fittings before attachment:
+all 105 still take saved meshes and both terminals keep boxes with the named
+refusal. This checks source-category admission independently of IFC labels.
+The replay separately checks both unmodified exported terminals' boxes,
+`BodySource` and exact refusal text.
 
 ## Native reference and body measurements
 
@@ -102,7 +119,10 @@ The reference package contains only `README.txt` and `native-mep-107.ifc`.
 The IFC is a geometry-only subset of that export: all 107 representation and
 placement trees were checked equal to the original, with units and the site
 frame retained. Unrelated elements, properties and owner metadata are left
-out. It is not presented as an untouched full-project export.
+out. It is not presented as an untouched full-project export. The archive
+is unchanged: it still contains both terminal references, but the replay
+scores only the 105 admitted fittings. The terminals are refusal controls,
+not positive geometry targets.
 
 | Artifact | Bytes | SHA-256 |
 |---|---:|---|
@@ -120,22 +140,21 @@ abort the replay rather than disappearing from the denominator.
 
 | Native reference tessellation | Bodies | Maximum two-way sampled distance | Maximum relative volume difference |
 |---|---:|---:|---:|
-| Default (primary comparison) | 107 | 0.720662 mm | 0.178479% |
-| Fine, supplementary: duct fittings | 105 | 0.131137 mm | See all-body maximum below |
-| Fine, supplementary: sanitary terminals | 2 | 0.720662 mm | See all-body maximum below |
-| Fine, supplementary: all | 107 | 0.720662 mm | 0.019083% |
+| Default (primary comparison): duct fittings | 105 | 0.696493 mm | 0.178479% |
+| Fine, supplementary: duct fittings | 105 | 0.131137 mm | 0.019083% |
 
-**None of the 107 bodies passes the strict 0.001 ft two-way threshold in
-the default comparison.** Fine reference tessellation brings 105 of 107
-inside that threshold. It does not replace the default verdict. The replay's
-explicit bounds are 0.0033 ft / 0.2% by default; fine bounds are 0.0005 ft
-for fittings, 0.0025 ft for terminals and 0.025% for volume. These are
-regression bounds for this sample, not a new project-wide accuracy claim.
+**None of the 105 fittings passes the strict 0.001 ft two-way threshold in
+the default comparison.** All 105 pass with fine reference tessellation.
+It does not replace the default verdict. The replay's explicit bounds
+remain 0.0033 ft / 0.2% by default and 0.0005 ft / 0.025% with fine reference
+tessellation. These are regression bounds for this sample, not a new
+project-wide accuracy claim.
 
-The two sanitary residuals lie at an existing plane/cylinder junction, away
-from the new ruled patches. This change does not fix that junction or claim
-the full bodies exact. The replay reports both classes separately; the
-native export calls the sanitary elements `IfcFlowTerminal`.
+The two sanitary terminals missed the strict threshold even with fine
+reference tessellation: their previous sampled residual was 0.720662 mm
+at an existing plane/cylinder junction. They are now refused, not accepted
+under a looser terminal bound. Their native export class is `IfcFlowTerminal`;
+the decision uses their source record category, not that export class.
 
 ## Reproduce without Revit
 
@@ -173,21 +192,21 @@ are written under `--work`. No Revit installation or automation is needed.
 
 ## Regression comparison
 
-Against the base above, 12 project models were exported before and after:
+Against `09b18bd3`, 12 project models were exported before and after:
 Autodesk 2023 structural basic, architectural advanced/basic, public MEP and
 Golden Nugget; Autodesk 2025 electrical, facades and architectural; BIM4LCA
 concrete office as built and timber housing at permit; RE1 Mechanical and
-Plumbing. Only the intended 107 MEP bodies change their representation or
-placement. Eight other project IFCs are byte-identical. Architectural basic,
+Plumbing. Only the intended 105 MEP fittings change their representation; placements
+are unchanged. Eight other project IFCs are byte-identical. Architectural basic,
 Golden Nugget and the office change only 6, 9 and 15 `SavedMeshRefusal`
 messages respectively, identifying the still-unsupported profiles or trims.
 This local selection is not the full upstream Measure corpus.
 
 All six existing REV-A, REV-B, REV-BT, ARC-A, ARC-B and ARC-BT IFC outputs
 are byte-identical to the base, including the unsupported partial-arc cases.
-The input files' hashes are unchanged. Before the reference was withdrawn,
-a fresh-download replay reproduced the 107-body measurement. It now requires
-the not-shared reference locally.
+The input files' hashes are unchanged. The native replay now scores the 105
+fittings and checks two terminal refusals; it requires the not-shared reference
+locally.
 
 ## Maintainer's Measure of the reviewed head (2026-11-12)
 
@@ -213,7 +232,10 @@ maximum). Snowdon Towers HVAC grows from 65.5 to 69.4 MB for 32 new bodies
 the original grid, before the point-profile subdivision revision below.
 
 
-## Point-profile subdivision revision (2026-11-12)
+## Historical point-profile subdivision revision (`5a0f8d1f`, 2026-11-12)
+
+This section records the earlier 107-body scope before the category
+restriction. Its terminal counts and costs are not the current admission.
 
 The original ruled grid subdivided both directions. For a point/arc patch,
 every generator from the arc to the point is straight. A strip between two
@@ -279,3 +301,33 @@ bodies have zero counted junctions, down from 2,572, with none increasing.
 These are local revision checks, not a new unfiltered Measure result. The
 maintainer's previous corpus verdict and its native-reference limitation
 remain attributed to the reviewed head above.
+
+## Duct-fitting admission revision (2026-11-12)
+
+Following review of `5a0f8d1f`, the exporter narrows body admission to the
+source duct-fitting category. The two sanitary terminals remain useful byte
+witnesses but fail the fine native-reference body threshold, so they are
+explicit negative controls. No tessellation or pointer rule changes in this
+revision. The native-reference archive and its hashes are unchanged.
+
+Local comparison against `5a0f8d1f` on the 2023 and 2024 basic MEP saves finds
+exactly two representation changes: 543319 and 593903 return to their original
+record boxes, with the new category refusal. All 105 fittings retain identical
+representations and placements. Their 64,380 triangles (613.143 average, 636
+maximum) are unchanged; the previous 66,098 included the two refused terminals.
+Snowdon Towers HVAC retains all 32 recovered fittings and its 5,856 triangles.
+Its IFC is byte-identical to `5a0f8d1f`, as are architectural basic 2024 and
+the BIM4LCA concrete office as built.
+
+| Local export | Base `09b18bd3` | Reviewed `5a0f8d1f` | Duct fittings only |
+|---|---:|---:|---:|
+| Basic MEP 2023 | 101,091,346 bytes | 105,088,486 bytes | 105,006,306 bytes |
+| Basic MEP 2024 | 103,550,587 bytes | 107,547,770 bytes | 107,465,590 bytes |
+| Snowdon Towers HVAC 2024 | 65,514,494 bytes | 65,858,488 bytes | 65,858,488 bytes |
+
+The 12-project and six-family local comparisons against `09b18bd3` retain
+the scope described above, with 105 MEP fittings replacing the previous 107
+positive targets. The default and fine native replays score those 105 only;
+both terminal controls keep boxes with the named refusal. The 608 graph
+refusals and all 107 IFC-class override controls pass. These are local checks
+of the category revision, not a new unfiltered Measure result.

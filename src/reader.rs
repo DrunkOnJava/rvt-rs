@@ -1199,6 +1199,34 @@ impl RevitFile {
             .map(|(_, _, elements)| Arc::clone(elements))
     }
 
+    /// The last production walk's element-record categories, without another
+    /// scan. Absent or conflicting categories stay unknown (RE-443).
+    pub(crate) fn walked_builtin_categories(&self) -> BTreeMap<u32, Option<i64>> {
+        let mut categories = BTreeMap::new();
+        if let Some((_, _, elements)) = &self.walk {
+            for element in elements.iter() {
+                let Some(id) = element.id else { continue };
+                let category = element.fields.iter().find_map(|(name, value)| match value {
+                    crate::walker::InstanceField::Integer { value, .. }
+                        if name == "m_builtinCategory" =>
+                    {
+                        Some(*value)
+                    }
+                    _ => None,
+                });
+                categories
+                    .entry(id)
+                    .and_modify(|held| {
+                        if *held != category {
+                            *held = None;
+                        }
+                    })
+                    .or_insert(category);
+            }
+        }
+        categories
+    }
+
     /// Keep a production walk's elements for later walks with the same
     /// `min_score` and `limits`.
     // Tracker: B71.

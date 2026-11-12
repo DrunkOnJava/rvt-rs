@@ -120,8 +120,6 @@
     "539533",
     "539543",
     "539553",
-    "543319",
-    "593903",
     "717522",
     "717637",
     "717648",
@@ -162,7 +160,18 @@
     "default_max_distance_ft": 0.0033,
     "default_max_relative_volume_error": 0.002,
     "fine_fitting_max_distance_ft": 0.0005,
-    "fine_terminal_max_distance_ft": 0.0025,
     "fine_max_relative_volume_error": 0.00025
-  }
+  },
+  "refusal_controls": [
+    {
+      "tag": "543319",
+      "body_source": "partition_element_record_bbox",
+      "reason": "collapsed ruled profile outside the measured duct fittings"
+    },
+    {
+      "tag": "593903",
+      "body_source": "partition_element_record_bbox",
+      "reason": "collapsed ruled profile outside the measured duct fittings"
+    }
+  ]
 }

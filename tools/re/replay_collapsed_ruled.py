@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""RE-443: replay public RVT bytes and 107 bodies against native IFC, without Revit.
+"""RE-443: replay public RVT bytes and 105 duct fittings and two body refusals against native IFC, without Revit.
 
 Build rvt-ifc and probe_collapsed_ruled with --profile ci. Install the repository's
 tools/ci/requirements-ifc.txt. Then:
@@ -84,10 +84,37 @@ def candidate_triangles(model, products):
     return out
 
 
+def check_body_refusals(model):
+    controls = {row['tag']: row for row in PIN['refusal_controls']}
+    if set(controls) & set(PIN['targets']):
+        raise ValueError('A refused body is also a positive target')
+    products = selected(model, set(controls))
+    rows = []
+    for tag, product in products.items():
+        properties = {}
+        for relation in product.IsDefinedBy:
+            if not relation.is_a('IfcRelDefinesByProperties'):
+                continue
+            definition = relation.RelatingPropertyDefinition
+            if definition.is_a('IfcPropertySet') and definition.Name == 'RvtElementRecordGeometry':
+                properties.update({p.Name: p.NominalValue.wrappedValue for p in definition.HasProperties
+                                   if p.is_a('IfcPropertySingleValue') and p.NominalValue is not None})
+        expected = controls[tag]
+        if properties.get('BodySource') != expected['body_source'] or properties.get('SavedMeshRefusal') != expected['reason']:
+            raise ValueError(f'Body refusal differs: {tag}')
+        geometry = list(model.traverse(product.Representation)) if product.Representation else []
+        if not any(x.is_a('IfcExtrudedAreaSolid') for x in geometry) or any(x.is_a('IfcTriangulatedFaceSet') for x in geometry):
+            raise ValueError(f'Refused body did not retain its box: {tag}')
+        rows.append(dict(tag=tag, body_source=properties['BodySource'], refusal=properties['SavedMeshRefusal']))
+    return sorted(rows, key=lambda row: int(row['tag']))
+
+
 def check_probe(path):
     probe = json.loads(path.read_text())
     if probe['file_sha256'] != PIN['source']['sha256'] or probe['surfaces'] != PIN['expected']['surfaces']:
         raise ValueError('Wrong probe file or surface count')
+    if probe.get("category_controls") != {"fittings_with_proxy_class_admitted": 105, "terminals_with_duct_class_refused": 2}:
+        raise ValueError("Category controls differ")
     expected = {s['owner']: s['body_sha256'] for s in PIN['symbols']}
     if {row['owner'] for row in probe['rows']} != set(expected):
         raise ValueError('Missing symbol witnesses')
@@ -125,6 +152,8 @@ def pole_witness(probe, native):
 
 def measure_body(payload):
     tag, a, b, native_class, fine = payload
+    if native_class != "IfcDuctFitting":
+        raise ValueError(f"Positive target is outside measured duct fittings: {tag}")
     pa = np.unique(np.concatenate([a.reshape(-1, 3), a.mean(axis=1)]), axis=0)
     pb = np.unique(np.concatenate([b.reshape(-1, 3), b.mean(axis=1)]), axis=0)
     va, vb = float(score.volume(a)), float(score.volume(b))
@@ -136,7 +165,7 @@ def measure_body(payload):
     distance_limit = expected['default_max_distance_ft']
     volume_limit = expected['default_max_relative_volume_error']
     if fine:
-        distance_limit = expected['fine_fitting_max_distance_ft'] if native_class == 'IfcDuctFitting' else expected['fine_terminal_max_distance_ft']
+        distance_limit = expected['fine_fitting_max_distance_ft']
         volume_limit = expected['fine_max_relative_volume_error']
     if not np.isfinite([da, db, ratio]).all() or max(da, db) > distance_limit or abs(ratio-1) > volume_limit:
         raise ValueError(f'Outside measured bound: {tag}: distances={da}, {db}; volume ratio={ratio}')
@@ -214,6 +243,7 @@ def main():
     os.environ.setdefault('RVT_MESH_CACHE', str(args.work/'mesh-cache'))
     result = dict(source_sha256=PIN['source']['sha256'], reference_sha256=PIN['reference']['sha256'],
                   byte_surfaces=probe['surfaces'], refusal_controls=controls,
+                  body_refusal_controls=check_body_refusals(candidate_model),
                   representative_pole=pole_witness(probe, native_model),
                   default=measure(candidate, reference_path, native_model, False, args.workers))
     if args.fine:

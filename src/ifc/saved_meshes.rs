@@ -78,6 +78,10 @@ use std::collections::{BTreeMap, BTreeSet};
 /// `BodySource` of a body drawn from the element's saved graphics.
 pub const SAVED_MESH_BODY_SOURCE: &str = "saved_graphics_mesh";
 
+/// RE-443: only duct fittings meet the measured native-reference body bound.
+const COLLAPSED_RULED_CATEGORY_REFUSAL: &str =
+    "collapsed ruled profile outside the measured duct fittings";
+
 /// How far above its base a wall's saved mesh must start, and below its top,
 /// for [`attach_scoped_with_control`] to draw a wall that embeds a curtain
 /// wall from it, feet (#1385, RE-340). On the BIM4LCA office as built and at
@@ -96,7 +100,7 @@ pub struct SavedMeshReport {
     /// Of those, elements now drawn from their saved mesh.
     pub replaced: usize,
     /// Of those, elements keeping their box because part of their saved
-    /// graphics did not decode (RE-224).
+    /// graphics did not decode (RE-224) or is outside the measured category (RE-443).
     pub partial: usize,
     /// Triangles written in all.
     pub triangles: usize,
@@ -107,7 +111,7 @@ pub struct SavedMeshReport {
     /// their base to the top of the curtain wall.
     pub embed_raised: usize,
     /// Of those, walls keeping their body because part of their saved
-    /// graphics did not decode (RE-224).
+    /// graphics did not decode (RE-224) or is outside the measured category (RE-443).
     pub embed_partial: usize,
     /// Why the walls' native records were not read, where they were not: no
     /// wall that embeds a curtain wall is then drawn from its mesh.
@@ -319,6 +323,10 @@ pub fn attach_scoped_with_control(
     control: &crate::control::WalkerControl,
 ) -> anyhow::Result<SavedMeshReport> {
     let mut report = SavedMeshReport::default();
+    // Read the source record's category, never the possibly overridden IFC class.
+    // An attach without a production walk cannot qualify a collapsed body.
+    let categories = rf.walked_builtin_categories();
+
     let mut by_id: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
     // A stair or curtain wall is drawn by its parts; its own saved graphics
     // would draw it twice.
@@ -536,6 +544,27 @@ pub fn attach_scoped_with_control(
         |element| {
             if by_id.contains_key(&element.identity.element_id) {
                 seen.insert(element.identity.element_id);
+            }
+            let category = u32::try_from(element.identity.element_id)
+                .ok()
+                .and_then(|id| categories.get(&id).copied().flatten());
+            if element.meshes.has_collapsed_ruled_profile
+                && category != Some(crate::partition_element_records::OST_DUCT_FITTING)
+            {
+                // Preserve an existing decoder refusal for a body already partial.
+                // Complete bodies outside the measured category keep their boxes;
+                // their meshes must not supply quantities or raised wall bodies either.
+                let reason = partial_refusal(&element.meshes)
+                    .unwrap_or_else(|| COLLAPSED_RULED_CATEGORY_REFUSAL.into());
+                if let Some(indices) = by_id.get(&element.identity.element_id) {
+                    report.partial += indices.len();
+                    refusals.extend(indices.iter().map(|index| (*index, reason.clone())));
+                }
+                if let Some(&index) = hosts.get(&element.identity.element_id) {
+                    report.embed_partial += 1;
+                    refusals.push((index, reason));
+                }
+                return Ok(());
             }
             if let Some([index]) = walls.get(&element.identity.element_id).map(Vec::as_slice) {
                 let held = wall_openings.get(index);
