@@ -31,11 +31,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_saved_mesh::{face, pointer};
 use rvt::research::native_symbol_cuts::instance_cut_loops;
-use serde_json::Value;
 
 const DEPTH: usize = 4;
 
@@ -50,11 +50,11 @@ struct CutGeometry {
     max: [f64; 3],
 }
 
-fn pointers(value: &Value, out: &mut Vec<Value>) {
+fn pointers(value: &Fv, out: &mut Vec<Fv>) {
     match value {
-        Value::Object(map) if map.contains_key("pointer_token") => out.push(value.clone()),
-        Value::Object(map) => map.values().for_each(|v| pointers(v, out)),
-        Value::Array(items) => items.iter().for_each(|v| pointers(v, out)),
+        Fv::Object(map) if map.contains_key("pointer_token") => out.push(value.clone()),
+        Fv::Object(map) => map.values().iter().for_each(|v| pointers(v, out)),
+        Fv::Array(items) => items.iter().for_each(|v| pointers(v, out)),
         _ => {}
     }
 }
@@ -74,7 +74,7 @@ fn walk(
     };
     *cut.classes.entry(object.class_name.clone()).or_default() += 1;
     if object.class_name == "Geometry" {
-        if let Some(faces) = object.fields.get("m_pFaces").and_then(Value::as_array) {
+        if let Some(faces) = object.fields.get("m_pFaces").and_then(Fv::as_array) {
             for p in faces {
                 let Ok(Some(fi)) = pointer(graph, index, p) else {
                     continue;
@@ -142,7 +142,7 @@ fn cut_geometry(graph: &ObjectGraph) -> CutGeometry {
     cut
 }
 
-fn element_id(value: &Value) -> Option<u64> {
+fn element_id(value: &Fv) -> Option<u64> {
     value
         .pointer("/m_id/m_id64")?
         .as_i64()
@@ -189,8 +189,8 @@ fn main() -> anyhow::Result<()> {
                 .objects
                 .first()
                 .and_then(|root| root.fields.get("m_pCutLoops"))
-                .and_then(Value::as_array)
-                .map_or(0, Vec::len);
+                .and_then(Fv::as_array)
+                .map_or(0, <[Fv]>::len);
             symbols.insert(id, (loop_count, cut_geometry(graph)));
         } else if ids.contains(&id) {
             if let Some(symbol) = graph

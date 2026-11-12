@@ -19,19 +19,19 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
-use serde_json::Value;
 
-fn scalars(fields: &Value) -> String {
+fn scalars(fields: &Fv) -> String {
     let Some(map) = fields.as_object() else {
         return String::new();
     };
     map.iter()
         .map(|(key, value)| {
             let text = match value {
-                Value::Object(inner) if inner.contains_key("pointer_token") => "->".to_string(),
-                Value::Array(items) => format!("[{}]", items.len()),
-                Value::Object(_) => {
+                Fv::Object(inner) if inner.contains_key("pointer_token") => "->".to_string(),
+                Fv::Array(items) => format!("[{}]", items.len()),
+                Fv::Object(_) => {
                     let text = value.to_string();
                     text.chars().take(80).collect()
                 }
@@ -58,7 +58,7 @@ fn polymesh(
         return "no topology".into();
     };
     let f = &topology.fields;
-    let len = |key: &str| f[key].as_array().map_or(0, Vec::len);
+    let len = |key: &str| f[key].as_array().map_or(0, <[Fv]>::len);
     format!(
         "flag={} points={} normals={} facets={}",
         f["m_normalsFlag"],
@@ -117,7 +117,7 @@ fn main() -> anyhow::Result<()> {
             let keys: Vec<&str> = object
                 .fields
                 .as_object()
-                .map(|map| map.keys().map(String::as_str).collect())
+                .map(|map| map.keys().collect())
                 .unwrap_or_default();
             *field_sets.entry(keys.join(",")).or_default() += 1;
             let parent_classes: Vec<&str> = in_edges

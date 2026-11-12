@@ -341,7 +341,7 @@ fn main() -> anyhow::Result<()> {
             return Ok(());
         };
         if shown.insert(class.to_string()) {
-            let names: Vec<&String> = root
+            let names: Vec<&str> = root
                 .fields
                 .as_object()
                 .map(|fields| fields.keys().collect())
@@ -360,7 +360,7 @@ fn main() -> anyhow::Result<()> {
             .map(|fields| {
                 fields
                     .iter()
-                    .map(|(name, value)| (name.clone(), shortened(value)))
+                    .map(|(name, value)| (name.to_string(), shortened(&value.to_json())))
                     .collect()
             })
             .unwrap_or_default();
@@ -377,7 +377,7 @@ fn main() -> anyhow::Result<()> {
                     .map(|fields| {
                         fields
                             .iter()
-                            .map(|(name, value)| (name.clone(), shortened(value)))
+                            .map(|(name, value)| (name.to_string(), shortened(&value.to_json())))
                             .collect()
                     })
                     .unwrap_or_default();
@@ -389,9 +389,9 @@ fn main() -> anyhow::Result<()> {
             }
             let text = object.fields.to_string();
             let fields = if text.len() <= OBJECT_LIMIT {
-                object.fields.clone()
+                object.fields.to_json()
             } else {
-                let names: Vec<&String> = object
+                let names: Vec<&str> = object
                     .fields
                     .as_object()
                     .map(|fields| fields.keys().collect())

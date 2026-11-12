@@ -224,7 +224,7 @@ fn probe(path: &str) -> Result<()> {
                 if let Some(group) = object
                     .fields
                     .pointer("/m_groupId/m_id/m_id64")
-                    .and_then(Value::as_u64)
+                    .and_then(rvt::research::graph_value::Fv::as_u64)
                 {
                     groups.insert(group);
                 }
@@ -233,7 +233,7 @@ fn probe(path: &str) -> Result<()> {
                 println!(
                     "rec {id} obj {} {}",
                     object.class_name,
-                    trimmed(&object.fields)
+                    trimmed(&object.fields.to_json())
                 );
             }
         }
@@ -254,7 +254,7 @@ fn probe(path: &str) -> Result<()> {
                 println!(
                     "group {id} {class} obj {} {}",
                     object.class_name,
-                    trimmed(&object.fields)
+                    trimmed(&object.fields.to_json())
                 );
             }
         }

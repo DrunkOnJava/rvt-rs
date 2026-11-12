@@ -35,8 +35,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_element_parameters;
-use serde_json::Value;
 
 const CLASSES: [&str; 6] = [
     "IFCWALL",
@@ -83,8 +83,8 @@ fn main() -> anyhow::Result<()> {
             .flatten()
             .filter_map(|parameter| {
                 let value = match &parameter.value {
-                    Value::Bool(b) => b.to_string(),
-                    Value::String(text) => text.replace(' ', "_"),
+                    Fv::Bool(b) => b.to_string(),
+                    Fv::Str(text) => text.replace(' ', "_"),
                     _ => return None,
                 };
                 Some(format!(

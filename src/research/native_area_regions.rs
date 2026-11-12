@@ -35,10 +35,10 @@
 //! none (fail closed).
 
 use crate::RevitFile;
+use crate::graph_value::Fv;
 use crate::ifc::element_provenance::SourcePart;
 use crate::native_json::identifier_i64;
 use crate::research::native_document;
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::f64::consts::PI;
 
@@ -511,7 +511,7 @@ fn unwrap_near(angle: f64, near: f64) -> f64 {
 }
 
 /// The plan point of a two- or three-number array.
-fn plan_point(value: &Value) -> Option<(f64, f64)> {
+fn plan_point(value: &Fv) -> Option<(f64, f64)> {
     let items = value.as_array()?;
     let x = items.first()?.as_f64()?;
     let y = items.get(1)?.as_f64()?;
@@ -519,7 +519,7 @@ fn plan_point(value: &Value) -> Option<(f64, f64)> {
 }
 
 /// A segment key as a plan topology saves it.
-fn segment_key(value: &Value) -> Option<SegmentKey> {
+fn segment_key(value: &Fv) -> Option<SegmentKey> {
     let item = value.get("m_item")?;
     Some((
         identifier_i64(item.get("m_linkInstOrHostId")?)?,
@@ -529,12 +529,12 @@ fn segment_key(value: &Value) -> Option<SegmentKey> {
 }
 
 /// A circuit id, `{"m_id": n}`.
-fn circuit_id(value: &Value) -> Option<i64> {
+fn circuit_id(value: &Fv) -> Option<i64> {
     value.get("m_id")?.as_i64()
 }
 
 /// The parts of a `PlanTopology` read here.
-fn plan(fields: &Value) -> Option<Plan> {
+fn plan(fields: &Fv) -> Option<Plan> {
     let mut out = Plan::default();
     for segment in fields.get("m_segments")?.as_array()? {
         let key = segment_key(segment.get("m_key")?)?;
@@ -590,10 +590,10 @@ fn plan(fields: &Value) -> Option<Plan> {
 /// An area boundary line's curve and offsets, from its record's objects.
 fn boundary_curve(objects: &[crate::native_parameters::GraphObject]) -> Option<BoundaryCurve> {
     let element = objects.iter().find(|o| o.class_name == "CurveElem")?;
-    if element.fields.get("m_isAreaMeasurementScheme") != Some(&Value::Bool(true)) {
+    if element.fields.get("m_isAreaMeasurementScheme") != Some(&Fv::Bool(true)) {
         return None;
     }
-    let ends = |fields: &Value| -> Option<(f64, f64)> {
+    let ends = |fields: &Fv| -> Option<(f64, f64)> {
         let ends = fields.get("m_endParams")?.as_array()?;
         Some((ends.first()?.as_f64()?, ends.get(1)?.as_f64()?))
     };

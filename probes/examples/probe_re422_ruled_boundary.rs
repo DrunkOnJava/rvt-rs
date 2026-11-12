@@ -28,10 +28,10 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, Record, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_saved_mesh::pointer;
-use serde_json::Value;
 
 const ROOFS: [u64; 4] = [1926040, 1975810, 1985275, 2112673];
 /// How many open edges of each roof are listed with their fields.
@@ -62,15 +62,15 @@ fn describe(g: &ObjectGraph, oi: usize, depth: usize) -> String {
     format!("{}#{oi}{{{}}}", o.class_name, parts.join(" "))
 }
 
-fn value_text(g: &ObjectGraph, oi: usize, v: &Value, depth: usize) -> String {
+fn value_text(g: &ObjectGraph, oi: usize, v: &Fv, depth: usize) -> String {
     match v {
-        Value::Object(m) if m.contains_key("pointer_token") => match pointer(g, oi, v) {
+        Fv::Object(m) if m.contains_key("pointer_token") => match pointer(g, oi, v) {
             Ok(Some(t)) if depth > 0 => describe(g, t, depth - 1),
             Ok(Some(t)) => format!("->{}#{t}", g.objects[t].class_name),
             Ok(None) => "null".into(),
             Err(_) => "->?".into(),
         },
-        Value::Array(a) => {
+        Fv::Array(a) => {
             let items: Vec<String> = a
                 .iter()
                 .take(6)
@@ -83,7 +83,7 @@ fn value_text(g: &ObjectGraph, oi: usize, v: &Value, depth: usize) -> String {
             };
             format!("[{}{more}]", items.join(","))
         }
-        Value::Object(m) => {
+        Fv::Object(m) => {
             let items: Vec<String> = m
                 .iter()
                 .map(|(k, x)| format!("{k}:{}", value_text(g, oi, x, depth)))
@@ -170,7 +170,7 @@ fn main() -> anyhow::Result<()> {
             .enumerate()
             .filter(|(_, object)| object.class_name == "Edge")
         {
-            let Some(entries) = object.fields.get("m_pFace").and_then(Value::as_array) else {
+            let Some(entries) = object.fields.get("m_pFace").and_then(Fv::as_array) else {
                 *shapes.entry("no m_pFace".into()).or_default() += 1;
                 continue;
             };

@@ -22,8 +22,9 @@ use std::path::Path;
 
 use anyhow::{Context, Result, ensure};
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::{native_form_geometry, native_parameters};
-use serde_json::{Value, json};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 
 const CLASSES: [&str; 4] = ["RevolutionElem", "CurveElem", "SketchPlane", "VarSketch"];
@@ -52,13 +53,13 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn identifier(value: &Value) -> Option<i64> {
+fn identifier(value: &Fv) -> Option<i64> {
     let inner = value.get("m_id")?;
     inner.as_i64().or_else(|| {
         inner
             .get("m_id64")
             .or_else(|| inner.get("m_id"))
-            .and_then(Value::as_i64)
+            .and_then(Fv::as_i64)
     })
 }
 
@@ -130,14 +131,14 @@ fn main() -> Result<()> {
                         for item in object
                             .fields
                             .get("m_paramSet")
-                            .and_then(Value::as_array)
+                            .and_then(Fv::as_array)
                             .into_iter()
                             .flatten()
                         {
                             if let Some(id @ (-1_001_802 | -1_001_803)) =
                                 item.get("m_paramId").and_then(identifier)
                             {
-                                let value = item.get("m_value").and_then(Value::as_f64);
+                                let value = item.get("m_value").and_then(Fv::as_f64);
                                 angle_values.push(json!({"parameter_id":id,"value":value,"decoded_f64_le_hex":value.map(|v| hex(&v.to_le_bytes())),"object_index":index}));
                             }
                         }

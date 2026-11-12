@@ -25,11 +25,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
-use serde_json::Value;
 
 /// The stair a `BaseRailing`'s fields name.
-fn stair_of(fields: &Value) -> Option<u64> {
+fn stair_of(fields: &Fv) -> Option<u64> {
     let id = fields
         .get("m_stairsId")?
         .pointer("/m_id/m_id64")?

@@ -98,7 +98,8 @@ fn main() -> anyhow::Result<()> {
         let Some(root) = graph.objects.first() else {
             return Ok(());
         };
-        let loops = root.fields.get("m_pCutLoops").unwrap_or(&Value::Null);
+        let root_fields = root.fields.to_json();
+        let loops = root_fields.get("m_pCutLoops").unwrap_or(&Value::Null);
         if empty(loops) {
             return Ok(());
         }
@@ -107,10 +108,10 @@ fn main() -> anyhow::Result<()> {
         if let Ok(id) = i64::try_from(id) {
             cut_symbols.insert(id);
         }
-        let family = root.fields.get("m_familyId").and_then(element_id);
+        let family = root_fields.get("m_familyId").and_then(element_id);
         let cut: serde_json::Map<String, Value> = FIELDS
             .iter()
-            .filter_map(|name| Some((name.to_string(), root.fields.get(*name)?.clone())))
+            .filter_map(|name| Some((name.to_string(), root_fields.get(*name)?.clone())))
             .collect();
         println!(
             "cut {id} {} {owner} {}",
@@ -119,7 +120,7 @@ fn main() -> anyhow::Result<()> {
         );
         println!(
             "symbolrefs {id} {}",
-            serde_json::to_string(&id_fields(&root.fields))?
+            serde_json::to_string(&id_fields(&root_fields))?
         );
         for object in graph.objects.iter().skip(1).take(400) {
             println!(
@@ -144,7 +145,8 @@ fn main() -> anyhow::Result<()> {
         let Some(root) = graph.objects.first() else {
             return Ok(());
         };
-        let master = root.fields.get("m_masterSymbolId").and_then(element_id);
+        let root_fields = root.fields.to_json();
+        let master = root_fields.get("m_masterSymbolId").and_then(element_id);
         if !master.is_some_and(|m| cut_symbols.contains(&m)) {
             return Ok(());
         }
@@ -152,11 +154,12 @@ fn main() -> anyhow::Result<()> {
         let owner = record.identity.owning_element_id;
         println!(
             "instance {id} {owner} {}",
-            serde_json::to_string(&id_fields(&root.fields))?
+            serde_json::to_string(&id_fields(&root_fields))?
         );
         let mut deep = Vec::new();
         for object in &graph.objects {
-            for (name, value) in object.fields.as_object().into_iter().flatten() {
+            let object_fields = object.fields.to_json();
+            for (name, value) in object_fields.as_object().into_iter().flatten() {
                 let mut ids = BTreeSet::new();
                 ids_in(value, &mut ids);
                 for found in ids {

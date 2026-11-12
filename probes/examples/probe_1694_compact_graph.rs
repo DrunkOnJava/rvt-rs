@@ -8,15 +8,17 @@
 //! pull request that does that measures the exports.
 //!
 //! A counting global allocator keeps the heap bytes live. Each record's graph
-//! is decoded (the live bytes after over before are what the graph holds
-//! today), then its objects' fields are cloned (the live bytes of the clone
-//! are a floor for today's: a clone is built whole, while the decoder grows
-//! each map by inserting) and converted to `Fv` (the live bytes of the
-//! conversion, with the lists of names the objects share added to the table
-//! the first time they are seen). The graph, the clones and the conversion are
-//! dropped before the next record, so the probe holds one record at a time.
-//! The conversion is turned back into JSON and compared with the original
-//! fields after its bytes are counted.
+//! is decoded (the live bytes after over before are what the graph holds),
+//! then its objects' fields are written out as `serde_json::Value`, what the
+//! graph held before the decoder built `Fv` itself (the live bytes of that
+//! copy are a floor for the old graph's: a copy is built whole, while the old
+//! decoder grew each map by inserting) and converted to `Fv` again (the live
+//! bytes of the conversion, with the lists of names the objects share added to
+//! the table the first time they are seen). The graph, the copies and the
+//! conversion are dropped before the next record, so the probe holds one
+//! record at a time. The conversion is turned back into JSON and compared
+//! with the copy, and with the graph's own fields, after its bytes are
+//! counted.
 //!
 //! Output, one line each:
 //!   file <path> release <release>
@@ -161,23 +163,21 @@ fn main() -> Result<()> {
         let copies: Vec<serde_json::Value> = graph
             .objects
             .iter()
-            .map(|object| object.fields.clone())
+            .map(|object| object.fields.to_json())
             .collect();
         clone_bytes += live().saturating_sub(before);
-        drop(copies);
 
         let before = live();
-        let compact: Vec<Fv> = graph
-            .objects
+        let compact: Vec<Fv> = copies
             .iter()
-            .map(|object| Fv::from_json(&object.fields, &mut table))
+            .map(|json| Fv::from_json(json, &mut table))
             .collect();
         compact_bytes += live().saturating_sub(before);
 
-        for (fv, object) in compact.iter().zip(&graph.objects) {
+        for ((fv, copy), object) in compact.iter().zip(&copies).zip(&graph.objects) {
             values += fv.node_count();
             compared += 1;
-            mismatches += usize::from(fv.to_json() != object.fields);
+            mismatches += usize::from(fv.to_json() != *copy || *fv != object.fields);
         }
         Ok(())
     });

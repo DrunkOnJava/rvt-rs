@@ -23,8 +23,10 @@ use std::collections::BTreeMap;
 /// Elements printed per file.
 const SHOWN: usize = 20;
 
-fn id_at(value: &serde_json::Value, pointer: &str) -> Option<i64> {
-    value.pointer(pointer).and_then(serde_json::Value::as_i64)
+fn id_at(value: &rvt::research::graph_value::Fv, pointer: &str) -> Option<i64> {
+    value
+        .pointer(pointer)
+        .and_then(rvt::research::graph_value::Fv::as_i64)
 }
 
 fn probe(path: &str) -> anyhow::Result<()> {
@@ -42,7 +44,7 @@ fn probe(path: &str) -> anyhow::Result<()> {
         let Some(object) = record.graph.as_ref().and_then(|g| g.objects.first()) else {
             return Ok(());
         };
-        let fields = serde_json::to_value(&object.fields)?;
+        let fields = object.fields.clone();
         let class = record.class_name.clone().unwrap_or_default();
         match class.as_str() {
             "AllProjectPhases" if id_at(&fields, "/m_famId/m_id/m_id64") == Some(-1) => {
