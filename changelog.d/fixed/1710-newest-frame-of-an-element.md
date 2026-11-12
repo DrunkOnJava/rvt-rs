@@ -10,8 +10,16 @@
   the type of an older frame, and 2 walls an older type's `Width`. The values of
   that file that differ from Revit's export fall from 18 quantities and 52
   properties to 1 and 1, and the BIM4LCA housing gains 25 quantities equal to
-  Revit's. Five values that were equal on the timber office at permit are no
-  longer written (two walls now name no type), and one wall is drawn from its
-  record box where it was drawn from its saved mesh. Within one partition the
-  greater extent still wins. Revit 2008 to 2023 already kept the newest frame
-  (RE-107).
+  Revit's. Five exports move, and in each only the elements whose frame
+  changed: the timber office at permit (250 IfcPlate, 74 IfcMember, 66 IfcDoor,
+  48 IfcWall, 7 IfcSpace, 4 IfcColumn and 1 IfcCurtainWall), the concrete
+  housing as built (60 IfcPlate, 16 IfcCurtainWall, 13 IfcWindow, 8 IfcSlab,
+  5 IfcCovering, 4 IfcWall, an IfcDoor and an IfcSpace) and at permit (20
+  IfcWall, 7 IfcWindow, an IfcRoof and an IfcSpace), and the timber housing as
+  built (4 IfcCovering, 2 IfcWall, an IfcDoor and an IfcSpace) and at permit (7
+  IfcWindow). Five values that were equal on the timber office at permit are no
+  longer written (two walls retyped since the earlier save take a type whose
+  layers are not read, #1802, and two mullions stand beside a mullion whose
+  frame moved, #1803), and one wall is drawn from its record box where it was
+  drawn from its saved mesh (#1407). Within one partition the greater extent
+  still wins. Revit 2008 to 2023 already kept the newest frame (RE-107).
