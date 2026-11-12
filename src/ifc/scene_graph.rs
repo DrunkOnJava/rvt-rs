@@ -36,6 +36,11 @@ use super::entities::IfcEntity;
 use super::step_writer::{Placement, associates_material, placements, storey_of};
 use serde::{Deserialize, Serialize};
 
+/// The most hosts an element hangs below in the tree, as many as
+/// [`storey_of`] follows: an opening's host, its host's, and so on. Real
+/// models nest a door or window in a wall, a panel in a curtain wall.
+const MAX_HOST_DEPTH: usize = 16;
+
 /// A single node in the rendered scene graph.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[non_exhaustive]
@@ -1044,7 +1049,10 @@ pub fn build_scene_graph(model: &IfcModel) -> SceneNode {
     }
     // Two elements that host each other (or a longer ring) have no top to
     // hang from: the lowest index of each ring becomes a node of its own
-    // storey instead.
+    // storey instead. An element more than `MAX_HOST_DEPTH` hosts down
+    // hangs from its storey too: a crafted file can chain doors through each
+    // other, and the tree is built by recursion as deep as the chain, after a
+    // walk of the whole chain from every element in it (#1845).
     for &idx in &written {
         let mut seen = vec![idx];
         let mut at = idx;
@@ -1054,6 +1062,10 @@ pub fn build_scene_graph(model: &IfcModel) -> SceneNode {
                 if let Some(top) = ring_top {
                     host_of.remove(&top);
                 }
+                break;
+            }
+            if seen.len() > MAX_HOST_DEPTH {
+                host_of.remove(&idx);
                 break;
             }
             seen.push(host);
