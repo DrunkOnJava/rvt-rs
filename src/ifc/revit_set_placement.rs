@@ -388,10 +388,13 @@ fn stair_flight_additions(entities: &[IfcEntity]) -> Vec<(usize, &'static str, V
                         })
                 })
                 .collect();
-            if let Some(counts) = counts {
+            // A sum past i64 is no stair's count: the property is left out (#1845).
+            let total = counts
+                .and_then(|counts| counts.iter().try_fold(0i64, |sum, &n| sum.checked_add(n)));
+            if let Some(total) = total {
                 properties.push(Property {
                     name: name.into(),
-                    value: PropertyValue::CountValue(counts.iter().sum()),
+                    value: PropertyValue::CountValue(total),
                 });
             }
         }

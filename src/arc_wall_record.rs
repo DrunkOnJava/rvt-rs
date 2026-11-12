@@ -302,33 +302,20 @@ impl ArcWallRecord {
             buf[offset + 0x0f],
         ]);
 
+        // Through `le_bytes`, which refuses a number no model holds (#1845).
+        let coord = |at: usize| {
+            le_bytes::f64_at(buf, at).ok_or_else(|| Error::Malformed {
+                what: "ArcWall record",
+                detail: format!("the coordinate at offset {at} is not a number a model holds"),
+            })
+        };
         let mut coords = [0f64; 6];
         for (i, slot) in coords.iter_mut().enumerate() {
-            let p = offset + 0x12 + i * 8;
-            *slot = f64::from_le_bytes([
-                buf[p],
-                buf[p + 1],
-                buf[p + 2],
-                buf[p + 3],
-                buf[p + 4],
-                buf[p + 5],
-                buf[p + 6],
-                buf[p + 7],
-            ]);
+            *slot = coord(offset + 0x12 + i * 8)?;
         }
         let mut coords_dup = [0f64; 6];
         for (i, slot) in coords_dup.iter_mut().enumerate() {
-            let p = offset + 0x42 + i * 8;
-            *slot = f64::from_le_bytes([
-                buf[p],
-                buf[p + 1],
-                buf[p + 2],
-                buf[p + 3],
-                buf[p + 4],
-                buf[p + 5],
-                buf[p + 6],
-                buf[p + 7],
-            ]);
+            *slot = coord(offset + 0x42 + i * 8)?;
         }
         let trailer = buf[offset + 0x72];
 
