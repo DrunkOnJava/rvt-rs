@@ -133,9 +133,6 @@ stream-evidence = { path = "tools/stream_evidence" }
 # `cargo install` or the published crate. Path-only, so `cargo publish`
 # strips it.
 rvt = { path = ".", features = ["unstable-research"] }
-# Builds the crafted MS-CFB files of `tests/fuzz_regressions.rs` in memory (#1815).
-# The same crate and version `rvt` already depends on, so it adds no crate.
-cfb = "0.16"
 # Statistical benchmarking harness — drives `benches/*` and
 # powers the criterion-based cells in `docs/benchmarks.md` (Q-05).
 # `html_reports` renders per-run HTML + SVG so CI artefacts are

@@ -1324,8 +1324,9 @@ mod tests {
 
     #[test]
     fn a_trim_under_the_cut_budget_is_cut_as_before() {
-        // The same loop over few knots of v is cut whole: its count stays far under the
-        // budget and nothing else about the face changes.
+        // The same loop of four bands over a few knots of v, two of them inside its
+        // bands: it is cut whole, every triangle inside the loop and their area the
+        // loop's, 2.
         let mut ring = Vec::new();
         for band in 0..4 {
             let v = band as f64;
@@ -1335,13 +1336,7 @@ mod tests {
                 ring.extend([[1.0, v], [0.0, v]]);
             }
         }
-        let result = trimmed_cells(&[ring], &[0.0, 1.0], &[0.0, 1.5, 4.0]);
-        assert!(
-            result
-                .as_ref()
-                .err()
-                .is_none_or(|error| error.to_string() != CUT_BUDGET_EXCEEDED)
-        );
+        check(&[ring], &[0.0, 1.0], &[0.0, 0.5, 2.5, 4.0], 2.0);
     }
 
     // How a triangle of a face's cells can be wrong, and the one thing that looks

@@ -459,6 +459,10 @@ fn bisect_crossing_edge(
 /// polygon does. Any other edge is as the graph stores it. `limit` is the most
 /// points the edge may add to its ring, the first not counted: an edge that would
 /// give more is refused as [`CYLINDER_BUDGET_EXCEEDED`] before it is built (#1815).
+/// The ring's budget is below an edge's own [`EDGE_POINT_BUDGET`], so an edge that
+/// runs out of points always refuses the face now, where before #1815 one past
+/// [`EDGE_POINT_BUDGET`] kept its stored samples; the plane that shares it refuses
+/// at [`PLANAR_FACE_POINT_BUDGET`] first, so the element was not drawn either way.
 ///
 /// Any other error is not an edge to refuse here: the loop keeps the samples the
 /// graph stored, as it did before, and the plane's side, which does refuse,
@@ -521,7 +525,7 @@ fn refined_curved_edge(
     };
     let refined = refine_crossing_edge_within(&evaluate, origin, normal, original, &limits)
         .map_err(|error| {
-            // The ring's points left, not the edge's own budget, ran out.
+            // The ring's points left ran out: its budget is below the edge's own.
             if limits.points < EDGE_POINT_BUDGET && error.to_string() == EDGE_POINTS_EXCEEDED {
                 anyhow!(CYLINDER_BUDGET_EXCEEDED)
             } else {
