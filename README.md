@@ -47,15 +47,16 @@ The measured detail behind each row is in [`docs/evidence.md`](docs/evidence.md)
 
 ## Install and quick start
 
-The latest release is [v0.14.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.14.0) (2026-11-04). Install it with any of:
+This README ships with [v0.14.1](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.14.1) (2026-11-12), a patch release of 0.14 for users who need 0.14's output exactly: it lowers the saved-mesh pass's peak memory and changes no export. Newer releases, whose output differs, are on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases). Install 0.14.1 with any of:
 
-- the prebuilt Linux, macOS and Windows binaries on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases), or the container image `ghcr.io/drunkonjava/rvt-rs`;
-- `cargo install rvt --locked`;
-- `pip install rvt`, for the Python bindings;
-- `cargo install rvt-rs-mcp --locked`, for the [MCP server](#mcp-server) alone;
-- nothing at all: the [browser viewer](https://drunkonjava.github.io/rvt-rs/) reads a file inside the tab.
+- the prebuilt Linux, macOS and Windows binaries on [its release page](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.14.1), or the container image `ghcr.io/drunkonjava/rvt-rs:0.14.1`;
+- `cargo install rvt --version 0.14.1 --locked`;
+- `pip install rvt==0.14.1`, for the Python bindings;
+- `cargo install rvt-rs-mcp --version 0.14.1 --locked`, for the [MCP server](#mcp-server) alone.
 
-[`docs/install.md`](docs/install.md) covers every channel, building from source and the smoke tests. This README describes `main`, which the browser viewer is also built from, so it can be ahead of the latest release: "Upgrading from 0.13" in the [changelog](CHANGELOG.md#upgrading-from-013) says what a user of 0.13 has to change, and each change `main` adds after 0.14.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into `CHANGELOG.md`. To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
+The [browser viewer](https://drunkonjava.github.io/rvt-rs/) reads a file inside the tab with nothing installed, but it is built from `main`, not from this release.
+
+[`docs/install.md`](docs/install.md) covers every channel, building from source and the smoke tests. This README is 0.14.1's: "Upgrading from 0.13" in the [changelog](CHANGELOG.md#upgrading-from-013) says what a user of 0.13 has to change, and 0.14.1 changes nothing a user of 0.14.0 calls. `main` has moved on since; to use it, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
 
 Three commands cover most of what the command line does:
 

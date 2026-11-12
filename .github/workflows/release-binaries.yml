@@ -4,15 +4,29 @@ name: Release binaries
 # who need to read a Revit file do not have to install Rust first.
 #
 #   - `publish.yml` calls this on a `v*` tag with `upload: true`, which
-#     attaches the archives and SHA256SUMS to that tag's GitHub Release.
+#     attaches the archives to that tag's GitHub Release, with the Python
+#     wheels and the sdist its jobs built (artifacts `wheel-*` and `sdist` of
+#     the same run), SHA256SUMS listing every file but itself and the
+#     provenance bundle, and one build-provenance attestation over all of
+#     them (#1466).
 #   - Pull requests that touch this workflow or docker/ run the full matrix
 #     without uploading, and so does a weekly run of main, so a release
-#     never depends on an untested matrix. A dependency bump alone no
+#     never depends on an untested matrix. Such a run has no wheels, and
+#     SHA256SUMS lists the archives alone. A dependency bump alone no
 #     longer runs it: Cargo.lock in the paths ran the whole five-platform
 #     LTO build 16 times in five days (C7).
 #   - `workflow_dispatch` builds any ref; the archives are downloadable from
 #     the run's artifacts. Its `tag` input names them for a release (for
-#     staging a draft GitHub Release) without uploading anything.
+#     staging a draft GitHub Release) without uploading anything. Its
+#     `python` input rehearses the rest of a release page: it builds one
+#     wheel and the sdist under the artifact names publish.yml uses, and the
+#     `checksums` and `attest` jobs below run on them as they do on a
+#     release, up to the `release-page` artifact the `upload` job would
+#     attach. Nothing is attached to a release or pushed to a registry, and
+#     the one job that could publish is a release's alone (`inputs.upload`
+#     exists only when publish.yml calls this workflow). The attestation is
+#     real, though: it is signed for the ref and files of the run, and the
+#     public Sigstore log keeps it.
 #   - The `image` job packs the two static Linux builds into a distroless
 #     container (docker/Dockerfile) and smoke-tests it on every run; on a
 #     release it pushes linux/amd64 + linux/arm64 to ghcr.io.
@@ -20,7 +34,8 @@ name: Release binaries
 # Linux binaries are static musl builds (no glibc version floor), built on
 # native x86_64 and arm64 runners so both can be smoke-tested. Windows links
 # the C runtime statically so no Visual C++ redistributable is needed. The
-# x86_64 macOS build is cross-compiled on the arm64 runner.
+# x86_64 macOS build is cross-compiled on the arm64 runner and smoke-tested
+# there under Rosetta (`arch -x86_64`).
 
 on:
   workflow_call:
@@ -39,6 +54,10 @@ on:
         description: "Name the archives and image for this tag (e.g. v0.2.0); nothing is uploaded or pushed"
         type: string
         default: ""
+      python:
+        description: "Also build one wheel and the sdist, checksum and attest them with the archives (a rehearsal of a release page; nothing is uploaded, but the attestation is real)"
+        type: boolean
+        default: false
   pull_request:
     paths:
       - .github/workflows/release-binaries.yml
@@ -58,6 +77,9 @@ jobs:
   build:
     name: Build / ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    # A release job must not die on its limit: each is 5 or more times the longest of its last 9 runs.
+    # Windows leg longest 16.8 minutes.
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       matrix:
@@ -69,13 +91,14 @@ jobs:
             os: ubuntu-24.04-arm
             smoke: true
           - target: aarch64-apple-darwin
-            os: macos-latest
+            os: macos-26
             smoke: true
           - target: x86_64-apple-darwin
-            os: macos-latest
-            smoke: false
+            os: macos-26
+            smoke: true
+            rosetta: true
           - target: x86_64-pc-windows-msvc
-            os: windows-latest
+            os: windows-2025-vs2026
             smoke: true
             rustflags: "-C target-feature=+crt-static"
     env:
@@ -88,20 +111,14 @@ jobs:
         with:
           persist-credentials: false
       - name: Install Rust stable
-        shell: bash
-        env:
-          TARGETS: ${{ matrix.target }}
-        run: |
-          rustup toolchain install stable --profile minimal --no-self-update ${TARGETS:+--target "$TARGETS"}
-          rustup default stable
-          echo CARGO_INCREMENTAL=0 >> "$GITHUB_ENV"
-          echo CARGO_TERM_COLOR=always >> "$GITHUB_ENV"
-          rustc --version
+        uses: $/.github/actions/setup-rust
+        with:
+          target: ${{ matrix.target }}
       # cargo-auditable embeds the dependency list in each binary, so
       # `cargo audit bin` and other scanners can check a shipped binary
       # against advisories (C10).
       - name: Install cargo-auditable
-        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68 # v2.88.1
+        uses: taiki-e/install-action@3a3daafd3b7f23b8f65d9f5ba2db203fb59b79e2 # v2.90.2
         with:
           tool: cargo-auditable@0.7.7
       # The root crate's CLIs and the MCP server (rvt-mcp/, `rvt-rs-mcp`), which
@@ -172,6 +189,25 @@ jobs:
             echo "archive=dist/${archive}"
             echo "bins=$(wc -l < bins.txt | tr -d ' ')"
           } >> "$GITHUB_OUTPUT"
+      # The Intel macOS archive is built on the arm64 runner, so its binaries
+      # run here only under Rosetta 2. The runner image may lack it: install
+      # it, and fail the job if an x86_64 binary still cannot run, rather than
+      # shipping an Intel CLI nobody has run.
+      - name: Install Rosetta
+        if: matrix.rosetta
+        # A hung softwareupdate would hold the runner for the job's six-hour
+        # default.
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          if arch -x86_64 /usr/bin/true 2>/dev/null; then
+            echo "Rosetta is already installed"
+          else
+            sudo softwareupdate --install-rosetta --agree-to-license
+            arch -x86_64 /usr/bin/true
+            echo "Rosetta installed"
+          fi
       - name: Smoke test the packaged binaries
         if: matrix.smoke
         shell: bash
@@ -179,24 +215,33 @@ jobs:
           DIR: ${{ steps.package.outputs.dir }}
           BINS: ${{ steps.package.outputs.bins }}
           TARGET: ${{ matrix.target }}
+          ROSETTA: ${{ matrix.rosetta }}
         run: |
           set -euo pipefail
           dir="${DIR}"
           ext=""
           if [[ "${TARGET}" == *windows* ]]; then ext=".exe"; fi
-          "${dir}/rvt-info${ext}" --version
+          run() {
+            if [[ "${ROSETTA}" == true ]]; then arch -x86_64 "$@"; else "$@"; fi
+          }
+          if [[ "${ROSETTA}" == true ]]; then
+            # What runs below is the x86_64 build, under Rosetta.
+            test "$(lipo -archs "${dir}/rvt-info")" = x86_64
+            test "$(arch -x86_64 uname -m)" = x86_64
+          fi
+          run "${dir}/rvt-info${ext}" --version
           scratch="$(mktemp -d)"
-          "${dir}/gen-fixture${ext}" demo --classes Wall,Level,Project --element-count 5 \
+          run "${dir}/gen-fixture${ext}" demo --classes Wall,Level,Project --element-count 5 \
             --year 2024 --output "${scratch}/demo.rvt"
-          "${dir}/rvt-info${ext}" "${scratch}/demo.rvt"
-          "${dir}/rvt-inspect${ext}" "${scratch}/demo.rvt" --json > "${scratch}/inspect.json"
-          "${dir}/rvt-ifc${ext}" "${scratch}/demo.rvt" -o "${scratch}/demo.ifc"
+          run "${dir}/rvt-info${ext}" "${scratch}/demo.rvt"
+          run "${dir}/rvt-inspect${ext}" "${scratch}/demo.rvt" --json > "${scratch}/inspect.json"
+          run "${dir}/rvt-ifc${ext}" "${scratch}/demo.rvt" -o "${scratch}/demo.ifc"
           test -s "${scratch}/demo.ifc"
           # The MCP server answers server/discover on stdio and exits when its
           # stdin closes (the pause keeps stdin open until it has answered).
-          "${dir}/rvt-rs-mcp${ext}" --version
+          run "${dir}/rvt-rs-mcp${ext}" --version
           discover='{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}'
-          reply="$({ printf '%s\n' "${discover}"; sleep 3; } | "${dir}/rvt-rs-mcp${ext}")"
+          reply="$({ printf '%s\n' "${discover}"; sleep 3; } | run "${dir}/rvt-rs-mcp${ext}")"
           case "${reply}" in
             *'"supportedVersions"'*'2026-07-28'*) ;;
             *) echo "::error::rvt-rs-mcp did not answer server/discover: ${reply}"; exit 1 ;;
@@ -208,20 +253,123 @@ jobs:
           path: ${{ steps.package.outputs.archive }}
           if-no-files-found: error
 
+  # What a release adds beside the archives, in a dispatch with `python`: one
+  # manylinux wheel and the sdist, built by the steps publish.yml's
+  # `build-wheels` and `build-sdist` jobs run and uploaded under the names those
+  # jobs use (`wheel-linux-x86_64`, `sdist`), so the downloads below are the
+  # ones a release makes. A release gets its seven wheels and its sdist from
+  # those jobs of the same run instead, and every step here is skipped.
+  #
+  # The steps are skipped, not the job, on purpose. A skipped job skips every
+  # job that needs it, however far down, unless that job's own `if` repeats a
+  # status check: with `if: inputs.python` here, `checksums` (which would then
+  # need `!failure()` to run) kept running, and `image`, `attest` and `upload`
+  # were skipped behind it in a pull request run (run 42134335447), which a
+  # release would have done too, publishing nothing.
+  # tools/ci/check-workflows.py fails a job-level `if` on any job above `attest`.
+  python:
+    name: Python wheel and sdist (rehearsal only)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: inputs.python
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        if: inputs.python
+        with:
+          python-version: "3.12"
+      - name: Build wheel via maturin
+        if: inputs.python
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          command: build
+          target: x86_64
+          manylinux: "2014"
+          args: --release --out dist --manifest-path rvt-py/Cargo.toml
+      - name: Upload wheel artifact
+        if: inputs.python
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheel-linux-x86_64
+          path: dist/*.whl
+          if-no-files-found: error
+      - name: Build sdist via maturin
+        if: inputs.python
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          command: sdist
+          args: --out dist
+      - name: Upload sdist artifact
+        if: inputs.python
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  # SHA256SUMS lists every file the release page carries but itself and the
+  # provenance bundle: the archives, and in a release (or a `python` rehearsal)
+  # the wheels and the sdist (#1466). It hashes everything in `dist`, which holds
+  # only what the downloads below put there, so a file cannot be on the page
+  # without a line here.
   checksums:
     name: SHA256SUMS
-    needs: build
+    needs: [build, python]
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: rvt-rs-*
           path: dist
           merge-multiple: true
+      # A pull request or weekly run builds no wheels, and `name: sdist` would
+      # fail there.
+      - name: Download the wheels
+        if: inputs.upload || inputs.python
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: wheel-*
+          path: dist
+          merge-multiple: true
+      - name: Download the sdist
+        if: inputs.upload || inputs.python
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: sdist
+          path: dist
       - name: Write SHA256SUMS
         working-directory: dist
+        shell: bash
+        env:
+          UPLOAD: ${{ inputs.upload }}
+          WITH_PYTHON: ${{ inputs.upload || inputs.python }}
+          # One wheel for each entry of publish.yml's `build-wheels` matrix, which
+          # tools/ci/check-workflows.py compares this with. Nothing else counts
+          # them: release-binaries does not wait for the PyPI job, whose own count
+          # gates only PyPI. A rehearsal builds one.
+          RELEASE_WHEELS: "7"
         run: |
-          sha256sum rvt-rs-* > SHA256SUMS
+          set -euo pipefail
+          export LC_ALL=C
+          shopt -s nullglob
+          # A pattern download that matches nothing succeeds, and one that matches
+          # too few would be checksummed and attested all the same.
+          if [[ "${WITH_PYTHON}" == true ]]; then
+            want=1
+            if [[ "${UPLOAD}" == true ]]; then want="${RELEASE_WHEELS}"; fi
+            wheels=(*.whl)
+            sdists=(rvt-[0-9]*.tar.gz)
+            if [[ ${#wheels[@]} -ne ${want} || ${#sdists[@]} -ne 1 ]]; then
+              echo "::error::expected ${want} wheels and one sdist, found ${#wheels[@]} and ${#sdists[@]}"
+              exit 1
+            fi
+          fi
+          files=(*)
+          test "${#files[@]}" -gt 0
+          sha256sum -- "${files[@]}" > SHA256SUMS
           cat SHA256SUMS
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -233,6 +381,7 @@ jobs:
     name: Container image
     needs: checksums
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -248,11 +397,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # The archives and SHA256SUMS, and nothing else: the wheels, the sdist
+      # and the `release-page` artifact (the archives again, with the bundle)
+      # are in the same run when it is a release, and `stage.sh` reads none of
+      # them. SHA256SUMS lists files this directory does not hold, which its
+      # `--ignore-missing` check skips.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
-          pattern: "*"
+          pattern: rvt-rs-*
           path: dist
           merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: SHA256SUMS
+          path: dist
       - name: Stage the build context from the checksummed archives
         run: docker/stage.sh dist
       - name: Image name, version and tags
@@ -270,8 +428,12 @@ jobs:
             version="g${GITHUB_SHA::7}"
           fi
           tags="${image}:${version}"
-          # A pre-release (v0.3.0-rc1) never moves `latest`.
-          if [[ -n "${TAG_INPUT}" && "${version}" != *-* ]]; then
+          # A pre-release (v0.3.0-rc1) never moves `latest`, and neither does a
+          # patch to an older line (0.14.1 after 0.19.0, #1808): only the highest
+          # released version takes it.
+          highest="$(git ls-remote --tags --refs "https://github.com/${GITHUB_REPOSITORY}" 'v*' \
+            | sed 's#.*refs/tags/v##' | grep -v -- '-' | sort -V | tail -n 1)"
+          if [[ -n "${TAG_INPUT}" && "${version}" != *-* && "${version}" == "${highest}" ]]; then
             tags="${tags},${image}:latest"
           fi
           {
@@ -304,7 +466,7 @@ jobs:
           docker run --rm -v "${work}:/data" rvt-rs:smoke rvt-ifc demo.rvt -o demo.ifc
           test -s "${work}/demo.ifc"
           echo "image smoke OK"
-      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         if: inputs.upload
         with:
           registry: ghcr.io
@@ -330,40 +492,117 @@ jobs:
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
-  upload:
-    name: Attach to the GitHub Release
-    if: inputs.upload
+  # The release page: every file a release attaches, assembled and checked
+  # once, attested once, and handed to `upload` as one artifact, so the files
+  # attached are the files attested and listed in SHA256SUMS (#1466). Of the
+  # jobs that handle the page only this one signs (`image` signs the container
+  # image), and `upload`, the only job that holds `contents: write`, never
+  # signs. A dispatch with `python` runs this job and stops after the artifact.
+  attest:
+    name: Attest the release page
+    if: inputs.upload || inputs.python
     needs: checksums
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
-      contents: write
-      # Build provenance for the archives (actions/attest).
-      id-token: write
-      attestations: write
+      contents: read
+      id-token: write # the OIDC token the Sigstore certificate is issued against
+      attestations: write # storing the attestation (actions/attest)
     steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+      # Refused before anything is signed.
+      - name: A release names its tag
+        if: inputs.upload
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [[ -z "${TAG}" ]]; then
+            echo "::error::upload requested without a tag"
+            exit 1
+          fi
+      - name: Download the archives
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
-          pattern: "*"
+          pattern: rvt-rs-*
           path: dist
           merge-multiple: true
-      # `gh attestation verify <archive> -R DrunkOnJava/rvt-rs`
-      - name: Attest the archives' build provenance
+      - name: Download SHA256SUMS
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: SHA256SUMS
+          path: dist
+      - name: Download the wheels
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: wheel-*
+          path: dist
+          merge-multiple: true
+      - name: Download the sdist
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: sdist
+          path: dist
+      # Every file that will be attested and attached has a line in SHA256SUMS
+      # and every line has a file with its hash. Only the provenance bundle,
+      # which cannot attest itself, is added after this.
+      - name: Check the page against SHA256SUMS
+        working-directory: dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+          shopt -s nullglob
+          sha256sum -c SHA256SUMS
+          present=()
+          for file in *; do
+            if [[ "${file}" != SHA256SUMS ]]; then present+=("${file}"); fi
+          done
+          if ! diff <(awk '{print $2}' SHA256SUMS | sort) <(printf '%s\n' "${present[@]}" | sort); then
+            echo "::error::SHA256SUMS and the files to attach differ (< only in SHA256SUMS, > only on the page)"
+            exit 1
+          fi
+          echo "${#present[@]} files, each listed in SHA256SUMS with its hash"
+      # `gh attestation verify <file> -R DrunkOnJava/rvt-rs` works for each of
+      # the archives, wheels and the sdist. SHA256SUMS is attested too, so one
+      # file can be verified and every other file checked against it
+      # (`sha256sum -c --ignore-missing SHA256SUMS`).
+      - name: Attest the build provenance of every file and SHA256SUMS
         id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
-          subject-path: dist/rvt-rs-*
+          subject-path: dist/*
       # The same bundle as a release file, one JSON line per attestation, the
       # form `gh attestation download` writes. OpenSSF Scorecard's
       # Signed-Releases check looks for provenance among a release's files
       # (#891).
-      - name: Attach the provenance bundle to the release files
+      - name: Add the provenance bundle to the page
         env:
           BUNDLE: ${{ steps.attest.outputs.bundle-path }}
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          jq -c . "${BUNDLE}" > "dist/rvt-rs-${TAG}.intoto.jsonl"
-          test -s "dist/rvt-rs-${TAG}.intoto.jsonl"
+          name="rvt-rs-${TAG:-dispatch}.intoto.jsonl"
+          jq -c . "${BUNDLE}" > "dist/${name}"
+          test -s "dist/${name}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-page
+          path: dist
+          retention-days: 7
+          if-no-files-found: error
+
+  upload:
+    name: Attach to the GitHub Release
+    if: inputs.upload
+    needs: attest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write # creating the release and attaching the files (gh release)
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-page
+          path: dist
       - name: Create the release if needed and upload
         env:
           GH_TOKEN: ${{ github.token }}
@@ -374,8 +613,63 @@ jobs:
             echo "::error::upload requested without a tag"
             exit 1
           fi
+          (cd dist && sha256sum -c SHA256SUMS)
+          # GitHub marks a new release Latest unless told not to: a patch to an
+          # older line (0.14.1 after 0.19.0, #1808) must leave the mark where it is.
+          highest="$(git ls-remote --tags --refs "https://github.com/${GITHUB_REPOSITORY}" 'v*' \
+            | sed 's#.*refs/tags/##' | grep -v -- '-' | sort -V | tail -n 1)"
+          latest=false
+          if [[ "${TAG}" == "${highest}" ]]; then
+            latest=true
+          fi
           if ! gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" > /dev/null 2>&1; then
             gh release create "${TAG}" --repo "${GITHUB_REPOSITORY}" --verify-tag \
-              --title "${TAG}" --generate-notes
+              --title "${TAG}" --generate-notes --latest="${latest}"
           fi
           gh release upload "${TAG}" --repo "${GITHUB_REPOSITORY}" --clobber dist/*
+
+  # A release whose page chain was skipped, or that uploaded fewer files than it
+  # attested, goes red here instead of green: `upload` is skipped by an `if`, and
+  # a skipped job leaves nothing to fail. This job runs whether or not `upload`
+  # did, and compares the files the release holds with the page `attest` signed
+  # (#1466). The counts are the page's: the archives, the wheels, the sdist,
+  # SHA256SUMS and the bundle.
+  page:
+    name: Check the release page
+    if: ${{ !cancelled() && inputs.upload }}
+    needs: upload
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-page
+          path: dist
+      - name: The release holds the files that were attested
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          # Counted against the `build` matrix and publish.yml's `build-wheels`
+          # matrix by tools/ci/check-workflows.py.
+          RELEASE_ARCHIVES: "5"
+          RELEASE_WHEELS: "7"
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+          shopt -s nullglob
+          page=$(cd dist && printf '%s\n' * | sort)
+          assets=$(gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets[].name' | sort)
+          expected=$((RELEASE_ARCHIVES + RELEASE_WHEELS + 3))
+          found=$(printf '%s\n' "${assets}" | grep -c .) || found=0
+          if [[ "${found}" -ne "${expected}" ]]; then
+            echo "::error::release ${TAG} holds ${found} files, not the ${expected} of the page (${RELEASE_ARCHIVES} archives, ${RELEASE_WHEELS} wheels, the sdist, SHA256SUMS, the bundle)"
+            exit 1
+          fi
+          if ! diff <(printf '%s\n' "${page}") <(printf '%s\n' "${assets}"); then
+            echo "::error::release ${TAG} does not hold the files that were attested (< only attested, > only on the release)"
+            exit 1
+          fi
+          echo "release ${TAG} holds the ${found} files attested"
