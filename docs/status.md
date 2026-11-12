@@ -1352,6 +1352,17 @@ or Combined, and walls, floors and stairs before Revit 2024 are left without
 Vitoria's 247 walls are the ones the census counts apart)
 (`reports/element-framing/RE-429-structural-load-bearing.md`).
 
+**RE-448 (2026-11-12)** sets each door and window of a Revit 2015 to 2023
+save in the wall its own native record names (`m_hostId`), where the
+reference list's nearest wall is another plain wall: RE-245's rule, which
+ran on 2024 to 2027 only and read the host only in 2024's 8-byte
+ElementId. Autodesk's `rac_advanced` has 28 doors and windows and
+`rac_basic` one rebound on every save from 2015 to 2023, each now in the wall
+the same project's 2024 save sets it in, its opening's centre and faces
+within 0.0005 m of the 2024 opening's; nothing else changes on 58 local
+files of 2015 to 2023
+(`reports/element-framing/RE-448-opening-native-host-pre2024.md`).
+
 **RE-327 (2026-11-04)** rebuilds a family's extrusions from their own records:
 the sketch's `CurveElem` lines and arcs (in the family's coordinates), chained
 into loops, placed in the `SketchPlane`'s frame and swept between the

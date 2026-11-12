@@ -16,7 +16,7 @@
 //! Architecture's 4 doors, and the door and 3 windows of each of the R2025
 //! models 12 to 17 (`reports/element-framing/RE-215-symbol-cut-loops.md`).
 
-use crate::native_json::{element_id, finite_triple};
+use crate::native_json::{element_id, finite_triple, identifier_i64};
 use crate::vector_math::distance;
 use crate::{RevitFile, native_document, native_saved_mesh::pointer};
 use std::collections::{BTreeMap, BTreeSet};
@@ -182,6 +182,46 @@ pub struct InstanceCuts {
     /// `m_flippedX` and `m_flippedY` of the instance's current record: its
     /// hand flip and facing flip (RE-343).
     pub flips: BTreeMap<u64, [bool; 2]>,
+}
+
+/// The element hosting each of `instances`: the first `m_hostId` of its
+/// native record, read on Revit 2015 to 2027 and in either shape the schema
+/// saves an ElementId, `{"m_id":{"m_id64":n}}` from 2024 and the 4-byte
+/// `{"m_id":{"m_id":n}}` before (RE-280, RE-448). [`instance_cuts_and_symbols`]
+/// reads the same member on 2024 to 2027 (RE-245).
+pub fn instance_hosts(
+    rf: &mut RevitFile,
+    instances: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, u64>> {
+    let mut hosts = BTreeMap::new();
+    if instances.is_empty() {
+        return Ok(hosts);
+    }
+    let options = native_document::Options {
+        selected_ids: instances.clone(),
+        releases: native_document::NATIVE_RELEASES,
+        ..native_document::Options::default()
+    };
+    native_document::extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        if !instances.contains(&id) {
+            return Ok(());
+        }
+        if let Some(host) = graph.objects.iter().find_map(|object| {
+            object
+                .fields
+                .get("m_hostId")
+                .and_then(identifier_i64)
+                .and_then(|host| u64::try_from(host).ok())
+        }) {
+            hosts.insert(id, host);
+        }
+        Ok(())
+    })?;
+    Ok(hosts)
 }
 
 /// [`instance_cut_loops_and_uncut`], and the symbol that draws each of
