@@ -32,7 +32,7 @@ const SIX: [&str; 6] = [
     "autodesk.spec.aec:time",
 ];
 
-fn family_of(fields: &serde_json::Value) -> Option<i64> {
+fn family_of(fields: &rvt::research::graph_value::Fv) -> Option<i64> {
     let id = &fields["m_famId"]["m_id"];
     id["m_id64"].as_i64().or_else(|| id["m_id"].as_i64())
 }
