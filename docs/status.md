@@ -1553,7 +1553,13 @@ prints it from any installed build.
   Revit's export writes, every type object had a GlobalId of its own, and a
   standalone Revit 2020 family with one revolution exported as an
   `IfcRevolvedAreaSolid` (experimental). Every record box that stays one says
-  why (`SavedMeshRefusal`).
+  why (`SavedMeshRefusal`). No roof, beam, slab, footing or stair flight mesh
+  was among the bodies scored against Revit's export on 31 models, a mesh was
+  not always Revit's (doors 675 of 681, walls 14 of 18), and a stair that
+  aggregates its railings has more volume than Revit's where a railing is
+  still its record box (RE-303). `[0.18.0]` in
+  [`CHANGELOG.md`](../CHANGELOG.md) gives what each change measures and what it
+  does not.
 - **v0.17.0** (2026-11-09): published on every channel, each checked from its
   published artifacts. It reads more
   of Revit 2015 to 2023 projects: curtain walls are `IfcCurtainWall` with their
