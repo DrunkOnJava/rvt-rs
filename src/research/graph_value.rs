@@ -150,15 +150,6 @@ impl<'a> IntoIterator for &'a Obj {
     }
 }
 
-impl<'a> IntoIterator for &'a Box<Obj> {
-    type Item = (&'a str, &'a Fv);
-    type IntoIter = ObjIter<'a>;
-
-    fn into_iter(self) -> ObjIter<'a> {
-        self.iter()
-    }
-}
-
 /// The lists of names the objects of a graph (or of a whole file) share.
 #[derive(Debug, Default)]
 pub struct NameTable {
@@ -222,11 +213,8 @@ static NULL: Fv = Fv::Null;
 
 /// What [`Fv::get`] and indexing take: a field name or an array position.
 ///
-/// Crate-private on purpose, which seals it: a public trait implemented for
-/// `usize`, `str` and `String` makes rustc count it, and the `Fv` its method
-/// takes, as reachable from the public API of a build without
-/// `unstable-research` (CI's `unnameable_types` step), though no stable item
-/// hands either out.
+/// Crate-private, which seals it: only the indexes implemented below can be
+/// used, and no reader can name the trait.
 pub(crate) trait FvIndex {
     fn index_into<'v>(&self, value: &'v Fv) -> Option<&'v Fv>;
 }

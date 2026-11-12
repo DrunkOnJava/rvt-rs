@@ -48,7 +48,7 @@ fn ids(value: &Fv, path: &str, out: &mut Vec<(String, u64)>) {
                 out.push((path.to_string(), id));
                 return;
             }
-            for (key, child) in map {
+            for (key, child) in map.iter() {
                 ids(child, &format!("{path}.{key}"), out);
             }
         }

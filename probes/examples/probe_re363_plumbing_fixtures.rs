@@ -222,7 +222,7 @@ fn flatten(prefix: &str, value: &Fv, depth: usize, out: &mut Vec<(String, String
             if depth >= 4 {
                 return;
             }
-            for (name, member) in members {
+            for (name, member) in members.iter() {
                 let key = if prefix.is_empty() {
                     name.to_string()
                 } else {

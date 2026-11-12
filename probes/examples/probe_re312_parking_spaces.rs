@@ -63,7 +63,7 @@ fn flatten(prefix: &str, value: &Fv, out: &mut Vec<(String, String)>) {
             out.push((prefix.to_string(), "->".into()));
         }
         Fv::Object(map) => {
-            for (key, inner) in map {
+            for (key, inner) in map.iter() {
                 let path = if prefix.is_empty() {
                     key.to_string()
                 } else {

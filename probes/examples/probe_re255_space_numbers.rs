@@ -45,7 +45,7 @@ fn numbers(label: &str, value: &Fv, out: &mut Vec<String>) {
             }
         }
         Fv::Object(map) => {
-            for (name, inner) in map {
+            for (name, inner) in map.iter() {
                 numbers(&format!("{label}.{name}"), inner, out);
             }
         }
