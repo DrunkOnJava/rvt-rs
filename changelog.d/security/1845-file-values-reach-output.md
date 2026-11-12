@@ -6,5 +6,7 @@
   than 1e30 (twenty orders past any model's coordinates), is now read as
   absent where the walker, the native graphs and the element records decode
   it, so no sum or difference made from it becomes infinite. A sum of stair
-  counts that would overflow leaves the property out. No real file of the
+  counts that would overflow leaves the property out. The glTF and the plan
+  SVG, which unlike the IFC writer had no check of their own, now draw an
+  element whose transform or outline is not finite as no geometry. No real file of the
   measured corpus changes.
