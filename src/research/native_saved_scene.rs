@@ -598,8 +598,13 @@ pub fn extract_in_batches_with_control(
     // The pass walks the partitions once for each batch it reads. It inflates
     // them as it walks and the handle keeps no copy of them, which at this
     // stage was 36% to 43% of the largest files' peak resident memory (#1694).
-    opts.uncached_partitions = true;
-    file.release_inflated_partitions();
+    // A read that records value sources names each value's place in the
+    // inflated partition, which only a walk of the handle's copy knows
+    // (#1360), so it keeps the copies.
+    if !file.recording_value_sources() {
+        opts.uncached_partitions = true;
+        file.release_inflated_partitions();
+    }
     // Everything each owner's graph names. An owner can name another owner,
     // whose own symbols its mesh then reaches, as the one-shot read finds them
     // by reading every record's references.
