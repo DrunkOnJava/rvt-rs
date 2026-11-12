@@ -664,7 +664,7 @@ pub fn plan_profile_from_lines(lines: &[[f64; 4]]) -> Option<PlanProfile> {
         if ![x0, y0, x1, y1].iter().all(|v| v.is_finite()) {
             return None;
         }
-        let (a, b) = (vertices.intern((x0, y0)), vertices.intern((x1, y1)));
+        let (a, b) = (vertices.intern((x0, y0))?, vertices.intern((x1, y1))?);
         if a == b {
             return None;
         }
@@ -768,23 +768,44 @@ fn profile_from_loops(loops: Vec<Vec<(f64, f64)>>) -> Option<PlanProfile> {
     })
 }
 
-/// Vertex registry with tolerance matching.
+/// The comparisons one owner's loop solve may make: its vertex lookups, its
+/// edge checks and the vertex pairs each diagonal line is tried against. A
+/// slab's sketch has tens of lines (Core Interior's plates own 57, RE-95),
+/// a few million comparisons at most; a crafted owner of thousands of
+/// diagonal lines took Θ(n⁴) and more (#1833). Past it the owner has no
+/// plan profile and keeps its record's box.
+const SOLVE_WORK_BUDGET: usize = 100_000_000;
+
+/// Vertex registry with tolerance matching, and the work the solve has done.
 #[derive(Default)]
 struct Vertices {
     points: Vec<(f64, f64)>,
     degree: Vec<usize>,
+    work: std::cell::Cell<usize>,
 }
 
 impl Vertices {
-    fn intern(&mut self, point: (f64, f64)) -> usize {
+    fn intern(&mut self, point: (f64, f64)) -> Option<usize> {
+        self.charge(self.points.len())?;
         for (index, held) in self.points.iter().enumerate() {
             if same(*held, point) {
-                return index;
+                return Some(index);
             }
         }
         self.points.push(point);
         self.degree.push(0);
-        self.points.len() - 1
+        Some(self.points.len() - 1)
+    }
+
+    /// Count `units` against [`SOLVE_WORK_BUDGET`] before they are spent.
+    fn charge(&self, units: usize) -> Option<()> {
+        let work = self.work.get().saturating_add(units);
+        self.work.set(work);
+        (work <= SOLVE_WORK_BUDGET).then_some(())
+    }
+
+    fn spent(&self) -> bool {
+        self.work.get() > SOLVE_WORK_BUDGET
     }
 }
 
@@ -824,6 +845,9 @@ fn solve_loops(segments: &[[f64; 4]]) -> Option<Vec<Vec<(f64, f64)>>> {
                 placed = Some((index, pair));
                 break;
             }
+            if vertices.spent() {
+                return None;
+            }
         }
         let (index, (a, b)) = placed?;
         pending.remove(index);
@@ -841,11 +865,12 @@ fn push_edge(
     a: (f64, f64),
     b: (f64, f64),
 ) -> Option<()> {
-    let ia = vertices.intern(a);
-    let ib = vertices.intern(b);
+    let ia = vertices.intern(a)?;
+    let ib = vertices.intern(b)?;
     if ia == ib {
         return None;
     }
+    vertices.charge(edges.len())?;
     if edges
         .iter()
         .any(|(p, q)| (*p == ia && *q == ib) || (*p == ib && *q == ia))
@@ -869,6 +894,7 @@ fn sole_candidate(
     span: &[f64; 4],
 ) -> Option<((f64, f64), (f64, f64))> {
     let [x0, y0, x1, y1] = *span;
+    vertices.charge(vertices.points.len())?;
     let open: Vec<usize> = (0..vertices.points.len())
         .filter(|index| {
             let (x, y) = vertices.points[*index];
@@ -883,6 +909,7 @@ fn sole_candidate(
     let mut spanning: Vec<((f64, f64), (f64, f64))> = Vec::new();
     for (slot, ia) in open.iter().enumerate() {
         for ib in open.iter().skip(slot + 1) {
+            vertices.charge(edges.len())?;
             if edges
                 .iter()
                 .any(|(p, q)| (p == ia && q == ib) || (p == ib && q == ia))
