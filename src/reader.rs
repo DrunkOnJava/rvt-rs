@@ -865,7 +865,7 @@ impl RevitFile {
     /// holds the `Arc` it was given keeps it. The saved-graphics pass calls this
     /// once the readers that share the copies are done, so that its own walks
     /// do not hold them at the peak (#1694).
-    pub fn release_inflated_partitions(&mut self) {
+    pub(crate) fn release_inflated_partitions(&mut self) {
         self.inflated.clear();
     }
 

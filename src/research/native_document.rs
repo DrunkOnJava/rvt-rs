@@ -127,7 +127,10 @@ pub struct Options {
     /// it inflates only the groups of each partition that hold a record the
     /// read selects, a copy of it included: on the largest files one partition
     /// holds nearly every group, so the index alone leaves nothing to skip
-    /// (#1694). Off by default: the other readers share the copy.
+    /// (#1694). A group it skips is never inflated, so neither its members'
+    /// inflation nor the group budget is checked here: the read that recorded
+    /// the index inflated and walked every group. Off by default: the other
+    /// readers share the copy.
     pub uncached_partitions: bool,
 }
 /// The default [`Options::max_group_bytes`]: one reassembled continuation
