@@ -15,7 +15,7 @@ rather than from its rounded ratio column:
   base, the bars most rows use (a row with another bar reads the table);
 - any row whose figures do not read as numbers.
 
-A sample is a row named `YYYY-...`; every other row is a model. It judges no
+A sample is a row named `YYYY-<lowercase stem>`; every other row is a model. It judges no
 registered row; where a file's base rounds fall into two values (#1694), the
 median here is not how such a row is judged.
 
@@ -44,7 +44,9 @@ def rows(path):
         if base_ms <= 0 or base_mib <= 0:
             bad.append(cells[0])
             continue
-        year = re.match(r"(\d{4})-", cells[0])
+        # A sample's row is `YYYY-<its file's lowercase stem>`; a model's name
+        # has capitals or another separator (`2024_Core_Interior`).
+        year = re.fullmatch(r"(\d{4})-[a-z0-9_]+", cells[0])
         good.append({
             "name": cells[0],
             "year": int(year.group(1)) if year else None,

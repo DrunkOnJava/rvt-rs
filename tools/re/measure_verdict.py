@@ -49,14 +49,18 @@ def named(names):
 
 
 def compare(head, base, name, label):
-    same, differ, no_base, held = 0, [], [], 0
-    for model in models(head):
+    # Over both sides' models: a model the base wrote and the head did not is
+    # an export that disappeared, the regression this line most needs to show.
+    same, differ, no_base, no_head, held = 0, [], [], [], 0
+    for model in sorted(set(models(head)) | set(models(base))):
         mine = read(os.path.join(head, model, name))
-        if mine is None:
+        theirs = read(os.path.join(base, model, name))
+        if mine is None and theirs is None:
             continue
         held += 1
-        theirs = read(os.path.join(base, model, name))
-        if theirs is None:
+        if mine is None:
+            no_head.append(model)
+        elif theirs is None:
             no_base.append(model)
         elif theirs == mine:
             same += 1
@@ -68,6 +72,8 @@ def compare(head, base, name, label):
     line = f"- {label}: **{same} of {held} identical**"
     if differ:
         line += f"; **{len(differ)} differ**: {named(differ)}"
+    if no_head:
+        line += f"; **{len(no_head)} missing at head**: {named(no_head)}"
     if no_base:
         line += f"; {len(no_base)} with no base: {named(no_base)}"
     print(line)
@@ -79,15 +85,25 @@ def scorer_residue(path):
     except OSError:
         print("- Scorer diff: none written")
         return
-    residue, files, current = [], set(), None
+    residue, files, current, headers = [], set(), None, 0
     for line in lines:
+        if headers:
+            # The `---` and `+++` lines right after `diff -r`; a content line
+            # can start with `--` or `++` too, and is residue.
+            headers -= 1
+            if line.startswith(("---", "+++")):
+                continue
         if line.startswith("Only in "):
             if not HEAD_ONLY.search(line):
                 residue.append(line)
                 files.add(line)
+        elif line.startswith("Binary files "):
+            residue.append(line)
+            files.add(line)
         elif line.startswith("diff -r"):
             current = line.rsplit(" ", 1)[-1]
-        elif line.startswith(("---", "+++", "@@")):
+            headers = 2
+        elif line.startswith("@@"):
             continue
         elif line.startswith(("+", "-")):
             if current and current.endswith("counts.txt") and PROBE_EXIT.match(line):
