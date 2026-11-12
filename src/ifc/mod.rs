@@ -5423,6 +5423,17 @@ fn geometry_gap_skipped_items(
     );
 
     let placements = step_writer::placements(model);
+    // A whole whose aggregated parts carry its body, as Revit's export draws a
+    // stair (RE-39) and a curtain wall (RE-46), lacks no body of its own: it is
+    // counted in `building_elements_carried_by_parts` (RE-440).
+    let wholes: std::collections::BTreeSet<usize> = model
+        .entities
+        .iter()
+        .filter_map(|entity| match entity {
+            entities::IfcEntity::Aggregate { whole, .. } => Some(*whole),
+            _ => None,
+        })
+        .collect();
     for (index, entity) in model.entities.iter().enumerate() {
         let entities::IfcEntity::BuildingElement {
             ifc_type,
@@ -5467,10 +5478,11 @@ fn geometry_gap_skipped_items(
         if location_feet.is_none() {
             unsupported_curve.add(ifc_type, name, id);
         }
-        if !has_body_shape {
+        let carried_by_parts = !has_body_shape && wholes.contains(&index);
+        if !has_body_shape && !carried_by_parts {
             missing_dimensions.add(ifc_type, name, id);
         }
-        if location_feet.is_some() && !has_body_shape {
+        if location_feet.is_some() && !has_body_shape && !carried_by_parts {
             unsupported_profile.add(ifc_type, name, id);
         }
         if hosted_geometry_type(ifc_type) && host_element_index.is_none() {

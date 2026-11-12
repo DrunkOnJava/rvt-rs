@@ -584,7 +584,10 @@ the `unsupported_geometry_*` prefix and currently include
 `unsupported_geometry_unresolved_host`, `unsupported_geometry_missing_level`,
 and `unsupported_geometry_missing_dimensions`. A single element can appear in
 more than one geometry bucket because these are condition counts, not a
-deduplicated element total.
+deduplicated element total. A whole whose aggregated parts carry its body, a
+stair or curtain wall as Revit's export draws them, is in neither
+`unsupported_geometry_profile` nor `unsupported_geometry_missing_dimensions`:
+it is counted in `exported.building_elements_carried_by_parts` (RE-440).
 
 `stream_not_read_resource_limit` lists the streams a resource limit kept from
 being read whole (#1075): `classes` maps each stream's name (`Partitions/189`)

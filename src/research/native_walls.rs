@@ -264,6 +264,33 @@ pub fn native_walls(
     Ok(native_walls_and_top_joins(rf, walls)?.walls)
 }
 
+/// The type of each wall in `walls` whose native record is an `SWall` or
+/// `ArcWall`: its `m_WallAttributesId` (RE-440). A wall whose record is of
+/// another class, or names no type, is left out.
+pub fn wall_type_ids(
+    rf: &mut RevitFile,
+    walls: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, u64>> {
+    let mut out = BTreeMap::new();
+    if walls.is_empty() {
+        return Ok(out);
+    }
+    let options = Options {
+        selected_ids: walls.clone(),
+        ..Options::default()
+    };
+    extract_graphs(rf, &options, |record| {
+        if !matches!(record.class_name.as_deref(), Some("SWall" | "ArcWall")) {
+            return Ok(());
+        }
+        if let Some(type_id) = record.graph.as_ref().and_then(wall_type_id) {
+            out.insert(record.identity.element_id, type_id);
+        }
+        Ok(())
+    })?;
+    Ok(out)
+}
+
 /// The name of each curtain wall type in `types` whose native record is a
 /// `NewCurtainWallType`: its `SymbolInfo.m_name`. A curtain wall type's
 /// serialised data gives no name where a basic wall type's does (#322), and

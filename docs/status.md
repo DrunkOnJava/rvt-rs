@@ -245,7 +245,8 @@ parts of the model that are actually decoded.
 not a production RVT-to-IFC converter for arbitrary architectural projects.
 Production `walker::iter_elements` prefers typed MVP decoders on
 `Global/Latest` (fail closed), merges version-gated 2023 ArcWall partition
-recovers, and additionally merges fail-closed partition MVP recovers for
+recovers whose native record is a wall (none on any local file: Einhoven's
+pattern matches are its curtain wall's parts, RE-440), and additionally merges fail-closed partition MVP recovers for
 `Level` (elevation + name), `Material` (display-name candidates), and — on
 Revit 2024 — `Wall`, `Door`, `Window`, `Column`, `Floor` and `BuildingPad`
 instances from partition element records. The 2024 rows RE-15 read as an
@@ -1158,7 +1159,8 @@ counts the Revit parameter values written into the export's property sets
 storey's elements by category, type name first, with curtain-wall and
 stair parts under their whole. Elements reach their storey from the
 Level their record names (RE-59, RE-60): all 970 of Core Interior's
-building elements sit on Revit's storey, and ArcWalls bind by elevation.
+building elements sit on Revit's storey, and all 28 of Einhoven's on its one
+Level (RE-440).
 The tree, the Schedule panel and the info panel then put each element on the
 storey the IFC export writes it on (a part on its whole's, an element in a
 room on the room's, an opening on its host's) and list only the elements the
@@ -1351,6 +1353,21 @@ or Combined, and walls, floors and stairs before Revit 2024 are left without
 (the older models show only the false state, so nothing is written for them;
 Vitoria's 247 walls are the ones the census counts apart)
 (`reports/element-framing/RE-429-structural-load-bearing.md`).
+
+**RE-440 (2026-11-12)** finds that the 24 records the Revit 2023 ArcWall
+pattern matches on `Revit_IFC5_Einhoven` are none of them walls: their
+ElementIds' native records are 15 curtain panels and 7 curtain grid lines, and
+2 have no ElementId. A match is now kept only where its native record is an
+`ArcWall` or `SWall`, which leaves none on any local file. Einhoven's one
+`Level` is its storey (a lone 2015 to 2023 Level is kept where the file's
+native `Level` records are that one alone), and a 2023 wall whose type is a
+`NewCurtainWallType` is an `IfcCurtainWall` named by that type, aggregating
+the panels that name it. Einhoven exports 1 wall, 1 curtain wall of 24 panels
+and 2 windows on `Level 1`, where it exported 26 walls, 9 panels and 4
+storeys; 2023 `rac_basic`'s 9 curtain walls take the type name its 2024 and
+2025 saves give them; a curtain wall whose panels carry its body is no longer
+reported as missing one. No other 2015 to 2023 export changes
+(`reports/element-framing/RE-440-einhoven-curtain-wall.md`).
 
 **RE-327 (2026-11-04)** rebuilds a family's extrusions from their own records:
 the sketch's `CurveElem` lines and arcs (in the family's coordinates), chained

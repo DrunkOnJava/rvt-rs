@@ -169,11 +169,91 @@ pub(super) fn recover_2023_records(
             attach_host_candidates(record, &wall_ids, element);
         }
     }
+    // --- Curtain walls and their panels and mullions (RE-440) ---
+    attach_curtain_walls_2023(rf, &selected, &mut out.walls, &mut out.products);
     // Each record's reference list, as read, for the readers it names (RE-366).
     selected
         .into_iter()
         .map(|(id, record)| (id, record.references))
         .collect()
+}
+
+/// Make each 2023 wall whose native record's type (`m_WallAttributesId`) is a
+/// `NewCurtainWallType` a curtain wall with that type's name, and give each
+/// panel and mullion whose reference list names exactly one of them that wall
+/// as its aggregate whole, as on 2024 (RE-46). On 2023 no mullion or grid
+/// element names its wall the way 2024's do, but the wall's own type says
+/// what it is (RE-440): `Revit_IFC5_Einhoven`'s wall 7187 has a curtain grid
+/// of 24 cells whose panels name it, and its type 1937 is a
+/// `NewCurtainWallType`.
+fn attach_curtain_walls_2023(
+    rf: &mut RevitFile,
+    selected: &BTreeMap<u32, crate::partition_element_records::PartitionElementRecord>,
+    walls: &mut [DecodedElement],
+    products: &mut [DecodedElement],
+) {
+    let wall_ids: BTreeSet<u64> = walls
+        .iter()
+        .filter_map(|wall| wall.id)
+        .map(u64::from)
+        .collect();
+    let wall_types = crate::native_walls::wall_type_ids(rf, &wall_ids).unwrap_or_default();
+    let type_ids: BTreeSet<u64> = wall_types.values().copied().collect();
+    let curtain_types =
+        crate::native_walls::curtain_wall_type_names(rf, &type_ids).unwrap_or_default();
+    let mut curtain_walls = BTreeSet::new();
+    for wall in walls.iter_mut() {
+        let Some(id) = wall.id else {
+            continue;
+        };
+        let Some((&type_id, name)) = wall_types
+            .get(&u64::from(id))
+            .and_then(|type_id| Some((type_id, curtain_types.get(type_id)?)))
+        else {
+            continue;
+        };
+        let Ok(type_id) = u32::try_from(type_id) else {
+            continue;
+        };
+        curtain_walls.insert(id);
+        wall.class = CURTAIN_WALL_CLASS.into();
+        wall.fields.retain(|(field, _)| {
+            field != TYPE_ID_FIELD && field != TYPE_NAME_FIELD && field != FAMILY_NAME_FIELD
+        });
+        wall.fields.push((
+            TYPE_ID_FIELD.into(),
+            InstanceField::ElementId {
+                tag: 0,
+                id: type_id,
+            },
+        ));
+        wall.fields
+            .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+    }
+    if curtain_walls.is_empty() {
+        return;
+    }
+    for part in products
+        .iter_mut()
+        .filter(|part| CURTAIN_WALL_PART_CLASSES.contains(&part.class.as_str()))
+    {
+        let Some(record) = part.id.and_then(|id| selected.get(&id)) else {
+            continue;
+        };
+        let named: BTreeSet<u32> = record
+            .references
+            .iter()
+            .filter_map(|&id| u32::try_from(id).ok())
+            .filter(|id| curtain_walls.contains(id))
+            .collect();
+        let mut named = named.into_iter();
+        if let (Some(whole), None) = (named.next(), named.next()) {
+            part.fields.push((
+                AGGREGATE_WHOLE_FIELD.into(),
+                InstanceField::ElementId { tag: 0, id: whole },
+            ));
+        }
+    }
 }
 
 /// Each exported 2023 wall's, floor's, roof's and ceiling's type and its
