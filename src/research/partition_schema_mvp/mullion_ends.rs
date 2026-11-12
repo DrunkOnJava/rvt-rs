@@ -37,13 +37,22 @@
 //! or one of whose ends has no partner and a mullion across that holds `p`
 //! inside its box (Revit counts 14 such ends and hides 5 that read alike), or
 //! an oblique mullion where one across holds `p`, is left out. So is a mullion
-//! with an end that meets, within `NEAR_FEET`, a mullion that is left out or
-//! overlapped, unless it is overlapped itself, and a mullion with another
-//! lying over one of its ends whose section is not the usual one of its type:
-//! on the BIM4LCA timber office at permit 16 of the 22 overlapped mullions
-//! that are wrong have such a mullion over an end, and 1 of the 148 that are
-//! right does (RE-403). A mullion shorter than its section is read like any
-//! other and is not a reason to leave its neighbours out (RE-400).
+//! with an end that meets, within `NEAR_FEET`, a mullion that is left out,
+//! unless it is overlapped itself, and a mullion with another lying over one
+//! of its ends whose section is not the usual one of its type: on the BIM4LCA
+//! timber office at permit 16 of the 22 overlapped mullions that are wrong
+//! have such a mullion over an end, and 1 of the 148 that are right does
+//! (RE-403). A mullion beside an overlapped mullion is read like any other
+//! (RE-441: Revit's count is the rule's on 312 of the 314 such mullions of the
+//! BIM4LCA concrete office as built, the other 2 having no value, and on 272 of
+//! the 280 of the timber office), but for two kinds: one with a mullion across
+//! centred on an end, where Revit keeps an end the rule hides on 3 of the 28 of
+//! the timber office, and one with an end that has no partner where an
+//! overlapped mullion's axis lies on the plane of the end, a vertical standing
+//! on the face of a bar, where Revit hides the end on all 4 of the timber
+//! office, none of the 216 chain ends without such a mullion being wrong. A
+//! mullion shorter than its section is read like any other and is not a reason
+//! to leave its neighbours out (RE-400).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -169,6 +178,18 @@ fn end_points(b: &MullionBox, along: usize) -> [([f64; 3], [f64; 3]); 2] {
         ]
     };
     [(at(-1.0), axis.map(|c| -c)), (at(1.0), axis)]
+}
+
+/// Whether the axis of `o`, a mullion across `m` near its end `p`, lies on the
+/// plane of that end: `o` is centred on `p` along `m`'s axis though its box may not
+/// hold `p`, as a vertical that stands on the face of a bar does at the bar's end
+/// (RE-441: Revit hides that end).
+fn centred_on_end_plane(m: &MullionBox, along: usize, o: &MullionBox, p: [f64; 3]) -> bool {
+    let Some(o_along) = o.along.filter(|a| *a < 3) else {
+        return false;
+    };
+    dot(o.axes[o_along], m.axes[along]).abs() < ACROSS
+        && dot(sub(o.centre, p), m.axes[along]).abs() < TOLERANCE_FEET
 }
 
 /// Tenths of a millimetre in a foot.
@@ -337,15 +358,32 @@ pub fn kept_ends_with_partners(group: &[MullionBox]) -> BTreeMap<u32, KeptEnds> 
         }
         // An overlapped mullion is read on its own where what lies over it is
         // of its type: its count is Revit's on all 159 of the office's. A
-        // neighbour of one, or of a mullion left out, is not read (RE-400).
-        let meets_one_not_read = !overlapped.contains(&m.id)
-            && end_points(m, *along).iter().any(|(p, _)| {
+        // neighbour of a mullion left out is not read (RE-400). A neighbour of an
+        // overlapped one is read like any other (RE-441), but for two kinds
+        // whose count Revit does not give as the rule does: one with a mullion
+        // across centred on an end, and one with an end that has no partner where
+        // an overlapped mullion's axis lies on the end's plane.
+        let points = end_points(m, *along);
+        let beside = |ids: &BTreeSet<u32>| {
+            points.iter().any(|(p, _)| {
                 group.iter().any(|o| {
-                    o.id != m.id
-                        && (left_out.contains(&o.id) || overlapped.contains(&o.id))
-                        && distance_to_box(o, *p) < NEAR_FEET
+                    o.id != m.id && ids.contains(&o.id) && distance_to_box(o, *p) < NEAR_FEET
                 })
-            });
+            })
+        };
+        let doubtful = || {
+            ends.iter().any(|end| end.centre)
+                || points.iter().zip(ends).any(|((p, _), end)| {
+                    !end.partner
+                        && group.iter().any(|o| {
+                            overlapped.contains(&o.id)
+                                && distance_to_box(o, *p) < NEAR_FEET
+                                && centred_on_end_plane(m, *along, o, *p)
+                        })
+                })
+        };
+        let meets_one_not_read = !overlapped.contains(&m.id)
+            && (beside(&left_out) || (beside(&overlapped) && doubtful()));
         if meets_one_not_read {
             continue;
         }
@@ -538,5 +576,62 @@ mod tests {
         assert_eq!(kept(0.25), BTreeMap::from([(1, 2), (2, 2)]));
         // A section that differs by less than the 3 mm the boxes are read to is one.
         assert_eq!(kept(0.085), BTreeMap::from([(1, 1), (2, 1)]));
+    }
+
+    /// Two bars of one line along y that each hold an end of the other, so that both
+    /// are overlapped, `x` feet from the vertical axis and `z` feet up: the pair
+    /// of verticals that stand on a bar of the BIM4LCA timber office, seen end on.
+    fn overlapped_pair(first_id: u32, x: f64, z: f64) -> [MullionBox; 2] {
+        [
+            across(first_id, [x, -0.5, z], 3.0, 0.08),
+            across(first_id + 1, [x, 0.5, z], 3.0, 0.08),
+        ]
+    }
+
+    // How reading the mullions beside an overlapped mullion can go wrong (RE-441): not
+    // read at all, as before; or read where a bar that stands on the mullion's face is
+    // centred on the plane of its free end, which Revit hides and the end's point
+    // does not show; or read where a mullion across is centred on an end; or the
+    // neighbours of a mullion left out read with them.
+    #[test]
+    fn a_mullion_beside_an_overlapped_pair_is_read_unless_a_bar_is_centred_on_its_free_end() {
+        // A 0.3 ft stub whose top end meets its continuation and whose bottom end is free.
+        let stub = mullion(1, [0.0, 0.0, 0.0], 0.3, 0.0, 0.08);
+        let above = mullion(2, [0.0, 0.0, 0.3], 2.0, 0.0, 0.08);
+        let with_pair = |z: f64| {
+            let [first, second] = overlapped_pair(3, 0.16, z);
+            kept_ends(&[stub.clone(), above.clone(), first, second])
+        };
+        // The pair's axes lie 0.08 ft from the plane of the free end, at the stub's side
+        // face: the partner end is hidden and the free end kept.
+        assert_eq!(with_pair(0.08).get(&1), Some(&1));
+        // A pair centred on that plane: Revit hides the end, the boxes do not show it.
+        assert_eq!(with_pair(0.0).get(&1), None);
+    }
+
+    #[test]
+    fn a_mullion_with_a_bar_centred_on_an_end_is_not_read_beside_an_overlapped_pair() {
+        let stub = mullion(1, [0.0, 0.0, 0.0], 0.3, 0.0, 0.08);
+        let above = mullion(2, [0.0, 0.0, 0.3], 2.0, 0.0, 0.08);
+        // A bar through the free end, centred on it: both ends of the stub are hidden.
+        let bar = across(5, [0.0, 0.0, 0.0], 4.0, 0.08);
+        assert_eq!(
+            kept_ends(&[stub.clone(), above.clone(), bar.clone()]).get(&1),
+            Some(&0)
+        );
+        let [first, second] = overlapped_pair(3, 0.16, 0.08);
+        assert_eq!(kept_ends(&[stub, above, bar, first, second]).get(&1), None);
+    }
+
+    #[test]
+    fn a_mullion_beside_one_left_out_is_still_not_read() {
+        // The mullion of the oldest test above, left out for a bar across inside its
+        // unpartnered end, with a mullion 0.12 ft from its bottom end.
+        let lower = mullion(1, [0.0, 0.0, 0.0], 2.0, 0.0, 0.08);
+        let bar = across(3, [0.0, 0.0, 2.04], 4.0, 0.08);
+        let beside = mullion(4, [0.2, 0.0, 0.0], 1.0, 0.0, 0.08);
+        assert!(!kept_ends(&[lower.clone(), bar.clone()]).contains_key(&1));
+        assert!(!kept_ends(&[lower, bar, beside.clone()]).contains_key(&4));
+        assert_eq!(kept_ends(&[beside]).get(&4), Some(&2));
     }
 }
