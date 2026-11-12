@@ -40,6 +40,16 @@ pub const DEFAULT_MAX_FILE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// multi-GB allocation.
 pub const DEFAULT_MAX_STREAM_BYTES: u64 = 256 * 1024 * 1024;
 
+/// The most inflated bytes the handle's partition memo holds at once
+/// ([`RevitFile::inflated_partition`]). Each stream is capped, at 1 GiB by
+/// default, but not their sum, so a crafted file of many streams held every
+/// one (#1833). No real file comes near 16 GiB: the 1.13 GB client model
+/// peaks at 5.1 GB in all (docs/viewer-api.md). Past it the memo is let go
+/// whole before the next stream joins it; a reader keeps the `Arc` it was
+/// given, and a later ask inflates again, so no output changes (Griffin,
+/// 2026-11-12, "Bound it at 16 GiB").
+const INFLATED_MEMO_BUDGET_BYTES: u64 = 16 << 30;
+
 /// The most bytes the memo of [`RevitFile::header_hits`] holds at once. A hit
 /// is a `usize`, and a partition carrying the ten-byte element-data header
 /// every ten bytes is held again at 0.8 of its size, for each (stream,
@@ -173,6 +183,13 @@ pub struct RevitFile {
     /// the handle — `RevitFile` never writes — so one inflate serves
     /// all of them.
     inflated: std::collections::HashMap<String, Arc<compression::InflatedStream>>,
+    /// The inflated bytes `inflated` holds, kept under
+    /// [`INFLATED_MEMO_BUDGET_BYTES`].
+    inflated_bytes: u64,
+    /// Every `Partitions/*` stream inflated so far, held or not: the
+    /// progress count, which a count of `inflated`'s keys would lower each
+    /// time the memo is let go.
+    partitions_inflated: std::collections::BTreeSet<String>,
     /// Memoised `Partitions/NN` string-record extraction. The UTF-16
     /// decode over the whole partition is the single most expensive
     /// step after inflate, and unit recovery, storey names and the
@@ -518,6 +535,8 @@ impl RevitFile {
             cfb,
             limits,
             inflated: std::collections::HashMap::new(),
+            inflated_bytes: 0,
+            partitions_inflated: std::collections::BTreeSet::new(),
             partition_strings: None,
             second_prologue_ids: None,
             element_names: None,
@@ -881,6 +900,7 @@ impl RevitFile {
     /// do not hold them at the peak (#1694).
     pub(crate) fn release_inflated_partitions(&mut self) {
         self.inflated.clear();
+        self.inflated_bytes = 0;
     }
 
     /// Read and inflate every gzip member of `name`, memoised.
@@ -921,14 +941,19 @@ impl RevitFile {
             });
         }
         let inflated = Arc::new(inflated);
+        let added = inflated.bytes().len() as u64;
+        if self.inflated_bytes.saturating_add(added) > INFLATED_MEMO_BUDGET_BYTES {
+            self.inflated.clear();
+            self.inflated_bytes = 0;
+        }
+        self.inflated_bytes = self.inflated_bytes.saturating_add(added);
         self.inflated
             .insert(name.to_string(), Arc::clone(&inflated));
+        if name.starts_with("Partitions/") {
+            self.partitions_inflated.insert(name.to_string());
+        }
         if let Some((control, total)) = &self.partition_progress {
-            let done = self
-                .inflated
-                .keys()
-                .filter(|key| key.starts_with("Partitions/"))
-                .count() as u64;
+            let done = self.partitions_inflated.len() as u64;
             control.report(
                 crate::control::Stage::PartitionScan,
                 done.min(*total),
