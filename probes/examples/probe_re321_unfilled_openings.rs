@@ -229,7 +229,8 @@ fn cut_box(graph: &ObjectGraph) -> Option<String> {
         let Some(geometry) = graph.objects.get(index) else {
             continue;
         };
-        let Some(faces) = geometry.fields.get("m_pFaces").and_then(Value::as_array) else {
+        let fields = geometry.fields.to_json();
+        let Some(faces) = fields.get("m_pFaces").and_then(Value::as_array) else {
             continue;
         };
         for item in faces {
@@ -351,10 +352,16 @@ fn probe(path: &str) -> Result<()> {
             return Ok(());
         };
         let id = record.identity.element_id;
+        let as_json: Vec<Value> = graph
+            .objects
+            .iter()
+            .map(|object| object.fields.to_json())
+            .collect();
         let objects: Vec<(&str, &Value)> = graph
             .objects
             .iter()
-            .map(|object| (object.class_name.as_str(), &object.fields))
+            .zip(&as_json)
+            .map(|(object, fields)| (object.class_name.as_str(), fields))
             .collect();
         let structural = WALLS.contains(&class) || SLABS.contains(&class);
         let door = export.doors.contains(&id);
@@ -365,7 +372,7 @@ fn probe(path: &str) -> Result<()> {
                 .iter()
                 .find(|object| object.class_name == "InstanceInfo")
                 .and_then(|object| object.fields.pointer("/m_symbolId/m_id/m_id64"))
-                .and_then(Value::as_u64);
+                .and_then(rvt::research::graph_value::Fv::as_u64);
             symbols.extend(symbol);
         }
         let all = if structural {
@@ -424,7 +431,7 @@ fn probe(path: &str) -> Result<()> {
                 println!(
                     "rectcut {id} obj {} {}",
                     object.class_name,
-                    trimmed(&object.fields)
+                    trimmed(&object.fields.to_json())
                 );
             }
         }
@@ -440,7 +447,7 @@ fn probe(path: &str) -> Result<()> {
         };
         let id = record.identity.element_id;
         if let Some(root) = graph.objects.first() {
-            println!("sym {id} root {}", trimmed(&root.fields));
+            println!("sym {id} root {}", trimmed(&root.fields.to_json()));
         }
         if let Some(found) = cut_box(graph) {
             println!("sym {id} cutbox {found}");

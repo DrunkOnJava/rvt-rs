@@ -224,7 +224,7 @@ fn flatten(prefix: &str, value: &Fv, depth: usize, out: &mut Vec<(String, String
             }
             for (name, member) in members {
                 let key = if prefix.is_empty() {
-                    name.clone()
+                    name.to_string()
                 } else {
                     format!("{prefix}.{name}")
                 };

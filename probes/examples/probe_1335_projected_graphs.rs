@@ -110,7 +110,8 @@ fn identifier(value: &Value) -> Option<i64> {
 /// identity check of `extract_records`, then `ingest_binding_context`.
 fn ingest(definitions: &mut Definitions, graph: &ObjectGraph, id: u64) -> Result<(), String> {
     let root = graph.objects.first().ok_or("empty owner graph")?;
-    let saved = identifier(&root.fields["m_id"]).ok_or("unsupported serialized ElementId value")?;
+    let saved = identifier(&root.fields["m_id"].to_json())
+        .ok_or("unsupported serialized ElementId value")?;
     if u64::try_from(saved).ok() != Some(id) {
         return Err(format!(
             "serialized owner identity disagrees with indexed record {id}"
@@ -176,11 +177,11 @@ fn differences(full: &ObjectGraph, projected: &ObjectGraph, keep: &[&str]) -> Ve
             found.push("object");
         }
         let expected = if a.class_name == "ExtensibleStorageEntity" {
-            a.fields.clone()
+            a.fields.to_json()
         } else {
-            filtered(&a.fields, keep)
+            filtered(&a.fields.to_json(), keep)
         };
-        if expected != b.fields {
+        if expected != b.fields.to_json() {
             found.push("fields");
         }
     }

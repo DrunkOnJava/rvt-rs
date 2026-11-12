@@ -125,7 +125,7 @@ fn main() -> anyhow::Result<()> {
                 .fields
                 .get("m_arrRefs")
                 .and_then(|refs| refs.as_array())
-                .map(<[Fv]>::to_vec)
+                .map(<[rvt::research::graph_value::Fv]>::to_vec)
                 .unwrap_or_default();
             for reference in refs {
                 if reference.get("m_connType").and_then(|v| v.as_u64()) != Some(1) {

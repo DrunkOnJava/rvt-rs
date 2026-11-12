@@ -115,7 +115,7 @@ fn partners_of(record: Record, partners: &mut BTreeSet<u64>) -> Result<()> {
     for object in &graph.objects {
         if object.class_name == "CutPairGStep" || object.class_name == "CleanPairGStep" {
             if let Some(other) = object.fields.get("m_otherId") {
-                ids_under(other, partners);
+                ids_under(&other.to_json(), partners);
             }
         }
     }
@@ -128,7 +128,10 @@ fn print_partner(record: Record) -> Result<()> {
     };
     let id = record.identity.element_id;
     if let Some(root) = graph.objects.first() {
-        println!("partner {id} {class} root {}", trimmed(&root.fields));
+        println!(
+            "partner {id} {class} root {}",
+            trimmed(&root.fields.to_json())
+        );
     }
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     for object in &graph.objects {
@@ -144,7 +147,7 @@ fn print_partner(record: Record) -> Result<()> {
         if name.ends_with("GStep") || ATTACHMENTS.contains(&name) {
             println!(
                 "partner {id} {class} step {name} {}",
-                trimmed(&object.fields)
+                trimmed(&object.fields.to_json())
             );
         }
     }

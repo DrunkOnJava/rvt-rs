@@ -356,6 +356,25 @@ impl Fv {
         Fv::Object(Box::new(Obj { names, values }))
     }
 
+    /// An object of the `pairs` given, whatever their order. Of two pairs with
+    /// one name the later is kept, as inserting into a `serde_json::Map` has it.
+    pub fn from_pairs<K: AsRef<str>>(pairs: impl IntoIterator<Item = (K, Fv)>) -> Fv {
+        let mut fields: Vec<(K, Fv)> = pairs.into_iter().collect();
+        // A stable sort keeps equal names in the order they came, so the last wins below.
+        fields.sort_by(|a, b| a.0.as_ref().cmp(b.0.as_ref()));
+        let mut kept: Vec<(K, Fv)> = Vec::with_capacity(fields.len());
+        for field in fields {
+            match kept.last_mut() {
+                Some(last) if last.0.as_ref() == field.0.as_ref() => *last = field,
+                _ => kept.push(field),
+            }
+        }
+        let keys: Vec<&str> = kept.iter().map(|field| field.0.as_ref()).collect();
+        let names = intern_names(&keys);
+        let values: Box<[Fv]> = kept.into_iter().map(|field| field.1).collect();
+        Fv::Object(Box::new(Obj { names, values }))
+    }
+
     /// The value of a pointer field: `{"class_tag", "offset", "pointer_token"}`.
     pub fn pointer_value(token: u32, class_tag: Option<u16>, offset: usize) -> Fv {
         static NAMES: OnceLock<Names> = OnceLock::new();
@@ -858,5 +877,28 @@ mod tests {
             Fv::pointer_value(0, None, 0).to_json(),
             json!({"pointer_token": 0, "class_tag": null, "offset": 0})
         );
+    }
+
+    #[test]
+    fn pairs_make_the_object_a_map_would_hold_the_later_of_two_equal_names_winning() {
+        // Out of order, a name twice, an empty name, and an empty set of pairs.
+        let built = Fv::from_pairs([
+            ("z".to_string(), Fv::U64(1)),
+            ("a".to_string(), Fv::U64(2)),
+            ("z".to_string(), Fv::U64(3)),
+            (String::new(), Fv::Null),
+        ]);
+        assert_eq!(built.to_json(), json!({"": null, "a": 2, "z": 3}));
+        assert_eq!(
+            Fv::from_pairs(Vec::<(&str, Fv)>::new()).to_json(),
+            json!({})
+        );
+        // Borrowed names are fine, and objects with the same names share them.
+        let first = Fv::from_pairs([("b", Fv::Null), ("a", Fv::Null)]);
+        let second = Fv::from_pairs([("a", Fv::U64(1)), ("b", Fv::U64(2))]);
+        let (Fv::Object(first), Fv::Object(second)) = (&first, &second) else {
+            panic!("not objects");
+        };
+        assert!(Arc::ptr_eq(&first.names, &second.names));
     }
 }

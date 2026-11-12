@@ -31,7 +31,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
-use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_symbol_cuts::instance_cut_loops;
 use rvt::research::partition_instance_transforms::{instance_transform, scan_instance_transforms};

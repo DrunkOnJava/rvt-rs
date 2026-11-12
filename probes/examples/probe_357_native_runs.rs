@@ -46,7 +46,7 @@ fn ids(fields: &Fv) -> Vec<(String, i64)> {
         .as_object()
         .into_iter()
         .flat_map(|object| object.iter())
-        .filter_map(|(name, v)| Some((name.clone(), v.get("m_id")?.get("m_id64")?.as_i64()?)))
+        .filter_map(|(name, v)| Some((name.to_string(), v.get("m_id")?.get("m_id64")?.as_i64()?)))
         .collect()
 }
 

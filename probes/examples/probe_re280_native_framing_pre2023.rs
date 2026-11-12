@@ -574,7 +574,7 @@ struct Ctx<'a> {
 
 fn fingerprint(registry: &Registry, object: &GraphObject) -> Obj {
     let mut fields = BTreeMap::new();
-    if let Value::Object(map) = &object.fields {
+    if let Value::Object(map) = &object.fields.to_json() {
         for (name, value) in map {
             let text = normalize(registry, value).to_string();
             fields.insert(
@@ -595,7 +595,7 @@ fn fingerprint(registry: &Registry, object: &GraphObject) -> Obj {
 /// The Element base scalars from the decoded root, through either shape of
 /// `Identifier` (`m_id` on 2015 to 2023, `m_id64` from 2024).
 fn base_from_graph(root: &GraphObject) -> Result<BaseScalars, String> {
-    let fields = &root.fields;
+    let fields = &root.fields.to_json();
     let get = |name: &str| {
         fields
             .get(name)
@@ -659,14 +659,16 @@ fn decode_record(ctx: &Ctx<'_>, id: u64, partition: u32, body: &[u8]) -> Rec {
                 None => Err("no root".to_string()),
             };
             rec.id_agrees = graph.objects.first().map(|root| {
-                owner_id(&root.fields).is_some_and(|named| u64::try_from(named).ok() == Some(id))
+                owner_id(&root.fields.to_json())
+                    .is_some_and(|named| u64::try_from(named).ok() == Some(id))
             });
             match native_metadata::project_with_definitions(&graph, ctx.defs) {
                 Err(error) => rec.metadata_error = Some(norm_msg(&format!("{error:#}"))),
                 Ok(metadata) => {
                     for set in &metadata.parameter_sets {
                         for parameter in &set.parameters {
-                            let text = normalize(ctx.registry, &parameter.raw_value).to_string();
+                            let text =
+                                normalize(ctx.registry, &parameter.raw_value.to_json()).to_string();
                             rec.params.push(Param {
                                 id: parameter.serialized_parameter_id,
                                 storage: parameter.storage_type.clone(),

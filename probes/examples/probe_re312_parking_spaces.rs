@@ -65,7 +65,7 @@ fn flatten(prefix: &str, value: &Fv, out: &mut Vec<(String, String)>) {
         Fv::Object(map) => {
             for (key, inner) in map {
                 let path = if prefix.is_empty() {
-                    key.clone()
+                    key.to_string()
                 } else {
                     format!("{prefix}.{key}")
                 };

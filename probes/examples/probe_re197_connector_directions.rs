@@ -122,10 +122,10 @@ fn main() -> anyhow::Result<()> {
                         .as_object()
                         .into_iter()
                         .flatten()
-                        .filter(|(name, _)| name.as_str() != "m_index")
+                        .filter(|(name, _)| *name != "m_index")
                         .map(|(name, value)| {
                             let text = value.to_string();
-                            (name.clone(), text.chars().take(80).collect())
+                            (name.to_string(), text.chars().take(80).collect())
                         })
                         .collect();
                     // The object `m_oRelevantParams` points to, through the
