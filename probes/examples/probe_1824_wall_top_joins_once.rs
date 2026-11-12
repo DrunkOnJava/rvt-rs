@@ -6,7 +6,9 @@
 //! of the same record built with only the fields its facts take. Both give the
 //! same value on every wall. So the first read leaves the top joins in
 //! `WallReads`, and the export's later readers of them make no pass of their
-//! own.
+//! own. The walls with no type in the export, which that read draws no body
+//! for, are read in it for their facts alone (`facts_only`): only a wall whose
+//! record it could not read is left to a pass of the later readers.
 //!
 //! The probe:
 //! 1. Makes the export `rvt-ifc` makes with no flags, and counts the passes
@@ -17,7 +19,7 @@
 //!    (`WallReads::top_joins`).
 //!
 //! Output:
-//!   export wall_read_passes=<n>
+//!   export wall_read_passes=<n> facts_only=<n>
 //!   top_joins walls=<n> whole=<n> projected=<n> joined=<n> equal=<bool>
 //!   differ <id> whole=<value> projected=<value>   (the first 20, if any)
 //!
@@ -28,7 +30,9 @@ use std::collections::BTreeSet;
 
 use rvt::RevitFile;
 use rvt::research::native_document::{NATIVE_RELEASES, Options, extract_graphs};
-use rvt::research::native_walls::{WallReads, native_walls_and_top_joins, wall_read_passes};
+use rvt::research::native_walls::{
+    WallReads, native_walls_and_top_joins, wall_facts_only_reads, wall_read_passes,
+};
 
 fn open(path: &str) -> anyhow::Result<RevitFile> {
     Ok(RevitFile::open_with_limits(
@@ -45,12 +49,17 @@ fn main() -> anyhow::Result<()> {
         .expect("usage: probe_1824_wall_top_joins_once MODEL.rvt");
 
     let before = wall_read_passes();
+    let facts_before = wall_facts_only_reads();
     rvt::ifc::run_export_with_limits(
         &mut open(&path)?,
         &rvt::ifc::ExportOptions::default(),
         rvt::walker::WalkerLimits::default(),
     )?;
-    println!("export wall_read_passes={}", wall_read_passes() - before);
+    println!(
+        "export wall_read_passes={} facts_only={}",
+        wall_read_passes() - before,
+        wall_facts_only_reads() - facts_before
+    );
 
     let options = Options {
         selected_classes: ["SWall", "ArcWall"]
