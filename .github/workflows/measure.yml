@@ -1324,6 +1324,7 @@ jobs:
             tools/re/cmp_measure.py
             tools/re/counted_apart.py
             tools/re/box_reasons.py
+            tools/re/measure_verdict.py
           sparse-checkout-cone-mode: false
       # Each side's shards hold disjoint models; merged, they are the
       # measure-head and measure-base directories one runner used to write.
@@ -1401,11 +1402,28 @@ jobs:
           overwrite: true
       - name: Summary
         run: |
+          # The kept IFCs and GLBs are compared by hash below; diffed as
+          # text they made a 3 GB summary GitHub refused (run
+          # 41537426493). The whole diff is the compare-scorer-diff
+          # artifact; the summary shows its start, under GitHub's 1 MiB.
+          # mcp-dump.json is the MCP answers' semantic dump (#1327, read by
+          # #1334's merge check), megabytes on the office: in the artifact,
+          # not in this diff. Made first, for the verdict.
+          if [ -d measure-base ]; then
+            diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json \
+              -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base measure-head > scorer-diff.txt || true
+          fi
           {
             echo "## Measured"
             echo
             echo "head: $(cat measure-head/commit.txt)"
             [ -d measure-base ] && echo "base: $(cat measure-base/commit.txt)"
+            echo
+            # Which exports and diagnostics moved, what the scorer diff holds
+            # beyond the head side's own output, and the probe's lines, counted
+            # (tools/re/measure_verdict.py): what a reader of the run looks for first.
+            python3 -I tools/re/measure_verdict.py measure-head measure-base scorer-diff.txt > verdict.md 2>&1 || echo "measure_verdict.py failed (exit $?)" >> verdict.md
+            head -c 60000 verdict.md
             echo
             # #1327: what the MCP server answered, per model, against the
             # model's own export. A difference is a bug in the server or in the
@@ -1504,15 +1522,6 @@ jobs:
               echo
               echo "### Scorer differences (base → head)"
               echo
-              # The kept IFCs and GLBs are compared by hash above; diffed as
-              # text they made a 3 GB summary GitHub refused (run
-              # 41537426493). The whole diff is the compare-scorer-diff
-              # artifact; the summary shows its start, under GitHub's 1 MiB.
-              # mcp-dump.json is the MCP answers' semantic dump (#1327, read by
-              # #1334's merge check), megabytes on the office: in the artifact,
-              # not in this diff.
-              diff -r -U0 -x commit.txt -x 'runner*.txt' -x '*.log' -x ifc.sha256 -x diagnostics.json \
-                -x mcp-dump.json -x '*.ifc' -x '*.glb' measure-base measure-head > scorer-diff.txt || true
               limit=$((640 * 1024))
               size=$(stat -c %s scorer-diff.txt)
               echo '```diff'
@@ -1533,6 +1542,17 @@ jobs:
             exit 1
           fi
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
+          # In the log too, which `gh run view --log` reads where the summary
+          # page cannot be.
+          cat verdict.md
+      # The verdict alone, a few kilobytes, for a reader that would otherwise
+      # download both sides' results to learn which exports moved.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() && hashFiles('verdict.md') != '' }}
+        with:
+          name: measure-verdict
+          path: verdict.md
+          overwrite: true
       # #1334: the semantic diff of the two sides' MCP dumps, per openly
       # licensed model. A dump in a model that is restricted or on neither list
       # (tools/re/semantic_diff.py OPEN_MODELS) fails this step. A run with no
@@ -1785,6 +1805,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      # The timing verdict's script, from the workflow's own ref (this job runs
+      # no measured code). First, since a checkout cleans the workspace.
+      - name: Workflow tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools/re/timing_verdict.py
+          sparse-checkout-cone-mode: false
       - id: dl_timing_shards
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         continue-on-error: true
@@ -1808,7 +1837,7 @@ jobs:
           BASE_COMMIT: ${{ needs.timing-build.outputs.base }}
         run: |
           python3 - <<'PY'
-          import json, os, re
+          import json, os, re, subprocess
           e = os.environ
           header = None
           rows = []
@@ -1849,6 +1878,15 @@ jobs:
               for shard in missing:
                   summary.write(f"No table from shard {shard['shard']} ({shard['what']}).\n\n")
               if header:
+                  # The ratios performance rows are judged on, above the table
+                  # they come from (tools/re/timing_verdict.py).
+                  verdict = subprocess.run(["python3", "-I", "tools/re/timing_verdict.py", "timing.md"],
+                                           capture_output=True, text=True)
+                  text = (verdict.stdout[:60000] if verdict.returncode == 0
+                          else f"timing_verdict.py failed (exit {verdict.returncode}): {verdict.stderr[:2000]}\n\n")
+                  open("timing-verdict.md", "w").write(text)
+                  print(text)
+                  summary.write(text)
                   summary.write("\n".join(header + rows) + "\n")
           for shard in missing:
               print(f"::error::timing shard {shard['shard']} ({shard['what']}) left no table")
@@ -1888,5 +1926,6 @@ jobs:
           path: |
             timing.md
             timing-runners.txt
+            timing-verdict.md
           if-no-files-found: error
           overwrite: true
