@@ -26,12 +26,14 @@
 //! are 675 of 681, sanitary terminals 68 of 94, flow fittings 71 of 89, flow
 //! terminals 30 of 35 and walls 14 of 18. The cost is reading the saved
 //! graphics of every boxed element: against 0.17.0 the BIM4LCA office as built
-//! goes from 25.4 s and 914 MiB to 33.0 s and 1,432 MiB, with its IFC 87 MB
-//! against 68, Core Interior from 4.7 s and 305 MiB to 5.3 s and 437 MiB and
-//! Snowdon Towers Architectural from 17.6 s and 1,073 MiB to 28.0 s and 2,086
-//! MiB, with its IFC 189 MB against 37 (Measure run 42956917709, the median of
-//! three exports on one runner per file); #1690 stopped holding every owner's
-//! graph at once, and what is left is #1694.
+//! goes from 21.2 s and 913 MiB to 24.3 s and 944 MiB, with its IFC 114 MB
+//! against 68, Core Interior from 4.2 s and 305 MiB to 4.4 s and 327 MiB and
+//! Snowdon Towers Architectural from 28.3 s and 1,073 MiB to 39.2 s and 1,114
+//! MiB, with its IFC 258 MB against 37 (Measure run 43152271314, the median of
+//! three exports on one runner per file; the IFC sizes are 0.17.0's from
+//! 0.18.0's notes and run 43152139337's); #1690 and #1694 stopped holding every
+//! owner's graph at once and made a graph's fields a sixth of their size, and
+//! the inflated partitions the handle keeps are now what is left of the peak.
 //!
 //! A roof drawn as the level block of its sketch outline at its record box's
 //! full height is replaced too (#1612): the record box holds the roof's
