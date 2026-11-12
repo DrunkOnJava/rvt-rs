@@ -20,6 +20,13 @@
 //! `Value` reads an `Fv` as it did, with one difference: `as_array` is a slice
 //! and `as_object` an [`Obj`]. `Serialize` writes the JSON of the `Value` it
 //! stands for, keys sorted, byte for byte.
+//!
+//! The four public types carry an `allow(unnameable_types)`: rustc counts the
+//! `IntoIterator` impl on `&Obj` as public, so in a build without
+//! `unstable-research`, where this module is private, CI's default-features
+//! step would list them as reachable. No stable item names any of them: with
+//! every top-level item made crate-private the public API compiled without a
+//! `private_interfaces` or `private_bounds` finding (#1694).
 
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
@@ -37,6 +44,10 @@ use serde_json::{Map, Number, Value};
 pub type Names = Arc<[Box<str>]>;
 
 /// A graph value: the content of a `serde_json::Value`, laid out to cost little.
+#[allow(
+    unnameable_types,
+    reason = "rustc counts the `IntoIterator` impl on `&Obj` as public, so this type reads as reachable in a build without `unstable-research`; no stable item hands it out (made crate-private, nothing in the public API names it)"
+)]
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum Fv {
     #[default]
@@ -54,6 +65,10 @@ pub enum Fv {
 }
 
 /// An object: its names (shared) and its values, in the same order.
+#[allow(
+    unnameable_types,
+    reason = "rustc counts the `IntoIterator` impl on `&Obj` as public, so this type reads as reachable in a build without `unstable-research`; no stable item hands it out (made crate-private, nothing in the public API names it)"
+)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Obj {
     names: Names,
@@ -115,6 +130,10 @@ impl Obj {
 }
 
 /// The fields of an [`Obj`], name and value, in order.
+#[allow(
+    unnameable_types,
+    reason = "rustc counts the `IntoIterator` impl on `&Obj` as public, so this type reads as reachable in a build without `unstable-research`; no stable item hands it out (made crate-private, nothing in the public API names it)"
+)]
 #[derive(Debug, Clone)]
 pub struct ObjIter<'a> {
     names: std::slice::Iter<'a, Box<str>>,
@@ -151,6 +170,10 @@ impl<'a> IntoIterator for &'a Obj {
 }
 
 /// The lists of names the objects of a graph (or of a whole file) share.
+#[allow(
+    unnameable_types,
+    reason = "rustc counts the `IntoIterator` impl on `&Obj` as public, so this type reads as reachable in a build without `unstable-research`; no stable item hands it out (made crate-private, nothing in the public API names it)"
+)]
 #[derive(Debug, Default)]
 pub struct NameTable {
     lists: HashMap<u64, Vec<Names>>,
