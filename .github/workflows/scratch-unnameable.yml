@@ -1,0 +1,28 @@
+# Scratch: which stable item hands out the compact graph value (the default-features step of CI fails on it).
+name: scratch unnameable
+on:
+  push:
+    branches: ["scratch/1800-unnameable"]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: rustup toolchain install stable --profile minimal
+      - name: The CI step
+        run: |
+          RUSTFLAGS="-D warnings -D unnameable_types" cargo +stable check --lib --bins > a.log 2>&1 || true
+          echo "A: errors $(grep -c '^error' a.log || true)"
+          grep -E '^error' -A 3 a.log | head -60 || true
+      - name: Make Fv and Obj crate-private, see who hands them out
+        run: |
+          sed -i 's/^pub enum Fv {/pub(crate) enum Fv {/; s/^pub struct Obj {/pub(crate) struct Obj {/' src/research/graph_value.rs
+          RUSTFLAGS="-W private_interfaces -W private_bounds" cargo +stable check --lib --bins > b.log 2>&1 || true
+          echo "B: log lines $(wc -l < b.log)"
+          grep -E '^(warning|error)' -A 8 b.log | head -200 || true
