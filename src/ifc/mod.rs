@@ -2795,15 +2795,6 @@ fn revit_model_global_ids(
 /// type (`IFCFamilyInstanceSubElements.InstanceAsType`).
 const INSTANCE_AS_TYPE: u16 = 2048;
 
-/// Give each family instance written as a distribution element or a proxy a
-/// port for each of its symbol's connectors that Revit's export writes one
-/// for, with its flow direction, joined or not; the writer skips a port a
-/// join has already given it. The ducts' and pipes' ports, written by then,
-/// take their flow direction from the same pass
-/// (`crate::native_connectors::connector_ports`, RE-212), and then every
-/// joined pair is given Revit's directions ([`apply_partner_directions`]). A
-/// file whose release the native record path does not read keeps the ports
-/// of its joins only, with no direction.
 /// How far, in feet, a cut solid's corner may lie from its plan footprint's
 /// and its ends from the host's faces (#824).
 const HOSTED_CUT_TOLERANCE_FEET: f64 = 1e-6;
@@ -2974,6 +2965,15 @@ fn attach_hosted_cut_openings(rf: &mut crate::RevitFile, entities: &mut Vec<enti
     entities.extend(openings);
 }
 
+/// Give each family instance written as a distribution element or a proxy a
+/// port for each of its symbol's connectors that Revit's export writes one
+/// for, with its flow direction, joined or not; the writer skips a port a
+/// join has already given it. The ducts' and pipes' ports, written by then,
+/// take their flow direction from the same pass
+/// (`crate::native_connectors::connector_ports`, RE-212), and then every
+/// joined pair is given Revit's directions ([`apply_partner_directions`]). A
+/// file whose release the native record path does not read keeps the ports
+/// of its joins only, with no direction.
 fn attach_family_instance_ports(
     rf: &mut crate::RevitFile,
     entities: &mut Vec<entities::IfcEntity>,
