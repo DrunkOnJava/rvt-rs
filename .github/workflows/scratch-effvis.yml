@@ -1,0 +1,33 @@
+# Scratch: print the effective visibility of every impl and item of the compact value's module (nightly attribute), to see what makes rustc count its types as reachable.
+name: scratch effvis
+on:
+  push:
+    branches: ["scratch/1800-unnameable"]
+permissions:
+  contents: read
+jobs:
+  effvis:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: rustup toolchain install nightly --profile minimal
+      - name: Annotate and check
+        run: |
+          python3 - <<'PY'
+          import re
+          p = "src/research/graph_value.rs"
+          s = open(p, encoding="utf-8").read()
+          s = re.sub(r"^(\s*)(impl\b|pub (?:enum|struct|trait|type|fn|static|const)\b)", lambda m: f"{m.group(1)}#[rustc_effective_visibility]\n{m.group(1)}{m.group(2)}", s, flags=re.M)
+          open(p, "w", encoding="utf-8").write(s)
+          l = open("src/lib.rs", encoding="utf-8").read()
+          open("src/lib.rs", "w", encoding="utf-8").write("#![feature(rustc_attrs)]\n" + l)
+          PY
+          cargo +nightly check --lib > e.log 2>&1 || true
+          echo "E: log lines $(wc -l < e.log)"
+          grep -c "Direct:" e.log || true
+          grep -B 1 -A 6 "Direct: pub," e.log | head -150 || true
+          grep -E "^error" e.log | sort | uniq -c | head -10 || true
