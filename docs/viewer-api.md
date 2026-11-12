@@ -339,6 +339,31 @@ frame (feet, +Z up) and
 hang under one root node whose matrix, `gltf::Z_UP_FEET_TO_Y_UP_METRES`,
 turns them into glTF's metres with +Y up.
 
+Every material carries `extras: { colourSource, alphaSource }`
+(`gltf::MaterialExtras`, #1812), which loaders surface as the material's
+`userData`. Each says where its value comes from:
+
+- `"file"`: the Revit material's own colour, or one minus its own
+  transparency (RE-53).
+- `"rvt-rs"`: rvt-rs chose it. That covers the category colours above,
+  translucent windows and faint rooms included, the mid-grey of a material
+  whose colour was not read, and the opaque alpha of one whose transparency
+  was not read.
+
+The two are marked apart because a material decoded from `Global/Latest`
+reads its colour and its transparency from two fields, so either can be read
+without the other. A consumer that stores colour or opacity as model data
+should keep only what is marked `"file"`. Metallic and roughness are always
+rvt-rs's, guessed from the material's name.
+
+A view's visibility and graphics overrides (a category or element set to
+50% transparency in one view, say) are not read, and nothing in the GLB or
+the IFC reflects them. Revit's own IFC export ignores them too. In Autodesk's
+`revit-ifc`, `BodyExporter.GetBestColourAndOpacity` takes an element's colour
+and opacity from its material, or else from its category's material, and
+`CategoryUtil` writes `IfcSurfaceStyleRendering.Transparency` from the
+material's own transparency.
+
 ### 2D (SVG plan view)
 
 ```rust
