@@ -182,6 +182,22 @@ pub const NESTED_DETAIL_FILTER_DIAGNOSTIC: &str =
 pub const VIEW_COMPONENT_DIAGNOSTIC: &str =
     "surface-bearing component requires qualified owner/view visibility";
 
+/// The calls one curves-only check may make, as many as `Walker::visit`
+/// may (#1833). A node is reached once along each path to it, so a child
+/// shared at every level doubled the calls at each, up to 2^128 within the
+/// depth limit. Over the budget a branch is not curves only: a filter's
+/// children are then walked, under `visit`'s own limit, and a component gets
+/// [`VIEW_COMPONENT_DIAGNOSTIC`].
+const CURVE_CHECK_BUDGET: usize = 100_000;
+
+/// The state of one curves-only check: the current path, which a cycle may
+/// not re-enter, and the calls made so far.
+#[derive(Default)]
+struct CurveWalk {
+    path: HashSet<usize>,
+    calls: usize,
+}
+
 struct Walker<'a, 'r> {
     edge_indexes: HashMap<usize, EdgeIndex>,
     graph: &'a ObjectGraph,
@@ -331,10 +347,8 @@ impl Walker<'_, '_> {
                         return Ok(());
                     }
                     // Curves are deliberately outside this surface-only selector.
-                    if children
-                        .iter()
-                        .all(|&i| self.only_curves(i, &mut HashSet::new()))
-                    {
+                    let mut walk = CurveWalk::default();
+                    if children.iter().all(|&i| self.only_curves(i, &mut walk)) {
                         self.result.excluded_non_surface_branches += 1;
                         return Ok(());
                     }
@@ -435,7 +449,7 @@ impl Walker<'_, '_> {
                     .entry(target as *const ObjectGraph as usize)
                     .or_insert_with(|| edge_index(target));
                 self.graph = target;
-                let curves_only = self.only_curves(0, &mut HashSet::new());
+                let curves_only = self.only_curves(0, &mut CurveWalk::default());
                 self.graph = previous;
                 if curves_only {
                     self.result.excluded_non_surface_branches += 1;
@@ -541,8 +555,9 @@ impl Walker<'_, '_> {
             && default_representation(&info.fields, self.pre2023)
             && read_transform(&info.fields["m_Trf"]).is_ok_and(|t| rotation(&t))
     }
-    fn only_curves(&self, index: usize, seen: &mut HashSet<usize>) -> bool {
-        if seen.len() >= 128 || !seen.insert(index) {
+    fn only_curves(&self, index: usize, walk: &mut CurveWalk) -> bool {
+        walk.calls += 1;
+        if walk.calls > CURVE_CHECK_BUDGET || walk.path.len() >= 128 || !walk.path.insert(index) {
             return false;
         }
         let result = match self.graph.objects[index].class_name.as_str() {
@@ -550,10 +565,10 @@ impl Walker<'_, '_> {
             | "GPolyline" | "GPoint" => true,
             "GElement" | "GGroup" | "GFilter" => self
                 .children(index)
-                .is_ok_and(|c| c.iter().all(|&i| self.only_curves(i, seen))),
+                .is_ok_and(|c| c.iter().all(|&i| self.only_curves(i, walk))),
             _ => false,
         };
-        seen.remove(&index);
+        walk.path.remove(&index);
         result
     }
 }
