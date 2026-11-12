@@ -536,8 +536,9 @@ pub struct CarrierCount {
 }
 
 /// How many elements have a native record and how many of those have its
-/// offset given, counted over every element with an ElementId, whatever the
-/// cap on the listed entries.
+/// offset given, counted over the table's elements (those the walk scores at
+/// or above `DEFAULT_MIN_ELEMENT_CONFIDENCE`, each with an ElementId),
+/// whatever the cap on the listed entries.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct NativeRecordCount {
