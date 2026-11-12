@@ -88,7 +88,7 @@ pub fn geometry_maps(
         let Some(map) = root
             .fields
             .get("m_geomTag2MaterialId")
-            .and_then(serde_json::Value::as_array)
+            .and_then(crate::graph_value::Fv::as_array)
         else {
             return Ok(());
         };

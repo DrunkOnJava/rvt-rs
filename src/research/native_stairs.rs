@@ -634,7 +634,7 @@ fn spiral(run: &Fv, treads: &[Fv]) -> Option<([f64; 2], [f64; 2], Vec<SpiralTrea
         let corners = tread.get("m_bndBox")?.get("m_corners")?.as_array()?;
         let corner = |index: usize| -> Option<[f64; 2]> {
             let pair = corners.get(index)?.as_array()?;
-            match pair.as_slice() {
+            match pair {
                 [a, b] => {
                     Some([a.as_f64()?, b.as_f64()?]).filter(|p| p.iter().all(|c| c.is_finite()))
                 }
@@ -1359,7 +1359,7 @@ fn landing_loop(
                 let target = crate::native_saved_mesh::pointer(graph, index, curve).ok()??;
                 let curve = graph.objects.get(target)?;
                 let params = curve.fields.get("m_endParams")?.as_array()?;
-                let [t0, t1] = params.as_slice() else {
+                let [t0, t1] = params else {
                     return None;
                 };
                 let (t0, t1) = (t0.as_f64()?, t1.as_f64()?);

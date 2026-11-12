@@ -50,7 +50,7 @@ impl CutLoop {
 /// XZ plane and with some width and height. Anything else is `None`.
 fn cut_loop(graph: &crate::native_parameters::ObjectGraph) -> Option<CutLoop> {
     let root = graph.objects.first()?;
-    let [loop_pointer] = root.fields.get("m_pCutLoops")?.as_array()?.as_slice() else {
+    let [loop_pointer] = root.fields.get("m_pCutLoops")?.as_array()? else {
         return None;
     };
     let index = pointer(graph, 0, loop_pointer).ok()??;
@@ -99,7 +99,7 @@ fn cut_loop(graph: &crate::native_parameters::ObjectGraph) -> Option<CutLoop> {
 
 fn point2(value: Option<&crate::graph_value::Fv>) -> Option<[f64; 2]> {
     let items = value?.as_array()?;
-    let [a, b] = items.as_slice() else {
+    let [a, b] = items else {
         return None;
     };
     let p = [a.as_f64()?, b.as_f64()?];
@@ -223,7 +223,7 @@ pub fn instance_cuts_and_symbols(
                 .first()
                 .and_then(|root| root.fields.get("m_pCutLoops"))
                 .and_then(crate::graph_value::Fv::as_array)
-                .is_some_and(Vec::is_empty)
+                .is_some_and(|items| items.is_empty())
             {
                 uncut_symbols.insert(id);
                 if let Some(size) = cut_solid_vertices(graph).and_then(|v| cut_solid_size(&v)) {

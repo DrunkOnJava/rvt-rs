@@ -1133,7 +1133,7 @@ fn plane_regions_tile(
             region.class_name == "Face"
                 && region.fields["m_faceRegions"]
                     .as_array()
-                    .is_some_and(Vec::is_empty),
+                    .is_some_and(|items| items.is_empty()),
             FACE_REGIONS
         );
         let si = index
@@ -1498,7 +1498,7 @@ pub fn cylinder_face(
     ensure!(
         face.fields["m_faceRegions"]
             .as_array()
-            .is_some_and(Vec::is_empty),
+            .is_some_and(|items| items.is_empty()),
         "face regions need subdivision"
     );
     let surface_index = index

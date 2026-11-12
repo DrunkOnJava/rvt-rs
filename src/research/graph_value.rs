@@ -438,6 +438,59 @@ impl Fv {
     }
 }
 
+impl From<bool> for Fv {
+    fn from(b: bool) -> Fv {
+        Fv::Bool(b)
+    }
+}
+
+macro_rules! from_unsigned {
+    ($($ty:ty),*) => {$(
+        impl From<$ty> for Fv {
+            fn from(n: $ty) -> Fv {
+                Fv::U64(n as u64)
+            }
+        }
+    )*};
+}
+
+macro_rules! from_signed {
+    ($($ty:ty),*) => {$(
+        impl From<$ty> for Fv {
+            fn from(n: $ty) -> Fv {
+                Fv::from_i64(n as i64)
+            }
+        }
+    )*};
+}
+
+from_unsigned!(u8, u16, u32, u64, usize);
+from_signed!(i8, i16, i32, i64, isize);
+
+impl From<f64> for Fv {
+    fn from(n: f64) -> Fv {
+        Fv::from_f64(n)
+    }
+}
+
+impl From<f32> for Fv {
+    fn from(n: f32) -> Fv {
+        Fv::from_f64(f64::from(n))
+    }
+}
+
+impl From<&str> for Fv {
+    fn from(s: &str) -> Fv {
+        Fv::Str(s.into())
+    }
+}
+
+impl From<String> for Fv {
+    fn from(s: String) -> Fv {
+        Fv::Str(s.into_boxed_str())
+    }
+}
+
 impl fmt::Display for Fv {
     /// The compact JSON of the value, as `serde_json::Value` prints it.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

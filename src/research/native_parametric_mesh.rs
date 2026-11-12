@@ -447,7 +447,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
     ensure!(
         f.fields["m_faceRegions"]
             .as_array()
-            .is_some_and(Vec::is_empty),
+            .is_some_and(|items| items.is_empty()),
         "face regions need subdivision"
     );
     let si = pointer(g, fi, &f.fields["m_pSurf"])?.context("face surface")?;

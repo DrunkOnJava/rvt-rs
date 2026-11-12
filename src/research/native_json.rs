@@ -30,7 +30,7 @@ pub(crate) fn identifier_i64(value: &Fv) -> Option<i64> {
 
 /// A three-number array as a point, `None` unless every coordinate is finite.
 pub(crate) fn finite_triple(value: &Fv) -> Option<[f64; 3]> {
-    let [x, y, z] = value.as_array()?.as_slice() else {
+    let [x, y, z] = value.as_array()? else {
         return None;
     };
     let p = [x.as_f64()?, y.as_f64()?, z.as_f64()?];

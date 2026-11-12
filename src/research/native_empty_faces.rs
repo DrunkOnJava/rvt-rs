@@ -45,7 +45,7 @@ pub fn is_observed_empty_trim_face(graph: &ObjectGraph, face_index: usize) -> bo
         || fields
             .get("m_faceRegions")
             .and_then(Fv::as_array)
-            .map(Vec::len)
+            .map(|items| items.len())
             != Some(0)
         || !is_minus_one_id(fields.get("m_renderStyleId"))
         || !is_null_pointer(fields.get("m_pFirstLoop"))

@@ -184,7 +184,7 @@ impl InventoryBuilder {
                             object.fields["fields"]
                                 .as_array()
                                 .ok_or_else(|| anyhow::anyhow!("ES dynamic fields absent"))?
-                                .clone(),
+                                .to_vec(),
                         )
                     };
                     let mut reachable = BTreeSet::new();

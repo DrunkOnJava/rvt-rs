@@ -139,7 +139,7 @@ pub fn from_graph(graph: &ObjectGraph, bytes: &[u8]) -> Result<(Catalog, Value)>
                 )?,
                 subschema_guid: (sub != "00000000-0000-0000-0000-000000000000").then_some(sub),
                 spec_type_id: (!spec.is_empty()).then_some(spec),
-                raw_metadata: f.clone(),
+                raw_metadata: f.to_json(),
             });
         }
         catalog.insert(Schema {
@@ -147,9 +147,9 @@ pub fn from_graph(graph: &ObjectGraph, bytes: &[u8]) -> Result<(Catalog, Value)>
             name: string(s, "m_schemaName")?,
             fields,
             raw_metadata: {
-                let mut metadata = s.clone();
+                let mut metadata = s.to_json();
                 if usage_map {
-                    metadata["_storage_usage"] = row["second"].clone();
+                    metadata["_storage_usage"] = row["second"].to_json();
                 }
                 metadata
             },

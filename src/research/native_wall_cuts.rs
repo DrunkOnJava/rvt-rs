@@ -210,7 +210,7 @@ pub fn rect_opening_boxes(
             .find(|object| object.class_name == "RectOpeningData")
             .and_then(|object| object.fields.get("m_aPoint"))
             .and_then(Fv::as_array);
-        if let Some([a, b]) = corners.map(Vec::as_slice) {
+        if let Some([a, b]) = corners {
             if let (Some(a), Some(b)) = (finite_triple(a), finite_triple(b)) {
                 out.insert(
                     record.identity.element_id,
@@ -267,7 +267,7 @@ pub fn frame_boxes(rf: &mut RevitFile, ids: &BTreeSet<u64>) -> BTreeMap<u64, Vec
 
 /// A 3 by 3 matrix as its rows.
 fn rows(value: &Fv) -> Option<[[f64; 3]; 3]> {
-    let [a, b, c] = value.as_array()?.as_slice() else {
+    let [a, b, c] = value.as_array()? else {
         return None;
     };
     Some([finite_triple(a)?, finite_triple(b)?, finite_triple(c)?])

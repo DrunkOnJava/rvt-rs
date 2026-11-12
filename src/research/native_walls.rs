@@ -112,7 +112,7 @@ fn shell_widths(structure: &Fv) -> Option<[f64; 2]> {
 }
 
 fn triple(value: Option<&Fv>) -> Option<[f64; 3]> {
-    match value?.as_array()?.as_slice() {
+    match value?.as_array()? {
         [x, y, z] => Some([x.as_f64()?, y.as_f64()?, z.as_f64()?]),
         _ => None,
     }
@@ -145,7 +145,7 @@ fn face_offsets(planes: &[&Fv], start: [f64; 2], direction: [f64; 2]) -> Option<
 fn line_ends(fields: &Fv) -> Option<([f64; 2], [f64; 2])> {
     let origin = triple(fields.get("m_origin"))?;
     let direction = triple(fields.get("m_dirVec"))?;
-    let [a, b] = match fields.get("m_endParams")?.as_array()?.as_slice() {
+    let [a, b] = match fields.get("m_endParams")?.as_array()? {
         [a, b] => [a.as_f64()?, b.as_f64()?],
         _ => return None,
     };
@@ -952,7 +952,7 @@ pub fn native_walls_and_top_joins_into(
                 .find(|object| object.class_name == "VWallDriver")
                 .and_then(|driver| driver.fields.get("m_controlJoinsSet"))
                 .and_then(Fv::as_array)
-                .cloned()
+                .map(|items| items.to_vec())
                 .unwrap_or_default();
             let root = graph.objects.first().map(|object| &object.fields);
             let length = (end[0] - start[0]).hypot(end[1] - start[1]);

@@ -277,7 +277,7 @@ fn read_creation_episodes(
     );
     let root = native_parameters::decode_object_fields(history, registry, 2, tag)?;
     let inline = root.fields["m_episodeList"]["m_oEpisodes"].as_array();
-    if !allow_deferred && !inline.is_some_and(Vec::is_empty) {
+    if !allow_deferred && !inline.is_some_and(|items| items.is_empty()) {
         anyhow::bail!("{INLINE_EPISODES_REFUSED}");
     }
     let inline = inline.ok_or_else(|| anyhow::anyhow!("history episode list absent"))?;

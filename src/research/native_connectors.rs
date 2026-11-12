@@ -165,7 +165,7 @@ pub struct ConnectorFrame {
 /// finite and its axis a unit vector.
 fn connector_frame(trf: &crate::graph_value::Fv) -> Option<ConnectorFrame> {
     let origin = finite_triple(trf.get("m_or")?)?;
-    let [r0, r1, r2] = trf.get("m_3x3")?.as_array()?.as_slice() else {
+    let [r0, r1, r2] = trf.get("m_3x3")?.as_array()? else {
         return None;
     };
     let rows = [finite_triple(r0)?, finite_triple(r1)?, finite_triple(r2)?];
