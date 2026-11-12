@@ -373,7 +373,7 @@ Where one element's answer comes from. Every element in an answer carries one. F
 | `enclosing_record_id` | string \| null | no | For a frame inside another partition record, the ElementId of that record. |
 | `global_id` | string \| null | no | The IFC GlobalId the export writes: Revit's own where the file yields it, otherwise one derived from the document's identity and the ElementId. |
 | `native_record` | [NativeRecordOut](#nativerecordout) \| null | no | The element's native record, where the export's native passes indexed one. |
-| `offset` | integer \| null | no | Where the record or frame starts in that stream inflated: the frame the exporter selected (on Revit 2024 and later the greatest vertical extent, then the higher-numbered partition and later offset; on 2008 to 2023 the newest). A body reader may take another copy; `value_sources` names it. |
+| `offset` | integer \| null | no | Where the record or frame starts in that stream inflated: the frame the exporter selected (the newest: the highest-numbered partition, then on Revit 2024 and later the greatest vertical extent within it, then the later offset). A body reader may take another copy; `value_sources` names it. |
 | `profile_source` | string \| null | no | Where the plan profile of the body came from. |
 | `provenance_omitted` | boolean \| null | no | True when the record fields are absent because the provenance table lists at most 250,000 elements and this one is past them (`file.omitted_entries`). |
 | `record_offset` | integer \| null | no | Where the ElementId is stored: the partition record header it is the first bytes of. |
