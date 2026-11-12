@@ -220,17 +220,14 @@ fn number(n: &Number) -> Fv {
 
 static NULL: Fv = Fv::Null;
 
-mod private {
-    pub trait Sealed {}
-    impl Sealed for usize {}
-    impl Sealed for str {}
-    impl Sealed for String {}
-    impl<T: ?Sized + Sealed> Sealed for &T {}
-}
-
 /// What [`Fv::get`] and indexing take: a field name or an array position.
-pub trait FvIndex: private::Sealed {
-    #[doc(hidden)]
+///
+/// Crate-private on purpose, which seals it: a public trait implemented for
+/// `usize`, `str` and `String` makes rustc count it, and the `Fv` its method
+/// takes, as reachable from the public API of a build without
+/// `unstable-research` (CI's `unnameable_types` step), though no stable item
+/// hands either out.
+pub(crate) trait FvIndex {
     fn index_into<'v>(&self, value: &'v Fv) -> Option<&'v Fv>;
 }
 
@@ -264,6 +261,10 @@ impl<T: ?Sized + FvIndex> FvIndex for &T {
     }
 }
 
+#[allow(
+    private_bounds,
+    reason = "FvIndex is sealed by being crate-private; every index a reader writes is one it is implemented for"
+)]
 impl<I: FvIndex> Index<I> for Fv {
     type Output = Fv;
 
@@ -390,6 +391,10 @@ impl Fv {
     }
 
     /// The field `index` names of an object, or the item it names of an array.
+    #[allow(
+        private_bounds,
+        reason = "FvIndex is sealed by being crate-private; every index a reader writes is one it is implemented for"
+    )]
     pub fn get<I: FvIndex>(&self, index: I) -> Option<&Fv> {
         index.index_into(self)
     }
