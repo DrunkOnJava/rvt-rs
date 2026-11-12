@@ -40,6 +40,16 @@ pub const DEFAULT_MAX_FILE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// multi-GB allocation.
 pub const DEFAULT_MAX_STREAM_BYTES: u64 = 256 * 1024 * 1024;
 
+/// The most bytes the memo of [`RevitFile::header_hits`] holds at once. A hit
+/// is a `usize`, and a partition carrying the ten-byte element-data header
+/// every ten bytes is held again at 0.8 of its size, for each (stream,
+/// header), for the handle's life (#1833). RE-144 counts the header's places
+/// on the reference models at 50,951 (Core Interior, every partition), 40,149
+/// (RE1 Architecture) and 5,277 (Einhoven): 0.4 MiB at most, and this is 165
+/// times that. Past it the memo is dropped whole; a reader keeps the `Arc` it
+/// was given and a later ask searches again, so no output changes.
+const HEADER_HITS_BUDGET_BYTES: usize = 64 * 1024 * 1024;
+
 /// Limits applied when opening a Revit file. Protects against
 /// pathological or hostile input that would otherwise force
 /// unbounded memory allocation.
@@ -219,6 +229,9 @@ pub struct RevitFile {
     /// and header: a dozen element-data readers each searched every partition
     /// for the release's header.
     header_hits: std::collections::HashMap<(String, Vec<u8>), Arc<Vec<usize>>>,
+    /// The bytes `header_hits` holds, one `usize` a hit, kept under
+    /// [`HEADER_HITS_BUDGET_BYTES`].
+    header_hits_bytes: usize,
     /// Memoised native extraction preamble: each native consumer read
     /// the schema, the element index and the increments again.
     // Tracker: B82.
@@ -520,6 +533,7 @@ impl RevitFile {
             partition_progress: None,
             data_objects: std::collections::HashMap::new(),
             header_hits: std::collections::HashMap::new(),
+            header_hits_bytes: 0,
             native_preamble: None,
             native_preamble_deferred: 0,
             native_definitions: None,
@@ -988,6 +1002,12 @@ impl RevitFile {
         let inflated = self.inflated_partition(name)?;
         let hits =
             Arc::new(memchr::memmem::find_iter(inflated.bytes(), header).collect::<Vec<_>>());
+        let added = hits.len().saturating_mul(std::mem::size_of::<usize>());
+        if self.header_hits_bytes.saturating_add(added) > HEADER_HITS_BUDGET_BYTES {
+            self.header_hits.clear();
+            self.header_hits_bytes = 0;
+        }
+        self.header_hits_bytes = self.header_hits_bytes.saturating_add(added);
         self.header_hits.insert(key, Arc::clone(&hits));
         Ok(hits)
     }
