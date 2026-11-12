@@ -8,7 +8,10 @@
 //! other body (a sketched profile, a steel section, a swept or revolved
 //! solid, a brep) has its own mesh. An element with no body gets a node
 //! with no mesh. Each element gets a material drawn from
-//! `PbrMaterial::from_material_info`.
+//! `PbrMaterial::from_material_info`, and each material says in its
+//! `extras` whether its colour is the file's or rvt-rs's ([`MaterialExtras`]).
+//! A view's visibility and graphics overrides are not read: Revit's own IFC
+//! export does not apply them either.
 //!
 //! Element nodes are in the model's frame, feet with +Z up. glTF is
 //! metres with +Y up, so they hang under one root node whose matrix
@@ -141,6 +144,35 @@ pub struct Material {
     pub double_sided: bool,
     #[serde(default, rename = "alphaMode", skip_serializing_if = "Option::is_none")]
     pub alpha_mode: Option<String>,
+    /// Where the base colour and its alpha come from (#1812).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extras: Option<MaterialExtras>,
+}
+
+/// Where a material's colour comes from. glTF loaders surface it as the
+/// material's `userData`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MaterialExtras {
+    /// `"file"` where the base colour and alpha are the Revit material's own
+    /// (RE-53), and `"rvt-rs"` where rvt-rs chose them: the category colour
+    /// ([`category_colour`]) an element with no material of its own is drawn
+    /// in, or the grey of a material whose colour was not read. A consumer
+    /// that stores the colour or opacity as the model's data keeps only
+    /// `"file"`. Metallic and roughness are always rvt-rs's, guessed from the
+    /// material's name.
+    #[serde(rename = "colourSource")]
+    pub colour_source: String,
+}
+
+/// [`MaterialExtras::colour_source`] of a colour read from the file.
+pub const COLOUR_FROM_FILE: &str = "file";
+/// [`MaterialExtras::colour_source`] of a colour rvt-rs chose.
+pub const COLOUR_FROM_RVT_RS: &str = "rvt-rs";
+
+fn colour_source(source: &str) -> Option<MaterialExtras> {
+    Some(MaterialExtras {
+        colour_source: source.into(),
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -342,6 +374,12 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
             } else {
                 None
             },
+            // A material's colour and transparency are read together.
+            extras: colour_source(if m.color_packed.is_some() {
+                COLOUR_FROM_FILE
+            } else {
+                COLOUR_FROM_RVT_RS
+            }),
         };
         doc.materials.push(mat);
     }
@@ -487,6 +525,7 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
                                         format!("Layer {rgb:06x}"),
                                         rgb,
                                         alpha,
+                                        COLOUR_FROM_FILE,
                                     ));
                                     doc.materials.len() - 1
                                 })
@@ -637,7 +676,8 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
 /// red, green and amber ramps, in the hues of the plan's palette
 /// ([`super::sheet`]). Blue-6 is left to the viewer's selection highlight.
 /// Glass-like categories are translucent, and spaces faint enough not to
-/// hide the building they fill.
+/// hide the building they fill. None of it is read from the file: the GLB
+/// marks these materials `"rvt-rs"` ([`MaterialExtras`]).
 pub fn category_colour(ifc_type: &str) -> (u32, f32) {
     match ifc_type {
         "IFCWALL" | "IFCWALLSTANDARDCASE" | "IFCCURTAINWALL" => (0xCDCED0, 1.0),
@@ -658,12 +698,17 @@ pub fn category_colour(ifc_type: &str) -> (u32, f32) {
 /// The material a category's colour makes, named for the category.
 fn category_material(ifc_type: &str) -> Material {
     let (rgb, alpha) = category_colour(ifc_type);
-    colour_material(format!("Category {ifc_type}"), rgb, alpha)
+    colour_material(
+        format!("Category {ifc_type}"),
+        rgb,
+        alpha,
+        COLOUR_FROM_RVT_RS,
+    )
 }
 
-/// A material of one sRGB colour (`0xRRGGBB`) and alpha. glTF base colours
-/// are linear, so the colour is linearised.
-fn colour_material(name: String, rgb: u32, alpha: f32) -> Material {
+/// A material of one sRGB colour (`0xRRGGBB`) and alpha, from `source`. glTF
+/// base colours are linear, so the colour is linearised.
+fn colour_material(name: String, rgb: u32, alpha: f32, source: &str) -> Material {
     let linear = |shift: u32| {
         let c = ((rgb >> shift) & 0xff) as f32 / 255.0;
         if c <= 0.04045 {
@@ -681,6 +726,7 @@ fn colour_material(name: String, rgb: u32, alpha: f32) -> Material {
         },
         double_sided: alpha < 1.0,
         alpha_mode: (alpha < 1.0).then(|| "BLEND".into()),
+        extras: colour_source(source),
     }
 }
 
