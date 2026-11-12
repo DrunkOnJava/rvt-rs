@@ -700,13 +700,16 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
     file.remember_native_definitions(key, Arc::clone(&pass));
     Ok(pass)
 }
-/// Every current or historical record of every partition in [`Options`]'
-/// default channels (#1032): its channel, ElementId, partition and the class
-/// tag its body opens with. The first pass with the default channels and
-/// budgets records it while it walks every partition for its own records,
-/// and the handle keeps it; every later such pass finds the partitions
-/// holding its selected records from it, rather than walking every
-/// partition for them, and walks only those partitions.
+/// Every current or historical record of every partition in one channel
+/// (#1032): its channel, ElementId, partition and the class tag its body opens
+/// with. The first pass that reads that channel alone, with the default group
+/// budget and every partition read, records it while it walks every
+/// partition for its own records, whatever it selects, and the handle keeps
+/// it, one for each channel. Every later such pass of the
+/// channel finds the partitions holding its selected records from it, rather
+/// than walking every partition for them, and walks only those partitions.
+/// Channel 102 holds the elements' records and 103 their saved graphics
+/// (#1694).
 #[derive(Debug)]
 pub struct RecordIndex {
     records: Vec<IndexedRecord>,
