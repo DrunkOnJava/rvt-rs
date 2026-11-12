@@ -801,6 +801,7 @@ fn definition_pass(
         started,
     );
     definitions.enable_builtin_catalog(&definition_summary.schema_sha256)?;
+    definitions.seal_bindings();
     let pass = Arc::new(DefinitionPass {
         registry: definitions,
         diagnostics,

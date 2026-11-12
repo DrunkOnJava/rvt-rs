@@ -320,13 +320,23 @@ pub fn scan_partitions_with_control(
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
+        // Each stream may add only what the cap leaves, as
+        // `partition_arc_walls` passes it down: a stream's whole buffer,
+        // already at the cap, appended before the truncation held twice the
+        // cap (#1833). The candidates kept are the same first ones.
+        let stream_options = ScanOptions {
+            max_candidates: options
+                .max_candidates
+                .map(|max| max.saturating_sub(candidates.len())),
+            ..options.clone()
+        };
         let mut found = scan_partition_buffer(
             &stream,
             inflated.bytes(),
             inflated.chunk_ends(),
             revit_version,
             &tag_to_name,
-            options,
+            &stream_options,
         );
         candidates.append(&mut found);
         if let Some(max) = options.max_candidates {

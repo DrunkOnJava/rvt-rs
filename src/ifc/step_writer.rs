@@ -497,6 +497,10 @@ pub fn type_objects(model: &IfcModel) -> TypeObjects {
         }
     }
     let mut groups: Vec<TypeObject> = Vec::new();
+    // Each group's place in `groups` by its key: an element found its group
+    // by a scan of every group made so far, quadratic in elements (#1845).
+    type GroupKey = (u32, String, String, Option<String>);
+    let mut group_of: HashMap<GroupKey, usize> = HashMap::new();
     for (entity_idx, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
@@ -549,17 +553,20 @@ pub fn type_objects(model: &IfcModel) -> TypeObjects {
             .and_then(|tag| tag.parse::<u32>().ok())
             .unwrap_or(u32::MAX);
         // Revit writes a type object per entity and predefined type (B73).
-        match groups.iter_mut().find(|group| {
-            group.type_id == *type_id
-                && group.entity == entity_name
-                && group.tail == tail
-                && group.global_id == global_id
-        }) {
-            Some(group) => {
+        let key = (
+            *type_id,
+            entity_name.clone(),
+            tail.clone(),
+            global_id.clone(),
+        );
+        match group_of.get(&key).copied() {
+            Some(index) => {
+                let group = &mut groups[index];
                 group.elements.push(entity_idx);
                 group.first_element = group.first_element.min(element_id);
             }
             None => {
+                group_of.insert(key, groups.len());
                 // Spike 257: Revit's type parameters Category, Family Name
                 // and Type Name, in the sets Revit's export gives a type
                 // object.

@@ -373,8 +373,9 @@ every reason of `skipped` the log's `total` is the sum of the items' counts and,
 for a reason that dropped none, the entries by class are the item's `classes`.
 `tests/export_decisions_counts.rs` checks this on Core Interior, the RE1 models
 (the default export, and the first phase, which leaves the 11 rooms out),
-Einhoven and the BIM4LCA as-built office. The one item it leaves out is
-`stream_not_read_resource_limit`, which counts streams, not elements. Core
+Einhoven and the BIM4LCA as-built office. The items it leaves out are
+`stream_not_read_resource_limit`, which counts streams, and
+`work_budget_reached`, which counts readers' stops, not elements. Core
 Interior has nothing left out (its `skipped` section is empty and the three
 `exported` counts are 0), so its log is empty and the test checks that; for the
 other models it names the reasons their diagnostics count and requires entries
@@ -596,6 +597,20 @@ limit and which one it was (the stream limit, one inflated member, or the
 stream's inflated total). Every reader went on without those streams, so the
 export is missing what they hold. `rvt-ifc` and `rvt-gltf` write no model and
 exit with status 3 when this item is present, unless `--allow-partial`.
+
+`work_budget_reached` lists the readers that stopped at a work budget
+(#1833, #1845): `classes` maps each reader (`pipe_connector_tests`,
+`room_solid_headers`, `sketch_loop_solve`, ...) to how many times it stopped
+since the file was opened, `count` is their sum, and one warning per reader
+begins `Work budget reached:`. Each reader counts its work against a budget
+no real model is known to reach, so that a file built to make it work
+without end cannot hang the export; past it the reader leaves out what it
+would have read (a pipe's ports, a room's outline, a slab's sketch profile),
+as an unread stream leaves out what it holds. No option raises a work
+budget. As for an unread stream, `rvt-ifc` and `rvt-gltf` write no model and
+exit with status 3 when this item is present, unless `--allow-partial`.
+The stops are kept with the open file: a second export of it, which reads
+back what the first read, reports them too.
 
 `element_record_without_element_id` counts the element records of every
 recovered category whose frame is in place (the `BuiltInCategory` at `+0x12`
