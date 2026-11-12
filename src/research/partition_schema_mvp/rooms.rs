@@ -119,6 +119,14 @@ pub(super) fn attach_room_outlines(
     // Each stream's room solids are found in one pass (B85): a search per
     // room took 1.2 s on Autodesk's 2025 rme_advanced sample.
     let mut solids = std::collections::HashMap::new();
+    // The rooms of each stream, whose headers alone are kept (#1833).
+    let mut wanted: std::collections::HashMap<_, std::collections::BTreeSet<u64>> =
+        std::collections::HashMap::new();
+    for room in rooms.iter() {
+        if let (Some(id), Some(stream)) = (room.id, element_source_stream(room)) {
+            wanted.entry(stream).or_default().insert(u64::from(id));
+        }
+    }
     let recording = rf.recording_value_sources();
     for room in rooms.iter_mut() {
         let (Some(id), Some(stream)) = (room.id, element_source_stream(room)) else {
@@ -155,7 +163,8 @@ pub(super) fn attach_room_outlines(
                 let Ok(inflated) = rf.inflated_partition(slot.key()) else {
                     continue;
                 };
-                let headers = prb::solid_headers_by_id(inflated.bytes());
+                let ids = wanted.get(slot.key()).cloned().unwrap_or_default();
+                let headers = prb::solid_headers_for(inflated.bytes(), &ids);
                 slot.insert((inflated, headers))
             }
         };
