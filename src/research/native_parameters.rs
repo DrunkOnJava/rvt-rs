@@ -517,10 +517,10 @@ impl View {
         wanted: impl Fn(usize, usize) -> bool,
     ) -> View {
         let mut included: Vec<(&str, usize, usize)> = Vec::new();
-        for (distance, c) in lineage.iter().enumerate() {
-            for field_index in 0..c.fields.len() {
+        for (distance, chain_keys) in keys.iter().enumerate() {
+            for (field_index, key) in chain_keys.iter().enumerate() {
                 if wanted(distance, field_index) {
-                    included.push((keys[distance][field_index].as_str(), distance, field_index));
+                    included.push((key.as_str(), distance, field_index));
                 }
             }
         }
