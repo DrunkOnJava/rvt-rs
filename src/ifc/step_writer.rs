@@ -3577,6 +3577,17 @@ impl StepWriter<'_> {
         // geometry below.
         let host_references = super::host_references(model);
 
+        // #1016: whether rvt-rs writes the base quantities at all, which
+        // `--no-base-quantities` stops by emptying every `Qto_` set, as
+        // Revit's export made with "Export base quantities" off holds no
+        // opening quantity either (RE-242).
+        let base_quantities_written = model.entities.iter().any(|entity| match entity {
+            super::entities::IfcEntity::ElementPropertySet { set, .. } => {
+                set.name.starts_with("Qto_") && !set.properties.is_empty()
+            }
+            _ => false,
+        });
+
         // RE-151 (#227): an opening nothing fills, a hole in a floor's sketch.
         // As in Revit's export it is placed in its host's frame, its outline
         // extruded up through the host, and it voids the host without being
@@ -3693,6 +3704,56 @@ impl StepWriter<'_> {
                         &set,
                         &gid(&["property-set", opening_gid.as_str(), set_name]),
                         &gid(&["defines-by-properties", opening_gid.as_str(), set_name]),
+                    );
+                }
+            }
+            // RE-151, RE-244: Revit's export gives an opening a floor's
+            // sketch makes its `Area`, its outline's, where that outline is
+            // not a rectangle, and its `Width` and `Height` where it is: on
+            // the office as built the 36 such openings are the 5 whose outline
+            // has a notch, whose `Area` this is to 1e-6 m2, and the 31
+            // rectangles, which Revit's export gives no `Area` on. A notched
+            // outline is what is measured; a quadrilateral that is not a
+            // rectangle, and every other kind of unfilled opening, stay
+            // without. So does an outline with a corner that is not a right
+            // angle: an arc of the sketch is chords there, whose polygon is
+            // short of the area Revit takes from the curves themselves.
+            if number.is_none() && base_quantities_written {
+                let area = outline_feet
+                    .iter()
+                    .zip(outline_feet.iter().cycle().skip(1))
+                    .map(|(from, to)| from.0 * to.1 - to.0 * from.1)
+                    .sum::<f64>()
+                    .abs()
+                    / 2.0;
+                // More than four square corners: a rectangle one of whose
+                // edges is two sketch lines has four, and whether Revit calls
+                // that loop a rectangle is not measured.
+                if area > 0.0
+                    && super::export_content::square_corner_count(outline_feet)
+                        .is_some_and(|corners| corners > 4)
+                {
+                    let quantities = PropertySet {
+                        name: "Qto_OpeningElementBaseQuantities".into(),
+                        properties: vec![super::entities::Property {
+                            name: "Area".into(),
+                            value: super::entities::PropertyValue::AreaSquareFeet(area),
+                        }],
+                    };
+                    self.emit_property_set(
+                        owner_hist,
+                        opening_id,
+                        &quantities,
+                        &gid(&[
+                            "property-set",
+                            opening_gid.as_str(),
+                            "Qto_OpeningElementBaseQuantities",
+                        ]),
+                        &gid(&[
+                            "defines-by-properties",
+                            opening_gid.as_str(),
+                            "Qto_OpeningElementBaseQuantities",
+                        ]),
                     );
                 }
             }
@@ -4029,7 +4090,15 @@ impl StepWriter<'_> {
             // which are the right way round on a rectangular opening (not on
             // a door's, RE-244). With base quantities off the wall has none
             // and the opening none either.
-            if *with_quantities && wall_widths.contains_key(host) {
+            // #1165: the opening a door cuts in a second wall is a rectangle
+            // extruded across that wall as the ones above are, and Revit's
+            // export measures it the same way round, not swapped as on a
+            // door's own opening (RE-244): its `Depth` is that extrusion's
+            // extent, the door's width, and its `Height` the outline's. Its
+            // `Width` stays out: Revit's is the thickness of the wall the
+            // door stands in, and the outline here is 0.2 mm wider than that
+            // on two of the four openings read on the BIM4LCA office.
+            if wall_widths.contains_key(host) {
                 let extent = |axis: fn(&(f64, f64)) -> f64| {
                     let low = outline_feet.iter().map(axis).fold(f64::INFINITY, f64::min);
                     let high = outline_feet
@@ -4042,13 +4111,15 @@ impl StepWriter<'_> {
                     name: name.into(),
                     value: super::entities::PropertyValue::PositiveLengthFeet(feet),
                 };
+                let mut properties = Vec::new();
+                if *with_quantities {
+                    properties.push(length("Width", extent(|point| point.0)));
+                }
+                properties.push(length("Height", extent(|point| point.1)));
+                properties.push(length("Depth", *thickness_feet));
                 let quantities = PropertySet {
                     name: "Qto_OpeningElementBaseQuantities".into(),
-                    properties: vec![
-                        length("Width", extent(|point| point.0)),
-                        length("Height", extent(|point| point.1)),
-                        length("Depth", *thickness_feet),
-                    ],
+                    properties,
                 };
                 self.emit_property_set(
                     owner_hist,

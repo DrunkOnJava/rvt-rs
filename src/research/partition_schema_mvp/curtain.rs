@@ -92,7 +92,7 @@ pub(super) fn attach_curtain_member_is_external(
 /// ([`crate::native_mullion_hosts::mullions_on_plain_hosts`], RE-243) with
 /// [`MULLION_PLAIN_HOST_FIELD`], and give it, where the boxes of its curtain
 /// wall's mullions say how many of its end faces Revit's solid keeps
-/// ([`kept_ends`], RE-268), [`MULLION_KEPT_ENDS_FIELD`]. The curtain wall is
+/// ([`kept_ends_with_partners`], RE-268), [`MULLION_KEPT_ENDS_FIELD`]. The curtain wall is
 /// the one its native record names, as in the record's own grouping.
 pub(super) fn attach_mullion_plain_hosts(rf: &mut RevitFile, products: &mut [DecodedElement]) {
     let mullions: BTreeSet<u64> = products
@@ -135,9 +135,9 @@ pub(super) fn attach_mullion_plain_hosts(rf: &mut RevitFile, products: &mut [Dec
     for mullion in groups.values_mut().flatten() {
         mullion.odd = has_unusual_section(mullion, &usual);
     }
-    let mut kept: BTreeMap<u32, u8> = BTreeMap::new();
+    let mut kept: BTreeMap<u32, KeptEnds> = BTreeMap::new();
     for group in groups.values() {
-        kept.extend(kept_ends(group));
+        kept.extend(kept_ends_with_partners(group));
     }
     // RE-404: the pass that draws a mullion from its saved mesh reads the ends of
     // those that stand on no plain host as well.
@@ -154,7 +154,7 @@ pub(super) fn attach_mullion_plain_hosts(rf: &mut RevitFile, products: &mut [Dec
                 element.fields.push((
                     MULLION_KEPT_ENDS_FIELD.into(),
                     InstanceField::Integer {
-                        value: i64::from(*ends),
+                        value: i64::from(ends.kept),
                         signed: false,
                         size: 4,
                     },
