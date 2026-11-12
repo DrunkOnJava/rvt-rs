@@ -457,7 +457,9 @@ impl ExportDiagnostics {
     }
 
     /// The readers that stopped at a work budget ([`WORK_BUDGET_REASON`],
-    /// #1833), by name, with how often; `None` when none did.
+    /// #1833), by name, with how often they stopped on the open file: an
+    /// export made again adds the stops of a reader it runs again. `None`
+    /// when none did.
     pub fn work_budget_stops(&self) -> Option<&std::collections::BTreeMap<String, usize>> {
         self.skipped
             .iter()

@@ -606,11 +606,19 @@ begins `Work budget reached:`. Each reader counts its work against a budget
 no real model is known to reach, so that a file built to make it work
 without end cannot hang the export; past it the reader leaves out what it
 would have read (a pipe's ports, a room's outline, a slab's sketch profile),
-as an unread stream leaves out what it holds. No option raises a work
-budget. As for an unread stream, `rvt-ifc` and `rvt-gltf` write no model and
-exit with status 3 when this item is present, unless `--allow-partial`.
-The stops are kept with the open file: a second export of it, which reads
-back what the first read, reports them too.
+as an unread stream leaves out what it holds. The export's own geometry has
+budgets too: a wall's top left uncut (`wall_top_pieces`,
+`wall_top_covered_parts`) or not cleared as embedded
+(`wall_top_embedded_pieces`), a roof or slab envelope not drawn
+(`envelope_pieces`), the mullion ends in a crowded grid cell counted as
+continued by none (`mullion_end_cells`), and no element contained in a space
+(`space_containment`). No option raises a work budget. As for an unread
+stream, `rvt-ifc` and `rvt-gltf` write no model and exit with status 3 when
+this item is present, unless `--allow-partial`. The stops are kept with the
+open file: a second export of it, which reads back what the first read,
+reports them too. A reader that export runs again adds its stops again, so a
+count is how often the reader stopped on the open file; which readers stopped
+is exact for each export.
 
 `element_record_without_element_id` counts the element records of every
 recovered category whose frame is in place (the `BuiltInCategory` at `+0x12`
