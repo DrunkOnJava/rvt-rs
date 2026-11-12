@@ -3525,6 +3525,9 @@ fn apply_partition_level_storeys(
     // The storeys' read is the export's last native extraction: a Revit 2015
     // to 2023 file's named parameters made the first (#1237). The definition
     // pass they shared is dropped so the rest of the export does not hold it.
+    // The project's display units come from that pass too, so they are read,
+    // and memoised, before it goes; read after, they walk the file again (#1816).
+    rf.project_units();
     rf.forget_native_definitions();
 }
 
