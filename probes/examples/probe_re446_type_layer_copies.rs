@@ -13,7 +13,7 @@
 //!
 //!   file <path> release <release>
 //!   summary wall_types <n> used <n> layers_read <n> copies_agree <n> copies_disagree <n> none_decoded <n> disagree_latest_differs_from_first <n>
-//!   type <id> walls <n> copies <k> decoded <d> verdict <agree|disagree|none|single> latest_p <p> total_mm <first>/<latest>
+//!   type <id> walls <n> copies <k> decoded <d> verdict <agree|disagree|none|single> latest_p <p> current_p <p|-> total_mm <first>/<latest>/<current>
 //!     copy <p>/<offset> <layers|none>      one line per copy, only for a type used by a wall whose copies do not give one list
 //!     data <p>/<offset> <hex>               the first 192 bytes after a copy's id, for a type none of whose copies decode
 //!
@@ -25,6 +25,7 @@
 //!   cargo run --profile ci -p rvt-probes --example probe_re446_type_layer_copies -- MODEL.rvt
 
 use rvt::RevitFile;
+use rvt::research::native_document;
 use rvt::research::partition_compound_structure as pcs;
 use rvt::research::partition_names;
 use rvt::research::partition_type_records as ptr;
@@ -140,6 +141,14 @@ fn main() -> anyhow::Result<()> {
             });
         }
     }
+    // The partition the element index routes each used type with several copies to, as the
+    // readers of an element's data take it (RE-145, RE-216).
+    let holders: BTreeMap<u32, BTreeSet<u32>> = copies
+        .iter()
+        .filter(|(id, held)| used.contains(id) && held.len() > 1)
+        .map(|(id, held)| (*id, held.iter().map(|copy| copy.partition).collect()))
+        .collect();
+    let current = native_document::current_partitions(&mut rf, &holders);
     let (mut layers_read, mut agree, mut disagree, mut none_decoded, mut latest_differs) =
         (0, 0, 0, 0, 0);
     let mut lines: Vec<String> = Vec::new();
@@ -175,13 +184,24 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
         lines.push(format!(
-            "type {id} walls {} copies {} decoded {} verdict {verdict} latest_p {} total_mm {}/{}",
+            "type {id} walls {} copies {} decoded {} verdict {verdict} latest_p {} current_p {} total_mm {}/{}/{}",
             walls_of.get(id).copied().unwrap_or(0),
             ordered.len(),
             decoded.len(),
             ordered.last().map_or(0, |copy| copy.partition),
+            current.get(id).map_or("-".to_string(), |p| p.to_string()),
             first.map_or("-".to_string(), |l| format!("{:.1}", total_mm(l))),
             latest.map_or("-".to_string(), |l| format!("{:.1}", total_mm(l))),
+            current
+                .get(id)
+                .and_then(|p| {
+                    ordered
+                        .iter()
+                        .rev()
+                        .find(|copy| copy.partition == *p)
+                        .and_then(|copy| copy.layers.as_ref())
+                })
+                .map_or("-".to_string(), |l| format!("{:.1}", total_mm(l))),
         ));
         for copy in &ordered {
             lines.push(format!(
