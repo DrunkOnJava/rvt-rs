@@ -255,6 +255,7 @@ impl BoxGrid {
             }
             filled = filled.saturating_add(cells);
             if filled > MAX_GRID_CELLS {
+                crate::budget::stopped("pipe_box_grid");
                 return None;
             }
             for x in first[0]..=last[0] {
@@ -333,6 +334,7 @@ fn connector_points(
         let near = grid.near(point);
         tests = tests.saturating_add(near.len());
         if tests > MAX_CONNECTOR_TESTS {
+            crate::budget::stopped("pipe_connector_tests");
             found.iter_mut().for_each(Vec::clear);
             offsets.iter_mut().for_each(Vec::clear);
             return (found, offsets);
@@ -432,6 +434,7 @@ pub fn scan_pipe_end_keys(
             }
             tests = tests.saturating_add(candidates.len());
             if tests > MAX_CONNECTOR_TESTS {
+                crate::budget::stopped("pipe_end_keys");
                 return Ok(BTreeMap::new());
             }
             let Some(element) = at

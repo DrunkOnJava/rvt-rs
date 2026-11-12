@@ -6,6 +6,8 @@
   room solids for the rooms alone, empty faces from one walk of each graph,
   a pipe end's keys through a set), or counts its work against a budget no
   real model comes near and, past it, leaves the element as an unread
-  stream leaves it. The memo of element-data header positions is held
+  stream leaves it, and the export's diagnostics say so: a
+  `work_budget_reached` skipped item counting each reader's stops, and a
+  `Work budget reached:` warning per reader. The memo of element-data header positions is held
   under 64 MiB, and the memo of inflated partitions under 16 GiB. No real
   file of the measured corpus changes.

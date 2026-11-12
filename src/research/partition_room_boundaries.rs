@@ -902,6 +902,7 @@ pub fn solid_headers_for(
             let headers = out.entry(id).or_default();
             headers.push(header);
             if headers.len() > MAX_SOLIDS_PER_ROOM {
+                crate::budget::stopped("room_solid_headers");
                 out.remove(&id);
                 crowded.insert(id);
             }

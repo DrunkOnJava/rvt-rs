@@ -1497,6 +1497,8 @@ fn export_rvt_doc_reporting(
     walker_limits: crate::walker::WalkerLimits,
     control: &crate::control::WalkerControl,
 ) -> Result<IfcModel> {
+    // The readers' work-budget stops are this export's from here on.
+    crate::budget::reset();
     let policy = ExportContentPolicy::for_quality_mode(quality_mode);
     // Identity from PartAtom if present; fall back to the file name in
     // BasicFileInfo's original path.
@@ -5002,12 +5004,25 @@ pub const UNREAD_STREAMS_REASON: &str = "stream_not_read_resource_limit";
 /// How each warning about a stream not read whole begins.
 const UNREAD_STREAM_WARNING: &str = "Not read whole: ";
 
+/// The [`SkippedExportItem::reason`] of the readers that stopped at a work
+/// budget (#1833, #1845), counted by reader in its `classes`.
+pub const WORK_BUDGET_REASON: &str = "work_budget_reached";
+
+/// The start of each warning [`record_unread_streams`] writes for a reader
+/// that stopped at its work budget.
+const WORK_BUDGET_WARNING: &str = "Work budget reached: ";
+
 /// Put the streams a resource limit kept from being read whole
 /// ([`crate::RevitFile::unread_streams`], #1075) into `diagnostics`: one
 /// skipped item ([`UNREAD_STREAMS_REASON`]) and a warning per stream, in
 /// place of any an earlier call wrote. The export built every element it
 /// could without them, so what they hold is missing; call this again after
 /// a later step (saved meshes, Revit property sets) has read more streams.
+///
+/// It also puts in the readers that stopped at a work budget since the
+/// export began (#1833, #1845): one skipped item ([`WORK_BUDGET_REASON`])
+/// counting them by reader, and a warning per reader. Each left out what was
+/// past its budget, as a stream a limit kept out is left out.
 pub fn record_unread_streams(
     diagnostics: &mut ExportDiagnostics,
     unread: &[crate::reader::UnreadStream],
@@ -5033,6 +5048,30 @@ pub fn record_unread_streams(
         for stream in unread {
             diagnostics.warnings.push(format!(
                 "{UNREAD_STREAM_WARNING}{stream}; the export is incomplete. Raise the limit to read it: rvt-ifc --large-model (or --max-stream-bytes / --max-inflate-bytes), or OpenLimits / RevitFile(max_stream_bytes=..., max_inflate_bytes=...) from Rust and Python."
+            ));
+        }
+    }
+    diagnostics
+        .skipped
+        .retain(|item| item.reason != WORK_BUDGET_REASON);
+    diagnostics
+        .warnings
+        .retain(|warning| !warning.starts_with(WORK_BUDGET_WARNING));
+    let stopped = crate::budget::stopped_so_far();
+    if !stopped.is_empty() {
+        diagnostics.skipped.push(SkippedExportItem {
+            phase: None,
+            reason: WORK_BUDGET_REASON.into(),
+            count: stopped.values().sum(),
+            classes: stopped
+                .iter()
+                .map(|(what, times)| ((*what).to_owned(), *times))
+                .collect(),
+            sample_names: Vec::new(),
+        });
+        for (what, times) in &stopped {
+            diagnostics.warnings.push(format!(
+                "{WORK_BUDGET_WARNING}{what} stopped {times} time(s) at its work budget, and what it would have read is missing from the export. No real model is known to reach one; a file built to make the reader do unbounded work does."
             ));
         }
     }

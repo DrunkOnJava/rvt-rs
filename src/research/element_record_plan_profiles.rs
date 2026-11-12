@@ -799,8 +799,12 @@ impl Vertices {
 
     /// Count `units` against [`SOLVE_WORK_BUDGET`] before they are spent.
     fn charge(&self, units: usize) -> Option<()> {
-        let work = self.work.get().saturating_add(units);
+        let before = self.work.get();
+        let work = before.saturating_add(units);
         self.work.set(work);
+        if work > SOLVE_WORK_BUDGET && before <= SOLVE_WORK_BUDGET {
+            crate::budget::stopped("sketch_loop_solve");
+        }
         (work <= SOLVE_WORK_BUDGET).then_some(())
     }
 

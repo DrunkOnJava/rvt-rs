@@ -260,6 +260,7 @@ pub fn scan_curve_fields(
                 .take(2)
                 .collect();
             if tests.get() > MAX_CONNECTOR_TESTS {
+                crate::budget::stopped("curve_field_tests");
                 return Ok(BTreeMap::new());
             }
             if points.is_empty() {

@@ -379,6 +379,7 @@ pub fn data_objects(buf: &[u8]) -> Vec<(usize, DataObject)> {
         if plausible {
             verified = verified.saturating_add(size);
             if verified > budget {
+                crate::budget::stopped("room_data_objects");
                 break;
             }
         }
