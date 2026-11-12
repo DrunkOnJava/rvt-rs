@@ -178,6 +178,10 @@ pub fn project(graph: &ObjectGraph) -> Result<Option<Definition>> {
     }))
 }
 
+/// Each (category, binding kind)'s matching binding keys, or the message
+/// their match fails with.
+type SealedBindings = BTreeMap<(i64, i64), std::result::Result<Vec<i64>, String>>;
+
 #[derive(Debug, Default, Serialize)]
 pub struct Registry {
     pub definitions: BTreeMap<i64, Definition>,
@@ -193,7 +197,7 @@ pub struct Registry {
     /// every binding again and rebuilt each definition's backlinks, records ×
     /// bindings × backlinks (#1833).
     #[serde(skip)]
-    sealed: Option<BTreeMap<(i64, i64), std::result::Result<Vec<i64>, String>>>,
+    sealed: Option<SealedBindings>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Binding {

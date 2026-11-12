@@ -450,10 +450,10 @@ pub fn scan_pipe_end_keys(
                 continue;
             };
             for &&(id, slot, end) in &candidates {
-                if (0..3).all(|axis| (point[axis] - end[axis]).abs() <= SAME_POINT_FEET) {
-                    if held.insert((id, slot, (element, index))) {
-                        out.entry(id).or_default()[slot].push((element, index));
-                    }
+                if (0..3).all(|axis| (point[axis] - end[axis]).abs() <= SAME_POINT_FEET)
+                    && held.insert((id, slot, (element, index)))
+                {
+                    out.entry(id).or_default()[slot].push((element, index));
                 }
             }
         }

@@ -1068,7 +1068,12 @@ impl SurfacePlan<'_> {
         } else {
             let at = index - self.on_curves();
             let p = self.inside[at / 2];
-            solid.world(p, if at % 2 == 0 { solid.low } else { solid.high })
+            let level = if at.is_multiple_of(2) {
+                solid.low
+            } else {
+                solid.high
+            };
+            solid.world(p, level)
         }
     }
 }
