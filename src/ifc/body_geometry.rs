@@ -714,6 +714,10 @@ pub const MAX_ENVELOPE_PLANES: usize = 32;
 /// and memory a hostile sketch can ask for.
 pub const MAX_ENVELOPE_PIECES: usize = 1 << 16;
 
+/// Most points those pieces hold in all: sixteen a piece at the piece cap,
+/// where a convex piece of a roof's plan has a handful.
+pub const MAX_ENVELOPE_POINTS: usize = 16 * MAX_ENVELOPE_PIECES;
+
 /// The point where the segment `p`–`q` crosses the line `f = 0`, from the
 /// values `fp` and `fq` of `f` at its ends. The ends are taken in a fixed
 /// order, so two triangles sharing the segment get the same point.
@@ -860,7 +864,12 @@ pub(super) fn envelope_slab_mesh_split(
             })
             .filter(|poly| poly.len() >= 3 && signed_area(poly).abs() > 1e-12)
             .collect();
-        if pieces.len() > MAX_ENVELOPE_PIECES {
+        // A split whose other half is a sliver adds two points to a piece and
+        // no piece, so the count alone let a crafted sketch reach 8,000 points
+        // a piece at the cap (#1845). Summing them costs what the split did.
+        if pieces.len() > MAX_ENVELOPE_PIECES
+            || pieces.iter().map(Vec::len).sum::<usize>() > MAX_ENVELOPE_POINTS
+        {
             return None;
         }
     }
@@ -1378,16 +1387,27 @@ pub fn solid_mesh(shape: &SolidShape) -> Option<Mesh> {
             }
             Some(mesh)
         }
-        SolidShape::BooleanResult {
-            op,
-            operand_a,
-            operand_b,
-        } => {
-            let mut mesh = solid_mesh(operand_a)?;
-            if matches!(op, IfcBooleanOp::Union) {
-                if let Some(other) = solid_mesh(operand_b) {
-                    mesh.append(other);
+        SolidShape::BooleanResult { .. } => {
+            // A wall's profile cuts nest one level per cut, down the first
+            // operand (#1845): walked as a loop, so the file's cut count is not
+            // the stack's depth. A difference keeps its first operand's mesh; a
+            // union adds its second's, innermost first, as recursion did.
+            let mut unions = Vec::new();
+            let mut at = shape;
+            while let SolidShape::BooleanResult {
+                op,
+                operand_a,
+                operand_b,
+            } = at
+            {
+                if matches!(op, IfcBooleanOp::Union) {
+                    unions.push(operand_b.as_ref());
                 }
+                at = operand_a.as_ref();
+            }
+            let mut mesh = solid_mesh(at)?;
+            for other in unions.into_iter().rev().filter_map(solid_mesh) {
+                mesh.append(other);
             }
             Some(mesh)
         }
