@@ -517,11 +517,18 @@ pub fn extract_in_batches_with_control(
                 &mut wanted,
             );
         }
-        let objects: usize = shared
-            .values()
-            .filter_map(|record| record.graph.as_ref())
-            .map(|graph| graph.objects.len())
-            .sum();
+        // The next batch is sized by the symbols this one read: an owner read
+        // again with them is not a symbol, and its graph is not the one a
+        // symbol's size predicts.
+        let (records, objects) = shared
+            .iter()
+            .filter(|(id, _)| !owner_references.contains_key(*id))
+            .fold((0usize, 0usize), |(records, objects), (_, record)| {
+                (
+                    records + 1,
+                    objects + record.graph.as_ref().map_or(0, |graph| graph.objects.len()),
+                )
+            });
         let elements = mesh_elements(
             &ids,
             Records {
@@ -535,7 +542,7 @@ pub fn extract_in_batches_with_control(
         }
         // Only a batch of symbols sizes the next one.
         if !symbols.is_empty() {
-            limit = (BATCH_OBJECT_BUDGET.saturating_mul(shared.len().max(1)) / objects.max(1))
+            limit = (BATCH_OBJECT_BUDGET.saturating_mul(records.max(1)) / objects.max(1))
                 .clamp(MIN_BATCH_SYMBOLS, MAX_BATCH_SYMBOLS);
         }
         // The batch's owners are meshed: their graphs go with its symbols,
