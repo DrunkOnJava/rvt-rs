@@ -8,11 +8,12 @@ no rotation about the site's vertical turns, is Revit's height of the body. The 
 set against it, and a frame agrees where the two are within 2 mm.
 
 Only the elements whose frames disagree on the vertical extent are scored (`z_disagree 1`). Of those, the ones
-where the frame the exporter keeps (the greatest vertical extent, a tie going to the newest) is not the newest
-frame decide between the two rules; they are counted apart: the frame kept agrees with Revit's body, the newest
-frame does, both, or neither. Every summary line starts `frame copies:` and holds counts beside fixed words,
-which the held-out scrub keeps; `--list` adds a line for each element where the frame kept is not the newest,
-and those name an ElementId and are dropped there.
+where the frame the exporter keeps is not the newest frame decide between the two rules; they are counted apart:
+the frame kept agrees with Revit's body, the newest frame does, both, or neither. The frame kept and the newest
+are the ones the probe names (`selected` and `newest`, each a partition and an offset): the probe models the
+selector, the greatest vertical extent quantised to 1e-4 ft and then the newest frame. Every summary line starts
+`frame copies:` and holds counts beside fixed words, which the held-out scrub keeps; `--list` adds a line for each
+element where the frame kept is not the newest, and those name an ElementId and are dropped there.
 
 An element with no body in Revit's export, or whose Tag no `IfcElement` of it holds, is counted and not
 scored.
@@ -36,7 +37,7 @@ FEET_METRES = 0.3048
 AGREE_METRES = 0.002
 
 ELEMENT = re.compile(
-    r"^element (\d+) (\S+) box_disagree ([01]) z_disagree ([01]) selected (\d+) newest (\d+) current (\d+|-) copies (.*)$"
+    r"^element (\d+) (\S+) box_disagree ([01]) z_disagree ([01]) selected (\d+)/(\d+) newest (\d+)/(\d+) current (\d+|-) copies (.*)$"
 )
 
 
@@ -47,7 +48,7 @@ def parse(path):
         match = ELEMENT.match(line.strip())
         if not match:
             continue
-        ident, category, _, z_disagree, selected, newest, current, copies = match.groups()
+        ident, category, _, z_disagree, sel_p, sel_o, new_p, new_o, current, copies = match.groups()
         frames = []
         for copy in copies.split():
             partition, offset, _dx, _dy, dz, _z = copy.split("/")
@@ -57,8 +58,8 @@ def parse(path):
                 "id": ident,
                 "category": category,
                 "z_disagree": z_disagree == "1",
-                "selected": int(selected),
-                "newest": int(newest),
+                "selected": (int(sel_p), int(sel_o)),
+                "newest": (int(new_p), int(new_o)),
                 "current": None if current == "-" else int(current),
                 "frames": frames,
             }
@@ -106,9 +107,10 @@ def main():
             counts["no body in Revit's export"] += 1
             continue
         frames = item["frames"]
-        # The frame kept: the greatest height quantised to 0.1 mm, a tie going to the newest.
-        kept = max(frames, key=lambda f: (round(f[2] / FEET_METRES * 1e4), f[0], f[1]))
-        newest = max(frames, key=lambda f: (f[0], f[1]))
+        # The frame kept and the newest, as the probe chose them (its model of the selector, which breaks the ties
+        # on the greatest height quantised to 1e-4 ft in Rust's rounding, not Python's).
+        kept = next(f for f in frames if (f[0], f[1]) == item["selected"])
+        newest = next(f for f in frames if (f[0], f[1]) == item["newest"])
         oldest = min(frames, key=lambda f: (f[0], f[1]))
         current = [f for f in frames if item["current"] is not None and f[0] == item["current"]]
         agrees = lambda f: abs(f[2] - height) <= AGREE_METRES  # noqa: E731

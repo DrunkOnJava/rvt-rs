@@ -13,13 +13,20 @@
 //! instance (the frames the selector reads), then totals:
 //!
 //!   file <path> release <release>
-//!   element <id> <category> box_disagree <0|1> z_disagree <0|1> selected <p> newest <p> current <p|-> copies <p>/<offset>/<dx>/<dy>/<dz>/<min z> ...
+//!   element <id> <category> box_disagree <0|1> z_disagree <0|1> selected <p>/<offset> newest <p>/<offset> current <p|-> copies <p>/<offset>/<dx>/<dy>/<dz>/<min z> ...
 //!   summary elements <n> multi_framed <n> box_disagree <n> z_disagree <n> selected_newest <n> selected_current <n> newest_current <n>
 //!
 //! The box is in feet and in the model's frame; `p` is the number of the
 //! `Partitions/NN` stream; `current` is `-` where the element index routes the
 //! element to no partition that holds a frame of it. The totals of the last
 //! line count the elements whose frames disagree on the vertical extent.
+//!
+//! `selected` is a model of `select_instance_records`, which is private to the
+//! crate and which the probe cannot call: the greatest vertical extent,
+//! quantised to 1e-4 ft, then the newest frame. The frame the exporter kept is
+//! the one `decoded.element_provenance` names for the element (`stream` and
+//! `offset`, `rvt-ifc --element-provenance`); the report sets the two against one
+//! another for every element the export holds.
 //!
 //! `tools/re/frame_copies_vs_ifc.py` sets each frame's vertical extent against
 //! Revit's body.
@@ -148,14 +155,16 @@ fn main() -> rvt::Result<()> {
             })
             .collect();
         println!(
-            "element {id} {} box_disagree {} z_disagree {} selected {} newest {} current {} copies {}",
+            "element {id} {} box_disagree {} z_disagree {} selected {}/{} newest {}/{} current {} copies {}",
             per::builtin_category_name(first.builtin_category)
                 .unwrap_or("?")
                 .replace(' ', "_"),
             u8::from(boxes_differ),
             u8::from(z_differs),
             selected.frame_order().0,
+            selected.offset,
             newest.frame_order().0,
+            newest.offset,
             routed.map_or("-".to_string(), |p| p.to_string()),
             copies.join(" ")
         );

@@ -25,6 +25,8 @@ The BIM4LCA timber office at building permit holds 18 `Qto_` values and 52 `Pset
 
 `probe_re444_frame_copies` lists, for every element of the product categories, walls, floors, doors, windows, columns, framing, mullions, panels, ceilings, roofs, ramps and stairs that has more than one frame of an exported instance, each frame's partition, offset and box, whether the boxes and the heights disagree, the frame the selector keeps, the newest, and the partition `native_document::current_partitions` names current. `frame_copies_vs_ifc.py` meshes the element in Revit's export, takes its vertical range (no rotation about the site's vertical changes it) and says which frames agree with it to 2 mm. The decisive population is the elements where the frame kept is not the newest.
 
+The probe's `selected` is a model of `select_instance_records`, which is private to the crate and which the probe cannot call: the greatest vertical extent, quantised to 1e-4 ft, then the newest frame. The scorer takes the frame kept and the newest from the probe's own lines (a partition and an offset each), not from the heights the probe prints. The model matches the exporter: the frame the export itself names for an element (`decoded.element_provenance`, the `provenance.stream` of the MCP dump of Measure 43115049478) is the partition the probe's `selected` names on every element both hold, 10,509 of 10,509 on the timber office at permit, 1,440 on the concrete housing as built, 1,402 at permit, 3,467 on the concrete office at permit, 510 on the timber housing as built and 510 on Core Interior (the rest are frames of elements the export does not hold), and among them are the five stale lengths, whose 5.123 and 3.75 m are the older frame's box.
+
 ## 4. The rows (registered on #1636 before the run)
 
 Probe run on the BIM4LCA files, Core Interior, RE1, `rac_advanced` 2015 to 2020, BIMcollab's model and the 24 Revit 2025 models:
@@ -36,7 +38,30 @@ Probe run on the BIM4LCA files, Core Interior, RE1, `rac_advanced` 2015 to 2020,
 
 ## 5. What Measure found
 
-To be filled.
+Measure run [43137611524](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43137611524) (head `7803da19`, `scorers=none`, `base=none`, the probe on the BIM4LCA files, Core Interior, RE1, the 24 Revit 2025 models; Einhoven is Revit 2023, outside the element records' range of the probe and read by the 2008 to 2023 path, which already keeps the newest frame (RE-107), and `rac_advanced` 2015 to 2020 and BIMcollab's model run no probe). Rows read on [#1636](https://github.com/DrunkOnJava/rvt-rs/issues/1636#issuecomment-6812055593).
+
+Elements framed more than once, those whose frames disagree in height, and, of the ones with a body in Revit's export, those where the frame the exporter keeps is not the newest (the decisive ones), with the frame that agrees with Revit's height to 2 mm:
+
+| file | framed more than once | disagree in height | decisive | newest agrees | kept agrees |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Core Interior | 510 of 853 | 12 | 0 | | |
+| housing, concrete, as built | 1,654 of 1,698 | 290 | 91 | 91 | 0 |
+| housing, concrete, permit | 1,616 of 1,654 | 75 | 27 | 27 | 0 |
+| housing, timber, as built | 510 of 2,009 | 13 | 7 | 7 | 0 |
+| housing, timber, permit | 321 of 1,940 | 7 | 7 | 7 | 0 |
+| office, concrete, permit | 3,646 of 15,441 | 12 | 0 | | |
+| **office, timber, permit** | **12,679 of 12,735** | **1,737** | **414** | **405** | **1** |
+| office, concrete and timber, as built | 0 | 0 | 0 | | |
+| housing terrain, concrete and timber | 914 of 950, 920 of 951 | 0, 3 | 0 | | |
+| office terrain, concrete and timber | 0, 1 of 113 | 0, 1 | 0 | | |
+| RE1 (4 models), Revit 2025 (24 models) | 0 to 70 | 0 | 0 | | |
+
+1. **Held.** All five (3024546, 3027086, 3029162, 1929459 and 3478460) are decisive on the timber office at permit, the newest frame (`Partitions/424`) giving Revit's height (3.7000, 4.2200, 0.7000, 5.0000 and 3.5420 m) and the frame kept (`Partitions/374`, 395) 0.05 to 0.123 m more. So are the five walls of section 2 (1347199, 1347201, 1436343, 1493966 and 2114950: the frame kept is 0.46 to 0.7 m taller than Revit's body, the newest frame has it).
+2. **Held.** The two as-built office files have no element framed more than once. On Core Interior no wall, door, window or column has frames that disagree in height; 12 slabs do, and the frame kept is the newest on all 12 and agrees with Revit's height. On the concrete office at permit 12 elements disagree, all with the frame kept as the newest (2 agree with Revit's height, 10 do not: the box is not Revit's body for another reason).
+3. **Held.** In the decisive population (546 elements of five files) the newest frame agrees with Revit's height on 537 (98.4%) and the frame kept on 1 (0.2%): on every file that has such elements, the newest agrees on all of them but, on the timber office at permit, 9 of 414 (the walls 1494012, 2056705, 2056770, 2057670, 2058499, 2058501, 2070689, 2070691 and 2177212, whose Revit bodies are lower than either frame, the newest being the nearer on all nine). By category on the timber office at permit: 251 curtain panels, 65 doors, 52 mullions, 42 walls and 4 columns. The partition `current_partitions` names is the newest frame's on 2,075 of the 2,150 elements whose frames disagree in height (96.5%, 95.7% on the timber office at permit and every element of every other file); the 75 others (24 walls, 23 doors, 18 mullions, 8 panels, a run and a landing, all on the timber office at permit) have a current partition older than their newest frame, and the frames of the current partition and of the newest one have the same height on all 75, the older copies being rewritten unchanged.
+4. **The change follows**, section 8.
+
+Where the frame kept is the newest and still does not agree with Revit's height (25 on the timber office at permit, 10 on the concrete office at permit, 1 on the concrete housing as built) the frame is not the choice: the record's box is not Revit's body.
 
 ## 6. Not done
 
