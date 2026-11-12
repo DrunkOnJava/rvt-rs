@@ -4682,7 +4682,7 @@ fn add_piece_sets(
     // in pieces scanned every entity for its sets, elements × entities
     // (#1845). A set given to a piece is added as it is pushed, as the scan
     // would have seen it.
-    let mut sets_of: std::collections::HashMap<usize, Vec<usize>> = Default::default();
+    let mut sets_of: HashMap<usize, Vec<usize>> = Default::default();
     for (index, entity) in entities.iter().enumerate() {
         if let entities::IfcEntity::ElementPropertySet { element, .. } = entity {
             sets_of.entry(*element).or_default().push(index);
