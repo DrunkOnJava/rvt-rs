@@ -13,7 +13,7 @@ pub struct ParametricMesh {
     pub triangles: Vec<[u32; 3]>,
 }
 
-fn uv_point(v: &serde_json::Value) -> Result<[f64; 2]> {
+fn uv_point(v: &crate::graph_value::Fv) -> Result<[f64; 2]> {
     let a = v.as_array().context("UV array")?;
     ensure!(a.len() == 2, "UV dimension");
     let p = [

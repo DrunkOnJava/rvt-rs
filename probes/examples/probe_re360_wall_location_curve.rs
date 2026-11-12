@@ -65,6 +65,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Result;
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_walls::native_walls;
@@ -73,7 +74,7 @@ use rvt::research::partition_schema_mvp::{
     opening_flips_from_fields, wall_native_direction_from_fields,
 };
 use rvt::walker::{InstanceField, iter_elements};
-use serde_json::{Value, json};
+use serde_json::json;
 
 const NAMED: [u64; 2] = [234869, 428745];
 const ONLY_POINTER_DETAIL: usize = 6;
@@ -115,7 +116,7 @@ fn bump(count: &mut Count, key: impl Into<String>) {
     *count.entry(key.into()).or_default() += 1;
 }
 
-fn triple(value: Option<&Value>) -> Option<[f64; 3]> {
+fn triple(value: Option<&Fv>) -> Option<[f64; 3]> {
     match value?.as_array()?.as_slice() {
         [x, y, z] => Some([x.as_f64()?, y.as_f64()?, z.as_f64()?]),
         _ => None,
@@ -123,7 +124,7 @@ fn triple(value: Option<&Value>) -> Option<[f64; 3]> {
 }
 
 /// The plan start and end of a level `GLine`, as `native_walls` reads it.
-fn level_ends(fields: &Value) -> Option<([f64; 2], [f64; 2])> {
+fn level_ends(fields: &Fv) -> Option<([f64; 2], [f64; 2])> {
     let origin = triple(fields.get("m_origin"))?;
     let direction = triple(fields.get("m_dirVec"))?;
     let [a, b] = match fields.get("m_endParams")?.as_array()?.as_slice() {
@@ -138,11 +139,11 @@ fn level_ends(fields: &Value) -> Option<([f64; 2], [f64; 2])> {
 }
 
 /// The path of object keys and array indices to the pointer at `offset`.
-fn path_to(value: &Value, offset: usize, path: &mut Vec<String>) -> bool {
+fn path_to(value: &Fv, offset: usize, path: &mut Vec<String>) -> bool {
     match value {
-        Value::Object(map) => {
+        Fv::Object(map) => {
             if map.contains_key("pointer_token")
-                && map.get("offset").and_then(Value::as_u64) == u64::try_from(offset).ok()
+                && map.get("offset").and_then(Fv::as_u64) == u64::try_from(offset).ok()
             {
                 return true;
             }
@@ -155,7 +156,7 @@ fn path_to(value: &Value, offset: usize, path: &mut Vec<String>) -> bool {
             }
             false
         }
-        Value::Array(items) => {
+        Fv::Array(items) => {
             for (index, item) in items.iter().enumerate() {
                 path.push(format!("[{index}]"));
                 if path_to(item, offset, path) {
@@ -227,7 +228,7 @@ fn chain(graph: &ObjectGraph, index: usize) -> Vec<String> {
     out
 }
 
-fn clip(value: &Value) -> Value {
+fn clip(value: &Fv) -> Fv {
     let text = value.to_string();
     if text.len() > FIELD_CLIP {
         json!({ "long": text.len() })
@@ -271,8 +272,8 @@ fn pointer_tag(graph: &ObjectGraph) -> Option<u64> {
 /// One short line of a wall: its curves, who names each, and what `m_pCrv`
 /// names, for every `SWall` of a save so that the same wall is read across the
 /// saves by its id.
-fn wall_line(id: u64, graph: &ObjectGraph) -> Value {
-    let curves: Vec<Value> = graph
+fn wall_line(id: u64, graph: &ObjectGraph) -> Fv {
+    let curves: Vec<Fv> = graph
         .objects
         .iter()
         .enumerate()
@@ -360,15 +361,15 @@ fn current_line(graph: &ObjectGraph) -> Option<([f64; 2], [f64; 2])> {
     }
 }
 
-fn wall_detail(id: u64, openings: &[u32], graph: &ObjectGraph) -> Value {
-    let objects: Vec<Value> = graph
+fn wall_detail(id: u64, openings: &[u32], graph: &ObjectGraph) -> Fv {
+    let objects: Vec<Fv> = graph
         .objects
         .iter()
         .enumerate()
         .map(|(index, object)| format!("{index}:{}:{}", object.class_name, object.token))
-        .map(Value::from)
+        .map(Fv::from)
         .collect();
-    let curves: Vec<Value> = graph
+    let curves: Vec<Fv> = graph
         .objects
         .iter()
         .enumerate()
@@ -376,7 +377,7 @@ fn wall_detail(id: u64, openings: &[u32], graph: &ObjectGraph) -> Value {
         .map(|(index, object)| {
             let ends = level_ends(&object.fields);
             let length = ends.map(|(s, e)| (e[0] - s[0]).hypot(e[1] - s[1]));
-            let named: Vec<Value> = owners(graph, index)
+            let named: Vec<Fv> = owners(graph, index)
                 .into_iter()
                 .map(|(source, class, token, field)| {
                     json!({ "object": source, "class": class, "token": token, "field": field })

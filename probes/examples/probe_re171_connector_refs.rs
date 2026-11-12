@@ -60,7 +60,7 @@ fn revit_joins(step: &str) -> BTreeSet<Join> {
         .collect()
 }
 
-fn as_u64(value: &serde_json::Value) -> Option<u64> {
+fn as_u64(value: &rvt::research::graph_value::Fv) -> Option<u64> {
     value
         .as_u64()
         .or_else(|| value.get("m_id").and_then(as_u64))

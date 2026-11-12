@@ -28,9 +28,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::{IfcEntity, PropertyValue};
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_saved_scene::extract_at_detail;
-use serde_json::Value;
 
 /// One `GInstance` of a railing's graph.
 struct Instance {
@@ -64,7 +64,7 @@ fn visibility(flags: u64) -> u8 {
 
 /// An identifier as the saved graphs write it: a number, or one inside
 /// `m_id` / `m_id64`.
-fn identifier(value: &Value) -> Option<i64> {
+fn identifier(value: &Fv) -> Option<i64> {
     if let Some(n) = value.as_i64() {
         return Some(n);
     }
@@ -76,7 +76,7 @@ fn identifier(value: &Value) -> Option<i64> {
 
 /// The largest deviation of `m_Trf.m_3x3 * transpose` from the identity: 0 for a
 /// rigid transform (a rotation or a mirrored one), the scale otherwise.
-fn gram_deviation(transform: &Value) -> f64 {
+fn gram_deviation(transform: &Fv) -> f64 {
     let Some(rows) = transform["m_3x3"].as_array().filter(|rows| rows.len() == 3) else {
         return f64::NAN;
     };

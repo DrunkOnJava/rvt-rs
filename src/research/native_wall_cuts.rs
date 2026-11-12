@@ -12,12 +12,12 @@
 //! record (CLEANROOM.md source 5, checked against 148 of 148 openings whose
 //! GlobalId hashes the opening number).
 
+use crate::graph_value::Fv;
 use crate::native_json::{element_id, finite_triple};
 use crate::{
     RevitFile, native_document, native_saved_mesh::face, native_saved_mesh::pointer,
     partition_element_records as per,
 };
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// Which step of a wall's record names a cutting element.
@@ -162,7 +162,7 @@ fn read_wall_cut_steps(
                         .fields
                         .get("m_otherWallId")
                         .and_then(element_id)
-                        .zip(object.fields.get("m_ggId").and_then(Value::as_u64))
+                        .zip(object.fields.get("m_ggId").and_then(Fv::as_u64))
                 } else {
                     None
                 };
@@ -170,7 +170,7 @@ fn read_wall_cut_steps(
                     kind,
                     cutter,
                     cuts_something,
-                    id: object.fields.get("m_id").and_then(Value::as_u64),
+                    id: object.fields.get("m_id").and_then(Fv::as_u64),
                     mirrors,
                 });
             }
@@ -209,7 +209,7 @@ pub fn rect_opening_boxes(
             .iter()
             .find(|object| object.class_name == "RectOpeningData")
             .and_then(|object| object.fields.get("m_aPoint"))
-            .and_then(Value::as_array);
+            .and_then(Fv::as_array);
         if let Some([a, b]) = corners.map(Vec::as_slice) {
             if let (Some(a), Some(b)) = (finite_triple(a), finite_triple(b)) {
                 out.insert(
@@ -266,7 +266,7 @@ pub fn frame_boxes(rf: &mut RevitFile, ids: &BTreeSet<u64>) -> BTreeMap<u64, Vec
 }
 
 /// A 3 by 3 matrix as its rows.
-fn rows(value: &Value) -> Option<[[f64; 3]; 3]> {
+fn rows(value: &Fv) -> Option<[[f64; 3]; 3]> {
     let [a, b, c] = value.as_array()?.as_slice() else {
         return None;
     };

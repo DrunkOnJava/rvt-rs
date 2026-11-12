@@ -7,11 +7,11 @@
 //! meaning to its flags.  A match is not a general free-plane classification:
 //! callers must retain the raw graph record and its provenance.
 
+use crate::graph_value::Fv;
 use crate::native_metadata::identifier;
 use crate::native_parameters::ObjectGraph;
 use crate::native_saved_mesh::pointer;
 use anyhow::Result;
-use serde_json::Value;
 
 const OBSERVED_GINFO_FLAGS: u64 = 0x8204;
 const OBSERVED_FACE_FLAGS_V9: u64 = 6;
@@ -34,17 +34,17 @@ pub fn is_observed_empty_trim_face(graph: &ObjectGraph, face_index: usize) -> bo
     };
     if fields
         .get("m_GInfo")
-        .and_then(Value::as_object)
+        .and_then(Fv::as_object)
         .and_then(|v| v.get("m_flags"))
-        .and_then(Value::as_u64)
+        .and_then(Fv::as_u64)
         != Some(OBSERVED_GINFO_FLAGS)
     {
         return false;
     }
-    if fields.get("m_faceFlags_v9").and_then(Value::as_u64) != Some(OBSERVED_FACE_FLAGS_V9)
+    if fields.get("m_faceFlags_v9").and_then(Fv::as_u64) != Some(OBSERVED_FACE_FLAGS_V9)
         || fields
             .get("m_faceRegions")
-            .and_then(Value::as_array)
+            .and_then(Fv::as_array)
             .map(Vec::len)
             != Some(0)
         || !is_minus_one_id(fields.get("m_renderStyleId"))
@@ -69,15 +69,15 @@ pub fn is_observed_empty_trim_face(graph: &ObjectGraph, face_index: usize) -> bo
     surface.class_name == "Plane" && ordered_finite_envelope(&surface.fields)
 }
 
-fn is_null_pointer(value: Option<&Value>) -> bool {
+fn is_null_pointer(value: Option<&Fv>) -> bool {
     value
-        .and_then(Value::as_object)
+        .and_then(Fv::as_object)
         .and_then(|v| v.get("pointer_token"))
-        .and_then(Value::as_u64)
+        .and_then(Fv::as_u64)
         == Some(0)
 }
 
-fn is_minus_one_id(value: Option<&Value>) -> bool {
+fn is_minus_one_id(value: Option<&Fv>) -> bool {
     value.is_some_and(|v| identifier(v).ok() == Some(-1))
 }
 
@@ -130,7 +130,7 @@ fn has_active_edge_face_reference(graph: &ObjectGraph, face_index: usize) -> Res
                         let Some(adjacency) = link_object.fields.get(field) else {
                             continue;
                         };
-                        let entries: Vec<&Value> = if let Some(array) = adjacency.as_array() {
+                        let entries: Vec<&Fv> = if let Some(array) = adjacency.as_array() {
                             array.iter().collect()
                         } else {
                             vec![adjacency]
@@ -148,12 +148,12 @@ fn has_active_edge_face_reference(graph: &ObjectGraph, face_index: usize) -> Res
     Ok(false)
 }
 
-fn ordered_finite_envelope(fields: &Value) -> bool {
+fn ordered_finite_envelope(fields: &Fv) -> bool {
     let Some(corners) = fields
         .get("m_Envelope")
-        .and_then(Value::as_object)
+        .and_then(Fv::as_object)
         .and_then(|v| v.get("m_corners"))
-        .and_then(Value::as_array)
+        .and_then(Fv::as_array)
     else {
         return false;
     };
@@ -169,10 +169,10 @@ fn ordered_finite_envelope(fields: &Value) -> bool {
     if first.len() != 2 || second.len() != 2 {
         return false;
     }
-    let Some(a) = first.iter().map(Value::as_f64).collect::<Option<Vec<_>>>() else {
+    let Some(a) = first.iter().map(Fv::as_f64).collect::<Option<Vec<_>>>() else {
         return false;
     };
-    let Some(b) = second.iter().map(Value::as_f64).collect::<Option<Vec<_>>>() else {
+    let Some(b) = second.iter().map(Fv::as_f64).collect::<Option<Vec<_>>>() else {
         return false;
     };
     a.iter().chain(b.iter()).all(|value| value.is_finite()) && b[0] > a[0] && b[1] > a[1]

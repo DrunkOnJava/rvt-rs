@@ -24,10 +24,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::partition_schema_mvp::{TYPE_ID_FIELD, recover_partition_schema_mvp};
 use rvt::walker::{InstanceField, WalkerLimits};
-use serde_json::Value;
 
 const CLASSES: [&str; 5] = [
     "IFCRAILING",
@@ -103,7 +103,7 @@ fn main() -> anyhow::Result<()> {
                     continue;
                 };
                 for (name, value) in fields {
-                    if let (Value::Number(_), Some(number)) =
+                    if let (Fv::Number(_), Some(number)) =
                         (value, value.as_f64().filter(|v| v.is_finite()))
                     {
                         found.push((format!("{label}.{name}"), number));

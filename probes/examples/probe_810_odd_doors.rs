@@ -22,24 +22,24 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::partition_element_records::{REFERENCE_LIST_OFFSET, decode_reference_list};
 use rvt::research::partition_instance_transforms::scan_instance_transforms;
 use rvt::walker::{InstanceField, iter_elements};
-use serde_json::Value;
 
 const DOORS: &[u32] = &[
     2053330, 2896990, 3269270, 3270587, 1756089, 1765267, 1382481, 1432311,
 ];
 
-fn members(fields: &Value) -> String {
+fn members(fields: &Fv) -> String {
     fields
         .as_object()
         .into_iter()
         .flat_map(|members| members.iter())
         .filter_map(|(name, value)| match value {
-            Value::Number(_) | Value::Bool(_) => Some(format!("{name}={value}")),
-            Value::String(text) => Some(format!("{name}={}", text.replace(' ', "_"))),
+            Fv::Number(_) | Fv::Bool(_) => Some(format!("{name}={value}")),
+            Fv::String(text) => Some(format!("{name}={}", text.replace(' ', "_"))),
             _ => value
                 .get("m_id")?
                 .get("m_id64")

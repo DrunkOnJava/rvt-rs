@@ -29,6 +29,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_stairs::native_runs;
 use rvt::research::partition_element_records::{
@@ -39,9 +40,8 @@ use rvt::research::partition_type_records::{
     scan_type_records, type_definition_ids, unique_type_reference,
 };
 use rvt::walker::{InstanceField, iter_elements};
-use serde_json::Value;
 
-fn ids(fields: &Value) -> Vec<(String, i64)> {
+fn ids(fields: &Fv) -> Vec<(String, i64)> {
     fields
         .as_object()
         .into_iter()
@@ -50,12 +50,12 @@ fn ids(fields: &Value) -> Vec<(String, i64)> {
         .collect()
 }
 
-fn find_ids(value: &Value, wanted: &BTreeSet<u64>, path: String, out: &mut Vec<(String, u64)>) {
+fn find_ids(value: &Fv, wanted: &BTreeSet<u64>, path: String, out: &mut Vec<(String, u64)>) {
     match value {
-        Value::Object(members) => {
+        Fv::Object(members) => {
             if let Some(id) = members
                 .get("m_id64")
-                .and_then(Value::as_u64)
+                .and_then(Fv::as_u64)
                 .filter(|id| wanted.contains(id))
             {
                 out.push((path.clone(), id));
@@ -64,7 +64,7 @@ fn find_ids(value: &Value, wanted: &BTreeSet<u64>, path: String, out: &mut Vec<(
                 find_ids(member, wanted, format!("{path}.{name}"), out);
             }
         }
-        Value::Array(items) => {
+        Fv::Array(items) => {
             for (index, item) in items.iter().enumerate() {
                 find_ids(item, wanted, format!("{path}[{index}]"), out);
             }
@@ -81,8 +81,8 @@ fn main() -> anyhow::Result<()> {
         ..Options::default()
     };
     let mut types: BTreeSet<u64> = BTreeSet::new();
-    let mut runs: BTreeMap<u64, (Value, Vec<Value>)> = BTreeMap::new();
-    let mut graphs: BTreeMap<u64, Vec<(String, Value)>> = BTreeMap::new();
+    let mut runs: BTreeMap<u64, (Fv, Vec<Fv>)> = BTreeMap::new();
+    let mut graphs: BTreeMap<u64, Vec<(String, Fv)>> = BTreeMap::new();
     extract_graphs(&mut rf, &options, |record| {
         let (Some(class), Some(graph)) = (record.class_name.as_deref(), record.graph.as_ref())
         else {
@@ -108,7 +108,7 @@ fn main() -> anyhow::Result<()> {
                 ] {
                     println!(
                         "type {id} {name} {}",
-                        root.fields.get(name).unwrap_or(&Value::Null)
+                        root.fields.get(name).unwrap_or(&Fv::Null)
                     );
                 }
             }
@@ -157,19 +157,16 @@ fn main() -> anyhow::Result<()> {
             "m_extendBelowTreadBase",
             "m_baseRiserIndex",
         ] {
-            println!(
-                "check {id} {name} {}",
-                run.get(name).unwrap_or(&Value::Null)
-            );
+            println!("check {id} {name} {}", run.get(name).unwrap_or(&Fv::Null));
         }
         for (k, tread) in treads.iter().enumerate() {
-            let get = |name: &str| tread.get(name).cloned().unwrap_or(Value::Null);
+            let get = |name: &str| tread.get(name).cloned().unwrap_or(Fv::Null);
             println!(
                 "check {id} tread {k} idx {} runType {} depth {} origin {} dir {} riserDir {}",
                 tread
                     .get("m_startRiser")
                     .and_then(|r| r.get("m_specifiedIdx"))
-                    .unwrap_or(&Value::Null),
+                    .unwrap_or(&Fv::Null),
                 get("m_runType"),
                 get("m_actDepth"),
                 get("m_origin"),

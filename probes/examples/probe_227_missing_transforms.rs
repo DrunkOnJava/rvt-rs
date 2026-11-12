@@ -31,11 +31,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_symbol_cuts::instance_cut_loops;
 use rvt::research::partition_instance_transforms::{instance_transform, scan_instance_transforms};
 use rvt::research::partition_names::element_data_header;
-use serde_json::Value;
 
 const SEARCH: usize = 0x4000;
 const TOLERANCE: f64 = 1e-9;
@@ -181,7 +181,7 @@ fn main() -> anyhow::Result<()> {
         let Some(root) = graph.objects.first() else {
             return Ok(());
         };
-        let place: serde_json::Map<String, Value> = [
+        let place: serde_json::Map<String, Fv> = [
             "m_instOrigin",
             "m_RefDir",
             "m_zAxis",

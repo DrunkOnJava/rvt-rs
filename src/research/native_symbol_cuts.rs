@@ -59,7 +59,7 @@ fn cut_loop(graph: &crate::native_parameters::ObjectGraph) -> Option<CutLoop> {
         || curve_loop
             .fields
             .get("m_open")
-            .and_then(serde_json::Value::as_bool)
+            .and_then(crate::graph_value::Fv::as_bool)
             != Some(false)
     {
         return None;
@@ -97,7 +97,7 @@ fn cut_loop(graph: &crate::native_parameters::ObjectGraph) -> Option<CutLoop> {
         .then_some(cut)
 }
 
-fn point2(value: Option<&serde_json::Value>) -> Option<[f64; 2]> {
+fn point2(value: Option<&crate::graph_value::Fv>) -> Option<[f64; 2]> {
     let items = value?.as_array()?;
     let [a, b] = items.as_slice() else {
         return None;
@@ -222,7 +222,7 @@ pub fn instance_cuts_and_symbols(
                 .objects
                 .first()
                 .and_then(|root| root.fields.get("m_pCutLoops"))
-                .and_then(serde_json::Value::as_array)
+                .and_then(crate::graph_value::Fv::as_array)
                 .is_some_and(Vec::is_empty)
             {
                 uncut_symbols.insert(id);
@@ -252,7 +252,11 @@ pub fn instance_cuts_and_symbols(
                 .first()
                 .filter(|_| record.class_name.as_deref() == Some("FamilyInstance"))
             {
-                let flag = |name: &str| root.fields.get(name).and_then(serde_json::Value::as_bool);
+                let flag = |name: &str| {
+                    root.fields
+                        .get(name)
+                        .and_then(crate::graph_value::Fv::as_bool)
+                };
                 if let Some((x, y)) = flag("m_flippedX").zip(flag("m_flippedY")) {
                     flips.insert(id, [x, y]);
                 }
@@ -343,10 +347,10 @@ pub fn symbol_wire_widths(
             let fields = &object.fields;
             let category = fields
                 .pointer("/m_GInfo/m_categoryId/m_id/m_id64")
-                .and_then(serde_json::Value::as_i64);
+                .and_then(crate::graph_value::Fv::as_i64);
             let visible = fields
                 .pointer("/m_GInfo/m_flags")
-                .and_then(serde_json::Value::as_u64)
+                .and_then(crate::graph_value::Fv::as_u64)
                 .is_some_and(|flags| flags & VISIBILITY_FLAG_BITS == 0);
             if category != Some(WIRE_CATEGORY) || !visible {
                 continue;

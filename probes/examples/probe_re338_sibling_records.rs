@@ -32,9 +32,9 @@ use std::collections::BTreeSet;
 
 use anyhow::Result;
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, Record, extract_graphs};
 use rvt::research::partition_element_records as per;
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 const STEPS: [&str; 4] = [
@@ -52,21 +52,21 @@ const CASES: [u64; 11] = [
 
 /// `fields` without the stream offsets of its pointers, which say where in a
 /// stream an object was saved and not what it holds.
-fn without_offsets(fields: &Value) -> Value {
+fn without_offsets(fields: &Fv) -> Fv {
     match fields {
-        Value::Object(members) => Value::Object(
+        Fv::Object(members) => Fv::Object(
             members
                 .iter()
                 .filter(|(name, _)| name.as_str() != "offset")
                 .map(|(name, member)| (name.clone(), without_offsets(member)))
                 .collect(),
         ),
-        Value::Array(items) => Value::Array(items.iter().map(without_offsets).collect()),
+        Fv::Array(items) => Fv::Array(items.iter().map(without_offsets).collect()),
         other => other.clone(),
     }
 }
 
-fn object_digest(fields: &Value) -> String {
+fn object_digest(fields: &Fv) -> String {
     digest(without_offsets(fields).to_string().as_bytes())
 }
 
@@ -101,7 +101,7 @@ fn probe(path: &str) -> Result<()> {
             let Some(cutter) = object
                 .fields
                 .pointer("/m_instId/m_id/m_id64")
-                .and_then(Value::as_u64)
+                .and_then(Fv::as_u64)
             else {
                 continue;
             };

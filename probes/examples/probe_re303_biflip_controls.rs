@@ -19,19 +19,19 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
-use serde_json::Value;
 
-fn scalars(fields: &Value) -> String {
+fn scalars(fields: &Fv) -> String {
     let Some(map) = fields.as_object() else {
         return String::new();
     };
     map.iter()
         .map(|(key, value)| {
             let text = match value {
-                Value::Object(inner) if inner.contains_key("pointer_token") => "->".to_string(),
-                Value::Array(items) => format!("[{}]", items.len()),
-                Value::Object(_) => {
+                Fv::Object(inner) if inner.contains_key("pointer_token") => "->".to_string(),
+                Fv::Array(items) => format!("[{}]", items.len()),
+                Fv::Object(_) => {
                     let text = value.to_string();
                     text.chars().take(80).collect()
                 }

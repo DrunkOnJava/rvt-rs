@@ -24,9 +24,10 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, Record, extract_graphs};
 use rvt::research::partition_element_records::{self as per};
-use serde_json::{Map, Value};
+use serde_json::Map;
 
 const SKETCH_LINES: i64 = -2_000_045;
 const CLIP: usize = 6000;
@@ -39,7 +40,7 @@ fn clip(text: String) -> String {
     }
 }
 
-fn trimmed(fields: &Value) -> String {
+fn trimmed(fields: &Fv) -> String {
     let Some(members) = fields.as_object() else {
         return clip(fields.to_string());
     };
@@ -47,12 +48,12 @@ fn trimmed(fields: &Value) -> String {
     for (name, member) in members {
         if name.ends_with("HistTable") {
             let count = member.as_array().map_or(0, Vec::len);
-            kept.insert(format!("{name}#"), Value::from(count));
+            kept.insert(format!("{name}#"), Fv::from(count));
         } else if member.get("pointer_token").is_none() {
             kept.insert(name.clone(), member.clone());
         }
     }
-    clip(Value::Object(kept).to_string())
+    clip(Fv::Object(kept).to_string())
 }
 
 /// `#id -> (entity, args)` for every line of a STEP file.
@@ -224,7 +225,7 @@ fn probe(path: &str) -> Result<()> {
                 if let Some(group) = object
                     .fields
                     .pointer("/m_groupId/m_id/m_id64")
-                    .and_then(Value::as_u64)
+                    .and_then(Fv::as_u64)
                 {
                     groups.insert(group);
                 }

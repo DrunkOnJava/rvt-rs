@@ -51,6 +51,7 @@
 //! ```
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{NATIVE_RELEASES, Options, Record, extract_graphs};
 use rvt::research::native_family_forms::{family_records, family_solids, instances_without_body};
 use rvt::research::native_graphics_traversal::{
@@ -62,7 +63,6 @@ use rvt::research::native_saved_mesh::{
 };
 use rvt::research::partition_element_records::{self as per, PartitionElementRecord};
 use rvt::research::partition_element_records_2023 as per32;
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The most family documents whose records are counted by class: a document is
@@ -144,7 +144,7 @@ fn no_body_reason(record: &PartitionElementRecord) -> &'static str {
 }
 
 /// `{"m_id":{"m_id64":n}}`, or a bare integer, as `n`.
-fn identifier(value: &Value) -> Option<i64> {
+fn identifier(value: &Fv) -> Option<i64> {
     if let Some(n) = value.as_i64() {
         return Some(n);
     }
@@ -195,13 +195,13 @@ fn ignorable(diagnostic: &str) -> bool {
 
 /// Every scalar under `value`, as (path, text): a pointer as `ptrnull` or
 /// `ptrset`, an array as its length and, short, its items.
-fn flatten(prefix: &str, value: &Value, depth: usize, out: &mut Vec<(String, String)>) {
+fn flatten(prefix: &str, value: &Fv, depth: usize, out: &mut Vec<(String, String)>) {
     match value {
-        Value::Null => {}
-        Value::Bool(b) => out.push((prefix.to_string(), b.to_string())),
-        Value::Number(n) => out.push((prefix.to_string(), n.to_string())),
-        Value::String(text) => out.push((prefix.to_string(), tidy(text))),
-        Value::Array(items) => {
+        Fv::Null => {}
+        Fv::Bool(b) => out.push((prefix.to_string(), b.to_string())),
+        Fv::Number(n) => out.push((prefix.to_string(), n.to_string())),
+        Fv::String(text) => out.push((prefix.to_string(), tidy(text))),
+        Fv::Array(items) => {
             out.push((format!("{prefix}[]"), items.len().to_string()));
             if depth < 3 && items.len() <= 8 {
                 for (index, item) in items.iter().enumerate() {
@@ -209,7 +209,7 @@ fn flatten(prefix: &str, value: &Value, depth: usize, out: &mut Vec<(String, Str
                 }
             }
         }
-        Value::Object(members) => {
+        Fv::Object(members) => {
             if let Some(token) = members.get("pointer_token") {
                 let state = if token.as_u64() == Some(0) {
                     "ptrnull"

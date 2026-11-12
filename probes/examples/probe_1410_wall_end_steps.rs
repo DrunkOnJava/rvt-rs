@@ -25,8 +25,9 @@
 
 use anyhow::Result;
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, Record, extract_graphs};
-use serde_json::{Map, Value};
+use serde_json::Map;
 
 const WALLS: [&str; 2] = ["SWall", "ArcWall"];
 
@@ -47,7 +48,7 @@ fn clip(text: String) -> String {
     }
 }
 
-fn trimmed(fields: &Value) -> String {
+fn trimmed(fields: &Fv) -> String {
     let Some(members) = fields.as_object() else {
         return clip(fields.to_string());
     };
@@ -55,37 +56,37 @@ fn trimmed(fields: &Value) -> String {
     for (name, member) in members {
         if name.ends_with("HistTable") {
             let count = member.as_array().map_or(0, Vec::len);
-            kept.insert(format!("{name}#"), Value::from(count));
+            kept.insert(format!("{name}#"), Fv::from(count));
         } else if member.get("pointer_token").is_none() {
             kept.insert(name.clone(), member.clone());
         }
     }
-    clip(Value::Object(kept).to_string())
+    clip(Fv::Object(kept).to_string())
 }
 
 /// `m_elemId` and `m_joinedEnd` of one join entry as `id:end`.
-fn entry(item: &Value) -> String {
+fn entry(item: &Fv) -> String {
     let id = item
         .get("m_elemId")
         .and_then(|e| e.get("m_id"))
         .and_then(|e| e.get("m_id64"))
-        .and_then(Value::as_i64)
+        .and_then(Fv::as_i64)
         .map_or_else(|| "?".to_string(), |id| id.to_string());
     let end = item
         .get("m_joinedEnd")
-        .and_then(Value::as_i64)
+        .and_then(Fv::as_i64)
         .map_or_else(|| "?".to_string(), |end| end.to_string());
     format!("{id}:{end}")
 }
 
-fn entries(list: Option<&Value>) -> String {
-    list.and_then(Value::as_array)
+fn entries(list: Option<&Fv>) -> String {
+    list.and_then(Fv::as_array)
         .map(|items| items.iter().map(entry).collect::<Vec<_>>().join(" "))
         .unwrap_or_default()
 }
 
-fn exposed(list: Option<&Value>) -> String {
-    list.and_then(Value::as_array)
+fn exposed(list: Option<&Fv>) -> String {
+    list.and_then(Fv::as_array)
         .map(|items| {
             items
                 .iter()
@@ -95,11 +96,11 @@ fn exposed(list: Option<&Value>) -> String {
                         .and_then(|s| s.get("m_elemId"))
                         .and_then(|e| e.get("m_id"))
                         .and_then(|e| e.get("m_id64"))
-                        .and_then(Value::as_i64)
+                        .and_then(Fv::as_i64)
                         .unwrap_or(-1);
                     let tag = second
                         .and_then(|s| s.get("m_tag"))
-                        .and_then(Value::as_i64)
+                        .and_then(Fv::as_i64)
                         .unwrap_or(-1);
                     format!("{id}:{tag}")
                 })
@@ -124,7 +125,7 @@ fn visit(record: Record) -> Result<()> {
                 "end {id} {} real {} geom {} omitted {} weak {} exposed {}",
                 fields
                     .get("m_end")
-                    .and_then(Value::as_i64)
+                    .and_then(Fv::as_i64)
                     .map_or_else(|| "?".to_string(), |end| end.to_string()),
                 entries(fields.get("m_realJoined")),
                 entries(fields.get("m_geomJoined")),
@@ -133,14 +134,14 @@ fn visit(record: Record) -> Result<()> {
                     .map_or_else(String::new, entry),
                 fields
                     .get("m_weakIdx")
-                    .and_then(Value::as_i64)
+                    .and_then(Fv::as_i64)
                     .map_or_else(|| "?".to_string(), |n| n.to_string()),
                 exposed(fields.get("m_exposedFaceMap")),
             ),
             "VWallDriver" => {
                 let sets = fields
                     .get("m_controlJoinsSet")
-                    .and_then(Value::as_array)
+                    .and_then(Fv::as_array)
                     .map(Vec::as_slice)
                     .unwrap_or_default();
                 for set in sets {
@@ -148,11 +149,11 @@ fn visit(record: Record) -> Result<()> {
                     println!(
                         "ctl {id} {} {} type {}",
                         set.get("m_index")
-                            .and_then(Value::as_i64)
+                            .and_then(Fv::as_i64)
                             .map_or_else(|| "?".to_string(), |n| n.to_string()),
                         entries(info.and_then(|i| i.get("m_info"))),
                         info.and_then(|i| i.get("m_wallJoinType"))
-                            .and_then(Value::as_i64)
+                            .and_then(Fv::as_i64)
                             .map_or_else(|| "?".to_string(), |n| n.to_string()),
                     );
                 }

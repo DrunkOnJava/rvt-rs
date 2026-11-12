@@ -43,7 +43,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde_json::Value;
+use crate::graph_value::Fv;
 
 use crate::RevitFile;
 use crate::native_document::{Options, extract_graphs};
@@ -93,7 +93,7 @@ pub struct NativeWall {
 
 /// The widths of a `CompoundStructure`'s layers outside its core, on its
 /// exterior and its interior side.
-fn shell_widths(structure: &Value) -> Option<[f64; 2]> {
+fn shell_widths(structure: &Fv) -> Option<[f64; 2]> {
     let widths: Vec<f64> = structure
         .get("m_layers")?
         .as_array()?
@@ -111,7 +111,7 @@ fn shell_widths(structure: &Value) -> Option<[f64; 2]> {
     ])
 }
 
-fn triple(value: Option<&Value>) -> Option<[f64; 3]> {
+fn triple(value: Option<&Fv>) -> Option<[f64; 3]> {
     match value?.as_array()?.as_slice() {
         [x, y, z] => Some([x.as_f64()?, y.as_f64()?, z.as_f64()?]),
         _ => None,
@@ -120,7 +120,7 @@ fn triple(value: Option<&Value>) -> Option<[f64; 3]> {
 
 /// The signed distances to the left of the line from `start` along the unit
 /// `direction` of the outermost two of `planes` that stand upright along it.
-fn face_offsets(planes: &[&Value], start: [f64; 2], direction: [f64; 2]) -> Option<[f64; 2]> {
+fn face_offsets(planes: &[&Fv], start: [f64; 2], direction: [f64; 2]) -> Option<[f64; 2]> {
     let offsets: Vec<f64> = planes
         .iter()
         .filter_map(|plane| {
@@ -142,7 +142,7 @@ fn face_offsets(planes: &[&Value], start: [f64; 2], direction: [f64; 2]) -> Opti
 }
 
 /// The plan start and end of a horizontal `GLine`.
-fn line_ends(fields: &Value) -> Option<([f64; 2], [f64; 2])> {
+fn line_ends(fields: &Fv) -> Option<([f64; 2], [f64; 2])> {
     let origin = triple(fields.get("m_origin"))?;
     let direction = triple(fields.get("m_dirVec"))?;
     let [a, b] = match fields.get("m_endParams")?.as_array()?.as_slice() {
@@ -163,13 +163,13 @@ fn line_ends(fields: &Value) -> Option<([f64; 2], [f64; 2])> {
 /// a step names its elements in a shape that is not read, so that no step is
 /// left out unseen.
 fn named_by_steps<'a>(
-    steps: impl Iterator<Item = (&'a str, &'a Value)>,
+    steps: impl Iterator<Item = (&'a str, &'a Fv)>,
 ) -> Option<(BTreeSet<u64>, BTreeSet<u64>)> {
     let mut joined = BTreeSet::new();
     let mut paired = BTreeSet::new();
     for (class, fields) in steps {
-        let (references, named): (Vec<&Value>, &mut BTreeSet<u64>) = match class {
-            "JoinToRoofGStep" if fields.get("m_baseOrTop").and_then(Value::as_i64) == Some(1) => (
+        let (references, named): (Vec<&Fv>, &mut BTreeSet<u64>) = match class {
+            "JoinToRoofGStep" if fields.get("m_baseOrTop").and_then(Fv::as_i64) == Some(1) => (
                 fields.get("m_ids")?.as_array()?.iter().collect(),
                 &mut joined,
             ),
@@ -191,13 +191,11 @@ fn named_by_steps<'a>(
 /// its record; a null reference (an id of 0 or less) names nothing. `None`
 /// where a base join names its elements in a shape that is not read.
 fn base_joined_by_steps<'a>(
-    steps: impl Iterator<Item = (&'a str, &'a Value)>,
+    steps: impl Iterator<Item = (&'a str, &'a Fv)>,
 ) -> Option<BTreeSet<u64>> {
     let mut named = BTreeSet::new();
     for (class, fields) in steps {
-        if class != "JoinToRoofGStep"
-            || fields.get("m_baseOrTop").and_then(Value::as_i64) != Some(0)
-        {
+        if class != "JoinToRoofGStep" || fields.get("m_baseOrTop").and_then(Fv::as_i64) != Some(0) {
             continue;
         }
         for reference in fields.get("m_ids")?.as_array()? {
@@ -211,10 +209,10 @@ fn base_joined_by_steps<'a>(
 }
 
 /// The members of one control join, as (member, end it joins by) pairs.
-fn join_members(control: &Value) -> Vec<(u64, u32)> {
+fn join_members(control: &Fv) -> Vec<(u64, u32)> {
     control
         .pointer("/m_JoinInfo/m_info")
-        .and_then(Value::as_array)
+        .and_then(Fv::as_array)
         .into_iter()
         .flatten()
         .filter_map(|member| {
@@ -226,7 +224,7 @@ fn join_members(control: &Value) -> Vec<(u64, u32)> {
 }
 
 /// The control joins listing `wall`'s `end`.
-fn end_controls(wall: u64, controls: &[Value], end: u32) -> Vec<&Value> {
+fn end_controls(wall: u64, controls: &[Fv], end: u32) -> Vec<&Fv> {
     controls
         .iter()
         .filter(|control| join_members(control).contains(&(wall, end)))
@@ -234,7 +232,7 @@ fn end_controls(wall: u64, controls: &[Value], end: u32) -> Vec<&Value> {
 }
 
 /// The join listing `wall`'s `end`, as (member, end it joins by) pairs.
-fn end_join(wall: u64, controls: &[Value], end: u32) -> Option<Vec<(u64, u32)>> {
+fn end_join(wall: u64, controls: &[Fv], end: u32) -> Option<Vec<(u64, u32)>> {
     match end_controls(wall, controls, end).as_slice() {
         [] => Some(Vec::new()),
         [control] => Some(join_members(control)),
@@ -243,7 +241,7 @@ fn end_join(wall: u64, controls: &[Value], end: u32) -> Option<Vec<(u64, u32)>> 
 }
 
 /// The `m_wallJoinType` of the one join listing `wall`'s `end` (RE-322).
-fn end_join_type(wall: u64, controls: &[Value], end: u32) -> Option<i64> {
+fn end_join_type(wall: u64, controls: &[Fv], end: u32) -> Option<i64> {
     match end_controls(wall, controls, end).as_slice() {
         [control] => control.pointer("/m_JoinInfo/m_wallJoinType")?.as_i64(),
         _ => None,
@@ -436,7 +434,7 @@ fn is_previous_location_line(graph: &crate::native_parameters::ObjectGraph, inde
                         && source
                             .fields
                             .pointer("/m_prevLocLine/offset")
-                            .and_then(Value::as_u64)
+                            .and_then(Fv::as_u64)
                             == u64::try_from(edge.pointer_offset).ok()
                 })
         })
@@ -493,7 +491,7 @@ fn real_joined(graph: &crate::native_parameters::ObjectGraph, id: u64) -> [Optio
         let Some(slot) = step
             .fields
             .get("m_end")
-            .and_then(Value::as_u64)
+            .and_then(Fv::as_u64)
             .and_then(|end| usize::try_from(end).ok())
             .filter(|end| *end < 2)
         else {
@@ -503,7 +501,7 @@ fn real_joined(graph: &crate::native_parameters::ObjectGraph, id: u64) -> [Optio
         let listed: Option<Vec<u64>> = step
             .fields
             .get("m_realJoined")
-            .and_then(Value::as_array)
+            .and_then(Fv::as_array)
             .and_then(|items| {
                 items
                     .iter()
@@ -535,7 +533,7 @@ fn real_joined(graph: &crate::native_parameters::ObjectGraph, id: u64) -> [Optio
 fn is_top_joined(graph: &crate::native_parameters::ObjectGraph) -> bool {
     graph.objects.iter().any(|object| {
         object.class_name == "JoinToRoofGStep"
-            && object.fields.get("m_baseOrTop").and_then(Value::as_i64) == Some(1)
+            && object.fields.get("m_baseOrTop").and_then(Fv::as_i64) == Some(1)
     })
 }
 
@@ -584,7 +582,7 @@ pub fn wall_facts(graph: &crate::native_parameters::ObjectGraph) -> WallFacts {
 pub fn wall_load_bearing(graph: &crate::native_parameters::ObjectGraph) -> Option<bool> {
     let root = &graph.objects.first()?.fields;
     let integer = |name: &str| match root.get(name)? {
-        Value::Bool(flag) => Some(i64::from(*flag)),
+        Fv::Bool(flag) => Some(i64::from(*flag)),
         other => other.as_i64(),
     };
     Some(integer("m_isStructuralSignificant")? == 1 && integer("m_wallStructuralUsage")? == 1)
@@ -948,18 +946,18 @@ pub fn native_walls_and_top_joins_into(
             }
         }
         let read = record_line(graph).map(|(start, end)| {
-            let controls: Vec<Value> = graph
+            let controls: Vec<Fv> = graph
                 .objects
                 .iter()
                 .find(|object| object.class_name == "VWallDriver")
                 .and_then(|driver| driver.fields.get("m_controlJoinsSet"))
-                .and_then(Value::as_array)
+                .and_then(Fv::as_array)
                 .cloned()
                 .unwrap_or_default();
             let root = graph.objects.first().map(|object| &object.fields);
             let length = (end[0] - start[0]).hypot(end[1] - start[1]);
             let direction = [(end[0] - start[0]) / length, (end[1] - start[1]) / length];
-            let planes: Vec<&Value> = graph
+            let planes: Vec<&Fv> = graph
                 .objects
                 .iter()
                 .filter(|object| object.class_name == "Plane")
@@ -975,7 +973,7 @@ pub fn native_walls_and_top_joins_into(
             {
                 let Some(slot) = step
                     .get("m_end")
-                    .and_then(Value::as_u64)
+                    .and_then(Fv::as_u64)
                     .and_then(|end| usize::try_from(end).ok())
                     .filter(|end| *end < 2)
                 else {
@@ -984,7 +982,7 @@ pub fn native_walls_and_top_joins_into(
                 if !std::mem::replace(&mut stepped[slot], true) {
                     exposed[slot] = step
                         .get("m_exposedFaceMap")
-                        .and_then(Value::as_array)
+                        .and_then(Fv::as_array)
                         .into_iter()
                         .flatten()
                         .filter_map(|face| element_id(face.pointer("/second/m_elemId")?))
@@ -998,7 +996,7 @@ pub fn native_walls_and_top_joins_into(
                 .flat_map(|join| {
                     join.fields
                         .get("m_info")
-                        .and_then(Value::as_array)
+                        .and_then(Fv::as_array)
                         .into_iter()
                         .flatten()
                 })

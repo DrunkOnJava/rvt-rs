@@ -35,9 +35,10 @@
 
 use anyhow::{Context, Result};
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, Record, extract_graphs};
 use rvt::research::partition_element_records as per;
-use serde_json::{Map, Value};
+use serde_json::Map;
 use std::collections::{BTreeMap, BTreeSet};
 
 const WALLS: [&str; 2] = ["SWall", "ArcWall"];
@@ -59,9 +60,9 @@ fn clip(text: String) -> String {
 }
 
 /// Every positive `m_id64` under `value`.
-fn ids_under(value: &Value, out: &mut BTreeSet<u64>) {
+fn ids_under(value: &Fv, out: &mut BTreeSet<u64>) {
     match value {
-        Value::Object(members) => {
+        Fv::Object(members) => {
             for (name, member) in members {
                 match member.as_u64() {
                     Some(id) if name == "m_id64" && id > 0 => {
@@ -71,7 +72,7 @@ fn ids_under(value: &Value, out: &mut BTreeSet<u64>) {
                 }
             }
         }
-        Value::Array(items) => {
+        Fv::Array(items) => {
             for item in items {
                 ids_under(item, out);
             }
@@ -80,7 +81,7 @@ fn ids_under(value: &Value, out: &mut BTreeSet<u64>) {
     }
 }
 
-fn trimmed(fields: &Value) -> String {
+fn trimmed(fields: &Fv) -> String {
     let Some(members) = fields.as_object() else {
         return clip(fields.to_string());
     };
@@ -88,12 +89,12 @@ fn trimmed(fields: &Value) -> String {
     for (name, member) in members {
         if name.ends_with("HistTable") {
             let count = member.as_array().map_or(0, Vec::len);
-            kept.insert(format!("{name}#"), Value::from(count));
+            kept.insert(format!("{name}#"), Fv::from(count));
         } else if member.get("pointer_token").is_none() {
             kept.insert(name.clone(), member.clone());
         }
     }
-    clip(Value::Object(kept).to_string())
+    clip(Fv::Object(kept).to_string())
 }
 
 /// The partners of the walls that embed a wall: the elements their

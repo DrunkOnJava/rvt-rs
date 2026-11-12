@@ -1,8 +1,8 @@
 //! Tessellation of bounded saved planar and cylindrical BRep faces. No application or vendor runtime.
+use crate::graph_value::Fv;
 use crate::native_parameters::ObjectGraph;
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FaceMesh {
@@ -54,7 +54,7 @@ impl<'a> PointerIndex<'a> {
             lookup: graph.lookup(),
         }
     }
-    fn resolve(&self, source: usize, v: &Value) -> Result<Option<usize>> {
+    fn resolve(&self, source: usize, v: &Fv) -> Result<Option<usize>> {
         let g = self.graph;
         let t = v["pointer_token"]
             .as_u64()
@@ -94,10 +94,10 @@ impl<'a> PointerIndex<'a> {
         Ok(Some(objs[0]))
     }
 }
-pub fn pointer(g: &ObjectGraph, source: usize, v: &Value) -> Result<Option<usize>> {
+pub fn pointer(g: &ObjectGraph, source: usize, v: &Fv) -> Result<Option<usize>> {
     PointerIndex::new(g).resolve(source, v)
 }
-fn point<const N: usize>(v: &Value) -> Result<[f64; N]> {
+fn point<const N: usize>(v: &Fv) -> Result<[f64; N]> {
     let a = v.as_array().context("point array")?;
     ensure!(a.len() == N, "point dimension");
     let mut p = [0.; N];
@@ -517,7 +517,7 @@ fn refined_curved_edge(
 }
 
 /// The parameter box of a cylinder surface, from its `m_Envelope` corners.
-fn cylinder_envelope(corners: &Value) -> Result<([f64; 2], [f64; 2])> {
+fn cylinder_envelope(corners: &Fv) -> Result<([f64; 2], [f64; 2])> {
     let corners = corners.as_array().context("cylinder envelope")?;
     ensure!(corners.len() == 2, "cylinder envelope bounds");
     Ok((point::<2>(&corners[0])?, point::<2>(&corners[1])?))
@@ -1092,7 +1092,7 @@ fn plane_regions_tile(
     index: &PointerIndex<'_>,
     fi: usize,
     plane: usize,
-    regions: &[Value],
+    regions: &[Fv],
     work: &mut u64,
 ) -> Result<()> {
     let basis = |si: usize| -> Result<[[f64; 3]; 3]> {

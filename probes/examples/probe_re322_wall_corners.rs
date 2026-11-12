@@ -34,14 +34,15 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::Result;
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
-use serde_json::{Map, Value, json};
+use serde_json::{Map, json};
 
 const CLIP: usize = 6000;
 
-fn compact(value: &Value) -> Value {
+fn compact(value: &Fv) -> Fv {
     match value {
-        Value::Object(map) => {
+        Fv::Object(map) => {
             if let Some(id) = map.get("m_id").and_then(|v| v.get("m_id64")) {
                 if map.len() == 1 {
                     return id.clone();
@@ -51,28 +52,28 @@ fn compact(value: &Value) -> Value {
             for (name, member) in map {
                 if name.ends_with("HistTable") {
                     let count = member.as_array().map_or(0, Vec::len);
-                    out.insert(format!("{name}#"), Value::from(count));
+                    out.insert(format!("{name}#"), Fv::from(count));
                 } else if member.get("pointer_token").is_none() && name != "m_cleanData" {
                     out.insert(name.clone(), compact(member));
                 }
             }
-            Value::Object(out)
+            Fv::Object(out)
         }
-        Value::Array(items) => Value::Array(items.iter().map(compact).collect()),
+        Fv::Array(items) => Fv::Array(items.iter().map(compact).collect()),
         other => other.clone(),
     }
 }
 
-fn clipped(value: Value) -> Value {
+fn clipped(value: Fv) -> Fv {
     let text = value.to_string();
     if text.len() <= CLIP {
         value
     } else {
-        Value::String(text.chars().take(CLIP).collect())
+        Fv::String(text.chars().take(CLIP).collect())
     }
 }
 
-fn triple(value: Option<&Value>) -> Option<[f64; 3]> {
+fn triple(value: Option<&Fv>) -> Option<[f64; 3]> {
     let items = value?.as_array()?;
     Some([
         items.first()?.as_f64()?,
@@ -107,7 +108,7 @@ fn main() -> Result<()> {
                 .objects
                 .iter()
                 .find(|object| object.class_name == "CompoundStructure");
-            let layers: Vec<Value> = structure
+            let layers: Vec<Fv> = structure
                 .and_then(|s| s.fields.get("m_layers")?.as_array())
                 .into_iter()
                 .flatten()

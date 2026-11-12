@@ -963,12 +963,12 @@ fn slab_shape(graph: &crate::native_parameters::ObjectGraph) -> SlabShape {
 /// creases a step can also hold are not read, and neither are corners that do
 /// not lie in one plane; a field that is absent or not of the shape read makes
 /// the step unread.
-fn slab_step_shape(fields: &serde_json::Value) -> SlabShape {
+fn slab_step_shape(fields: &crate::graph_value::Fv) -> SlabShape {
     read_slab_step(fields).unwrap_or(SlabShape::Unread("shape_edit_fields_not_read"))
 }
 
-fn read_slab_step(fields: &serde_json::Value) -> Option<SlabShape> {
-    let held = |name: &str| fields.get(name).and_then(serde_json::Value::as_array);
+fn read_slab_step(fields: &crate::graph_value::Fv) -> Option<SlabShape> {
+    let held = |name: &str| fields.get(name).and_then(crate::graph_value::Fv::as_array);
     let corners = held("m_cornerVertices")?;
     let others = ["m_interiorVertices", "m_edgeVertices", "m_explicitCreases"]
         .iter()
@@ -978,7 +978,7 @@ fn read_slab_step(fields: &serde_json::Value) -> Option<SlabShape> {
         .any(|added| added);
     let original = fields
         .get("m_originalFaceHeight")
-        .and_then(serde_json::Value::as_f64)?;
+        .and_then(crate::graph_value::Fv::as_f64)?;
     let mut points: Vec<[f64; 3]> = Vec::with_capacity(corners.len());
     for corner in corners {
         let vertex = corner.get("m_vertex")?;
@@ -996,7 +996,11 @@ fn read_slab_step(fields: &serde_json::Value) -> Option<SlabShape> {
     if !moved && !others {
         return Some(SlabShape::Unedited);
     }
-    if fields.get("m_dormant").and_then(serde_json::Value::as_bool) != Some(false) {
+    if fields
+        .get("m_dormant")
+        .and_then(crate::graph_value::Fv::as_bool)
+        != Some(false)
+    {
         return Some(SlabShape::Unread("shape_edit_dormant_or_unmarked"));
     }
     if others {

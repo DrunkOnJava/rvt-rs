@@ -19,8 +19,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
-use serde_json::Value;
 
 fn main() -> anyhow::Result<()> {
     let Some(path) = std::env::args().nth(1) else {
@@ -91,7 +91,7 @@ fn main() -> anyhow::Result<()> {
                     .map(|map| {
                         map.iter()
                             .map(|(key, value)| match value {
-                                Value::Object(inner) if inner.contains_key("pointer_token") => {
+                                Fv::Object(inner) if inner.contains_key("pointer_token") => {
                                     format!("{key}=->")
                                 }
                                 other => {

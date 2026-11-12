@@ -26,11 +26,11 @@
 //!   cargo run --profile ci -p rvt-probes --example probe_re212_connector_data -- MODEL.rvt
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
-use serde_json::Value;
 use std::collections::BTreeSet;
 
-fn element_id(value: &Value) -> Option<i64> {
+fn element_id(value: &Fv) -> Option<i64> {
     value.get("m_id")?.get("m_id64")?.as_i64()
 }
 
@@ -88,7 +88,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         if class == "FamilyInstance" {
-            let place: serde_json::Map<String, Value> = [
+            let place: serde_json::Map<String, Fv> = [
                 "m_instOrigin",
                 "m_RefDir",
                 "m_zAxis",
@@ -127,7 +127,7 @@ fn main() -> anyhow::Result<()> {
                 }
             }
             "FamilyInstance" => {
-                let connectors: Vec<&Value> = graph
+                let connectors: Vec<&Fv> = graph
                     .objects
                     .iter()
                     .filter(|o| o.class_name == "Connector")

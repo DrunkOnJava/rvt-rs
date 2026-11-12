@@ -29,9 +29,9 @@
 use anyhow::Result;
 use rvt::RevitFile;
 use rvt::formats::FieldType;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Options};
 use rvt::research::schema_registry::{Class, Field, Registry};
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
@@ -105,25 +105,25 @@ struct Walk<'a> {
     tokens: BTreeSet<u64>,
 }
 
-fn pointer_items(value: &Value) -> Vec<&Value> {
+fn pointer_items(value: &Fv) -> Vec<&Fv> {
     match value {
-        Value::Array(items) => items.iter().collect(),
+        Fv::Array(items) => items.iter().collect(),
         other => vec![other],
     }
 }
 
-fn token_of(item: &Value) -> Option<u64> {
-    item.get("pointer_token").and_then(Value::as_u64)
+fn token_of(item: &Fv) -> Option<u64> {
+    item.get("pointer_token").and_then(Fv::as_u64)
 }
 
-fn layout(field: &Field, value: &Value) -> std::result::Result<(), String> {
+fn layout(field: &Field, value: &Fv) -> std::result::Result<(), String> {
     match (field.base, field.modifier) {
         (0x0a, 0) => match value.get("class_name") {
-            Some(Value::String(_)) => Ok(()),
+            Some(Fv::String(_)) => Ok(()),
             _ => Err("the u16 names no class".into()),
         },
         (0x0e, 0x13) | (0x0e, 0x53) | (0x0e, 0x54) => {
-            let Value::Array(items) = value else {
+            let Fv::Array(items) = value else {
                 return Err("not an array".into());
             };
             if field.modifier == 0x13 && Some(items.len() as u32) != field.array_count {
@@ -137,7 +137,7 @@ fn layout(field: &Field, value: &Value) -> std::result::Result<(), String> {
                 let Some(token) = token_of(item) else {
                     return Err("an item is not a pointer".into());
                 };
-                let tagged = !item.get("class_tag").is_none_or(Value::is_null);
+                let tagged = !item.get("class_tag").is_none_or(Fv::is_null);
                 let wants_tag = field.modifier == 0x54 && token != 0;
                 if tagged != wants_tag {
                     return Err(format!("item token {token} class tag present {tagged}"));
@@ -156,14 +156,14 @@ fn layout(field: &Field, value: &Value) -> std::result::Result<(), String> {
     }
 }
 
-fn kind(value: &Value) -> String {
+fn kind(value: &Fv) -> String {
     match value {
-        Value::Null => "null".into(),
-        Value::Bool(_) => "bool".into(),
-        Value::Number(_) => "number".into(),
-        Value::String(_) => "string".into(),
-        Value::Array(items) => format!("array[{}]", items.len()),
-        Value::Object(map) => format!(
+        Fv::Null => "null".into(),
+        Fv::Bool(_) => "bool".into(),
+        Fv::Number(_) => "number".into(),
+        Fv::String(_) => "string".into(),
+        Fv::Array(items) => format!("array[{}]", items.len()),
+        Fv::Object(map) => format!(
             "object{{{}}}",
             map.keys().cloned().collect::<Vec<_>>().join(",")
         ),
@@ -171,7 +171,7 @@ fn kind(value: &Value) -> String {
 }
 
 impl Walk<'_> {
-    fn note(&mut self, class: &str, field: &Field, value: &Value) {
+    fn note(&mut self, class: &str, field: &Field, value: &Fv) {
         let verdict = layout(field, value);
         let tokens = &self.tokens;
         let stats = self
@@ -204,7 +204,7 @@ impl Walk<'_> {
                     Some(_) => stats.unresolved += 1,
                     None => {}
                 }
-                if let Some(tag) = item.get("class_tag").and_then(Value::as_u64) {
+                if let Some(tag) = item.get("class_tag").and_then(Fv::as_u64) {
                     let name = u16::try_from(tag)
                         .ok()
                         .and_then(|tag| self.registry.class(tag))
@@ -226,7 +226,7 @@ impl Walk<'_> {
         }
     }
 
-    fn class(&mut self, tag: u16, value: &Value, depth: usize) {
+    fn class(&mut self, tag: u16, value: &Fv, depth: usize) {
         if depth > 64 {
             return;
         }
@@ -265,7 +265,7 @@ impl Walk<'_> {
         }
     }
 
-    fn field(&mut self, field: &Field, value: &Value, depth: usize) {
+    fn field(&mut self, field: &Field, value: &Fv, depth: usize) {
         if depth > 96 {
             return;
         }
@@ -284,7 +284,7 @@ impl Walk<'_> {
                 _ => {}
             },
             0x10..=0x13 | 0x50..=0x54 => {
-                if let Value::Array(items) = value {
+                if let Fv::Array(items) = value {
                     let mut item = field.clone();
                     item.modifier &= 0xf;
                     item.array_count = None;

@@ -3,11 +3,12 @@
 //! Refusal cases mutate decoded native graphs only; source files never change.
 use anyhow::{Context, Result, ensure};
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::{
     native_form_geometry::{self, Curve, FormDocument},
     native_parameters::{self, ObjectGraph},
 };
-use serde_json::{Value, json};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::{
     fs,
@@ -147,7 +148,7 @@ fn mutate(records: &mut Vec<(u64, ObjectGraph)>, case: &str) -> Result<()> {
     Ok(())
 }
 
-fn curve_json(curve: &Curve) -> Value {
+fn curve_json(curve: &Curve) -> Fv {
     match curve {
         Curve::Line { from, to } => json!({"kind":"line","from":from,"to":to}),
         Curve::Arc {

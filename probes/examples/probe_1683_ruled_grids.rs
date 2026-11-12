@@ -78,7 +78,7 @@ fn distinct(values: impl Iterator<Item = f64>) -> usize {
 }
 
 /// The pass's `instance_symbols`, with `native_metadata::identifier` copied.
-fn identifier(value: &serde_json::Value) -> Option<i64> {
+fn identifier(value: &rvt::research::graph_value::Fv) -> Option<i64> {
     if let Some(n) = value.as_i64() {
         return Some(n);
     }

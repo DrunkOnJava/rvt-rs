@@ -35,11 +35,11 @@
 mod revolution;
 pub use revolution::{Revolution, RevolutionMesh};
 
+use crate::graph_value::Fv;
 use crate::le_bytes;
 use crate::native_parameters::{GraphObject, ObjectGraph};
 use crate::{RevitFile, native_document, native_saved_mesh, native_segments};
 use anyhow::{Result, ensure};
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::f64::consts::{PI, TAU};
 
@@ -250,7 +250,7 @@ fn orient(a: V2, b: V2, c: V2) -> f64 {
     (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
 }
 
-fn pair(value: Option<&Value>) -> Option<V2> {
+fn pair(value: Option<&Fv>) -> Option<V2> {
     let items = value?.as_array()?;
     if items.len() != 2 {
         return None;
@@ -259,7 +259,7 @@ fn pair(value: Option<&Value>) -> Option<V2> {
     point.iter().all(|n| n.is_finite()).then_some(point)
 }
 
-fn triple(value: Option<&Value>) -> Option<V3> {
+fn triple(value: Option<&Fv>) -> Option<V3> {
     let items = value?.as_array()?;
     if items.len() != 3 {
         return None;
@@ -270,13 +270,13 @@ fn triple(value: Option<&Value>) -> Option<V3> {
 
 /// An ElementId field as either shape of the schema saves it: `m_id64` from
 /// Revit 2024 and a 4-byte `m_id` before (RE-280).
-fn identifier(value: &Value) -> Option<i64> {
+fn identifier(value: &Fv) -> Option<i64> {
     let inner = value.get("m_id")?;
     inner.as_i64().or_else(|| {
         inner
             .get("m_id64")
             .or_else(|| inner.get("m_id"))
-            .and_then(Value::as_i64)
+            .and_then(Fv::as_i64)
     })
 }
 
@@ -582,7 +582,7 @@ fn read_curve(object: &GraphObject) -> Result<Curve3, String> {
             let y_axis = triple(fields.get("m_yVec")).ok_or("arc y axis")?;
             let radius = fields
                 .get("m_radius")
-                .and_then(Value::as_f64)
+                .and_then(Fv::as_f64)
                 .filter(|r| r.is_finite() && *r > 0.0)
                 .ok_or("arc radius")?;
             let range = pair(fields.get("m_endParams")).ok_or("arc angle range")?;
@@ -1145,7 +1145,7 @@ fn linked_object<'a>(
         .ok_or_else(|| format!("missing {field}"))?;
     let offset = pointer
         .get("offset")
-        .and_then(Value::as_u64)
+        .and_then(Fv::as_u64)
         .ok_or("pointer offset")?;
     if graph
         .edges
@@ -1197,7 +1197,7 @@ fn stored_curves(graph: &ObjectGraph, helper: usize) -> Result<Vec<Curve3>, Stri
     let pointers = graph.objects[helper]
         .fields
         .get("m_pCurveLoops")
-        .and_then(Value::as_array)
+        .and_then(Fv::as_array)
         .ok_or("no stored curve loops")?;
     let mut curves = Vec::new();
     for pointer in pointers {
@@ -1208,7 +1208,7 @@ fn stored_curves(graph: &ObjectGraph, helper: usize) -> Result<Vec<Curve3>, Stri
             .objects
             .get(target)
             .and_then(|object| object.fields.get("m_curves"))
-            .and_then(Value::as_array)
+            .and_then(Fv::as_array)
             .ok_or("curve loop has no curves")?;
         for member in members {
             let at = native_saved_mesh::pointer(graph, target, member)
@@ -1393,7 +1393,7 @@ impl FormDocument {
         let cutting = root
             .fields
             .get("m_cutting")
-            .and_then(Value::as_bool)
+            .and_then(Fv::as_bool)
             .ok_or("no m_cutting")?;
         let (helper_index, helper) = graph
             .objects
@@ -1415,9 +1415,9 @@ impl FormDocument {
             .iter()
             .filter(|object| object.class_name == "ParamValueSetDouble")
         {
-            let entries = object.fields.get("m_paramSet").and_then(Value::as_array);
+            let entries = object.fields.get("m_paramSet").and_then(Fv::as_array);
             for entry in entries.into_iter().flatten() {
-                let value = entry.get("m_value").and_then(Value::as_f64);
+                let value = entry.get("m_value").and_then(Fv::as_f64);
                 match entry.get("m_paramId").and_then(identifier) {
                     Some(START_PARAMETER) => start = value,
                     Some(END_PARAMETER) => end = value,
@@ -1431,10 +1431,10 @@ impl FormDocument {
             .iter()
             .filter(|object| object.class_name == "ParamValueSetInt")
         {
-            let entries = object.fields.get("m_paramSet").and_then(Value::as_array);
+            let entries = object.fields.get("m_paramSet").and_then(Fv::as_array);
             for entry in entries.into_iter().flatten() {
                 if entry.get("m_paramId").and_then(identifier) == Some(VISIBLE_PARAMETER) {
-                    visible = entry.get("m_value").and_then(Value::as_i64);
+                    visible = entry.get("m_value").and_then(Fv::as_i64);
                 }
             }
         }
@@ -1476,7 +1476,7 @@ impl FormDocument {
         let rows = trf
             .fields
             .get("m_3x3")
-            .and_then(Value::as_array)
+            .and_then(Fv::as_array)
             .filter(|rows| rows.len() == 3)
             .ok_or("transform matrix")?;
         let mut matrix = [[0.0; 3]; 3];
@@ -1494,13 +1494,13 @@ impl FormDocument {
             let object = plane.objects.get(target)?;
             Some((
                 object.class_name.clone(),
-                object.fields.get("m_mirror").and_then(Value::as_bool),
+                object.fields.get("m_mirror").and_then(Fv::as_bool),
             ))
         });
         let always_ref_plane_norm = root
             .fields
             .get("m_alwaysRefPlaneNorm")
-            .and_then(Value::as_bool);
+            .and_then(Fv::as_bool);
         let sketch_flips = self
             .graphs
             .get(&sketch_id)
@@ -1530,7 +1530,7 @@ impl FormDocument {
             .objects
             .first()
             .and_then(|object| object.fields.get("m_flipZ"))
-            .and_then(Value::as_bool)
+            .and_then(Fv::as_bool)
             .ok_or("sketch plane flip not read")?;
         Ok(Extrusion {
             id,

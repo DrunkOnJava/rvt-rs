@@ -52,6 +52,7 @@
 //!   cargo run --profile ci -p rvt-probes --example probe_1335_projected_graphs -- FILE
 use anyhow::Result;
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Options};
 use rvt::research::native_es_catalog::{self, CATALOG_FIELDS};
 use rvt::research::native_parameter_definitions::{
@@ -63,7 +64,6 @@ use rvt::research::native_parameters::{
 };
 use rvt::research::native_walls::{WALL_READ_FIELDS, wall_facts};
 use rvt::research::schema_registry;
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
@@ -84,9 +84,9 @@ const KEEPS: [&[&str]; 6] = [
     &[],
 ];
 
-fn filtered(fields: &Value, keep: &[&str]) -> Value {
+fn filtered(fields: &Fv, keep: &[&str]) -> Fv {
     match fields {
-        Value::Object(map) => Value::Object(
+        Fv::Object(map) => Fv::Object(
             map.iter()
                 .filter(|(key, _)| keep.contains(&key.as_str()))
                 .map(|(key, value)| (key.clone(), value.clone()))
@@ -96,7 +96,7 @@ fn filtered(fields: &Value, keep: &[&str]) -> Value {
     }
 }
 
-fn identifier(value: &Value) -> Option<i64> {
+fn identifier(value: &Fv) -> Option<i64> {
     if let Some(n) = value.as_i64() {
         return Some(n);
     }

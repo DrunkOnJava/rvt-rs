@@ -32,16 +32,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::entities::IfcEntity;
 use rvt::ifc::{ExportQualityMode, RvtDocExporter};
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Record};
 use rvt::research::native_parametric_surface::ParametricSurface;
 use rvt::research::native_saved_mesh::{face as mesh_face, pointer};
-use serde_json::Value;
 
 /// Buckets of a distance in feet: at most 1e-4, 5e-4, 1e-3, 5e-3, more.
 const BUCKETS: [f64; 4] = [1e-4, 5e-4, 1e-3, 5e-3];
 const BAR: f64 = 1e-3;
 
-fn arr<const N: usize>(value: &Value) -> Option<[f64; N]> {
+fn arr<const N: usize>(value: &Fv) -> Option<[f64; N]> {
     let items = value.as_array()?;
     if items.len() < N {
         return None;
@@ -68,7 +68,7 @@ fn bucket_label(index: usize) -> String {
 }
 
 /// The pass's `instance_symbols`, with `native_metadata::identifier` copied.
-fn identifier(value: &Value) -> Option<i64> {
+fn identifier(value: &Fv) -> Option<i64> {
     if let Some(n) = value.as_i64() {
         return Some(n);
     }
@@ -128,7 +128,7 @@ fn scan(owner: u64, record: &Record, kinds: &mut BTreeMap<String, Kind>, other_p
         if edge.class_name != "Edge" {
             continue;
         }
-        let Some(pair) = edge.fields.get("m_pFace").and_then(Value::as_array) else {
+        let Some(pair) = edge.fields.get("m_pFace").and_then(Fv::as_array) else {
             continue;
         };
         if pair.len() != 2 {
@@ -172,14 +172,14 @@ fn scan(owner: u64, record: &Record, kinds: &mut BTreeMap<String, Kind>, other_p
         let Some(ends) = edge
             .fields
             .get("m_firstAndLastEdgePnts")
-            .and_then(Value::as_array)
+            .and_then(Fv::as_array)
         else {
             continue;
         };
         if ends.len() != 2 {
             continue;
         }
-        let uv = |sample: &Value| arr::<2>(&sample["uv"][curved_side]);
+        let uv = |sample: &Fv| arr::<2>(&sample["uv"][curved_side]);
         let mut samples = Vec::new();
         let Some(start) = uv(&ends[0]) else {
             continue;
@@ -189,7 +189,7 @@ fn scan(owner: u64, record: &Record, kinds: &mut BTreeMap<String, Kind>, other_p
         for sample in edge
             .fields
             .get("m_interiorEdgePnts")
-            .and_then(Value::as_array)
+            .and_then(Fv::as_array)
             .map(Vec::as_slice)
             .unwrap_or(&[])
         {

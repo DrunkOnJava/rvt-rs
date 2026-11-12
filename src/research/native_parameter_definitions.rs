@@ -1,11 +1,11 @@
 //! Parameter definitions recovered through native owner-to-definition edges.
 //! Registry scope is one document/content namespace. Captions never identify a
 //! parameter, and unknown definition classes never select a family value slot.
+use crate::graph_value::Fv;
 use crate::native_metadata::{FamilyParameterSlots, identifier};
 use crate::native_parameters::ObjectGraph;
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -20,14 +20,14 @@ pub struct Definition {
     pub group_type_id: Option<String>,
     pub spec_evidence: &'static str,
     pub unit_type_id: Option<String>,
-    pub unit_format_fields: Option<Value>,
+    pub unit_format_fields: Option<Fv>,
     pub unit_resolution: String,
     pub shared_guid: Option<String>,
     pub is_shared: Option<bool>,
     pub storage_type: Option<String>,
     pub storage_evidence: &'static str,
-    pub definition_fields: Value,
-    pub owner_fields: BTreeMap<String, Value>,
+    pub definition_fields: Fv,
+    pub owner_fields: BTreeMap<String, Fv>,
 }
 
 /// Return None for records that do not own a definition. Missing or ambiguous
@@ -181,9 +181,9 @@ pub fn project(graph: &ObjectGraph) -> Result<Option<Definition>> {
 #[derive(Debug, Default, Serialize)]
 pub struct Registry {
     pub definitions: BTreeMap<i64, Definition>,
-    pub unit_formats: BTreeMap<String, Value>,
+    pub unit_formats: BTreeMap<String, Fv>,
     pub builtin_definitions: BTreeMap<i64, BuiltinDefinition>,
-    pub builtin_catalog_provenance: Option<Value>,
+    pub builtin_catalog_provenance: Option<Fv>,
     pub bindings: BTreeMap<i64, Binding>,
     pub family_categories: BTreeMap<i64, i64>,
     pub symbol_families: BTreeMap<i64, i64>,
@@ -206,7 +206,7 @@ pub struct BuiltinDefinition {
     #[serde(default)]
     pub unit_type_id: Option<String>,
     #[serde(default)]
-    pub unit_format_fields: Option<Value>,
+    pub unit_format_fields: Option<Fv>,
     #[serde(default)]
     pub unit_resolution: String,
     #[serde(default)]
@@ -318,7 +318,7 @@ impl Registry {
             let Some(ids) = definition
                 .owner_fields
                 .get("m_bindingIds")
-                .and_then(Value::as_array)
+                .and_then(Fv::as_array)
             else {
                 continue;
             };
@@ -437,7 +437,7 @@ impl Registry {
         })
     }
 }
-fn enrich_unit(definition: &mut Definition, formats: &BTreeMap<String, Value>) {
+fn enrich_unit(definition: &mut Definition, formats: &BTreeMap<String, Fv>) {
     if let Some(format) = definition
         .spec_type_id
         .as_ref()
@@ -455,7 +455,7 @@ pub struct ResolvedFamilyParameter {
     pub source_object: usize,
     pub parameter_id: i64,
     pub storage_type: String,
-    pub raw_value: Value,
+    pub raw_value: Fv,
     pub stored_instance_flag: bool,
     pub reporting: bool,
     pub definition_parameter_id: i64,

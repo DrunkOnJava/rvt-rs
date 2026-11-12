@@ -66,6 +66,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::{IfcEntity, PropertyValue};
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, Record, extract_graphs};
 use rvt::research::native_graphics_traversal::{
     NESTED_DETAIL_FILTER_DIAGNOSTIC, VIEW_COMPONENT_DIAGNOSTIC,
@@ -73,7 +74,6 @@ use rvt::research::native_graphics_traversal::{
 };
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_saved_mesh::{face, graphics_with_resolver_at_detail, pointer};
-use serde_json::Value;
 
 const RECORD_BOX: &str = "partition_element_record_bbox";
 const READ_SURFACES: [&str; 5] = ["Plane", "CylSurf", "SurfRev", "RuledSurf", "ConeSurf"];
@@ -88,7 +88,7 @@ const EXPLAINED: [&str; 6] = [
     "multiple cylinder trim loops unsupported",
 ];
 
-fn identifier(value: &Value) -> Option<i64> {
+fn identifier(value: &Fv) -> Option<i64> {
     if let Some(n) = value.as_i64() {
         return Some(n);
     }
@@ -129,7 +129,7 @@ fn ignorable(diagnostic: &str) -> bool {
         || diagnostic.ends_with(VIEW_COMPONENT_DIAGNOSTIC)
 }
 
-fn uv(value: &Value) -> Option<[f64; 2]> {
+fn uv(value: &Fv) -> Option<[f64; 2]> {
     let a = value.as_array()?;
     if a.len() != 2 {
         return None;

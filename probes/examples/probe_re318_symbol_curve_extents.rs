@@ -25,17 +25,17 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
-use serde_json::Value;
 
-fn element_id(value: &Value) -> Option<u64> {
+fn element_id(value: &Fv) -> Option<u64> {
     value
         .pointer("/m_id/m_id64")?
         .as_i64()
         .and_then(|n| u64::try_from(n).ok())
 }
 
-fn triple(value: Option<&Value>) -> Option<[f64; 3]> {
+fn triple(value: Option<&Fv>) -> Option<[f64; 3]> {
     let items = value?.as_array()?;
     let [a, b, c] = items.as_slice() else {
         return None;
@@ -43,7 +43,7 @@ fn triple(value: Option<&Value>) -> Option<[f64; 3]> {
     Some([a.as_f64()?, b.as_f64()?, c.as_f64()?])
 }
 
-fn pair(value: Option<&Value>) -> Option<[f64; 2]> {
+fn pair(value: Option<&Fv>) -> Option<[f64; 2]> {
     let items = value?.as_array()?;
     let [a, b] = items.as_slice() else {
         return None;
@@ -52,7 +52,7 @@ fn pair(value: Option<&Value>) -> Option<[f64; 2]> {
 }
 
 /// The range along X of a `GLine`: its start and end.
-fn line_range(fields: &Value) -> Option<(f64, f64)> {
+fn line_range(fields: &Fv) -> Option<(f64, f64)> {
     let origin = triple(fields.get("m_origin"))?;
     let direction = triple(fields.get("m_dirVec"))?;
     let [t0, t1] = pair(fields.get("m_endParams"))?;
@@ -62,7 +62,7 @@ fn line_range(fields: &Value) -> Option<(f64, f64)> {
 
 /// The range along X of a `GArc`: x(t) = cx + r (cos t xv0 + sin t yv0) for t
 /// between its end parameters, at its ends and wherever x'(t) is zero.
-fn arc_range(fields: &Value) -> Option<(f64, f64)> {
+fn arc_range(fields: &Fv) -> Option<(f64, f64)> {
     let center = triple(fields.get("m_center"))?;
     let radius = fields.get("m_radius")?.as_f64()?;
     let x_vec = triple(fields.get("m_xVec"))?;
@@ -165,12 +165,12 @@ fn main() -> anyhow::Result<()> {
             let category = object
                 .fields
                 .pointer("/m_GInfo/m_categoryId/m_id/m_id64")
-                .and_then(Value::as_i64)
+                .and_then(Fv::as_i64)
                 .unwrap_or(i64::MIN);
             let flags = object
                 .fields
                 .pointer("/m_GInfo/m_flags")
-                .and_then(Value::as_u64)
+                .and_then(Fv::as_u64)
                 .unwrap_or(0);
             let group = groups
                 .entry((object.class_name.clone(), category, flags))

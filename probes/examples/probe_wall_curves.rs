@@ -24,38 +24,38 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::walker::{InstanceField, iter_elements};
-use serde_json::Value;
 
 /// `{"m_id":{"m_id64":n}}` becomes `n`, and `"m_bTangent":false` goes, so
 /// the joins print short.
-fn compact(value: &Value) -> Value {
+fn compact(value: &Fv) -> Fv {
     match value {
-        Value::Object(map) => {
+        Fv::Object(map) => {
             if let Some(id) = map.get("m_id").and_then(|v| v.get("m_id64")) {
                 if map.len() == 1 {
                     return id.clone();
                 }
             }
-            Value::Object(
+            Fv::Object(
                 map.iter()
-                    .filter(|(k, v)| !(k.as_str() == "m_bTangent" && *v == &Value::Bool(false)))
+                    .filter(|(k, v)| !(k.as_str() == "m_bTangent" && *v == &Fv::Bool(false)))
                     .filter(|(k, _)| k.as_str() != "m_cleanData")
                     .map(|(k, v)| (k.clone(), compact(v)))
                     .collect(),
             )
         }
-        Value::Array(items) => Value::Array(items.iter().map(compact).collect()),
+        Fv::Array(items) => Fv::Array(items.iter().map(compact).collect()),
         other => other.clone(),
     }
 }
 
-fn number(value: Option<&Value>) -> Option<f64> {
-    value.and_then(Value::as_f64)
+fn number(value: Option<&Fv>) -> Option<f64> {
+    value.and_then(Fv::as_f64)
 }
 
-fn triple(value: Option<&Value>) -> Option<[f64; 3]> {
+fn triple(value: Option<&Fv>) -> Option<[f64; 3]> {
     let items = value?.as_array()?;
     Some([
         items.first()?.as_f64()?,
@@ -99,7 +99,7 @@ fn main() -> anyhow::Result<()> {
                 let widths: Vec<String> = structure
                     .fields
                     .get("m_layers")
-                    .and_then(Value::as_array)
+                    .and_then(Fv::as_array)
                     .into_iter()
                     .flatten()
                     .filter_map(|layer| layer.get("m_layerWidth")?.as_f64())
@@ -111,11 +111,11 @@ fn main() -> anyhow::Result<()> {
                     structure
                         .fields
                         .get("m_numShellLayersExt")
-                        .unwrap_or(&Value::Null),
+                        .unwrap_or(&Fv::Null),
                     structure
                         .fields
                         .get("m_numShellLayersInt")
-                        .unwrap_or(&Value::Null),
+                        .unwrap_or(&Fv::Null),
                 );
             }
             return Ok(());
@@ -129,7 +129,7 @@ fn main() -> anyhow::Result<()> {
             .find(|object| matches!(object.class_name.as_str(), "GLine" | "GArc"));
         if let Some(curve) = curve {
             let origin = triple(curve.fields.get("m_origin"));
-            let params = curve.fields.get("m_endParams").and_then(Value::as_array);
+            let params = curve.fields.get("m_endParams").and_then(Fv::as_array);
             let (start, end) = match (curve.class_name.as_str(), origin, params) {
                 ("GLine", Some(o), Some(params)) => {
                     let d = triple(curve.fields.get("m_dirVec")).unwrap_or([0.0; 3]);
@@ -153,14 +153,10 @@ fn main() -> anyhow::Result<()> {
                     thickness
                         .get(&id)
                         .map_or("-".to_string(), |t| format!("{t:.6}")),
-                    compact(
-                        root.fields
-                            .get("m_WallAttributesId")
-                            .unwrap_or(&Value::Null)
-                    ),
-                    root.fields.get("m_wallKeyRef").unwrap_or(&Value::Null),
-                    root.fields.get("m_keyRefOffset").unwrap_or(&Value::Null),
-                    root.fields.get("m_isFlipped").unwrap_or(&Value::Null),
+                    compact(root.fields.get("m_WallAttributesId").unwrap_or(&Fv::Null)),
+                    root.fields.get("m_wallKeyRef").unwrap_or(&Fv::Null),
+                    root.fields.get("m_keyRefOffset").unwrap_or(&Fv::Null),
+                    root.fields.get("m_isFlipped").unwrap_or(&Fv::Null),
                 );
             } else {
                 println!("curve {id} {} unread", curve.class_name);
@@ -171,22 +167,22 @@ fn main() -> anyhow::Result<()> {
             match object.class_name.as_str() {
                 "VWallDriver" => println!(
                     "driver {id} nojoin {} control {}",
-                    compact(f.get("m_noJoinAtEnd").unwrap_or(&Value::Null)),
-                    compact(f.get("m_controlJoinsSet").unwrap_or(&Value::Null)),
+                    compact(f.get("m_noJoinAtEnd").unwrap_or(&Fv::Null)),
+                    compact(f.get("m_controlJoinsSet").unwrap_or(&Fv::Null)),
                 ),
                 "JoinEndGStep" => println!(
                     "joinend {id} {} real {} realjoined {} geomjoined {} omitted {} flags {}",
-                    f.get("m_end").unwrap_or(&Value::Null),
-                    f.get("m_hasRealJoined").unwrap_or(&Value::Null),
-                    compact(f.get("m_realJoined").unwrap_or(&Value::Null)),
-                    compact(f.get("m_geomJoined").unwrap_or(&Value::Null)),
-                    compact(f.get("m_omittedTarget").unwrap_or(&Value::Null)),
-                    f.get("m_flags").unwrap_or(&Value::Null),
+                    f.get("m_end").unwrap_or(&Fv::Null),
+                    f.get("m_hasRealJoined").unwrap_or(&Fv::Null),
+                    compact(f.get("m_realJoined").unwrap_or(&Fv::Null)),
+                    compact(f.get("m_geomJoined").unwrap_or(&Fv::Null)),
+                    compact(f.get("m_omittedTarget").unwrap_or(&Fv::Null)),
+                    f.get("m_flags").unwrap_or(&Fv::Null),
                 ),
                 "CDJoinInfo" => println!(
                     "cdjoin {id} type {} info {}",
-                    f.get("m_wallJoinType").unwrap_or(&Value::Null),
-                    compact(f.get("m_info").unwrap_or(&Value::Null)),
+                    f.get("m_wallJoinType").unwrap_or(&Fv::Null),
+                    compact(f.get("m_info").unwrap_or(&Fv::Null)),
                 ),
                 _ => {}
             }

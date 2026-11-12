@@ -1,6 +1,7 @@
 //! Lossless projections of selected saved metadata from a complete native graph.
 //! This is not API-evaluated data. Family value slots need parameter definitions
 //! before a storage type can be selected; no nonzero-slot guessing is performed.
+use crate::graph_value::Fv;
 use crate::native_parameter_definitions::{
     BuiltinDefinition, Definition, Registry, ResolvedFamilyParameter,
 };
@@ -8,7 +9,6 @@ use crate::native_parameters::{ObjectGraph, Parameter};
 use crate::revit_global_ids::compress_ifc_guid;
 use anyhow::{Result, ensure};
 use serde::Serialize;
-use serde_json::Value;
 use std::collections::BTreeMap;
 
 #[derive(Debug, Serialize)]
@@ -56,7 +56,7 @@ pub struct RawFieldParameter {
     pub source_element_id: Option<i64>,
     pub projection_rule: &'static str,
     pub storage_type: String,
-    pub raw_value: Value,
+    pub raw_value: Fv,
     pub value_semantics: &'static str,
 }
 #[derive(Debug, Serialize)]
@@ -71,13 +71,13 @@ pub struct FamilyParameterSlots {
     pub parameter_id: i64,
     pub stored_instance_flag: bool,
     pub reporting: bool,
-    pub double_slot: Value,
-    pub integer_slot: Value,
-    pub string_slot: Value,
+    pub double_slot: Fv,
+    pub integer_slot: Fv,
+    pub string_slot: Fv,
     pub element_id_slot: i64,
-    pub expression_pointer: Value,
+    pub expression_pointer: Fv,
 }
-pub(crate) fn identifier(value: &Value) -> Result<i64> {
+pub(crate) fn identifier(value: &Fv) -> Result<i64> {
     if let Some(n) = value.as_i64() {
         return Ok(n);
     }

@@ -25,11 +25,11 @@
 use std::collections::BTreeSet;
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_saved_mesh::pointer;
-use serde_json::Value;
 
-fn point(value: Option<&Value>) -> Option<[f64; 3]> {
+fn point(value: Option<&Fv>) -> Option<[f64; 3]> {
     let items = value?.as_array()?;
     let [x, y, z] = items.as_slice() else {
         return None;
@@ -65,12 +65,12 @@ fn main() -> anyhow::Result<()> {
             let curves = object
                 .fields
                 .get("m_curves")
-                .and_then(Value::as_array)
+                .and_then(Fv::as_array)
                 .cloned()
                 .unwrap_or_default();
             println!(
                 "loop {id} {index} open {} curves {}",
-                object.fields.get("m_open").unwrap_or(&Value::Null),
+                object.fields.get("m_open").unwrap_or(&Fv::Null),
                 curves.len()
             );
             for curve in &curves {

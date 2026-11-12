@@ -46,10 +46,10 @@
 use anyhow::Result;
 use rvt::RevitFile;
 use rvt::formats::FieldType;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Options};
 use rvt::research::native_parameters;
 use rvt::research::schema_registry::{self, Class, Field, Registry};
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
@@ -272,10 +272,10 @@ impl Walk<'_> {
         self.touched.clear();
     }
 
-    fn note(&mut self, owner: &str, field: &Field, value: &Value) {
-        let is_array = matches!(value, Value::Array(_));
-        let items: Vec<&Value> = match value {
-            Value::Array(items) => items.iter().collect(),
+    fn note(&mut self, owner: &str, field: &Field, value: &Fv) {
+        let is_array = matches!(value, Fv::Array(_));
+        let items: Vec<&Fv> = match value {
+            Fv::Array(items) => items.iter().collect(),
             other => vec![other],
         };
         self.touched.insert(field.offset);
@@ -323,7 +323,7 @@ impl Walk<'_> {
         }
     }
 
-    fn class(&mut self, tag: u16, value: &Value, depth: usize) {
+    fn class(&mut self, tag: u16, value: &Fv, depth: usize) {
         if depth > 64 {
             return;
         }
@@ -355,7 +355,7 @@ impl Walk<'_> {
         }
     }
 
-    fn field(&mut self, owner: &str, field: &Field, value: &Value, depth: usize) {
+    fn field(&mut self, owner: &str, field: &Field, value: &Fv, depth: usize) {
         if depth > 96 {
             return;
         }
@@ -378,7 +378,7 @@ impl Walk<'_> {
                 _ => {}
             },
             0x10..=0x13 | 0x50..=0x54 => {
-                if let Value::Array(items) = value {
+                if let Fv::Array(items) = value {
                     let mut item = field.clone();
                     item.modifier &= 0xf;
                     item.array_count = None;

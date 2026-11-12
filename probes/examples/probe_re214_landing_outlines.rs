@@ -26,6 +26,7 @@
 //!   cargo run --profile ci -p rvt-probes --example probe_re214_landing_outlines -- FILE.rvt
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_stairs::native_landings;
 use rvt::research::partition_beam_axes::{BOUNDED_LINE_TAG, bounded_arc_at, bounded_line_at};
@@ -38,7 +39,6 @@ use rvt::research::partition_type_records::{
     scan_type_records, type_definition_ids, unique_type_reference,
 };
 use rvt::walker::{InstanceField, iter_elements};
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 fn field(fields: &[(String, InstanceField)], name: &str) -> f64 {
@@ -82,8 +82,8 @@ fn print_native(
                 .into_iter()
                 .flat_map(|members| members.iter())
                 .filter_map(|(name, value)| match value {
-                    Value::Number(_) | Value::Bool(_) => Some(format!("{name}={value}")),
-                    Value::String(text) => Some(format!("{name}={}", text.replace(' ', "_"))),
+                    Fv::Number(_) | Fv::Bool(_) => Some(format!("{name}={value}")),
+                    Fv::String(text) => Some(format!("{name}={}", text.replace(' ', "_"))),
                     _ => value
                         .get("m_id")?
                         .get("m_id64")

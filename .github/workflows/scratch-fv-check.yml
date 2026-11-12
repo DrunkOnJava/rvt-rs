@@ -1,0 +1,24 @@
+# Scratch: a keep-going cargo check of the whole workspace on pushes to this branch only, so that
+# every compile error of the graph-value change is listed at once. Removed before the pull request is ready.
+name: scratch fv check
+on:
+  push:
+    branches: ["perf/1694-fv-graphs"]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: rustup toolchain install stable --profile minimal
+      - name: Check everything, keep going
+        run: |
+          cargo +stable check --keep-going --workspace --all-targets --all-features --message-format short > check.log 2>&1 || true
+          echo "log lines: $(wc -l < check.log)"
+          echo "errors: $(grep -c -E '(^|: )error' check.log || true)"
+          grep -E '(^|: )error|: warning: ' check.log | head -400 || true

@@ -179,15 +179,18 @@ fn exported(step: &str) -> BTreeMap<u32, Exported> {
 }
 
 /// A field of a native object, as JSON.
-fn field<'a>(fields: &'a serde_json::Value, name: &str) -> Option<&'a serde_json::Value> {
+fn field<'a>(
+    fields: &'a rvt::research::graph_value::Fv,
+    name: &str,
+) -> Option<&'a rvt::research::graph_value::Fv> {
     fields.as_object()?.get(name)
 }
 
 /// `{"m_id":{"m_id64":n}}` as `n`.
-fn element_id(value: &serde_json::Value) -> Option<u64> {
+fn element_id(value: &rvt::research::graph_value::Fv) -> Option<u64> {
     value
         .pointer("/m_id/m_id64")
-        .and_then(serde_json::Value::as_i64)
+        .and_then(rvt::research::graph_value::Fv::as_i64)
         .and_then(|n| u64::try_from(n).ok())
 }
 
@@ -220,7 +223,9 @@ fn native(rf: &mut RevitFile, ids: &BTreeSet<u64>) -> anyhow::Result<Native> {
                 if let Some(t) = field(&fields, "m_WallAttributesId").and_then(element_id) {
                     out.wall_type.entry(id).or_insert(t);
                 }
-                if let Some(f) = field(&fields, "m_function").and_then(serde_json::Value::as_i64) {
+                if let Some(f) =
+                    field(&fields, "m_function").and_then(rvt::research::graph_value::Fv::as_i64)
+                {
                     out.function.entry(id).or_insert(f);
                 }
                 if object.class_name == "JoinToRoofGStep" {

@@ -42,9 +42,9 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, Record, extract_graphs};
 use rvt::research::partition_element_records::{self as per};
-use serde_json::Value;
 
 const SKETCH_LINES: i64 = -2_000_045;
 const NEAR_FEET: f64 = 2e-3;
@@ -135,7 +135,7 @@ fn read_export(step: &str) -> Vec<Opening> {
 }
 
 /// The `N` numbers of a JSON array.
-fn numbers<const N: usize>(value: Option<&Value>) -> Option<[f64; N]> {
+fn numbers<const N: usize>(value: Option<&Fv>) -> Option<[f64; N]> {
     let items = value?.as_array()?;
     if items.len() != N {
         return None;
@@ -148,7 +148,7 @@ fn numbers<const N: usize>(value: Option<&Value>) -> Option<[f64; N]> {
 }
 
 /// A `GLine`'s start and end in plan.
-fn line_ends(fields: &Value) -> Option<Ends> {
+fn line_ends(fields: &Fv) -> Option<Ends> {
     let origin = numbers::<3>(fields.get("m_origin"))?;
     let direction = numbers::<3>(fields.get("m_dirVec"))?;
     let params = numbers::<2>(fields.get("m_endParams"))?;

@@ -22,20 +22,20 @@
 use std::collections::BTreeSet;
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::walker::iter_elements;
-use serde_json::Value;
 
 const CLASSES: &[&str] = &["Stair", "StairsRun", "StairsLanding", "StairsStringer"];
 
-fn members(fields: &Value, held: &mut BTreeSet<u64>) -> String {
+fn members(fields: &Fv, held: &mut BTreeSet<u64>) -> String {
     fields
         .as_object()
         .into_iter()
         .flat_map(|members| members.iter())
         .filter_map(|(name, value)| match value {
-            Value::Number(_) | Value::Bool(_) => Some(format!("{name}={value}")),
-            Value::String(text) => Some(format!("{name}={}", text.replace(' ', "_"))),
+            Fv::Number(_) | Fv::Bool(_) => Some(format!("{name}={value}")),
+            Fv::String(text) => Some(format!("{name}={}", text.replace(' ', "_"))),
             _ => {
                 let id = value.get("m_id")?.get("m_id64")?.as_u64()?;
                 held.insert(id);

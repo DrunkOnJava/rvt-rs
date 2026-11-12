@@ -44,12 +44,13 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
 use rvt::elem_table::{declared_ids, parse_records};
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Options};
 use rvt::research::partition_element_records::OST_CURTAIN_WALL_PANELS;
 use rvt::research::partition_element_records_2023::{is_32bit_release, scan_records};
 use rvt::research::partition_materials::{scan_material_names, scan_materials_32};
 use rvt::research::partition_names::name_entries_2023;
-use serde_json::{Value, json};
+use serde_json::json;
 
 /// How much of an array element's other fields a source keeps.
 const CONTEXT_LIMIT: usize = 400;
@@ -69,12 +70,12 @@ struct Source {
 
 /// An ElementId field as the schema saves it: `{"m_id":{"m_id64":n}}` from
 /// Revit 2024, `{"m_id":{"m_id":n}}` on 2015 to 2023.
-fn element_id(value: &Value) -> Option<i64> {
+fn element_id(value: &Fv) -> Option<i64> {
     let identifier = value.get("m_id")?;
     identifier
         .get("m_id64")
         .or_else(|| identifier.get("m_id"))
-        .and_then(Value::as_i64)
+        .and_then(Fv::as_i64)
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -89,7 +90,7 @@ fn hex(bytes: &[u8]) -> String {
 /// a material, whatever field it is in: the offset, the eight bytes before it
 /// and the four after. A coincidence is possible and a decoded field is not
 /// needed, so this finds a material the graph does not show.
-fn byte_hits(body: &[u8], materials: &BTreeMap<u32, String>) -> Vec<Value> {
+fn byte_hits(body: &[u8], materials: &BTreeMap<u32, String>) -> Vec<Fv> {
     let mut hits = Vec::new();
     for (offset, window) in body.windows(4).enumerate() {
         let word = u32::from_le_bytes([window[0], window[1], window[2], window[3]]);
@@ -113,9 +114,9 @@ fn byte_hits(body: &[u8], materials: &BTreeMap<u32, String>) -> Vec<Value> {
 /// fields that leads to it. `parent` and `key` are the object holding `value`
 /// and the field it is in.
 fn walk(
-    value: &Value,
+    value: &Fv,
     path: &str,
-    parent: Option<(&Value, &str)>,
+    parent: Option<(&Fv, &str)>,
     materials: &BTreeMap<u32, String>,
     out: &mut Vec<Source>,
 ) {
@@ -145,7 +146,7 @@ fn walk(
         return;
     }
     match value {
-        Value::Object(map) => {
+        Fv::Object(map) => {
             for (key, child) in map {
                 walk(
                     child,
@@ -156,7 +157,7 @@ fn walk(
                 );
             }
         }
-        Value::Array(items) => {
+        Fv::Array(items) => {
             for child in items {
                 walk(child, &format!("{path}[]"), parent, materials, out);
             }
@@ -343,7 +344,7 @@ fn main() -> anyhow::Result<()> {
         // style data a pointer reaches holds the material field).
         if class == "GStyleElem" && !seen.is_empty() {
             let hits = byte_hits(body, &materials);
-            let objects: Vec<Value> = record
+            let objects: Vec<Fv> = record
                 .graph
                 .as_ref()
                 .map(|graph| {
