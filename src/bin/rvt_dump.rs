@@ -182,8 +182,8 @@ fn undecoded(name: &str, stored: &[u8]) -> Undecoded {
 /// so it cannot leave `--out`. Otherwise:
 /// - `/`, a control character and `<>"|?*`, which Windows refuses in a file
 ///   name and which would fail the write and stop the dump, become `_`;
-/// - a device name Windows reserves (`CON`, `NUL`, `COM1` and the like,
-///   whatever follows its first `.`) takes a `_` in front;
+/// - a device name Windows reserves (`CON`, `NUL`, `CONIN$`, `COM1`, `LPT¹`
+///   and the like, whatever follows its first `.`) takes a `_` in front;
 /// - a name another stream already has takes `~2`, `~3` and so on, where the
 ///   later write would have replaced the earlier silently.
 ///
@@ -206,10 +206,22 @@ fn file_stem_for(name: &str, taken: &mut HashSet<String>) -> String {
         .unwrap_or_default()
         .trim_end()
         .to_ascii_uppercase();
-    let numbered = device.len() == 4
-        && (device.starts_with("COM") || device.starts_with("LPT"))
-        && device.ends_with(|c: char| c.is_ascii_digit());
-    if numbered || matches!(device.as_str(), "CON" | "PRN" | "AUX" | "NUL") {
+    // Windows also reserves the superscript ports `COM¹` to `LPT³`, which are
+    // five bytes long.
+    let numbered = device
+        .strip_prefix("COM")
+        .or_else(|| device.strip_prefix("LPT"))
+        .is_some_and(|port| {
+            let mut chars = port.chars();
+            matches!((chars.next(), chars.next()), (Some(digit), None)
+                if digit.is_ascii_digit() || matches!(digit, '¹' | '²' | '³'))
+        });
+    if numbered
+        || matches!(
+            device.as_str(),
+            "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+        )
+    {
         stem.insert(0, '_');
     }
     let mut unique = stem.clone();
