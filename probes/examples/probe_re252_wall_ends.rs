@@ -42,8 +42,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
-use serde_json::Value;
 
 fn field_json(field: &rvt::walker::InstanceField) -> String {
     use rvt::walker::InstanceField as F;
@@ -60,8 +60,8 @@ fn field_json(field: &rvt::walker::InstanceField) -> String {
     }
 }
 
-fn id_of(value: &Value) -> Option<i64> {
-    value.pointer("/m_id/m_id64").and_then(Value::as_i64)
+fn id_of(value: &Fv) -> Option<i64> {
+    value.pointer("/m_id/m_id64").and_then(Fv::as_i64)
 }
 
 fn main() -> anyhow::Result<()> {
@@ -190,7 +190,7 @@ fn main() -> anyhow::Result<()> {
                 .filter_map(|o| {
                     o.fields
                         .pointer("/m_pCrv/pointer_token")
-                        .and_then(Value::as_u64)
+                        .and_then(Fv::as_u64)
                 })
                 .flat_map(|token| {
                     graph
@@ -200,12 +200,12 @@ fn main() -> anyhow::Result<()> {
                         .map(|o| format!("\"{}\"", o.class_name))
                 })
                 .collect();
-            let numbers = |value: Option<&Value>| -> Vec<f64> {
+            let numbers = |value: Option<&Fv>| -> Vec<f64> {
                 value
-                    .and_then(Value::as_array)
+                    .and_then(Fv::as_array)
                     .into_iter()
                     .flatten()
-                    .filter_map(Value::as_f64)
+                    .filter_map(Fv::as_f64)
                     .collect()
             };
             let mut joins = Vec::new();
@@ -217,9 +217,9 @@ fn main() -> anyhow::Result<()> {
                 match object.class_name.as_str() {
                     "CDJoinInfo" => {
                         let mut entry = String::from("[");
-                        if let Some(info) = object.fields.get("m_info").and_then(Value::as_array) {
+                        if let Some(info) = object.fields.get("m_info").and_then(Fv::as_array) {
                             for item in info {
-                                let end = item.get("m_joinedEnd").and_then(Value::as_i64);
+                                let end = item.get("m_joinedEnd").and_then(Fv::as_i64);
                                 let other = item.get("m_elemId").and_then(id_of);
                                 let _ = write!(
                                     entry,
@@ -229,22 +229,22 @@ fn main() -> anyhow::Result<()> {
                                 );
                             }
                         }
-                        let kind = object.fields.get("m_wallJoinType").and_then(Value::as_i64);
+                        let kind = object.fields.get("m_wallJoinType").and_then(Fv::as_i64);
                         let _ = write!(entry, "{}]", kind.map_or("null".into(), |v| v.to_string()));
                         joins.push(entry);
                     }
                     "JoinEndGStep" => {
-                        let field = |name: &str| object.fields.get(name).and_then(Value::as_i64);
+                        let field = |name: &str| object.fields.get(name).and_then(Fv::as_i64);
                         let omitted = object.fields.get("m_omittedTarget");
                         let omitted_id = omitted.and_then(|o| o.get("m_elemId")).and_then(id_of);
                         let omitted_end = omitted
                             .and_then(|o| o.get("m_joinedEnd"))
-                            .and_then(Value::as_i64);
+                            .and_then(Fv::as_i64);
                         let show = |v: Option<i64>| v.map_or("null".into(), |v| v.to_string());
                         let exposed: Vec<String> = object
                             .fields
                             .get("m_exposedFaceMap")
-                            .and_then(Value::as_array)
+                            .and_then(Fv::as_array)
                             .into_iter()
                             .flatten()
                             .map(|pair| {
@@ -252,7 +252,7 @@ fn main() -> anyhow::Result<()> {
                                 format!(
                                     "[{},{}]",
                                     show(face.and_then(|f| f.get("m_elemId")).and_then(id_of)),
-                                    show(face.and_then(|f| f.get("m_tag")).and_then(Value::as_i64))
+                                    show(face.and_then(|f| f.get("m_tag")).and_then(Fv::as_i64))
                                 )
                             })
                             .collect();
@@ -270,7 +270,7 @@ fn main() -> anyhow::Result<()> {
                             object
                                 .fields
                                 .get(name)
-                                .and_then(Value::as_f64)
+                                .and_then(Fv::as_f64)
                                 .map_or("null".into(), |v| v.to_string())
                         };
                         keyref = format!(
@@ -285,20 +285,20 @@ fn main() -> anyhow::Result<()> {
                         for set in object
                             .fields
                             .get("m_controlJoinsSet")
-                            .and_then(Value::as_array)
+                            .and_then(Fv::as_array)
                             .into_iter()
                             .flatten()
                         {
-                            let index = set.get("m_index").and_then(Value::as_i64);
+                            let index = set.get("m_index").and_then(Fv::as_i64);
                             let mut entry = String::new();
                             for item in set
                                 .pointer("/m_JoinInfo/m_info")
-                                .and_then(Value::as_array)
+                                .and_then(Fv::as_array)
                                 .into_iter()
                                 .flatten()
                             {
                                 let other = item.get("m_elemId").and_then(id_of);
-                                let end = item.get("m_joinedEnd").and_then(Value::as_i64);
+                                let end = item.get("m_joinedEnd").and_then(Fv::as_i64);
                                 let show =
                                     |v: Option<i64>| v.map_or("null".into(), |v| v.to_string());
                                 if !entry.is_empty() {
@@ -334,7 +334,7 @@ fn main() -> anyhow::Result<()> {
                         if let Some(tags) = object
                             .fields
                             .get("m_affectedEdgesTags")
-                            .and_then(Value::as_array)
+                            .and_then(Fv::as_array)
                         {
                             for tag in tags {
                                 if let Some(id) = tag.get("first").and_then(id_of) {

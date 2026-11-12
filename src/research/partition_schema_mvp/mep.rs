@@ -841,7 +841,7 @@ fn line_ends(graph: &crate::native_parameters::ObjectGraph) -> Option<[[f64; 3];
         .get("m_endParams")?
         .as_array()?
         .iter()
-        .map(serde_json::Value::as_f64)
+        .map(crate::graph_value::Fv::as_f64)
         .collect::<Option<Vec<f64>>>()?[..]
     else {
         return None;
@@ -870,7 +870,7 @@ fn end_connectors(graph: &crate::native_parameters::ObjectGraph, taps: bool) -> 
         let end = match position
             .fields
             .get("m_paramOnCurve")
-            .and_then(serde_json::Value::as_f64)
+            .and_then(crate::graph_value::Fv::as_f64)
         {
             Some(0.0) => 0,
             Some(1.0) => 1,
@@ -880,7 +880,7 @@ fn end_connectors(graph: &crate::native_parameters::ObjectGraph, taps: bool) -> 
         let index = position
             .fields
             .pointer("/m_pConnector/pointer_token")
-            .and_then(serde_json::Value::as_u64)
+            .and_then(crate::graph_value::Fv::as_u64)
             .and_then(|token| {
                 let mut found = graph.objects.iter().filter(|object| {
                     object.class_name == "Connector" && u64::from(object.token) == token
@@ -946,13 +946,13 @@ fn pipe_directions(graph: &crate::native_parameters::ObjectGraph) -> BTreeMap<u3
         let Some((index, direction)) = calculation
             .fields
             .pointer("/m_pConnector/pointer_token")
-            .and_then(serde_json::Value::as_u64)
+            .and_then(crate::graph_value::Fv::as_u64)
             .and_then(|token| index_of_token.get(&token))
             .zip(
                 calculation
                     .fields
                     .get("m_eDirection")
-                    .and_then(serde_json::Value::as_i64),
+                    .and_then(crate::graph_value::Fv::as_i64),
             )
         else {
             continue;
@@ -1067,7 +1067,7 @@ pub(super) fn attach_native_pipes(
                 .iter()
                 .find(|object| object.class_name == "SymbolInfo")
                 .and_then(|object| object.fields.get("m_name"))
-                .and_then(serde_json::Value::as_str)
+                .and_then(crate::graph_value::Fv::as_str)
                 .filter(|name| !name.is_empty())
                 .map(str::to_string);
             crate::native_json::agree(&mut type_names, id, name);
@@ -1294,7 +1294,7 @@ fn native_duct(graph: &crate::native_parameters::ObjectGraph, own: u64) -> Nativ
     };
     let float = |name: &str| {
         field(name)
-            .and_then(serde_json::Value::as_f64)
+            .and_then(crate::graph_value::Fv::as_f64)
             .filter(|value| value.is_finite())
     };
     let positive = |name: &str| float(name).filter(|value| *value > 0.0);
@@ -1303,7 +1303,7 @@ fn native_duct(graph: &crate::native_parameters::ObjectGraph, own: u64) -> Nativ
     // Revit's export is measured on.
     let centred = [field("m_eHorOffset"), field("m_eVertOffset")]
         .iter()
-        .all(|value| value.and_then(serde_json::Value::as_i64) == Some(0));
+        .all(|value| value.and_then(crate::graph_value::Fv::as_i64) == Some(0));
     let normal = field("m_vNormal").and_then(finite_triple).filter(|normal| {
         let length = normal.iter().map(|v| v * v).sum::<f64>().sqrt();
         (length - 1.0).abs() <= 1e-6
@@ -1446,7 +1446,7 @@ pub(super) fn attach_native_ducts(
                 .iter()
                 .find(|object| object.class_name == "SymbolInfo")
                 .and_then(|object| object.fields.get("m_name"))
-                .and_then(serde_json::Value::as_str)
+                .and_then(crate::graph_value::Fv::as_str)
                 .filter(|name| !name.is_empty())
                 .map(str::to_string);
             let mut shapes = graph

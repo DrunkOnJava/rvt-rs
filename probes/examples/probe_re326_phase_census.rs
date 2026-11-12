@@ -74,10 +74,10 @@ fn probe(path: &str) -> anyhow::Result<()> {
             return Ok(());
         };
         match class.as_str() {
-            "AllProjectPhases" if ident(&object.fields["m_famId"]) == Some(-1) => {
+            "AllProjectPhases" if ident(&object.fields["m_famId"].to_json()) == Some(-1) => {
                 let ids: Vec<i64> = object.fields["m_phaseIds"]
                     .as_array()
-                    .map(|a| a.iter().filter_map(ident).collect())
+                    .map(|a| a.iter().filter_map(|id| ident(&id.to_json())).collect())
                     .unwrap_or_default();
                 order = Some(ids);
             }

@@ -40,15 +40,15 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_parametric_surface::ParametricSurface;
 use rvt::research::native_saved_mesh::pointer;
-use serde_json::Value;
 
 type Point = [f64; 3];
 
-fn vec3(v: &Value) -> Option<Point> {
+fn vec3(v: &Fv) -> Option<Point> {
     let a = v.as_array()?;
     Some([
         a.first()?.as_f64()?,
@@ -57,7 +57,7 @@ fn vec3(v: &Value) -> Option<Point> {
     ])
 }
 
-fn uv(v: &Value) -> Option<[f64; 2]> {
+fn uv(v: &Fv) -> Option<[f64; 2]> {
     let a = v.as_array()?;
     Some([a.first()?.as_f64()?, a.get(1)?.as_f64()?])
 }

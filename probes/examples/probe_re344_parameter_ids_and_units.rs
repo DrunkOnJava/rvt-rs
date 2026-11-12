@@ -55,12 +55,12 @@ use std::f64::consts::PI;
 
 use anyhow::Result;
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, Options};
 use rvt::research::native_family_forms::family_records_in;
 use rvt::research::native_form_geometry;
 use rvt::research::native_metadata::{self, SavedMetadata};
 use rvt::research::native_parameters::{self, GraphLimits, ObjectGraph};
-use serde_json::Value;
 
 type Tally = BTreeMap<String, usize>;
 type Owner<'a> = &'a dyn Fn(i64) -> Option<String>;
@@ -125,13 +125,13 @@ fn bucket(distance: i64) -> String {
     }
 }
 
-fn identifier(value: &Value) -> Option<i64> {
+fn identifier(value: &Fv) -> Option<i64> {
     let inner = value.get("m_id")?;
     inner.as_i64().or_else(|| {
         inner
             .get("m_id64")
             .or_else(|| inner.get("m_id"))
-            .and_then(Value::as_i64)
+            .and_then(Fv::as_i64)
     })
 }
 
@@ -347,14 +347,14 @@ fn form(graph: &ObjectGraph, tally: &mut Tally) {
             "ParamValueSetElementId" => "ElementId",
             _ => continue,
         };
-        let entries = object.fields.get("m_paramSet").and_then(Value::as_array);
+        let entries = object.fields.get("m_paramSet").and_then(Fv::as_array);
         for entry in entries.into_iter().flatten() {
             let Some(id) = entry.get("m_paramId").and_then(identifier) else {
                 continue;
             };
             bump(tally, format!("form {class} {storage} {id}"));
             let value = (storage == "Double")
-                .then(|| entry.get("m_value").and_then(Value::as_f64))
+                .then(|| entry.get("m_value").and_then(Fv::as_f64))
                 .flatten();
             if let Some(value) = value {
                 doubles.insert(id, value);

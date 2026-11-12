@@ -4,11 +4,12 @@
 //! Object field keys are bare schema names unless the inheritance chain has
 //! multiple serialized declarations of that name; those keys are all emitted
 //! as `DeclaringClass::field`. Inline objects have independent naming scopes.
+use crate::graph_value::{Fv, Names, intern_names};
 use crate::le_bytes;
 use crate::schema_registry::{Class, Field, Registry};
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value, json};
+use serde_json::json;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::rc::Rc;
 
@@ -16,7 +17,7 @@ use std::rc::Rc;
 pub struct Parameter {
     pub serialized_parameter_id: i64,
     pub storage_type: String,
-    pub raw_value: Value,
+    pub raw_value: Fv,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Parameters {
@@ -25,7 +26,7 @@ pub struct Parameters {
     pub derived_fields_end: usize,
     pub parameter_sets_end: usize,
     pub parameters: Vec<Parameter>,
-    pub fields: Value,
+    pub fields: Fv,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldSpan {
@@ -41,7 +42,7 @@ pub struct ObjectFields {
     pub class_name: String,
     pub start: usize,
     pub end: usize,
-    pub fields: Value,
+    pub fields: Fv,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GraphObject {
@@ -50,7 +51,7 @@ pub struct GraphObject {
     pub token: u32,
     pub start: usize,
     pub fields_end: usize,
-    pub fields: Value,
+    pub fields: Fv,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObjectGraph {
@@ -486,6 +487,60 @@ struct ClassPlan {
     /// The fields the plan was made for, where it was made for a projected
     /// decode.
     keep: Option<Vec<String>>,
+    /// The object an inline object, or any object of a decode that is not
+    /// projected, is built as: every field the chain reads (#1694).
+    full: View,
+    /// The object the top object of a projected decode is built as: the fields
+    /// in `kept` only. Made only for a plan made for a projected decode.
+    projected: Option<View>,
+}
+/// The keys of the fields an object built from a chain of classes holds, and
+/// where each field's value goes (#1694).
+#[derive(Debug)]
+struct View {
+    /// The keys, in the order a `serde_json` map iterates them, shared by every
+    /// object of the view and of any other view with the same keys.
+    names: Names,
+    /// For each field of each class of the chain, the position of its key in
+    /// `names`, or `usize::MAX` where the object holds no such field.
+    slots: Vec<Vec<usize>>,
+    /// Whether two fields of the objects built under this view share a key, so
+    /// that a decode that builds one must notice the second where it reads it.
+    ambiguous: bool,
+}
+impl View {
+    /// The view of the fields `wanted(distance, field_index)` picks out of
+    /// `lineage`, whose keys are `keys`.
+    fn new(
+        lineage: &[&Class],
+        keys: &[Vec<String>],
+        wanted: impl Fn(usize, usize) -> bool,
+    ) -> View {
+        let mut included: Vec<(&str, usize, usize)> = Vec::new();
+        for (distance, chain_keys) in keys.iter().enumerate() {
+            for (field_index, key) in chain_keys.iter().enumerate() {
+                if wanted(distance, field_index) {
+                    included.push((key.as_str(), distance, field_index));
+                }
+            }
+        }
+        let mut sorted: Vec<&str> = included.iter().map(|(key, _, _)| *key).collect();
+        sorted.sort_unstable();
+        sorted.dedup();
+        let ambiguous = sorted.len() != included.len();
+        let mut slots: Vec<Vec<usize>> = lineage
+            .iter()
+            .map(|c| vec![usize::MAX; c.fields.len()])
+            .collect();
+        for (key, distance, field_index) in &included {
+            slots[*distance][*field_index] = sorted.binary_search(key).unwrap_or(usize::MAX);
+        }
+        View {
+            names: intern_names(&sorted),
+            slots,
+            ambiguous,
+        }
+    }
 }
 impl ClassPlan {
     /// What the plan costs a [`PlanCache`]: its entry, a unit for each field
@@ -563,7 +618,7 @@ impl<'a> Cursor<'a> {
     fn u32(&mut self) -> Result<u32> {
         Ok(u32::from_le_bytes(self.take(4)?.try_into()?))
     }
-    fn pointer<const BUILD: bool>(&mut self, external: bool) -> Result<Value> {
+    fn pointer<const BUILD: bool>(&mut self, external: bool) -> Result<Fv> {
         let offset = self.pos;
         let token = self.u32()?;
         let tag = if token != 0 && !external {
@@ -583,12 +638,12 @@ impl<'a> Cursor<'a> {
             None
         };
         Ok(if BUILD {
-            json!({"pointer_token":token,"class_tag":tag,"offset":offset})
+            Fv::pointer_value(token, tag, offset)
         } else {
-            Value::Null
+            Fv::Null
         })
     }
-    fn entity_pointer<const BUILD: bool>(&mut self) -> Result<Value> {
+    fn entity_pointer<const BUILD: bool>(&mut self) -> Result<Fv> {
         let offset = self.pos;
         let discriminator = i32::from_le_bytes(self.take(4)?.try_into()?);
         ensure!(
@@ -597,9 +652,11 @@ impl<'a> Cursor<'a> {
         );
         if discriminator == 0 {
             return Ok(if BUILD {
-                json!({"discriminator":0,"state":"serialized_absent","offset":offset})
+                Fv::from_value(
+                    &json!({"discriminator":0,"state":"serialized_absent","offset":offset}),
+                )
             } else {
-                Value::Null
+                Fv::Null
             });
         }
         let raw: [u8; 16] = self.take(16)?.try_into()?;
@@ -615,12 +672,14 @@ impl<'a> Cursor<'a> {
             schema_guid: Some(guid.clone()),
         });
         Ok(if BUILD {
-            json!({"discriminator":-1,"schema_guid":guid,"state":"serialized_present","offset":offset})
+            Fv::from_value(
+                &json!({"discriminator":-1,"schema_guid":guid,"state":"serialized_present","offset":offset}),
+            )
         } else {
-            Value::Null
+            Fv::Null
         })
     }
-    fn entity_fields(&mut self, guid: &str) -> Result<Value> {
+    fn entity_fields(&mut self, guid: &str) -> Result<Fv> {
         let schema = self
             .catalog
             .and_then(|c| c.schemas.get(guid))
@@ -649,9 +708,11 @@ impl<'a> Cursor<'a> {
             };
             values.push(json!({"index":field.index,"name":field.name,"type_name":field.type_name,"container_type":field.container_type,"spec_type_id":field.spec_type_id,"subschema_guid":field.subschema_guid,"start":start,"end":self.pos,"raw_value":raw_value,"value_semantics":"serialized_value","serialized_unit_type_id":serialized_unit_type_id,"unit_status":unit_status}));
         }
-        Ok(json!({"schema_guid":guid,"schema_name":schema.name,"fields":values}))
+        Ok(Fv::from_value(
+            &json!({"schema_guid":guid,"schema_name":schema.name,"fields":values}),
+        ))
     }
-    fn es_value(&mut self, name: &str, container: i32) -> Result<Value> {
+    fn es_value(&mut self, name: &str, container: i32) -> Result<Fv> {
         ensure!(
             matches!(container, 0..=2),
             "unqualified ES container {container}"
@@ -712,13 +773,13 @@ impl<'a> Cursor<'a> {
     /// The object of class `tag` at the cursor. With `BUILD` unset nothing is
     /// built: every byte is read, every check made and every pointer noted as
     /// when it is set, and the value is `Null` (#1335).
-    fn class<const BUILD: bool>(&mut self, tag: u16, depth: usize) -> Result<Value> {
+    fn class<const BUILD: bool>(&mut self, tag: u16, depth: usize) -> Result<Fv> {
         self.class_in::<BUILD>(tag, depth, false)
     }
     /// [`Self::class`], where `top` says the object is one the graph decode
     /// itself starts on, not an inline one inside a field: only then are the
     /// fields chosen by [`Self::keep`] the only ones built.
-    fn class_in<const BUILD: bool>(&mut self, tag: u16, depth: usize, top: bool) -> Result<Value> {
+    fn class_in<const BUILD: bool>(&mut self, tag: u16, depth: usize, top: bool) -> Result<Fv> {
         ensure!(
             depth < self.limits.max_depth,
             "native class recursion budget exceeded"
@@ -726,7 +787,21 @@ impl<'a> Cursor<'a> {
         let plan = self.plan(tag, depth)?;
         let registry = self.registry;
         let project = BUILD && top && self.keep.is_some();
-        let mut values = Map::new();
+        // Only the top object of a projected decode holds the kept fields alone;
+        // an inline object holds every field it reads.
+        let view = match &plan.projected {
+            Some(projected) if project => projected,
+            _ => &plan.full,
+        };
+        // The object's values in the order of the view's names, each at the slot
+        // of its field's key (#1694).
+        let mut built: Vec<Fv> = if BUILD {
+            vec![Fv::Null; view.names.len()]
+        } else {
+            Vec::new()
+        };
+        let mut filled: Option<Vec<bool>> =
+            (BUILD && view.ambiguous).then(|| vec![false; view.names.len()]);
         for (distance, class_tag) in plan.lineage.iter().enumerate().rev() {
             let c = registry
                 .class(*class_tag)
@@ -764,14 +839,22 @@ impl<'a> Cursor<'a> {
                     });
                 }
                 if kept {
-                    let key = plan.keys[distance][field_index].clone();
-                    ensure!(
-                        !values.contains_key(&key),
-                        "ambiguous native field key {key} in declaring class {} (tag {})",
-                        c.name,
-                        c.tag
-                    );
-                    values.insert(key, value);
+                    let slot = view.slots[distance][field_index];
+                    if let Some(filled) = filled.as_mut() {
+                        ensure!(
+                            !filled.get(slot).copied().unwrap_or(false),
+                            "ambiguous native field key {} in declaring class {} (tag {})",
+                            plan.keys[distance][field_index],
+                            c.name,
+                            c.tag
+                        );
+                        if let Some(cell) = filled.get_mut(slot) {
+                            *cell = true;
+                        }
+                    }
+                    if let Some(cell) = built.get_mut(slot) {
+                        *cell = value;
+                    }
                 } else {
                     ensure!(
                         plan.duplicate != Some((distance, field_index)),
@@ -784,9 +867,12 @@ impl<'a> Cursor<'a> {
             }
         }
         Ok(if BUILD {
-            Value::Object(values)
+            Fv::Object(Box::new(crate::graph_value::Obj::from_parts(
+                view.names.clone(),
+                built.into_boxed_slice(),
+            )))
         } else {
-            Value::Null
+            Fv::Null
         })
     }
     /// One field `f` of class `c`, the `distance`th of the chain from the
@@ -797,15 +883,23 @@ impl<'a> Cursor<'a> {
         f: &Field,
         depth: usize,
         distance: usize,
-    ) -> Result<Value> {
+    ) -> Result<Fv> {
         if c.name == "ClassDefinitionRef" && f.name == "m_ref" && f.base == 10 && f.modifier == 0 {
             // ClassDefinitionRef stores a 16-bit schema class tag. The
             // qualified external reader performs Int16Reader -> ClassesContainer.find.
             let class_tag = u16::from_le_bytes(self.take(2)?.try_into()?);
             Ok(if BUILD {
-                json!({"class_tag":class_tag,"class_name":self.registry.class(class_tag).map(|class|class.name.as_str())})
+                Fv::object([
+                    ("class_tag", Fv::U64(u64::from(class_tag))),
+                    (
+                        "class_name",
+                        self.registry
+                            .class(class_tag)
+                            .map_or(Fv::Null, |class| Fv::Str(class.name.as_str().into())),
+                    ),
+                ])
             } else {
-                Value::Null
+                Fv::Null
             })
         } else if c.name == "ESEntity" && f.name == "m_blob" && f.base == 14 && f.modifier == 1 {
             self.entity_pointer::<BUILD>()
@@ -935,6 +1029,16 @@ impl<'a> Cursor<'a> {
         } else {
             None
         };
+        // The objects the plan builds: every field read, and, for the top object of
+        // a projected decode, the kept fields alone (#1694).
+        let full = View::new(&lineage, &keys, |distance, field_index| {
+            lineage[distance].fields[field_index].uninterpreted_flags & 2 == 0
+        });
+        let projected = self.keep.is_some().then(|| {
+            View::new(&lineage, &keys, |distance, field_index| {
+                kept[distance][field_index]
+            })
+        });
         let plan = Rc::new(ClassPlan {
             lineage: lineage.iter().map(|c| c.tag).collect(),
             keys,
@@ -943,6 +1047,8 @@ impl<'a> Cursor<'a> {
             keep: self
                 .keep
                 .map(|keep| keep.iter().map(|field| (*field).to_string()).collect()),
+            full,
+            projected,
         });
         // A plan is kept only while the cache's cost stays within its limit:
         // one that would pass it empties the cache, and one dearer than the
@@ -961,7 +1067,7 @@ impl<'a> Cursor<'a> {
         }
         Ok(plan)
     }
-    fn field<const BUILD: bool>(&mut self, f: &Field, depth: usize) -> Result<Value> {
+    fn field<const BUILD: bool>(&mut self, f: &Field, depth: usize) -> Result<Fv> {
         self.field_as::<BUILD>(f, f.modifier, f.array_count, depth)
     }
     /// [`Self::field`] reading `f` with `modifier` and `array_count` in place
@@ -974,7 +1080,7 @@ impl<'a> Cursor<'a> {
         modifier: u8,
         array_count: Option<u32>,
         depth: usize,
-    ) -> Result<Value> {
+    ) -> Result<Fv> {
         ensure!(
             depth < self.limits.max_depth,
             "native field recursion budget exceeded ({})",
@@ -994,13 +1100,13 @@ impl<'a> Cursor<'a> {
                 let bytes = self.take(n * 2)?;
                 if BUILD {
                     let units = le_bytes::u16_units(bytes).collect::<Vec<_>>();
-                    Ok(Value::String(String::from_utf16(&units)?))
+                    Ok(Fv::Str(String::from_utf16(&units)?.into_boxed_str()))
                 } else {
                     if char::decode_utf16(le_bytes::u16_units(bytes)).any(|unit| unit.is_err()) {
                         let units = le_bytes::u16_units(bytes).collect::<Vec<_>>();
                         String::from_utf16(&units)?;
                     }
-                    Ok(Value::Null)
+                    Ok(Fv::Null)
                 }
             }
             0x10 | 0x11 | 0x12 | 0x13 | 0x50 | 0x51 | 0x52 | 0x53 => {
@@ -1015,57 +1121,80 @@ impl<'a> Cursor<'a> {
                     for _ in 0..n {
                         values.push(self.field_as::<true>(f, modifier & 0xf, None, depth + 1)?);
                     }
-                    Ok(Value::Array(values))
+                    Ok(Fv::Array(values.into_boxed_slice()))
                 } else {
                     for _ in 0..n {
                         self.field_as::<false>(f, modifier & 0xf, None, depth + 1)?;
                     }
-                    Ok(Value::Null)
+                    Ok(Fv::Null)
                 }
             }
             0 => match f.base {
                 1 => {
                     let b = self.take(1)?[0];
                     ensure!(b <= 1, "invalid native bool");
-                    Ok(if BUILD { json!(b != 0) } else { Value::Null })
+                    Ok(if BUILD { Fv::Bool(b != 0) } else { Fv::Null })
                 }
                 2 => {
                     let b = self.take(1)?[0];
-                    Ok(if BUILD { json!(b) } else { Value::Null })
+                    Ok(if BUILD {
+                        Fv::U64(u64::from(b))
+                    } else {
+                        Fv::Null
+                    })
                 }
                 3 => {
                     let n = i16::from_le_bytes(self.take(2)?.try_into()?);
-                    Ok(if BUILD { json!(n) } else { Value::Null })
+                    Ok(if BUILD {
+                        Fv::from_i64(i64::from(n))
+                    } else {
+                        Fv::Null
+                    })
                 }
                 4 => {
                     let n = i32::from_le_bytes(self.take(4)?.try_into()?);
-                    Ok(if BUILD { json!(n) } else { Value::Null })
+                    Ok(if BUILD {
+                        Fv::from_i64(i64::from(n))
+                    } else {
+                        Fv::Null
+                    })
                 }
                 5 => {
                     let n = self.u32()?;
-                    Ok(if BUILD { json!(n) } else { Value::Null })
+                    Ok(if BUILD {
+                        Fv::U64(u64::from(n))
+                    } else {
+                        Fv::Null
+                    })
                 }
                 6 => {
                     let n = f32::from_le_bytes(self.take(4)?.try_into()?);
                     ensure!(n.is_finite(), "nonfinite native float");
-                    Ok(if BUILD { json!(n) } else { Value::Null })
+                    Ok(if BUILD {
+                        Fv::from_f64(f64::from(n))
+                    } else {
+                        Fv::Null
+                    })
                 }
                 7 => {
                     let n = f64::from_le_bytes(self.take(8)?.try_into()?);
                     ensure!(n.is_finite(), "nonfinite native double");
-                    Ok(if BUILD { json!(n) } else { Value::Null })
+                    Ok(if BUILD { Fv::from_f64(n) } else { Fv::Null })
                 }
                 9 => {
                     let bytes = self.take(16)?;
                     Ok(if BUILD {
-                        json!({"guid_bytes":bytes})
+                        Fv::object([(
+                            "guid_bytes",
+                            Fv::Array(bytes.iter().map(|b| Fv::U64(u64::from(*b))).collect()),
+                        )])
                     } else {
-                        Value::Null
+                        Fv::Null
                     })
                 }
                 11 => {
                     let n = i64::from_le_bytes(self.take(8)?.try_into()?);
-                    Ok(if BUILD { json!(n) } else { Value::Null })
+                    Ok(if BUILD { Fv::from_i64(n) } else { Fv::Null })
                 }
                 13 => self.field::<BUILD>(
                     f.nested_descriptor
@@ -1086,11 +1215,11 @@ impl<'a> Cursor<'a> {
         }
     }
 }
-fn identifier(value: &Value) -> Result<i64> {
+fn identifier(value: &Fv) -> Result<i64> {
     value
         .get("m_id")
         .and_then(|v| v.get("m_id64"))
-        .and_then(Value::as_i64)
+        .and_then(Fv::as_i64)
         .ok_or_else(|| anyhow::anyhow!("unsupported serialized ElementId value"))
 }
 /// Decode scalar parameter sets after the schema-directed derived-field prefix.
@@ -1149,7 +1278,7 @@ pub fn decode(body: &[u8], registry: &Registry) -> Result<Parameters> {
                 .get("m_value")
                 .ok_or_else(|| anyhow::anyhow!("parameter value missing"))?;
             let raw_value = if storage == "ElementId" {
-                json!(identifier(raw)?)
+                Fv::from_i64(identifier(raw)?)
             } else {
                 raw.clone()
             };

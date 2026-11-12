@@ -30,9 +30,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_family_forms::family_records;
-use serde_json::Value;
 
 const DOORS: [u64; 5] = [1756089, 1765267, 1382481, 1722215, 1623922];
 const OBJECT_LIMIT: usize = 200;
@@ -51,7 +51,7 @@ const GEOMETRY: [&str; 12] = [
     "FamilyInstance",
 ];
 
-fn element_id(value: &Value) -> Option<u64> {
+fn element_id(value: &Fv) -> Option<u64> {
     value
         .pointer("/m_id/m_id64")?
         .as_i64()

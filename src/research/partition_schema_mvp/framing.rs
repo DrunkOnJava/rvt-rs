@@ -408,7 +408,7 @@ pub(super) fn attach_beam_rotations(rf: &mut RevitFile, products: &mut [DecodedE
             .iter()
             .filter(|object| object.class_name == "FamInstCurveDriver")
             .find_map(|object| object.fields.get("m_rotation"))
-            .and_then(serde_json::Value::as_f64)
+            .and_then(crate::graph_value::Fv::as_f64)
             .filter(|rotation| rotation.is_finite());
         crate::native_json::agree(&mut rotations, record.identity.element_id, rotation);
         Ok(())

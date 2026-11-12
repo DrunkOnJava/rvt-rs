@@ -41,12 +41,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_stairs::{native_run_shapes, native_stair_counts};
-use serde_json::Value;
 
-fn pair(value: Option<&Value>) -> Option<(f64, f64)> {
-    match value?.as_array()?.as_slice() {
+fn pair(value: Option<&Fv>) -> Option<(f64, f64)> {
+    match value?.as_array()? {
         [a, b] => Some((a.as_f64()?, b.as_f64()?)),
         _ => None,
     }
@@ -182,21 +182,21 @@ fn main() -> anyhow::Result<()> {
                 match name {
                     "GLine" => {
                         lines += (b - a).abs();
-                        let origin = object.fields.get("m_origin").and_then(Value::as_array);
-                        let dir = object.fields.get("m_dirVec").and_then(Value::as_array);
+                        let origin = object.fields.get("m_origin").and_then(Fv::as_array);
+                        let dir = object.fields.get("m_dirVec").and_then(Fv::as_array);
                         if let (Some(o), Some(d)) = (origin, dir) {
-                            let point = |v: &Vec<Value>| {
+                            let point = |v: &[Fv]| {
                                 [
-                                    v.first().and_then(Value::as_f64).unwrap_or(f64::NAN),
-                                    v.get(1).and_then(Value::as_f64).unwrap_or(f64::NAN),
+                                    v.first().and_then(Fv::as_f64).unwrap_or(f64::NAN),
+                                    v.get(1).and_then(Fv::as_f64).unwrap_or(f64::NAN),
                                 ]
                             };
                             line_points
                                 .entry(id)
                                 .or_default()
                                 .push((point(o), point(d)));
-                            let at = |v: &Vec<Value>, i: usize| {
-                                v.get(i).and_then(Value::as_f64).unwrap_or(f64::NAN)
+                            let at = |v: &[Fv], i: usize| {
+                                v.get(i).and_then(Fv::as_f64).unwrap_or(f64::NAN)
                             };
                             println!(
                                 "line {id} {} {} {} {} {} {} {a} {b}",
@@ -211,7 +211,7 @@ fn main() -> anyhow::Result<()> {
                         if let Some((dx, dy)) = object
                             .fields
                             .get("m_dirVec")
-                            .and_then(Value::as_array)
+                            .and_then(Fv::as_array)
                             .and_then(|v| Some((v.first()?.as_f64()?, v.get(1)?.as_f64()?)))
                         {
                             lines_of
@@ -221,8 +221,7 @@ fn main() -> anyhow::Result<()> {
                         }
                     }
                     "GArc" => {
-                        if let Some(radius) = object.fields.get("m_radius").and_then(Value::as_f64)
-                        {
+                        if let Some(radius) = object.fields.get("m_radius").and_then(Fv::as_f64) {
                             arcs += radius * (b - a).abs();
                         }
                     }

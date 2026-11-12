@@ -426,7 +426,7 @@ pub fn compute_phase_filter(rf: &mut RevitFile) -> anyhow::Result<PhaseFilter> {
                 i64::try_from(record.identity.element_id),
                 root.fields
                     .get("m_name")
-                    .and_then(serde_json::Value::as_str),
+                    .and_then(crate::graph_value::Fv::as_str),
             ) {
                 names.insert(id, name.to_string());
             }
@@ -441,7 +441,7 @@ pub fn compute_phase_filter(rf: &mut RevitFile) -> anyhow::Result<PhaseFilter> {
             agree(&mut rooms, id, phase("m_phaseId").filter(|p| *p != -1));
             return Ok(());
         }
-        let fields = serde_json::to_value(&root.fields)?;
+        let fields = &root.fields;
         if fields.get("m_famId").and_then(identifier_i64) != Some(-1) {
             return Ok(());
         }

@@ -1,4 +1,5 @@
 //! File-local Extensible Storage catalog from the owned Global/Latest graph.
+use crate::graph_value::Fv;
 use crate::{
     native_extensible_storage::{Catalog, Field, Schema, guid_string},
     native_parameters::{self, GraphLimits, ObjectGraph},
@@ -102,7 +103,7 @@ pub fn from_graph(graph: &ObjectGraph, bytes: &[u8]) -> Result<(Catalog, Value)>
     let usage_map = current.is_some();
     let rows = old
         .or(current)
-        .and_then(Value::as_array)
+        .and_then(Fv::as_array)
         .ok_or_else(|| anyhow::anyhow!("ES schema entries absent"))?;
     let mut catalog = Catalog::default();
     for row in rows {
@@ -138,7 +139,7 @@ pub fn from_graph(graph: &ObjectGraph, bytes: &[u8]) -> Result<(Catalog, Value)>
                 )?,
                 subschema_guid: (sub != "00000000-0000-0000-0000-000000000000").then_some(sub),
                 spec_type_id: (!spec.is_empty()).then_some(spec),
-                raw_metadata: f.clone(),
+                raw_metadata: f.to_json(),
             });
         }
         catalog.insert(Schema {
@@ -146,9 +147,9 @@ pub fn from_graph(graph: &ObjectGraph, bytes: &[u8]) -> Result<(Catalog, Value)>
             name: string(s, "m_schemaName")?,
             fields,
             raw_metadata: {
-                let mut metadata = s.clone();
+                let mut metadata = s.to_json();
                 if usage_map {
-                    metadata["_storage_usage"] = row["second"].clone();
+                    metadata["_storage_usage"] = row["second"].to_json();
                 }
                 metadata
             },
@@ -159,13 +160,13 @@ pub fn from_graph(graph: &ObjectGraph, bytes: &[u8]) -> Result<(Catalog, Value)>
         json!({"stream":"Global/Latest","inflated_sha256":crate::native_document::lower_hex(&Sha256::digest(bytes)),"graph_bytes":end,"stream_bytes":bytes.len(),"fixed_footer":0,"root_class":"ADocument","app_info_object_index":manager,"storage_object_index":storages[0],"storage_start":storage.start,"storage_end":storage.fields_end,"complete_global_graph":true,"scope":"Owned file-local schemas; general nonzero fixed footers remain unqualified"}),
     ))
 }
-fn string(v: &Value, key: &str) -> Result<String> {
+fn string(v: &Fv, key: &str) -> Result<String> {
     v[key]
         .as_str()
         .map(str::to_owned)
         .ok_or_else(|| anyhow::anyhow!("ES string {key} absent"))
 }
-fn guid(v: &Value) -> Result<String> {
+fn guid(v: &Fv) -> Result<String> {
     let v = if v.get("guid_bytes").is_some() {
         v
     } else {
@@ -184,7 +185,7 @@ fn guid(v: &Value) -> Result<String> {
     }
     Ok(guid_string(b))
 }
-fn owned(g: &ObjectGraph, owner: usize, pointer: &Value) -> Result<usize> {
+fn owned(g: &ObjectGraph, owner: usize, pointer: &Fv) -> Result<usize> {
     let offset = pointer["offset"]
         .as_u64()
         .ok_or_else(|| anyhow::anyhow!("ES ownership pointer absent"))?;

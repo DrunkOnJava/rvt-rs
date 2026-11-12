@@ -23,9 +23,9 @@ use rvt::RevitFile;
 use rvt::elem_table::{declared_ids, parse_records};
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::partition_type_parameters::partition_length_entries;
-use serde_json::Value;
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("usage: MODEL.rvt");
@@ -119,7 +119,7 @@ fn main() -> anyhow::Result<()> {
                         .find(|o| o.class_name == "ParamDefValue")?
                         .fields
                         .get("m_caption")
-                        .and_then(Value::as_str)
+                        .and_then(Fv::as_str)
                         .map(str::to_string)
                 });
                 if let (Some(caption), Ok(id)) =

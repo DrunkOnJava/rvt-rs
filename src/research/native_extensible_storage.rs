@@ -75,7 +75,7 @@ pub struct Entity {
     pub source: Value,
     pub cell_object_index: usize,
     pub payload_object_index: Option<usize>,
-    pub fields: Vec<Value>,
+    pub fields: Vec<crate::graph_value::Fv>,
     pub nested_payloads: Vec<Value>,
     pub payload_edges: Vec<crate::native_parameters::GraphEdge>,
 }
@@ -184,7 +184,7 @@ impl InventoryBuilder {
                             object.fields["fields"]
                                 .as_array()
                                 .ok_or_else(|| anyhow::anyhow!("ES dynamic fields absent"))?
-                                .clone(),
+                                .to_vec(),
                         )
                     };
                     let mut reachable = BTreeSet::new();
