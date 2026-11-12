@@ -2146,10 +2146,14 @@ impl StepWriter<'_> {
 
     fn emit_header(&mut self, model: &IfcModel) {
         let project = escape(model.project_name.as_deref().unwrap_or("Untitled"));
+        // `escape` makes a string literal safe; this text goes in a comment,
+        // where the file's own PartAtom id or version could end it with `*/`
+        // and write the rest as STEP (#1845).
         let desc = escape(model.description.as_deref().unwrap_or(
             "Produced by rvt-rs (https://github.com/DrunkOnJava/rvt-rs) — \
                  clean-room Apache-2 Revit reader.",
-        ));
+        ))
+        .replace("*/", "* /");
         self.emit_line("ISO-10303-21;");
         self.emit_line("HEADER;");
         self.emit_line("FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');");

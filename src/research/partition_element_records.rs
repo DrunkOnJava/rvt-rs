@@ -979,7 +979,9 @@ pub fn decode_frame_as(
     let mut bbox_feet = [0.0f64; 6];
     for (index, slot) in bbox_feet.iter_mut().enumerate() {
         let value = le_bytes::f64_at(buf, offset + BBOX_OFFSET + index * 8)?;
-        if !value.is_finite() {
+        // A finite but huge corner made the box's centre or extent infinite
+        // downstream (#1845).
+        if !le_bytes::physical(value) {
             return None;
         }
         *slot = value;
