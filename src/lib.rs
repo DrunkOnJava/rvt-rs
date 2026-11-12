@@ -217,7 +217,7 @@ mod research;
 pub(crate) use research::{
     element_record_beam_cuts, element_record_column_cuts, element_record_level_refs,
     element_record_plan_profiles, element_record_storeys, element_record_wall_joins, es_refs,
-    evidence, identity, native_area_regions, native_column_joins, native_connectors,
+    evidence, graph_value, identity, native_area_regions, native_column_joins, native_connectors,
     native_document, native_duct_shapes, native_element, native_element_parameters,
     native_element_types, native_empty_faces, native_es_catalog, native_extensible_storage,
     native_family_forms, native_form_geometry, native_graphics_traversal, native_index,

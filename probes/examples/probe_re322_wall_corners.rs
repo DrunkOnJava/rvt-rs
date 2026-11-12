@@ -115,7 +115,7 @@ fn main() -> Result<()> {
                     json!({
                         "w": layer.get("m_layerWidth"),
                         "fn": layer.get("m_layerFunction"),
-                        "mat": layer.get("m_materialId").map(compact),
+                        "mat": layer.get("m_materialId").map(|material| compact(&material.to_json())),
                     })
                 })
                 .collect();
@@ -125,7 +125,7 @@ fn main() -> Result<()> {
                 "{}",
                 json!({
                     "type": id,
-                    "root": clipped(compact(&root.fields)),
+                    "root": clipped(compact(&root.fields.to_json())),
                     "layers": layers,
                     "ext": field("m_numShellLayersExt"),
                     "int": field("m_numShellLayersInt"),
@@ -138,9 +138,10 @@ fn main() -> Result<()> {
             .iter()
             .find(|object| object.class_name == "GLine")
             .and_then(|line| {
-                let origin = triple(line.fields.get("m_origin"))?;
-                let direction = triple(line.fields.get("m_dirVec"))?;
-                let params = line.fields.get("m_endParams")?.as_array()?;
+                let fields = line.fields.to_json();
+                let origin = triple(fields.get("m_origin"))?;
+                let direction = triple(fields.get("m_dirVec"))?;
+                let params = fields.get("m_endParams")?.as_array()?;
                 let (a, b) = (params.first()?.as_f64()?, params.get(1)?.as_f64()?);
                 let at = |t: f64| [origin[0] + direction[0] * t, origin[1] + direction[1] * t];
                 Some(json!({"start": at(a), "end": at(b), "z": origin[2]}))
@@ -151,7 +152,7 @@ fn main() -> Result<()> {
             let name = object.class_name.as_str();
             *classes.entry(name).or_default() += 1;
             if name.ends_with("Step") || matches!(name, "VWallDriver" | "CDJoinInfo" | "Plane") {
-                objects.push(json!({"c": name, "f": clipped(compact(&object.fields))}));
+                objects.push(json!({"c": name, "f": clipped(compact(&object.fields.to_json()))}));
             }
         }
         walls += 1;
@@ -160,7 +161,7 @@ fn main() -> Result<()> {
             json!({
                 "wall": id,
                 "class": class,
-                "root": clipped(compact(&root.fields)),
+                "root": clipped(compact(&root.fields.to_json())),
                 "curve": curve,
                 "classes": classes,
                 "objects": objects,

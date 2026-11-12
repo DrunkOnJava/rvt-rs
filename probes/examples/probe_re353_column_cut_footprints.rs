@@ -128,7 +128,7 @@ fn main() -> anyhow::Result<()> {
                     .fields
                     .get("m_otherId")
                     .and_then(|value| value.pointer("/m_id/m_id64"))
-                    .and_then(serde_json::Value::as_i64)
+                    .and_then(rvt::research::graph_value::Fv::as_i64)
                     .and_then(|id| u64::try_from(id).ok());
                 if let Some(other) = other {
                     pairs

@@ -294,6 +294,10 @@ struct Cut {
     up: [f64; 2],
     recess: bool,
     reference_from: usize,
+    /// Whether `Width` is written beside `Height` and `Depth`: the opening a
+    /// door cuts in a second wall takes the two only, since Revit's `Width`
+    /// there is the thickness of the wall the door stands in and this
+    /// outline is not always that to the scorer's tolerance (#1165).
     quantities: bool,
 }
 

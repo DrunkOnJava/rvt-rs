@@ -57,7 +57,7 @@ pub fn storage_increments(bytes: &[u8], registry: &Registry) -> Result<Vec<Incre
 /// same physical route. More general tables remain explicitly unsupported.
 fn qualify_single_increment_permutation(
     increments: &mut [Increment],
-    value: &serde_json::Value,
+    value: &crate::graph_value::Fv,
 ) -> Result<()> {
     let pairs = value
         .as_array()
@@ -98,8 +98,8 @@ fn qualify_single_increment_permutation(
 }
 
 fn reconcile_increment_rows(
-    global: &serde_json::Value,
-    local: &serde_json::Value,
+    global: &crate::graph_value::Fv,
+    local: &crate::graph_value::Fv,
 ) -> Result<Vec<Increment>> {
     // Global and local stream bookkeeping revisions can differ after a save.
     // Equality is required for every field that determines physical routing;
@@ -113,7 +113,7 @@ fn reconcile_increment_rows(
     Ok(increments)
 }
 
-fn decode_increment_rows(value: &serde_json::Value) -> Result<Vec<Increment>> {
+fn decode_increment_rows(value: &crate::graph_value::Fv) -> Result<Vec<Increment>> {
     let rows = value
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("increment rows absent"))?;
@@ -277,7 +277,7 @@ fn read_creation_episodes(
     );
     let root = native_parameters::decode_object_fields(history, registry, 2, tag)?;
     let inline = root.fields["m_episodeList"]["m_oEpisodes"].as_array();
-    if !allow_deferred && !inline.is_some_and(Vec::is_empty) {
+    if !allow_deferred && !inline.is_some_and(|items| items.is_empty()) {
         anyhow::bail!("{INLINE_EPISODES_REFUSED}");
     }
     let inline = inline.ok_or_else(|| anyhow::anyhow!("history episode list absent"))?;
@@ -327,7 +327,7 @@ fn read_creation_episodes(
     );
     Ok((guids, deferred.len()))
 }
-fn episode_guid(fields: &serde_json::Value) -> Result<String> {
+fn episode_guid(fields: &crate::graph_value::Fv) -> Result<String> {
     let values = fields["m_eGUID"]["m_guid"]["m_guid"]["guid_bytes"]
         .as_array()
         .ok_or_else(|| anyhow::anyhow!("unsupported Episode GUID shape"))?;
@@ -344,9 +344,9 @@ fn episode_guid(fields: &serde_json::Value) -> Result<String> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectIndex {
     pub identities: BTreeMap<u64, Identity>,
-    pub graveyard_rows: Vec<serde_json::Value>,
+    pub graveyard_rows: Vec<crate::graph_value::Fv>,
     pub row_stride: usize,
-    pub source_fields: serde_json::Value,
+    pub source_fields: crate::graph_value::Fv,
 }
 #[derive(Clone)]
 struct Leaf {

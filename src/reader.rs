@@ -238,10 +238,11 @@ pub struct RevitFile {
     /// native pass walked every partition again to find its records.
     native_record_index: Option<Arc<crate::native_document::RecordIndex>>,
     /// How many of its two end faces the Revit solid of each curtain mullion
-    /// keeps, by ElementId, where the boxes of its curtain wall's mullions say
-    /// (RE-268), set when the partition's mullions are read, for the pass that
-    /// draws their bodies from saved meshes (RE-404).
-    mullion_kept_ends: Option<Arc<BTreeMap<u32, u8>>>,
+    /// keeps, and how many of those ends have a partner, by ElementId, where the
+    /// boxes of its curtain wall's mullions say (RE-268, RE-439), set when the
+    /// partition's mullions are read, for the pass that draws their bodies from
+    /// saved meshes (RE-404).
+    mullion_kept_ends: Option<Arc<BTreeMap<u32, crate::partition_schema_mvp::KeptEnds>>>,
     /// The unit axis each curtain mullion runs along, in the model's frame, by
     /// ElementId, set when the partition's mullions are read, for the pass that
     /// draws them from saved meshes (RE-418).
@@ -282,6 +283,10 @@ pub struct RevitFile {
     /// the same records.
     pub(crate) wall_cut_steps_memo: BTreeMap<u64, Vec<crate::native_wall_cuts::WallCutStep>>,
     pub(crate) wall_cut_steps_asked: BTreeSet<u64>,
+    /// Of the walls in `wall_cut_steps_asked`, those whose record was read as a
+    /// wall's and holds no base join (#1046): the same walk of the records
+    /// gives it (`research::native_wall_cuts::walls_with_no_base_join`).
+    pub(crate) wall_no_base_join_memo: BTreeSet<u64>,
     /// Family instances written as spaces that were left out because their
     /// family draws no model form (RE-312, #1262), by class.
     bodiless_family_spaces: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>>,
@@ -530,6 +535,7 @@ impl RevitFile {
             disagreeing_type_texts: BTreeSet::new(),
             wall_cut_steps_memo: BTreeMap::new(),
             wall_cut_steps_asked: BTreeSet::new(),
+            wall_no_base_join_memo: BTreeSet::new(),
             bodiless_family_spaces: BTreeMap::new(),
             bodiless_family_space_error: None,
             invisible_type_instances: BTreeMap::new(),
@@ -1034,14 +1040,19 @@ impl RevitFile {
     }
 
     /// Keep the end faces each curtain mullion's solid keeps (RE-268, RE-404).
-    pub(crate) fn remember_mullion_kept_ends(&mut self, kept: BTreeMap<u32, u8>) {
+    pub(crate) fn remember_mullion_kept_ends(
+        &mut self,
+        kept: BTreeMap<u32, crate::partition_schema_mvp::KeptEnds>,
+    ) {
         self.mullion_kept_ends = Some(Arc::new(kept));
     }
 
     /// The kept end faces of each curtain mullion
     /// ([`Self::remember_mullion_kept_ends`]), or none where the partition's
     /// mullions were not read.
-    pub(crate) fn mullion_kept_ends(&self) -> Option<Arc<BTreeMap<u32, u8>>> {
+    pub(crate) fn mullion_kept_ends(
+        &self,
+    ) -> Option<Arc<BTreeMap<u32, crate::partition_schema_mvp::KeptEnds>>> {
         self.mullion_kept_ends.clone()
     }
 

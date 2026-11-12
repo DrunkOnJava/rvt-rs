@@ -274,7 +274,7 @@ pub(super) fn attach_room_heights(
             .iter()
             .find(|o| o.class_name == "RoomElem")
             .and_then(|o| o.fields.get("m_height"))
-            .and_then(serde_json::Value::as_f64)
+            .and_then(crate::graph_value::Fv::as_f64)
             .filter(|h| h.is_finite() && *h > 0.0);
         if let (true, Some(height)) = (faces >= 2, height) {
             heights.insert(record.identity.element_id, height);

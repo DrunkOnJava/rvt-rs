@@ -11,8 +11,10 @@ ends are kept follows from where the boxes meet. For each end point `p` of a
 mullion, outward along its axis, the other mullions of the same curtain wall
 (the one `IfcRelAggregates` names) are classified by their box:
 
-  PARTNER      a mullion running the same way with an end at `p` and its body
-               on the far side: the mullion's continuation
+  PARTNER      a mullion running the same way (within a cosine of 0.99999,
+               RE-432) with an end at `p` and its body on the far side, of the
+               mullion's own section (RE-436): its continuation, coinciding
+               with it; one bent off the axis or of another section is none
   PERP_CENTER  a mullion across it whose box holds `p` on its axis
   PERP_FACE    a mullion across it whose box holds `p` on its side face
   PERP_IN      a mullion across it whose box holds `p` elsewhere
@@ -21,14 +23,18 @@ mullion, outward along its axis, the other mullions of the same curtain wall
   PAR_IN       a mullion running the same way whose box holds `p`
   OBLIQUE      a mullion neither along nor across it whose box holds `p`
 
-An end is not counted (hidden) when it has a PARTNER and nothing across
-covers `p`, or when a mullion across covers `p` (PERP_CENTER or PERP_IN) and
-there is no PARTNER; PERP_FACE (the end butts against a side face) and no
-neighbour at all leave it counted. A mullion is left out, its count not
-claimed, when an end is PERP_IN or OBLIQUE, when its axis is not known (no
-rvt-rs `Length` equal to a side of its box), or when an end meets, within
-NEAR, a mullion that is left out or overlapped (an end is PAR_SAME or PAR_IN:
-another mullion lies over it), unless it is overlapped itself. An overlapped
+An end with a PARTNER is not counted (hidden) unless a mullion lies at it that
+is OBLIQUE or PERP_IN, which keeps it, and a PERP_CENTER with the PARTNER leaves
+it hidden; an end with no PARTNER is hidden by a PERP_CENTER only, and
+PERP_FACE (the end butts against a side face), PAR_SAME, PAR_IN, OBLIQUE and no
+neighbour at all leave it counted (RE-438 section 3 holds the table this
+prints, and the counts of the meshes it comes from). A mullion is left out, its
+count not claimed, when an end has a PERP_IN and no PARTNER (Revit counts such
+an end on some mullions and hides it on others that read alike) or an OBLIQUE
+where a PERP_CENTER or PERP_IN holds the point, when its axis is not known (no
+rvt-rs `Length` equal to a side of its box), or when an end meets, within NEAR,
+a mullion that is left out or overlapped (an end is PAR_SAME or PAR_IN: another
+mullion lies over it), unless it is overlapped itself. An overlapped
 mullion is read on its own, and a mullion shorter than its section is read like
 any other and leaves its neighbours alone (RE-400; RE-268 left out an
 overlapped mullion and the neighbours of a short one). A mullion with another
@@ -38,7 +44,9 @@ permit 16 of the 22 overlapped mullions that are wrong have one over an end,
 and 1 of the 148 that are right does (RE-403).
 
 It prints the boxes read, the mullions left out by cause, the confusion table
-of the count against the one Revit's NetSurfaceArea implies, and, for the
+of the count against the one Revit's NetSurfaceArea implies, what Revit does
+at an end by what lies at it (read from the mullions whose count is 0 or 2 to
+0.02 of an end face, which tells each end: RE-438), and, for the
 mullions rvt-rs writes a `NetVolume` on (the ones drawn as an extrusion of
 their box section, RE-243) and the rule does not leave out, whether
 `perimeter x length + ends x area` of rvt-rs's box is Revit's value, with how
@@ -70,9 +78,9 @@ FEET_PER_METRE = 1 / 0.3048
 TOL = 0.01
 NEAR = 0.2
 PARALLEL = 0.999
+COLLINEAR = 0.99999
 ACROSS = 0.01
 AXIS_MATCH = 1e-3 * FEET_PER_METRE
-UNREAD = ("PERP_IN", "OBLIQUE")
 OVERLAPPED = ("PAR_SAME", "PAR_IN")
 
 
@@ -164,6 +172,15 @@ def end_points(box):
     return [(box["centre"] - axis * half, -axis), (box["centre"] + axis * half, axis)]
 
 
+def same_section(m, o):
+    """Whether `o`'s section is `m`'s (RE-436): `o`'s extent along each of `m`'s two sides across the mullion is `m`'s half extent there."""
+    for side in (1, 2):
+        reach = sum(abs(m["u"][side] @ o["u"][i]) * o["half"][i] for i in (1, 2))
+        if abs(reach - m["half"][side]) > TOL:
+            return False
+    return True
+
+
 def labels(m, p, out, others):
     found = set()
     for o in others:
@@ -176,7 +193,13 @@ def labels(m, p, out, others):
             for q, _ in end_points(o):
                 if np.linalg.norm(q - p) < TOL:
                     far = [e for e, _ in end_points(o) if np.linalg.norm(e - p) >= TOL]
-                    found.add("PARTNER" if far and (far[0] - p) @ out > TOL else "PAR_SAME")
+                    if far and (far[0] - p) @ out > TOL:
+                        # A continuation bent off the axis covers none of the end face, and one of another section is
+                        # not the end face: nothing hides it (RE-432, RE-436).
+                        if cosine > COLLINEAR and same_section(m, o):
+                            found.add("PARTNER")
+                    else:
+                        found.add("PAR_SAME")
                     break
             else:
                 found.add("PAR_IN")
@@ -227,9 +250,23 @@ def over_odd_box(m, p, out, group, usual):
     return False
 
 
+def unread(found):
+    """Why the end's join is not read, or None (RE-438): a mullion across holds `p` inside its box and the end has no
+    partner (Revit counts such an end on some mullions and hides it on others that read alike), or an oblique mullion
+    lies where one across holds `p`."""
+    if "PERP_IN" in found and "PARTNER" not in found:
+        return "an end has a mullion across inside it and no partner"
+    if "OBLIQUE" in found and ("PERP_CENTER" in found or "PERP_IN" in found):
+        return "an end has an oblique mullion where one across holds the point"
+    return None
+
+
 def hidden(found):
-    covered = "PERP_CENTER" in found or "PERP_IN" in found
-    return ("PARTNER" in found) != covered
+    """Whether the end is hidden (RE-438): its partner hides it unless an oblique mullion or one across holding `p`
+    inside its box lies at it; with no partner, a mullion across centred on `p` hides it."""
+    if "PARTNER" in found:
+        return not ("PERP_IN" in found or "OBLIQUE" in found)
+    return "PERP_CENTER" in found
 
 
 def main(argv):
@@ -262,8 +299,9 @@ def main(argv):
             ends = end_points(m)
             found[m["tag"]] = [labels(m, p, out, group) for p, out in ends]
             seen = set().union(*found[m["tag"]])
-            if set(UNREAD) & seen:
-                cause[m["tag"]] = "an end is " + "/".join(sorted(set(UNREAD) & seen))
+            why = next((reason for reason in map(unread, found[m["tag"]]) if reason), None)
+            if why:
+                cause[m["tag"]] = why
             elif set(OVERLAPPED) & seen:
                 if any(over_odd_box(m, p, out, group, usual) for p, out in ends):
                     cause[m["tag"]] = "an end has a mullion lying over it whose box is not its type's section"
@@ -305,6 +343,8 @@ def main(argv):
     by_class = collections.Counter()
     left_out = collections.Counter()
     by_labels = collections.Counter()
+    ends_table = collections.defaultdict(collections.Counter)
+    not_whole = 0
     different = []
     new_claims = collections.Counter()
     new_hosts = collections.defaultdict(set)
@@ -316,10 +356,23 @@ def main(argv):
             span = 2 * m["half"][0] / FEET_PER_METRE
             area, perimeter = sides[0] * sides[1], 2 * (sides[0] + sides[1])
             implied = None
+            both = None
             if nsa is not None and m["axis"] is not None and area > 0:
                 ends = (nsa - perimeter * span) / area
                 if abs(ends - round(ends)) < 1e-3 and round(ends) in (0, 1, 2):
                     implied = round(ends)
+                # Revit writes its values to a few digits, which on the small end faces of a short mullion is
+                # coarser than 0.001 of an end face, so the end table takes a count within 0.02 of 0 or 2.
+                if abs(ends - round(ends)) <= 0.02 and round(ends) in (0, 2):
+                    both = round(ends)
+                elif abs(ends - round(ends)) > 0.02 or round(ends) not in (0, 1, 2):
+                    not_whole += 1
+            if both is not None and m["tag"] in found:
+                # A count of 0 or 2 tells each end: both hidden, or both kept (RE-438).
+                for f in found[m["tag"]]:
+                    row = ends_table["+".join(sorted(f - {"PERP_FACE"})) or "nothing"]
+                    row["kept" if both == 2 else "hidden"] += 1
+                    row["side face"] += "PERP_FACE" in f
             if m["tag"] in found and m["tag"] not in cause:
                 predicted = sum(0 if hidden(f) else 1 for f in found[m["tag"]])
                 confusion[(predicted, implied if implied is not None else "-")] += 1
@@ -354,6 +407,10 @@ def main(argv):
     print("what lies at the two ends, ends implied by Revit's NetSurfaceArea: mullions")
     for (pair, implied), n in sorted(by_labels.items(), key=lambda kv: -kv[1]):
         print(f"  {pair}: {implied}: {n}")
+    print("what Revit does at an end, by what lies at it (mullions whose count is 0 or 2 to 0.02): ends kept, ends hidden, ends butting a side face")
+    for name, row in sorted(ends_table.items(), key=lambda kv: -(kv[1]["kept"] + kv[1]["hidden"])):
+        print(f"  {name}: {row['kept']}, {row['hidden']}, {row['side face']}")
+    print(f"  not counted: {not_whole} mullions whose value is no whole number of end faces on their box (short, mitred pieces whose box is not Revit's solid)")
     plain = sum(1 for b in boxes.values() if b["plain"])
     print(f"NetSurfaceArea on the {plain} mullions with a NetVolume (drawn as their box's extrusion): " + ", ".join(f"{k} {v}" for k, v in sorted(values.items())))
     print("left out among them, by cause, and the value the rule would have given: mullions")

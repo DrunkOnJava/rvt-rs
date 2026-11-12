@@ -24,8 +24,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
-use serde_json::Value;
 
 const CLASSES: [&str; 6] = [
     "IFCPIPESEGMENT",
@@ -37,22 +37,22 @@ const CLASSES: [&str; 6] = [
 ];
 
 /// Every ElementId (`{"m_id": {"m_id64": n}}`) under `value`, with its path.
-fn ids(value: &Value, path: &str, out: &mut Vec<(String, u64)>) {
+fn ids(value: &Fv, path: &str, out: &mut Vec<(String, u64)>) {
     match value {
-        Value::Object(map) => {
+        Fv::Object(map) => {
             if let Some(id) = map
                 .get("m_id")
                 .and_then(|v| v.get("m_id64"))
-                .and_then(Value::as_u64)
+                .and_then(Fv::as_u64)
             {
                 out.push((path.to_string(), id));
                 return;
             }
-            for (key, child) in map {
+            for (key, child) in map.iter() {
                 ids(child, &format!("{path}.{key}"), out);
             }
         }
-        Value::Array(items) => {
+        Fv::Array(items) => {
             for (index, child) in items.iter().enumerate() {
                 ids(child, &format!("{path}[{index}]"), out);
             }
@@ -134,7 +134,7 @@ fn main() -> anyhow::Result<()> {
             .iter()
             .find(|o| o.class_name == "SymbolInfo")
             .and_then(|o| o.fields.get(field))
-            .and_then(Value::as_str)
+            .and_then(Fv::as_str)
             .map(|s| s.replace(' ', "_"))
             .unwrap_or_else(|| "-".into())
     };

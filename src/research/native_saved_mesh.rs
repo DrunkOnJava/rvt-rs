@@ -1,8 +1,8 @@
 //! Tessellation of bounded saved planar and cylindrical BRep faces. No application or vendor runtime.
+use crate::graph_value::Fv;
 use crate::native_parameters::ObjectGraph;
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FaceMesh {
@@ -54,7 +54,7 @@ impl<'a> PointerIndex<'a> {
             lookup: graph.lookup(),
         }
     }
-    fn resolve(&self, source: usize, v: &Value) -> Result<Option<usize>> {
+    fn resolve(&self, source: usize, v: &Fv) -> Result<Option<usize>> {
         let g = self.graph;
         let t = v["pointer_token"]
             .as_u64()
@@ -94,10 +94,10 @@ impl<'a> PointerIndex<'a> {
         Ok(Some(objs[0]))
     }
 }
-pub fn pointer(g: &ObjectGraph, source: usize, v: &Value) -> Result<Option<usize>> {
+pub fn pointer(g: &ObjectGraph, source: usize, v: &Fv) -> Result<Option<usize>> {
     PointerIndex::new(g).resolve(source, v)
 }
-fn point<const N: usize>(v: &Value) -> Result<[f64; N]> {
+fn point<const N: usize>(v: &Fv) -> Result<[f64; N]> {
     let a = v.as_array().context("point array")?;
     ensure!(a.len() == N, "point dimension");
     let mut p = [0.; N];
@@ -274,6 +274,9 @@ const EDGE_LIMITS: EdgeLimits = EdgeLimits {
     depth: EDGE_REFINEMENT_DEPTH,
     points: EDGE_POINT_BUDGET,
 };
+/// The text a crossing edge's refinement is refused with when it would give the edge
+/// more points than its limits allow.
+const EDGE_POINTS_EXCEEDED: &str = "edge refinement point budget exceeded";
 /// How close to the plane (feet) a point solved onto it must lie.
 const EDGE_ON_PLANE: f64 = 1e-9;
 
@@ -441,10 +444,7 @@ fn bisect_crossing_edge(
         "edge refinement is still above the bound after {} halvings",
         limits.depth
     );
-    ensure!(
-        out.len() < limits.points,
-        "edge refinement point budget exceeded"
-    );
+    ensure!(out.len() < limits.points, EDGE_POINTS_EXCEEDED);
     bisect_crossing_edge(evaluate, signed, limits, a, exact, depth + 1, out)?;
     out.push(exact);
     bisect_crossing_edge(evaluate, signed, limits, exact, b, depth + 1, out)
@@ -517,7 +517,7 @@ fn refined_curved_edge(
 }
 
 /// The parameter box of a cylinder surface, from its `m_Envelope` corners.
-fn cylinder_envelope(corners: &Value) -> Result<([f64; 2], [f64; 2])> {
+fn cylinder_envelope(corners: &Fv) -> Result<([f64; 2], [f64; 2])> {
     let corners = corners.as_array().context("cylinder envelope")?;
     ensure!(corners.len() == 2, "cylinder envelope bounds");
     Ok((point::<2>(&corners[0])?, point::<2>(&corners[1])?))
@@ -545,7 +545,9 @@ fn within_envelope(
 
 // Refine a particular shared edge in its curved surface's parameter domain.
 // The planar side is reconstructed from the same evaluated 3D positions, not
-// from interpolation along the old polygon's chords.
+// from interpolation along the old polygon's chords. `limit` is the most points
+// the edge may add to its ring, the first not counted: an edge that would give
+// more is refused as `planar face budget exceeded` before it is built (#1770).
 fn refined_plane_edge(
     g: &ObjectGraph,
     index: &PointerIndex<'_>,
@@ -553,6 +555,7 @@ fn refined_plane_edge(
     edge_index: usize,
     plane_side: usize,
     original: Vec<[f64; 2]>,
+    limit: usize,
 ) -> Result<Vec<[f64; 2]>> {
     let edge = &g.objects[edge_index];
     let faces = edge.fields["m_pFace"]
@@ -686,7 +689,22 @@ fn refined_plane_edge(
         // keep its chords within the bar of the surface, the same points the
         // curved face's loop takes (#1706).
         let normal = unit_normal(x, y)?;
-        let mut refined = refine_crossing_edge(evaluate.as_ref(), origin, normal, &samples)?;
+        let limits = EdgeLimits {
+            depth: EDGE_REFINEMENT_DEPTH,
+            points: limit.saturating_add(1).min(EDGE_POINT_BUDGET),
+        };
+        let mut refined =
+            refine_crossing_edge_within(evaluate.as_ref(), origin, normal, &samples, &limits)
+                .map_err(|error| {
+                    // The face's points left, not the edge's own budget, ran out.
+                    if limits.points < EDGE_POINT_BUDGET
+                        && error.to_string() == EDGE_POINTS_EXCEEDED
+                    {
+                        anyhow!(PLANAR_BUDGET_EXCEEDED)
+                    } else {
+                        error
+                    }
+                })?;
         if kind == "CylSurf" {
             // The cylinder's loop leaves out the points beyond its envelope, and so
             // does the polygon, so that the two hold one list.
@@ -710,6 +728,12 @@ fn refined_plane_edge(
     if start[axis] > end[axis] {
         values.reverse();
     }
+    // Each is projected through the other face's surface: the face's points left
+    // are counted before the first is.
+    ensure!(
+        values.len() <= limit.saturating_add(1),
+        PLANAR_BUDGET_EXCEEDED
+    );
     values
         .into_iter()
         .map(|t| {
@@ -748,14 +772,27 @@ fn ring(
     face: usize,
     li: usize,
 ) -> Result<Vec<[f64; 2]>> {
-    ring_impl(g, index, face, li, EdgeSide::Cylinder)
+    ring_impl(g, index, face, li, EdgeSide::Cylinder, usize::MAX)
 }
+/// The edges' points a ring holds once an edge of `edge` points joins its `held`:
+/// the edge's first is the last of the one before it, so it is not counted. `None`
+/// where that is more than `limit`, or does not fit a `usize`.
+fn ring_points_with(held: usize, edge: usize, limit: usize) -> Option<usize> {
+    held.checked_add(edge.saturating_sub(1))
+        .filter(|total| *total <= limit)
+}
+/// The ring of the loop `li` of `face`, in the surface's parameters. A planar face's
+/// ring is bounded as it is built: the edges' points it holds may not pass `limit`,
+/// the points the face's rings may still hold, counted as each edge is read and
+/// before any of its refinement is made, so that the refusal does not wait for the
+/// ring to be built (#1770); `usize::MAX` for a face that has no such budget.
 fn ring_impl(
     g: &ObjectGraph,
     index: &PointerIndex<'_>,
     face: usize,
     li: usize,
     refine: EdgeSide,
+    limit: usize,
 ) -> Result<Vec<[f64; 2]>> {
     let l = &g.objects[li];
     ensure!(
@@ -773,6 +810,7 @@ fn ring_impl(
         .context("empty loop")?;
     let mut seen = BTreeSet::new();
     let mut segments = Vec::new();
+    let mut held = 0usize;
     while cur != li {
         ensure!(seen.insert(cur), "edge chain cycle before loop sentinel");
         let e = &g.objects[cur];
@@ -793,20 +831,23 @@ fn ring_impl(
             .as_array()
             .context("edge endpoints")?;
         ensure!(endpoints.len() == 2, "edge endpoint count");
-        let mut pts = vec![point::<2>(&endpoints[0]["uv"][side])?];
-        for p in e.fields["m_interiorEdgePnts"]
+        let interior = e.fields["m_interiorEdgePnts"]
             .as_array()
-            .context("edge interior points")?
-        {
+            .context("edge interior points")?;
+        // The graph's own points of the edge, ends included, before any is copied.
+        ring_points_with(held, interior.len() + 2, limit).context(PLANAR_BUDGET_EXCEEDED)?;
+        let mut pts = vec![point::<2>(&endpoints[0]["uv"][side])?];
+        for p in interior {
             pts.push(point::<2>(&p["uv"][side])?)
         }
         pts.push(point::<2>(&endpoints[1]["uv"][side])?);
         pts = match refine {
-            EdgeSide::Plane => refined_plane_edge(g, index, face, cur, side, pts)?,
+            EdgeSide::Plane => refined_plane_edge(g, index, face, cur, side, pts, limit - held)?,
             EdgeSide::Cylinder => {
                 refined_curved_edge(g, index, face, cur, side, &pts).unwrap_or(pts)
             }
         };
+        held = ring_points_with(held, pts.len(), limit).context(PLANAR_BUDGET_EXCEEDED)?;
         segments.push(pts);
         cur = index
             .resolve(cur, &e.fields["m_next"][side])?
@@ -979,8 +1020,26 @@ fn shared_area_of(a: &[Triangle], b: &[Triangle], work: &mut usize) -> Result<f6
 /// centroid test, because two non-convex tiles can overlap with neither
 /// centroid inside the other, and not by bounding boxes, which say nothing of
 /// a notch. A ring that crosses itself, or more regions or triangle pairs than
-/// the bounds allow, does not tile.
-fn regions_tile(parent: &[[f64; 2]], regions: &[&[[f64; 2]]], tolerance: f64) -> bool {
+/// the bounds allow, does not tile. Testing a region's vertices against the parent
+/// costs the product of their counts, which is charged to `work`, the face's counter
+/// ([`PLANAR_WORK_BUDGET`]): a face past it does not tile (#1770).
+fn regions_tile(
+    parent: &[[f64; 2]],
+    regions: &[&[[f64; 2]]],
+    tolerance: f64,
+    work: &mut u64,
+) -> bool {
+    regions_tile_within(parent, regions, tolerance, work, PLANAR_WORK_BUDGET)
+}
+
+/// [`regions_tile`] with the work it may charge to `face_work` given as `budget`.
+fn regions_tile_within(
+    parent: &[[f64; 2]],
+    regions: &[&[[f64; 2]]],
+    tolerance: f64,
+    face_work: &mut u64,
+    budget: u64,
+) -> bool {
     if regions.len() > 256 {
         return false;
     }
@@ -993,6 +1052,11 @@ fn regions_tile(parent: &[[f64; 2]], regions: &[&[[f64; 2]]], tolerance: f64) ->
     let mut covered = 0.;
     let mut work = 0usize;
     for outline in regions {
+        *face_work =
+            face_work.saturating_add((outline.len() as u64).saturating_mul(parent.len() as u64));
+        if *face_work > budget {
+            return false;
+        }
         if !outline.iter().all(|&p| inside_or_on(p, parent, tolerance)) {
             return false;
         }
@@ -1028,7 +1092,8 @@ fn plane_regions_tile(
     index: &PointerIndex<'_>,
     fi: usize,
     plane: usize,
-    regions: &[Value],
+    regions: &[Fv],
+    work: &mut u64,
 ) -> Result<()> {
     let basis = |si: usize| -> Result<[[f64; 3]; 3]> {
         let s = &g.objects[si];
@@ -1038,7 +1103,10 @@ fn plane_regions_tile(
             point::<3>(&s.fields["m_yVec"])?,
         ])
     };
-    let single_ring = |face: usize| -> Result<Vec<[f64; 2]>> {
+    // The parent's ring and every region's are earcut and tested against each other,
+    // so together they hold no more points than one planar face may (#1770).
+    let mut left = PLANAR_FACE_POINT_BUDGET;
+    let mut single_ring = |face: usize| -> Result<Vec<[f64; 2]>> {
         let li = index
             .resolve(face, &g.objects[face].fields["m_pFirstLoop"])?
             .context(FACE_REGIONS)?;
@@ -1048,7 +1116,9 @@ fn plane_regions_tile(
                 .is_none(),
             FACE_REGIONS
         );
-        ring(g, index, face, li)
+        let ring = ring_impl(g, index, face, li, EdgeSide::Cylinder, left)?;
+        left = left.saturating_sub(ring.len());
+        Ok(ring)
     };
     let parent_basis = basis(plane)?;
     let parent = single_ring(fi)?;
@@ -1063,7 +1133,7 @@ fn plane_regions_tile(
             region.class_name == "Face"
                 && region.fields["m_faceRegions"]
                     .as_array()
-                    .is_some_and(Vec::is_empty),
+                    .is_some_and(|items| items.is_empty()),
             FACE_REGIONS
         );
         let si = index
@@ -1081,7 +1151,16 @@ fn plane_regions_tile(
         outlines.push(single_ring(ri)?);
     }
     let rings: Vec<&[[f64; 2]]> = outlines.iter().map(Vec::as_slice).collect();
-    ensure!(regions_tile(&parent, &rings, 1e-7), FACE_REGIONS);
+    let tiles = regions_tile(&parent, &rings, 1e-7, work);
+    // A face the budget stopped says so, as every other planar face does.
+    ensure!(
+        tiles,
+        if *work > PLANAR_WORK_BUDGET {
+            PLANAR_BUDGET_EXCEEDED
+        } else {
+            FACE_REGIONS
+        }
+    );
     Ok(())
 }
 /// Returns no mesh for a face with no trimming boundary (an auxiliary surface).
@@ -1116,8 +1195,11 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
         "unsupported surface {}",
         p.class_name
     );
+    // The work of the whole face: the tests of its regions, its outer rings and a
+    // second try after a split share one budget (#1748, #1770).
+    let mut work = 0;
     if !regions.is_empty() {
-        plane_regions_tile(g, index, fi, pi, regions)?;
+        plane_regions_tile(g, index, fi, pi, regions, &mut work)?;
     }
     let origin = point::<3>(&p.fields["m_origin"])?;
     let x = point::<3>(&p.fields["m_xVec"])?;
@@ -1141,7 +1223,14 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
     let mut points = 0;
     loop {
         ensure!(seen.insert(li), "loop-list cycle");
-        let ring = ring_impl(g, index, fi, li, EdgeSide::Plane)?;
+        let ring = ring_impl(
+            g,
+            index,
+            fi,
+            li,
+            EdgeSide::Plane,
+            PLANAR_FACE_POINT_BUDGET - points,
+        )?;
         points = planar_points_with(points, ring.len()).context(PLANAR_BUDGET_EXCEEDED)?;
         loops.push(ring);
         match index.resolve(li, &g.objects[li].fields["m_nextLoop"])? {
@@ -1149,9 +1238,6 @@ fn face_indexed(g: &ObjectGraph, index: &PointerIndex<'_>, fi: usize) -> Result<
             None => break,
         }
     }
-    // The work of the whole face: its outer rings and a second try after a split
-    // share one budget (#1748).
-    let mut work = 0;
     let (vertices, triangles) = match plane_mesh(&loops, orient, origin, x, y, &mut work) {
         Err(error) if error.to_string().starts_with(AREA_MISMATCH) => {
             // The outline of two lobes that touch at a vertex is one ring that visits
@@ -1193,7 +1279,10 @@ const AREA_MISMATCH: &str = "triangulated area mismatch";
 /// The most points all the rings of one planar face may hold (#1748). Earcut,
 /// `retain_boundary_points` and `split_pinched_rings` are super-linear in a face's
 /// points, and a hostile file can give each edge of a ring up to
-/// [`EDGE_POINT_BUDGET`] of them; the trimmed-cell path has its own budgets. The
+/// [`EDGE_POINT_BUDGET`] of them: they are counted as each edge is read, before the
+/// edge is refined, so that no more than the points left are ever made (#1770); the
+/// parent's ring and the regions' rings of a face with regions share one such budget,
+/// the trimmed-cell path has its own budgets. The
 /// largest planar face of the 2023 to 2027 samples, the BIM4LCA models and the
 /// reference models holds 2,308 points (Autodesk's Snowdon Towers Architectural), so
 /// this is 4.3 times it.
@@ -1409,7 +1498,7 @@ pub fn cylinder_face(
     ensure!(
         face.fields["m_faceRegions"]
             .as_array()
-            .is_some_and(Vec::is_empty),
+            .is_some_and(|items| items.is_empty()),
         "face regions need subdivision"
     );
     let surface_index = index
@@ -2179,8 +2268,8 @@ mod tests {
     use super::{
         EDGE_SAGITTA, EdgeLimits, PLANAR_FACE_POINT_BUDGET, PLANAR_WORK_BUDGET, area, cross,
         distance_to_chord, isoparametric_axis, normals_follow_winding, planar_points_with,
-        refine_crossing_edge, refine_crossing_edge_within, regions_tile,
-        retain_boundary_points_within, split_pinched_rings, within_envelope,
+        refine_crossing_edge, refine_crossing_edge_within, regions_tile, regions_tile_within,
+        retain_boundary_points_within, ring_points_with, split_pinched_rings, within_envelope,
     };
     use anyhow::Result;
     use std::collections::BTreeSet;
@@ -2343,7 +2432,47 @@ mod tests {
 
     fn tile(parent: &[[f64; 2]], regions: &[Vec<[f64; 2]>]) -> bool {
         let rings: Vec<&[[f64; 2]]> = regions.iter().map(Vec::as_slice).collect();
-        regions_tile(parent, &rings, TOLERANCE)
+        regions_tile(parent, &rings, TOLERANCE, &mut 0)
+    }
+
+    // How the work of a face's regions can go wrong: counted for each call and not for the
+    // face, so that a second call on its counter is let through; not counted for a
+    // region at all; or a refusal for the budget that cannot be told from a ring that does
+    // not tile (the caller says which by whether the counter is past the budget).
+    #[test]
+    fn the_vertex_tests_of_a_faces_regions_are_charged_to_the_faces_work() {
+        let parent = rect(0., 0., 2., 1.);
+        let regions = [rect(0., 0., 1., 1.), rect(1., 0., 2., 1.)];
+        let rings: Vec<&[[f64; 2]]> = regions.iter().map(Vec::as_slice).collect();
+        // Each region's 4 vertices against the parent's 4: 16 a region, 32 in all.
+        let mut work = 0;
+        assert!(regions_tile_within(
+            &parent, &rings, TOLERANCE, &mut work, 32
+        ));
+        assert_eq!(work, 32);
+        let mut work = 0;
+        assert!(!regions_tile_within(
+            &parent, &rings, TOLERANCE, &mut work, 31
+        ));
+        assert!(work > 31);
+        let mut work = 0;
+        assert!(regions_tile_within(
+            &parent, &rings, TOLERANCE, &mut work, 40
+        ));
+        assert!(!regions_tile_within(
+            &parent, &rings, TOLERANCE, &mut work, 40
+        ));
+        assert!(work > 40);
+        // Regions that do not tile leave the counter within the budget.
+        let left = rect(0., 0., 1., 1.);
+        let twice = [left.as_slice(), left.as_slice()];
+        let mut work = 0;
+        assert!(!regions_tile_within(
+            &parent, &twice, TOLERANCE, &mut work, 100
+        ));
+        assert!(work <= 100);
+        // At the real budget the face tiles, as it does through `tile`.
+        assert!(tile(&parent, &regions));
     }
 
     // A region listed twice and the other half missing: the areas add up to the
@@ -2790,6 +2919,25 @@ mod tests {
             rings += 1;
         }
         assert_eq!(rings, PLANAR_FACE_POINT_BUDGET / 4);
+    }
+
+    // How a ring's running count can go wrong: an edge's first point, which is the last of
+    // the edge before it, counted twice; one point too many let through at the limit; an
+    // edge of one point that underflows it; or a count that wraps round.
+    #[test]
+    fn a_ring_is_held_to_its_limit_by_its_edges_points_less_each_first() {
+        let mut held = 0;
+        for _ in 0..3 {
+            held = ring_points_with(held, 4, 9).unwrap();
+        }
+        assert_eq!(held, 9);
+        assert_eq!(ring_points_with(8, 2, 9), Some(9));
+        assert_eq!(ring_points_with(9, 2, 9), None);
+        assert_eq!(ring_points_with(0, 11, 9), None);
+        assert_eq!(ring_points_with(5, 1, 9), Some(5));
+        assert_eq!(ring_points_with(5, 0, 9), Some(5));
+        assert_eq!(ring_points_with(usize::MAX, 2, usize::MAX), None);
+        assert_eq!(ring_points_with(2, usize::MAX, usize::MAX), None);
     }
 
     // A face's points, the edges of its rings and the triangles earcut made of them.

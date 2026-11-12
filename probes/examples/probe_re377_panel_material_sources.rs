@@ -259,7 +259,7 @@ fn main() -> anyhow::Result<()> {
             let mut sources = Vec::new();
             for object in &graph.objects {
                 walk(
-                    &object.fields,
+                    &object.fields.to_json(),
                     &object.class_name,
                     None,
                     &materials,

@@ -62,11 +62,13 @@ server turns it on for the models it opens. The IFC is the same file either way.
 What an element's `offset` is, and what has been measured:
 
 - `offset` is the frame the exporter selected for the element's record. Among an
-  element's frames, Revit 2024 and later (`select_instance_records`) take the
-  one with the greatest vertical extent and, on a tie, the higher-numbered
-  partition and then the later offset; Revit 2008 to 2023
-  (`select_newest_instance_records`, RE-107) take the newest, the
-  highest-numbered partition and then the latest offset, with no extent test. A
+  element's frames, both take the newest, the highest-numbered partition; Revit
+  2024 and later (`select_instance_records`, RE-444) then the one with the
+  greatest vertical extent within that partition and, on a tie, the later
+  offset; Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) the
+  latest offset, with no extent test. Before RE-444 Revit 2024 and later took the
+  greatest vertical extent first, which kept the older frame of an element made
+  shorter after an earlier save. A
   body reader may take another copy: the sketch-line readers take the current
   one (`current_partitions`, RE-216), which is also the copy `native.stream`
   names. So `offset` and `native.stream` can name different partitions, and the
@@ -415,9 +417,9 @@ What an entry's `offset` is, and what has been measured:
   finds an element framed in several partitions keeps the last frame in scan
   order, partition number and then offset, with no test of vertical extent. The
   frame `decoded.element_provenance` names for an exported element is the one
-  the exporter selected (`select_instance_records`: on Revit 2024 and later the
-  greatest vertical extent), so the two can name different frames of the same
-  element.
+  the exporter selected (`select_instance_records`: the newest partition and,
+  within it, on Revit 2024 and later the greatest vertical extent), so the two
+  can name different frames of the same element.
 - On Revit 2008 to 2023 files `element_record_frame_stopped` is made from the
   frames of the marker scan that did not become an element (see
   [Element record stages](#element-record-stages)): its `class` is the stage the

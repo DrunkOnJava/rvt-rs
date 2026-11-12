@@ -367,7 +367,7 @@
                   "offset": {
                     "type": "integer",
                     "minimum": 0,
-                    "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected among the element's frames (Revit 2024 and later: the greatest vertical extent, then the greater stream and offset; 2008 to 2023: the newest), which a body reader may not have taken: value_sources names the copy a reader took a value from. It and native.stream can name different partitions. For the global_latest_schema_walk carrier it indexes Global/Latest as the walk inflates it; that carrier is unmeasured."
+                    "description": "Where the record or frame starts in that stream inflated: the frame the exporter selected among the element's frames (the newest: the highest-numbered partition, then on Revit 2024 and later the greatest vertical extent within it, then the later offset), which a body reader may not have taken: value_sources names the copy a reader took a value from. It and native.stream can name different partitions. For the global_latest_schema_walk carrier it indexes Global/Latest as the walk inflates it; that carrier is unmeasured."
                   },
                   "record_offset": {
                     "type": "integer",

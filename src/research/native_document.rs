@@ -290,8 +290,8 @@ pub struct Summary {
     pub partitions: BTreeMap<String, native_segments::Statistics>,
     pub parameter_definitions: BTreeMap<i64, crate::native_parameter_definitions::Definition>,
     pub definition_diagnostics: BTreeMap<u64, String>,
-    pub unit_formats: BTreeMap<String, serde_json::Value>,
-    pub builtin_catalog_provenance: Option<serde_json::Value>,
+    pub unit_formats: BTreeMap<String, crate::graph_value::Fv>,
+    pub builtin_catalog_provenance: Option<crate::graph_value::Fv>,
     pub parameter_binding_context: serde_json::Value,
 }
 /// Integrity-checked member boundaries. The suffix is retained as opaque storage

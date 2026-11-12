@@ -39,11 +39,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_saved_mesh::{face, pointer};
 use rvt::research::native_saved_scene;
-use serde_json::Value;
 
 const FULL: [u64; 2] = [2058852, 1766487];
 const OBJECT_LIMIT: usize = 400;
@@ -63,20 +63,20 @@ fn cap(text: String, limit: usize) -> String {
     }
 }
 
-fn compact(value: Option<&Value>) -> String {
+fn compact(value: Option<&Fv>) -> String {
     value.map_or("-".to_string(), |v| v.to_string())
 }
 
-fn pointers(value: &Value, out: &mut Vec<Value>) {
+fn pointers(value: &Fv, out: &mut Vec<Fv>) {
     match value {
-        Value::Object(map) if map.contains_key("pointer_token") => out.push(value.clone()),
-        Value::Object(map) => map.values().for_each(|v| pointers(v, out)),
-        Value::Array(items) => items.iter().for_each(|v| pointers(v, out)),
+        Fv::Object(map) if map.contains_key("pointer_token") => out.push(value.clone()),
+        Fv::Object(map) => map.values().iter().for_each(|v| pointers(v, out)),
+        Fv::Array(items) => items.iter().for_each(|v| pointers(v, out)),
         _ => {}
     }
 }
 
-fn element_id(value: &Value) -> Option<u64> {
+fn element_id(value: &Fv) -> Option<u64> {
     value
         .pointer("/m_id/m_id64")?
         .as_i64()
@@ -157,7 +157,7 @@ fn summarize(graph: &ObjectGraph, id: u64, full: bool) -> Vec<String> {
         let Some(geometry) = graph.objects.get(gi) else {
             continue;
         };
-        let Some(faces) = geometry.fields.get("m_pFaces").and_then(Value::as_array) else {
+        let Some(faces) = geometry.fields.get("m_pFaces").and_then(Fv::as_array) else {
             out.push(format!("symsolid {id} {n} class={}", geometry.class_name));
             continue;
         };
@@ -263,8 +263,8 @@ fn main() -> anyhow::Result<()> {
                 .objects
                 .first()
                 .and_then(|root| root.fields.get("m_pCutLoops"))
-                .and_then(Value::as_array)
-                .is_some_and(Vec::is_empty);
+                .and_then(Fv::as_array)
+                .is_some_and(<[Fv]>::is_empty);
             if uncut {
                 symbol_lines.insert(id, summarize(graph, id, FULL.contains(&id)));
             }

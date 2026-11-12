@@ -191,7 +191,7 @@ fn read_base_by_graph(
             field
                 .as_array()
                 .ok_or_else(|| anyhow::anyhow!("constraint reference container missing"))?
-                .clone()
+                .to_vec()
         } else {
             vec![field.clone()]
         };

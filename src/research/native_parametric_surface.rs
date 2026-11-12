@@ -1,12 +1,12 @@
 //! Typed evaluators for the non-planar surfaces observed in saved graphs.
 
+use crate::graph_value::Fv;
 use crate::native_parameters::ObjectGraph;
 use crate::vector_math::{cross, dot, sub};
 use anyhow::{Context, Result, bail, ensure};
-use serde_json::Value;
 
 pub type Point = [f64; 3];
-fn p(v: &Value, n: &str) -> Result<Point> {
+fn p(v: &Fv, n: &str) -> Result<Point> {
     let a = v
         .as_array()
         .with_context(|| format!("{n} must be an array"))?;
@@ -31,7 +31,7 @@ fn mul(a: Point, s: f64) -> Point {
 fn len(a: Point) -> f64 {
     dot(a, a).sqrt()
 }
-fn range(v: &Value, n: &str) -> Result<[f64; 2]> {
+fn range(v: &Fv, n: &str) -> Result<[f64; 2]> {
     let a = v
         .as_array()
         .with_context(|| format!("{n} must be an array"))?;
@@ -46,7 +46,7 @@ fn range(v: &Value, n: &str) -> Result<[f64; 2]> {
     );
     Ok(r)
 }
-fn corner(v: &Value) -> Result<[f64; 2]> {
+fn corner(v: &Fv) -> Result<[f64; 2]> {
     let a = v.as_array().context("envelope corner")?;
     ensure!(a.len() == 2, "envelope corner must have two coordinates");
     let r = [
@@ -60,11 +60,11 @@ fn corner(v: &Value) -> Result<[f64; 2]> {
     Ok(r)
 }
 
-fn target(g: &ObjectGraph, source: usize, v: &Value) -> Result<usize> {
+fn target(g: &ObjectGraph, source: usize, v: &Fv) -> Result<usize> {
     crate::native_saved_mesh::pointer(g, source, v)?.context("missing surface pointer target")
 }
 
-fn basis(f: &Value) -> Result<(Point, Point, Point)> {
+fn basis(f: &Fv) -> Result<(Point, Point, Point)> {
     let x = p(&f["m_xVec"], "surface x basis")?;
     let y = p(&f["m_yVec"], "surface y basis")?;
     let z = p(&f["m_zVec"], "surface z basis")?;

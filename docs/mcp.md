@@ -265,12 +265,11 @@ its report, Corpus health's `element-provenance` artifact); no figure is stated
 here yet. The fields are never written into the IFC.
 
 When an element has several partition element record frames, `offset` is the
-one the exporter selected. On Revit 2024 and later
-(`select_instance_records`) that is the frame with the greatest vertical extent
-and, on a tie, the higher-numbered partition and then the later offset;
-on Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) it is the
-newest, the highest-numbered partition and then the latest offset, with no extent
-test. A body reader may take another copy (the sketch-line readers take the
+one the exporter selected. It is the newest, the highest-numbered partition: on
+Revit 2024 and later (`select_instance_records`, RE-444) then the frame with the
+greatest vertical extent within that partition and, on a tie, the later offset;
+on Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) the latest
+offset, with no extent test. A body reader may take another copy (the sketch-line readers take the
 current one, `current_partitions`, RE-216), and `native_record.stream` names the
 current native copy. So `offset` and `native_record.stream` can name different
 partitions. `get_element` and `explain_element` list, in `value_sources`, the

@@ -29,19 +29,19 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
-use serde_json::Value;
 
 const OBJECTS: usize = 400;
 
-fn scalar(value: &Value) -> Option<String> {
+fn scalar(value: &Fv) -> Option<String> {
     match value {
-        Value::Number(n) => Some(n.to_string()),
-        Value::Bool(b) => Some(b.to_string()),
-        Value::String(s) if s.len() <= 40 => Some(s.replace(' ', "_")),
-        Value::Object(_) => value
+        n @ (Fv::U64(_) | Fv::I64(_) | Fv::F64(_)) => Some(n.to_string()),
+        Fv::Bool(b) => Some(b.to_string()),
+        Fv::Str(s) if s.len() <= 40 => Some(s.replace(' ', "_")),
+        Fv::Object(_) => value
             .pointer("/m_id/m_id64")
-            .and_then(Value::as_i64)
+            .and_then(Fv::as_i64)
             .map(|id| format!("@{}", id.signum())),
         _ => None,
     }
@@ -139,7 +139,7 @@ fn main() -> anyhow::Result<()> {
                     .fields
                     .get("m_hostId")
                     .and_then(|value| value.pointer("/m_id/m_id64"))
-                    .and_then(Value::as_i64)
+                    .and_then(Fv::as_i64)
                     .and_then(|id| u64::try_from(id).ok())
             });
             if let Some(host) = host {
@@ -153,7 +153,7 @@ fn main() -> anyhow::Result<()> {
                     .fields
                     .get("m_otherId")
                     .and_then(|value| value.pointer("/m_id/m_id64"))
-                    .and_then(Value::as_i64)
+                    .and_then(Fv::as_i64)
                     .and_then(|id| u64::try_from(id).ok());
                 if let Some(other) = other {
                     others

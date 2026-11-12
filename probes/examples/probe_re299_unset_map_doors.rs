@@ -80,14 +80,14 @@ fn main() -> anyhow::Result<()> {
             .and_then(|graph| graph.objects.first());
         if let Some(map) = root
             .and_then(|root| root.fields.get("m_geomTag2MaterialId"))
-            .and_then(serde_json::Value::as_array)
+            .and_then(rvt::research::graph_value::Fv::as_array)
         {
             let unset = map
                 .iter()
                 .filter(|entry| {
                     entry
                         .pointer("/second/m_id/m_id64")
-                        .and_then(serde_json::Value::as_i64)
+                        .and_then(rvt::research::graph_value::Fv::as_i64)
                         == Some(-1)
                 })
                 .count();
@@ -96,7 +96,7 @@ fn main() -> anyhow::Result<()> {
         let family = root
             .and_then(|root| root.fields.get("m_familyId"))
             .and_then(|id| id.pointer("/m_id/m_id64"))
-            .and_then(serde_json::Value::as_i64)
+            .and_then(rvt::research::graph_value::Fv::as_i64)
             .and_then(|id| u64::try_from(id).ok());
         if let Some(family) = family {
             family_of.insert(record.identity.element_id, family);

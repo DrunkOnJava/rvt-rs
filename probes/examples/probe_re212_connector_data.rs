@@ -26,11 +26,11 @@
 //!   cargo run --profile ci -p rvt-probes --example probe_re212_connector_data -- MODEL.rvt
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
-use serde_json::Value;
 use std::collections::BTreeSet;
 
-fn element_id(value: &Value) -> Option<i64> {
+fn element_id(value: &Fv) -> Option<i64> {
     value.get("m_id")?.get("m_id64")?.as_i64()
 }
 
@@ -62,7 +62,7 @@ fn main() -> anyhow::Result<()> {
         };
         let id = record.identity.element_id;
         if shown.insert(class.to_string()) {
-            let names: Vec<&String> = root
+            let names: Vec<&str> = root
                 .fields
                 .as_object()
                 .map(|o| o.keys().collect())
@@ -88,7 +88,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
         if class == "FamilyInstance" {
-            let place: serde_json::Map<String, Value> = [
+            let place: serde_json::Map<String, serde_json::Value> = [
                 "m_instOrigin",
                 "m_RefDir",
                 "m_zAxis",
@@ -98,7 +98,7 @@ fn main() -> anyhow::Result<()> {
                 "m_mirrored",
             ]
             .iter()
-            .filter_map(|name| Some((name.to_string(), root.fields.get(*name)?.clone())))
+            .filter_map(|name| Some((name.to_string(), root.fields.get(*name)?.to_json())))
             .collect();
             println!("place {id} {}", serde_json::to_string(&place)?);
         }
@@ -127,7 +127,7 @@ fn main() -> anyhow::Result<()> {
                 }
             }
             "FamilyInstance" => {
-                let connectors: Vec<&Value> = graph
+                let connectors: Vec<&Fv> = graph
                     .objects
                     .iter()
                     .filter(|o| o.class_name == "Connector")

@@ -26,15 +26,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::native_parameters::{GraphObject, ObjectGraph};
-use serde_json::Value;
 
 const FULL_CHARS: usize = 30_000;
 const SAMPLE_HOSTS: usize = 3;
 
-fn link(value: &Value) -> Option<i64> {
-    value.pointer("/m_id/m_id64").and_then(Value::as_i64)
+fn link(value: &Fv) -> Option<i64> {
+    value.pointer("/m_id/m_id64").and_then(Fv::as_i64)
 }
 
 fn clip(text: String) -> String {
@@ -46,7 +46,7 @@ fn clip(text: String) -> String {
     }
 }
 
-fn find<'a>(graph: &'a ObjectGraph, name: &str) -> Option<&'a Value> {
+fn find<'a>(graph: &'a ObjectGraph, name: &str) -> Option<&'a Fv> {
     graph
         .objects
         .iter()
@@ -60,22 +60,18 @@ fn object<'a>(graph: &'a ObjectGraph, class: &str) -> Option<&'a GraphObject> {
         .find(|object| object.class_name == class)
 }
 
-fn id_of(value: Option<&Value>) -> Option<u64> {
+fn id_of(value: Option<&Fv>) -> Option<u64> {
     value.and_then(link).and_then(|id| u64::try_from(id).ok())
 }
 
-fn list<'a>(value: &'a Value, key: &str) -> &'a [Value] {
-    value
-        .get(key)
-        .and_then(Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or(&[])
+fn list<'a>(value: &'a Fv, key: &str) -> &'a [Fv] {
+    value.get(key).and_then(Fv::as_array).unwrap_or(&[])
 }
 
-fn number(value: &Value, key: &str) -> String {
+fn number(value: &Fv, key: &str) -> String {
     value
         .get(key)
-        .and_then(Value::as_i64)
+        .and_then(Fv::as_i64)
         .map_or("-".to_string(), |n| n.to_string())
 }
 
@@ -121,7 +117,7 @@ fn main() -> anyhow::Result<()> {
                 host.map_or("-".to_string(), |h| h.to_string()),
                 id_of(find(graph, "m_masterSymbolId")).map_or("-".to_string(), |t| t.to_string()),
                 find(graph, "m_edgeTag")
-                    .and_then(Value::as_i64)
+                    .and_then(Fv::as_i64)
                     .map_or("-".to_string(), |e| e.to_string()),
             );
             Ok(())
@@ -153,7 +149,7 @@ fn main() -> anyhow::Result<()> {
             joins_of.insert(id, joins.len());
             let join_types = object(graph, "CurtainGrid")
                 .and_then(|grid| grid.fields.get("m_joinTypes"))
-                .map_or("-".to_string(), Value::to_string);
+                .map_or("-".to_string(), Fv::to_string);
             println!(
                 "drv {id} {} {} {} {join_types}",
                 number(&driver.fields, "m_mullionJoinId"),
@@ -175,7 +171,7 @@ fn main() -> anyhow::Result<()> {
                     "join {id} {} {} {}",
                     number(join, "m_id"),
                     join.get("m_constULinesButt")
-                        .map_or("-".to_string(), Value::to_string),
+                        .map_or("-".to_string(), Fv::to_string),
                     set.join(",")
                 );
             }
@@ -238,9 +234,11 @@ fn main() -> anyhow::Result<()> {
             let id = record.identity.element_id;
             if class == "CurtainGridLine" {
                 let root = &graph.objects[0];
-                let mut fields = root.fields.clone();
+                let mut fields = root.fields.to_json();
                 if let Some(map) = fields.as_object_mut() {
-                    map.retain(|_, value| !value.is_object() || link(value).is_some());
+                    map.retain(|_, value| {
+                        !value.is_object() || link(&Fv::from_value(value)).is_some()
+                    });
                 }
                 println!(
                     "gl {id} {} {}",

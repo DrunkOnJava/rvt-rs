@@ -23,10 +23,10 @@ use rvt::{RevitFile, research::native_document};
 use serde_json::json;
 use std::collections::BTreeSet;
 
-fn id(value: Option<&serde_json::Value>) -> Option<i64> {
+fn id(value: Option<&rvt::research::graph_value::Fv>) -> Option<i64> {
     value
         .and_then(|v| v.pointer("/m_id/m_id64"))
-        .and_then(serde_json::Value::as_i64)
+        .and_then(rvt::research::graph_value::Fv::as_i64)
 }
 
 fn main() -> anyhow::Result<()> {
