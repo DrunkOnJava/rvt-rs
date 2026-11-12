@@ -501,14 +501,6 @@ pub fn extract_in_batches_with_control(
                 );
                 Ok(())
             })?;
-            // A symbol that names an owner whose graph was freed with an
-            // earlier batch (no owner names it, so it was not kept): the mesh
-            // looks it up among the shared records, so it is read again.
-            wanted.extend(found.iter().copied().filter(|id| {
-                owner_references.contains_key(id)
-                    && !owners.contains_key(id)
-                    && !attempted.contains(id)
-            }));
             add_references(
                 found,
                 &owner_references,
