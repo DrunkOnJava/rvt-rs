@@ -60,7 +60,7 @@ fn find_ids(value: &Fv, wanted: &BTreeSet<u64>, path: String, out: &mut Vec<(Str
             {
                 out.push((path.clone(), id));
             }
-            for (name, member) in members {
+            for (name, member) in members.iter() {
                 find_ids(member, wanted, format!("{path}.{name}"), out);
             }
         }
