@@ -1031,8 +1031,19 @@ impl RevitFile {
     /// Drop the kept parameter-definition pass, whose registry an MEP model
     /// makes tens of MiB: the export does once it has made its last
     /// extraction, so a file read once keeps nothing.
+    #[track_caller]
     pub(crate) fn forget_native_definitions(&mut self) {
-        self.native_definitions = None;
+        if self.native_definitions.take().is_some() {
+            crate::native_document::note_event(
+                "definitions dropped",
+                std::panic::Location::caller(),
+            );
+        }
+    }
+
+    /// Whether a parameter-definition pass is held, under any key.
+    pub(crate) fn holds_native_definitions(&self) -> bool {
+        self.native_definitions.is_some()
     }
 
     /// Keep a parameter-definition pass for later extractions under `key`.
