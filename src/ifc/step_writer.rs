@@ -4029,7 +4029,15 @@ impl StepWriter<'_> {
             // which are the right way round on a rectangular opening (not on
             // a door's, RE-244). With base quantities off the wall has none
             // and the opening none either.
-            if *with_quantities && wall_widths.contains_key(host) {
+            // #1165: the opening a door cuts in a second wall is a rectangle
+            // extruded across that wall as the ones above are, and Revit's
+            // export measures it the same way round, not swapped as on a
+            // door's own opening (RE-244): its `Depth` is that extrusion's
+            // extent, the door's width, and its `Height` the outline's. Its
+            // `Width` stays out: Revit's is the thickness of the wall the
+            // door stands in, and the outline here is 0.2 mm wider than that
+            // on two of the four openings read on the BIM4LCA office.
+            if wall_widths.contains_key(host) {
                 let extent = |axis: fn(&(f64, f64)) -> f64| {
                     let low = outline_feet.iter().map(axis).fold(f64::INFINITY, f64::min);
                     let high = outline_feet
@@ -4042,13 +4050,15 @@ impl StepWriter<'_> {
                     name: name.into(),
                     value: super::entities::PropertyValue::PositiveLengthFeet(feet),
                 };
+                let mut properties = Vec::new();
+                if *with_quantities {
+                    properties.push(length("Width", extent(|point| point.0)));
+                }
+                properties.push(length("Height", extent(|point| point.1)));
+                properties.push(length("Depth", *thickness_feet));
                 let quantities = PropertySet {
                     name: "Qto_OpeningElementBaseQuantities".into(),
-                    properties: vec![
-                        length("Width", extent(|point| point.0)),
-                        length("Height", extent(|point| point.1)),
-                        length("Depth", *thickness_feet),
-                    ],
+                    properties,
                 };
                 self.emit_property_set(
                     owner_hist,
