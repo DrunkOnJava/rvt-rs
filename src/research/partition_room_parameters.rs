@@ -363,6 +363,7 @@ pub fn data_objects(buf: &[u8]) -> Vec<(usize, DataObject)> {
     let u32_at = |p: usize| le_bytes::u32_at(buf, p).unwrap_or(0);
     let mut out = Vec::new();
     let mut p = 0;
+    let (mut verified, budget) = (0usize, buf.len().saturating_mul(4));
     while p + DATA_OBJECT_HEADER <= buf.len() {
         let size = u32_at(p + 12) as usize;
         // On a 32-bit target a size read from arbitrary bytes can carry the
@@ -371,6 +372,16 @@ pub fn data_objects(buf: &[u8]) -> Vec<(usize, DataObject)> {
         let plausible = end.is_some_and(|end| {
             u32_at(p + 4) == 0 && size >= 4 && end <= buf.len() && u32_at(end - 4) as usize == size
         });
+        // Each plausible header costs an Adler-32 over its payload. A real
+        // stream's objects follow each other, so verifying them reads the
+        // stream about once; a crafted one nested plausible headers to make
+        // it quadratic (#1833). Past four times the stream, no more objects.
+        if plausible {
+            verified = verified.saturating_add(size);
+            if verified > budget {
+                break;
+            }
+        }
         match plausible.then(|| verified_data_object(buf, p)).flatten() {
             Some(object) => {
                 out.push((p, object));
@@ -454,7 +465,13 @@ pub fn scan_text_parameter(
     let tag = parameter.to_le_bytes();
     let mut found = LatestCopy::default();
     for stream in rf.partition_stream_names() {
-        let Ok(inflated) = rf.inflated_partition(&stream) else {
+        // Each hit's owner from the stream's data objects, listed once: a
+        // backward search of up to `DATA_OBJECT_SEARCH` bytes for every hit
+        // cost hits × 200,000 steps (#1833).
+        let (Ok(inflated), Ok(objects)) = (
+            rf.inflated_partition(&stream),
+            rf.memoised_partition_data_objects(&stream),
+        ) else {
             continue;
         };
         let partition = partition_number(&stream);
@@ -467,7 +484,7 @@ pub fn scan_text_parameter(
                     None => continue,
                 },
             };
-            let Some(element) = enclosing_data_object(buf, hit).filter(|id| elements.contains(id))
+            let Some(element) = data_object_owner(&objects, hit).filter(|id| elements.contains(id))
             else {
                 continue;
             };
@@ -510,7 +527,13 @@ pub fn scan_integer_parameter(
     let tag = parameter.to_le_bytes();
     let mut found = LatestCopy::default();
     for stream in rf.partition_stream_names() {
-        let Ok(inflated) = rf.inflated_partition(&stream) else {
+        // Each hit's owner from the stream's data objects, listed once: a
+        // backward search of up to `DATA_OBJECT_SEARCH` bytes for every hit
+        // cost hits × 200,000 steps (#1833).
+        let (Ok(inflated), Ok(objects)) = (
+            rf.inflated_partition(&stream),
+            rf.memoised_partition_data_objects(&stream),
+        ) else {
             continue;
         };
         let partition = partition_number(&stream);
@@ -519,7 +542,7 @@ pub fn scan_integer_parameter(
             let Some(value) = le_bytes::u32_at(buf, hit + tag.len()) else {
                 continue;
             };
-            let Some(element) = enclosing_data_object(buf, hit).filter(|id| elements.contains(id))
+            let Some(element) = data_object_owner(&objects, hit).filter(|id| elements.contains(id))
             else {
                 continue;
             };
@@ -702,7 +725,13 @@ pub fn find_parameter_definitions(rf: &mut RevitFile, revit_version: u32) -> BTr
         .collect();
     let mut found: BTreeMap<String, Option<u32>> = BTreeMap::new();
     for stream in rf.partition_stream_names() {
-        let Ok(inflated) = rf.inflated_partition(&stream) else {
+        // Each hit's owner from the stream's data objects, listed once: a
+        // backward search of up to `DATA_OBJECT_SEARCH` bytes for every hit
+        // cost hits × 200,000 steps (#1833).
+        let (Ok(inflated), Ok(objects)) = (
+            rf.inflated_partition(&stream),
+            rf.memoised_partition_data_objects(&stream),
+        ) else {
             continue;
         };
         let buf = inflated.bytes();
@@ -714,7 +743,7 @@ pub fn find_parameter_definitions(rf: &mut RevitFile, revit_version: u32) -> BTr
             let name = (after..after + PARAMETER_NAME_WINDOW).find_map(|at| {
                 utf16_entry(buf, at, 256).filter(|name| name.encode_utf16().count() >= 2)
             });
-            let (Some(name), Some(id)) = (name, enclosing_data_object(buf, hit)) else {
+            let (Some(name), Some(id)) = (name, data_object_owner(&objects, hit)) else {
                 continue;
             };
             match found.get_mut(&name) {
