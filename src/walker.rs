@@ -609,7 +609,7 @@ impl DecodedElement {
 /// any model reached the IFC, glTF and plan SVG as one (#1845). As bytes it
 /// is read as absent and written back unchanged.
 fn float_field(value: f64, size: u8, raw: &[u8]) -> InstanceField {
-    if crate::le_bytes::physical(value) {
+    if le_bytes::physical(value) {
         InstanceField::Float { value, size }
     } else {
         InstanceField::Bytes(raw.to_vec())
