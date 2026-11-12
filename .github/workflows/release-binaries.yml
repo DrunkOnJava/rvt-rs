@@ -432,10 +432,20 @@ jobs:
           # patch to an older line (0.14.1 after 0.19.0, #1808): only the highest
           # released version takes it. Only vX.Y.Z tags count, since a stray `v`
           # tag (`vscode`) would sort above every version and hold `latest` for good.
-          highest="$(git ls-remote --tags --refs "https://github.com/${GITHUB_REPOSITORY}" 'v*' \
-            | sed 's#.*refs/tags/v##' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
-          if [[ -n "${TAG_INPUT}" && "${version}" != *-* && "${version}" == "${highest}" ]]; then
-            tags="${tags},${image}:latest"
+          if [[ -n "${TAG_INPUT}" && "${version}" != *-* ]]; then
+            # Listed on its own line so that a failed lookup fails the step:
+            # read as an empty list, it would quietly keep `latest` off a
+            # release that should have it.
+            remote_tags="$(git ls-remote --tags --refs "https://github.com/${GITHUB_REPOSITORY}" 'v*')"
+            highest="$(printf '%s\n' "${remote_tags}" | sed 's#.*refs/tags/v##' \
+              | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+            if [[ -z "${highest}" ]]; then
+              echo "::error::the remote lists no vX.Y.Z tag, not even ${TAG_INPUT}, so whether this release takes latest cannot be decided"
+              exit 1
+            fi
+            if [[ "${version}" == "${highest}" ]]; then
+              tags="${tags},${image}:latest"
+            fi
           fi
           {
             echo "image=${image}"
@@ -617,9 +627,15 @@ jobs:
           (cd dist && sha256sum -c SHA256SUMS)
           # GitHub marks a new release Latest unless told not to: a patch to an
           # older line (0.14.1 after 0.19.0, #1808) must leave the mark where it is.
-          # Only vX.Y.Z tags count, as in the image's tags above.
-          highest="$(git ls-remote --tags --refs "https://github.com/${GITHUB_REPOSITORY}" 'v*' \
-            | sed 's#.*refs/tags/##' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+          # Only vX.Y.Z tags count, and a failed lookup fails the step, as in the
+          # image's tags above.
+          remote_tags="$(git ls-remote --tags --refs "https://github.com/${GITHUB_REPOSITORY}" 'v*')"
+          highest="$(printf '%s\n' "${remote_tags}" | sed 's#.*refs/tags/##' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)"
+          if [[ -z "${highest}" ]]; then
+            echo "::error::the remote lists no vX.Y.Z tag, so whether ${TAG} takes the Latest mark cannot be decided"
+            exit 1
+          fi
           latest=false
           if [[ "${TAG}" == "${highest}" ]]; then
             latest=true
