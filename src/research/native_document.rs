@@ -787,14 +787,19 @@ pub(crate) fn group_records(
         let end = start
             .checked_add(length)
             .ok_or_else(|| anyhow::anyhow!("native record size overflow"))?;
+        // A 32-bit `usize` lets `end` land within 4 of `usize::MAX`, so
+        // `end + 4` must fail closed rather than wrap past the bounds check.
+        let next = end
+            .checked_add(4)
+            .ok_or_else(|| anyhow::anyhow!("native record size overflow"))?;
         ensure!(
-            end + 4 <= bytes.len()
-                && u32::from_le_bytes(bytes[end..end + 4].try_into()?) as usize == length,
+            next <= bytes.len()
+                && u32::from_le_bytes(bytes[end..next].try_into()?) as usize == length,
             "native record dual lengths disagree"
         );
         records.push((id, pos, start, end));
         body_sum += length as u64;
-        pos = end + 4;
+        pos = next;
     }
     let count = records.len() as u64;
     ensure!(
