@@ -119,7 +119,8 @@ fn main() -> anyhow::Result<()> {
     drop(diagnostics);
 
     stages.begin();
-    let detail = match rvt::ifc::saved_meshes::default_scope(&mut rf) {
+    // Scratch (0.14.1 row 3): the scope `rvt-ifc --saved-meshes` uses.
+    let detail = match Some(rvt::ifc::saved_meshes::SavedMeshScope::All) {
         Some(scope) => {
             let control = rvt::control::WalkerControl::default();
             match rvt::ifc::saved_meshes::attach_scoped_with_control(
