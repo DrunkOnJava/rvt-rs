@@ -170,7 +170,7 @@ fn read_wall_records(rf: &mut RevitFile, walls: &BTreeSet<u64>) -> anyhow::Resul
             read.insert(id);
             if graph.objects.iter().any(|object| {
                 object.class_name == "JoinToRoofGStep"
-                    && object.fields.get("m_baseOrTop").and_then(Value::as_i64) != Some(1)
+                    && object.fields.get("m_baseOrTop").and_then(Fv::as_i64) != Some(1)
             }) {
                 attached.insert(id);
             }
