@@ -1929,7 +1929,13 @@ pub fn append_typed_production_elements(
 
     // #1384: a wall's base is cut at the top of the floor or footing it stands
     // on, level or following that element's shape-edited top.
-    wall_tops::cut_wall_bases(entities, &pending_bases, &slab_shapes, &end_steps);
+    wall_tops::cut_wall_bases(
+        entities,
+        &pending_bases,
+        &slab_shapes,
+        &end_steps,
+        &plate_roofs,
+    );
     wall_tops::finish_wall_ends(entities, &end_steps);
 
     // #1473: the cut-out of an edited elevation profile goes on, a line along
