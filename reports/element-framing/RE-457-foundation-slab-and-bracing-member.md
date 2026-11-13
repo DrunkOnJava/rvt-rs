@@ -5,7 +5,7 @@
 **Artefacts:** a reporter's Revit 2027 structural model with Revit's IFC4 export of the same save (confidential; their counts only, read through the Revit API and from the export); Autodesk's Snowdon Towers Structural sample (Revit 2024) and `rst_basic` (Revit 2023 to 2027); Autodesk's exporter source (revit-ifc, CLEANROOM.md source 5: cited, not quoted)
 **Probe:** `probes/examples/probe_1841_framing_usage.rs` (the reporter ran its Windows build from `probe-binaries.yml`)
 **Runs:** Measure [43465228601](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43465228601) (the exports of both sides kept for Snowdon Towers Structural, `rac_basic` and `rst_basic` of 2024, at `d11e99cb`) and [43465218624](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43465218624) (unfiltered, the same head)
-**Status:** the floor rule is read on the open models (section 5); both rules wait on the reporter's counts after a release, since no open model with a Revit export has a foundation or a bracing.
+**Status:** the floor rule is read on the open models and by the unfiltered Measure (section 5); both rules wait on the reporter's counts after a release, since no open model with a Revit export has a foundation or a bracing.
 
 ## 1. The question
 
@@ -29,12 +29,12 @@ The reporter's model has 60 elements whose IFC class differs from Revit's export
 ## 5. Rows, registered on #1841 before the Measure of this change was dispatched, and what the runs read
 
 1. **Holds.** The 4 floors of the category in Snowdon Towers Structural (tags 680685, 680724, 784139 and 784189) go from `IfcFooting` to `IfcSlab` with `BASESLAB` on the occurrence (a Revit 2024 file), with the same GlobalIds; its 86 other `IfcFooting` and every other element are as before (1,282 elements, 4 differ).
-2. **Holds on the 2024 save.** `rst_basic` of 2024 differs in no element (454 of 454; its 36 `IfcFooting` stay). The other saves are read on the unfiltered run.
-3. **One more file holds a floor of the category.** `rac_basic` of 2024 has one (tag 766598, type `150mm Foundation Slab`), which row 3 allowed; it is the only other element of the kept exports that changes (453 elements, 1 differs).
+2. **Holds on every save.** `rst_basic` of 2024 differs in no element (454 of 454; its 36 `IfcFooting` stay), and its twelve other saves, 2015 to 2023 and 2025 to 2027, export byte for byte as on `main` in the unfiltered run.
+3. **One more file holds a floor of the category.** `rac_basic` has one (tag 766598 on its 2024 save, type `150mm Foundation Slab`), which row 3 allowed; on 2024 it is the only other element of the kept exports that changes (453 elements, 1 differs). The unfiltered run shows the same floor move on the 2025, 2026 and 2027 saves, and no `rac_basic` save before 2024 changes: each of the four exports differs, with 3 more property sets, and the scorers count on the 2026 and 2027 saves one more `IfcSlab` (12 for 11 in `RvtElementRecordGeometry.SourceStream`, 10 for 9 in `Pset_SlabCommon.IsExternal`) and one fewer `IfcFooting` (22 for 23), and on 2024, 2025 and 2026 one more `IfcSlab` with a `PredefinedType` (a Revit 2027 save states none, #1692). Against the 2025 save, the 2026 and 2027 saves hold every property compared equal (663 of 663 values, none differ; 662 before).
 4. **What the 5 gain besides the class.** The `Floor` system family and the name `Floor:<type name>:<ElementId>` as Revit names a floor, an `IfcSlabType` named `Floor:<type name>` that carries `BASESLAB` (row 6 below), and the property sets of a floor (`Pset_SlabCommon` with `IsExternal` false, `Identity Data`, `Pset_EnvironmentalImpactIndicators`, `Pset_ReinforcementBarPitchOfSlab`). No other property of theirs changes.
-5. **Same-project gates:** pending.
+5. **Same-project gates:** pass on `d11e99cb`, the commit the unfiltered run measured (check run `same-project gates`, success). The one commit after it changes this report only.
 6. **Holds.** Each of the 5 has an `IfcSlabType` with `BASESLAB`; on a Revit 2027 save the occurrence states none by the rule for slabs (#1692), and the type keeps the value, as the reporter's 59 do. The first kept run (43463267911, the floor commit alone) showed these floors with no type object, which is why the system family name is derived for them.
-7. **The member rule.** No open sample carries usage 8 (their values are 3 to 6), so no `IfcMember` is added and no `IfcBeam` is lost; the read adds no pass over the file and the unfiltered run, pending, shows whether any export differs for it.
+7. **The member rule.** No open sample carries usage 8 (their values are 3 to 6), so no `IfcMember` is added and no `IfcBeam` is lost: the unfiltered run exports 146 models (every flag), and the 141 that are not the five above are byte for byte as on `main`, in their exports and their diagnostics. The read adds no pass over the file.
 
 ## 6. Not changed, and what is left out
 

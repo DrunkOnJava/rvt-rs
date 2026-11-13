@@ -1255,8 +1255,9 @@ reporter's Revit 2027 structural model Revit's export writes the 59 foundation
 slabs as `IfcSlab` (`BASESLAB` on their types) and the one framing instance of
 usage 8 as `IfcMember`, where the 914 of usage 3 and 6 are `IfcBeam` (#1841). A
 floor is told from a footing by the class its record names: Snowdon Towers
-Structural has 4 floors among its 90 footings and `rst_basic` none among its 36,
-and the usage is read in the pass that already reads the beams' rotations. No
+Structural has 4 floors among its 90 footings, `rac_basic` has 1 on each save
+from 2024 and `rst_basic` none among its 36, and the usage is read in the pass
+that already reads the beams' rotations. No
 model Measure holds with a Revit export has a foundation or a bracing, so
 neither rule is scored against Revit here: the reporter's counts after a
 release are the check, and the member's `PredefinedType` is not read
