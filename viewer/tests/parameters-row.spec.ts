@@ -7,6 +7,9 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const coreInteriorPath = path.resolve(__dirname, '../public/demos/2024_Core_Interior.rvt');
 const coreInteriorTest = fs.existsSync(coreInteriorPath) ? test : test.skip;
+// RE1 Mechanical (Drshelden/IFC-ECS, MIT), which viewer-test.yml fetches beside
+// the magnetar models.
+const re1MechanicalPath = path.resolve(__dirname, '../../_project_corpus/Revit/RE1-Mechanical.rvt');
 
 // B49 (#35): Core Interior's export writes Revit's parameter values into its
 // Pset_ property sets, so the status panel's Parameters row reports how many
@@ -329,15 +332,20 @@ sampleTest(
     test.setTimeout(900_000);
     const none = async (expected: Map<number, Parameter[]>) =>
       (await treeElements(page)).find(({ id }) => id !== null && expected.get(id)?.length === 0);
-    // The sample first; the largest reference model when none of the sample's
-    // elements is one.
+    // The sample first, then the reference models this job holds, until one
+    // has such an element. Einhoven had one in its ArcWall matches, which were
+    // its curtain wall's panels and grid lines (RE-440) and are no longer
+    // written; every element its export writes now has parameters, and so has
+    // every element of Core Interior's. RE1 Mechanical has 25 (v0.22.0's
+    // rvt-elements against its rvt-ifc export, 2026-11-13).
     await open(page, sample!);
     let from = path.basename(sample!);
     let found = await none(oracle());
-    if (found === undefined && fs.existsSync(coreInteriorPath)) {
-      await open(page, coreInteriorPath);
-      from = path.basename(coreInteriorPath);
-      found = await none(rvtElements(coreInteriorPath));
+    for (const fallback of [coreInteriorPath, re1MechanicalPath]) {
+      if (found !== undefined || !fs.existsSync(fallback)) continue;
+      await open(page, fallback);
+      from = path.basename(fallback);
+      found = await none(rvtElements(fallback));
     }
     expect(found, 'an element of the tree that rvt-elements prints no parameters for').toBeDefined();
 
