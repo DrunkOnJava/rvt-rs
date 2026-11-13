@@ -361,8 +361,8 @@ AI changes all four:
 - Layer 3 (per-stream framing): **done** for every stream we've
   touched; 165-byte `Global/PartitionTable` invariant + 44-byte
   `Partitions/NN` header decoded.
-- Layer 4a (schema table): **done**. 3,490 to 4,285 class records on the 2016 to 2026 releases
-  per release (4,126 on the 2024 sample) with
+- Layer 4a (schema table): **done**. 3,490 to 4,285 class records
+  per release from 2016 to 2026 (4,126 on the 2024 sample) with
   `{tag, parent, ancestor_tag, declared_field_count}` per class.
 - Layer 4b (schema → data link): **done**. Tags from `Formats/Latest`
   occur in `Global/Latest` at ~340× the uniform-random rate.
