@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 use tempfile::NamedTempFile;
 
 use crate::config::{Config, Failure};
-use crate::root::{self, Root};
+use crate::root::{Folder, Root};
 use crate::store::lower_hex;
 
 /// A writer over the temporary file that counts and hashes what passes
@@ -76,7 +76,7 @@ fn outside(config: &Config, root: Option<&Root>, raw: &str, shown: &Path) -> Str
     match (&config.output_dir, root) {
         (Some(dir), _) => format!(
             "out_path must be inside {}, the folder the server was started with (--output-dir): {}",
-            dir.display(),
+            dir.dir().display(),
             shown.display()
         ),
         (None, Some(root)) => root.refusal("out_path", Path::new(raw)),
@@ -105,11 +105,11 @@ pub fn plan(
     // Exports go inside `--output-dir` when one was named and otherwise inside
     // the root (#1883); a relative path is taken from that folder.
     let root = config.reach.limit()?;
-    let base: Option<&Path> = config.output_dir.as_deref().or(root.map(|root| root.dir()));
+    let base: Option<&Folder> = config.output_dir.as_ref().or(root.map(Root::folder));
     if let Some(base) = base
         && path.is_relative()
     {
-        path = base.join(path);
+        path = base.dir().join(path);
     }
     let has_extension = path
         .extension()
@@ -127,7 +127,7 @@ pub fn plan(
     // Outside by its text: refused before any file is looked at, so that the
     // refusal does not say whether a folder there exists (#1883).
     if let Some(base) = base
-        && !root::inside(&path, base)
+        && !base.lexically_holds(&path)
     {
         return Err(outside(config, root, raw, &path));
     }
@@ -147,7 +147,7 @@ pub fn plan(
     let target = parent.join(file_name);
     // And once every link in the folder's path is resolved.
     if let Some(base) = base
-        && !target.starts_with(base)
+        && !base.holds(&target)
     {
         return Err(outside(config, root, raw, &target));
     }

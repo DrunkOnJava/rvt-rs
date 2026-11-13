@@ -36,7 +36,7 @@ use rvt::walker::WalkerLimits;
 
 use crate::config::Config;
 use crate::gate::Gate;
-use crate::root::Reach;
+use crate::root::{Folder, Reach};
 use crate::server::RvtServer;
 use crate::store::Store;
 
@@ -176,7 +176,7 @@ impl Args {
         )?;
         let output_dir = match &self.output_dir {
             Some(dir) => Some(
-                std::fs::canonicalize(dir)
+                Folder::new(dir)
                     .map_err(|error| format!("--output-dir {}: {error}", dir.display()))?,
             ),
             None => None,

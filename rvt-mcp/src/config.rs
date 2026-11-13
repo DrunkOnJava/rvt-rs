@@ -1,13 +1,12 @@
 //! What the server is started with, and how a tool job fails.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use rvt::reader::OpenLimits;
 use rvt::walker::WalkerLimits;
 
 use crate::gate::Gate;
-use crate::root::Reach;
+use crate::root::{Folder, Reach};
 
 /// Settings fixed when the server starts. The resource limits are the
 /// ones the CLIs apply, so a model that `rvt-ifc` refuses is refused here too.
@@ -25,7 +24,7 @@ pub struct Config {
     pub reach: Reach,
     /// When set, exports are written inside this folder only, which need not
     /// be inside the root.
-    pub output_dir: Option<PathBuf>,
+    pub output_dir: Option<Folder>,
     /// The most bytes of JSON one answer may carry; a longer one is refused.
     pub max_answer_bytes: usize,
     /// Where files are read and models decoded, as many at once as models are

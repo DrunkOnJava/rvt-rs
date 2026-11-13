@@ -1949,6 +1949,79 @@ fn the_setup_picks_the_root_by_flag_or_environment_whatever_the_working_director
     server.finish();
 }
 
+/// A folder reached through a link has two names, and a client sends the one it
+/// knows (`/tmp/work` and `/private/tmp/work` on macOS): paths spelled either way
+/// are inside a root or an output folder named either way, and a path outside
+/// is still refused by both. The resolved path is the gate.
+#[cfg(unix)]
+#[test]
+fn a_root_and_an_output_dir_reached_through_a_link_take_paths_spelled_either_way() {
+    let base = std::fs::canonicalize(scratch("root-alias")).expect("canonical scratch");
+    let real = base.join("real");
+    for dir in ["project", "other", "out"] {
+        std::fs::create_dir_all(real.join(dir)).expect("create a folder");
+    }
+    std::fs::copy(fixture(), real.join("project/model.rvt")).expect("copy the fixture");
+    std::fs::copy(fixture(), real.join("other/model.rvt")).expect("copy the fixture");
+    let alias = base.join("alias");
+    std::os::unix::fs::symlink(&real, &alias).expect("link the folder");
+    let root = std::fs::canonicalize(real.join("project")).expect("canonical root");
+
+    let named = alias.join("project");
+    let out = alias.join("out");
+    let mut server = Raw::start_in(
+        &[
+            OsStr::new("--root"),
+            named.as_os_str(),
+            OsStr::new("--output-dir"),
+            out.as_os_str(),
+        ],
+        &base,
+    );
+    // The spelling the setup gave, and the resolved one.
+    for (id, model) in [
+        (1, alias.join("project/model.rvt")),
+        (2, real.join("project/model.rvt")),
+    ] {
+        let reply = tool(&mut server, id, "open_model", json!({ "model": model }));
+        assert_eq!(reply["result"]["isError"], false, "{model:?}: {reply}");
+    }
+    // A sibling folder is outside by either name.
+    for (id, model) in [
+        (3, alias.join("other/model.rvt")),
+        (4, real.join("other/model.rvt")),
+        (5, alias.join("project/../other/model.rvt")),
+    ] {
+        let reply = tool(&mut server, id, "open_model", json!({ "model": model }));
+        assert_outside(&refusal(&reply), &root, &format!("{model:?}"));
+    }
+    // The output folder, spelled through the link, takes an export spelled either way.
+    for (id, name) in [
+        (6, alias.join("out/by-alias.ifc")),
+        (7, real.join("out/by-real.ifc")),
+    ] {
+        let reply = tool(
+            &mut server,
+            id,
+            "export_ifc",
+            json!({ "model": "model.rvt", "out_path": name }),
+        );
+        assert_eq!(reply["result"]["isError"], false, "{name:?}: {reply}");
+    }
+    assert!(real.join("out/by-alias.ifc").is_file());
+    assert!(real.join("out/by-real.ifc").is_file());
+    // And not a folder beside it.
+    let reply = tool(
+        &mut server,
+        8,
+        "export_ifc",
+        json!({ "model": "model.rvt", "out_path": alias.join("other/leaves.ifc") }),
+    );
+    assert_eq!(reply["result"]["isError"], true, "{reply}");
+    assert!(!real.join("other/leaves.ifc").exists());
+    server.finish();
+}
+
 /// A root that is not a folder, and both flags together, are failures to start.
 #[test]
 fn a_root_that_is_not_a_folder_or_both_flags_fail_to_start() {

@@ -33,10 +33,21 @@ use crate::bounds;
 /// an argument.
 pub const ROOT_ENV: &str = "RVT_MCP_ROOT";
 
-/// The folder, canonical.
+/// A folder files are confined to: its path with every link resolved, which
+/// is what a resolved path is held to, and the other spellings of it that a
+/// client may use. A folder reached through a link has two names (`/tmp/work`
+/// and `/private/tmp/work` on macOS, a symlinked `/home` on Linux), and a
+/// client sends the one it knows.
+#[derive(Debug, Clone)]
+pub struct Folder {
+    canonical: PathBuf,
+    spellings: Vec<PathBuf>,
+}
+
+/// The root: the folder models are read from and exports written to.
 #[derive(Debug, Clone)]
 pub struct Root {
-    dir: PathBuf,
+    folder: Folder,
 }
 
 /// Where the server may read and write.
@@ -54,18 +65,77 @@ pub enum Reach {
     Anywhere,
 }
 
-impl Root {
-    /// The folder `dir`, which must exist.
-    pub fn new(dir: &Path) -> Result<Self, String> {
-        let dir = std::fs::canonicalize(dir).map_err(|error| error.to_string())?;
-        if !dir.is_dir() {
-            return Err(format!("{} is not a folder", dir.display()));
+impl Folder {
+    /// The folder `given`, which must exist. Its spellings are `given` itself,
+    /// made absolute and cleaned of `.` and `..`, and the shell's `PWD` where
+    /// that names this folder.
+    pub fn new(given: &Path) -> Result<Self, String> {
+        let canonical = std::fs::canonicalize(given).map_err(|error| error.to_string())?;
+        if !canonical.is_dir() {
+            return Err(format!("{} is not a folder", canonical.display()));
         }
-        Ok(Self { dir })
+        let mut spellings: Vec<PathBuf> = Vec::new();
+        let mut spell = |path: PathBuf| {
+            let flat = lexical(&path);
+            if flat.is_absolute() && flat != canonical && !spellings.contains(&flat) {
+                spellings.push(flat);
+            }
+        };
+        spell(if given.is_absolute() {
+            given.to_path_buf()
+        } else {
+            std::env::current_dir().unwrap_or_default().join(given)
+        });
+        if let Some(pwd) = std::env::var_os("PWD") {
+            let pwd = PathBuf::from(pwd);
+            if std::fs::canonicalize(&pwd).is_ok_and(|resolved| resolved == canonical) {
+                spell(pwd);
+            }
+        }
+        Ok(Self {
+            canonical,
+            spellings,
+        })
+    }
+
+    /// The folder with every link resolved.
+    pub fn dir(&self) -> &Path {
+        &self.canonical
+    }
+
+    /// Whether the absolute `path` lies inside the folder by its text alone,
+    /// under its resolved path or under another spelling of it. No file is
+    /// looked at, so a link is not followed: the caller still resolves the path
+    /// and checks it with [`Folder::holds`], which is the gate.
+    pub fn lexically_holds(&self, path: &Path) -> bool {
+        let flat = lexical(path);
+        flat.starts_with(&self.canonical)
+            || self
+                .spellings
+                .iter()
+                .any(|spelling| flat.starts_with(spelling))
+    }
+
+    /// Whether `resolved`, a path with every link resolved, is inside the folder.
+    pub fn holds(&self, resolved: &Path) -> bool {
+        resolved.starts_with(&self.canonical)
+    }
+}
+
+impl Root {
+    /// The folder `given`, which must exist.
+    pub fn new(given: &Path) -> Result<Self, String> {
+        Ok(Self {
+            folder: Folder::new(given)?,
+        })
+    }
+
+    pub fn folder(&self) -> &Folder {
+        &self.folder
     }
 
     pub fn dir(&self) -> &Path {
-        &self.dir
+        self.folder.dir()
     }
 
     /// `raw` as an absolute path to look at: taken from the root when it is
@@ -74,11 +144,11 @@ impl Root {
     /// checked with [`Root::holds`]: a link inside the root can lead out.
     pub fn locate(&self, raw: &Path, what: &str) -> Result<PathBuf, String> {
         let joined = if raw.is_relative() {
-            self.dir.join(raw)
+            self.dir().join(raw)
         } else {
             raw.to_path_buf()
         };
-        if inside(&joined, &self.dir) {
+        if self.folder.lexically_holds(&joined) {
             Ok(joined)
         } else {
             Err(self.refusal(what, raw))
@@ -87,7 +157,7 @@ impl Root {
 
     /// Whether `canonical`, a path with every link resolved, is inside the root.
     pub fn holds(&self, canonical: &Path) -> bool {
-        canonical.starts_with(&self.dir)
+        self.folder.holds(canonical)
     }
 
     /// The message for a path outside the root: where the root is and how to
@@ -96,7 +166,7 @@ impl Root {
         bounds::message(format!(
             "{what} {} is outside {}, the folder this server reads from and writes to. Name a path inside it. The person who set the server up can start it with --root <folder> to use another folder, or with --unconfined to lift the limit.",
             raw.display(),
-            self.dir.display()
+            self.dir().display()
         ))
     }
 }
@@ -129,11 +199,16 @@ impl Reach {
                 "cannot find the folder the server was started in: {error}. Pass --root <folder>, or set {ROOT_ENV}."
             )
         })?;
-        let started_in = std::fs::canonicalize(&cwd).unwrap_or(cwd);
-        Ok(match too_broad(&started_in, homes) {
-            Some(why) => Self::Unset { started_in, why },
-            None => Self::Folder(Root { dir: started_in }),
-        })
+        let started_in = std::fs::canonicalize(&cwd).unwrap_or_else(|_| cwd.clone());
+        match too_broad(&started_in, homes) {
+            Some(why) => Ok(Self::Unset { started_in, why }),
+            None => Root::new(&cwd).map(Self::Folder).map_err(|error| {
+                format!(
+                    "the folder the server was started in, {}: {error}",
+                    cwd.display()
+                )
+            }),
+        }
     }
 
     /// The folder files are confined to: none when unconfined, and an error
@@ -179,13 +254,6 @@ pub fn home_folders() -> Vec<PathBuf> {
         .collect()
 }
 
-/// Whether the absolute `path` lies inside `dir` by its text alone: no file is
-/// looked at, so a link is not followed (the caller still resolves the path and
-/// checks it again).
-pub fn inside(path: &Path, dir: &Path) -> bool {
-    lexical(path).starts_with(dir)
-}
-
 /// `path` with its `.` and `..` components resolved by its text alone: no file
 /// is looked at, so a link is not followed. A `..` at the top of an absolute
 /// path stays at the top, and one in a relative path is kept.
@@ -223,7 +291,20 @@ mod tests {
 
     fn root() -> Root {
         Root {
-            dir: PathBuf::from("/work/project"),
+            folder: Folder {
+                canonical: PathBuf::from("/work/project"),
+                spellings: Vec::new(),
+            },
+        }
+    }
+
+    /// A root reached through a link: `/tmp/work` is `/private/tmp/work`.
+    fn aliased() -> Root {
+        Root {
+            folder: Folder {
+                canonical: PathBuf::from("/private/tmp/work"),
+                spellings: vec![PathBuf::from("/tmp/work")],
+            },
         }
     }
 
@@ -279,6 +360,37 @@ mod tests {
         assert!(message.contains("/work/project"), "{message}");
         assert!(message.contains("--root"), "{message}");
         assert!(message.contains("--unconfined"), "{message}");
+    }
+
+    #[test]
+    fn a_folder_reached_through_a_link_takes_paths_spelled_either_way() {
+        let root = aliased();
+        for inside in [
+            "/tmp/work/x.rvt",
+            "/private/tmp/work/x.rvt",
+            "/tmp/work/a/../b/x.rvt",
+        ] {
+            assert!(root.locate(Path::new(inside), "model").is_ok(), "{inside}");
+        }
+        // Still outside by either name: another folder, a name that only starts
+        // like one, a `..` that climbs out of either.
+        for outside in [
+            "/tmp/other/x.rvt",
+            "/tmp/workshop/x.rvt",
+            "/private/tmp/other/x.rvt",
+            "/tmp/work/../other/x.rvt",
+            "/private/tmp/work/../x.rvt",
+            "/tmp/x.rvt",
+        ] {
+            let message = root.locate(Path::new(outside), "model").unwrap_err();
+            assert!(
+                message.contains("/private/tmp/work"),
+                "{outside}: {message}"
+            );
+        }
+        // The resolved path is the gate and is held to the resolved name alone.
+        assert!(root.holds(Path::new("/private/tmp/work/x.rvt")));
+        assert!(!root.holds(Path::new("/tmp/work/x.rvt")));
     }
 
     #[test]
