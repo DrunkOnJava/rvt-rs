@@ -564,19 +564,43 @@ pub(super) fn attach_curtain_walls(
             ));
         }
     }
+    // RE-452: the ids of the lists of the openings that name exactly one curtain
+    // wall and no grid, whose element data may name it.
+    let mut opening_crowded: BTreeSet<u32> = BTreeSet::new();
+    for (elements, lists) in openings.iter().zip(&opening_references) {
+        for (element, list) in elements.iter().zip(lists) {
+            let Some(list) = list else {
+                continue;
+            };
+            let (named, on_grid) = part_walls(element.id, list, &curtain_walls, &grids);
+            if on_grid.is_empty() && named.len() == 1 {
+                opening_crowded.extend(
+                    list.iter()
+                        .filter_map(|&id| u32::try_from(id).ok())
+                        .filter(|id| Some(*id) != element.id && !wall_ids.contains(id)),
+                );
+            }
+        }
+    }
+    let opening_in_data = if opening_crowded.is_empty() {
+        BTreeMap::new()
+    } else {
+        scan_walls_in_element_data(rf, revit_version, &opening_crowded, &curtain_walls)
+    };
     for (elements, lists) in openings.into_iter().zip(opening_references) {
         for (element, list) in elements.iter_mut().zip(lists) {
             let Some(list) = list else {
                 continue;
             };
             // RE-452: an opening with no grid whose list names exactly one
-            // curtain wall is a part of it, as a mullion or a panel is. On Revit
-            // 2027 the grid's offsets (RE-72) are not found, and the curtain
+            // curtain wall is a part of it when the element data of an id of its
+            // list names that wall too, as a mullion's or a panel's grid does. On
+            // Revit 2027 the grid's offsets (RE-72) are not found, and the curtain
             // door 216844 of `rac_advanced` stood alone.
             let (named, on_grid) = part_walls(element.id, &list, &curtain_walls, &grids);
             let whole = match (on_grid.len(), named.len()) {
                 (1, _) => on_grid.iter().next().copied(),
-                (0, 1) => named.iter().next().copied(),
+                (0, 1) => data_confirmed_wall(element.id, &list, &named, &opening_in_data),
                 _ => None,
             };
             if let Some(whole) = whole {
