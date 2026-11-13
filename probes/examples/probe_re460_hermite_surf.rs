@@ -42,6 +42,13 @@
 //!   edges control plane-plane ends <n> <buckets> interior <n> <buckets>   the same distances for
 //!     edges between two planes, what the file's own edges hold
 //!   edges unevaluated vs plane: no uv <n>, outside the grid by at most 1e-6 <n> 1e-3 <n> 1 <n> more <n>
+//!   edges class <name> within 1e-6 <n> over <n>   the samples of the plane edges that the first
+//!     reading evaluates, by where they lie (boundary or interior cell, twist or none, end of an
+//!     edge or inside it, on a node line or inside a cell)
+//!   edges extrapolated vs plane ...   the samples past the grid, with the nearest cell's patch continued
+//!   edges miss d <ft> cell <i>/<cells> <j>/<cells> t <t> s <s> du <du> dv <dv> twist <t> end <b>
+//!     su <(scale, rest)> sv <> sw <>   the first 40 samples over 1e-6 ft, with the scale of the u
+//!     tangents, the v tangents and the twist that would remove the miss along each, and what is left
 //!   edges unevaluated inside the envelope: by at most 1e-6 <n> 1e-3 <n> 1 <n> more <n>
 //!   edges fit count <n> rr <sum of squares> normal <six sums> rhs <three sums>   the normal equations of
 //!     the least-squares fit of three scales (u tangent, v tangent, mixed derivative), to be summed
@@ -226,14 +233,49 @@ impl Hermite {
         )
     }
 
+    /// The cell of `params` whose patch is continued to hold `x`, which may lie past the grid.
+    fn cell_extended(params: &[f64], x: f64) -> usize {
+        params
+            .partition_point(|p| *p <= x)
+            .saturating_sub(1)
+            .min(params.len() - 2)
+    }
+
+    /// The longest mixed derivative at the four nodes of cell (i, j), with the node of
+    /// `(iu, iv)` at `iv * nu + iu`.
+    fn cell_twist(&self, i: usize, j: usize) -> f64 {
+        let nu = self.u.len();
+        [(i, j), (i + 1, j), (i, j + 1), (i + 1, j + 1)]
+            .iter()
+            .map(|(iu, iv)| {
+                let w = self.nodes[iv * nu + iu].mixed;
+                dot3(w, w).sqrt()
+            })
+            .fold(0.0, f64::max)
+    }
+
     /// The four parts of the bicubic Hermite patch of the cell holding (u, v), each a
     /// vector: the nodes' points, their u tangents, their v tangents and their mixed
     /// derivatives, each with its basis and the cell's size. The patch is their sum.
     /// `v_fastest` reads the node of `(iu, iv)` at `iu * nv + iv` and `swap` reads
     /// `m_iTangent[1]` as the u tangent.
-    fn terms(&self, v_fastest: bool, swap: bool, uv: [f64; 2]) -> Option<[[f64; 3]; 4]> {
+    /// With `extend`, a (u, v) past the grid takes the nearest cell's patch continued.
+    fn terms(
+        &self,
+        v_fastest: bool,
+        swap: bool,
+        uv: [f64; 2],
+        extend: bool,
+    ) -> Option<[[f64; 3]; 4]> {
         let (nu, nv) = (self.u.len(), self.v.len());
-        let (i, j) = (Self::cell(&self.u, uv[0])?, Self::cell(&self.v, uv[1])?);
+        let (i, j) = if extend {
+            (
+                Self::cell_extended(&self.u, uv[0]),
+                Self::cell_extended(&self.v, uv[1]),
+            )
+        } else {
+            (Self::cell(&self.u, uv[0])?, Self::cell(&self.v, uv[1])?)
+        };
         let (du, dv) = (self.u[i + 1] - self.u[i], self.v[j + 1] - self.v[j]);
         let (t, s) = ((uv[0] - self.u[i]) / du, (uv[1] - self.v[j]) / dv);
         // The value and tangent basis of a cell's end 0 or 1.
@@ -293,7 +335,7 @@ impl Hermite {
 
     /// The patch at (u, v): the sum of [`Hermite::terms`].
     fn eval(&self, v_fastest: bool, swap: bool, uv: [f64; 2]) -> Option<[f64; 3]> {
-        let parts = self.terms(v_fastest, swap, uv)?;
+        let parts = self.terms(v_fastest, swap, uv, false)?;
         Some(std::array::from_fn(|k| {
             parts[0][k] + parts[1][k] + parts[2][k] + parts[3][k]
         }))
@@ -644,6 +686,9 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
     let mut outside = [0usize; 4];
     let mut outside_in_envelope = [0usize; 4];
     let mut fit = Fit::default();
+    let mut classes: BTreeMap<&'static str, [usize; 2]> = BTreeMap::new();
+    let mut extrapolated = Gaps::default();
+    let mut misses_printed = 0usize;
     for record in records.values() {
         let Some(graph) = &record.graph else { continue };
         let surface_of = |edge_index: usize, face: &Fv| -> Option<usize> {
@@ -755,11 +800,93 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
                 }
             }
             for sample in samples.iter().copied() {
-                let parts =
-                    uv_of(sample, hermite_side).and_then(|uv| surface.terms(false, false, uv));
+                let parts = uv_of(sample, hermite_side)
+                    .and_then(|uv| surface.terms(false, false, uv, false));
                 let target = uv_of(sample, other_side).map(|uv| plane_point(&[origin, x, y], uv));
                 if let (Some(parts), Some(target)) = (parts, target) {
                     fit.add(&parts, target);
+                }
+            }
+            for (n, sample) in samples.iter().copied().enumerate() {
+                let (Some(on_surface), Some(on_plane)) =
+                    (uv_of(sample, hermite_side), uv_of(sample, other_side))
+                else {
+                    continue;
+                };
+                let target = plane_point(&[origin, x, y], on_plane);
+                let end = n == 0 || n + 1 == samples.len();
+                let sum = |parts: &[[f64; 3]; 4]| -> [f64; 3] {
+                    std::array::from_fn(|k| parts[0][k] + parts[1][k] + parts[2][k] + parts[3][k])
+                };
+                let Some(parts) = surface.terms(false, false, on_surface, false) else {
+                    let gap = surface
+                        .terms(false, false, on_surface, true)
+                        .map(|parts| distance(sum(&parts), target));
+                    record_gap(&mut extrapolated, end, gap);
+                    continue;
+                };
+                let point = sum(&parts);
+                let gap = distance(point, target);
+                let miss = gap > 1e-6;
+                let i = Hermite::cell_extended(&surface.u, on_surface[0]);
+                let j = Hermite::cell_extended(&surface.v, on_surface[1]);
+                let (cells_u, cells_v) = (surface.u.len() - 1, surface.v.len() - 1);
+                let (du, dv) = (
+                    surface.u[i + 1] - surface.u[i],
+                    surface.v[j + 1] - surface.v[j],
+                );
+                let (t, s) = (
+                    (on_surface[0] - surface.u[i]) / du,
+                    (on_surface[1] - surface.v[j]) / dv,
+                );
+                let twist = surface.cell_twist(i, j);
+                let on_line = [t, s]
+                    .iter()
+                    .any(|w| w.abs() <= 1e-9 || (w - 1.0).abs() <= 1e-9);
+                let boundary = i == 0 || i + 1 == cells_u || j == 0 || j + 1 == cells_v;
+                for class in [
+                    if boundary {
+                        "boundary cell"
+                    } else {
+                        "interior cell"
+                    },
+                    if twist <= 1e-12 {
+                        "no twist in the cell"
+                    } else {
+                        "twist in the cell"
+                    },
+                    if end {
+                        "end of an edge"
+                    } else {
+                        "inside an edge"
+                    },
+                    if on_line {
+                        "on a node line"
+                    } else {
+                        "inside a cell"
+                    },
+                ] {
+                    classes.entry(class).or_default()[usize::from(miss)] += 1;
+                }
+                if miss && misses_printed < 40 {
+                    misses_printed += 1;
+                    let left: [f64; 3] = std::array::from_fn(|k| target[k] - point[k]);
+                    // The scale of one part that would remove the miss along it, and what is
+                    // left of the miss then.
+                    let implied = |part: [f64; 3]| -> Option<(f64, f64)> {
+                        let norm = dot3(part, part);
+                        (norm > 1e-24).then(|| {
+                            let a = dot3(left, part) / norm;
+                            let rest: [f64; 3] = std::array::from_fn(|k| left[k] - a * part[k]);
+                            (1.0 + a, dot3(rest, rest).sqrt())
+                        })
+                    };
+                    println!(
+                        "edges miss d {gap:e} cell {i}/{cells_u} {j}/{cells_v} t {t:.6} s {s:.6} du {du:e} dv {dv:e} twist {twist:e} end {end} su {:?} sv {:?} sw {:?}",
+                        implied(parts[1]),
+                        implied(parts[2]),
+                        implied(parts[3])
+                    );
                 }
             }
             for (slot, (v_fastest, swap, _)) in vs_plane.iter_mut().zip(VARIANTS) {
@@ -812,6 +939,16 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
         fit.rhs[0],
         fit.rhs[1],
         fit.rhs[2]
+    );
+    for (class, [hits, misses]) in &classes {
+        println!("edges class {class} within 1e-6 {hits} over {misses}");
+    }
+    println!(
+        "{}",
+        extrapolated.show(
+            "extrapolated",
+            "vs plane (the nearest cell's patch continued)"
+        )
     );
     println!(
         "edges unevaluated inside the envelope: by at most 1e-6 {} 1e-3 {} 1 {} more {}",
