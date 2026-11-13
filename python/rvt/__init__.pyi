@@ -339,10 +339,12 @@ class RevitFile:
         succeeds.
 
         Raises ``ValueError`` when a resource limit kept part of the
-        file from being read (``unread_streams()`` lists it), or a reader
-        stopped at its work budget, unless ``allow_partial=True``; open the
-        file with a larger ``max_stream_bytes`` / ``max_inflate_bytes`` to
-        read a stream. No option raises a work budget.
+        file from being read (``unread_streams()`` lists it), unless
+        ``allow_partial=True``; open the file with a larger
+        ``max_stream_bytes`` / ``max_inflate_bytes`` to read a stream. A
+        reader that stopped at its work budget leaves out what it would
+        have read, and the IFC is still returned, with a
+        ``RuntimeWarning`` naming it. No option raises a work budget.
 
         Every element of a Revit 2023 to 2027 file that would be a bounding
         box is drawn from the mesh Revit saved for it where all of a mesh

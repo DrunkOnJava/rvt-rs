@@ -870,6 +870,7 @@ pub(super) fn envelope_slab_mesh_split(
         if pieces.len() > MAX_ENVELOPE_PIECES
             || pieces.iter().map(Vec::len).sum::<usize>() > MAX_ENVELOPE_POINTS
         {
+            crate::budget::stopped("envelope_pieces");
             return None;
         }
     }
@@ -911,6 +912,7 @@ pub(super) fn envelope_slab_mesh_split(
             cuts.dedup_by(|x, y| (*x - *y).abs() <= 1e-12);
             sides += cuts.len() - 1;
             if sides > MAX_ENVELOPE_PIECES {
+                crate::budget::stopped("envelope_pieces");
                 return None;
             }
             let at = |t: f64| (a.0 + t * (b.0 - a.0), a.1 + t * (b.1 - a.1));

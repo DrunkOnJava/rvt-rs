@@ -117,7 +117,7 @@ impl From<ManifestFraming> for StreamFraming {
 
 fn decode_base64(s: &str) -> Result<Vec<u8>, String> {
     // Minimal base64 decoder — avoid adding a crate dep for a
-    // single helper. Supports the standard alphabet + trailing
+    // single helper. Standard alphabet, with or without trailing
     // `=` padding.
     let lookup = |c: u8| -> Option<u8> {
         match c {
@@ -130,34 +130,25 @@ fn decode_base64(s: &str) -> Result<Vec<u8>, String> {
         }
     };
     let bytes: Vec<u8> = s.bytes().filter(|c| !c.is_ascii_whitespace()).collect();
-    let mut out = Vec::with_capacity(bytes.len() * 3 / 4);
-    for chunk in bytes.chunks(4) {
-        if chunk.iter().all(|c| *c == b'=') {
-            break;
+    // `=` pads only the end, and a group of n characters (2 to 4) holds
+    // n - 1 bytes: a last group read as three bytes whatever its length, or
+    // an `=` inside the text read as zeros, patches the stream with bytes
+    // the manifest never gave.
+    let data = bytes
+        .strip_suffix(b"==")
+        .or_else(|| bytes.strip_suffix(b"="))
+        .unwrap_or(&bytes);
+    let mut out = Vec::with_capacity(data.len() * 3 / 4);
+    for chunk in data.chunks(4) {
+        if chunk.len() == 1 {
+            return Err("ends in a lone character, which holds no byte".into());
         }
-        let mut buf = [0u8; 4];
-        let mut pad = 0;
+        let mut triple = 0u32;
         for (i, c) in chunk.iter().enumerate() {
-            if *c == b'=' {
-                pad += 1;
-                buf[i] = 0;
-            } else {
-                buf[i] = lookup(*c).ok_or_else(|| format!("invalid base64 char 0x{c:02x}"))?;
-            }
+            let value = lookup(*c).ok_or_else(|| format!("invalid base64 char 0x{c:02x}"))?;
+            triple |= u32::from(value) << (18 - 6 * i);
         }
-        let triple = ((buf[0] as u32) << 18)
-            | ((buf[1] as u32) << 12)
-            | ((buf[2] as u32) << 6)
-            | buf[3] as u32;
-        if pad <= 2 {
-            out.push((triple >> 16) as u8);
-        }
-        if pad <= 1 {
-            out.push((triple >> 8) as u8);
-        }
-        if pad == 0 {
-            out.push(triple as u8);
-        }
+        out.extend_from_slice(&triple.to_be_bytes()[1..chunk.len()]);
     }
     Ok(out)
 }

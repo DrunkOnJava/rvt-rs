@@ -51,8 +51,9 @@ fn source_date_epoch() -> Result<Option<i64>, String> {
 }
 
 /// The refusal `rvt-ifc` gives with exit status 3: a resource limit kept
-/// streams from being read, or a reader stopped at its work budget (#1833),
-/// and the caller did not accept an incomplete file.
+/// streams from being read, and the caller did not accept an incomplete file.
+/// A reader that stopped at its work budget (#1833) refuses nothing: the file
+/// is written and the result's notes name it (Griffin, 2026-11-12).
 fn refuse_partial(source: &Source<'_>, allow_partial: bool) -> Result<(), Failure> {
     if !source.diagnostics.is_partial() || allow_partial {
         return Ok(());
@@ -63,13 +64,8 @@ fn refuse_partial(source: &Source<'_>, allow_partial: bool) -> Result<(), Failur
     for stream in source.unread {
         message.push_str(&format!("\n  {stream}"));
     }
-    for (reader, times) in source.diagnostics.work_budget_stops().into_iter().flatten() {
-        message.push_str(&format!(
-            "\n  {reader} stopped {times} time(s) at its work budget"
-        ));
-    }
     message.push_str(
-        "\nStart the server with --large-model (or --max-stream-bytes and --max-inflate-bytes) to read a stream (no option raises a work budget), or pass allow_partial=true to write the incomplete file.",
+        "\nStart the server with --large-model (or --max-stream-bytes and --max-inflate-bytes) to read them, or pass allow_partial=true to write the incomplete file.",
     );
     Err(Failure::Message(message))
 }
@@ -99,7 +95,7 @@ fn finish(
     // budget are listed here, since the glb's summary carries no diagnostics.
     for (reader, times) in diagnostics.work_budget_stops().into_iter().flatten() {
         notes.push(format!(
-            "{reader} stopped {times} time(s) at its work budget, so the export is missing what it would have read (partial)."
+            "Warning: {reader} stopped {times} time(s) at its work budget, so the export leaves out what it would have read."
         ));
     }
     let folded: usize = diagnostics.exported.body_pieces_folded.values().sum();
