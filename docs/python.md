@@ -531,7 +531,8 @@ if `BasicFileInfo` can't be parsed.
 | Exception | Raised when |
 |---|---|
 | `IOError` | File missing, non-CFB input, file-size over `max_file_bytes`, unknown stream name, read error |
-| `ValueError` | File parsed as CFB but could not be decoded further: the IFC export cannot build a model, `mode` is not one of the four or is not met, a resource limit left part of the file unread or a reader stopped at its work budget, and `allow_partial` is false, a strict variant fails, the schema or `Global/ElemTable` does not parse, `read_adocument` finds no `ADocument` class, or `schedule_csv` gets another `kind` |
+| `ValueError` | File parsed as CFB but could not be decoded further: the IFC export cannot build a model, `mode` is not one of the four or is not met, a resource limit left part of the file unread and `allow_partial` is false, a strict variant fails, the schema or `Global/ElemTable` does not parse, `read_adocument` finds no `ADocument` class, or `schedule_csv` gets another `kind` |
+| `RuntimeWarning` (a warning, not an exception) | A reader stopped at its work budget: the export is still written, without what that reader would have read, and the warning names the reader (since 0.20.0, #1855) |
 
 `IOError` is the Python alias of `OSError` — both are caught by
 `except OSError` or `except IOError`.
