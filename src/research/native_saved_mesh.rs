@@ -557,7 +557,7 @@ fn within_envelope(
         .into_iter()
         .filter(|uv| {
             original.contains(uv)
-                || (0..2).all(|k| uv[k] >= low[k] - 1e-9 && uv[k] <= high[k] + 1e-9)
+                || (0..2).all(|k| uv[k] >= low[k] - 1e-6 && uv[k] <= high[k] + 1e-6)
         })
         .collect()
 }
