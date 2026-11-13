@@ -512,6 +512,7 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             .collect::<Result<Vec<_>>>()?
     };
     const CHORD: f64 = 0.001;
+    const HERMITE_CHORD: f64 = 0.0005;
     let length = |p: [f64; 3]| p.iter().map(|x| x * x).sum::<f64>().sqrt();
     let angular = |r: f64| {
         (4. * (CHORD / (2. * r.max(CHORD))).min(1.).sqrt().asin()).min(std::f64::consts::FRAC_PI_2)
@@ -547,6 +548,9 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
             let far = min[1].abs().max(max[1].abs());
             (angular(far * half_angle.sin()), 1.)
         }
+        // One step across the face: its grid is the knots added below, every node
+        // parameter in it and the cuts the curvature of its patches asks for (RE-460).
+        ParametricSurface::HermiteSurf { .. } => (max[0] - min[0], max[1] - min[1]),
         ParametricSurface::RuledSurf {
             profile1, profile2, ..
         } => {
@@ -709,12 +713,25 @@ pub fn face_grid(g: &ObjectGraph, fi: usize) -> Result<FaceGrid> {
         a.dedup_by(|a, b| (*a - *b).abs() < 1e-12);
         Ok(a)
     };
-    let trim_u: Vec<f64> = trim.iter().map(|p| p[0]).collect();
+    // A Hermite face's grid holds the knots of its patches too (RE-460), cut at half the
+    // chord the other surfaces keep: the patch lies within 0.001 ft of Revit's own points
+    // on every edge sample measured, and the other half of the bar is left to the mesh.
+    let [hermite_u, hermite_v] = surface
+        .hermite_knots([min, max], HERMITE_CHORD)?
+        .unwrap_or_default();
+    let trim_u: Vec<f64> = trim
+        .iter()
+        .map(|p| p[0])
+        .chain(hermite_u.iter().copied())
+        .collect();
     let trim_v: Vec<f64> = if rectangular {
-        trim.iter().map(|p| p[1]).collect()
+        trim.iter().map(|p| p[1]).collect::<Vec<_>>()
     } else {
         trim_steps(&polygons)
-    };
+    }
+    .into_iter()
+    .chain(hermite_v.iter().copied())
+    .collect();
     Ok(FaceGrid {
         u: axis(0, du, &trim_u)?,
         v: axis(1, dv, &trim_v)?,
