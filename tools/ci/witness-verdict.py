@@ -165,6 +165,13 @@ def main() -> int:
         if verdict["status"] != "PASS":
             continue
         tolerance = int(spec.get("tolerance", 0))
+        # A witness may leave a type it counts as zero out of its counts (rvt-rs's does), so a missing count reads
+        # as 0; but a claimed type no witness reports at all was observed by none, and 0 against 0 would pass it
+        # (#1882). At least one witness must name it, zero included.
+        if not any(ifc_type in obs.get("observation", {}).get("entity_counts", {}) for obs in observations.values()):
+            verdict["status"] = "MANIFEST_ERROR"
+            verdict.setdefault("manifest_errors", []).append(f"no witness reports entity_counts.{ifc_type}")
+            continue
         values = {
             wid: int(obs.get("observation", {}).get("entity_counts", {}).get(ifc_type, 0))
             for wid, obs in observations.items()

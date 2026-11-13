@@ -615,12 +615,19 @@ const PARTNER_COSINE: f64 = 0.99999;
 /// stands on, and Revit's value counts one.
 pub(super) fn partner_ends(placed: &[Placed]) -> Vec<[bool; 2]> {
     const CELL: f64 = 0.1;
+    // A curtain grid node holds a few mullion ends in one cell; a crafted file
+    // put every end in one, and each end then tested all of them, n² (#1845).
+    // A cell holding more is no evidence: its ends are continued by none.
+    const MAX_ENDS_PER_CELL: usize = 64;
     let cell = |point: [f64; 3]| point.map(|coordinate| (coordinate / CELL).floor() as i64);
     let mut grid: HashMap<[i64; 3], Vec<(usize, usize)>> = HashMap::new();
     for (index, mullion) in placed.iter().enumerate() {
         for (end, point) in mullion.ends.iter().enumerate() {
             grid.entry(cell(*point)).or_default().push((index, end));
         }
+    }
+    if grid.values().any(|ends| ends.len() > MAX_ENDS_PER_CELL) {
+        crate::budget::stopped("mullion_end_cells");
     }
     placed
         .iter()
@@ -643,6 +650,7 @@ pub(super) fn partner_ends(placed: &[Placed]) -> Vec<[bool; 2]> {
                                 cy.saturating_add(dy),
                                 cz.saturating_add(dz),
                             ])
+                            .filter(|ends| ends.len() <= MAX_ENDS_PER_CELL)
                             .into_iter()
                             .flatten()
                             .any(|&(other, other_end)| {
@@ -663,6 +671,40 @@ pub(super) fn partner_ends(placed: &[Placed]) -> Vec<[bool; 2]> {
             })
         })
         .collect()
+}
+
+/// How far apart, along its axis, a mullion's two ends must be, feet, to be told
+/// apart by the side of the axis each lies on.
+const MIN_SPAN_FEET: f64 = 1e-6;
+
+/// How many of the ends of a mullion that have a partner in `partners`
+/// ([`partner_ends`]) are not an end its curtain wall's boxes kept with a partner
+/// they saw (`seen`: the end at the `-axis` side of the box, then the one at its
+/// `+axis` side, RE-439): each is a continuation the boxes missed, and the count
+/// of kept ends they read is wrong at it. The mesh's two ends come in the order
+/// its planes were found, not along the axis, so each is told by which side of the
+/// other it lies along `placed.axis`, the axis the boxes' ends are told by; two
+/// ends with no length between them are not told apart, and each partner is
+/// counted as missed.
+pub(super) fn partners_the_boxes_missed(
+    placed: &Placed,
+    partners: [bool; 2],
+    seen: [bool; 2],
+) -> usize {
+    let along = dot(sub(placed.ends[1], placed.ends[0]), placed.axis);
+    [0usize, 1]
+        .into_iter()
+        .filter(|&end| {
+            let side = if along > MIN_SPAN_FEET {
+                Some(end)
+            } else if along < -MIN_SPAN_FEET {
+                Some(1 - end)
+            } else {
+                None
+            };
+            partners[end] && !side.is_some_and(|side| seen[side])
+        })
+        .count()
 }
 
 #[cfg(test)]
@@ -1203,6 +1245,77 @@ mod tests {
         assert_eq!(
             partner_ends(&[lower, upper(0.002_500_2)]),
             vec![[false, true], [true, false]]
+        );
+    }
+
+    // How reading a partner as one the boxes saw can go wrong (RE-439): a partner at
+    // an end the boxes kept with none is taken for theirs because another end has
+    // one (a count cannot tell), or the mesh's ends are matched to the boxes' by
+    // the order they come in, which is the order their planes were found.
+    #[test]
+    fn a_partner_at_an_end_the_boxes_kept_with_one_is_no_continuation_they_missed() {
+        let lower = placed([0.0, 0.0, 1.0], [0.0, 0.0, 0.0], [0.0, 0.0, 2.1]);
+        // The boxes kept the upper end with a partner: the mesh's there is theirs.
+        assert_eq!(
+            partners_the_boxes_missed(&lower, [false, true], [false, true]),
+            0
+        );
+        // A partner at the end they kept with none is one they missed, though they
+        // saw one at the other end: the counts of partners alone are equal.
+        assert_eq!(
+            partners_the_boxes_missed(&lower, [true, false], [false, true]),
+            1
+        );
+        // Both ends have one in the mesh and the boxes saw the upper only.
+        assert_eq!(
+            partners_the_boxes_missed(&lower, [true, true], [false, true]),
+            1
+        );
+        // None in the mesh, none missed, whatever the boxes saw.
+        assert_eq!(
+            partners_the_boxes_missed(&lower, [false, false], [true, true]),
+            0
+        );
+    }
+
+    #[test]
+    fn the_meshs_ends_are_told_by_the_axis_and_not_by_the_order_they_come_in() {
+        // The mesh lists the upper end first.
+        let reversed = placed([0.0, 0.0, 1.0], [0.0, 0.0, 2.1], [0.0, 0.0, 0.0]);
+        // Its partner is at the upper end, which the boxes kept with one (their
+        // `+axis` end), and then at the lower end, which they did not.
+        assert_eq!(
+            partners_the_boxes_missed(&reversed, [true, false], [false, true]),
+            0
+        );
+        assert_eq!(
+            partners_the_boxes_missed(&reversed, [true, false], [true, false]),
+            1
+        );
+        // An axis that runs the other way turns the boxes' sides over.
+        let flipped = placed([0.0, 0.0, -1.0], [0.0, 0.0, 0.0], [0.0, 0.0, 2.1]);
+        assert_eq!(
+            partners_the_boxes_missed(&flipped, [false, true], [true, false]),
+            0
+        );
+        assert_eq!(
+            partners_the_boxes_missed(&flipped, [false, true], [false, true]),
+            1
+        );
+    }
+
+    #[test]
+    fn ends_with_no_length_between_them_are_not_told_apart_and_a_partner_is_missed() {
+        let point = placed([0.0, 0.0, 1.0], [0.0, 0.0, 2.1], [0.0, 0.0, 2.1]);
+        assert_eq!(
+            partners_the_boxes_missed(&point, [true, false], [true, true]),
+            1
+        );
+        // Ends across the axis, none along it, are no better.
+        let across = placed([0.0, 0.0, 1.0], [0.0, 0.0, 2.1], [0.4, 0.0, 2.1]);
+        assert_eq!(
+            partners_the_boxes_missed(&across, [false, true], [true, true]),
+            1
         );
     }
 

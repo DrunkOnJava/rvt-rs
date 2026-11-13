@@ -1,4 +1,4 @@
-# rvt-rs — Python bindings (v0.18.0)
+# rvt-rs — Python bindings (v0.21.0)
 
 `rvt` is a Python package built on top of the Rust `rvt` crate. It
 exposes the file reader, metadata, schema introspection, the
@@ -25,12 +25,12 @@ For all installation paths, including release smoke tests, see
 pip install rvt
 ```
 
-**PyPI `rvt` 0.18.0 is the current release.** Wheels target Python ≥ 3.8
+**PyPI `rvt` 0.21.0 is the current release.** Wheels target Python ≥ 3.8
 via pyo3's `abi3-py38` feature, so one wheel per OS/architecture covers
 every supported Python minor. The matching Rust crate is on crates.io
 (`cargo add rvt`); platforms and the other install channels are in
 [`install.md`](install.md). This page describes `main`, which can be ahead
-of the latest release: what has landed since 0.18.0 is in the fragments
+of the latest release: what has landed since 0.21.0 is in the fragments
 under [`changelog.d/`](../changelog.d/README.md).
 
 ### From source
@@ -55,7 +55,7 @@ import rvt
 f = rvt.RevitFile("my-family.rfa")
 
 # BasicFileInfo getters — each a cheap parse of the BasicFileInfo
-# stream, cached by the Rust reader.
+# stream, re-read and re-parsed on every call.
 print(f.version)              # 2024
 print(f.build)                # "20230308_1635(x64)"
 print(f.guid)                 # "7f3c..." or None
@@ -64,7 +64,7 @@ print(f.part_atom_title)      # e.g. "0610 x 0915mm" on family files
 
 # Stream enumeration.
 print(f.stream_names())       # 13 entries on the reference corpus
-print(f.missing_required_streams())  # [] on a valid Revit file
+print(f.missing_required_streams())  # [] on the family file
 
 # Schema counts (cheap).
 summary = f.schema_summary()
@@ -96,7 +96,7 @@ with open("my-family.ifc", "w") as out:
 ## API reference
 
 Every signature below is verified against
-[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.18.0).
+[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.21.0).
 
 ### Module-level
 
@@ -133,7 +133,9 @@ opens the file, runs the document-level IFC4 exporter
 Raises `IOError` on open failure, `ValueError` if the file parses as CFB
 but the exporter can't build a model, the requested export mode cannot be
 satisfied, or a resource limit kept part of the file from being read and
-`allow_partial` is false.
+`allow_partial` is false. A reader that stopped at its work budget leaves out
+what it would have read, and the IFC is still returned, with a
+`RuntimeWarning` naming it.
 
 `rvt_to_ifc_diagnostics(path, saved_meshes=True, phase=None, element_provenance=False, export_decisions=False)` returns the JSON
 diagnostics sidecar for the same export path. The schema matches `rvt-ifc --diagnostics`
@@ -234,8 +236,9 @@ unknown stream names.
 missing_required_streams(self) -> list[str]
 ```
 Required Revit stream names that are absent. Empty list on a
-valid Revit file. Useful for pre-validating an input before
-running heavy extractors.
+family file, whose 13 invariant streams are all present; a project
+`.rvt` with no `PartAtom` stream lists `["PartAtom"]`. Useful for
+pre-validating an input before running heavy extractors.
 
 ```text
 basic_file_info_json(self) -> str | None
@@ -296,8 +299,8 @@ Decoded schema counts. Cheap. Keys: `classes`, `fields`,
 schema_json(self) -> str
 ```
 Full schema as a JSON string. The Rust-side `SchemaTable` type
-derives `Serialize`, so the call is effectively zero-copy
-relative to the in-memory schema. Parse with `json.loads()` to
+derives `Serialize`, so the call serialises the whole in-memory
+schema into a new string. Parse with `json.loads()` to
 get a structured dict.
 
 Return shape after `json.loads`:
@@ -323,6 +326,9 @@ Return shape after `json.loads`:
     ],
     "cpp_types": ["ElementId", "std::pair< ElementId, double >", ...],
     "skipped_records": 0,
+    "scanned_bytes": int,
+    "total_bytes": int,
+    "scan_truncated": False,
 }
 ```
 
@@ -371,6 +377,12 @@ Field kinds:
 | `pointer` | `slot_a: int`, `slot_b: int` | Two u32 slots (raw container pointer) |
 | `element_id` | `tag: int`, `id: int` | Tagged ElementId; `id` is the runtime value |
 | `ref_container` | `count: int`, `col_a: list[int]`, `col_b: list[int]` | Two-column reference container (u16 per cell) |
+| `integer` | `value: int`, `signed: bool`, `size: int` | Fixed-size integer; `value` is the widened 64-bit value |
+| `float` | `value: float`, `size: int` | 32- or 64-bit IEEE 754 value |
+| `bool` | `value: bool` | 1-byte boolean |
+| `guid` | `bytes: list[int]` | 16-byte GUID / UUID |
+| `string` | `value: str` | UTF-16LE length-prefixed string |
+| `vector` | `len: int` | Homogeneous vector; count only |
 | `bytes` | `len: int` | Raw bytes; field type not yet decoded |
 
 ```text
@@ -382,7 +394,8 @@ export_diagnostics(self, saved_meshes: bool = True, phase: str | int | None = No
 `decoded_elements()` returns production-walker elements. Each entry
 has `id`, `class_name`, `byte_range`, `fields`, `parameters` (the element's
 saved parameters, as `rvt-elements` lists them; a file whose parameters
-cannot be read keeps its elements and raises a `UserWarning`), and `typed`.
+cannot be read keeps its elements and raises a `UserWarning`), `provenance`
+(where the element was read from, and how confidently) and `typed`.
 `typed` is the typed projection for
 `Level` / `Wall` / `Floor` / `Door` / `Window` / `Room` / `Material`
 (also listed as `rvt.MVP_TYPED_CLASSES`), or `None` for other classes.
@@ -431,7 +444,7 @@ Every element of a Revit 2023 to 2027 file that would be a bounding box
 the mesh Revit saved for it where all of a mesh decodes, as `rvt-ifc` draws
 them by default; `saved_meshes=False` keeps their bounding boxes, as
 `rvt-ifc --no-saved-meshes` does; reading every box's saved graphics takes
-1.1 to 1.9 times the time and 1.4 to 4.4 times the peak memory of 0.17.0 on Autodesk's samples of Revit 2023 to 2027 (Measure run 42956917709, #1191, #1694); on Revit 2024 to 2027 files a wall that embeds a curtain wall is drawn from its saved mesh the same way where Revit has raised its base (RE-340), and `saved_meshes=False` keeps its record's body. When the saved graphics cannot be read,
+1.04 to 1.92 times the time and 1.04 to 1.69 times the peak memory of 0.17.0 on Autodesk's samples of Revit 2023 to 2027 (Measure run 43152271314, #1191, #1694); on Revit 2024 to 2027 files a wall that embeds a curtain wall is drawn from its saved mesh the same way where Revit has raised its base (RE-340), and `saved_meshes=False` keeps its record's body. When the saved graphics cannot be read, or an element's decode only in part (that element keeps its box),
 the export keeps the bounding boxes and a `RuntimeWarning` says so.
 `export_diagnostics()`, `export_diagnostics_json()` and
 `rvt_to_ifc_diagnostics()` take the same `saved_meshes` and describe the
@@ -524,12 +537,29 @@ __repr__(self) -> str
 Returns `"RevitFile(version=2024)"` or `"RevitFile(version=?)"`
 if `BasicFileInfo` can't be parsed.
 
+### Threads
+
+The calls that do the Rust work release the GIL while they run (#1884): opening
+a file (`RevitFile(path)`, `rvt_to_ifc`, `rvt_to_ifc_diagnostics`), `write_ifc`,
+`schedule_csv`, `export_diagnostics_json`, `export_diagnostics`,
+`decoded_elements` and `element_counts`. Another Python thread runs meanwhile,
+so a service can export several files at once, or keep answering while a large
+model decodes. The result is built into Python objects, and a warning raised,
+after the GIL is taken again.
+
+A handle is used by one thread at a time: a second call on the same
+`RevitFile`, from another thread, while one runs raises `RuntimeError` (the
+object is already borrowed). Before 0.22.0 that call waited for the GIL and then
+ran, so a program that shares a handle between threads needs a handle for each
+thread, or a lock.
+
 ### Errors
 
 | Exception | Raised when |
 |---|---|
 | `IOError` | File missing, non-CFB input, file-size over `max_file_bytes`, unknown stream name, read error |
 | `ValueError` | File parsed as CFB but could not be decoded further: the IFC export cannot build a model, `mode` is not one of the four or is not met, a resource limit left part of the file unread and `allow_partial` is false, a strict variant fails, the schema or `Global/ElemTable` does not parse, `read_adocument` finds no `ADocument` class, or `schedule_csv` gets another `kind` |
+| `RuntimeWarning` (a warning, not an exception) | A reader stopped at its work budget: the export is still written, without what that reader would have read, and the warning names the reader (since 0.20.0, #1855) |
 
 `IOError` is the Python alias of `OSError` — both are caught by
 `except OSError` or `except IOError`.
@@ -606,7 +636,7 @@ The Python bindings have the Rust core's version support:
 | 2023 | yes | `None` (entry-point detector: partial) | typed elements from element records |
 | 2024 – 2025 | yes | full | typed elements with measured geometry |
 | 2026 | yes | full | typed elements from element records, experimental |
-| 2027 | partial: the sample projects open and their schema and `BasicFileInfo` read; `PartAtom` and the preview are not measured | not measured | typed elements from element records, experimental |
+| 2027 | yes | not measured | typed elements from element records, experimental |
 
 Full matrix and per-column definitions are in
 [`docs/compatibility.md`](./compatibility.md). Expanding the generic
@@ -659,14 +689,14 @@ Not in Python today:
 Likely an older / different `rvt` package in the environment. Run
 `pip uninstall rvt` and reinstall.
 
-### `IOError: NotACfbFile`
+### `IOError: Not a Revit file (magic bytes did not match CFB/OLE)`
 
 The file doesn't start with OLE2 magic bytes
 (`D0 CF 11 E0 A1 B1 1A E1`). Likely causes: it's not a Revit file,
 it's a zero-byte Git LFS placeholder, or a transfer layer mangled
 the bytes (e.g. line-ending conversion).
 
-### `IOError: FileTooLarge`
+### `IOError: the file is <size> bytes, over the limit of <limit>`
 
 The file exceeds `max_file_bytes` (default 2 GiB). Either pass a
 larger cap explicitly in the constructor or verify the file isn't
@@ -677,7 +707,7 @@ corrupt.
 The Layer-5a walker's entry-point detector didn't find an
 `ADocument` record. Expected on Revit 2016–2023 files (see version
 support matrix). For 2024–2026 files this is unexpected on the
-11-release reference corpus — all samples resolve — but may occur
+12-release reference corpus — all samples resolve — but may occur
 on exotic layouts. File an issue with the Revit release year and
 `f.stream_names()` output.
 

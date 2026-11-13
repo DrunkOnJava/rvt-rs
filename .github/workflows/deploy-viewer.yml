@@ -225,11 +225,16 @@ jobs:
     steps:
       # C3: wait for CI on this commit (.github/actions/wait-for-check, which
       # the release preflight uses too). A commit whose every file CI's push
-      # filter ignores runs no CI, and deploys at once.
+      # filter ignores runs no CI, and deploys at once. A commit whose CI run a
+      # later push cancelled never gets its check: the wait ends at once and the
+      # later commit's deploy, queued behind this one, ships the viewer.
       - name: Wait for CI on the commit
+        id: ci
         uses: $/.github/actions/wait-for-check
         with:
           sha: ${{ github.sha }}
+          superseded-skips: "true"
       - name: Deploy to GitHub Pages
         id: deployment
+        if: steps.ci.outputs.result != 'superseded'
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5.0.1

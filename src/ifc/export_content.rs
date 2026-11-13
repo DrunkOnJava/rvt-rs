@@ -62,9 +62,10 @@ pub struct TypedProductionAppend {
     pub element_type_ids: BTreeMap<u32, u32>,
     /// The standard property sets Revit's export gives each type object, by
     /// the type's ElementId and the STEP name of the type entity
-    /// (`IFCWALLTYPE`): its common set's `IsExternal`, `FireRating` and
-    /// `LoadBearing` (RE-286), and a stair or flight type's dimensions
-    /// (RE-286). A type whose elements disagree has none.
+    /// (`IFCWALLTYPE`): its common set's `FireRating` and `LoadBearing`
+    /// (RE-286; no `IsExternal`, on which Revit's exporters disagree), and a
+    /// stair or flight type's dimensions (RE-286). A type whose elements
+    /// disagree has none.
     pub type_entity_sets: BTreeMap<u32, BTreeMap<String, Vec<PropertySet>>>,
     /// Each family instance's original symbol, by ElementId (RE-167).
     pub element_original_symbols: BTreeMap<u32, u32>,
@@ -864,7 +865,27 @@ pub fn append_typed_production_elements(
             continue;
         }
 
-        let mapping = category_map::lookup(&decoded.class);
+        // #1841: a floor of the Structural Foundations category is a slab, not a
+        // footing, and a horizontal bracing is a member, not a beam; the record
+        // names its own class (RE-76) and a framing instance its usage.
+        let record_class = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::String(text)
+                if name == crate::partition_schema_mvp::REVIT_CLASS_FIELD =>
+            {
+                Some(text.as_str())
+            }
+            _ => None,
+        });
+        let structural_usage = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::Integer { value, .. }
+                if name == crate::partition_schema_mvp::STRUCT_USAGE_FIELD =>
+            {
+                u64::try_from(*value).ok()
+            }
+            _ => None,
+        });
+        let mapping =
+            category_map::lookup_for_record(&decoded.class, record_class, structural_usage);
         if mapping.is_none() && policy.require_mapped_ifc_type {
             continue;
         }
@@ -3050,9 +3071,9 @@ fn add_extend_to_structure(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded:
 /// its top down its type's thickness (RE-214) is level, and so is a slab
 /// drawn as an extrusion whose depth is its type's layers' total
 /// thickness, as a sloped or shape-edited slab's record box is deeper than
-/// its layers. Any other slab gets nothing: on the BIM4LCA office the
-/// record boxes of 8 sloped floors are drawn level, and Revit gives them
-/// 1.9 to 24 degrees.
+/// its layers. Any other slab gets nothing here: the BIM4LCA office's 8
+/// sloped floors, to which Revit gives 1.9 to 24 degrees, are drawn along
+/// their plane and take their angle from `add_shaped_floor_pitch` (RE-384).
 fn level_slab(
     ifc_type: &str,
     decoded: &DecodedElement,
@@ -3163,15 +3184,18 @@ fn add_railing_length(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &Dec
     });
 }
 
-/// Add a space's `Qto_SpaceBaseQuantities.Height` to `sets`, its room's
-/// height (RE-255).
+/// Add a space's `Qto_SpaceBaseQuantities.Height` to `sets`: its room's height
+/// (RE-255), or an Area's, the height of its body, from its Level up to the
+/// Level above (RE-317), which its reader gives on the releases Revit's export
+/// is measured on.
 fn add_space_height(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     if ifc_type != "IFCSPACE" {
         return;
     }
     let Some(height) = decoded.fields.iter().find_map(|(name, value)| match value {
         InstanceField::Float { value, .. }
-            if name == crate::partition_schema_mvp::ROOM_HEIGHT_FIELD =>
+            if name == crate::partition_schema_mvp::ROOM_HEIGHT_FIELD
+                || name == crate::partition_area_records::AREA_SPACE_HEIGHT_FIELD =>
         {
             Some(*value)
         }
@@ -3582,7 +3606,7 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// `Depth`, the one layer's thickness of a floor of one layer, and its
 /// `GrossVolume`, the area times it. A floor of several layers gets neither:
 /// the office's export (24.0.5) gives it its bottom layer's thickness, a
-/// newer exporter (26.4) another value (RE-298). Its
+/// newer exporter (26.4) another value (RE-298). A floor's
 /// `Perimeter` is left out: Revit's export writes it in feet, unscaled, in
 /// a file whose length unit is millimetres (RE-235 §5).
 ///
@@ -3602,6 +3626,13 @@ fn add_beam_roll(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedE
 /// sketch's outline, gets the same from its layers (RE-298): its `Depth` is
 /// the extrusion's, the layers' total, whatever their number, and its
 /// `NetVolume`, when its record holds no cutting step, the area times it. Its
+/// `Perimeter`, the length of the outline of that profile, is written too:
+/// Revit's export writes a roof's in the file's unit, unlike a floor's
+/// (RE-235 §5), and on all 10 of the office's roofs it is that outline's
+/// length. A roof whose profile has holes gets none: whether the export
+/// counts a hole's outline in the value is unmeasured, and the housing's 2
+/// roofs with holes are left out. Nor does one whose outline has a corner
+/// that is not a right angle: an arc of its sketch is chords there. Its
 /// `Width` is its profile's extent, as a floor of one layer's is, and is left
 /// out. All 10 of the office's roofs as built and at permit are Revit's, the
 /// one a hatch cuts (`YP-1`) but for its `NetVolume`.
@@ -3670,6 +3701,17 @@ fn add_slab_gross_area(
         name: "GrossArea".into(),
         value: PropertyValue::AreaSquareFeet(gross),
     }];
+    // A roof's `Perimeter` is its profile's outline length in the file's unit,
+    // not the floor's value in feet, and Revit writes it on every roof it
+    // writes the area on (RE-235 §5).
+    if roof {
+        if let Some(perimeter) = profile_outline_length(body) {
+            properties.push(Property {
+                name: "Perimeter".into(),
+                value: PropertyValue::PositiveLengthFeet(perimeter),
+            });
+        }
+    }
     // A floor of one layer only: on floors of several layers Revit's
     // exporters disagree (RE-298).
     let one_layer = layers
@@ -3752,6 +3794,73 @@ fn profile_outline_area(body: &Extrusion) -> Option<f64> {
     };
     let area = polygon_area_sqft(points);
     (area.is_finite() && area > 0.0).then_some(area)
+}
+
+/// The length of the outline of the profile `body` extrudes, its holes not
+/// taken in: `None` for a profile with holes or another shape (RE-235 §5),
+/// and for an outline with a corner that is not a right angle
+/// ([`square_corner_count`]): a sketch arc reaches the outline as chords,
+/// whose length is short of the arc's.
+fn profile_outline_length(body: &Extrusion) -> Option<f64> {
+    let Some(entities::ProfileDef::ArbitraryClosed { points }) = &body.profile_override else {
+        return None;
+    };
+    if square_corner_count(points).is_none_or(|corners| corners < 4) {
+        return None;
+    }
+    let mut length = 0.0;
+    for (index, &(x, y)) in points.iter().enumerate() {
+        let (next_x, next_y) = *points.get((index + 1) % points.len())?;
+        length += (next_x - x).hypot(next_y - y);
+    }
+    (length.is_finite() && length > 0.0).then_some(length)
+}
+
+/// The number of corners of the closed outline `points` where every one of
+/// them is a right angle, and `None` where one is not. A sketch arc reaches an
+/// outline as chords within 0.0005 ft of it, and no corner between two such
+/// chords is square, so an outline that has a count holds no arc and its
+/// polygon's length and area are its sketch's own. A point the outline runs
+/// straight through is no corner (a rectangle one of whose edges is two
+/// sketch lines has four), a repeated point and the closing one are dropped,
+/// and a spike is a corner that is not square.
+pub(super) fn square_corner_count(points: &[(f64, f64)]) -> Option<usize> {
+    // How far from zero a corner's cosine and a straight joint's sine may be.
+    const SQUARE: f64 = 1e-6;
+    const STRAIGHT: f64 = 1e-9;
+    let mut ring: Vec<(f64, f64)> = Vec::with_capacity(points.len());
+    for &point in points {
+        if ring.last() != Some(&point) {
+            ring.push(point);
+        }
+    }
+    if ring.len() > 1 && ring.first() == ring.last() {
+        ring.pop();
+    }
+    let count = ring.len();
+    let mut corners = 0usize;
+    for index in 0..count {
+        let before = ring.get((index + count - 1) % count)?;
+        let at = ring.get(index)?;
+        let after = ring.get((index + 1) % count)?;
+        let (u, v) = (
+            (at.0 - before.0, at.1 - before.1),
+            (after.0 - at.0, after.1 - at.1),
+        );
+        let scale = u.0.hypot(u.1) * v.0.hypot(v.1);
+        if !(scale.is_finite() && scale > 0.0) {
+            return None;
+        }
+        let (dot, cross) = (u.0 * v.0 + u.1 * v.1, u.0 * v.1 - u.1 * v.0);
+        if cross.abs() <= STRAIGHT * scale && dot > 0.0 {
+            continue;
+        }
+        if dot.abs() > SQUARE * scale {
+            return None;
+        }
+        corners += 1;
+    }
+    Some(corners)
 }
 
 /// The area and the length of the outline and hole of a hollow section
@@ -3965,15 +4074,6 @@ fn add_stair_flight_quantities(
     });
 }
 
-/// Add a wall's `Qto_WallBaseQuantities` `Width` to `sets`: its type's
-/// thickness, the wall's Width parameter revit-ifc's `WidthCalculator`
-/// (CLEANROOM.md source 5) reads (#1016), also on a wall the partition
-/// reader does not draw from its centreline, from its type's layers. Its `Length` too where the partition
-/// reader gives one ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]):
-/// Revit's export writes either the wall's curve's length or the length of
-/// that curve cut back at its joins, by how it draws the wall, so a Length is
-/// written only where the two are the same (Griffin, 2026-10-26, RE-252).
-/// Nothing where the thickness is not read.
 /// Add a curtain wall's `Qto_CurtainWallQuantities.Length` to `sets`: its
 /// location curve's length ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]),
 /// which revit-ifc's `LengthCalculator` takes from the wall's location curve
@@ -4000,6 +4100,15 @@ fn add_curtain_wall_length(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded:
     });
 }
 
+/// Add a wall's `Qto_WallBaseQuantities` `Width` to `sets`: its type's
+/// thickness, the wall's Width parameter revit-ifc's `WidthCalculator`
+/// (CLEANROOM.md source 5) reads (#1016), also on a wall the partition
+/// reader does not draw from its centreline, from its type's layers. Its
+/// `Length` too where the partition reader gives one ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]):
+/// Revit's export writes either the wall's curve's length or the length of
+/// that curve cut back at its joins, by how it draws the wall, so a Length is
+/// written only where the two are the same (Griffin, 2026-10-26, RE-252).
+/// Nothing where the thickness is not read.
 fn add_wall_quantities(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     use crate::partition_schema_mvp as mvp;
     if !matches!(ifc_type, "IFCWALL" | "IFCWALLSTANDARDCASE") {
@@ -4590,19 +4699,29 @@ fn add_piece_sets(
     entities: &mut Vec<entities::IfcEntity>,
     pieces_of: Vec<(usize, std::ops::Range<usize>)>,
 ) {
+    // Each owner's sets, as entity indices in order, found once: each element
+    // in pieces scanned every entity for its sets, elements × entities
+    // (#1845). A set given to a piece is added as it is pushed, as the scan
+    // would have seen it.
+    let mut sets_of: HashMap<usize, Vec<usize>> = Default::default();
+    for (index, entity) in entities.iter().enumerate() {
+        if let entities::IfcEntity::ElementPropertySet { element, .. } = entity {
+            sets_of.entry(*element).or_default().push(index);
+        }
+    }
     for (element, pieces) in pieces_of {
-        let sets: Vec<PropertySet> = entities
-            .iter()
-            .filter_map(|entity| match entity {
-                entities::IfcEntity::ElementPropertySet {
-                    element: owner,
-                    set,
-                } if *owner == element => Some(set.clone()),
+        let sets: Vec<PropertySet> = sets_of
+            .get(&element)
+            .into_iter()
+            .flatten()
+            .filter_map(|&index| match &entities[index] {
+                entities::IfcEntity::ElementPropertySet { set, .. } => Some(set.clone()),
                 _ => None,
             })
             .collect();
         for piece in pieces {
             for set in &sets {
+                sets_of.entry(piece).or_default().push(entities.len());
                 entities.push(entities::IfcEntity::ElementPropertySet {
                     element: piece,
                     set: set.clone(),
@@ -4715,6 +4834,12 @@ const ROOM_CONTENT_TYPES: [&str; 8] = [
 /// A closed plan loop, model feet.
 type PlanLoop = Vec<(f64, f64)>;
 
+/// The outline vertices [`contain_in_spaces`] may walk in all. A storey of
+/// 1,000 rooms of 20 vertices under 10,000 pieces of furniture takes 2e8 at
+/// most, every room tested for every piece; past this a crafted file is
+/// stacking spaces to hang the export (#1845).
+const SPACE_CONTAINMENT_BUDGET: usize = 1_000_000_000;
+
 /// A space's plan outline and voids in model coordinates: its body's profile
 /// moved to its placement.
 fn space_plan_outline(
@@ -4812,8 +4937,23 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             spaces.push((index, *storey, outer, voids));
         }
     }
+    // Each storey's spaces, in order: each content looked through every space
+    // of the model for its storey's (#1845).
+    let mut storey_spaces: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for (at, (_, storey, ..)) in spaces.iter().enumerate() {
+        storey_spaces.entry(*storey).or_default().push(at);
+    }
+    // The outline vertices the pass's tests have walked: a crafted file can
+    // stack every space on one storey under every content, contents × spaces
+    // × vertices with no end. Past the budget nothing is contained in a
+    // space, and each content stays in its storey.
+    let work = std::cell::Cell::new(0usize);
     let mut contents: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     for (index, entity) in entities.iter().enumerate() {
+        if work.get() > SPACE_CONTAINMENT_BUDGET {
+            crate::budget::stopped("space_containment");
+            return;
+        }
         let entities::IfcEntity::BuildingElement {
             ifc_type,
             storey_index: Some(storey),
@@ -4831,13 +4971,17 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             continue;
         }
         let holds = |outer: &PlanLoop, voids: &[PlanLoop], point: (f64, f64)| {
+            let vertices = outer.len() + voids.iter().map(|ring| ring.len()).sum::<usize>();
+            work.set(work.get().saturating_add(vertices));
             inside(outer, point) && !voids.iter().any(|ring| inside(ring, point))
         };
         let point = (location[0], location[1]);
         let on_storey = || {
-            spaces
-                .iter()
-                .filter(|(_, space_storey, ..)| space_storey == storey)
+            storey_spaces
+                .get(storey)
+                .into_iter()
+                .flatten()
+                .map(|&at| &spaces[at])
         };
         let mut space = on_storey()
             .find(|(_, _, outer, voids)| holds(outer, voids, point))
@@ -8535,4 +8679,106 @@ fn floor_boundary_annotation_from_decoded(decoded: &DecodedElement) -> Option<Pr
             },
         ],
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::square_corner_count;
+
+    /// A square with one corner rounded by a quarter circle of radius 1,
+    /// the arc as `chords` chords, which is how a sketch arc reaches an
+    /// outline.
+    fn rounded_square(chords: usize) -> Vec<(f64, f64)> {
+        let mut points = vec![(0.0, 0.0), (4.0, 0.0), (4.0, 3.0)];
+        for step in 1..=chords {
+            let angle = std::f64::consts::FRAC_PI_2 * step as f64 / chords as f64;
+            points.push((3.0 + angle.cos(), 3.0 + angle.sin()));
+        }
+        points.push((0.0, 4.0));
+        points
+    }
+
+    #[test]
+    fn an_arc_of_chords_is_refused() {
+        for chords in [2, 8, 64, 1024] {
+            assert_eq!(
+                square_corner_count(&rounded_square(chords)),
+                None,
+                "{chords} chords"
+            );
+        }
+    }
+
+    #[test]
+    fn a_slanted_edge_is_refused() {
+        assert_eq!(
+            square_corner_count(&[(0.0, 0.0), (4.0, 0.0), (5.0, 3.0), (0.0, 3.0)]),
+            None
+        );
+        assert_eq!(
+            square_corner_count(&[(0.0, 0.0), (4.0, 0.0), (0.0, 3.0)]),
+            None
+        );
+    }
+
+    #[test]
+    fn a_spike_is_refused() {
+        let spike = [
+            (0.0, 0.0),
+            (4.0, 0.0),
+            (4.0, 3.0),
+            (2.0, 3.0),
+            (2.0, 5.0),
+            (2.0, 3.0),
+            (0.0, 3.0),
+        ];
+        assert_eq!(square_corner_count(&spike), None);
+    }
+
+    #[test]
+    fn a_rectangle_with_a_collinear_joint_has_four_corners() {
+        let split = [(0.0, 0.0), (2.0, 0.0), (4.0, 0.0), (4.0, 3.0), (0.0, 3.0)];
+        assert_eq!(square_corner_count(&split), Some(4));
+    }
+
+    #[test]
+    fn a_repeated_point_and_the_closing_point_are_dropped() {
+        let closed = [
+            (0.0, 0.0),
+            (4.0, 0.0),
+            (4.0, 0.0),
+            (4.0, 3.0),
+            (0.0, 3.0),
+            (0.0, 0.0),
+        ];
+        assert_eq!(square_corner_count(&closed), Some(4));
+    }
+
+    #[test]
+    fn an_l_has_six_corners_at_any_turn_and_either_winding() {
+        let l = [
+            (0.0, 0.0),
+            (4.0, 0.0),
+            (4.0, 2.0),
+            (2.0, 2.0),
+            (2.0, 4.0),
+            (0.0, 4.0),
+        ];
+        assert_eq!(square_corner_count(&l), Some(6));
+        let reversed: Vec<(f64, f64)> = l.iter().rev().copied().collect();
+        assert_eq!(square_corner_count(&reversed), Some(6));
+        let (sin, cos) = 0.5_f64.sin_cos();
+        let turned: Vec<(f64, f64)> = l
+            .iter()
+            .map(|&(x, y)| (1e4 + x * cos - y * sin, -2e3 + x * sin + y * cos))
+            .collect();
+        assert_eq!(square_corner_count(&turned), Some(6));
+    }
+
+    #[test]
+    fn no_outline_has_no_corner() {
+        assert_eq!(square_corner_count(&[]), Some(0));
+        assert_eq!(square_corner_count(&[(1.0, 1.0)]), None);
+        assert_eq!(square_corner_count(&[(0.0, 0.0), (1.0, 0.0)]), None);
+    }
 }

@@ -13,7 +13,7 @@ The queries, in order:
 - `list_levels`;
 - `list_elements` unfiltered, a page of 1000 at a time, so every element's row;
 - `list_elements` once per IFC entity, per Revit class and per level, for the totals alone;
-- `list_rooms`;
+- `list_rooms`, a page of 1000 at a time (a server before #1883 gives every room in one answer, with no total);
 - `get_element` by ElementId for the five lowest ElementIds of each IFC entity (every element when
   `details` is "all"), and by GlobalId for the first of them;
 - `get_diagnostics`;
@@ -50,9 +50,18 @@ class ToolError(McpError):
     """A tool answered `isError`: the message is its text."""
 
 
+def takes_root(binary):
+    """Whether the server has `--root` (#1883): Measure runs the scorers against the server of both sides of a run, and a side from before the flag reads any file."""
+    help_text = subprocess.run([binary, "--help"], capture_output=True, text=True, timeout=60, check=True).stdout
+    return "--root" in help_text
+
+
 class Server:
-    def __init__(self, binary, output_dir=None, timeout=2280.0):
+    def __init__(self, binary, output_dir=None, timeout=2280.0, root=None):
         args = [binary]
+        if root and takes_root(binary):
+            # The server reads files only inside one folder; the model's own.
+            args += ["--root", root]
         if output_dir:
             args += ["--output-dir", output_dir]
         self.timeout = timeout
@@ -206,7 +215,17 @@ def gather(server, model, export_dir, per_entity=5, details="sample", progress=N
         "class": {name: count(**{"class": name}) for name in sorted(summary["by_revit_class"])},
         "level": {level["name"]: count(level=level["name"]) for level in opened["levels"]},
     }
-    answers["rooms"] = server.call("list_rooms", {"model": handle})["rooms"]
+    rooms, offset = [], 0
+    while True:
+        page = server.call("list_rooms", {"model": handle, "limit": PAGE, "offset": offset})
+        rooms += page["rooms"]
+        # A server that does not page (before #1883) answers with every room and says no total.
+        if "total" not in page or not page["rooms"]:
+            break
+        offset += len(page["rooms"])
+        if offset >= page["total"]:
+            break
+    answers["rooms"] = rooms
 
     by_category = {}
     for row in rows:
@@ -288,7 +307,7 @@ def main(argv):
         print("usage: mcp_client.py <rvt-rs-mcp> <model.rvt> [--all]  (prints the semantic dump)", file=sys.stderr)
         return 2
     with tempfile.TemporaryDirectory() as scratch:
-        server = Server(argv[1], output_dir=scratch)
+        server = Server(argv[1], output_dir=scratch, root=os.path.dirname(os.path.abspath(argv[2])))
         try:
             answers = gather(server, argv[2], scratch, details="all" if "--all" in argv[3:] else "sample")
         finally:

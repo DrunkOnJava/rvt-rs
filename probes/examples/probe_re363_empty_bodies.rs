@@ -44,6 +44,7 @@
 
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{NATIVE_RELEASES, Options, Record, extract_graphs};
 use rvt::research::native_graphics_traversal::{
     NESTED_DETAIL_FILTER_DIAGNOSTIC, VIEW_COMPONENT_DIAGNOSTIC,
@@ -53,7 +54,6 @@ use rvt::research::native_saved_mesh::{
 };
 use rvt::research::partition_element_records::{self as per, PartitionElementRecord};
 use rvt::research::partition_element_records_2023 as per32;
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::{Duration, Instant};
 
@@ -124,7 +124,7 @@ fn records_2024(rf: &mut RevitFile, release: u32) -> Vec<PartitionElementRecord>
 }
 
 /// `{"m_id":{"m_id64":n}}`, or a bare integer, as `n`.
-fn identifier(value: &Value) -> Option<i64> {
+fn identifier(value: &Fv) -> Option<i64> {
     if let Some(n) = value.as_i64() {
         return Some(n);
     }

@@ -43,9 +43,9 @@
       "IFCPROJECT": 1,
       "IFCPROPERTYSET": 6598,
       "IFCPROPERTYSINGLEVALUE": 28589,
-      "IFCQUANTITYAREA": 1099,
-      "IFCQUANTITYLENGTH": 1369,
-      "IFCQUANTITYVOLUME": 1107,
+      "IFCQUANTITYAREA": 1241,
+      "IFCQUANTITYLENGTH": 1440,
+      "IFCQUANTITYVOLUME": 1178,
       "IFCRECTANGLEPROFILEDEF": 754,
       "IFCRELAGGREGATES": 13,
       "IFCRELASSOCIATESMATERIAL": 412,
@@ -705,7 +705,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "372d556a78e548a3e4471a9b2f435f0932e76e33528233b6ef86a1ba6c917732",
+  "observation_hash_sha256": "7063cb8434c707f960b5ac1d22f916d05f264ea1717c1041ec63f4f0e6db1f11",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",
@@ -718,9 +718,8 @@
     "partial_revit_element_parameters"
   ],
   "warnings": [
-    "Unmapped Revit unit identifiers were preserved in diagnostics: autodesk.unit.unit:amperes-1.0.0, autodesk.unit.unit:britishThermalUnits-1.0.1, autodesk.unit.unit:britishThermalUnitsPerDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHour-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourCubicFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourFootDegreeFahrenheit-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFoot-1.0.1, autodesk.unit.unit:britishThermalUnitsPerHourSquareFootDegreeFahrenheit-1.0.1",
     "15 building storey name(s) came from partition Level records; 970 building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match."
   ],
   "witness_id": "rvt-rs",
-  "witness_version": "0.18.0"
+  "witness_version": "0.22.0"
 }

@@ -1,7 +1,7 @@
 # IFC Export Diagnostics
 
-`rvt-ifc --diagnostics path.json` writes a JSON sidecar next to the IFC
-output. The same payload is available to Python via
+`rvt-ifc --diagnostics path.json` writes a JSON sidecar to the path it
+names. The same payload is available to Python via
 `RevitFile.export_diagnostics_json()` / `rvt_to_ifc_diagnostics(path)` and to
 WASM via `openRvtBytesWithDiagnosticsMode(bytes, mode)`.
 
@@ -45,8 +45,8 @@ rvt-ifc model.rvt -o diagnostic.ifc --diagnostic-proxies \
   --diagnostics diagnostic.json
 ```
 
-Where each element was read from is a list as long as the file has elements,
-so it is off unless asked for (#1325):
+Where each element was read from is a list of the file's keyed elements,
+up to the 250,000 the table lists, so it is off unless asked for (#1325):
 
 ```bash
 rvt-ifc model.rvt -o model.ifc --diagnostics model.diagnostics.json --element-provenance
@@ -62,11 +62,13 @@ server turns it on for the models it opens. The IFC is the same file either way.
 What an element's `offset` is, and what has been measured:
 
 - `offset` is the frame the exporter selected for the element's record. Among an
-  element's frames, Revit 2024 and later (`select_instance_records`) take the
-  one with the greatest vertical extent and, on a tie, the higher-numbered
-  partition and then the later offset; Revit 2008 to 2023
-  (`select_newest_instance_records`, RE-107) take the newest, the
-  highest-numbered partition and then the latest offset, with no extent test. A
+  element's frames, both take the newest, the highest-numbered partition; Revit
+  2024 and later (`select_instance_records`, RE-444) then the one with the
+  greatest vertical extent within that partition and, on a tie, the later
+  offset; Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) the
+  latest offset, with no extent test. Before RE-444 Revit 2024 and later took the
+  greatest vertical extent first, which kept the older frame of an element made
+  shorter after an earlier save. A
   body reader may take another copy: the sketch-line readers take the current
   one (`current_partitions`, RE-216), which is also the copy `native.stream`
   names. So `offset` and `native.stream` can name different partitions, and the
@@ -111,7 +113,8 @@ A reader notes its choice where it makes it, only while the export builds this
 table, and the entry is listed only where the element's final `BodySource` is
 drawn from that reader, or one of its other `*Source` property values
 (`BodyHeightSource`, `BodyBaseSource`, `BodyEndSource`, `PlacementAxesSource`,
-`ThicknessSource`, `SpaceOutlineSource`) is (#1498).
+`ThicknessSource`, `SpaceOutlineSource`, `ProfileStubSource`, `ProfileTopSource`,
+`ProfileCutSource`, `PlacementOriginSource`) is (#1498).
 
 | `BodySource` | Reader | Rule | What `offset` is |
 |---|---|---|---|
@@ -121,7 +124,7 @@ drawn from that reader, or one of its other `*Source` property values
 | The same | `sketch_list` | `agreeing` or `current` | The element-data header of the Sketch's curve list that names the lines (RE-97), the lowest-numbered partition's or the current one. Where the element has one. |
 | The same, where the outline is read from the lines' own ends rather than their boxes | `sketch_line_data` | `agreeing` or `current` | `parts`: the element-data header of each line's copy (as `bounded_line`). |
 | The same bodies where the section is the type symbol's box (`profile_source` `family_type_symbol_envelope`: columns) | `type_section` | `agreeing` or `frame` | `parts`: the type symbol's frame, the last of its frames the column scan kept; `agreeing` (with `partitions`) where every frame of the symbol gives the same box, `frame` where they do not. |
-| The same bodies where the profile is a room's outline read from its stored solid (`profile_source` `partition_room_solid_faces`, `partition_room_solid_faces_resolved`, `partition_room_solid_faces_approximate` or `partition_room_solid_edges`, RE-101, RE-316, RE-374) | `room_solid_faces` | `frame` | `parts`: the header of each stored solid of the room that gave the outline (the ElementId, then the solid's tag), in the room's own partition; where more than one solid gave one, every one gave the same. Only that partition is read: the room's solids in other partitions are not compared, so the rule is not `agreeing`. No model of the CI gate has a `partition_room_solid_edges` room (RE-374: two rooms, both on models outside it), so the test reads none of them. |
+| The same bodies where the profile is a room's outline read from its stored solid (`profile_source` `partition_room_solid_faces`, `partition_room_solid_faces_resolved`, `partition_room_solid_faces_approximate` or `partition_room_solid_edges`, RE-101, RE-316, RE-374) | `room_solid_faces` | `frame` | `parts`: the header of each stored solid of the room that gave the outline (the ElementId, then the solid's tag), in the room's own partition; where more than one solid gave one, every one gave the same. Only that partition is read: the room's solids in other partitions are not compared, so the rule is not `agreeing`. One model of the CI gate has a `partition_room_solid_edges` room (RE-374: two rooms, the BIM4LCA office's room 3095831 at building permit and Snowdon Towers' room 830902, only the first in the gate), so the test reads it. |
 | `family_type_hollow_section` | `type_hollow_section` | `agreeing` | `parts`: the entries of the column type's parameters `b`, `Ht`, `t` and `kr` (`f64`, `ff` x 8, `i64` parameter id), in the type's value block; the first copy of each, every copy holding the same value. A parameter whose value block holds two different values, or whose copies in two partitions differ, is skipped (the type then has no section): that is not counted as a disagreement among copies. The element's `selected_frame` names the frame whose box the section is held to. |
 | `family_type_i_section` | `type_i_section` | `agreeing` | `parts`: the six entries of the type's I section (width, height, web and flange thickness, the centroid both ways), as for the hollow section. `instance_transform` (as below) gives the plan angle of the column's X axis. On Core Interior, the BIM4LCA office and the RE1 models no element has this body (Measure run 41887789579), so no model of the CI gate reads it; Measure run 42118489328 read it on 557 elements of 5 Autodesk models. |
 | Any body drawn as its type's I section: a beam along its line (`partition_beam_axis`) or a column (`SectionShape` `I` is written exactly then) | `type_i_section` | `agreeing` | As for the column above: `parts`: the six entries of the type's I section. A beam of an I-section type whose body along its line does not hold the section has no `SectionShape` and no such source. No model of the CI gate has one (Measure run 42118489328 at ee449c3b: 557 elements on 5 models, Autodesk's `rstbasicsampleproject` of 2024 to 2027 with 35 each and the Snowdon Towers structural sample with 417), so the test reads none of them. |
@@ -132,12 +135,12 @@ drawn from that reader, or one of its other `*Source` property values
 | `partition_roof_slope`, `partition_roof_extrusion` | `roof_line_data` | `agreeing` or `current` | `parts`: the element-data header of the copy of each of those sketch lines (a roof by extrusion: all of its lines) the line or spline was read from, as `sketch_line_data` (RE-211). |
 | `partition_roof_slope` | `roof_fascia_depth` | `agreeing` | The element-data header of the roof's own data that gave its fascia depth, where it was read (RE-199). |
 | `partition_roof_slope` | `roof_rafter_cut` | `native` | The header of the roof's current native record, which gives its rafter cut, where it was read (RE-199). |
-| `partition_roof_slope`, `partition_roof_extrusion` | `roof_type_layers` | `agreeing` | `parts`: the element-data header of the roof type's layers, whose widths sum to the roof's thickness, read once for the type and noted for each roof of it. |
+| `partition_roof_slope`, `partition_roof_extrusion` | `roof_type_layers` | `agreeing` or `current` | `parts`: the element-data header of the roof type's layers, whose widths sum to the roof's thickness, read once for the type and noted for each roof of it: the first copy where every copy of the type gives the same layers (`agreeing`), the current partition's where the copies disagree (`current`, Revit 2024 and later, RE-446). |
 | `partition_roof_slope`, `partition_roof_extrusion` | `sketch_lines`, `sketch_list` | as above | The roof's outline (a sloped roof) as for a floor; for a roof by extrusion `sketch_lines` lists the first frame of each of its sketch lines, rule `frame` (the other frames are not compared), and `sketch_list` is listed only when the roof's Sketch lists its curves (RE-97): `11_RoofByExtrusion` has none, its lines are found by their owner reference. The element's `selected_frame` names the frame whose box the section is held to. |
 | `family_extrusions` | `family_forms` | `frame` | Only with `--element-provenance` and `--family-extrusions` both on. `parts`: the records of the family's own embedded document that the instance's extrusions were rebuilt from: each visible extrusion (`ExtrusionElem`), its sketch plane (`SketchPlane`) and the curves of its sketch (`CurveElem`), at the place the document's group puts the record in its partition (the record's id, then its length and body). The ids are the family document's, not the model's, so a part's `element_id` can equal another element's. The document is read once, as it is embedded. A record the file holds in several partitions is named at its copy in the highest partition (partitions taken in number order), the copy the rebuild reads; the other copies are not compared. An instance one of whose records has no place (its group's bytes are not the partition's own consecutive members) gets no `family_forms` source, because a part list that left a record out would not be the records the body was rebuilt from; it keeps its other sources. The instance's own `selected_frame` and `instance_transform` are listed beside it: the transform places the extrusions, and the frame is the location and rotation they are drawn at. The saved mesh the extrusions are checked against is not a source of the body. |
 | `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_beam_axis`, `partition_beam_box_along_axis` | `bounded_line` | `agreeing` | The element-data header of the lowest-numbered partition's copy of its location line. Every copy holds the same line; a wall or beam whose copies differ is drawn as its box instead. |
 | `partition_wall_arc` | `bounded_arc` | `agreeing` | As `bounded_line`, for a curved wall's arc. |
-| `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_wall_arc` | `wall_type_layers` | `agreeing` | `parts`: the element-data header of the wall type's layers, which give the thickness the body is drawn at and the layers a layer-joined wall's staircase is drawn in; read once for the type and noted for each wall of it (as `roof_type_layers`). A wall's other inputs have the rows below (#1498). |
+| `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_wall_arc` | `wall_type_layers` | `agreeing` or `current` | `parts`: the element-data header of the wall type's layers, which give the thickness the body is drawn at and the layers a layer-joined wall's staircase is drawn in; read once for the type and noted for each wall of it (as `roof_type_layers`, `current` included: a type edited since an earlier save takes its current partition's copy, RE-446). A wall's other inputs have the rows below (#1498). |
 | `partition_wall_centreline`, `partition_wall_centreline_layer_joins`, `partition_wall_tapered_section`, `partition_wall_arc` | `wall_orientation` | `agreeing` | The element-data header of the lowest-numbered partition's copy of the wall's data that gave its location-line setting, its cross-section word and its flip (RE-54, RE-86); `partitions` lists the copies that did. A wall whose copies differ has none, and takes the word and the flip from its native record, which is `native_wall`. |
 | The same four bodies | `native_wall` | `native` | The header of the wall's current native record (`SWall` or `ArcWall`), read in the pass that gives the walls' joins, cut pairs, top joins, curve and flip: the joins and cut pairs that decide whether the wall is cut at its top, base or ends, `m_realJoined` (the walls Revit joins at each end), the straight level curve a door's placement is taken along, and the flip and cross-section word where the partition data has none. Listed for every wall whose body is one of these four and for every wall with a `BodyHeightSource`, `BodyBaseSource` or `BodyEndSource` below. The record is read for all of those values together; the row says which record, not which of its fields a given wall used. |
 | `partition_wall_tapered_section` | `wall_type_face_angle` | `agreeing` | The element-data header of the wall type's data that holds the face-angle frame (RE-86), the lowest-numbered partition's copy; every copy gives the same three angles or the type is left out. Revit 2024 and 2025 only. |
@@ -184,10 +187,11 @@ value with neither a source nor a stated gap. A row is one of
 
 - `Sourced`: every element that carries the value has a value source from each
   reader of the row (and from one of its alternatives): `BodyHeightSource`,
-  `BodyBaseSource`, `BodyEndSource`, `PlacementAxesSource`, `ThicknessSource`
-  and `SpaceOutlineSource`, whose readers the table above names and which the
-  export lists from the property's value (`property_readers`), not only from
-  the body's;
+  `BodyBaseSource`, `BodyEndSource`, `PlacementAxesSource`, `ThicknessSource`,
+  `SpaceOutlineSource`, `ProfileStubSource`, `ProfileTopSource`,
+  `ProfileCutSource` and `PlacementOriginSource`, whose readers the table above
+  names and which the export lists from the property's value (`property_readers`),
+  not only from the body's;
 - `Checked`: another check covers it, `BodySource` by `COVERAGE` and
   `ProfileSource` by the profile check;
 - `Unread`: the value says nothing was read (`SpaceOutlineSource` `none`);
@@ -202,7 +206,7 @@ archives and Autodesk's 58 samples):
 
 | Kind | Values | Elements | Why there is no source |
 |---|---|---|---|
-| A binding to a Level or a storey | `LevelBindSource`: `partition_element_record_reference_list`, `..._base_constraint`, `..._host`, `..._level_object`, `..._plumbing_level_object`, `..._base_at_level`, `..._same_class_host`, `..._base_elevation` and `structural_framing_top_level` (9); `StoreyBindSource`: `record_base_elevation`, `record_top_elevation`, `record_level_reference` (3) | 211,687 and 207,049 | The Level is read from the reference list of the element's own record and the elevations it is compared with from the Levels' blocks, and no reader notes either for the element. A binding is not a value of the body or the placement, which `value_sources` is about. |
+| A binding to a Level or a storey | `LevelBindSource`: `partition_element_record_reference_list`, `..._base_constraint`, `..._reference_level`, `..._host`, `..._level_object`, `..._plumbing_level_object`, `..._base_at_level`, `..._same_class_host`, `..._base_elevation` and `structural_framing_top_level` (10); `StoreyBindSource`: `record_base_elevation`, `record_top_elevation`, `record_level_reference` (3) | 211,687 and 207,049 | The Level is read from the reference list of the element's own record and the elevations it is compared with from the Levels' blocks, and no reader notes either for the element. A binding is not a value of the body or the placement, which `value_sources` is about. |
 | A name chosen by a table | `FamilyNameSource`: `system_family_by_category`, `system_family_by_type_kind` (2) | 19,449 | The family name is chosen from the element's category or the kind of its type record; no bytes of the file hold it. |
 | A column's height after its joins | `BodyHeightSource` `partition_geometry_node_after_joins` (1) | 85 | The height is the box at id-48 of the column's geometry node (RE-178), a record beside its frame that `element_record_column_cuts` reads and does not note. |
 | Schema-walker values | `LocationCurveSource` `ArcWallPartition` and `SchemaEndpoints`, `BoundarySource` `SchemaSketch` and `PartitionPlanLoop` (4) | 0 | The schema-driven wall and floor paths, which no element of those 92 models takes: the walker notes no value source. |
@@ -298,10 +302,11 @@ partition's copy with the others not compared, and `current` is
 
 #### Provenance table size
 
-The only place the table's size is stated. Every other document, doc comment
-and schema description links here and gives no number, so a change to the table
-(a new reader, say) updates this table and its run, and nothing else (a
-changelog fragment of unreleased work may state its own figure). Measured by
+The only place the table's measured size is stated. Every other document, doc
+comment and schema description gives no measurement of its own, only the cap of
+250,000 listed entries, so a change to the table (a new reader, say) updates
+this table and its run, and nothing else (a changelog fragment of unreleased
+work may state its own figure). Measured by
 Measure runs 41890994176 (the head of #1373; the first four rows) and
 41902619175 (the head of #1379; the Revit 2025 rows), with
 `-f ifc_flags=--element-provenance` against the same models without it.
@@ -371,8 +376,9 @@ every reason of `skipped` the log's `total` is the sum of the items' counts and,
 for a reason that dropped none, the entries by class are the item's `classes`.
 `tests/export_decisions_counts.rs` checks this on Core Interior, the RE1 models
 (the default export, and the first phase, which leaves the 11 rooms out),
-Einhoven and the BIM4LCA as-built office. The one item it leaves out is
-`stream_not_read_resource_limit`, which counts streams, not elements. Core
+Einhoven and the BIM4LCA as-built office. The items it leaves out are
+`stream_not_read_resource_limit`, which counts streams, and
+`work_budget_reached`, which counts readers' stops, not elements. Core
 Interior has nothing left out (its `skipped` section is empty and the three
 `exported` counts are 0), so its log is empty and the test checks that; for the
 other models it names the reasons their diagnostics count and requires entries
@@ -380,7 +386,7 @@ for each, so an empty log cannot pass.
 
 | Stage | Reason | What was decided | Counted in |
 |---|---|---|---|
-| `element_skipped` | `below_min_element_confidence`, `low_confidence_schema_scan_candidate`, `element_record_without_element_id`, `element_record_frame_stopped` (`class`: the stage), `element_record_without_volume`, `element_record_in_non_primary_design_option`, `element_record_not_in_export_phase`, `room_not_in_export_phase`, `element_record_empty_curtain_panel`, `element_record_family_space_without_body`, `area_without_proven_body`, `shaft_opening_not_cut` (`class`: `ShaftOpening`) | The element is not in the export. A shaft opening is no element of the IFC: it is counted because its cut from the floors, ceilings and roofs it passes through is read on Revit 2024 only (RE-345), so on a 2025 to 2027 file they stay whole. | the `skipped` item of the same reason |
+| `element_skipped` | `below_min_element_confidence`, `low_confidence_schema_scan_candidate`, `element_record_without_element_id`, `element_record_frame_stopped` (`class`: the stage), `element_record_without_volume`, `element_record_in_non_primary_design_option`, `element_record_not_in_export_phase`, `room_not_in_export_phase`, `element_record_empty_curtain_panel`, `element_record_family_space_without_body`, `element_record_family_type_draws_nothing`, `area_without_proven_body`, `shaft_opening_not_cut` (`class`: `ShaftOpening`) | The element is not in the export. A shaft opening is no element of the IFC: it is counted because its cut from the floors, ceilings and roofs it passes through is read on Revit 2024 only (RE-345), so on a 2025 to 2027 file they stay whole. | the `skipped` item of the same reason |
 | `body_not_drawn` | `unsupported_geometry_curve`, `unsupported_geometry_profile`, `unsupported_geometry_missing_dimensions` | The element is written with no body. | the `skipped` item |
 | `opening_not_cut` | `unsupported_geometry_unresolved_host` | A door or window has no host to cut. | the `skipped` item |
 | `storey_not_bound` | `unsupported_geometry_missing_level` | The element is written outside any storey. | the `skipped` item |
@@ -415,9 +421,9 @@ What an entry's `offset` is, and what has been measured:
   finds an element framed in several partitions keeps the last frame in scan
   order, partition number and then offset, with no test of vertical extent. The
   frame `decoded.element_provenance` names for an exported element is the one
-  the exporter selected (`select_instance_records`: on Revit 2024 and later the
-  greatest vertical extent), so the two can name different frames of the same
-  element.
+  the exporter selected (`select_instance_records`: the newest partition and,
+  within it, on Revit 2024 and later the greatest vertical extent), so the two
+  can name different frames of the same element.
 - On Revit 2008 to 2023 files `element_record_frame_stopped` is made from the
   frames of the marker scan that did not become an element (see
   [Element record stages](#element-record-stages)): its `class` is the stage the
@@ -438,7 +444,8 @@ What an entry's `offset` is, and what has been measured:
 Why a switch of its own, not `--element-provenance`: the log is bounded (at most
 5,000 entries a reason, whatever the model; 1,000 of each stage for
 `element_record_frame_stopped`, whose counts in `skipped` are complete) where the provenance table lists
-every element ([Provenance table size](#provenance-table-size)), and it needs no table in the
+every keyed element, up to the 250,000 it holds
+([Provenance table size](#provenance-table-size)), and it needs no table in the
 sidecar. Where an entry's
 evidence is an element the walk decoded, its stream and offset are read from a
 table built for the purpose and dropped. Someone asking why an element was left
@@ -577,7 +584,7 @@ minor release; incompatible changes must increment this number.
 | `warnings` | array | User-facing caveats for this specific export. On a Revit 2024 or later file that holds an Area or an area boundary line, one says how many declared chain records have an entry block that does not read (it does not fit the record, or an entry's second word is not -1): the Area reader does not see them, an Area among them with it (RE-333). It is absent from a file with neither. |
 | `confidence` | object | Coarse export-readiness level and booleans for metadata/elements/geometry. |
 | `source_coverage` | object (optional) | Measured coverage from export/decode counts. `status` is `measured` when at least one fraction has a trustworthy denominator; otherwise `unset` with null fractions. Never invents ratios. |
-| `formats_latest_integrity` | object (optional) | `Formats/Latest` page-boundary integrity under the narrow gate of #151 (the page strip stays **disabled**). Multipage streams report `integrity_status: uncertain` and `diagnostic_code: RVT_FORMATS_MULTIPAGE_UNVERIFIED` without claiming completeness. `schema_scan_truncated` / `schema_scanned_bytes` report whether schema parsing stopped at the 65536-byte scan limit — a "we stopped looking" signal, not a claim about the unscanned tail. |
+| `formats_latest_integrity` | object (optional) | `Formats/Latest` page-boundary integrity under the narrow gate of #151 (the page strip is on: `checksum_tail_stripping` is `enabled`, #410). Multipage streams report `integrity_status: uncertain` and `diagnostic_code: RVT_FORMATS_MULTIPAGE_UNVERIFIED` without claiming completeness. `schema_scan_truncated` / `schema_scanned_bytes` are kept from before #410, when schema parsing stopped at the 65536-byte scan limit: parsing now reads the whole stream, so the first is always `false` and the second the whole inflated length (`null` where inflate failed). |
 `skipped.reason` is stable enough for automation. Geometry-related reasons use
 the `unsupported_geometry_*` prefix and currently include
 `unsupported_geometry_curve`, `unsupported_geometry_profile`,
@@ -598,10 +605,35 @@ stream's inflated total). Every reader went on without those streams, so the
 export is missing what they hold. `rvt-ifc` and `rvt-gltf` write no model and
 exit with status 3 when this item is present, unless `--allow-partial`.
 
+`work_budget_reached` lists the readers that stopped at a work budget
+(#1833, #1845): `classes` maps each reader (`pipe_connector_tests`,
+`room_solid_headers`, `sketch_loop_solve`, ...) to how many times it stopped
+since the file was opened, `count` is their sum, and one warning per reader
+begins `Work budget reached:`. Each reader counts its work against a budget
+no real model is known to reach, so that a file built to make it work
+without end cannot hang the export; past it the reader leaves out what it
+would have read (a pipe's ports, a room's outline, a slab's sketch profile),
+as an unread stream leaves out what it holds. The export's own geometry has
+budgets too: a wall's top left uncut (`wall_top_pieces`,
+`wall_top_covered_parts`) or not cleared as embedded
+(`wall_top_embedded_pieces`), a roof or slab envelope not drawn
+(`envelope_pieces`), the mullion ends in a crowded grid cell counted as
+continued by none (`mullion_end_cells`), and no element contained in a space
+(`space_containment`). No option raises a work budget. Unlike an unread
+stream, a stop does not make the export partial: `rvt-ifc` and `rvt-gltf`
+write the model and print a warning naming each reader, Python's
+`write_ifc` returns the IFC with a `RuntimeWarning`, and the MCP server's
+exports write the file with the stops in their notes (Griffin, 2026-11-12:
+"Write it, with a warning"). The stops are kept with the
+open file: a second export of it, which reads back what the first read,
+reports them too. A reader that export runs again adds its stops again, so a
+count is how often the reader stopped on the open file; which readers stopped
+is exact for each export.
+
 `element_record_without_element_id` counts the element records of every
 recovered category whose frame is in place (the `BuiltInCategory` at `+0x12`
 and the bounding-box marker at `+0x50`) but whose `+0x00` holds no ElementId,
-keyed by class in `classes`. The recovered categories are walls, doors,
+keyed by class in `classes`. The recovered categories include walls, doors,
 windows, columns, floors, building pads and rooms, plus the RE-33 product
 categories: furniture, casework, plumbing fixtures, specialty equipment,
 ceilings, curtain-wall mullions and panels, railings, wall sweeps, ducts,
@@ -615,8 +647,16 @@ type symbols do not inflate it. Only frames inside the partition's leading
 record chain count: records after it belong to loaded families' own documents,
 whose frames are not model elements. A second-prologue frame whose enclosing
 record carries a declared ElementId is exported under it and not counted
-(RE-35). The fail-closed decode cannot attribute the frames that remain, so
-none is exported, and a matching warning says the model is incomplete. It is
+(RE-35). The frames that remain sit in records whose ElementId the element
+table does not declare, so none is exported. More than one cause is known and
+one has been measured: on the one Revit 2027 model compared with Revit's export
+of the same save, all 84 were deleted elements, which a file saved in place
+keeps and which Revit's export does not write (between its two saves the record
+chain was the same and the table declared 143 fewer of its records, #1838). An
+element table read short leaves real elements out instead, as it did on
+Autodesk's Snowdon Towers 2024 architectural sample (below), and other causes
+are not ruled out. A matching warning states what was measured on that one
+model and that the model is likely incomplete if nothing was deleted. It is
 absent on `2024_Core_Interior.rvt`, on the RE1 models, on every
 project-count fixture and, since RE-41 declares the ElemTable's second id,
 on Autodesk's Snowdon Towers 2024 architectural sample, where it was 37
@@ -776,13 +816,25 @@ Important nested fields:
 | `decoded.diagnostic_proxy_candidates` | integer | Low-confidence candidates available to diagnostic export. |
 | `decoded.arcwall_records` | integer | Version-gated ArcWall records exported as `IFCWALL`. |
 | `decoded.parameter_value_count` | integer | Property values the export writes in `Pset_*` sets: each element's, and the storeys' and the building's. It equals the values of the IFC file's `Pset_` sets. A piece folded into another element's body (`exported.body_pieces_folded`) writes no set, so its clone of its owner's sets is not counted (it was, before #1424): on the BIM4LCA office the count goes from 54,952 to 54,764 as built and from 55,145 to 54,957 at permit, which the Pset_ values of the IFC file equal (Measure run 41989882391). |
-| `decoded.recovered_unit_identifiers` | array | Revit `autodesk.unit.*` identifiers selected for IFC unit assignment. |
-| `decoded.unknown_unit_identifiers` | array | Revit unit identifiers observed but not mapped to IFC units. |
+| `decoded.mean_element_confidence` | number | Mean provenance confidence across the elements the production walk decoded (`iter_elements`): `null` where it decoded none. Always written. |
+| `decoded.elements_below_min_confidence` | integer | How many of those elements scored below `decoded.min_element_confidence`: the rows the default export hides from the IFC, each one a `below_min_element_confidence` decision and the count of `skipped`'s item of that reason. Always written. |
+| `decoded.min_element_confidence` | number | The confidence floor `elements_below_min_confidence` counts under and the default export hides rows at: always `DEFAULT_MIN_ELEMENT_CONFIDENCE`, which is 0.55. Always written. |
+| `decoded.recovered_unit_identifiers` | array | The display units of length, area, volume, angle, mass (the structural spec) and time, as the project's Project Units set them: its `UnitsElem` record, or the format maps of its string records where they all agree and the record is not read (RE-445). They describe the source model; the IFC's values and unit assignment are SI. Empty for a Revit 2015 to 2020 file, whose units are saved without spec names. |
+| `decoded.unknown_unit_identifiers` | array | Those of the six display units no IFC unit is known for. The export warns when there is one. |
+| `decoded.project_display_units` | object | The display unit of every spec the project lists (133 to 150 on Autodesk's samples), by the spec's `ForgeTypeId` (RE-445). Absent where none was read. |
 | `decoded.wall_curve_lengths_feet` | object | The length of each exported wall's native curve in feet, by ElementId (RE-252): one of the two lengths Revit's export may write as the wall's `Qto_WallBaseQuantities.Length`. `tools/re/qtos_vs_ifc.py` reads it to count apart a wall whose two lengths differ. It is not written in the IFC file, and is absent when no wall has one. |
 | `decoded.walls_type_confirmed` | array | The ElementIds of the exported walls whose native `SWall` record names the type the export gives them (RE-253). Where Revit's export gives such a wall another type, `tools/re/qtos_vs_ifc.py` counts its differing `Width` apart. Not written in the IFC file; absent when there is none. |
 | `room_phase_fallback` | object | Present only where no phase was named and the project's last phase holds no room, so the export writes the rooms of the latest phase that holds any (#1359, see `room_not_in_export_phase` above). `phase` (string) is that phase's name, or `ElementId <n>`; `--anonymize` replaces it. `rooms` (integer) counts its placed rooms, each once. Absent in every other export. |
 | `export_decisions` | object | Present only with `rvt-ifc --export-decisions` (see Export decisions above). Each fail-closed decision behind `skipped` and the `exported` body and outline counts, one entry per element, with a stage, a reason code and where the evidence was read; bounded at 5,000 entries a reason with the rest counted in `dropped`. The `skipped` counts are made from the same decisions. Not written in the IFC file. |
-| `decoded.element_provenance` | object | Present only with `rvt-ifc --element-provenance` (see [Provenance table size](#provenance-table-size)). Where each decoded element was read from, by ElementId (#1325): `elements` maps an ElementId to its `carrier` (`partition_element_record_first_prologue`, `partition_element_record_second_prologue`, `global_latest_schema_walk`, `partition_arc_wall`, `partition_area_record`, `partition_derived` or `other`), its `stream` (`Partitions/46`, `Global/Latest`), its `offset` in that stream inflated, the `record_offset` where its ElementId is stored (a partition record header; for a second-prologue frame the enclosing record's, whose id is `enclosing_record_id`, RE-35), its `class_tag` and the `class_name` that resolves to in the file's own schema, its `builtin_category`, and its `native` record (`copies`, which `copy` is named, `stream`, `offset`). An offset indexes the stream as `RevitFile::inflated_partition` returns it, which `rvt-dump` writes as `Partitions_NN.decomp` (#291); for the schema walk it indexes `Global/Latest` inflated as the walk inflates it. `by_carrier` counts every element with an ElementId by carrier, with how many have their offset given (`located`) and how many do not (`unlocated`), whatever the cap of 250,000 listed entries (`omitted_entries` counts the highest ElementIds left out); `unkeyed_elements` counts decoded elements with no ElementId, which have no entry; `native` counts the native records of every element with an ElementId the same way; `layout_release`, `partition_count` and `record_id_bytes` (8 from Revit 2024, 4 before) describe the file. When an element has several partition element record frames, `offset` is the one the exporter selected: on Revit 2024 and later (`select_instance_records`) the frame with the greatest vertical extent and, on a tie, the higher-numbered partition and then the later offset; on Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) the newest, with no extent test. A native record in several partitions names the current copy (RE-145, RE-216). A body reader may take another copy (the sketch-line readers take the current one), so `offset` and `native.stream` can name different partitions: the copy a reader took is in `value_sources`. The schema-walk carrier is unmeasured: no model of the offsets test has such an element. Not written in the IFC file; absent for a placeholder export and unless asked for. Each element also lists its `value_sources` (#1360), the copy each reader took a value of its body from, and the table its `value_source_counts`. |
+| `export_decisions.cap_per_reason` | integer | The most entries the log keeps of one reason, which is `MAX_DECISIONS_PER_REASON` (5,000) in every log the export writes; the `element_record_frame_stopped` reason shares its 5,000 among its five stages, 1,000 each (#1389). Present only with `rvt-ifc --export-decisions`. |
+| `export_decisions.dropped` | integer | How many decisions the cap left out altogether, over every reason and every stage: the total of the `dropped` that `reasons` gives each reason, whose kept entries are in `entries`. Present only with `rvt-ifc --export-decisions`. |
+| `decoded.element_provenance` | object | Present only with `rvt-ifc --element-provenance` (see [Provenance table size](#provenance-table-size)). Where each decoded element was read from, by ElementId (#1325): `elements` maps an ElementId to its `carrier` (`partition_element_record_first_prologue`, `partition_element_record_second_prologue`, `global_latest_schema_walk`, `partition_arc_wall`, `partition_area_record`, `partition_derived` or `other`), its `stream` (`Partitions/46`, `Global/Latest`), its `offset` in that stream inflated, the `record_offset` where its ElementId is stored (a partition record header; for a second-prologue frame the enclosing record's, whose id is `enclosing_record_id`, RE-35), its `class_tag` and the `class_name` that resolves to in the file's own schema, its `builtin_category`, and its `native` record (`copies`, which `copy` is named, `stream`, `offset`). An offset indexes the stream as `RevitFile::inflated_partition` returns it, which `rvt-dump` writes as `Partitions_NN.decomp` (#291); for the schema walk it indexes `Global/Latest` inflated as the walk inflates it. `by_carrier` counts every element with an ElementId by carrier, with how many have their offset given (`located`) and how many do not (`unlocated`), whatever the cap of 250,000 listed entries (`omitted_entries` counts the highest ElementIds left out); `unkeyed_elements` counts decoded elements with no ElementId, which have no entry; `native` counts the native records of every element with an ElementId the same way; `layout_release`, `partition_count` and `record_id_bytes` (8 from Revit 2024, 4 before) describe the file. When an element has several partition element record frames, `offset` is the one the exporter selected: on Revit 2024 and later (`select_instance_records`) the frame in the highest-numbered partition, then the one with the greatest vertical extent within it and, on a tie, the later offset (RE-444); on Revit 2008 to 2023 (`select_newest_instance_records`, RE-107) the newest, with no extent test. A native record in several partitions names the current copy (RE-145, RE-216). A body reader may take another copy (the sketch-line readers take the current one), so `offset` and `native.stream` can name different partitions: the copy a reader took is in `value_sources`. The schema-walk carrier is unmeasured: no model of the offsets test has such an element. Not written in the IFC file; absent for a placeholder export and unless asked for. Each element also lists its `value_sources` (#1360), the copy each reader took a value of its body from, and the table its `value_source_counts`. |
+| `decoded.element_provenance.native_record_index` | boolean | Whether the export's native passes built the index of native records: `true` where they did, so the elements the index holds a record for are given their `native` record, and `false` where they did not, and then no element has one. Always written with the table (`rvt-ifc --element-provenance`). |
+| `decoded.element_provenance.native.with_record` | integer | How many elements the index holds a native record for, counted up as each entry's `native` record is attached: over the elements that have an entry, so an element the walk scored below the confidence floor is not counted, and before the 250,000 cap leaves entries out, so an element the cap omits is counted. Always written with the table. |
+| `decoded.element_provenance.native.several_copies` | integer | Of those, how many have their native record in more than one partition (RE-216), whether or not one of the copies could be named current. Always written with the table. |
+| `decoded.element_provenance.native.copy_unresolved` | integer | Of those, how many have their native record in several partitions and no copy that could be named current, so their `native` entry gives `copy` `unresolved` and no `stream` or `offset`. Always written with the table. |
+| `decoded.element_provenance.elements[].native.class_tag` | integer | The class tag the native record's body opens with, as the record index holds it for the copy the entry names. Written only with the table (`rvt-ifc --element-provenance`), and absent where that copy is unresolved or the index holds no tag for the record; it is a separate field from the entry's own `class_tag`, which the export takes from the element record or from the walk's class. |
+| `decoded.element_provenance.elements[].native.class_name` | string | The class that tag names, as the file's schema lists it. Written only with `rvt-ifc --element-provenance`; absent where the copy is unresolved, the index holds no tag, or no class of the schema carries it. |
 | `exported.building_elements` | integer | The building elements the IFC file holds as elements: not an `IFCOPENINGELEMENT` building element (RE-84), which `by_ifc_type` lists and this does not count, and not a piece the writer folds into another element's body (`body_pieces_folded`). Before #1424 it counted the folded pieces too. |
 | `exported.by_ifc_type` | object | Count of the exported building elements grouped by STEP entity type, as the IFC file holds them: the entities of `building_elements` and the `IFCOPENINGELEMENT` building elements (RE-84). A piece folded into another element's body is not in it (`body_pieces_folded`). |
 | `exported.body_pieces_folded` | object | The further pieces of an element of separate loops that the writer folds into the body of the element that owns them, as items of its representation, not as elements of their own (#823), by STEP entity type: a ceiling of several loops is one `IfcCovering` whose body holds every piece. The same entities as `placements` marks `Folded` and the MCP server's `elements.folded_into_bodies`. They are in none of `building_elements`, `by_ifc_type`, `building_elements_with_geometry`, `body_sources`, `bounding_box_bodies` and the other `exported` counts of elements, so each counts what the IFC file holds. Before #1424 `building_elements` and `by_ifc_type` counted them, so their figure from before is the written count plus these (per entity, for `by_ifc_type`); the other counts took a piece's properties, which clone its owner's, and are not recoverable from this field. On the BIM4LCA office they are 47 `IFCCOVERING`: Measure run 41977947391 (head 2fc83c47, before #1424) counted 158 as built and 122 at permit in `by_ifc_type`, where the IFC and Revit's export hold 111 and 75; run 41989882391 (head 0b1bc044) counts 111 and 75 there and `{"IFCCOVERING": 47}` here, and no other model of the 35 whose diagnostics it kept has a folded piece. Empty where the export folds none. |
@@ -791,7 +843,9 @@ Important nested fields:
 | `exported.storey_names` | array | Recovered building-storey display names, in emission order. |
 | `exported.storey_elevations_feet` | array | Recovered storey elevations in feet, aligned with `storey_names`. |
 | `exported.storey_bound_elements` | integer | Building elements contained in a specific storey. The rest are contained in the `IfcBuilding`, never in a named storey. |
+| `exported.material_names_sample` | array | The display names of up to 12 of the materials the export recovered: a sample for File Status and inspect, not the whole set, which `exported.material_count` counts. Always written; empty where no material was recovered. |
 | `exported.layered_element_count` | integer | Elements whose compound layers and layer colours were read (RE-53). The glTF export draws each in its layers where they add up to its body's thickness; the rest are drawn whole. |
+| `exported.body_sources` | object | The exported building elements by how their body was derived: each one's `BodySource` property value, counted by value (#409), such as `partition_wall_centreline` or `partition_element_record_bbox`. A piece the writer folds into another element's body (`body_pieces_folded`) and an `IFCOPENINGELEMENT` are not counted: the pass skips them before it reads a property. Always written; empty where no element carries the property. |
 | `exported.bounding_box_spaces` | integer | Exported `IfcSpace`s whose body is their record's bounding box (`RvtElementRecordGeometry.SpaceOutlineSource` is `record_box`): a room whose outline was not read from its stored solid, or a family instance written as a space and drawn as its box. The body's plan area is the box's, not the space's (RE-313, [rooms](rooms.md)). Each is also in `exported.bounding_box_bodies`, except a family instance turned or tilted off the model's axes. |
 | `exported.area_body_refusals` | object | Of the exported Areas that have no body, why, by reason, counted from each Area's `RvtElementRecordGeometry.AreaBodyRefusal` (RE-317): `levels_not_recovered`, `boundary_line_not_read` (a declared area boundary line was not read or cannot be placed on a Level, so no Area of the file is drawn), `no_boundary_lines`, `point_not_read`, `level_or_scheme_not_named`, `named_lines_not_in_scheme_and_level` (a line the Area's record names is not a declared line of its scheme on its Level that was read: its copies disagree (an Area drawn from the plan topology may name a line whose copies disagree only in place, #1434), it has no Level or scheme, or it is in a non-primary design option), `next_storey_not_proven` (the Area's Level and the one above are not both building stories, or another Level lies between or at them), `boundary_lines_not_readable` (a line of the group overlaps another, may be missing or has a copy that names another Level or scheme or lies at another height, or is in a non-primary design option; or its copies disagree only in place and the plan topology gave the Area no region, #1434; or a line that is not straight along an axis, or whose record box is wider than the line, lies where the Area's region does or is joined to a line that bounds it, RE-330), `point_in_no_single_region`, `named_lines_not_on_region`, `area_not_in_one_plan_topology`, `area_circuit_not_found`, `area_circuit_side_not_read`, `area_circuit_area_differs`, `area_arc_not_finite`, `area_point_outside_circuit` and `area_circuit_too_large` (Revit's plan topology gives the Area no region that passes its checks, and the lines' arrangement gives none either, RE-333; a topology that was read and failed a check of its own, `area_circuit_area_differs`, `area_arc_not_finite`, `area_point_outside_circuit` or `area_circuit_too_large`, also stops the lines' region from being drawn in its place) and `area_regions_disagree` (both give a region and they are not the same one: not the same net area, or not the same corners) and `two_areas_one_region` (another placed Area of the same scheme and Level has the same region, whether or not that one is drawn). Empty when every Area is drawn or the export has no geometry. |
 | `exported.slab_shape_refusals` | object | Of the exported floors, roofs and ceilings whose corner vertices are shape-edited (`SlabShapeEditGStep`) and that keep their record's box, why, by reason, counted from each element's `RvtElementRecordGeometry.SlabShapeRefusal` (#1384, RE-336): `interior_edge_vertices_or_creases`, `corners_not_in_one_plane`, `first_three_corners_collinear`, `fewer_than_three_corner_vertices`, `shape_edit_dormant_or_unmarked`, `shape_edit_steps_disagree`, `shape_edit_fields_not_read`, `corner_vertex_not_finite`, `record_copies_disagree`, `record_copy_not_read`, `roof_or_ceiling_edit_not_drawn`, `plan_outline_not_read`, `plan_outline_in_pieces`, `corners_not_the_outline_vertices`, `plane_does_not_reproduce_record_box`. Empty when no such element is kept as its box. |
@@ -814,10 +868,10 @@ Important nested fields:
 | `exported.edge_outline_spaces` | integer | Exported rooms whose outline was read from the edges of their stored solid, where neither the walk of RE-101 nor the span of RE-316 reads one (`SpaceOutlineSource` is `stored_solid_edges`, #90, RE-374, [rooms](rooms.md)): the outline of the solid's floor, each edge drawn as the wall it meets. Read only on Revit 2024, and only where every face of the solid is vertical or horizontal, every edge's two planes give it the same ends, and the solid holds no point between its floor and 4 ft above it but on a vertical edge, so that up to that height the room is a prism of its floor. Revit's own area of Snowdon Towers' room 2181757 is the solid's section 4 ft above its floor, not its floor (RE-374), which is why a solid that is not such a prism is refused. |
 | `exported.space_kinds` | object | The exported `IfcSpace`s by what they are, counted from each one's `RvtElementRecordGeometry.SpaceKind` (#1437, [rooms](rooms.md)): `room`, `area`, `mep_space` (a Revit Space) or `family_instance` (any other element, a family instance or a mass in the files measured, that its "Export to IFC As" writes as a space), from the Revit class of the record the space was read from, not from where its outline came from. With `exported.spaces_without_kind` it adds up to `exported.by_ifc_type.IFCSPACE`. Empty when the export has no space. |
 | `exported.spaces_without_kind` | integer | The exported `IfcSpace`s that carry no `SpaceKind` (#1437): a space whose property set is not `RvtElementRecordGeometry` (in principle a wall or floor read through the schema walker, whose properties are in `RvtWallGeometry` or `RvtFloorGeometry`, with an "Export to IFC As" that names `IfcSpace`), which the export leaves without the property rather than guess. Zero on every model measured, and `rvt-ifc` says so in its summary when it is not. |
-| `exported.wall_cut_openings_left_out` | object | The steps of the walls' native records that name a rectangular wall opening, a fire hose cabinet, a door in a second wall or a curtain wall and write no opening for it, by reason (RE-321, RE-338). A wall's record lists the elements that cut it; the step is written as an `IfcOpeningElement` that nothing fills where its box is proven, and counted here where it is not: `rectangular_opening_not_read` and `rectangular_opening_not_in_wall` (the opening's saved rectangle is missing or does not lie in its wall's plane), `cabinet_cut_solid_not_read` and `cabinet_not_reaching_wall`, `door_cut_flag_not_read`, `door_opening_box_not_read` (the door has no own opening box of a read cut loop), `door_wall_axis_not_read`, `door_second_wall_parallel_to_door_wall` (Revit cuts the opening ten feet across, about the plane the door's symbol cuts in, which is not read) and `door_opening_not_in_second_wall`, `curtain_wall_box_not_read`, `curtain_wall_not_in_wall`, `curtain_wall_within_half_foot_of_wall_end` and `curtain_wall_box_beside_another_wall` (Revit cuts a curtain wall's opening back where the curtain wall reaches the wall's end or another wall lies beside it, by an amount nothing read gives), `opening_extent_not_positive`, and `wall_body_not_an_axis_aligned_prism` (the wall the step is in is not drawn as a prism along the model's axes: curved, turned, stepped otherwise than RE-320's, of several pieces, or one whose ElementId an earlier element holds, so no opening of any kind is written in it), `shadow_cutout_step_not_read` (a `WallShadowCutoutGStep` whose other wall holds no step of that cutter that its `m_ggId` names; none of the 124 on the BIM4LCA office, `rac_advanced` and Snowdon Towers Architectural is one, since RE-398 reads a shadow as the step it mirrors and counts it under that step's own reason) `door_cuts_a_wall_it_is_not_hosted_in_as_its_own` (a door's step with `m_bCutSomething` 1 in a wall other than the one it is hosted in, a door with no host included), `cabinet_cut_flag_not_set` (a cabinet's step whose `m_bCutSomething` is not 1, the only value measured), `opening_outside_wall_height` (a cabinet's, door's or curtain wall's box rises more than 0.05 ft above its wall's top or falls below its base) and `curtain_wall_record_copies_disagree` (the curtain wall's element record is framed in several partitions and the copies' boxes differ by more than 0.01 ft). `cabinet_cut_solid_not_read` includes a symbol that cuts several solids whose boxes do not touch. A counted step is not a statement that Revit's export has no opening for it: it writes one for most of them. Empty when every step is written or the export has no geometry. |
+| `exported.wall_cut_openings_left_out` | object | The steps of the walls' native records that name a rectangular wall opening, a fire hose cabinet, a door in a second wall or a curtain wall and write no opening for it, by reason (RE-321, RE-338), on Revit 2015 to 2027 (RE-456). A wall's record lists the elements that cut it; the step is written as an `IfcOpeningElement` that nothing fills where its box is proven, and counted here where it is not: `rectangular_opening_not_read` and `rectangular_opening_not_in_wall` (the opening's saved rectangle is missing or does not lie in its wall's plane; on Revit 2015 to 2018 the rectangle is saved only in the wall's face and is placed on the wall's location line, so it is counted where that line is not one level line, RE-456), `cabinet_cut_solid_not_read` and `cabinet_not_reaching_wall`, `door_cut_flag_not_read`, `door_opening_box_not_read` (the door has no own opening box of a read cut loop), `door_wall_axis_not_read`, `door_second_wall_parallel_to_door_wall` (Revit cuts the opening ten feet across, about the plane the door's symbol cuts in, which is not read) and `door_opening_not_in_second_wall`, `curtain_wall_box_not_read`, `curtain_wall_not_in_wall`, `curtain_wall_within_half_foot_of_wall_end` and `curtain_wall_box_beside_another_wall` (Revit cuts a curtain wall's opening back where the curtain wall reaches the wall's end or another wall lies beside it, by an amount nothing read gives), `opening_extent_not_positive`, and `wall_body_not_an_axis_aligned_prism` (the wall the step is in is not drawn as a prism along the model's axes: curved, turned, stepped otherwise than RE-320's, of several pieces, or one whose ElementId an earlier element holds, so no opening of any kind is written in it), `shadow_cutout_step_not_read` (a `WallShadowCutoutGStep` whose other wall holds no step of that cutter that its `m_ggId` names; none of the 124 on the BIM4LCA office, `rac_advanced` and Snowdon Towers Architectural is one, since RE-398 reads a shadow as the step it mirrors and counts it under that step's own reason) `door_cuts_a_wall_it_is_not_hosted_in_as_its_own` (a door's step with `m_bCutSomething` 1 in a wall other than the one it is hosted in, a door with no host included), `cabinet_cut_flag_not_set` (a cabinet's step whose `m_bCutSomething` is not 1, the only value measured), `opening_outside_wall_height` (a cabinet's, door's or curtain wall's box rises more than 0.05 ft above its wall's top or falls below its base) and `curtain_wall_record_copies_disagree` (the curtain wall's element record is framed in several partitions and the copies' boxes differ by more than 0.01 ft). `cabinet_cut_solid_not_read` includes a symbol that cuts several solids whose boxes do not touch. A counted step is not a statement that Revit's export has no opening for it: it writes one for most of them. Empty when every step is written or the export has no geometry. |
 | `confidence.level` | string | `scaffold`, `typed_no_geometry`, `geometry`, `diagnostic_partial`, or `proxy_only`. |
 | `confidence.score` | number | Heuristic 0..1 readiness score for UI sorting and dashboards. Its element terms (elements, typed elements, geometry) are scaled by the exported share when `unexported_element_records` is non-zero. |
-| `confidence.unexported_element_records` | integer | Element records of a recovered category (walls, doors, windows, columns, floors, rooms and the RE-33 product categories) the partition scan found but could not export because no ElementId is attributable (RE-30). Non-zero means the model is incomplete. Zero is not a completeness claim. |
+| `confidence.unexported_element_records` | integer | Element records of a recovered category (walls, doors, windows, columns, floors, rooms and the RE-33 product categories) the partition scan found but could not export because no ElementId is attributable (RE-30): they sit in records of ElementIds the element table does not declare. On the one model compared with Revit's export of the same save they were elements deleted since the file's last Save As, which a file saved in place keeps (#1838); if nothing was deleted the model is likely incomplete. Non-zero means the model may be incomplete. Zero is not a completeness claim. |
 
 ## Storey provenance
 
@@ -914,8 +968,12 @@ export.
     "class_counts": {
       "HostObjAttr": 9
     },
+    "parameter_value_count": 0,
+    "mean_element_confidence": null,
+    "elements_below_min_confidence": 0,
+    "min_element_confidence": 0.55,
     "recovered_unit_identifiers": [
-      "autodesk.unit.unit:meters-1.0.0"
+      "autodesk.unit.unit:millimeters-1.0.1"
     ],
     "unknown_unit_identifiers": []
   },
@@ -930,7 +988,8 @@ export.
     "storey_count": 0,
     "storey_names": [],
     "storey_elevations_feet": [],
-    "storey_bound_elements": 0
+    "storey_bound_elements": 0,
+    "material_names_sample": []
   },
   "skipped": [
     {
@@ -946,7 +1005,7 @@ export.
   "warnings": ["No building elements were exported; output is scaffold-only."],
   "confidence": {
     "level": "scaffold",
-    "score": 0.25,
+    "score": 0.35,
     "has_project_metadata": true,
     "has_typed_elements": false,
     "has_geometry": false,

@@ -1,0 +1,111 @@
+name: Probe binaries
+
+# Builds one probe of the rvt-probes crate (probes/examples) for Windows,
+# macOS and Linux and keeps each binary as a run artifact. It is for a reporter
+# who can run a probe on a file that cannot leave their machine, but has no
+# Rust toolchain there (#1838, #1829). Nothing is published or attached to a
+# release. The binaries can be downloaded from the run by anyone signed in to
+# GitHub, for the artifacts' retention, with a SHA256SUMS file beside each.
+#
+#   gh workflow run probe-binaries.yml -f probe=probe_re35_record_wrapper [--ref <branch or tag>]
+#
+# It builds the dispatched ref, the one `--ref` names. There is no input for
+# another ref: code checked out from an input would run where the default
+# branch's caches can be written (CodeQL's cache-poisoning rule).
+
+on:
+  workflow_dispatch:
+    inputs:
+      probe:
+        description: The probe to build, its file name under probes/examples without .rs (e.g. probe_re35_record_wrapper)
+        required: true
+  # A change to this workflow builds #1838's probe, so the pull request shows
+  # it working end to end.
+  pull_request:
+    paths:
+      - .github/workflows/probe-binaries.yml
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build / ${{ matrix.target }}
+    # A pull request from a fork would build its own probe code under the
+    # name a maintainer's build has (#1881): only this repository's branches.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            os: windows-2025-vs2026
+            # As the released Windows CLIs: no Visual C++ runtime needed.
+            rustflags: "-C target-feature=+crt-static"
+          - target: aarch64-apple-darwin
+            os: macos-26
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-24.04
+    env:
+      RUSTFLAGS: ${{ matrix.rustflags }}
+    steps:
+      - name: Disable autocrlf on Windows
+        if: runner.os == 'Windows'
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The name reaches a path and a cargo argument: only a probe that exists
+      # at the ref, by a plain file name.
+      - name: Check the probe exists
+        shell: bash
+        env:
+          PROBE: ${{ inputs.probe || 'probe_re35_record_wrapper' }}
+        run: |
+          set -euo pipefail
+          if [[ ! "${PROBE}" =~ ^[A-Za-z0-9_]+$ || ! -f "probes/examples/${PROBE}.rs" ]]; then
+            echo "::error::'${PROBE}' is not a probe under probes/examples at this ref"
+            exit 1
+          fi
+      - name: Install Rust stable
+        uses: $/.github/actions/setup-rust
+        with:
+          target: ${{ matrix.target }}
+      - name: Build the probe
+        shell: bash
+        env:
+          PROBE: ${{ inputs.probe || 'probe_re35_record_wrapper' }}
+          TARGET: ${{ matrix.target }}
+        run: cargo build --profile ci --locked -p rvt-probes --example "${PROBE}" --target "${TARGET}"
+      - name: Package
+        id: package
+        shell: bash
+        env:
+          PROBE: ${{ inputs.probe || 'probe_re35_record_wrapper' }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          ext=""
+          if [[ "${TARGET}" == *windows* ]]; then ext=".exe"; fi
+          commit="$(git rev-parse HEAD)"
+          name="${PROBE}-g${commit::8}-${TARGET}"
+          mkdir -p "dist/${name}"
+          cp "target/${TARGET}/ci/examples/${PROBE}${ext}" "dist/${name}/"
+          cd "dist/${name}"
+          if command -v sha256sum >/dev/null; then
+            sha256sum "${PROBE}${ext}" > SHA256SUMS
+          else
+            shasum -a 256 "${PROBE}${ext}" > SHA256SUMS
+          fi
+          printf 'Built from %s at %s for %s.\nRef: %s\nEvent: %s\nRun: %s/%s/actions/runs/%s\n' \
+            "${PROBE}" "${commit}" "${TARGET}" "${GITHUB_REF}" "${GITHUB_EVENT_NAME}" \
+            "${GITHUB_SERVER_URL}" "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}" > BUILT-FROM.txt
+          cat SHA256SUMS BUILT-FROM.txt
+          echo "name=${name}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.package.outputs.name }}
+          path: dist/${{ steps.package.outputs.name }}
+          if-no-files-found: error

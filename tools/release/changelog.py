@@ -21,6 +21,7 @@ blank line apart, and deletes the fragments.
 """
 
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -51,12 +52,22 @@ def items(text):
     return [" ".join(" ".join(item).split()) for item in out]
 
 
+def released_items_of(text):
+    """Every item of the released sections of a changelog: all its `## ` sections but `## [Unreleased]`, wherever
+    that stands (it was read as the section above the released ones, so an `[Unreleased]` last, or the only section
+    after the title, left nothing to check against and every fragment passed)."""
+    sections = re.split(r"(?m)^(?=## )", text)
+    return {
+        item
+        for section in sections
+        if section.startswith("## ") and not section.startswith("## [Unreleased]")
+        for item in items(section)
+    }
+
+
 def released_items():
-    """Every item of CHANGELOG.md below its `[Unreleased]` section."""
-    text = CHANGELOG.read_text(encoding="utf-8")
-    start = text.find("## [Unreleased]")
-    after = text.find("\n## [", start + 1) if start >= 0 else -1
-    return set(items(text[after:])) if after >= 0 else set()
+    """Every item of CHANGELOG.md in a section that has been released."""
+    return released_items_of(CHANGELOG.read_text(encoding="utf-8"))
 
 
 def fragments():

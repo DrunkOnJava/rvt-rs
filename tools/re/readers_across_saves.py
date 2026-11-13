@@ -35,11 +35,12 @@ shares with this one cannot be caught.
   windows       type object it is typed by (its GlobalId, class and Name).
   census        every body of the save with the 2025 save's, as
                 `save_pair_bodies.py` does it (world box to 3 mm, volume to
-                0.1%). A body that differs fails, except a roof the 2025 save
-                draws otherwise (ROOFS_NOT_THE_2025_BODY, counted, exactly those,
-                each as pinned: its record box, or its saved mesh whose box
-                contains the 2025 body's). The PINNED_WALLS, 16 walls of rac_basic
-                pinned until #1471 healed them, are empty, and no entry joins them.
+                0.1%). A body that differs fails. ROOFS_NOT_THE_2025_BODY, the
+                roofs a 2026 or 2027 save may draw otherwise, is empty since
+                RE-458 drew roof 243274 from its sketch's section on those saves
+                as the 2025 save does, and no entry joins it. The PINNED_WALLS,
+                16 walls of rac_basic pinned until #1471 healed them, are empty,
+                and no entry joins them.
 
 Every check prints how many it compared, and a check whose least number is
 not reached fails (MINIMUMS), so one that compared nothing is never a pass.
@@ -92,7 +93,7 @@ ADDED = [
 ]
 ADDED = [tuple(re.compile(part) for part in rule) for rule in ADDED]
 
-# No body may differ from the 2025 save's but the ROOFS_NOT_THE_2025_BODY. The 16
+# No body may differ from the 2025 save's (ROOFS_NOT_THE_2025_BODY is empty). The 16
 # walls of rac_basic pinned here on 2026-11-05 (Griffin; their source pair,
 # volumes and world boxes, at most PINNED_MOST) all became the 2025 save's with
 # #1471 (RE-351), and left the list, which no entry ever joins:
@@ -105,22 +106,16 @@ PIN_TOLERANCE = 1e-6
 RECORD_BOX = "partition_element_record_bbox"
 SAVED_MESH = "saved_graphics_mesh"
 # The roofs a 2026 or 2027 save may draw otherwise than the 2025 save does, each as
-# pinned and exactly these, in the saves of those two projects and none other. The roof
-# readers read 2025 and earlier, so a roof of 2026 or 2027 is its record box or its saved
-# mesh, the default of every class since #1191 (Griffin, 2026-11-09): 243274 is the 2025
-# save's roof extrusion (35.4236 m3) against a mesh of 34.9741 m3 in the same box.
-# 165755, 167036 and 167158, 15 degree gables the 2025 save drew as a level block, their
-# sketch outline over the record box (10.3 m3), were on this list until #1612 drew them
-# from their saved meshes on 2023 to 2025 too. 201262, rac_advanced's 30 ft arc roof (cut
-# by walls, #1471; Griffin, 2026-11-05), was its record box on 2026 and 2027 until #1706
-# meshed the plane-to-cylinder edge that kept it one: its mesh is the 2025 save's body to
-# the census's 0.1% and 3 mm (5.33205264 m3 against 5.33213143), so it left the list.
-# A mesh counts only where its box contains the 2025 body's, to the census's 3 mm.
-# Counted, not scored; one more, one fewer, or one of another kind fails. The list only
-# shrinks: tools/ci/check_same_project_projects.py holds it to these five or fewer.
-ROOFS_NOT_THE_2025_BODY = {
-    "racbasicsampleproject": {"243274": SAVED_MESH},
-}
+# pinned and exactly these, in the saves of those two projects and none other. It is
+# empty. 243274, rac_basic's roof by extrusion (the 2025 save's 35.4236 m3), was a saved
+# mesh of 34.9741 m3 in the same box on 2026 and 2027, the default of every class since
+# #1191 (Griffin, 2026-11-09), until RE-458 read the sketch's B-spline on those releases
+# too and drew it from its section. 165755, 167036 and 167158 left the list with #1612
+# and 201262 with #1706: its mesh is the 2025 save's body to the census's 0.1% and 3 mm
+# (5.33205264 m3 against 5.33213143). A mesh would count only where its box contains the
+# 2025 body's, to the census's 3 mm. The list only shrinks:
+# tools/ci/check_same_project_projects.py holds it to what it held, and none is added.
+ROOFS_NOT_THE_2025_BODY = {}
 
 # A door's or window's Area, which a 2027 save leaves out because Revit 2027's own
 # export gives it a value that is not Width times Height (RE-346): it must be

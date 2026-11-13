@@ -110,7 +110,7 @@ fn frame_at(buf: &[u8], at: usize) -> Option<MaterialAppearance> {
 /// where 2024 keeps four bare COLORREFs, then the shading colour and the
 /// shininess. A material that opens its own data frames it with `ff ff ff
 /// ff 9b 0b`; a family's own material does not, so the frame is known by
-/// its 0.5 and its slots instead. Revit 2015 to 2018 write two slots, not
+/// its 0.5 and its slots instead. Revit 2018 and earlier write two slots, not
 /// four ([`pattern_slots_32`]), and Revit 2008 to 2013 two `u32`
 /// ElementIds between the 0.5 and the slots ([`shading_ids_32`]).
 fn frame_at_2023(buf: &[u8], at: usize, slots: usize, ids: usize) -> Option<MaterialAppearance> {
@@ -150,7 +150,7 @@ fn frame_at_2023(buf: &[u8], at: usize, slots: usize, ids: usize) -> Option<Mate
 
 /// The pattern slots of a 32-bit release's shading frame: four, the
 /// foreground and background of the surface and cut patterns, from Revit
-/// 2019 on, and two on Revit 2011 to 2018, which have one pattern of each.
+/// 2019 on, and two before (measured on 2011 to 2018), one pattern of each.
 /// Autodesk's 2017 `rac_basic` frames each material of its 2019 copy with
 /// the same bytes, but for the two slots it lacks (RE-181); Autodesk's 2013
 /// `rac_advanced` frames its 2015 copy's two (RE-259).
@@ -620,10 +620,10 @@ fn category_style_materials(rf: &mut RevitFile) -> anyhow::Result<BTreeMap<i64, 
         let Some(graph) = record.graph.as_ref() else {
             return Ok(());
         };
-        let id = |value: Option<&serde_json::Value>| {
+        let id = |value: Option<&crate::graph_value::Fv>| {
             value
                 .and_then(|v| v.pointer("/m_id/m_id64"))
-                .and_then(serde_json::Value::as_i64)
+                .and_then(crate::graph_value::Fv::as_i64)
         };
         let Some(category) = graph
             .objects

@@ -121,6 +121,31 @@ fn csv_inventory_has_a_stable_header_and_marks_backups() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A file name reaches the `path` column as given, and a spreadsheet reads a
+/// cell that starts with `=` as a formula (#1885).
+#[test]
+fn csv_inventory_does_not_let_a_file_name_run_as_a_formula() {
+    let arch = tier1("architectural-2024");
+    if !arch.exists() {
+        eprintln!("skipping: tier-1 fixture missing");
+        return;
+    }
+    let dir = std::env::temp_dir().join(format!("rvt-info-cli-formula-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(&arch, dir.join("=1+1.rvt")).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_rvt-info"))
+        .current_dir(&dir)
+        .args(["-f", "csv", "=1+1.rvt"])
+        .output()
+        .expect("run rvt-info");
+    let text = stdout(&out);
+    let rows: Vec<&str> = text.lines().skip(1).collect();
+    assert_eq!(rows.len(), 1, "{text}");
+    assert!(rows[0].starts_with("'=1+1.rvt,"), "{}", rows[0]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn several_files_give_a_json_array_in_argument_order() {
     let (arch, mep) = (tier1("architectural-2024"), tier1("mep-2024"));

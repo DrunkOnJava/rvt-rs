@@ -93,6 +93,9 @@ struct Group<'a> {
     /// The first and last member of the stream that `data` is the span of,
     /// while it is one.
     span: Option<(usize, usize)>,
+    /// The walk's `wanted` refused the group: none of its segments is
+    /// inflated and `data` stays empty ([`walk_selected`]).
+    skipped: bool,
 }
 /// Walk a checksum-prepared partition. Each callback receives a complete
 /// continuation group, not a claimed live element. Maximum reassembled group
@@ -118,6 +121,33 @@ pub fn walk_inflated(
     inflated: Option<&InflatedStream>,
     registry: &Registry,
     max_group_bytes: usize,
+    callback: impl FnMut(&GroupSource, &[u8]) -> Result<()>,
+) -> Result<Statistics> {
+    walk_selected(
+        prepared,
+        inflated,
+        registry,
+        max_group_bytes,
+        |_| true,
+        callback,
+    )
+}
+/// [`walk_inflated`], inflating only the groups `wanted` takes. `wanted` is
+/// asked at each group's first segment, before it is inflated, and sees the
+/// group's channel, content key and `first_marker_offset`; its declared counts
+/// are the first segment's alone. A group it refuses is never inflated and
+/// never reaches `callback`: its markers, continuation flags, channel, content
+/// key and checkback are checked as every group's are, and its gzip members,
+/// their CRC and ISIZE and the group budget are not, since none of its bytes is
+/// read. [`Statistics::inflated_bytes`] counts the groups inflated. For a reader
+/// that knows from an earlier walk of the same stream which groups hold the
+/// records it reads (#1694).
+pub fn walk_selected(
+    prepared: &[u8],
+    inflated: Option<&InflatedStream>,
+    registry: &Registry,
+    max_group_bytes: usize,
+    mut wanted: impl FnMut(&GroupSource) -> bool,
     mut callback: impl FnMut(&GroupSource, &[u8]) -> Result<()>,
 ) -> Result<Statistics> {
     ensure!(max_group_bytes > 0, "zero partition group budget");
@@ -205,10 +235,31 @@ pub fn walk_inflated(
             let channel = r.u64()?;
             let compressed_at = r.pos;
             let compressed = r.take(size as usize - 8)?;
+            let from_previous = flags & 1 != 0;
+            let to_next = flags & 2 != 0;
+            // A continuation takes its group's answer; a segment whose
+            // continuation flag disagrees with the walk is inflated, and
+            // refused by the check below as it always was.
+            let skipped = match &active {
+                Some((_, group)) if from_previous => group.skipped,
+                None if !from_previous => !wanted(&GroupSource {
+                    content_key,
+                    content_element_count,
+                    channel,
+                    first_marker_offset: offset,
+                    segment_count: 1,
+                    declared_objects: u64::from(count),
+                    declared_body_bytes: u64::from(raw),
+                    inflated_offset: None,
+                }),
+                _ => false,
+            };
             let (bytes, member_index) = match inflated
+                .filter(|_| !skipped)
                 .and_then(|stream| whole_member(stream, compressed_at, compressed, max_group_bytes))
             {
                 Some((index, member)) => (Cow::Borrowed(member), Some(index)),
+                None if skipped => (Cow::Borrowed(&[][..]), None),
                 None => {
                     let mut decoder = flate2::bufread::GzDecoder::new(compressed);
                     let mut bytes = Vec::new();
@@ -229,8 +280,6 @@ pub fn walk_inflated(
             stats.segments += 1;
             stats.inflated_bytes += bytes.len() as u64;
             last_size = Some(size);
-            let from_previous = flags & 1 != 0;
-            let to_next = flags & 2 != 0;
             ensure!(
                 from_previous == active.is_some(),
                 "segment continuation state mismatch at {offset}"
@@ -260,10 +309,11 @@ pub fn walk_inflated(
                     }
                     _ => None,
                 };
+                // A refused group has no member to continue and holds nothing.
                 if let Some((first, index, span)) = continued {
                     group.data = Cow::Borrowed(span);
                     group.span = Some((first, index));
-                } else {
+                } else if !group.skipped {
                     group.span = None;
                     group.data.to_mut().extend_from_slice(&bytes);
                 }
@@ -285,16 +335,19 @@ pub fn walk_inflated(
                     Group {
                         data: bytes,
                         span: member_index.map(|index| (index, index)),
+                        skipped,
                     },
                 ));
             }
             if !to_next {
                 let (mut source, group) = active.take().unwrap();
-                source.inflated_offset = match (group.span, inflated) {
-                    (Some((first, _)), Some(stream)) => stream.member_start(first),
-                    _ => None,
-                };
-                callback(&source, &group.data)?;
+                if !group.skipped {
+                    source.inflated_offset = match (group.span, inflated) {
+                        (Some((first, _)), Some(stream)) => stream.member_start(first),
+                        _ => None,
+                    };
+                    callback(&source, &group.data)?;
+                }
                 stats.groups += 1;
             }
         } else if next == checkback_tag {

@@ -24,20 +24,20 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rvt::RevitFile;
 use rvt::research::element_record_plan_profiles::plan_profile_from_lines;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{NATIVE_RELEASES, Options, extract_graphs};
 use rvt::research::native_parameters::ObjectGraph;
 use rvt::research::native_saved_mesh::pointer;
 use rvt::research::partition_room_boundaries::{BOX_TOLERANCE_FEET, room_outline};
 use rvt::walker::InstanceField;
-use serde_json::Value;
 
 const FLOOR_TOLERANCE_FEET: f64 = 1e-3;
 
-fn short(value: &Value) -> String {
+fn short(value: &Fv) -> String {
     value.to_string().chars().take(1400).collect()
 }
 
-fn triple(value: &Value) -> Option<[f64; 3]> {
+fn triple(value: &Fv) -> Option<[f64; 3]> {
     let a = value.as_array()?;
     Some([
         a.first()?.as_f64()?,
@@ -46,7 +46,7 @@ fn triple(value: &Value) -> Option<[f64; 3]> {
     ])
 }
 
-fn pair(value: &Value) -> Option<[f64; 2]> {
+fn pair(value: &Fv) -> Option<[f64; 2]> {
     let a = value.as_array()?;
     Some([a.first()?.as_f64()?, a.get(1)?.as_f64()?])
 }

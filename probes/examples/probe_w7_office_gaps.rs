@@ -74,7 +74,7 @@ fn print_native(kind: &str, class: Option<&String>, record: &native_document::Re
     let mut objects = Vec::new();
     for object in graph.objects.iter().take(MAX_OBJECTS) {
         let mut flat = Map::new();
-        flatten("", &object.fields, MAX_DEPTH, &mut flat);
+        flatten("", &object.fields.to_json(), MAX_DEPTH, &mut flat);
         objects.push(json!({"c": object.class_name, "f": flat}));
     }
     println!(
@@ -174,7 +174,7 @@ fn main() -> anyhow::Result<()> {
                 .as_ref()
                 .and_then(|graph| graph.objects.first())
                 .and_then(|root| root.fields.pointer("/m_attrId/m_id/m_id64"))
-                .and_then(Value::as_u64);
+                .and_then(rvt::research::graph_value::Fv::as_u64);
             if let Some(type_id) = type_id {
                 level_types.insert(type_id);
             }

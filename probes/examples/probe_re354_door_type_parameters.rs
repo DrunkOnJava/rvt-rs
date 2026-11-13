@@ -23,14 +23,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use rvt::RevitFile;
 use rvt::ifc::RvtDocExporter;
 use rvt::ifc::entities::IfcEntity;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_element_parameters::{self, ElementParameter, ParameterLevel};
-use serde_json::Value;
 
 fn render(parameter: &ElementParameter) -> Option<String> {
     let value = match &parameter.value {
-        Value::String(text) => text.replace(' ', "_"),
-        Value::Bool(flag) => flag.to_string(),
-        Value::Number(number) => number.to_string(),
+        Fv::Str(text) => text.replace(' ', "_"),
+        Fv::Bool(flag) => flag.to_string(),
+        number @ (Fv::U64(_) | Fv::I64(_) | Fv::F64(_)) => number.to_string(),
         _ => return None,
     };
     Some(format!(

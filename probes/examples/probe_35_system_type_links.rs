@@ -19,7 +19,7 @@ use rvt::RevitFile;
 use rvt::research::native_document::{self, Options};
 
 /// A saved ElementId, `{"m_id":{"m_id64":n}}` or `{"m_id":n}`, as `n`.
-fn element_id(value: &serde_json::Value) -> Option<i64> {
+fn element_id(value: &rvt::research::graph_value::Fv) -> Option<i64> {
     let inner = value.get("m_id")?;
     inner.get("m_id64").unwrap_or(inner).as_i64()
 }

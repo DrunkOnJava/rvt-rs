@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-10-30
+Last reviewed: 2026-11-13
 
 This roadmap is the public, contributor-facing view of where rvt-rs is headed.
 The support boundary lives in [`docs/status.md`](docs/status.md) and the
@@ -23,8 +23,9 @@ and 2027 files too, measured on Autodesk's sample projects. On Revit 2024 and
 2025 project files it reads the building: each element's ElementId, category,
 name, type, storey, materials, layers and GlobalId, and a body that is exact
 where the element's data is decoded and its bounding box where it is not. It
-writes that as IFC4, glTF, plan SVG and CSV from the CLIs, Python and the
-zero-upload browser viewer. Revit 2023 projects get a narrower version of the
+writes that as IFC4, glTF, plan SVG and CSV from the CLIs and the
+zero-upload browser viewer, as IFC4 and CSV from Python, and as IFC4 and glTF
+from a local, read-only MCP server. Revit 2023 projects get a narrower version of the
 same, and Revit 2015 to 2022, 2026 and 2027 projects are experimental. Every
 recovery claim is measured against the oracle its report names: Revit's own
 IFC export of the same model wherever one is measured, and for 2015 to 2018,
@@ -34,8 +35,7 @@ RE-315), the same
 sample projects saved by Revit
 2019, 2023 and 2026 (but 2015's `rst_basic`, another model than its 2019 copy).
 What is not decoded
-(most parameters in IFC, family geometry, roofs by extrusion outside
-Revit 2025, openings whose symbol cuts no outline, the room phase rule against a Revit export made with the default setup, RE-326) is listed in [`docs/status.md`](docs/status.md), and
+(most parameters in IFC, family geometry, openings whose symbol cuts no outline, the room phase rule against a Revit export made with the default setup, RE-326) is listed in [`docs/status.md`](docs/status.md), and
 the four levels a file can reach are in the
 [supported profile](docs/supported-profile.md).
 
@@ -43,7 +43,7 @@ the four levels a file can reach are in the
 
 | Area | Status | Current state | Next decision point |
 |---|---|---|---|
-| Container, compression, metadata | Verified | MS-CFB container, Revit's truncated-gzip streams, PartAtom and previews open on every release from 2016 to 2027; 2015 project files open on Autodesk's sample projects, where PartAtom and previews are not measured. | Maintain compatibility and bounds checks against hostile input. |
+| Container, compression, metadata | Verified | MS-CFB container, Revit's truncated-gzip streams and PartAtom open on every release from 2016 to 2027, and a preview is checked on the 2024 family; 2015 project files open on Autodesk's sample projects, where PartAtom and previews are not measured. | Maintain compatibility and bounds checks against hostile input. |
 | `Formats/Latest` schema | Verified | The whole schema is read (#410: 4,126 classes on Revit 2024, where 395 were read before). A class's tag is its definition ordinal (#154), and element records name their class by it (RE-76). | Classify the three fields still unclassified (`ClassDefinitionRef::m_ref`, `VarParam::m_pSubst`, `VarSketchDimObj::m_dimValue`: no instance, or only null pointers), only with byte evidence (RE-323). |
 | ADocument walker | Partial | Document-level metadata for triage; the root ADocument walk is validated on 2024 to 2026. | Expand confidence across project releases and older files. |
 | Typed project elements | Partial | Elements come from their partition element records, typed by `BuiltInCategory` and matched against Revit's own exports. On Revit 2024 walls, doors, windows, columns, floor slabs and building pads match element for element (verified, RE-21); 2025 and 2023 are partial; 2026 is experimental (one local model), and so are 2015 to 2022 and 2027, measured against the same sample projects saved by Revit 2019, 2023 and 2026 (RE-181, RE-180, RE-179), but 2015's `rst_basic`, another model. Schema-field walls and opening-index doors and windows stay unsupported (RE-19). | A Revit export of a 2016 to 2022 or 2027 project to measure against, and a second 2015 one (#421, #878, #879), instance and type parameters in IFC (#35, #155, 0.13.0), held-out models (#408). |
@@ -250,11 +250,83 @@ the four levels a file can reach are in the
   flight mesh is scored against Revit's export, a mesh is not always Revit's
   (doors 675 of 681, walls 14 of 18), and the quantity rules were developed on
   one project; the notes say which.
+- **0.19.0, 2026-11-12.** Takes back much of the time and memory that 0.18.0's
+  saved-mesh default cost: a decoded graph's fields take a sixth of the memory
+  they did and the saved-graphics pass reads only what meshing needs (#1694), so
+  the default export of Autodesk's 28 samples of Revit 2023 to 2027 takes a median
+  0.64 times 0.18.0's peak memory (0.29 to 1.18) and 0.89 times its time (0.75 to
+  1.27), and against 0.17.0 1.04 to 1.92 times the time and 1.04 to 1.69 times the
+  peak memory. More elements are drawn from their saved meshes (faces where a plane
+  meets a cylinder, faces with a holed or non-rectangular trim, plane rings that
+  visit a vertex twice, four of Snowdon Towers Architectural's six block roofs, the
+  curtain mullions and panels that were turned boxes; RE-421, RE-422, RE-426,
+  RE-430, RE-434), which makes the IFC of those files larger (the BIM4LCA office as
+  built 87.5 to 113.7 MB, Snowdon Towers Architectural 189.1 to 257.8 MB,
+  `rac_advanced` +69% to +75%) and of others smaller (Snowdon Towers Electrical
+  -12.6%). More of Revit's own export is written for the bodies drawn: a beam's six
+  base quantities and its `Length`, `Span`, `Slope` and `Roll` (RE-423, RE-428), a
+  column's quantities (RE-424, RE-425), a curtain mullion's (RE-404, RE-418 and
+  after), a wall's side areas and heights where it is a prism less its openings
+  (#1046), a proxy's `NetVolume`, and `LoadBearing` on walls, floors and stairs of
+  Revit 2024 and later (RE-429). Furniture, railings, walls, ramps, light fixtures
+  and pipe segments carry Revit's `PredefinedType`, and a Revit 2027 save is written
+  without one on the classes whose exporter leaves it off (#1692, #1716); an
+  element framed in several partitions is read from its newest frame (RE-444); an
+  "Export to IFC As" of `IfcGeographicElement` is acted on (#1772); and a planar
+  face of more than 10,000 points or 250 million search steps is refused and keeps
+  its box (#1748, #1770). The quantity rules for beams, columns, mullions and walls
+  rest on one project with a Revit export (the BIM4LCA office and housing), a mesh
+  is not always Revit's (the 24 railings newly drawn read about 1.2 times its
+  volume), and `[0.19.0]` in [`CHANGELOG.md`](CHANGELOG.md) lists what each change
+  does not measure.
+- **0.20.0, 2026-11-12.** Mostly hardening against crafted files: a file can
+  no longer crash the browser viewer through a record's length or an overflow in
+  a value it stores, make a read take exponential time or time that grows with
+  the square of its element count, exhaust the stack through the chains it sets,
+  or write its own text into an export's STEP (#1815, #1831, #1833, #1845), and a
+  reader that stops at a work budget says so and still writes the export (#1855).
+  For real files, a wall, floor, ceiling or roof type edited since an earlier
+  save keeps its layers on Revit 2024 and later (#1802, RE-446); the project's
+  display units are read from its Project Units (RE-445); Revit 2026 and 2027
+  walls and the curtain parts on them carry `IsExternal` (#1860); an element on a
+  Level that is not a building story goes to the building story below it, and a
+  file with no building story, Autodesk's `rst_basic`, is written with no storey
+  (#1842); 105 duct fittings of a Revit 2023 MEP sample are drawn from their saved
+  surfaces (RE-443); each GLB material says whether its colour and alpha are the
+  file's (#1812); and two exports of one file write the same wall areas and
+  volume to the last bit (#1862). Against 0.19.0, 49 of 146 measured exports
+  move, with no census or body regression, and the default export of Autodesk's
+  samples of Revit 2023 to 2027 takes a median 0.76 times 0.19.0's peak memory.
+  The layer rule rests on one project, the stair runs that read their own
+  settings are drawn from their sketch where their saved mesh drew them (#1856),
+  and `[0.20.0]` in [`CHANGELOG.md`](CHANGELOG.md) lists what each change does
+  not measure.
+- **0.21.0, 2026-11-13.** The GlobalIds an export writes hold from one save of
+  a project to the next: openings, voids, fills, property sets, quantity sets,
+  material associations, containment, aggregation, type relationships, ports and
+  the further pieces of a layered floor, a slab or a curtain wall were seeded
+  from the document's `Unique Document GUID`, which changes on every save, and
+  are now seeded from the GlobalId of the entity they belong to (#1840, #1854).
+  They change once, in this release, which a clash or issue-tracking (BCF)
+  workflow sees as those entities removed and added again. `rvt-diff --elements`
+  lists what changed between two saves, keyed by GlobalId (#1843); `--redact`
+  scrubs the user name of a Linux home folder and every path of a message
+  (#1871); and the warning for element records of ElementIds the element table
+  does not declare no longer calls the IFC incomplete for what a same-save
+  comparison showed to be deleted elements (#1838). Against 0.20.0 all 146
+  measured exports move, and `diagnostics.json` is equal on all 121 that publish
+  one; the line comparisons of the two GlobalId changes found only GlobalIds
+  changed on the exports they kept. Time and peak memory are 1.00 times 0.20.0's
+  in the median. What belongs to no entity still moves between saves (the project, site,
+  building and storeys where Revit gives them no GlobalId, classifications,
+  materials, MEP systems and some types), 79 corner mullions of Autodesk's
+  `rac_advanced` 2027 save get no `IsExternal` (#1865), and `[0.21.0]` in
+  [`CHANGELOG.md`](CHANGELOG.md) lists what each change does not measure.
 
-### 0.19.0: IFC geometry and element data
+### 0.22.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.18.0, moved from the
-0.18.0 milestone when 0.18.0 shipped. Each
+The geometry and element-data work that continues after 0.21.0, moved from the
+0.21.0 milestone when 0.21.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall

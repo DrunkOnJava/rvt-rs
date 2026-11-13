@@ -149,7 +149,9 @@ fn looks_like_utf16_le(bytes: &[u8]) -> bool {
             ascii_nul += 1;
         }
     }
-    units > 0 && (ascii_nul * 100 / units) >= 60
+    // In u64: on a 32-bit target `ascii_nul * 100` overflows once 42.9 M
+    // code units look like ASCII.
+    units > 0 && (ascii_nul as u64 * 100 / units as u64) >= 60
 }
 
 fn opportunistic_extracts(text: &str) -> Vec<TransmissionExtract> {

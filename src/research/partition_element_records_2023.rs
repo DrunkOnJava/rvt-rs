@@ -6,9 +6,11 @@
 //! schema (RE-80). It opens with a chain-record header in 32-bit form: the
 //! ElementId as a `u32`, the record size, the tag of `ElementHeader` and a
 //! count, 52 bytes before the marker. The `BuiltInCategory` follows 38
-//! bytes before the marker. The container reference, placement kind,
-//! class tag and bounding box sit where 2024 has them relative to the
-//! marker, so a record's `offset` here is the marker minus
+//! bytes before the marker. The placement kind, class tag and bounding box
+//! sit where 2024 has them relative to the marker; the container reference
+//! does not: it is a `u32` 22 bytes before the marker, 16 after the
+//! category (`CONTAINER_BEFORE_MARKER`, RE-260), where RE-81 first read
+//! 2024's place. A record's `offset` here is the marker minus
 //! [`crate::partition_element_records::BBOX_MARKER_OFFSET`], as on 2024.
 //! After the box come two counted lists of `u32` ElementIds (2024 writes
 //! `u64`).
@@ -290,9 +292,10 @@ fn record_at(buf: &[u8], start: usize, header_tag: u16) -> Option<(u32, usize)> 
 /// record whose trailer echoes its size. The walk starts at offset 0, steps
 /// over each record that validates, and where one does not resumes at the
 /// next place the `ElementHeader` tag sits 8 bytes into a record that
-/// validates. A record of a loaded family's own document (RE-135) is stepped
-/// over and left out, as its id is not declared. A record is never entered,
-/// so the spans do not overlap and each step moves forward, which makes the
+/// validates. A record whose id is not declared is stepped over and left
+/// out: a loaded family's own document's (RE-135), and also the few of the
+/// project's own records whose id is undeclared (RE-135 section 4). A record
+/// is never entered, so the spans do not overlap and each step moves forward, which makes the
 /// walk linear in `buf`.
 pub fn record_spans(buf: &[u8], header_tag: u16, declared: &BTreeSet<u32>) -> Vec<RecordSpan> {
     let needle = header_tag.to_le_bytes();
@@ -669,6 +672,7 @@ fn decode_at_marker(
         preceding_reference: None,
         owner_reference: None,
         references,
+        second_references: Vec::new(),
         id_from_enclosing_record,
         design_option,
     })

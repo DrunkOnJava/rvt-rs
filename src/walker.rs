@@ -299,6 +299,9 @@ pub fn write_field_by_type(value: &InstanceField, ty: &formats::FieldType, out: 
                     (0x0b, InstanceField::Integer { value, .. }) => {
                         out.extend_from_slice(&value.to_le_bytes());
                     }
+                    // An item the reader kept as bytes (an unknown kind, or a
+                    // number that is not physical) goes back as it came.
+                    (_, InstanceField::Bytes(raw)) => out.extend_from_slice(raw),
                     (0x0d, InstanceField::Vector(point)) => {
                         // point = 3 × f64 — walk up to three floats
                         // (shape was emitted by the reader).
@@ -600,6 +603,19 @@ impl DecodedElement {
     }
 }
 
+/// A stored float as [`InstanceField::Float`], or as its bytes where it is
+/// not a number a model holds ([`crate::le_bytes::physical`]). Every reader
+/// takes a `Float` as a number, so a NaN, an infinity or a magnitude past
+/// any model reached the IFC, glTF and plan SVG as one (#1845). As bytes it
+/// is read as absent and written back unchanged.
+fn float_field(value: f64, size: u8, raw: &[u8]) -> InstanceField {
+    if le_bytes::physical(value) {
+        InstanceField::Float { value, size }
+    } else {
+        InstanceField::Bytes(raw.to_vec())
+    }
+}
+
 /// Read a single `InstanceField` value starting at `bytes[cursor]`
 /// based on the declared `FieldType`. Advances `cursor` past the
 /// consumed bytes. Returns `InstanceField::Bytes(rest)` when the
@@ -661,7 +677,7 @@ pub fn read_field_by_type(
                 (0x06, 4) => {
                     let v = f32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]) as f64;
                     *cursor += 4;
-                    InstanceField::Float { value: v, size: 4 }
+                    float_field(v, 4, &slice[..4])
                 }
                 (0x07, 8) => {
                     let v = f64::from_le_bytes([
@@ -669,7 +685,7 @@ pub fn read_field_by_type(
                         slice[7],
                     ]);
                     *cursor += 8;
-                    InstanceField::Float { value: v, size: 8 }
+                    float_field(v, 8, &slice[..8])
                 }
                 (0x0b, 8) => {
                     let v = i64::from_le_bytes([
@@ -833,7 +849,7 @@ pub fn read_field_by_type(
                             elem_bytes[6],
                             elem_bytes[7],
                         ]);
-                        InstanceField::Float { value: v, size: 8 }
+                        float_field(v, 8, elem_bytes)
                     }
                     (0x0b, 8) => {
                         let v = i64::from_le_bytes([
@@ -870,9 +886,18 @@ pub fn read_field_by_type(
                                 elem_bytes[off + 6],
                                 elem_bytes[off + 7],
                             ]);
-                            point.push(InstanceField::Float { value: v, size: 8 });
+                            point.push(float_field(v, 8, &elem_bytes[off..off + 8]));
                         }
-                        InstanceField::Vector(point)
+                        // A point is read whole or not at all: one component
+                        // that is not a number leaves the point as its bytes.
+                        if point
+                            .iter()
+                            .all(|p| matches!(p, InstanceField::Float { .. }))
+                        {
+                            InstanceField::Vector(point)
+                        } else {
+                            InstanceField::Bytes(elem_bytes.to_vec())
+                        }
                     }
                     _ => InstanceField::Bytes(elem_bytes.to_vec()),
                 };
@@ -1469,6 +1494,23 @@ pub(crate) fn walk_shared(
         control.report(Stage::PartitionScan, 1, Some(1));
         return Ok(elements);
     }
+    // A partition reader under the walk that stops at its work budget is
+    // kept with the file beside the elements, so an export that reads the
+    // walk back still reports the stop (#1833).
+    let stops = crate::budget::Notes::open();
+    let walked = walk_uncached(rf, min_score, limits, control);
+    rf.keep_budget_stops(stops.close());
+    walked
+}
+
+/// [`walk_shared`] when the handle holds no walk for `min_score` and
+/// `limits`: the walk itself, memoised on the handle.
+fn walk_uncached(
+    rf: &mut RevitFile,
+    min_score: i64,
+    limits: WalkerLimits,
+    control: &WalkerControl,
+) -> Result<std::sync::Arc<Vec<DecodedElement>>> {
     control.report(Stage::SchemaParse, 0, None);
     // #1075: both inflates run under the handle's limits, and a limit that
     // stops one is recorded on the handle before the walk fails.
@@ -2471,8 +2513,11 @@ fn read_field(
                 return None;
             }
             let elem_size = 6;
-            let col_bytes = 4 + count * elem_size;
-            let total = 2 * col_bytes;
+            // A caller that raises `max_container_records` lets the file's count reach
+            // a size whose bytes overflow a 32-bit `usize`: fail closed, as
+            // `trial_walk_checked` does for the same wire shape (#1815).
+            let col_bytes = count.checked_mul(elem_size)?.checked_add(4)?;
+            let total = col_bytes.checked_mul(2)?;
             if bytes.len() < total {
                 return None;
             }

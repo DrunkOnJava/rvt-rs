@@ -39,10 +39,10 @@
 //!   cargo run --profile ci -p rvt-probes --example probe_re312_parking_spaces -- FILE.rvt
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{Options, extract_graphs};
 use rvt::research::partition_element_records::scan_category_records_multi;
 use rvt::research::partition_ifc_export_overrides::scan_export_parameters;
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
@@ -57,22 +57,22 @@ fn text(value: &str) -> String {
         .collect()
 }
 
-fn flatten(prefix: &str, value: &Value, out: &mut Vec<(String, String)>) {
+fn flatten(prefix: &str, value: &Fv, out: &mut Vec<(String, String)>) {
     match value {
-        Value::Object(map) if map.contains_key("pointer_token") => {
+        Fv::Object(map) if map.contains_key("pointer_token") => {
             out.push((prefix.to_string(), "->".into()));
         }
-        Value::Object(map) => {
-            for (key, inner) in map {
+        Fv::Object(map) => {
+            for (key, inner) in map.iter() {
                 let path = if prefix.is_empty() {
-                    key.clone()
+                    key.to_string()
                 } else {
                     format!("{prefix}.{key}")
                 };
                 flatten(&path, inner, out);
             }
         }
-        Value::Array(items) => {
+        Fv::Array(items) => {
             let scalars = items
                 .iter()
                 .all(|item| !item.is_object() && !item.is_array());
@@ -80,7 +80,7 @@ fn flatten(prefix: &str, value: &Value, out: &mut Vec<(String, String)>) {
                 let joined: Vec<String> = items
                     .iter()
                     .map(|item| match item {
-                        Value::String(s) => text(s),
+                        Fv::Str(s) => text(s),
                         other => other.to_string(),
                     })
                     .collect();
@@ -89,20 +89,20 @@ fn flatten(prefix: &str, value: &Value, out: &mut Vec<(String, String)>) {
                 out.push((format!("{prefix}.len"), items.len().to_string()));
             }
         }
-        Value::String(s) => out.push((prefix.to_string(), text(s))),
+        Fv::Str(s) => out.push((prefix.to_string(), text(s))),
         other => out.push((prefix.to_string(), other.to_string())),
     }
 }
 
-fn integers(value: &Value, out: &mut BTreeSet<u64>) {
+fn integers(value: &Fv, out: &mut BTreeSet<u64>) {
     match value {
-        Value::Number(n) => {
+        n @ (Fv::U64(_) | Fv::I64(_) | Fv::F64(_)) => {
             if let Some(v) = n.as_u64() {
                 out.insert(v);
             }
         }
-        Value::Object(map) => map.values().for_each(|inner| integers(inner, out)),
-        Value::Array(items) => items.iter().for_each(|inner| integers(inner, out)),
+        Fv::Object(map) => map.values().iter().for_each(|inner| integers(inner, out)),
+        Fv::Array(items) => items.iter().for_each(|inner| integers(inner, out)),
         _ => {}
     }
 }
@@ -250,7 +250,7 @@ fn main() -> anyhow::Result<()> {
         if let Some(family) = object
             .fields
             .pointer("/m_familyId/m_id/m_id64")
-            .and_then(Value::as_i64)
+            .and_then(Fv::as_i64)
             .and_then(|id| u64::try_from(id).ok())
         {
             families.insert(family);

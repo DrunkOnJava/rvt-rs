@@ -80,7 +80,7 @@ Exemplo_data and modelo_bim (ribeiro, Revit 2023) name none: the layouts are mea
 
 `ifc::material_layer_sets_from_layers` builds one `MaterialLayerSet` per type name and layer sequence. It shares the set among the type's elements, and gives each layer its material where the name is read. A material the model does not hold yet is added with its colour. Each element gets a `MaterialLayerSetUsage` in `IfcModel::material_layer_usages`. An element gets no set when it has one layer with no name, since the set would say only what its body says. Core Interior's walls are single layers by category, so they get none.
 
-The usage is written only where the element's body is an extrusion whose extent across its layers equals their sum within 1e-4 ft (`body_geometry::LAYER_THICKNESS_TOLERANCE_FEET`):
+The usage is written only where the element's body is an extrusion whose extent across its layers equals their sum within 0.02 ft (`body_geometry::LAYER_THICKNESS_TOLERANCE_FEET`; *corrected 2026-11-13*: this first said 1e-4 ft, but the constant has been 0.02 ft since RE-53, the tolerance RE-57 gives for drawing the layers; RE-57's 1e-4 ft is `attach_slab_layers`' own check that a type's layers fit a record box):
 - **A floor, roof or ceiling** (layers stacked, RE-57): `AXIS3`, `NEGATIVE`, `OffsetFromReferenceLine` the body's height. The first layer is at the top and they run down.
 - **A wall** (RE-53): the local axis its exterior normal runs along, `AXIS1` or `AXIS2`. If the exterior faces that axis's positive side, the sense is `NEGATIVE` from the body's far face. Otherwise it is `POSITIVE` from its near face. Either way the first layer is the exterior one.
 

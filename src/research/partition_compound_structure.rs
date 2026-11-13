@@ -46,9 +46,10 @@
 //!
 //! # Wall orientation
 //!
-//! A wall's data carries, after `ff ff ff ff 01 00 00 00`, three `u32`: its
-//! location line (0 to 5), a word of 0 to 2, and a flip flag
-//! ([`wall_orientation`]). With the flag set, the wall's exterior (its first
+//! A wall's data carries, after `ff ff ff ff 01 00 00 00`, two `u32`, its
+//! location line (0 to 5) and a word of 0 to 2, then a flip byte and a
+//! second flag after it ([`wall_orientation`]; RE-126: RE-54 first read the
+//! flip as a third `u32`). With the flag set, the wall's exterior (its first
 //! layer) lies to the right of its location line's direction; clear, to
 //! the left. On Snowdon Towers this holds on all 416 walls whose first and
 //! last layers Revit's IFC4 export places measurably apart. The one other
@@ -290,9 +291,59 @@ pub fn find_layers(
         .find_map(|at| layers_at(data, at, layout, materials, declared))
 }
 
+/// A copy of a type's layers: the partition it is in, where its element-data
+/// header starts, and the layers it gives.
+type LayerCopy = (u32, usize, Vec<CompoundLayer>);
+
+/// Which copy of a type's layers a reader takes.
+#[derive(Debug, PartialEq)]
+enum CopyChoice<'a> {
+    /// Every copy gives the same layers (the first is the lowest partition's).
+    Agreeing(&'a LayerCopy),
+    /// The copies disagree and the copies of the current partition give one
+    /// list (RE-446).
+    Current(&'a LayerCopy),
+    /// The copies disagree and nothing says which is current, or the current
+    /// partition's copies disagree among themselves.
+    Refused,
+}
+
+/// The copy of a type's layers to take among its decoded `copies`, in partition
+/// order, given the partition the element index routes the type to, if any
+/// (`current`). A type whose copies agree takes the first. One whose copies
+/// disagree takes its current partition's copy, and none if there is no
+/// current partition, none of the copies is in it, or the copies in it
+/// disagree: a type edited after an earlier save is rewritten into a newer
+/// partition and the older copy stays (RE-446), so its current copy is the
+/// layers Revit's export gives, and a guess among copies is refused.
+fn choose_copy(copies: &[LayerCopy], current: Option<u32>) -> CopyChoice<'_> {
+    let Some(first) = copies.first() else {
+        return CopyChoice::Refused;
+    };
+    if copies.iter().all(|(_, _, layers)| *layers == first.2) {
+        return CopyChoice::Agreeing(first);
+    }
+    let Some(current) = current else {
+        return CopyChoice::Refused;
+    };
+    let mut in_current = copies
+        .iter()
+        .filter(|(partition, _, _)| *partition == current);
+    match in_current.next() {
+        Some(pick) if in_current.all(|(_, _, layers)| *layers == pick.2) => {
+            CopyChoice::Current(pick)
+        }
+        _ => CopyChoice::Refused,
+    }
+}
+
 /// The layers of each type in `types`, by ElementId, from each type's own
-/// data. A type whose copies disagree is dropped; empty for a release the
-/// layout is not measured on.
+/// data. On Revit 2024 and later a type whose copies in the partitions disagree
+/// takes its current partition's copy (`choose_copy`: the partition the element
+/// index routes it to, else the latest that holds a copy,
+/// [`crate::native_document::current_partitions`], RE-145, RE-216) and is
+/// dropped where that copy is not one list; on Revit 2008 to 2023 such a type
+/// is dropped. Empty for a release the layout is not measured on.
 pub fn scan_type_layers(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -310,7 +361,10 @@ pub fn scan_type_layers(
     ) else {
         return Ok(BTreeMap::new());
     };
-    let mut found: BTreeMap<u32, Option<Vec<CompoundLayer>>> = BTreeMap::new();
+    // The decoded copies of each type, in partition order, and the partitions
+    // that hold a copy of its data at all, decoded or not.
+    let mut copies: BTreeMap<u32, Vec<LayerCopy>> = BTreeMap::new();
+    let mut holders: BTreeMap<u32, BTreeSet<u32>> = BTreeMap::new();
     let recording = rf.recording_value_sources();
     let mut trail = crate::ifc::element_provenance::CopyTrail::default();
     for stream in rf.partition_stream_names() {
@@ -321,6 +375,7 @@ pub fn scan_type_layers(
         let Ok(hits) = rf.header_hits(&stream, &header) else {
             continue;
         };
+        let partition = crate::partition_room_parameters::partition_number(&stream);
         for (index, &hit) in hits.iter().enumerate() {
             let id_at = hit + header.len();
             let id = if layout.wide_ids {
@@ -337,11 +392,9 @@ pub fn scan_type_layers(
                 .unwrap_or(buf.len())
                 .min(hit.saturating_add(LAYER_WINDOW))
                 .min(buf.len());
+            holders.entry(id).or_default().insert(partition);
             if recording {
-                trail.named(
-                    id,
-                    crate::partition_room_parameters::partition_number(&stream),
-                );
+                trail.named(id, partition);
             }
             let Some(layers) = buf
                 .get(id_at + 8..end)
@@ -350,27 +403,62 @@ pub fn scan_type_layers(
                 continue;
             };
             if recording {
-                let partition = crate::partition_room_parameters::partition_number(&stream);
                 trail.gave(id, partition, hit);
             }
-            match found.get_mut(&id) {
-                None => {
-                    found.insert(id, Some(layers));
-                }
-                Some(held) => {
-                    if held.as_ref() != Some(&layers) {
-                        *held = None;
-                    }
-                }
-            }
+            copies.entry(id).or_default().push((partition, hit, layers));
         }
     }
-    let kept: BTreeMap<u32, Vec<CompoundLayer>> = found
-        .into_iter()
-        .filter_map(|(id, layers)| layers.map(|l| (id, l)))
-        .collect();
+    for held in copies.values_mut() {
+        // The scan met the streams in name order, which is not partition order.
+        held.sort_by_key(|(partition, hit, _)| (*partition, *hit));
+    }
+    // Measured on Revit 2024 and later only (the 64-bit layout): on the one
+    // held-out file of Revit 2008 to 2023 that has such a type (Revit 2020)
+    // the current copy gives five floors layers of Revit's widths and, on four
+    // of them, materials Revit's export does not give, so there a type whose
+    // copies disagree stays dropped (RE-446).
+    let current = if layout.wide_ids {
+        let disagreeing: BTreeMap<u32, BTreeSet<u32>> = copies
+            .iter()
+            .filter(|(_, held)| held.iter().any(|(_, _, layers)| *layers != held[0].2))
+            .filter_map(|(id, _)| Some((*id, holders.get(id)?.clone())))
+            .collect();
+        crate::native_document::current_partitions(rf, &disagreeing)
+    } else {
+        BTreeMap::new()
+    };
+    let mut kept: BTreeMap<u32, Vec<CompoundLayer>> = BTreeMap::new();
+    let mut agreeing: Vec<u32> = Vec::new();
+    let mut taken_current: Vec<(u32, crate::ifc::element_provenance::ValueSource)> = Vec::new();
+    for (id, held) in &copies {
+        match choose_copy(held, current.get(id).copied()) {
+            CopyChoice::Agreeing((_, _, layers)) => {
+                agreeing.push(*id);
+                kept.insert(*id, layers.clone());
+            }
+            CopyChoice::Current((partition, hit, layers)) => {
+                if recording {
+                    taken_current.push((
+                        *id,
+                        crate::ifc::element_provenance::ValueSource::in_partition(
+                            "type_layers",
+                            crate::ifc::element_provenance::CopyRule::Current,
+                            holders.get(id).map_or(0, BTreeSet::len),
+                            *partition,
+                            Some(*hit),
+                        ),
+                    ));
+                }
+                kept.insert(*id, layers.clone());
+            }
+            CopyChoice::Refused => {}
+        }
+    }
     if recording {
-        trail.note(rf, "type_layers", kept.keys().copied());
+        trail.note(rf, "type_layers", agreeing);
+        for (id, source) in taken_current {
+            rf.note_value_source(id, source);
+        }
     }
     Ok(kept)
 }
@@ -1026,4 +1114,76 @@ pub fn scan_wall_join_partners(
             Some((id, named))
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // How choosing among a type's copies can go wrong (RE-446): copies that
+    // agree are told apart because a later partition rewrote them; a type edited
+    // since an earlier save takes the older copy, or the highest-numbered one
+    // where the index routes it elsewhere; a guess is made where nothing says
+    // which copy is current; the current partition's copies disagree among
+    // themselves and one is taken.
+
+    fn layer(width_feet: f64, function: u32) -> CompoundLayer {
+        CompoundLayer {
+            width_feet,
+            material: Some(7),
+            function,
+        }
+    }
+
+    fn older() -> Vec<CompoundLayer> {
+        vec![layer(0.4593, 1), layer(0.0427, 4), layer(0.0427, 4)]
+    }
+
+    fn newer() -> Vec<CompoundLayer> {
+        vec![layer(0.4593, 1), layer(0.0591, 4)]
+    }
+
+    #[test]
+    fn copies_that_agree_take_the_first_whatever_the_routing() {
+        let copies = [(374, 10, older()), (410, 20, older())];
+        assert_eq!(choose_copy(&copies, None), CopyChoice::Agreeing(&copies[0]));
+        assert_eq!(
+            choose_copy(&copies, Some(410)),
+            CopyChoice::Agreeing(&copies[0])
+        );
+        assert_eq!(choose_copy(&[], Some(410)), CopyChoice::Refused);
+    }
+
+    #[test]
+    fn copies_that_disagree_with_no_routing_take_none() {
+        let copies = [(374, 10, older()), (410, 20, newer())];
+        assert_eq!(choose_copy(&copies, None), CopyChoice::Refused);
+    }
+
+    #[test]
+    fn copies_that_disagree_take_the_routed_partitions_not_the_highest() {
+        let copies = [(374, 10, older()), (410, 20, newer()), (442, 30, older())];
+        assert_eq!(
+            choose_copy(&copies, Some(410)),
+            CopyChoice::Current(&copies[1])
+        );
+        assert_eq!(
+            choose_copy(&copies, Some(374)),
+            CopyChoice::Current(&copies[0])
+        );
+    }
+
+    #[test]
+    fn a_routed_partition_without_a_decoded_copy_takes_none() {
+        let copies = [(374, 10, older()), (410, 20, newer())];
+        assert_eq!(choose_copy(&copies, Some(442)), CopyChoice::Refused);
+    }
+
+    #[test]
+    fn a_routed_partition_whose_copies_disagree_takes_none() {
+        let copies = [(374, 10, older()), (410, 20, newer()), (410, 90, older())];
+        assert_eq!(choose_copy(&copies, Some(410)), CopyChoice::Refused);
+        let same = [(374, 10, older()), (410, 20, newer()), (410, 90, newer())];
+        assert_eq!(choose_copy(&same, Some(410)), CopyChoice::Current(&same[1]));
+    }
 }

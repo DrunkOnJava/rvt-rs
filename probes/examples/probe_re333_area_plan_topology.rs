@@ -32,17 +32,17 @@
 //!   cargo run --profile ci -p rvt-probes --example probe_re333_area_plan_topology -- FILE.rvt
 
 use rvt::RevitFile;
+use rvt::research::graph_value::Fv;
 use rvt::research::{native_area_regions, native_document, partition_element_records};
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 /// An ElementId as either shape the schema saves it in.
-fn identifier(value: &Value) -> Option<i64> {
+fn identifier(value: &Fv) -> Option<i64> {
     let id = value.get("m_id")?;
     id.get("m_id64")
         .or_else(|| id.get("m_id"))
-        .and_then(Value::as_i64)
+        .and_then(Fv::as_i64)
 }
 
 fn main() -> anyhow::Result<()> {
@@ -70,8 +70,7 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
                 "CurveElem"
-                    if object.fields.get("m_isAreaMeasurementScheme")
-                        == Some(&Value::Bool(true)) =>
+                    if object.fields.get("m_isAreaMeasurementScheme") == Some(&Fv::Bool(true)) =>
                 {
                     let curve = graph
                         .objects
@@ -84,13 +83,13 @@ fn main() -> anyhow::Result<()> {
                         .iter()
                         .find(|o| o.class_name == "AreaMeasureCurveData")
                         .and_then(|o| o.fields.get("m_schemeSegments"))
-                        .and_then(Value::as_array)
+                        .and_then(Fv::as_array)
                         .map(|parts| {
                             parts
                                 .iter()
                                 .map(|part| {
                                     let n = |k: &str| {
-                                        part.get(k).and_then(Value::as_f64).unwrap_or(f64::NAN)
+                                        part.get(k).and_then(Fv::as_f64).unwrap_or(f64::NAN)
                                     };
                                     format!(
                                         "{:.6}-{:.6}:{:.6}",

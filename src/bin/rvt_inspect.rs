@@ -294,9 +294,9 @@ fn classify_failure_mode(
     if unexported > 0 {
         return FailureMode {
             kind: "incomplete_model".into(),
-            title: "Incomplete model".into(),
+            title: "Element records not exported".into(),
             summary: format!(
-                "Model elements were recovered, but {unexported} model element record(s) use a layout whose ElementId this release cannot locate and are not exported."
+                "Model elements were recovered, but {unexported} element record(s) belong to ElementIds the element table does not declare and are not exported. On the one model compared with Revit's export of the same save, such records were elements deleted since the file's last Save As (#1838); if nothing was deleted, the model is likely incomplete."
             ),
             severity: "warning".into(),
         };
@@ -408,7 +408,7 @@ fn export_readiness(diagnostics: &ExportDiagnostics) -> ExportReadiness {
     let unexported = diagnostics.confidence.unexported_element_records;
     let summary = if unexported > 0 {
         format!(
-            "{summary} Incomplete: {unexported} model element record(s) could not be exported (RE-30)."
+            "{summary} {unexported} element record(s) belong to ElementIds the element table does not declare and are not exported (RE-30, RE-35)."
         )
     } else {
         summary
@@ -445,7 +445,7 @@ fn next_steps(diagnostics: &ExportDiagnostics, schema_parsed: bool) -> Vec<Strin
     let unexported = diagnostics.confidence.unexported_element_records;
     if unexported > 0 {
         steps.push(format!(
-            "{unexported} element record(s) are missing from the export (RE-30). Do not use its element counts as a takeoff."
+            "{unexported} element record(s) belong to ElementIds the element table does not declare and are not in the export (RE-30, RE-35). Whatever the cause, compare the export's element counts with Revit's before using them as a takeoff: on the one model compared, such records were elements deleted since the file's last Save As (#1838)."
         ));
     }
     if diagnostics

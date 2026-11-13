@@ -4,14 +4,17 @@
 //! higher. Revit also stores the instance's geometry node in the inflated
 //! `Partitions/*` streams: the column's `u64` ElementId, then `u64 3 · u64
 //! 0xffffffffffffffff`, preceded by two boxes of six `f64` (min x, y, z, max
-//! x, y, z) at 96 and 48 bytes before the id. Their x and y extents are equal,
-//! and the second holds Revit's z-range. The run belongs to the schema classes
-//! `GArray` (parent `GInstance`) and `GRep`.
+//! x, y, z) at 96 and 48 bytes before the id. Their x and y extents agree to
+//! 1e-12 ft or differ by more than 1e-6 ft, and none of the 3,658 comparisons
+//! made on 18 models fell between (3,519 agree, 139 differ); the second holds
+//! Revit's z-range. The run belongs to the schema classes `GArray` (parent
+//! `GInstance`) and `GRep`.
 //!
 //! Fail closed: only for a column whose record box starts at exactly 0.0, and
-//! only from a node whose boxes are finite and whose x and y extents equal the
-//! record's to 1e-6 ft, whose top is the record's top (0.01 ft) and whose bottom
-//! is not. The column's bottom moves only if every such node gives the same one.
+//! only from a node whose boxes are finite, agree in x and y to 1e-9 ft and
+//! have x and y extents equal to the record's to 1e-6 ft, whose top is the
+//! record's top (0.01 ft) and whose bottom is not. The column's bottom moves
+//! only if every such node gives the same one.
 //!
 //! The box at id-48 is also the extent after geometry joins: a slab or roof
 //! joined to the column cuts it there, and the IFC body follows it (RE-178).

@@ -16,7 +16,7 @@
 //! Architecture's 4 doors, and the door and 3 windows of each of the R2025
 //! models 12 to 17 (`reports/element-framing/RE-215-symbol-cut-loops.md`).
 
-use crate::native_json::{element_id, finite_triple};
+use crate::native_json::{element_id, finite_triple, identifier_i64};
 use crate::vector_math::distance;
 use crate::{RevitFile, native_document, native_saved_mesh::pointer};
 use std::collections::{BTreeMap, BTreeSet};
@@ -50,7 +50,7 @@ impl CutLoop {
 /// XZ plane and with some width and height. Anything else is `None`.
 fn cut_loop(graph: &crate::native_parameters::ObjectGraph) -> Option<CutLoop> {
     let root = graph.objects.first()?;
-    let [loop_pointer] = root.fields.get("m_pCutLoops")?.as_array()?.as_slice() else {
+    let [loop_pointer] = root.fields.get("m_pCutLoops")?.as_array()? else {
         return None;
     };
     let index = pointer(graph, 0, loop_pointer).ok()??;
@@ -59,7 +59,7 @@ fn cut_loop(graph: &crate::native_parameters::ObjectGraph) -> Option<CutLoop> {
         || curve_loop
             .fields
             .get("m_open")
-            .and_then(serde_json::Value::as_bool)
+            .and_then(crate::graph_value::Fv::as_bool)
             != Some(false)
     {
         return None;
@@ -97,9 +97,9 @@ fn cut_loop(graph: &crate::native_parameters::ObjectGraph) -> Option<CutLoop> {
         .then_some(cut)
 }
 
-fn point2(value: Option<&serde_json::Value>) -> Option<[f64; 2]> {
+fn point2(value: Option<&crate::graph_value::Fv>) -> Option<[f64; 2]> {
     let items = value?.as_array()?;
-    let [a, b] = items.as_slice() else {
+    let [a, b] = items else {
         return None;
     };
     let p = [a.as_f64()?, b.as_f64()?];
@@ -184,6 +184,46 @@ pub struct InstanceCuts {
     pub flips: BTreeMap<u64, [bool; 2]>,
 }
 
+/// The element hosting each of `instances`: the first `m_hostId` of its
+/// native record, read on Revit 2015 to 2027 and in either shape the schema
+/// saves an ElementId, `{"m_id":{"m_id64":n}}` from 2024 and the 4-byte
+/// `{"m_id":{"m_id":n}}` before (RE-280, RE-448). [`instance_cuts_and_symbols`]
+/// reads the same member on 2024 to 2027 (RE-245).
+pub fn instance_hosts(
+    rf: &mut RevitFile,
+    instances: &BTreeSet<u64>,
+) -> anyhow::Result<BTreeMap<u64, u64>> {
+    let mut hosts = BTreeMap::new();
+    if instances.is_empty() {
+        return Ok(hosts);
+    }
+    let options = native_document::Options {
+        selected_ids: instances.clone(),
+        releases: native_document::NATIVE_RELEASES,
+        ..native_document::Options::default()
+    };
+    native_document::extract_graphs(rf, &options, |record| {
+        let Some(graph) = record.graph.as_ref() else {
+            return Ok(());
+        };
+        let id = record.identity.element_id;
+        if !instances.contains(&id) {
+            return Ok(());
+        }
+        if let Some(host) = graph.objects.iter().find_map(|object| {
+            object
+                .fields
+                .get("m_hostId")
+                .and_then(identifier_i64)
+                .and_then(|host| u64::try_from(host).ok())
+        }) {
+            hosts.insert(id, host);
+        }
+        Ok(())
+    })?;
+    Ok(hosts)
+}
+
 /// [`instance_cut_loops_and_uncut`], and the symbol that draws each of
 /// `instances` (its `InstanceInfo.m_symbolId`), read in the same pass:
 /// the type where the instance's own parameters change nothing, else the
@@ -222,8 +262,8 @@ pub fn instance_cuts_and_symbols(
                 .objects
                 .first()
                 .and_then(|root| root.fields.get("m_pCutLoops"))
-                .and_then(serde_json::Value::as_array)
-                .is_some_and(Vec::is_empty)
+                .and_then(crate::graph_value::Fv::as_array)
+                .is_some_and(|items| items.is_empty())
             {
                 uncut_symbols.insert(id);
                 if let Some(size) = cut_solid_vertices(graph).and_then(|v| cut_solid_size(&v)) {
@@ -252,7 +292,11 @@ pub fn instance_cuts_and_symbols(
                 .first()
                 .filter(|_| record.class_name.as_deref() == Some("FamilyInstance"))
             {
-                let flag = |name: &str| root.fields.get(name).and_then(serde_json::Value::as_bool);
+                let flag = |name: &str| {
+                    root.fields
+                        .get(name)
+                        .and_then(crate::graph_value::Fv::as_bool)
+                };
                 if let Some((x, y)) = flag("m_flippedX").zip(flag("m_flippedY")) {
                     flips.insert(id, [x, y]);
                 }
@@ -343,10 +387,10 @@ pub fn symbol_wire_widths(
             let fields = &object.fields;
             let category = fields
                 .pointer("/m_GInfo/m_categoryId/m_id/m_id64")
-                .and_then(serde_json::Value::as_i64);
+                .and_then(crate::graph_value::Fv::as_i64);
             let visible = fields
                 .pointer("/m_GInfo/m_flags")
-                .and_then(serde_json::Value::as_u64)
+                .and_then(crate::graph_value::Fv::as_u64)
                 .is_some_and(|flags| flags & VISIBILITY_FLAG_BITS == 0);
             if category != Some(WIRE_CATEGORY) || !visible {
                 continue;

@@ -282,8 +282,10 @@ const WALL_CENTRELINE_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=202
 /// are the walls it rests on (RE-358). Its own list, a decision of its own
 /// (#1473): the profile openings are read on
 /// [`WALL_PROFILE_OPENING_REVIT_VERSIONS`], and a release added to that list
-/// takes the rule only when it is added here. The walls the record joins at an
-/// end are read on [`WALL_END_JOIN_REVIT_VERSIONS`], which the rule asks for.
+/// takes the rule only when it is added here, as for the end joins on
+/// [`WALL_END_JOIN_REVIT_VERSIONS`]. The rule asks nothing of the joins: RE-358
+/// dropped the join-partner condition its second Measure run tried, which
+/// refused every end the first run carried (11 walls).
 const WALL_PROFILE_STUB_REVIT_VERSIONS: &[u32] = &[2024];
 
 /// Releases a wall's top is taken at the highest point of its edited elevation
@@ -1150,7 +1152,16 @@ pub(super) fn attach_wall_layers(
         end_joins,
     } = if centreline_bodies {
         let ids: BTreeSet<u64> = wall_ids.iter().map(|&id| u64::from(id)).collect();
-        crate::native_walls::native_walls_and_top_joins_into(rf, &ids, reads).unwrap_or_default()
+        // A wall with no type in the export draws no body here, but the readers
+        // after this one ask every wall's type id, top join and load bearing:
+        // it is read in the same pass for those alone, not in one more (#1824).
+        let typeless: BTreeSet<u64> = walls
+            .iter()
+            .filter(|wall| type_of(wall).is_none())
+            .filter_map(|wall| wall.id.map(u64::from))
+            .collect();
+        crate::native_walls::native_walls_and_top_joins_into(rf, &ids, &typeless, reads)
+            .unwrap_or_default()
     } else {
         Default::default()
     };

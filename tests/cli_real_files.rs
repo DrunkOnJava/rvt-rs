@@ -12,6 +12,9 @@
 //! - `rvt-analyze --json`: the identity's release is the file's, and with
 //!   `--redact` no Windows user folder, Autodesk OneDrive path or internal
 //!   project-id folder survives, where the reports without it name some;
+//! - `rvt-doc --json`: a file run from under a user folder and an Autodesk
+//!   OneDrive folder prints both in its path, and with `--redact` neither
+//!   survives anywhere in the output while the fields and notes are unchanged;
 //! - `rvt-diff`: a file against itself has every stream identical, and two
 //!   releases of the same family differ in some stream;
 //! - `rvt-ifc-compare --fail-on-diff`: an export against itself exits 0 with
@@ -577,4 +580,51 @@ fn analyze_redact_leaves_no_user_folder_or_autodesk_internal_path() {
         "no report named a user folder, so --redact was not exercised"
     );
     eprintln!("rvt-analyze --redact: {to_scrub} strings with a user or internal path scrubbed");
+}
+
+#[test]
+fn doc_redact_scrubs_the_path_given_and_changes_nothing_else() {
+    let files = families();
+    if files.is_empty() {
+        eprintln!("skipping: family corpus missing");
+        return;
+    }
+    let bin = env!("CARGO_BIN_EXE_rvt-doc");
+    // rvt-doc prints the path it was given, so each file is run from under
+    // the folders `--redact` is promised to scrub.
+    let dir = scratch("doc-redact");
+    let home = dir.join("Users").join("alice").join("OneDrive - Autodesk");
+    std::fs::create_dir_all(&home).expect("create the synthetic home folder");
+    for (year, path) in &files {
+        let copy = home.join(path.file_name().expect("file name"));
+        std::fs::copy(path, &copy).expect("copy the sample");
+        let doc = |redact: bool| -> Value {
+            let mut args = vec![copy.as_os_str(), "--json".as_ref()];
+            if redact {
+                args.push("--redact".as_ref());
+            }
+            serde_json::from_str(&ok(bin, &run(bin, &args))).expect("JSON")
+        };
+        let (plain, redacted) = (doc(false), doc(true));
+        let named = plain["path"].as_str().expect("path");
+        assert!(
+            named.contains("alice") && named.contains("OneDrive - Autodesk"),
+            "{year}: the output does not name the folders to scrub: {named}"
+        );
+        let mut seen = Vec::new();
+        strings(&redacted, &mut seen);
+        for s in &seen {
+            for leaked in ["alice", "OneDrive"] {
+                assert!(
+                    !s.contains(leaked),
+                    "{year}: {leaked} survives --redact: {s}"
+                );
+            }
+        }
+        // Scrubbing takes nothing else out of the output.
+        for key in ["version", "adocument_entry_offset", "fields", "notes"] {
+            assert_eq!(redacted[key], plain[key], "{year}: --redact changed {key}");
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
 }

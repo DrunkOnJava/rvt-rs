@@ -112,10 +112,10 @@ struct Document {
 }
 
 /// `{"m_id":{"m_id64":n}}` as `n`.
-fn element_id(value: Option<&serde_json::Value>) -> Option<i64> {
+fn element_id(value: Option<&crate::graph_value::Fv>) -> Option<i64> {
     value
         .and_then(|v| v.pointer("/m_id/m_id64"))
-        .and_then(serde_json::Value::as_i64)
+        .and_then(crate::graph_value::Fv::as_i64)
 }
 
 /// A graph's `FamilyParams` values: parameter ElementId and `m_int`.
@@ -220,7 +220,7 @@ fn read_documents(
                             cutting: root
                                 .fields
                                 .get("m_cutting")
-                                .and_then(serde_json::Value::as_bool)
+                                .and_then(crate::graph_value::Fv::as_bool)
                                 .unwrap_or(false),
                             visible: stored_visible(&graph),
                             bound,
@@ -276,17 +276,39 @@ fn blocks_of(
 ) -> BTreeMap<[u8; 16], u64> {
     let mut out = BTreeMap::new();
     for (family, body) in bodies {
+        // Every key has its block: no later body changes `out`.
+        if out.len() == keys.len() {
+            break;
+        }
         if !families.contains(family) {
             continue;
         }
-        for key in keys {
-            if memchr::memmem::find(body, key).is_some() {
-                out.entry(*key).or_insert(*family);
+        if keys.len() <= KEY_SEARCHES {
+            for key in keys {
+                if !out.contains_key(key) && memchr::memmem::find(body, key).is_some() {
+                    out.insert(*key, *family);
+                }
+            }
+            continue;
+        }
+        // A key is in a body exactly where one of its 16-byte windows is
+        // the key, so one pass over the body answers every key: a search
+        // for each key cost bodies × keys (#1833).
+        for window in body.windows(16) {
+            let Ok(key) = <[u8; 16]>::try_from(window) else {
+                continue;
+            };
+            if keys.contains(&key) {
+                out.entry(key).or_insert(*family);
             }
         }
     }
     out
 }
+
+/// Up to this many keys, a search of each body for each key, which `memchr`
+/// vectorises, is cheaper than one pass with a set lookup at every byte.
+const KEY_SEARCHES: usize = 16;
 
 /// What [`load`] reads: the schema, the release, the partitions, the block
 /// keys and the family documents.

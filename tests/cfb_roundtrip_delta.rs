@@ -28,6 +28,26 @@ fn corpus_available() -> bool {
     ALL_YEARS.iter().all(|y| sample_for_year(*y).exists())
 }
 
+/// The MIT `empty.rfa` committed beside the tests, which every checkout has: the patch
+/// tests run on its bytes with no corpus (#1933).
+fn fixture_empty_rfa() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/families/empty.rfa")
+}
+
+/// The families the patch tests run on: the committed fixture always, and each release
+/// of the family corpus where it is present.
+fn patch_sources() -> Vec<(String, PathBuf)> {
+    let mut sources = vec![("empty.rfa".to_string(), fixture_empty_rfa())];
+    if corpus_available() {
+        sources.extend(
+            ALL_YEARS
+                .iter()
+                .map(|year| (year.to_string(), sample_for_year(*year))),
+        );
+    }
+    sources
+}
+
 /// Byte-diff count between two slices. Counts differing positions
 /// through the minimum length, plus any trailing size difference.
 fn byte_delta(a: &[u8], b: &[u8]) -> usize {
@@ -189,14 +209,7 @@ fn cfb_roundtrip_delta_baseline() -> Result<()> {
 
 #[test]
 fn cfb_missing_stream_patch_errors_without_output() -> Result<()> {
-    let src = sample_for_year(2024);
-    if !src.exists() {
-        eprintln!(
-            "skipping missing-stream patch test: corpus missing at {}",
-            src.display()
-        );
-        return Ok(());
-    }
+    let src = fixture_empty_rfa();
 
     let tmp = std::env::temp_dir().join(format!("rvt-missing-stream-{}", std::process::id()));
     fs::create_dir_all(&tmp).unwrap();
@@ -232,14 +245,6 @@ fn cfb_missing_stream_patch_errors_without_output() -> Result<()> {
 /// delta across every release.
 #[test]
 fn cfb_single_stream_patch_preserves_unpatched_sectors() -> Result<()> {
-    if !corpus_available() {
-        eprintln!(
-            "skipping single-stream patch delta: corpus missing at {}",
-            samples_dir().display()
-        );
-        return Ok(());
-    }
-
     let tmp = std::env::temp_dir().join(format!("rvt-patch-delta-{}", std::process::id()));
     fs::create_dir_all(&tmp).unwrap();
 
@@ -248,8 +253,7 @@ fn cfb_single_stream_patch_preserves_unpatched_sectors() -> Result<()> {
     // is absent.
     let _ = (StreamFraming::Verbatim, BASIC_FILE_INFO);
 
-    for year in ALL_YEARS {
-        let src = sample_for_year(year);
+    for (year, src) in patch_sources() {
         let dst = tmp.join(format!("patch-{year}.rfa"));
 
         // Read the current BasicFileInfo bytes and re-write them
@@ -302,19 +306,10 @@ fn cfb_single_stream_patch_preserves_unpatched_sectors() -> Result<()> {
 /// cleanly and return their original bytes.
 #[test]
 fn cfb_patch_growing_stream_preserves_unpatched() -> Result<()> {
-    if !corpus_available() {
-        eprintln!(
-            "skipping growing-stream patch test: corpus missing at {}",
-            samples_dir().display()
-        );
-        return Ok(());
-    }
-
     let tmp = std::env::temp_dir().join(format!("rvt-grow-{}", std::process::id()));
     fs::create_dir_all(&tmp).unwrap();
 
-    for year in ALL_YEARS {
-        let src = sample_for_year(year);
+    for (year, src) in patch_sources() {
         let dst = tmp.join(format!("grow-{year}.rfa"));
 
         // Snapshot the original PartAtom bytes to compare after patch.
@@ -363,19 +358,10 @@ fn cfb_patch_growing_stream_preserves_unpatched() -> Result<()> {
 /// back at its new length, (c) unpatched streams are unaffected.
 #[test]
 fn cfb_patch_shrinking_stream_preserves_unpatched() -> Result<()> {
-    if !corpus_available() {
-        eprintln!(
-            "skipping shrinking-stream patch test: corpus missing at {}",
-            samples_dir().display()
-        );
-        return Ok(());
-    }
-
     let tmp = std::env::temp_dir().join(format!("rvt-shrink-{}", std::process::id()));
     fs::create_dir_all(&tmp).unwrap();
 
-    for year in ALL_YEARS {
-        let src = sample_for_year(year);
+    for (year, src) in patch_sources() {
         let dst = tmp.join(format!("shrink-{year}.rfa"));
 
         let (original_bfi, original_partatom) = {
@@ -419,19 +405,10 @@ fn cfb_patch_shrinking_stream_preserves_unpatched() -> Result<()> {
 /// correctly and all OTHER streams in the file still read cleanly.
 #[test]
 fn cfb_multi_stream_patch_preserves_rest() -> Result<()> {
-    if !corpus_available() {
-        eprintln!(
-            "skipping multi-stream patch test: corpus missing at {}",
-            samples_dir().display()
-        );
-        return Ok(());
-    }
-
     let tmp = std::env::temp_dir().join(format!("rvt-multi-{}", std::process::id()));
     fs::create_dir_all(&tmp).unwrap();
 
-    for year in ALL_YEARS {
-        let src = sample_for_year(year);
+    for (year, src) in patch_sources() {
         let dst = tmp.join(format!("multi-{year}.rfa"));
 
         // Snapshot every stream's bytes before patching so we can

@@ -43,7 +43,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use serde_json::Value;
+use crate::graph_value::Fv;
 
 use crate::RevitFile;
 use crate::native_document::{Options, extract_graphs};
@@ -93,7 +93,7 @@ pub struct NativeWall {
 
 /// The widths of a `CompoundStructure`'s layers outside its core, on its
 /// exterior and its interior side.
-fn shell_widths(structure: &Value) -> Option<[f64; 2]> {
+fn shell_widths(structure: &Fv) -> Option<[f64; 2]> {
     let widths: Vec<f64> = structure
         .get("m_layers")?
         .as_array()?
@@ -102,7 +102,11 @@ fn shell_widths(structure: &Value) -> Option<[f64; 2]> {
         .collect::<Option<_>>()?;
     let count = |name: &str| usize::try_from(structure.get(name)?.as_u64()?).ok();
     let (exterior, interior) = (count("m_numShellLayersExt")?, count("m_numShellLayersInt")?);
-    if exterior + interior > widths.len() || widths.iter().any(|w| !w.is_finite() || *w < 0.0) {
+    if exterior
+        .checked_add(interior)
+        .is_none_or(|shells| shells > widths.len())
+        || widths.iter().any(|w| !w.is_finite() || *w < 0.0)
+    {
         return None;
     }
     Some([
@@ -111,8 +115,8 @@ fn shell_widths(structure: &Value) -> Option<[f64; 2]> {
     ])
 }
 
-fn triple(value: Option<&Value>) -> Option<[f64; 3]> {
-    match value?.as_array()?.as_slice() {
+fn triple(value: Option<&Fv>) -> Option<[f64; 3]> {
+    match value?.as_array()? {
         [x, y, z] => Some([x.as_f64()?, y.as_f64()?, z.as_f64()?]),
         _ => None,
     }
@@ -120,7 +124,7 @@ fn triple(value: Option<&Value>) -> Option<[f64; 3]> {
 
 /// The signed distances to the left of the line from `start` along the unit
 /// `direction` of the outermost two of `planes` that stand upright along it.
-fn face_offsets(planes: &[&Value], start: [f64; 2], direction: [f64; 2]) -> Option<[f64; 2]> {
+fn face_offsets(planes: &[&Fv], start: [f64; 2], direction: [f64; 2]) -> Option<[f64; 2]> {
     let offsets: Vec<f64> = planes
         .iter()
         .filter_map(|plane| {
@@ -142,10 +146,10 @@ fn face_offsets(planes: &[&Value], start: [f64; 2], direction: [f64; 2]) -> Opti
 }
 
 /// The plan start and end of a horizontal `GLine`.
-fn line_ends(fields: &Value) -> Option<([f64; 2], [f64; 2])> {
+fn line_ends(fields: &Fv) -> Option<([f64; 2], [f64; 2])> {
     let origin = triple(fields.get("m_origin"))?;
     let direction = triple(fields.get("m_dirVec"))?;
-    let [a, b] = match fields.get("m_endParams")?.as_array()?.as_slice() {
+    let [a, b] = match fields.get("m_endParams")?.as_array()? {
         [a, b] => [a.as_f64()?, b.as_f64()?],
         _ => return None,
     };
@@ -163,13 +167,13 @@ fn line_ends(fields: &Value) -> Option<([f64; 2], [f64; 2])> {
 /// a step names its elements in a shape that is not read, so that no step is
 /// left out unseen.
 fn named_by_steps<'a>(
-    steps: impl Iterator<Item = (&'a str, &'a Value)>,
+    steps: impl Iterator<Item = (&'a str, &'a Fv)>,
 ) -> Option<(BTreeSet<u64>, BTreeSet<u64>)> {
     let mut joined = BTreeSet::new();
     let mut paired = BTreeSet::new();
     for (class, fields) in steps {
-        let (references, named): (Vec<&Value>, &mut BTreeSet<u64>) = match class {
-            "JoinToRoofGStep" if fields.get("m_baseOrTop").and_then(Value::as_i64) == Some(1) => (
+        let (references, named): (Vec<&Fv>, &mut BTreeSet<u64>) = match class {
+            "JoinToRoofGStep" if fields.get("m_baseOrTop").and_then(Fv::as_i64) == Some(1) => (
                 fields.get("m_ids")?.as_array()?.iter().collect(),
                 &mut joined,
             ),
@@ -191,13 +195,11 @@ fn named_by_steps<'a>(
 /// its record; a null reference (an id of 0 or less) names nothing. `None`
 /// where a base join names its elements in a shape that is not read.
 fn base_joined_by_steps<'a>(
-    steps: impl Iterator<Item = (&'a str, &'a Value)>,
+    steps: impl Iterator<Item = (&'a str, &'a Fv)>,
 ) -> Option<BTreeSet<u64>> {
     let mut named = BTreeSet::new();
     for (class, fields) in steps {
-        if class != "JoinToRoofGStep"
-            || fields.get("m_baseOrTop").and_then(Value::as_i64) != Some(0)
-        {
+        if class != "JoinToRoofGStep" || fields.get("m_baseOrTop").and_then(Fv::as_i64) != Some(0) {
             continue;
         }
         for reference in fields.get("m_ids")?.as_array()? {
@@ -211,10 +213,10 @@ fn base_joined_by_steps<'a>(
 }
 
 /// The members of one control join, as (member, end it joins by) pairs.
-fn join_members(control: &Value) -> Vec<(u64, u32)> {
+fn join_members(control: &Fv) -> Vec<(u64, u32)> {
     control
         .pointer("/m_JoinInfo/m_info")
-        .and_then(Value::as_array)
+        .and_then(Fv::as_array)
         .into_iter()
         .flatten()
         .filter_map(|member| {
@@ -226,7 +228,7 @@ fn join_members(control: &Value) -> Vec<(u64, u32)> {
 }
 
 /// The control joins listing `wall`'s `end`.
-fn end_controls(wall: u64, controls: &[Value], end: u32) -> Vec<&Value> {
+fn end_controls(wall: u64, controls: &[Fv], end: u32) -> Vec<&Fv> {
     controls
         .iter()
         .filter(|control| join_members(control).contains(&(wall, end)))
@@ -234,7 +236,7 @@ fn end_controls(wall: u64, controls: &[Value], end: u32) -> Vec<&Value> {
 }
 
 /// The join listing `wall`'s `end`, as (member, end it joins by) pairs.
-fn end_join(wall: u64, controls: &[Value], end: u32) -> Option<Vec<(u64, u32)>> {
+fn end_join(wall: u64, controls: &[Fv], end: u32) -> Option<Vec<(u64, u32)>> {
     match end_controls(wall, controls, end).as_slice() {
         [] => Some(Vec::new()),
         [control] => Some(join_members(control)),
@@ -243,7 +245,7 @@ fn end_join(wall: u64, controls: &[Value], end: u32) -> Option<Vec<(u64, u32)>> 
 }
 
 /// The `m_wallJoinType` of the one join listing `wall`'s `end` (RE-322).
-fn end_join_type(wall: u64, controls: &[Value], end: u32) -> Option<i64> {
+fn end_join_type(wall: u64, controls: &[Fv], end: u32) -> Option<i64> {
     match end_controls(wall, controls, end).as_slice() {
         [control] => control.pointer("/m_JoinInfo/m_wallJoinType")?.as_i64(),
         _ => None,
@@ -411,7 +413,7 @@ pub struct EndJoins {
 /// The index of the object `VWallDriver.m_pCrv` of the record names, where it
 /// is one `GLine`: a wall with an edited elevation profile holds more than one
 /// curve, and the pointer says which is its location curve (#1410).
-fn location_curve_index(graph: &crate::native_parameters::ObjectGraph) -> Option<usize> {
+pub(crate) fn location_curve_index(graph: &crate::native_parameters::ObjectGraph) -> Option<usize> {
     let token = graph
         .objects
         .iter()
@@ -463,7 +465,7 @@ fn is_previous_location_line(graph: &crate::native_parameters::ObjectGraph, inde
                         && source
                             .fields
                             .pointer("/m_prevLocLine/offset")
-                            .and_then(Value::as_u64)
+                            .and_then(Fv::as_u64)
                             == u64::try_from(edge.pointer_offset).ok()
                 })
         })
@@ -520,7 +522,7 @@ fn real_joined(graph: &crate::native_parameters::ObjectGraph, id: u64) -> [Optio
         let Some(slot) = step
             .fields
             .get("m_end")
-            .and_then(Value::as_u64)
+            .and_then(Fv::as_u64)
             .and_then(|end| usize::try_from(end).ok())
             .filter(|end| *end < 2)
         else {
@@ -530,7 +532,7 @@ fn real_joined(graph: &crate::native_parameters::ObjectGraph, id: u64) -> [Optio
         let listed: Option<Vec<u64>> = step
             .fields
             .get("m_realJoined")
-            .and_then(Value::as_array)
+            .and_then(Fv::as_array)
             .and_then(|items| {
                 items
                     .iter()
@@ -562,7 +564,7 @@ fn real_joined(graph: &crate::native_parameters::ObjectGraph, id: u64) -> [Optio
 fn is_top_joined(graph: &crate::native_parameters::ObjectGraph) -> bool {
     graph.objects.iter().any(|object| {
         object.class_name == "JoinToRoofGStep"
-            && object.fields.get("m_baseOrTop").and_then(Value::as_i64) == Some(1)
+            && object.fields.get("m_baseOrTop").and_then(Fv::as_i64) == Some(1)
     })
 }
 
@@ -611,7 +613,7 @@ pub fn wall_facts(graph: &crate::native_parameters::ObjectGraph) -> WallFacts {
 pub fn wall_load_bearing(graph: &crate::native_parameters::ObjectGraph) -> Option<bool> {
     let root = &graph.objects.first()?.fields;
     let integer = |name: &str| match root.get(name)? {
-        Value::Bool(flag) => Some(i64::from(*flag)),
+        Fv::Bool(flag) => Some(i64::from(*flag)),
         other => other.as_i64(),
     };
     Some(integer("m_isStructuralSignificant")? == 1 && integer("m_wallStructuralUsage")? == 1)
@@ -624,6 +626,25 @@ fn wall_read_fields(class: &str) -> Option<&'static [&'static str]> {
         "SWall" | "ArcWall" => Some(WALL_READ_FIELDS),
         _ => None,
     }
+}
+
+thread_local! {
+    static WALL_READ_PASSES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    static WALL_FACTS_ONLY: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// The passes over the file [`WallReads`] has made on this thread since it
+/// started: a probe sets it beside an export to see whether a reader found its
+/// walls' facts already read (#1824).
+pub fn wall_read_passes() -> u64 {
+    WALL_READ_PASSES.with(std::cell::Cell::get)
+}
+
+/// The walls [`native_walls_and_top_joins_into`] has read on this thread for
+/// their facts alone (its `facts_only`), counting those whose record it read
+/// (#1824).
+pub fn wall_facts_only_reads() -> u64 {
+    WALL_FACTS_ONLY.with(std::cell::Cell::get)
 }
 
 /// What reads of walls' native records have found, kept so that the reader
@@ -696,6 +717,7 @@ impl WallReads {
         if selected.is_empty() {
             return Ok(());
         }
+        WALL_READ_PASSES.with(|passes| passes.set(passes.get() + 1));
         let options = Options {
             selected_ids: selected,
             releases: crate::native_document::NATIVE_RELEASES,
@@ -828,15 +850,24 @@ pub fn native_walls_and_top_joins(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
 ) -> anyhow::Result<WallRecords> {
-    native_walls_and_top_joins_into(rf, walls, &mut WallReads::default())
+    native_walls_and_top_joins_into(rf, walls, &BTreeSet::new(), &mut WallReads::default())
 }
 
 /// [`native_walls_and_top_joins`], leaving in `reads` what the same records
 /// give a reader of the walls' types: each of `walls`' type ids, and the
-/// Function of each `BasicWallType` record the read takes besides (#1237).
+/// Function of each `BasicWallType` record the read takes besides (#1237);
+/// and what they give [`WallReads::top_joins`] and [`WallReads::load_bearing`]
+/// (#1824).
+///
+/// The walls of `facts_only` are read in the same pass for those facts alone,
+/// their type id, top join and load bearing, and are not in the records
+/// returned: the readers that follow ask them of every wall, and a wall the
+/// caller draws no body for would otherwise cost them a pass of their own
+/// (#1824). One whose record is not read is left to them.
 pub fn native_walls_and_top_joins_into(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
+    facts_only: &BTreeSet<u64>,
     reads: &mut WallReads,
 ) -> anyhow::Result<WallRecords> {
     if walls.is_empty() {
@@ -854,8 +885,11 @@ pub fn native_walls_and_top_joins_into(
     let mut whole: BTreeSet<u64> = BTreeSet::new();
     let mut bounded: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut end_joins: BTreeMap<u64, EndJoins> = BTreeMap::new();
+    let facts_only: BTreeSet<u64> = facts_only.difference(walls).copied().collect();
+    let mut facts_top_joined: BTreeMap<u64, bool> = BTreeMap::new();
+    let mut facts_bearing: BTreeMap<u64, bool> = BTreeMap::new();
     let options = Options {
-        selected_ids: walls.clone(),
+        selected_ids: walls.union(&facts_only).copied().collect(),
         selected_classes: BTreeSet::from(["BasicWallType".to_string()]),
         releases: crate::native_document::NATIVE_RELEASES,
         value_source: Some("native_wall"),
@@ -867,7 +901,7 @@ pub fn native_walls_and_top_joins_into(
     extract_graphs(rf, &options, |record| {
         if let Some(graph) = record.graph.as_ref() {
             let id = record.identity.element_id;
-            if walls.contains(&id) {
+            if walls.contains(&id) || facts_only.contains(&id) {
                 if let Some(type_id) = wall_type_id(graph) {
                     type_ids.insert(id, type_id);
                 }
@@ -893,7 +927,17 @@ pub fn native_walls_and_top_joins_into(
             }
             return Ok(());
         }
-        if !matches!(class, "SWall" | "ArcWall") || !walls.contains(&id) {
+        if !matches!(class, "SWall" | "ArcWall") {
+            return Ok(());
+        }
+        if facts_only.contains(&id) {
+            facts_top_joined.insert(id, is_top_joined(graph));
+            if let Some(load_bearing) = wall_load_bearing(graph) {
+                facts_bearing.insert(id, load_bearing);
+            }
+            return Ok(());
+        }
+        if !walls.contains(&id) {
             return Ok(());
         }
         top_joined.insert(id, is_top_joined(graph));
@@ -975,18 +1019,18 @@ pub fn native_walls_and_top_joins_into(
             }
         }
         let read = record_line(graph).map(|(start, end)| {
-            let controls: Vec<Value> = graph
+            let controls: Vec<Fv> = graph
                 .objects
                 .iter()
                 .find(|object| object.class_name == "VWallDriver")
                 .and_then(|driver| driver.fields.get("m_controlJoinsSet"))
-                .and_then(Value::as_array)
-                .cloned()
+                .and_then(Fv::as_array)
+                .map(|items| items.to_vec())
                 .unwrap_or_default();
             let root = graph.objects.first().map(|object| &object.fields);
             let length = (end[0] - start[0]).hypot(end[1] - start[1]);
             let direction = [(end[0] - start[0]) / length, (end[1] - start[1]) / length];
-            let planes: Vec<&Value> = graph
+            let planes: Vec<&Fv> = graph
                 .objects
                 .iter()
                 .filter(|object| object.class_name == "Plane")
@@ -1002,7 +1046,7 @@ pub fn native_walls_and_top_joins_into(
             {
                 let Some(slot) = step
                     .get("m_end")
-                    .and_then(Value::as_u64)
+                    .and_then(Fv::as_u64)
                     .and_then(|end| usize::try_from(end).ok())
                     .filter(|end| *end < 2)
                 else {
@@ -1011,7 +1055,7 @@ pub fn native_walls_and_top_joins_into(
                 if !std::mem::replace(&mut stepped[slot], true) {
                     exposed[slot] = step
                         .get("m_exposedFaceMap")
-                        .and_then(Value::as_array)
+                        .and_then(Fv::as_array)
                         .into_iter()
                         .flatten()
                         .filter_map(|face| element_id(face.pointer("/second/m_elemId")?))
@@ -1025,7 +1069,7 @@ pub fn native_walls_and_top_joins_into(
                 .flat_map(|join| {
                     join.fields
                         .get("m_info")
-                        .and_then(Value::as_array)
+                        .and_then(Fv::as_array)
                         .into_iter()
                         .flatten()
                 })
@@ -1108,6 +1152,23 @@ pub fn native_walls_and_top_joins_into(
     reads.functions_read.extend(functions_read);
     reads.bearing.extend(bearing);
     reads.bearing_read.extend(walls.iter().copied());
+    // The top joins too: on Revit 2015 to 2023, `read_wall_records` and
+    // `attach_wall_top_joins` ask for them next, and would otherwise read every
+    // wall's record again for this one member (#1824). Only the walls it found
+    // one for count as read: a wall whose whole graph did not decode (over the
+    // value budget, say) is left to the projected read, which builds far less.
+    reads.top_joined.extend(&top_joined);
+    reads.top_joins_read.extend(top_joined.keys().copied());
+    // A wall read for its facts alone counts as read for them only where its
+    // record was read, so one it did not decode is still read by the reader
+    // that asks.
+    let facts_read: Vec<u64> = facts_top_joined.keys().copied().collect();
+    WALL_FACTS_ONLY.with(|count| count.set(count.get() + facts_read.len() as u64));
+    reads.type_ids_read.extend(&facts_read);
+    reads.bearing.extend(facts_bearing);
+    reads.bearing_read.extend(&facts_read);
+    reads.top_joined.extend(facts_top_joined);
+    reads.top_joins_read.extend(facts_read);
     let walls = found
         .into_iter()
         .map(|(id, (mut wall, type_id))| {

@@ -1,7 +1,7 @@
 //! `{{class_name}}` — {{struct_description}}
 //!
 //! TODO: document field shape from real fixture. Run
-//! `cargo run --release --bin rvt-schema -- _corpus/<file>.rfa | grep -A 20 "class {{class_name}}"`
+//! `cargo run --release --bin rvt-schema -- _corpus/<file>.rfa --grep {{class_name}}`
 //! and record the fields below once the class is confirmed in the
 //! schema dump.
 //!

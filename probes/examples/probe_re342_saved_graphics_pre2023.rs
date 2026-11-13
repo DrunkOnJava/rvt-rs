@@ -71,13 +71,13 @@
 use anyhow::{Result, bail};
 use rvt::RevitFile;
 use rvt::control::WalkerControl;
+use rvt::research::graph_value::Fv;
 use rvt::research::native_document::{self, NATIVE_RELEASES, Options, extract_graphs};
 use rvt::research::native_index;
 use rvt::research::native_parameters::{self, GraphObject, ObjectGraph};
 use rvt::research::native_saved_mesh::{normals_follow_winding, pointer};
 use rvt::research::native_saved_scene::extract_in_batches_with_control;
 use rvt::research::schema_registry::{self, Class, Field, Registry};
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 /// The element classes a project's scene is meshed for: the ones that hold
@@ -226,7 +226,7 @@ fn history(rf: &mut RevitFile, registry: &Registry, tally: &mut Tally) {
             Ok(root) => {
                 let pointers = root.fields["m_episodeList"]["m_oEpisodes"]
                     .as_array()
-                    .map(Vec::len);
+                    .map(<[Fv]>::len);
                 match pointers {
                     Some(n) => tally.add(format!("history deferred episode pointers {n}"), 1),
                     None => tally.add("history deferred episode pointers absent", 1),
@@ -264,7 +264,7 @@ fn history(rf: &mut RevitFile, registry: &Registry, tally: &mut Tally) {
     }
 }
 
-fn numbers<const N: usize>(value: &Value) -> Option<[f64; N]> {
+fn numbers<const N: usize>(value: &Fv) -> Option<[f64; N]> {
     let items = value.as_array().filter(|a| a.len() == N)?;
     let mut out = [0.0; N];
     for (slot, item) in out.iter_mut().zip(items) {
@@ -273,7 +273,7 @@ fn numbers<const N: usize>(value: &Value) -> Option<[f64; N]> {
     Some(out)
 }
 
-fn rows<const N: usize>(value: &Value) -> Vec<[f64; N]> {
+fn rows<const N: usize>(value: &Fv) -> Vec<[f64; N]> {
     value
         .as_array()
         .map(|a| a.iter().filter_map(numbers::<N>).collect())
@@ -283,14 +283,14 @@ fn rows<const N: usize>(value: &Value) -> Vec<[f64; N]> {
 /// The rows of `value` as the reader takes them (`point` in
 /// `native_saved_mesh`): every one an array of `N` finite numbers, or `None`,
 /// where `rows` drops the malformed ones.
-fn strict_rows<const N: usize>(value: &Value) -> Option<Vec<[f64; N]>> {
+fn strict_rows<const N: usize>(value: &Fv) -> Option<Vec<[f64; N]>> {
     value.as_array()?.iter().map(numbers::<N>).collect()
 }
 
 /// The facets of `value` as the reader takes them: every one an array of three
 /// unsigned integers that fit 32 bits and index one of `points` points, or
 /// `None`, where `facets` drops the malformed ones and saturates the indices.
-fn strict_facets(value: &Value, points: usize) -> Option<Vec<[u32; 3]>> {
+fn strict_facets(value: &Fv, points: usize) -> Option<Vec<[u32; 3]>> {
     value
         .as_array()?
         .iter()
@@ -308,7 +308,7 @@ fn strict_facets(value: &Value, points: usize) -> Option<Vec<[u32; 3]>> {
         .collect()
 }
 
-fn facets(value: &Value) -> Vec<[usize; 3]> {
+fn facets(value: &Fv) -> Vec<[usize; 3]> {
     value
         .as_array()
         .map(|a| {
@@ -436,7 +436,7 @@ fn topology(object: &GraphObject, imposter: bool, tally: &mut Tally) {
     );
 }
 
-fn grep_id(fields: &Value) -> &'static str {
+fn grep_id(fields: &Fv) -> &'static str {
     match fields.get("m_GRepId") {
         None => "absent",
         Some(v) => match v.as_u64() {
@@ -448,7 +448,7 @@ fn grep_id(fields: &Value) -> &'static str {
 }
 
 /// The class of an `InstanceInfo.m_Trf`: how its 3x3 rows relate.
-fn matrix_class(value: &Value) -> &'static str {
+fn matrix_class(value: &Fv) -> &'static str {
     let Some(rows) = value["m_3x3"].as_array().filter(|r| r.len() == 3) else {
         return "unreadable";
     };

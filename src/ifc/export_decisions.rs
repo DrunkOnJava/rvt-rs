@@ -39,8 +39,8 @@
 //!   frame in scan order, partition number and then offset, with no test of
 //!   vertical extent. The frame the provenance table names for an exported
 //!   element ([`super::element_provenance`], `select_instance_records`) is
-//!   the one with the greatest extent, so the two can name different frames
-//!   of the same element.
+//!   the newest and, within one partition, the one with the greatest extent,
+//!   so the two can name different frames of the same element.
 //! - `element_record_frame_stopped` is made on Revit 2008 to 2023 files, from the
 //!   frames of their marker scan that did not become an element: its `class` is
 //!   the stage the frame stopped at (`frame_outside_stream`,

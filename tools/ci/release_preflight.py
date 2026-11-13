@@ -13,8 +13,10 @@ Usage:
   release_preflight.py check --event push|workflow_dispatch --ref-type tag|branch
                        --ref-name NAME --sha SHA [--repo OWNER/NAME] [--git-dir DIR]
       The tag, its signature, its commit's branch and the version files, read
-      from SHA's tree. With workflow_dispatch there is no tag: the tag checks
-      say so and pass, and the version files must still agree with each other.
+      from SHA's tree. A push, or a manual run on a tag, is a release of that
+      tag and gets all of it. A manual run on a branch has no tag: the tag
+      checks say so and pass, and the version files must still agree with each
+      other.
       Prints every problem, writes version=X.Y.Z to $GITHUB_OUTPUT, exits 1 on
       any problem. Waiting for CI is the wait-for-check action's job.
   release_preflight.py crate-state CRATE VERSION
@@ -59,7 +61,9 @@ FILES = tuple(path for path, *_ in MANIFESTS) + tuple(LOCKS) + (
 )
 
 TRANSIENT_VERIFICATION = ("gpgverify_unavailable", "gpgverify_error", "ocsp_pending")
-RELEASE_BRANCH = re.compile(r"origin/(main|hotfix/[^/].*)", re.ASCII)
+# CITATION.cff's top-level `version:` line, in the forms YAML allows (quoted, a trailing comment); group 1 is the
+# version. tools/release/bump_version.py rewrites with this pattern, so it cannot read less than this check does.
+CITATION_VERSION = re.compile(r"^version:[ \t]*\"?([^\"\s#]+)\"?[ \t]*(?:#.*)?$", re.M)
 
 
 def tag_version(ref):
@@ -146,7 +150,7 @@ def _citation(files, found, problems):
     if not isinstance(text, str):
         problems.append(f"{path} could not be read")
         return
-    versions = re.findall(r"^version:[ \t]*\"?([^\"\s#]+)\"?[ \t]*(?:#.*)?$", text, re.M)
+    versions = CITATION_VERSION.findall(text)
     if len(versions) == 1:
         found[f"{path} version"] = versions[0]
     else:
@@ -241,12 +245,29 @@ def tag_problems(ref_json, tag_json, name, commit):
     return problems
 
 
-def branch_problems(containing):
+def release_branches(version):
+    """The branches a release of `version` may be cut from: main, or the hotfix branch named for that version
+    (RELEASE.md, "Hotfix process"). Another hotfix branch holding the commit does not make it a release of this one."""
+    return ("origin/main", f"origin/hotfix/v{version}")
+
+
+def branch_problems(containing, version):
     if "origin/main" not in containing:
         return ["origin/main is not in the checkout, so the fetch was incomplete (the job needs fetch-depth: 0)"]
-    if any(RELEASE_BRANCH.fullmatch(ref) and contained is True for ref, contained in containing.items()):
+    allowed = release_branches(version)
+    if any(ref in allowed and contained is True for ref, contained in containing.items()):
         return []
-    return ["the tagged commit is on neither origin/main nor an origin/hotfix/* branch"]
+    return [f"the tagged commit is on neither origin/main nor origin/hotfix/v{version}"]
+
+
+def run_plan(event, ref_type, ref_name):
+    """(whether the tag checks apply, the problems with the kind of run). A tag decides it, not the event: a push
+    always releases a tag and says so when it is another ref, and a manual run on a tag (gh workflow run publish.yml
+    --ref v0.20.0) is checked as the release of that tag, not passed for having no tag."""
+    problems = []
+    if event == "push" and ref_type != "tag":
+        problems.append(f"publish.yml releases tags; this run is for the {ref_type} {ref_name}")
+    return event == "push" or ref_type == "tag", problems
 
 
 def crate_state(status, body, crate, version):
@@ -338,9 +359,9 @@ def check(args):
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     problems, notes = [], []
     expected = None
-    if args.event == "push":
-        if args.ref_type != "tag":
-            problems.append(f"publish.yml releases tags; this run is for the {args.ref_type} {args.ref_name}")
+    tag_checks, kind_problems = run_plan(args.event, args.ref_type, args.ref_name)
+    problems += kind_problems
+    if tag_checks:
         expected = tag_version(args.ref_name)
         if expected is None:
             problems.append(f"{args.ref_name!r} is not a release tag name (vMAJOR.MINOR.PATCH, with an optional -prerelease)")
@@ -351,9 +372,9 @@ def check(args):
                 problems.append(f"could not read the tag from GitHub ({error})")
             else:
                 problems += tag_problems(ref_json, tag_json, args.ref_name, args.sha)
-            problems += branch_problems(containing_branches(args.git_dir, args.sha))
+            problems += branch_problems(containing_branches(args.git_dir, args.sha), expected)
     else:
-        notes.append(f"{args.event} has no tag, so the tag name, signature, branch and CI checks do not apply")
+        notes.append(f"{args.event} on a {args.ref_type} has no tag, so the tag name, signature, branch and CI checks do not apply")
     files = {path: read_blob(args.git_dir, args.sha, path) for path in FILES}
     version, version_problems = check_versions(files, expected)
     problems += version_problems
