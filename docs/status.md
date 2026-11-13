@@ -1270,7 +1270,7 @@ Revit 2018 project, with the 73 rooms of each (an unfiltered Measure of 146
 exports: the project, building and site of 50 models, and the storeys of 11 files,
 become Revit's, and the diagnostics of all 121 are equal). It moves the
 GlobalId of every project, building, site and storey it applies to, so it ships
-with the next GlobalId change and not alone
+in the release after 0.22.0, with any other GlobalId change
 (`reports/element-framing/RE-459-episode-global-ids-2015-2023.md`).
 
 **RE-458 (2026-11-13)** reads a roof by extrusion on Revit 2024, 2026 and 2027

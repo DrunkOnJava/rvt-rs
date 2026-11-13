@@ -30,15 +30,26 @@
 //! `modelo_bim` (RE-108). On the 28-byte tables of earlier releases it is
 //! Revit's on 434 of 435 elements of Autodesk's 2018 sample and on three
 //! held-out files of Revit 2020 and 2021 (145 of 151, 181 of 181 and 1,696
-//! of 1,698, counts only), and it gives none on two Revit 2018 projects (0 of
-//! 1,314 and 0 of 1,441) and on BIMcollab's Revit 2015 example (0 of 241,
-//! RE-208), whose ids are not episodes (RE-459). The storeys, project, site
-//! and building of a file made before 2023 are not Revit's unless the file
-//! stores them (RE-220). Revit also exports parts it synthesises (stair components, a
-//! ramp's flight), with GlobalIds of its own making. rvt-rs does not write
-//! those parts. The ElementId XORed in is the
-//! element's first one: an element whose id has since changed (RE-41) keeps
+//! of 1,698, counts only). On the two Revit 2018 Vitoria projects it gives
+//! 1,297 of 1,314 and 1,420 of 1,441 elements once the history's entries closed
+//! by `0x1e` are read (RE-459), and it gives none on BIMcollab's Revit 2015
+//! example (0 of 241, RE-208), whose ids the file stores. Revit also exports
+//! parts it synthesises (stair components, a ramp's flight), with GlobalIds of
+//! its own making. rvt-rs does not write those parts. The ElementId XORed in is
+//! the element's first one: an element whose id has since changed (RE-41) keeps
 //! the id it was created with in its UniqueId.
+//!
+//! The project, the building, the site and the storeys have their own sources
+//! (RE-220, RE-459). A file that stores them gives them as stored. Otherwise, from
+//! Revit 2017 to 2027, the project's own GUID, which the header of
+//! `Global/History` holds four times ([`project_guid`]), with the fake ElementId
+//! -16, -15 or -14 XORed into its last 32 bits, is Revit's IfcProject,
+//! IfcBuilding and one IfcSite (63 of the 64 files with a Revit export of their
+//! own project), and on 2017 to 2022 a storey is that GUID with its Level's
+//! ElementId (69 of 69 storeys on 11 files). From Revit 2023 a storey is its
+//! Level's own episode's. Revit 2015 and 2016 have no file to measure any of it
+//! on, and a Revit 2028 file is not measured either: those keep the ids the
+//! writer derives.
 
 use crate::le_bytes;
 use crate::{Result, RevitFile, compression, elem_table, streams};
@@ -69,13 +80,18 @@ pub const PROJECT_GUID_OFFSETS: [usize; 4] = [0x16, 0x26, 0x36, 0x56];
 /// The releases whose project, building and site GlobalIds were measured to be the
 /// project's GUID with a fake id XORed in: 63 of the 64 files of 2017 to 2027 that
 /// have a Revit export of their own project (RE-459). Revit 2015 and 2016 have no
-/// file to measure it on.
-pub const PROJECT_GUID_RELEASES: std::ops::RangeFrom<u32> = 2017..;
+/// file to measure it on, and Revit 2028 is not measured.
+pub const PROJECT_GUID_RELEASES: std::ops::RangeInclusive<u32> = 2017..=2027;
 /// The releases whose storeys were measured to be the project's GUID with the
 /// Level's ElementId XORed in: 69 of 69 storeys on 11 of the 12 files of 2017 to 2022
 /// with a Revit export of their own project. From 2023 they are 0 of 229 and each
 /// Level's own episode's GUID is Revit's (RE-459).
 pub const PROJECT_GUID_STOREY_RELEASES: std::ops::RangeInclusive<u32> = 2017..=2022;
+/// The releases whose storeys were measured to be the GUID of the Level's own episode
+/// with its ElementId XORed in (RE-108, RE-459: Core Interior 15 of 15, the Revit 2025
+/// models, the BIM4LCA office and the held-out files of 2023 to 2027). On 2015 to 2022
+/// they are not (RE-220, RE-459), so there that id is not written.
+pub const STOREY_EPISODE_RELEASES: std::ops::RangeInclusive<u32> = 2023..=2027;
 /// The ElementId Revit's exporter XORs into the project's GUID for the IfcProject's
 /// GlobalId, the IfcBuilding's and the IfcSite's: the fake ids of revit-ifc's
 /// `GUIDUtil.ProjectLevelGUIDType` (RE-220, RE-459).

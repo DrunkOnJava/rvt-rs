@@ -2771,7 +2771,8 @@ fn revit_model_global_ids(
     let ids = crate::revit_global_ids::revit_global_ids(rf).unwrap_or_default();
     let revit_version = revit_year;
     // RE-459: the storeys of a file of 2017 to 2022 are the project's GUID with
-    // the Level's ElementId XORed in, and from 2023 each Level's own episode's.
+    // the Level's ElementId XORed in, and of 2023 to 2027 each Level's own
+    // episode's; before that, or after, none is written and the writer derives it.
     let from_project = project_guid
         .filter(|_| crate::revit_global_ids::PROJECT_GUID_STOREY_RELEASES.contains(&revit_year));
     for (index, storey) in storeys.iter().enumerate() {
@@ -2786,7 +2787,11 @@ fn revit_model_global_ids(
                         crate::revit_global_ids::revit_ifc_global_id(guid, level.element_id)
                     })
                 })
-                .or_else(|| ids.get(&level.element_id).cloned());
+                .or_else(|| {
+                    ids.get(&level.element_id).cloned().filter(|_| {
+                        crate::revit_global_ids::STOREY_EPISODE_RELEASES.contains(&revit_year)
+                    })
+                });
             if let Some(global_id) = global_id {
                 out.storeys.insert(index, global_id);
             }

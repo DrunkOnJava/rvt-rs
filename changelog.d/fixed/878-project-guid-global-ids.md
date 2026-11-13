@@ -30,7 +30,7 @@
   and 1,420 of 1,441 on the held-out Revit 2018 project, with the 73 rooms
   of each.
   Every project, building, site and storey GlobalId of a file the rule
-  applies to changes once, with the next GlobalId change: 50 of the 146
+  applies to changes once, in the release after 0.22.0: 50 of the 146
   exports of an unfiltered Measure get Revit's project, building and site
   where they had none, and 11 files get their storeys, with the diagnostics
   of all 121 equal and, on 22 exports kept from both builds, no line changed
