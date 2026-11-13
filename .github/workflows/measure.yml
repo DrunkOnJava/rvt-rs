@@ -1097,6 +1097,9 @@ jobs:
           # its 2022 save (main writes none on 2021) whenever both are, and says
           # so when not.
           AREAS_ACROSS_SAVES: ${{ matrix.side != 'base' && matrix.samples && '1' || '' }}
+          # The exports the two gates score, hard-linked here before the script
+          # deletes them, for the `gates` job (#1881).
+          GATE_DIR: ${{ matrix.side != 'base' && matrix.samples && format('{0}/gate-ifc', github.workspace) || '' }}
           RVT_SCORER_FINE_MESH: ${{ inputs.fine_mesh && '1' || '' }}
           FAMILY_DIR: ${{ matrix.families && format('{0}/_corpus/examples/Autodesk', github.workspace) || '' }}
           SAMPLE_DIR: ${{ matrix.samples && format('{0}/_samples', github.workspace) || '' }}
@@ -1184,6 +1187,108 @@ jobs:
           overwrite: true
           # Compare re-uploads them merged as measure-head and measure-base.
           retention-days: 7
+      # The exports the same-project gates score, for the job that scores them
+      # again from nothing else (#1881). Autodesk's public samples only.
+      - name: Keep the exports the same-project gates score
+        if: ${{ !cancelled() && matrix.side != 'base' && matrix.samples }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: gate-ifc-${{ matrix.shard }}
+          path: gate-ifc
+          if-no-files-found: ignore
+          overwrite: true
+          retention-days: 1
+
+  # The same-project gates, scored by a job that runs no measured code (#1881).
+  # The measure shards run the measured ref's binary and then scored the two
+  # gates in the same job, so a binary that wrote bodies_across_saves.txt could
+  # pass the gate it was held to. Here the gates run again over the exports the
+  # head side's samples shards kept, with the script and scorers of the
+  # workflow's own ref, and the sample list from this run's own inputs: the
+  # only things taken from the measured job are the IFC files. `same-project-gates`
+  # reads these results and no others. A binary that writes IFCs the scorers
+  # accept is not caught here; the maintainers read a change to `src/` before it
+  # lands, and the gate holds what the exports say to the same project's earlier
+  # saves, not the binary that wrote them.
+  gates:
+    name: Score the same-project gates
+    needs: [plan, measure]
+    if: ${{ !cancelled() && needs.plan.result == 'success' && inputs.samples }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    steps:
+      - name: Workflow tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            tools/ci/
+            tools/re/
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install IfcOpenShell
+        run: python -m pip install --require-hashes -r tools/ci/requirements-ifc.txt
+      # One folder for all shards: a sample is exported by one shard only.
+      - id: dl_gate_ifc
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        continue-on-error: true
+        with:
+          pattern: gate-ifc-*
+          merge-multiple: true
+          path: gate-ifc
+      # A second attempt after a transient failure (#1742): the artifacts service can reset a request.
+      - name: Pause before the second attempt of Download gate-ifc-*
+        if: steps.dl_gate_ifc.outcome == 'failure'
+        run: sleep 20
+      - name: Download gate-ifc-* (second attempt)
+        if: steps.dl_gate_ifc.outcome == 'failure'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: gate-ifc-*
+          merge-multiple: true
+          path: gate-ifc
+      - name: Score the gates
+        shell: bash
+        env:
+          SAMPLE_YEARS: ${{ inputs.sample_years }}
+          MEASURE_SCORERS: ${{ inputs.scorers }}
+          RVT_IFC_FLAGS: ${{ inputs.ifc_flags }}
+          AREAS_ACROSS_SAVES: "1"
+          MEASURE_GATES_ONLY: "1"
+          SAMPLE_DIR: ${{ github.workspace }}/gate-samples
+        run: |
+          set -euo pipefail
+          read -ra range <<< "${SAMPLE_YEARS:-}"
+          low="${range[0]:-0}"
+          high="${range[1]:-9999}"
+          mkdir -p gate-ifc gate-samples
+          # The samples this run holds, from its own inputs: an empty
+          # <year>-<project>.rvt each, which the script reads the saves from, and
+          # a folder for each result. An export that is missing from gate-ifc
+          # leaves its folder empty and the scorer says so.
+          for year in 2021 2022 2024 2025 2026 2027; do
+            { [ "$year" -ge "$low" ] && [ "$year" -le "$high" ]; } || continue
+            for project in racadvanced racbasic rmeadvanced rmebasic rstbasic; do
+              case "$year-$project" in 2021-racadvanced | 2022-racadvanced) ;; 2021-* | 2022-*) continue ;; esac
+              : > "gate-samples/$year-${project}sampleproject.rvt"
+              mkdir -p "gate-ifc/sample-$year-${project}sampleproject"
+            done
+          done
+          tools/ci/measure-reference-models.sh none none gate-ifc
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ !cancelled() }}
+        with:
+          name: gate-results
+          path: |
+            gate-ifc/areas_across_saves*.txt
+            gate-ifc/sample-*/bodies_across_saves.txt
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 7
 
   # The same-project gates. No Revit export of a 2025, 2026 or 2027 sample's
   # beam, tread landing, stair run or sketch outline exists to score them
@@ -1192,10 +1297,11 @@ jobs:
   # held to the same project's earlier 2024 and 2025 saves
   # (tools/re/bodies_across_saves.py) and rac_advanced's Areas to its 2024
   # save's, its 2021 save's to its 2022 save's (#1434;
-  # tools/re/areas_across_saves.py). The measuring script runs
-  # both beside the samples and writes their files; this job reads the head
-  # side's shards and fails on a difference, a missing file or a check that did
-  # not run for want of one. It is a job of its own, with a step for each gate
+  # tools/re/areas_across_saves.py). The `gates` job scores both from the head
+  # side's exports (the measuring script runs them in the shards too, for the
+  # comparison with the base side, but those files are not read here); this job
+  # reads its results and fails on a difference, a missing file or a check that
+  # did not run for want of one. It is a job of its own, with a step for each gate
   # that runs whatever the other did, so that a failure turns the run red and
   # Compare, which does not need it, still reports (a failed step in a measure
   # shard would skip Compare). The base side is not gated: its files show what
@@ -1203,15 +1309,16 @@ jobs:
   # 2026 or 2027 sample, the `scorers` excluding it, a run without the earlier saves,
   # a run with `ifc_flags`) says so in a notice and in the run summary. Measure is not a required check:
   # the failure is read before landing, by the landing rule.
-  # A failed Build job of the head side leaves no head results to read: the two
-  # checks are then left out (they would fail on a missing directory, which
-  # says nothing) and the verdict, written all the same, reads NOT MEASURED. A
+  # A failed Build job of the head side leaves the `gates` job no exports to
+  # score: the two checks are then left out (they would fail on a missing
+  # directory, which says nothing) and the verdict, written all the same, reads
+  # NOT MEASURED. A
   # failed Build job of the base side leaves the head results, which are
   # checked as always; the verdict then reads NOT MEASURED, or fails if a
   # result does, since a measure shard ended red.
   same-project-gates:
     name: Same-project gates
-    needs: [plan, build, measure]
+    needs: [plan, build, measure, gates]
     # Also after a red shard: a difference the other shards found still has to reach
     # the verdict, which reads such a run as NOT MEASURED unless a result fails.
     if: ${{ !cancelled() && needs.plan.result == 'success' }}
@@ -1230,34 +1337,36 @@ jobs:
             tools/ci/check-areas-across-saves.sh
             tools/ci/same_project_verdict.py
           sparse-checkout-cone-mode: false
-      # One directory for each shard: two shards write an areas_across_saves.txt.
-      - id: dl_head_results
+      # The results of the `gates` job, which scored the gates from the head
+      # side's exports and not from what the measured job wrote (#1881).
+      - id: dl_gate_results
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         continue-on-error: true
         with:
-          pattern: measure-head-*
-          path: measure-head
+          name: gate-results
+          path: gate-results
       # A second attempt after a transient failure (#1742): the artifacts service can reset a request.
-      - name: Pause before the second attempt of Download measure-head-*
-        if: steps.dl_head_results.outcome == 'failure'
+      - name: Pause before the second attempt of Download gate-results
+        if: steps.dl_gate_results.outcome == 'failure' && needs.gates.result != 'skipped'
         run: sleep 20
-      - name: Download measure-head-* (second attempt)
-        if: steps.dl_head_results.outcome == 'failure'
+      - name: Download gate-results (second attempt)
+        if: steps.dl_gate_results.outcome == 'failure' && needs.gates.result != 'skipped'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
-          pattern: measure-head-*
-          path: measure-head
+          name: gate-results
+          path: gate-results
       - name: Head results
         id: results
         shell: bash
         env:
           BUILD_RESULT: ${{ needs.build.result }}
           MEASURE_RESULT: ${{ needs.measure.result }}
+          GATES_RESULT: ${{ needs.gates.result }}
         run: |
-          if [ -n "$(find measure-head -type f -print -quit 2>/dev/null)" ]; then
+          if [ -n "$(find gate-results -type f -print -quit 2>/dev/null)" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
-            msg="No head shard left a result (the Build jobs ended $BUILD_RESULT, the measure shards $MEASURE_RESULT): the same-project gates compared nothing, and their verdict reads NOT MEASURED."
+            msg="The gates job left no result (it ended $GATES_RESULT, the Build jobs ended $BUILD_RESULT, the measure shards $MEASURE_RESULT): the same-project gates compared nothing, and their verdict reads NOT MEASURED."
             echo "::warning::$msg"
             printf -- '- %s\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
             echo "present=false" >> "$GITHUB_OUTPUT"
@@ -1269,13 +1378,13 @@ jobs:
           SAMPLES: ${{ inputs.samples }}
           SAMPLE_YEARS: ${{ inputs.sample_years }}
           SCORERS: ${{ inputs.scorers }}
-        run: tools/ci/check-bodies-across-saves.sh measure-head
+        run: tools/ci/check-bodies-across-saves.sh gate-results
       - name: The Areas agree across rac_advanced's saves
         if: ${{ !cancelled() && steps.results.outputs.present == 'true' }}
         shell: bash
         env:
           SAMPLES: ${{ inputs.samples }}
-        run: tools/ci/check-areas-across-saves.sh measure-head
+        run: tools/ci/check-areas-across-saves.sh gate-results
       # What the two found, as a check run on the commit Measure measured, which
       # a landing reads across a pull request's commits: Griffin chose these gates
       # to block landing, and Measure is not a required check. Only a run a
@@ -1297,7 +1406,7 @@ jobs:
         run: |
           sha=$(gh api "repos/$REPO/commits/$MEASURED" --jq .sha)
           # The `=` forms: `--saved-meshes` is a value ifc_flags takes.
-          python3 tools/ci/same_project_verdict.py measure-head --flags="$IFC_FLAGS" --samples="$SAMPLES" \
+          python3 tools/ci/same_project_verdict.py gate-results --flags="$IFC_FLAGS" --samples="$SAMPLES" \
             --sample-years="$SAMPLE_YEARS" --scorers="$SCORERS" --measure-result="$MEASURE_RESULT" > verdict.json
           cat verdict.json
           jq --arg sha "$sha" --arg from "Scored by workflow commit $GITHUB_WORKFLOW_SHA, run $GITHUB_RUN_ID" \

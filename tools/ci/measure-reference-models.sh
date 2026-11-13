@@ -99,6 +99,13 @@
 # names the years missing, and the workflow prints a notice: nothing was
 # checked. A run with ifc_flags is skipped the same way, since the gate is about
 # the default export.
+# When GATE_DIR names a directory, each sample the two gates score keeps its
+# export there as GATE_DIR/sample-<file>/model.ifc (a hard link, so the copy
+# costs nothing and outlives the deletion above), for the job that scores the
+# gates again from nothing else (#1881). MEASURE_GATES_ONLY=1 is that job: it
+# runs the two gates over an OUT_DIR that holds those exports, with a SAMPLE_DIR
+# of empty <year>-<project>.rvt files that say which samples the run holds, and
+# exits; no model is exported or scored, and BIN_DIR and MODELS_DIR are not read.
 # SAMPLE_DIR does the same for Autodesk's sample projects (.rvt), adding the
 # export's diagnostics.json, rvt-ifc.log and ifc.sha256 (hashed as a model's
 # is) under OUT_DIR/sample-<file>/, and element_stage_counts.txt, the check
@@ -629,6 +636,16 @@ saves_gate_keeps() { # sample
   case "$(pair_key "$1")" in racadvanced | racbasic | rmeadvanced | rmebasic | rstbasic) return 0 ;; esac
   return 1
 }
+# Whether the two gates score a sample's export: the 2025 to 2027 saves and the
+# 2024 and 2025 saves they are held to (saves_gate_keeps), and rac_advanced's
+# saves from 2021, 2022 and 2024 to 2027 that the Areas gate holds to each other.
+gate_sample() { # sample
+  flagged_export && return 1
+  saves_gate_keeps "$1" && return 0
+  [ -n "${AREAS_ACROSS_SAVES:-}" ] && [ "$(pair_key "$1")" = racadvanced ] || return 1
+  case "$(basename "$1" | cut -c1-4)" in 2021 | 2022 | 2024 | 2025 | 2026 | 2027) return 0 ;; esac
+  return 1
+}
 measure_sample() { # sample
   local sample="$1" dir item_started copy
   item_started=$(date +%s%N)
@@ -656,6 +673,10 @@ measure_sample() { # sample
     grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
     # #1437: every space of the sample's export says what it is.
     wanted space_kinds_vs_ifc && score "$dir/space_kinds_vs_ifc.txt" "$SCORERS/space_kinds_vs_ifc.py" "$dir/model.ifc"
+  fi
+  # The gates job scores these again, from nothing else (#1881).
+  if [ -n "${GATE_DIR:-}" ] && [ -s "$dir/model.ifc" ] && gate_sample "$sample"; then
+    mkdir -p "$GATE_DIR/$(basename "$dir")" && ln -f "$dir/model.ifc" "$GATE_DIR/$(basename "$dir")/model.ifc"
   fi
   if [ -z "${KEEP_IFC:-}" ] && ! saves_gate_keeps "$sample"; then rm -f "$dir/model.ifc"; fi
   rm -f "$dir/validation.jsonl"
@@ -817,6 +838,19 @@ spawn() { # command...: run it once fewer than JOBS are running, and while
   done
   "$@" &
 }
+
+# The gates job (#1881): the two same-project gates over the exports a samples
+# shard kept in GATE_DIR, and nothing else, so that the verdict is scored by a
+# job that ran no measured code. OUT_DIR holds those exports (sample-<file>/
+# model.ifc) and receives the results; SAMPLE_DIR holds an empty <year>-<project>
+# .rvt for each sample the run holds, which the workflow writes from its own
+# inputs and not from anything the measured job left.
+if [ -n "${MEASURE_GATES_ONLY:-}" ]; then
+  [ -d "${SAMPLE_DIR:-}" ] || { echo "::error::MEASURE_GATES_ONLY needs SAMPLE_DIR" >&2; exit 2; }
+  [ -z "${AREAS_ACROSS_SAVES:-}" ] || areas_across_saves
+  bodies_across_saves
+  exit 0
+fi
 
 # The definitions are fetched once here, before the items read them at once.
 python -c 'import sys; sys.path.insert(0, sys.argv[1]); import ifc4_property_sets; ifc4_property_sets.definitions(sys.argv[2])' \
