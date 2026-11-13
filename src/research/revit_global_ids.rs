@@ -66,6 +66,16 @@ pub const RECORD_EPISODE_OFFSET_28: usize = 8;
 /// project keeps: three copies in a row from `0x16`, 16 zero bytes, and a fourth
 /// that ends where the count at [`EPISODE_TABLE_OFFSET`] begins (RE-459).
 pub const PROJECT_GUID_OFFSETS: [usize; 4] = [0x16, 0x26, 0x36, 0x56];
+/// The releases whose project, building and site GlobalIds were measured to be the
+/// project's GUID with a fake id XORed in: 63 of the 64 files of 2017 to 2027 that
+/// have a Revit export of their own project (RE-459). Revit 2015 and 2016 have no
+/// file to measure it on.
+pub const PROJECT_GUID_RELEASES: std::ops::RangeFrom<u32> = 2017..;
+/// The releases whose storeys were measured to be the project's GUID with the
+/// Level's ElementId XORed in: 69 of 69 storeys on 11 of the 12 files of 2017 to 2022
+/// with a Revit export of their own project. From 2023 they are 0 of 229 and each
+/// Level's own episode's GUID is Revit's (RE-459).
+pub const PROJECT_GUID_STOREY_RELEASES: std::ops::RangeInclusive<u32> = 2017..=2022;
 /// The ElementId Revit's exporter XORs into the project's GUID for the IfcProject's
 /// GlobalId, the IfcBuilding's and the IfcSite's: the fake ids of revit-ifc's
 /// `GUIDUtil.ProjectLevelGUIDType` (RE-220, RE-459).
