@@ -2582,6 +2582,7 @@ fn decide_ends(
     pending: &[PendingBase],
     joined: &[PendingEnds],
     shapes: &HashMap<u32, SlabTop>,
+    plates: &HashSet<u32>,
     refused: &mut BTreeMap<usize, &'static str>,
     unmarked: &mut BTreeMap<usize, &'static str>,
 ) -> Vec<WallEnds> {
@@ -2613,6 +2614,7 @@ fn decide_ends(
         entities,
         gathered: gather(entities),
         shapes,
+        plates,
     };
     let mut cutters: HashMap<u32, Option<Cutter>> = HashMap::new();
     let mut accepted = Vec::new();
@@ -2898,6 +2900,7 @@ pub(super) fn extend_wall_ends(
     pending: &[PendingBase],
     joined: &[PendingEnds],
     shapes: &HashMap<u32, SlabTop>,
+    plates: &HashSet<u32>,
     handoffs: &mut BTreeMap<usize, Vec<Property>>,
 ) -> HashMap<usize, SteppedPlan> {
     let mut stepped = HashMap::new();
@@ -2916,6 +2919,7 @@ pub(super) fn extend_wall_ends(
         pending,
         joined,
         shapes,
+        plates,
         &mut refused,
         &mut unmarked,
     );

@@ -1924,6 +1924,7 @@ pub fn append_typed_production_elements(
         &pending_bases,
         &pending_ends,
         &slab_shapes,
+        &plate_roofs,
         &mut out.record_handoffs,
     );
 
