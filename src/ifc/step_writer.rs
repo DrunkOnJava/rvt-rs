@@ -2199,6 +2199,14 @@ impl StepWriter<'_> {
     fn emit_data(&mut self, model: &IfcModel) {
         self.emit_line("DATA;");
         let document = model.global_ids.document.as_deref().unwrap_or("");
+        // The document's identity seeds only what has no owner entity: the
+        // project, site, building and storey fallbacks, classifications,
+        // materials, systems and types Revit gives no GlobalId. Its
+        // `Unique Document GUID` changes on every save, so a GlobalId seeded
+        // from it moved between two saves of one project (#1854). Anything
+        // that belongs to an entity is seeded from that entity's written
+        // GlobalId instead, with the same key: it holds wherever its owner's
+        // does, and two documents share it only where they share the owner's.
         let gid = |key: &[&str]| stable_guid(document, key);
 
         // Required framework entities (buildingSMART minimum viable).
@@ -2263,16 +2271,17 @@ impl StepWriter<'_> {
         // Root project.
         let project_name = escape(model.project_name.as_deref().unwrap_or("Untitled"));
         let project_desc = escape(model.description.as_deref().unwrap_or("Exported by rvt-rs"));
+        let project_gid = model
+            .global_ids
+            .project
+            .clone()
+            .unwrap_or_else(|| gid(&["project"]));
         let project_id = self.id();
         self.emit_entity(
             project_id,
             format!(
                 "IFCPROJECT('{}',#{owner_hist},'{}',{},$,$,$,(#{geom_ctx}),#{unit_assignment})",
-                model
-                    .global_ids
-                    .project
-                    .clone()
-                    .unwrap_or_else(|| gid(&["project"])),
+                project_gid,
                 project_name,
                 quoted_or_dollar(&project_desc),
             ),
@@ -2298,16 +2307,17 @@ impl StepWriter<'_> {
             site_placement,
             format!("IFCLOCALPLACEMENT($,#{axis_placement})"),
         );
+        let site_gid = model
+            .global_ids
+            .site
+            .clone()
+            .unwrap_or_else(|| gid(&["site"]));
         let site_id = self.id();
         self.emit_entity(
             site_id,
             format!(
                 "IFCSITE('{}',#{owner_hist},'Default Site',$,$,#{site_placement},$,'Default Site',.ELEMENT.,$,$,$,$,$)",
-                model
-                    .global_ids
-                    .site
-                    .clone()
-                    .unwrap_or_else(|| gid(&["site"])),
+                site_gid,
             ),
         );
 
@@ -2316,16 +2326,17 @@ impl StepWriter<'_> {
             building_placement,
             format!("IFCLOCALPLACEMENT(#{site_placement},#{axis_placement})"),
         );
+        let building_gid = model
+            .global_ids
+            .building
+            .clone()
+            .unwrap_or_else(|| gid(&["building"]));
         let building_id = self.id();
         self.emit_entity(
             building_id,
             format!(
                 "IFCBUILDING('{}',#{owner_hist},'Default Building',$,$,#{building_placement},$,'Default Building',.ELEMENT.,$,$,$)",
-                model
-                    .global_ids
-                    .building
-                    .clone()
-                    .unwrap_or_else(|| gid(&["building"])),
+                building_gid,
             ),
         );
 
@@ -2382,7 +2393,7 @@ impl StepWriter<'_> {
             rel_proj_site,
             format!(
                 "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{project_id},(#{site_id}))",
-                gid(&["aggregates", "project"]),
+                stable_guid(&project_gid, &["aggregates", "project"]),
             ),
         );
         let rel_site_building = self.id();
@@ -2390,7 +2401,7 @@ impl StepWriter<'_> {
             rel_site_building,
             format!(
                 "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{site_id},(#{building_id}))",
-                gid(&["aggregates", "site"]),
+                stable_guid(&site_gid, &["aggregates", "site"]),
             ),
         );
         // IfcRelAggregates needs at least one related object, so a
@@ -2406,7 +2417,7 @@ impl StepWriter<'_> {
                 rel_building_storey,
                 format!(
                     "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{building_id},({storey_refs}))",
-                    gid(&["aggregates", "building"]),
+                    stable_guid(&building_gid, &["aggregates", "building"]),
                 ),
             );
         }
@@ -2420,8 +2431,8 @@ impl StepWriter<'_> {
                     owner_hist,
                     storey_id,
                     set,
-                    &gid(&["property-set", &key]),
-                    &gid(&["defines-by-properties", &key]),
+                    &stable_guid(storey_gid, &["property-set", &key]),
+                    &stable_guid(storey_gid, &["defines-by-properties", &key]),
                 );
             }
         }
@@ -2438,8 +2449,8 @@ impl StepWriter<'_> {
                 owner_hist,
                 building_id,
                 &set,
-                &gid(&["property-set", &key]),
-                &gid(&["defines-by-properties", &key]),
+                &stable_guid(&building_gid, &["property-set", &key]),
+                &stable_guid(&building_gid, &["defines-by-properties", &key]),
             );
         }
 
@@ -3407,7 +3418,7 @@ impl StepWriter<'_> {
                             rel_id,
                             format!(
                                 "IFCRELASSOCIATESMATERIAL('{}',#{owner_hist},$,$,(#{el_id}),#{usage_id})",
-                                gid(&["material-association", global_id]),
+                                stable_guid(global_id, &["material-association", global_id]),
                             ),
                         );
                         true
@@ -3458,7 +3469,7 @@ impl StepWriter<'_> {
                             rel_id,
                             format!(
                                 "IFCRELASSOCIATESMATERIAL('{}',#{owner_hist},$,$,(#{el_id}),#{usage_id})",
-                                gid(&["material-association", global_id]),
+                                stable_guid(global_id, &["material-association", global_id]),
                             ),
                         );
                             true
@@ -3561,7 +3572,7 @@ impl StepWriter<'_> {
                         let opening_id = self.id();
                         // #400: an opening exists only because the element
                         // filling it does, so its identity is that element's.
-                        let opening_gid = gid(&["opening", global_id]);
+                        let opening_gid = stable_guid(global_id, &["opening", global_id]);
                         // IfcOpeningElement: (GlobalId, OwnerHist, Name,
                         //   Desc, ObjectType, Placement, Rep, Tag,
                         //   PredefinedType). IFC4 adds PredefinedType.
@@ -3601,8 +3612,8 @@ impl StepWriter<'_> {
                                 owner_hist,
                                 opening_id,
                                 &quantities,
-                                &gid(&["property-set", &set_key]),
-                                &gid(&["defines-by-properties", &set_key]),
+                                &stable_guid(&opening_gid, &["property-set", &set_key]),
+                                &stable_guid(&opening_gid, &["defines-by-properties", &set_key]),
                             );
                         }
                         void_fill_triples.push((*h_idx, opening_id, Some(el_id), opening_gid));
@@ -3713,7 +3724,7 @@ impl StepWriter<'_> {
                 Some(number) => crate::revit_global_ids::hashed_global_id(&format!(
                     "IfcOpeningElement:{number}:{host_gid}"
                 )),
-                None => gid(&["void-opening", host_gid, tag]),
+                None => stable_guid(host_gid, &["void-opening", host_gid, tag]),
             };
             let opening_id = self.id();
             self.emit_entity(
@@ -3740,8 +3751,14 @@ impl StepWriter<'_> {
                         owner_hist,
                         opening_id,
                         &set,
-                        &gid(&["property-set", opening_gid.as_str(), set_name]),
-                        &gid(&["defines-by-properties", opening_gid.as_str(), set_name]),
+                        &stable_guid(
+                            &opening_gid,
+                            &["property-set", opening_gid.as_str(), set_name],
+                        ),
+                        &stable_guid(
+                            &opening_gid,
+                            &["defines-by-properties", opening_gid.as_str(), set_name],
+                        ),
                     );
                 }
             }
@@ -3782,16 +3799,22 @@ impl StepWriter<'_> {
                         owner_hist,
                         opening_id,
                         &quantities,
-                        &gid(&[
-                            "property-set",
-                            opening_gid.as_str(),
-                            "Qto_OpeningElementBaseQuantities",
-                        ]),
-                        &gid(&[
-                            "defines-by-properties",
-                            opening_gid.as_str(),
-                            "Qto_OpeningElementBaseQuantities",
-                        ]),
+                        &stable_guid(
+                            &opening_gid,
+                            &[
+                                "property-set",
+                                opening_gid.as_str(),
+                                "Qto_OpeningElementBaseQuantities",
+                            ],
+                        ),
+                        &stable_guid(
+                            &opening_gid,
+                            &[
+                                "defines-by-properties",
+                                opening_gid.as_str(),
+                                "Qto_OpeningElementBaseQuantities",
+                            ],
+                        ),
                     );
                 }
             }
@@ -3894,7 +3917,7 @@ impl StepWriter<'_> {
                 format!("IFCLOCALPLACEMENT(#{host_placement},#{opening_axis})"),
             );
             let host_gid = el_id_to_gid.get(host_el_id).copied().unwrap_or_default();
-            let opening_gid = gid(&["wall-profile-opening", host_gid, tag]);
+            let opening_gid = stable_guid(host_gid, &["wall-profile-opening", host_gid, tag]);
             let opening_id = self.id();
             self.emit_entity(
                 opening_id,
@@ -3923,8 +3946,14 @@ impl StepWriter<'_> {
                         owner_hist,
                         opening_id,
                         &set,
-                        &gid(&["property-set", opening_gid.as_str(), set_name]),
-                        &gid(&["defines-by-properties", opening_gid.as_str(), set_name]),
+                        &stable_guid(
+                            &opening_gid,
+                            &["property-set", opening_gid.as_str(), set_name],
+                        ),
+                        &stable_guid(
+                            &opening_gid,
+                            &["defines-by-properties", opening_gid.as_str(), set_name],
+                        ),
                     );
                 }
             }
@@ -3949,16 +3978,22 @@ impl StepWriter<'_> {
                     owner_hist,
                     opening_id,
                     &quantities,
-                    &gid(&[
-                        "property-set",
-                        opening_gid.as_str(),
-                        "Qto_OpeningElementBaseQuantities",
-                    ]),
-                    &gid(&[
-                        "defines-by-properties",
-                        opening_gid.as_str(),
-                        "Qto_OpeningElementBaseQuantities",
-                    ]),
+                    &stable_guid(
+                        &opening_gid,
+                        &[
+                            "property-set",
+                            opening_gid.as_str(),
+                            "Qto_OpeningElementBaseQuantities",
+                        ],
+                    ),
+                    &stable_guid(
+                        &opening_gid,
+                        &[
+                            "defines-by-properties",
+                            opening_gid.as_str(),
+                            "Qto_OpeningElementBaseQuantities",
+                        ],
+                    ),
                 );
             }
             void_fill_triples.push((*host, opening_id, None, opening_gid));
@@ -4082,7 +4117,7 @@ impl StepWriter<'_> {
                 Some(cutter) if !host_gid.is_empty() => crate::revit_global_ids::hashed_global_id(
                     &format!("Opening:{number}Solid:1{host_gid}{cutter}"),
                 ),
-                _ => gid(&["wall-cut-opening", host_gid, tag]),
+                _ => stable_guid(host_gid, &["wall-cut-opening", host_gid, tag]),
             };
             let opening_id = self.id();
             self.emit_entity(
@@ -4119,8 +4154,14 @@ impl StepWriter<'_> {
                     owner_hist,
                     opening_id,
                     &set,
-                    &gid(&["property-set", opening_gid.as_str(), set_name]),
-                    &gid(&["defines-by-properties", opening_gid.as_str(), set_name]),
+                    &stable_guid(
+                        &opening_gid,
+                        &["property-set", opening_gid.as_str(), set_name],
+                    ),
+                    &stable_guid(
+                        &opening_gid,
+                        &["defines-by-properties", opening_gid.as_str(), set_name],
+                    ),
                 );
             }
             // RE-321: Revit's `Depth` is the extrusion's depth, and its `Width`
@@ -4163,16 +4204,22 @@ impl StepWriter<'_> {
                     owner_hist,
                     opening_id,
                     &quantities,
-                    &gid(&[
-                        "property-set",
-                        opening_gid.as_str(),
-                        "Qto_OpeningElementBaseQuantities",
-                    ]),
-                    &gid(&[
-                        "defines-by-properties",
-                        opening_gid.as_str(),
-                        "Qto_OpeningElementBaseQuantities",
-                    ]),
+                    &stable_guid(
+                        &opening_gid,
+                        &[
+                            "property-set",
+                            opening_gid.as_str(),
+                            "Qto_OpeningElementBaseQuantities",
+                        ],
+                    ),
+                    &stable_guid(
+                        &opening_gid,
+                        &[
+                            "defines-by-properties",
+                            opening_gid.as_str(),
+                            "Qto_OpeningElementBaseQuantities",
+                        ],
+                    ),
                 );
             }
             void_fill_triples.push((*host, opening_id, None, opening_gid));
@@ -4204,7 +4251,7 @@ impl StepWriter<'_> {
                 voids_rel,
                 format!(
                     "IFCRELVOIDSELEMENT('{}',#{owner_hist},$,$,#{host_el_id},#{opening_id})",
-                    gid(&["voids", opening_gid]),
+                    stable_guid(opening_gid, &["voids", opening_gid]),
                 ),
             );
             let Some(el_id) = el_id else {
@@ -4215,7 +4262,7 @@ impl StepWriter<'_> {
                 fills_rel,
                 format!(
                     "IFCRELFILLSELEMENT('{}',#{owner_hist},$,$,#{opening_id},#{el_id})",
-                    gid(&["fills", opening_gid]),
+                    stable_guid(opening_gid, &["fills", opening_gid]),
                 ),
             );
         }
@@ -4246,7 +4293,10 @@ impl StepWriter<'_> {
                 rel_id,
                 format!(
                     "IFCRELAGGREGATES('{}',#{owner_hist},$,$,#{whole_el_id},({}))",
-                    gid(&["aggregates", el_id_to_gid[&whole_el_id]]),
+                    stable_guid(
+                        el_id_to_gid[&whole_el_id],
+                        &["aggregates", el_id_to_gid[&whole_el_id]]
+                    ),
                     part_refs.join(","),
                 ),
             );
@@ -4481,7 +4531,10 @@ impl StepWriter<'_> {
                     port,
                     format!(
                         "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'{}','Flow',$,{placement},$,{})",
-                        gid(&["port", &id_text, &index_text]),
+                        el_id_to_gid.get(&element).map_or_else(
+                            || gid(&["port", &id_text, &index_text]),
+                            |owner| stable_guid(owner, &["port", &id_text, &index_text]),
+                        ),
                         port_name(id, index),
                         port_attribute(id, index),
                     ),
@@ -4499,13 +4552,16 @@ impl StepWriter<'_> {
                 rel,
                 format!(
                     "IFCRELCONNECTSPORTS('{}',#{owner_hist},$,$,#{},#{},$)",
-                    gid(&[
-                        "ports",
-                        &a_id.to_string(),
-                        &a_index.to_string(),
-                        &b_id.to_string(),
-                        &b_index.to_string(),
-                    ]),
+                    stable_guid(
+                        el_id_to_gid.get(&a_el).copied().unwrap_or(document),
+                        &[
+                            "ports",
+                            &a_id.to_string(),
+                            &a_index.to_string(),
+                            &b_id.to_string(),
+                            &b_index.to_string(),
+                        ]
+                    ),
                     port_ids[0],
                     port_ids[1],
                 ),
@@ -4542,7 +4598,10 @@ impl StepWriter<'_> {
                 port,
                 format!(
                     "IFCDISTRIBUTIONPORT('{}',#{owner_hist},'{}','Flow',$,{placement},$,{})",
-                    gid(&["port", &id_text, &index_text]),
+                    el_id_to_gid.get(&element_id).map_or_else(
+                        || gid(&["port", &id_text, &index_text]),
+                        |owner| stable_guid(owner, &["port", &id_text, &index_text]),
+                    ),
                     port_name(*id, *index),
                     port_attribute(*id, *index),
                 ),
@@ -4564,7 +4623,10 @@ impl StepWriter<'_> {
                 rel,
                 format!(
                     "IFCRELNESTS('{}',#{owner_hist},'NestedPorts','Flow',#{element},({}))",
-                    gid(&["nested_ports", &id.to_string()]),
+                    stable_guid(
+                        el_id_to_gid.get(&element).copied().unwrap_or(document),
+                        &["nested_ports", &id.to_string()],
+                    ),
                     refs.join(","),
                 ),
             );
@@ -4648,8 +4710,8 @@ impl StepWriter<'_> {
                 owner_hist,
                 *el_id,
                 pset,
-                &gid(&["property-set", &set_key]),
-                &gid(&["defines-by-properties", &set_key]),
+                &stable_guid(el_id_to_gid[el_id], &["property-set", &set_key]),
+                &stable_guid(el_id_to_gid[el_id], &["defines-by-properties", &set_key]),
             );
         }
 
@@ -4794,7 +4856,7 @@ impl StepWriter<'_> {
             let set_ids: Vec<String> = property_sets
                 .iter()
                 .map(|set| {
-                    let set_gid = gid(&["type-pset", &type_gid, &set.name]);
+                    let set_gid = stable_guid(&type_gid, &["type-pset", &type_gid, &set.name]);
                     format!(
                         "#{}",
                         self.emit_bare_property_set(owner_hist, set, &set_gid)
@@ -4838,7 +4900,7 @@ impl StepWriter<'_> {
                 rel_id,
                 format!(
                     "IFCRELDEFINESBYTYPE('{}',#{owner_hist},$,$,({}),#{type_el_id})",
-                    gid(&["defines-by-type", &type_gid]),
+                    stable_guid(&type_gid, &["defines-by-type", &type_gid]),
                     elements
                         .iter()
                         .filter_map(|index| entity_index_to_el_id[*index])
@@ -4885,7 +4947,7 @@ impl StepWriter<'_> {
                 rel_id,
                 format!(
                     "IFCRELDEFINESBYTYPE('{}',#{owner_hist},$,$,(#{el_id}),#{type_el_id})",
-                    gid(&["defines-by-type", &type_gid]),
+                    stable_guid(&type_gid, &["defines-by-type", &type_gid]),
                 ),
             );
         }
@@ -4900,8 +4962,14 @@ impl StepWriter<'_> {
                 continue;
             }
             let (target_storey, container_gid) = match idx {
-                Some(index) => (storey_ids[index], gid(&["contains", &storey_gids[index]])),
-                None => (building_id, gid(&["contains", "building"])),
+                Some(index) => (
+                    storey_ids[index],
+                    stable_guid(&storey_gids[index], &["contains", &storey_gids[index]]),
+                ),
+                None => (
+                    building_id,
+                    stable_guid(&building_gid, &["contains", "building"]),
+                ),
             };
             let rel_id = self.id();
             let refs_list = element_ids
@@ -4926,8 +4994,14 @@ impl StepWriter<'_> {
                 continue;
             }
             let (parent, rel_gid) = match idx {
-                Some(index) => (storey_ids[index], gid(&["aggregates", &storey_gids[index]])),
-                None => (building_id, gid(&["aggregates", "building", "spaces"])),
+                Some(index) => (
+                    storey_ids[index],
+                    stable_guid(&storey_gids[index], &["aggregates", &storey_gids[index]]),
+                ),
+                None => (
+                    building_id,
+                    stable_guid(&building_gid, &["aggregates", "building", "spaces"]),
+                ),
             };
             let rel_id = self.id();
             let refs_list = space_ids
@@ -4945,7 +5019,10 @@ impl StepWriter<'_> {
             let Some(space_id) = entity_index_to_el_id.get(*space).and_then(|slot| *slot) else {
                 continue;
             };
-            let container_gid = gid(&["contains", el_id_to_gid[&space_id]]);
+            let container_gid = stable_guid(
+                el_id_to_gid[&space_id],
+                &["contains", el_id_to_gid[&space_id]],
+            );
             let refs_list = element_ids
                 .iter()
                 .map(|id| format!("#{id}"))
@@ -5123,17 +5200,19 @@ fn epoch_to_ymdhms(secs: i64) -> (i32, u32, u32, u32, u32, u32) {
 }
 
 /// The GlobalId of an entity Revit gives none (#400): SHA-256 over a fixed
-/// namespace, `document` (the document's identity, or for an element's
-/// further piece the element's Revit GlobalId, #1840) and `key` (the
-/// entity's role and the identities it derives from), as an RFC 9562 version-8 UUID in IFC's
-/// 22-character form. It depends on nothing about the entity's position in
-/// the file, so it survives changes elsewhere in the model, and the
-/// namespace keeps it apart from GlobalIds other tools derive.
-fn stable_guid(document: &str, key: &[&str]) -> String {
+/// namespace, `seed` and `key` (the entity's role and the identities it
+/// derives from), as an RFC 9562 version-8 UUID in IFC's 22-character form.
+/// `seed` is the GlobalId the writer gives the entity this one belongs to (for
+/// an element's further piece, the element's Revit GlobalId, #1840), or the
+/// document's identity where it belongs to none (#1854). It depends on
+/// nothing about the entity's position in the file, so it survives changes
+/// elsewhere in the model, and the namespace keeps it apart from GlobalIds
+/// other tools derive.
+fn stable_guid(seed: &str, key: &[&str]) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(b"rvt-rs ifc GlobalId v1\0");
-    hasher.update(document.as_bytes());
+    hasher.update(seed.as_bytes());
     for part in key {
         hasher.update([0x1f]);
         hasher.update(part.as_bytes());
