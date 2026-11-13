@@ -52,8 +52,8 @@ pub struct ElementState {
     pub location_feet: Option<[f64; 3]>,
     /// The body's rotation about Z, radians.
     pub rotation_radians: Option<f64>,
-    /// A digest of the body itself: its extrusion, its solid and the mapped
-    /// geometry it uses. Two equal digests are two equal bodies.
+    /// A digest of the body the export draws: the mapped geometry it uses, else
+    /// its solid, else its extrusion. Two equal digests are two equal bodies.
     pub body: Option<String>,
     /// Each property the export writes for it, keyed `<set>.<property>`, as
     /// the value's IFC kind and the value (`{"kind": "Real", "value": 2.5}`),
@@ -213,8 +213,15 @@ pub fn element_states(model: &IfcModel) -> Vec<ElementState> {
             }
         }
         let map = representation_map_index.and_then(|at| model.representation_maps.get(at));
+        // The writer draws the mapped item, else the solid, else the extrusion
+        // (`step_writer`). A body kept beside a higher one is not drawn, and two
+        // saves that differ only in it differ in nothing the IFC writes (#1864).
+        let drawn_solid = solid_shape.as_ref().filter(|_| map.is_none());
+        let drawn_extrusion = extrusion
+            .as_ref()
+            .filter(|_| map.is_none() && solid_shape.is_none());
         let body = (extrusion.is_some() || solid_shape.is_some() || map.is_some())
-            .then(|| digest(&(extrusion, solid_shape, map)));
+            .then(|| digest(&(drawn_extrusion, drawn_solid, map)));
         out.push(ElementState {
             global_id: global_id.clone(),
             tag: type_guid.clone(),

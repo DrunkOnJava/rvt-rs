@@ -467,7 +467,7 @@ pub fn scan_sketch_bounded_lines(
 
 /// Releases where a sketch line's B-spline ([`BoundedSpline`]) is measured
 /// (RE-211).
-pub const SKETCH_SPLINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2025];
+pub const SKETCH_SPLINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// The most control points a [`BoundedSpline`] is read with.
 pub const MAX_SPLINE_CONTROL_POINTS: usize = 4096;
