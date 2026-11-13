@@ -100,15 +100,16 @@ from them. A roof on 2023 to 2027 is drawn from its saved mesh where that
 decodes whole (#1191, and #1612 for one drawn as the level block of its sketch
 outline), and keeps the record-box solve alone where it does not
 (RE-341 section 5): without its slope, so a sloped roof can still be drawn as its
-outline at the box's full height, a level block. A roof's saved mesh is scored
+outline at the box's full height, a level block. A roof by extrusion is drawn as its
+sketch's section on 2024 to 2027 (RE-211; RE-458 for 2024, 2026 and 2027). A roof's saved mesh is scored
 against Revit's export on 15 roofs that #1612 and RE-401 draw from it, each within 0.4% of
 Revit's volume (Snowdon Towers Architectural's 14, local only, 4 of them Revit's to 1e-6 since a
 `GGTag` is walked as a group, and the T/U roof of puzzbobb's Revit 2025 models, RE-389,
-RE-401), where the level blocks of 8 of them were 40% or more too large. On Autodesk's samples, which have no Revit export, the mesh of
-one roof of the 2026 and 2027 saves is not the 2025 save's body and another keeps
-its box, which the same-project gate names (`ROOFS_NOT_THE_2025_BODY`, Griffin
-2026-11-05 and 2026-11-09). Such a roof no longer cuts the top
-of the walls under it unless its record box is exactly its type's layers and
+RE-401), where the level blocks of 8 of them were 40% or more too large. On Autodesk's samples, which have no Revit export, every roof of
+the 2026 and 2027 saves is the 2025 save's body to the same-project gate's
+tolerance, its list of roofs that may differ (`ROOFS_NOT_THE_2025_BODY`, Griffin
+2026-11-05 and 2026-11-09) being empty since RE-458. A roof that is not a plate no
+longer cuts the top of the walls under it unless its record box is exactly its type's layers and
 its outline is read (RE-351): the walls of `rac_basic` that its 2024 (15),
 2026 and 2027 (16) saves cut at roof 243274, up to 3.1865 m lower than its
 2025 save draws them (Measure run 42106436497), are drawn to their record
