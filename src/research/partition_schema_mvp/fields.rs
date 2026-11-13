@@ -353,6 +353,13 @@ pub const FURNITURE_DEFAULT_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026];
 /// 2025 saves do.
 pub const CUT_LOOP_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
+/// Releases before 2024 whose doors and windows take the outline their
+/// symbol cuts as their opening (RE-450): the symbol's `m_pCutLoops` and the
+/// instance's `InstanceInfo.m_Trf` are read from the native records there,
+/// and on Autodesk's `rac_basic` and `rac_advanced` saves by 2015 and 2023
+/// the openings they give are the 2024 saves'.
+pub const CUT_LOOP_32BIT_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2023;
+
 /// How closely an instance's plan X axis must lie along a model axis for
 /// its record box to be along its own axes (#810).
 pub const INSTANCE_AXIS_TOLERANCE: f64 = 1e-6;

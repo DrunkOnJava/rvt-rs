@@ -29,6 +29,7 @@
       "IFCMATERIAL": 87,
       "IFCMATERIALCONSTITUENT": 6,
       "IFCMATERIALCONSTITUENTSET": 4,
+      "IFCMATERIALDEFINITIONREPRESENTATION": 86,
       "IFCMATERIALLAYER": 9,
       "IFCMATERIALLAYERSET": 8,
       "IFCMATERIALLAYERSETUSAGE": 407,
@@ -64,6 +65,7 @@
       "IFCSPACE": 116,
       "IFCSPACETYPE": 116,
       "IFCSTYLEDITEM": 86,
+      "IFCSTYLEDREPRESENTATION": 86,
       "IFCSURFACESTYLE": 86,
       "IFCSURFACESTYLERENDERING": 86,
       "IFCTRIANGULATEDFACESET": 138,
@@ -705,7 +707,7 @@
       ]
     }
   },
-  "observation_hash_sha256": "6a7c43827def1cedc79ba24ad35d0374b887d9284caaaa67b17501fba917b4d2",
+  "observation_hash_sha256": "25f3862ae0bc4578015ce67a354de4c7073aa54bdedefc94bd3569dc684e95e0",
   "schema_version": "1.1.0",
   "semantic_surface_covered": [
     "entity_counts",

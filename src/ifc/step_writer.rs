@@ -2571,8 +2571,10 @@ impl StepWriter<'_> {
         // them. Each material gets:
         //   - IFCMATERIAL with just a name (IFC4 minimum)
         //   - If the material has a color: IFCCOLOURRGB +
-        //     IFCSURFACESTYLERENDERING + IFCSURFACESTYLE +
-        //     IFCSTYLEDITEM to surface the color to IFC4 viewers
+        //     IFCSURFACESTYLERENDERING + IFCSURFACESTYLE + IFCSTYLEDITEM,
+        //     in an IFCSTYLEDREPRESENTATION of an
+        //     IFCMATERIALDEFINITIONREPRESENTATION that names the material,
+        //     which is how IFC4 viewers find the colour
         // The color emission is gated because a color-less material
         // is valid IFC4 — we don't want to emit empty rendering
         // records when there's nothing to render.
@@ -2614,6 +2616,25 @@ impl StepWriter<'_> {
                 self.emit_entity(
                     styled_item_id,
                     format!("IFCSTYLEDITEM($,(#{presentation_id}),'{name_escaped}')"),
+                );
+                // A styled item with no `Item` styles nothing until a material
+                // definition representation hangs it on its material: IFC4's
+                // way to give a material its surface style, which a viewer
+                // then applies to every element associated with the material.
+                // Without it the colour was written and reached no consumer.
+                let styled_rep_id = self.id();
+                self.emit_entity(
+                    styled_rep_id,
+                    format!(
+                        "IFCSTYLEDREPRESENTATION(#{geom_ctx},'Style','Material',(#{styled_item_id}))"
+                    ),
+                );
+                let material_rep_id = self.id();
+                self.emit_entity(
+                    material_rep_id,
+                    format!(
+                        "IFCMATERIALDEFINITIONREPRESENTATION($,$,(#{styled_rep_id}),#{mat_id})"
+                    ),
                 );
             }
             material_ids.push(mat_id);

@@ -661,6 +661,7 @@ pub(super) fn attach_cut_loop_sizes(
         hosts,
         solids,
         flips,
+        ..
     }) = crate::native_symbol_cuts::instance_cuts_and_symbols(rf, &every_id)
     else {
         return;
@@ -915,6 +916,71 @@ pub(super) fn attach_cut_loop_sizes(
             cut.width_feet(),
             cut.height_feet(),
         );
+    }
+}
+
+/// Give each door and window of a Revit 2015 to 2023 file
+/// ([`CUT_LOOP_32BIT_REVIT_VERSIONS`]) the outline the symbol that draws it
+/// cuts in its host (RE-450): its extents as [`CUT_LOOP_SIZE_FIELDS`], which
+/// Revit's export writes as its `OverallWidth` and `OverallHeight` (RE-215),
+/// and the opening it cuts, the loop carried by the instance's transform
+/// (`InstanceInfo.m_Trf`), as `attach_cut_loop_sizes` gives it on 2024 to
+/// 2027 where no opening is read from the type. Without it the opening is
+/// the element's record box, its frame and trim included. A door that is an
+/// opening alone (RE-84) is written as that opening, and gets none.
+pub(super) fn attach_cut_loop_openings_32(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    groups: [&mut Vec<DecodedElement>; 2],
+) {
+    if !CUT_LOOP_32BIT_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    let mut elements: Vec<&mut DecodedElement> = groups
+        .into_iter()
+        .flat_map(|group| group.iter_mut())
+        .filter(|element| {
+            !element
+                .fields
+                .iter()
+                .any(|(name, _)| name == TYPE_WITHOUT_GEOMETRY_FIELD)
+        })
+        .collect();
+    let ids: BTreeSet<u64> = elements
+        .iter()
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    let Ok(cuts) = crate::native_symbol_cuts::instance_cuts_and_symbols(rf, &ids) else {
+        return;
+    };
+    for element in elements.iter_mut() {
+        let Some(id) = element.id.map(u64::from) else {
+            continue;
+        };
+        let Some(cut) = cuts.loops.get(&id) else {
+            continue;
+        };
+        for (name, value) in CUT_LOOP_SIZE_FIELDS
+            .iter()
+            .zip([cut.width_feet(), cut.height_feet()])
+        {
+            element
+                .fields
+                .push(((*name).into(), InstanceField::Float { value, size: 8 }));
+        }
+        if filler_opening_from_fields(&element.fields).is_some() {
+            continue;
+        }
+        if let Some(transform) = cuts.transforms.get(&id) {
+            push_filler_opening(
+                element,
+                transform,
+                (cut.min[0] + cut.max[0]) / 2.0,
+                cut.min[2],
+                cut.width_feet(),
+                cut.height_feet(),
+            );
+        }
     }
 }
 

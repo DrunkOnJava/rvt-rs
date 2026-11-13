@@ -1560,6 +1560,18 @@ or Combined, and walls, floors and stairs before Revit 2024 are left without
 Vitoria's 247 walls are the ones the census counts apart)
 (`reports/element-framing/RE-429-structural-load-bearing.md`).
 
+**RE-450 (2026-11-13)** cuts each door's and window's opening on a Revit
+2015 to 2023 save to the outline its symbol cuts (`m_pCutLoops`), placed by
+the instance's own transform (`InstanceInfo.m_Trf`), as #227 does on 2024
+to 2027, and writes the outline's extents as its `OverallWidth` and
+`OverallHeight` (RE-215); before, the opening was the element's record box,
+frame and trim included. On every save of Autodesk's `rac_basic` and
+`rac_advanced` from 2015 to 2023 the 26 and 107 openings are the 2024 save's
+within 0.001 m, but for 24 `rac_advanced` windows that are its size and
+0.0075 m off it on the 2015 to 2020 saves, as before; 34 of 60 local files
+are unchanged, every 2024 and 2025 file among them
+(`reports/element-framing/RE-450-opening-cut-loop-pre2024.md`).
+
 **RE-448 (2026-11-12)** sets each door and window of a Revit 2015 to 2023
 save in the wall its own native record names (`m_hostId`), where the
 reference list's nearest wall is another plain wall: RE-245's rule, which
