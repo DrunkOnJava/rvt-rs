@@ -21,10 +21,11 @@
   reaches every file with such a part, not the 2027 sample alone: 14 other
   exports of the 146 on Measure's unfiltered run change, each by `IsExternal`
   on curtain mullions the same way (9 to 79 in the 2015 to 2023 saves of
-  `rac_advanced`, 2 to 4 in the four BIM4LCA offices), which no Revit export
-  scores (RE-269), and two members of the BIM4LCA timber office are
-  aggregated into the curtain walls Revit's own export names (`IfcMember`
-  same whole 7,872 to 7,874). The `rac_advanced` saves of 2015 to 2022 now
+  `rac_advanced`, 2 to 4 in the four BIM4LCA offices), values that are not
+  measured and not equal: Revit's export writes them as an exporter artefact,
+  the census counts them apart (RE-269) and it does not move on any model.
+  Two members of the BIM4LCA timber office are aggregated into the curtain
+  walls Revit's own export names (`IfcMember` same whole 7,872 to 7,874). The `rac_advanced` saves of 2015 to 2022 now
   write the same 19,979 parameter values and those of 2024 to 2027 the same
   21,035; the 2023 save stays six short (#1899). Not changed: the curtain
   door 216844, which the 2026 and 2027 saves leave out of its wall for a

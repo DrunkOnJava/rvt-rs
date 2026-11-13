@@ -1267,10 +1267,11 @@ leave out of its wall for a cause not found, is unchanged. The rule reaches
 every file with a part that names two or more curtain walls and finds no grid,
 not that file alone: 14 other exports of the unfiltered Measure run gain
 `IsExternal` on curtain mullions (the 2015 to 2023 saves of `rac_advanced`,
-9 to 79 each, and the four BIM4LCA offices, 2 to 4), which Revit's export
-cannot score (RE-269), and two members of the BIM4LCA timber office take the
-curtain wall Revit's own export puts them under (`aggregates_vs_ifc`,
-`IfcMember` same whole 7,872 to 7,874). The 2023 save of `rac_advanced` stays
+9 to 79 each, and the four BIM4LCA offices, 2 to 4), values that are not
+measured and not equal (Revit's export writes them as an exporter artefact
+and the census counts them apart, RE-269), and two members of the BIM4LCA
+timber office take the curtain wall Revit's own export puts them under
+(`aggregates_vs_ifc`, `IfcMember` same whole 7,872 to 7,874). The 2023 save of `rac_advanced` stays
 six values short of its neighbours
 ([#1899](https://github.com/DrunkOnJava/rvt-rs/issues/1899))
 (`reports/element-framing/RE-449-curtain-corner-mullions.md`).

@@ -758,7 +758,13 @@ pub(super) fn scan_walls_in_element_data(
             continue;
         };
         let buf = inflated.bytes();
-        for hit in memchr::memmem::find_iter(buf, &header) {
+        // The reader's memo of where the header lies, which the other readers of
+        // element data fill and share: no pass of this scan's own over the
+        // partition once one of them has made it.
+        let Ok(hits) = rf.header_hits(&stream, &header) else {
+            continue;
+        };
+        for &hit in hits.iter() {
             let id_at = hit + header.len();
             let Some(id) = le_bytes::u64_at(buf, id_at)
                 .and_then(|id| u32::try_from(id).ok())
