@@ -8,6 +8,134 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-11-13
+
+0.21.0 makes the GlobalIds an export writes hold from one save of a project to the next, and adds a command that compares two saves element by element. Between two saves of one Autodesk sample, every GlobalId the writer derived moved while the elements kept theirs, because each was seeded from the document's `Unique Document GUID`, which changes on every save; each is now seeded from the GlobalId of the entity it belongs to, which the file keeps (#1840, #1854). `rvt-diff --elements` lists what changed between two saves, keyed by GlobalId (#1843). `--redact` now scrubs the user name of a Linux home folder and every path of a message (#1871). The warning for element records of ElementIds the element table does not declare no longer calls the IFC incomplete for what a same-save comparison showed to be deleted elements (#1838).
+
+Not measured, and said in each entry:
+- What belongs to no entity still moves between saves: the project, site, building and storeys where Revit gives them no GlobalId, classifications, materials, MEP systems, and types Revit gives no GlobalId (#1854).
+- `rvt-diff --elements` compares what rvt-rs reads, and a change in how rvt-rs reads a file shows as a change, so two saves are compared with one build (#1843). On Autodesk's `rst_basic`, its 2025 and 2026 saves differ in 12 beams' level-bind provenance because the 2026 records name one more Level (#1864), not because rvt-rs reads them differently.
+- On the 2027 save of `rac_advanced`, 80 curtain parts (79 `L Mullion 1` corner mullions and a curtain door) stand in no curtain wall where the 2025 save aggregates them, so the 79 mullions get no `IsExternal` (#1865).
+- The reading of #1838 rests on the one model compared with Revit's export of the same save (a Revit 2027 structural model, as counts): no model of Measure has such a record.
+
+### Upgrading from 0.20
+
+- Every export's IFC header names rvt-rs 0.21.0, so an export that is otherwise
+  unchanged still differs from 0.20.0's there.
+- **Every derived GlobalId changes once (#1840, #1854).** Openings, voids,
+  fills, property sets, quantity sets, material associations, containment,
+  aggregation, type relationships, ports and the further pieces of a layered
+  floor, a slab or a curtain wall take new GlobalIds in this release; from then
+  on they hold from save to save. A tool that follows elements by GlobalId (a
+  clash or issue-tracking (BCF) workflow) sees those removed and added again
+  between an export made with 0.20.0 or earlier and one made with this
+  release. The elements' own GlobalIds do not change.
+- **`rvt-diff` has a second mode, `--elements A.rvt B.rvt` (#1843).** Its JSON
+  is described by `docs/schemas/rvt-diff-elements.schema.json`. The first mode,
+  two files compared stream by stream, is unchanged.
+- **Rust: `rvt::ifc::element_diff` is new (#1843).** It adds public items and
+  changes none.
+- **The wording of the warning for undeclared element records changes
+  (#1838).** The command line's warning, the diagnostics' warning, `rvt-inspect`'s
+  failure-mode text and the viewer's card say what these records are; the count,
+  the readiness score and the `element_record_without_element_id` item, and
+  `rvt-inspect`'s failure kind `incomplete_model`, are unchanged.
+
+### Added
+
+- **`rvt-diff --elements` compares two saves of a model element by element
+  (#1843).** Each file is exported as `rvt-ifc` exports it, and the elements
+  are keyed by the GlobalId the export writes. It lists the elements added,
+  removed and changed, and for each changed one the fields that differ:
+  class, name, storey, type, predefined type, material, where the body is
+  placed, a digest of the body, and each property the export writes, less
+  rvt-rs's own record of where in the file it read the element (its
+  stream and offsets), which a later save moves. `--json`
+  writes the whole comparison (`docs/schemas/rvt-diff-elements.schema.json`),
+  and `--redact` scrubs names, parameter names and text values, and the file
+  paths in what it prints. An element whose GlobalId an export writes for more
+  than one element is left out of the comparison and reported, as
+  `duplicate_global_ids` and `set_aside`, so a repeated GlobalId cannot hide a
+  change. The library is `rvt::ifc::element_diff`. What rvt-rs does not read is not compared, and a
+  change in how rvt-rs reads a file shows as a change, so compare two saves
+  with one build. Suggested by HWT-25 (#1829), who compared two saves of a
+  Revit 2027 model by hand.
+
+### Fixed
+
+- **Records of ElementIds the element table does not declare are no longer
+  all reported as an incomplete IFC from a layout this release cannot locate
+  (#1838).** The element records the reader leaves out because their ElementId
+  is not one the file's element table declares were reported that way. A Revit
+  2027 structural model, compared with Revit's export of the same save, showed
+  84 of them were roof framing deleted between two saves: the record chain
+  was the same in both, the table declared 143 fewer of its records, and
+  Revit's export held none of the 84 and nothing the reader lacked (2,355 of
+  2,355 elements by GlobalId). The command line's and the diagnostics'
+  warnings, `rvt-inspect`'s failure mode, readiness and next step, the
+  viewer's card and the docs now say what was measured: on that one model such
+  records were elements deleted since the file's last Save As, which a file
+  saved in place keeps, and if nothing was deleted the model is likely
+  incomplete. Other causes are known (an element table read short, as on
+  Autodesk's Snowdon Towers 2024 sample before RE-41) or not ruled out, so the
+  count, the readiness score and the `element_record_without_element_id` item
+  are unchanged. Not measured: no model of Measure has such a record (none of
+  its 121 published diagnostics carries the item), so the one comparison is
+  the reporter's, as counts.
+
+- **An element's further pieces keep their GlobalIds from one save to the
+  next (#1840).** A layered floor's parts, a slab's further pieces and a
+  curtain wall's parts share their element's Tag, and Revit gives only the
+  first a GlobalId. The others were derived from the document's
+  `Unique Document GUID`, which can change between two saves of one project,
+  so on a Revit 2027 structural model every part's GlobalId moved on every
+  save (#1829). They are now derived from their element's Revit GlobalId,
+  which the file keeps. The element's own GlobalId does not change.
+  **Upgrade note for clash and issue-tracking (BCF) users:** each such
+  further piece's GlobalId changes once, in this release. A tool that
+  follows elements by GlobalId sees those pieces removed and added again
+  between an export made with the previous release and one made with this
+  one; from then on they hold. With each piece go the GlobalIds of its
+  material association and its property sets. On Autodesk's MEP samples
+  that is 25 pieces a file, on Snowdon Towers Architectural 25, and on the
+  BIM4LCA concrete housing as built 3; a model with no layered floor, slab
+  or curtain wall split into parts has none.
+
+- **Openings, property sets, quantities and the relationships between
+  entities keep their GlobalIds from one save to the next (#1854).** Each
+  GlobalId the IFC writer derives was seeded from the document's
+  `Unique Document GUID`, which changes on every save of every Autodesk
+  sample measured, so between two saves of one project every opening,
+  property set, quantity set, material association, containment, void,
+  fill, aggregation, type relationship and port took a new GlobalId while
+  the elements kept theirs. Each is now seeded from the GlobalId of the
+  entity it belongs to: an opening from its host's, a property set from its
+  element's, a relationship from the entity it starts from. It holds wherever
+  that entity's does, and two documents share it only where they share that
+  entity's. No project-level identity could take the document's place: the
+  first episode and the ProjectInfo GlobalId are the template's, one value
+  on 64 of the 102 models measured. What belongs to no entity still moves
+  between saves: the project, site, building and storeys where Revit gives
+  them no GlobalId, classifications, materials, MEP systems and types Revit
+  gives no GlobalId.
+  **Upgrade note for clash and issue-tracking (BCF) users:** every such
+  derived GlobalId changes once, in this release, as the element pieces of
+  #1840 do; from then on they hold.
+
+- **`--redact` scrubs the user name from a Linux home folder, from a path an
+  error echoes back, and from every path of a message instead of the first of
+  each kind (#1871).** The scrubber that each CLI's `--redact` runs its text
+  through knew `\Users\<name>\` and `/Users/<name>/` only, so a file under
+  `/home/<name>/`, or an error that names one, kept the name. It also scrubbed
+  only the first path of its kind in a string, so a message naming two files
+  kept the second one's name, and it left a name alone when no separator
+  followed it, which is the form a home folder takes in `No such file:
+  /Users/alice`. Such a name now ends at the first space, quote, closing
+  bracket, comma, semicolon or colon, or at the end of the string, so a name
+  with a space is scrubbed only up to the space there; a home folder with
+  nothing after it is left as it is. No committed output holds a home path, so
+  none of it changes.
+
 ## [0.20.0] — 2026-11-12
 
 0.20.0 is mostly hardening against crafted files. Such a file can no longer crash the browser viewer through a record's length or an overflow in a value it stores, make a read take exponential time or time that grows with the square of its element count, exhaust the stack through the chains it sets, or write its own text into an export's STEP (#1815, #1831, #1833, #1845). No real file of the measured corpus changes from any of those fixes. A reader that stops at one of the new work budgets says so, in a `work_budget_reached` skipped item and a warning, and the export is still written.
