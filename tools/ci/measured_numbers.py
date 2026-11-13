@@ -343,6 +343,13 @@ def check_page(page, text, models):
                         found.append(
                             (line, f"{listed} rests on {models[i]['names'][0]}, which is {fetch}, and no \"{fetch}\" stands beside its name in this clause or an earlier one of its cell, paragraph or list item, in: {shown}")
                         )
+    # A fence left open hides the rest of the page from every rule above (#1882).
+    opened = None
+    for number, raw in enumerate(text.splitlines(), 1):
+        if raw.strip().startswith(("```", "~~~")):
+            opened = None if opened else number
+    if opened:
+        found.append((opened, "a code fence opened here is never closed, so the rest of the page is not checked"))
     return [(page, line, message) for line, message in found], seen
 
 
@@ -366,6 +373,10 @@ def check(root):
             continue
         found, seen = check_page(page, text, models)
         problems += found
+        # Both pages are full of measured numbers: reading none says the reading broke, not that the page is
+        # clean (#1882).
+        if not seen["numbers"] and not seen["markers"]:
+            problems.append((page, 1, "no number was read from this page, so the check read nothing"))
         for key, value in seen.items():
             totals[key] += value
     return problems, totals
@@ -388,6 +399,12 @@ def report(problems, totals):
 # page, or the first occurrence of one string replaced by another), and the
 # text the check must name.
 REFUSALS = [
+    (
+        "a code fence left open",
+        PAGES[0],
+        "\n```\n",
+        "is never closed",
+    ),
     (
         "a number with no model",
         "docs/supported-profile.md",

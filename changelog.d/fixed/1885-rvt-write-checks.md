@@ -9,7 +9,10 @@
   used the same framing, so a `Formats/Latest` written as `Global/Latest` is
   framed passed its own verification; a patch framed `RawGzipFromZero` or
   `CustomPrefix8` is now refused unless the stream is stored that way
-  (`Verbatim` is the caller's own framing and is not checked). A
+  (`Verbatim` is the caller's own framing and is not checked); the library's
+  `rvt::writer::write_with_patches` returns `Error::WriteRefused` for it before
+  it writes anything, where it wrote the file and verified it with the same
+  wrong framing. A
   `new_decompressed_base64` that decodes to no bytes (`"="`, `""`) is refused
   where it emptied the stream; an empty `patches` array is a plain copy and
   exits 0, where it exited 1 with `0 stream(s) failed verification`; `--src`

@@ -1476,7 +1476,12 @@ jobs:
               echo
               for d in measure-head/*/; do
                 m=$(basename "$d")
-                [ -f "$d/ifc.sha256" ] || continue
+                # A model with no hash wrote no export: say so where the base wrote one, rather than leave it
+                # out of the list (#1882).
+                if [ ! -f "$d/ifc.sha256" ]; then
+                  [ -f "measure-base/$m/ifc.sha256" ] && echo "- $m: **no export on the head** (the base wrote one)"
+                  continue
+                fi
                 if [ ! -f "measure-base/$m/ifc.sha256" ]; then echo "- $m: no base hash"
                 elif cmp -s "$d/ifc.sha256" "measure-base/$m/ifc.sha256"; then echo "- $m: identical"; else echo "- $m: **differs**"; fi
               done

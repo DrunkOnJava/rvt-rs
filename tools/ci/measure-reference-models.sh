@@ -345,6 +345,22 @@ info() { # file dir
   echo "exit $?" > "$2/info.exit"
 }
 
+# One schema step, its output filtered by `drop` (a grep pattern, or empty). These scorers exit 1 for a finding,
+# so a non-zero status alone is no crash; a timeout (124), a signal (128 and up), a usage error (2) or a Python
+# traceback is, and it gets the `exit N` line the "results are whole" step looks for. Without it a crashed or
+# timed-out step left only its partial output in schema.txt (#1882).
+schema_step() { # dir step limit drop script args...
+  local dir="$1" step="$2" limit="$3" drop="$4" out status; shift 4
+  out=$(mktemp)
+  cached "$dir" "$step" "$limit" "$@" > "$out" 2>&1
+  status=$?
+  if [ -n "$drop" ]; then grep -v "$drop" "$out" || true; else cat "$out"; fi
+  if [ "$status" = 2 ] || [ "$status" = 124 ] || [ "$status" -ge 128 ] || grep -q '^Traceback (most recent call last)' "$out"; then
+    echo "exit $status"
+  fi
+  rm -f "$out"
+}
+
 # C9: the IFC4 schema's view of dir/model.ifc in dir/schema.txt: attribute
 # counts always, IfcOpenShell's full validation and its check of the schema's
 # EXPRESS rules up to max_bytes, otherwise marked as skipped, and the standard property sets against IFC4's
@@ -353,8 +369,8 @@ PSET_DEFINITIONS="${RUNNER_TEMP:-/tmp}/ifc4-pset-definitions.csv"
 schema() { # dir max_bytes
   {
     echo "arity:"
-    cached "$1" schema-arity 600 "$(dirname "$0")/ifc_schema_arity.py" "$1/model.ifc" \
-      | grep -v '^IFC schema conformance passed\|^  instances checked' || true
+    schema_step "$1" schema-arity 600 '^IFC schema conformance passed\|^  instances checked' \
+      "$(dirname "$0")/ifc_schema_arity.py" "$1/model.ifc"
     if [ "$(stat -c %s "$1/model.ifc")" -le "$2" ]; then
       # The validation and the EXPRESS rules read one parse of the file; the
       # rules' summary comes back in a file, to follow the validation's.
@@ -363,7 +379,7 @@ schema() { # dir max_bytes
       local extras="$1/validation.jsonl $1/schema-rules.part"
       case "$(basename "$1")" in sample-*) extras="$1/schema-rules.part" ;; esac
       echo "validate:"
-      CACHE_EXTRA="$extras" cached "$1" schema-validate-rules $(( 2 * STEP_TIMEOUT )) \
+      CACHE_EXTRA="$extras" schema_step "$1" schema-validate-rules $(( 2 * STEP_TIMEOUT )) '' \
         "$(dirname "$0")/ifc_validate_summary.py" --both "$1/model.ifc" "$1/validation.jsonl" "$1/schema-rules.part"
       echo "rules:"
       cat "$1/schema-rules.part" 2> /dev/null || true
@@ -372,7 +388,7 @@ schema() { # dir max_bytes
       echo "validate: skipped, over $(( $2 / 1048576 )) MB"
     fi
     echo "property sets:"
-    cached "$1" schema-psets "$STEP_TIMEOUT" "$(dirname "$0")/ifc4_property_sets.py" "$1/model.ifc" \
+    schema_step "$1" schema-psets "$STEP_TIMEOUT" '' "$(dirname "$0")/ifc4_property_sets.py" "$1/model.ifc" \
       --definitions "$PSET_DEFINITIONS"
   } > "$1/schema.txt"
 }
@@ -453,7 +469,9 @@ model_task() { # name rvt ref task
   case "$task" in
     base)
       wanted info && timed "$dir" rvt-info info "$MODELS/$rvt" "$dir"
-      grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
+      # No hash without an export, as for a sample or a family: an absent model.ifc hashed as the empty stream
+      # (e3b0c442...), so a crash on both sides compared as an unchanged export (#1882).
+      [ -s "$dir/model.ifc" ] && grep -v -E '^FILE_NAME\(|IFCOWNERHISTORY' "$dir/model.ifc" | sha256sum | cut -d' ' -f1 > "$dir/ifc.sha256"
       # RE-348, RE-349: how many walls take the wall base and end rules, and
       # why the others do not, as counts (the diagnostics are not uploaded for
       # a model without a licence to redistribute it; these lines are).

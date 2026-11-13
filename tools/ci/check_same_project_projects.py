@@ -7,7 +7,7 @@ list in several places, which must agree or the verdict does not see a sample (R
   measure-reference-models.sh        the two `case ... in` lists of project keys (saves_gate_keeps, bodies_across_saves),
                                      the year case of saves_gate_keeps and the `202[...]` globs of bodies_across_saves
   bodies_across_saves.py             the keys of MINIMUMS, OUTLINE_LEAST, REQUIRED and CYLINDER_LEAST
-  readers_across_saves.py            the keys of MINIMUMS (and a year-keyed PROPERTIES), PINNED_WALLS and
+  readers_across_saves.py            the keys of MINIMUMS, PINNED_WALLS and
                                      ROOFS_NOT_THE_2025_BODY
 
 PINNED_WALLS was the one list of bodies allowed to differ from the 2025 save (Griffin, 2026-11-05). It could only

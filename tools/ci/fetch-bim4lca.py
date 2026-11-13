@@ -155,6 +155,10 @@ def extract(url: str, total: int, entry: tuple[int, int, int, int], out: Path) -
     method, csize, usize, lho = entry
     if method not in (0, 8):
         raise Stale(f"compression method {method} is neither stored nor deflate")
+    # The sizes come from the downloaded directory, so they bound the read only once checked: a stored member is
+    # its own size, and deflate never grows data by more than 5 bytes per 16 KiB block plus a few (#1882).
+    if csize > usize + 5 * (usize // 16384 + 1) + 64:
+        raise Stale(f"{out.name}: {csize} compressed bytes for {usize} inflated")
     nlen, elen = struct.unpack("<HH", fetch(url, lho + 26, lho + 29, total))
     start = lho + 30 + nlen + elen
     data = fetch(url, start, start + csize - 1, total) if csize else b""
@@ -162,10 +166,21 @@ def extract(url: str, total: int, entry: tuple[int, int, int, int], out: Path) -
     inflate = zlib.decompressobj(-15) if method == 8 else None
     with open(out, "wb") as f:
         for i in range(0, len(data), 1 << 22):
-            chunk = data[i : i + (1 << 22)]
-            chunk = inflate.decompress(chunk) if inflate else chunk
-            digest.update(chunk)
-            written += f.write(chunk)
+            pending = data[i : i + (1 << 22)]
+            while pending:
+                if inflate:
+                    # Never inflate more than one byte past the listed size: deflate can reach 1000:1, so an
+                    # unbounded call could expand a 4 MiB chunk far past it before the check below ran.
+                    chunk = inflate.decompress(pending, usize - written + 1)
+                    pending = inflate.unconsumed_tail
+                else:
+                    chunk, pending = pending, b""
+                digest.update(chunk)
+                written += f.write(chunk)
+                if written > usize:
+                    raise Stale(f"{out.name} inflates past the {usize} bytes the archive says")
+                if inflate and not chunk and pending:
+                    break
         if inflate:
             rest = inflate.flush()
             digest.update(rest)
@@ -221,6 +236,8 @@ def main(argv: list[str]) -> int:
         for name, sha, size, out in missing:
             if name not in directory:
                 raise Stale(f"{name} is not in the archive")
+            if directory[name][2] != size:
+                raise Stale(f"{out.name}: the archive says {directory[name][2]} bytes, pinned {size}")
             print(f"  [fetch]     {out.name}", flush=True)
             got_sha, got_size = extract(url, total, directory[name], out)
             if (got_sha, got_size) != (sha, size):

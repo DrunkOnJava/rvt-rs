@@ -47,7 +47,7 @@ The measured detail behind each row is in [`docs/evidence.md`](docs/evidence.md)
 
 ## Install and quick start
 
-The latest release is [v0.20.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.20.0) (2026-11-12). Install it with any of:
+The latest release is [v0.21.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.21.0) (2026-11-13). Install it with any of:
 
 - the prebuilt Linux, macOS and Windows binaries on [GitHub Releases](https://github.com/DrunkOnJava/rvt-rs/releases), or the container image `ghcr.io/drunkonjava/rvt-rs`;
 - `cargo install rvt --locked`;
@@ -55,7 +55,7 @@ The latest release is [v0.20.0](https://github.com/DrunkOnJava/rvt-rs/releases/t
 - `cargo install rvt-rs-mcp --locked`, for the [MCP server](#mcp-server) alone;
 - nothing at all: the [browser viewer](https://drunkonjava.github.io/rvt-rs/) reads a file inside the tab.
 
-[`docs/install.md`](docs/install.md) covers every channel, building from source and the smoke tests. This README describes `main`, which the browser viewer is also built from, so it can be ahead of the latest release: "Upgrading from 0.19" in the [changelog](CHANGELOG.md#upgrading-from-019) says what a user of 0.19 has to change, and each change `main` adds after 0.20.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into `CHANGELOG.md`<!-- w10: release versions of this project, not measurements -->. To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
+[`docs/install.md`](docs/install.md) covers every channel, building from source and the smoke tests. This README describes `main`, which the browser viewer is also built from, so it can be ahead of the latest release: "Upgrading from 0.20" in the [changelog](CHANGELOG.md#upgrading-from-020) says what a user of 0.20 has to change, and each change `main` adds after 0.21.0 is a fragment in [`changelog.d/`](changelog.d/README.md), which the next release moves into `CHANGELOG.md`<!-- w10: release versions of this project, not measurements -->. To use `main` before the next release, build from source ([`docs/install.md`](docs/install.md#build-from-source)).
 
 Three commands cover most of what the command line does:
 

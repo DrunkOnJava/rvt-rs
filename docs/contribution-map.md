@@ -21,21 +21,24 @@ solved carrier: the reports under `reports/element-framing/` say what each
 negative result ruled out, and [`ROADMAP.md`](../ROADMAP.md) says what each
 milestone is for.
 
-### 0.21.0: IFC geometry and element data
+### 0.22.0: IFC geometry and element data
 
 | Issue | Remainder |
 |---|---|
-| [#1871](https://github.com/DrunkOnJava/rvt-rs/issues/1871) | --redact leaves the user name in /home/<name>/ paths: redact_path_str scrubs only \Users\ and /Users/ |
+| [#1887](https://github.com/DrunkOnJava/rvt-rs/issues/1887) | viewer: phase list, load events, element tree and the parameter cache grow with the file uncapped |
+| [#1886](https://github.com/DrunkOnJava/rvt-rs/issues/1886) | release tooling: hotfix refs, copied actions, the citation date and the tag gate check less than RELEASE.md says |
+| [#1885](https://github.com/DrunkOnJava/rvt-rs/issues/1885) | rvt-write dry run and framing checks, rvt-info CSV formulas, rvt-ifc overwriting its input, and rvt-dump output |
+| [#1884](https://github.com/DrunkOnJava/rvt-rs/issues/1884) | python: a partial saved mesh raises no RuntimeWarning, exports hold the GIL, and the stub forbids kinds the binding returns |
+| [#1883](https://github.com/DrunkOnJava/rvt-rs/issues/1883) | rvt-mcp: answers and server memory have no byte cap, and file text reaches the client unmarked |
+| [#1881](https://github.com/DrunkOnJava/rvt-rs/issues/1881) | ci: Measure's same-project verdict and corpus cache can be written by the measured code, and two workflows trust artifacts by name |
 | [#1870](https://github.com/DrunkOnJava/rvt-rs/issues/1870) | BIM4LCA office: wall 1348326's GLB layers start 0.49 ft from Revit's end, held there by a short-edge corner |
 | [#1865](https://github.com/DrunkOnJava/rvt-rs/issues/1865) | Revit 2027 rac_advanced: 79 curtain members get no IsExternal where the 2025 and 2026 saves write it |
 | [#1864](https://github.com/DrunkOnJava/rvt-rs/issues/1864) | Autodesk samples, 2025 against 2026 saves: 6 bodies, 1 profile and 12 level binds differ with no known cause |
 | [#1856](https://github.com/DrunkOnJava/rvt-rs/issues/1856) | Stair runs drawn from their sketch keep it where Revit's saved mesh exists: same box, 2.55% more volume on rac_advanced 2024 |
-| [#1854](https://github.com/DrunkOnJava/rvt-rs/issues/1854) | Openings, property sets, relationships and type objects take their GlobalIds from the document GUID, so they move between two saves whose document GUIDs differ (#1840) |
 | [#1845](https://github.com/DrunkOnJava/rvt-rs/issues/1845) | Crafted files: file values reach the IFC, glTF and SVG unsafely, host and cut chains set recursion depth, and four writer passes are quadratic |
 | [#1842](https://github.com/DrunkOnJava/rvt-rs/issues/1842) | Revit 2027 structural model: 104 columns, beams, slabs, flights and footings on no storey (#1829) |
 | [#1841](https://github.com/DrunkOnJava/rvt-rs/issues/1841) | IFC class: foundation slabs are written as IfcFooting where Revit writes IfcSlab, and one framing member as IfcBeam where Revit writes IfcMember (#1829) |
 | [#1839](https://github.com/DrunkOnJava/rvt-rs/issues/1839) | Beams run to the ends of their location line, where Revit's export cuts them back at the columns they frame into (#1829) |
-| [#1838](https://github.com/DrunkOnJava/rvt-rs/issues/1838) | Revit 2027: 84 framing records of one save are read with no ElementId, and the save a day before reads all 84 (#1829) |
 | [#1833](https://github.com/DrunkOnJava/rvt-rs/issues/1833) | Crafted files: eighteen readers do unbounded work or hold unbounded memory, two of them exponential |
 | [#1829](https://github.com/DrunkOnJava/rvt-rs/issues/1829) | Report: Revit 2027 structural model (CHL), compared element by element with Revit's IFC4 export and run through a clash engine |
 | [#1824](https://github.com/DrunkOnJava/rvt-rs/issues/1824) | Revit 2015 to 2023 exports read every wall record twice for its top join, and GStyleElem twice for category materials |
