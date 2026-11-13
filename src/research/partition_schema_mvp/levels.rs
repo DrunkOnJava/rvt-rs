@@ -390,6 +390,12 @@ pub(super) fn highest_level(named: &[u32], elevations: &BTreeMap<u32, f64>) -> O
 /// its base constraint ([`crate::element_record_level_refs::base_constraint_level`])
 /// as its host Level, from the Levels' own elevations (RE-51). Nothing
 /// changes where the Levels' elevations are not recovered.
+///
+/// A beam or brace takes the highest Level its record names instead, whatever
+/// their number: its Reference Level (RE-175, [`highest_level`]), which is the
+/// storey Revit's export puts it in. On the two BIM4LCA timber office files the
+/// 47 beams that name two Levels are in the highest's storey and in the base
+/// constraint's in none (RE-454).
 pub(super) fn resolve_base_constraint_levels(
     elevations: &BTreeMap<u32, f64>,
     elements: &mut [&mut Vec<DecodedElement>],
@@ -416,11 +422,21 @@ pub(super) fn resolve_base_constraint_levels(
                 _ => {}
             }
         }
-        let Some(level) = base.and_then(|z| refs::base_constraint_level(&named, elevations, z))
-        else {
+        let (level, source) = if element.class == "StructuralFraming" {
+            (
+                highest_level(&named, elevations),
+                refs::FRAMING_REFERENCE_LEVEL_SOURCE,
+            )
+        } else {
+            (
+                base.and_then(|z| refs::base_constraint_level(&named, elevations, z)),
+                refs::BASE_CONSTRAINT_SOURCE,
+            )
+        };
+        let Some(level) = level else {
             continue;
         };
-        bind_record_level(element, level, refs::BASE_CONSTRAINT_SOURCE);
+        bind_record_level(element, level, source);
     }
 }
 

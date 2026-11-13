@@ -1247,6 +1247,50 @@ and earlier write every room, as every element: both phase rules start at
 Revit 2016 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
+**RE-454 (2026-11-13)** puts a beam or brace in the storey of its Reference
+Level, which its record's second counted reference list holds. The storey bind
+read the first list alone, so on each BIM4LCA timber office file 63 beams were
+in a storey other than Revit's: 47 that name two Levels in the first list (the
+base constraint picked the lower, Revit's storey is the highest) and 16 that
+name one there while the second list names the Level Revit puts them in
+(#1842). A beam's Level is the second list's where that names any, else the
+first's, the one it names or the highest of several (RE-174, RE-175), now for
+the storey as it was for the `Reference Level` property. On both office files
+the 63 are in Revit's storey and no other element changes storey. The second
+list gives the same Level on the 2024 and the 2025, 2026 and 2027 saves of
+Autodesk's `rac_advanced` (37 of 38 beams, the other naming none) and `rst_basic`
+(370 of 370), where the first list's single Level changes for 10 beams from 2026
+on (#1864), and within each export every Level a beam is bound to now carries
+one `Reference Level` name on all its beams: Snowdon Towers Structural 942 of
+942 (455 of them on no storey before), `rst_basic` 370 of 370 and `rac_advanced`
+37 of 37, where 278 of 487, 37 of 366 and 4 of 16 bound beams carried another
+name than the rest of their Level's. On the Revit 2015 to 2023 saves of
+`rac_advanced` and `rst_basic` a beam's Level is the 2024 save's on more beams
+than before and on none fewer (`rst_basic` 297 to 325 of 366). A record of
+another class that names three or more Levels, and the foundations, floors and
+stair runs that name none, are as before
+(`reports/element-framing/RE-454-framing-reference-level-storeys.md`).
+
+**RE-453 (2026-11-13)** gives a door or window with no curtain grid found the
+curtain wall its list names when that is the one wall the list names. RE-452
+left out 84 of the 268 doors that Revit's export aggregates into a curtain wall
+on the four BIM4LCA offices (21 in each): each names that wall alone, its
+element data names the wall at no place, and nothing else its list holds
+separates it from the 184 RE-452 had (#1912). Every door of the offices and of
+Snowdon Towers Architectural that Revit puts in a curtain wall names that wall
+alone, and the three Snowdon doors that name a curtain wall and that Revit
+leaves standalone (RE-46) name a second wall, their host. The rule as first
+written in RE-452 took the named wall whatever else the list names and was a
+measured negative on those three and on a Revit 2018 door; with the list
+naming one wall in all it is right for 268 of 268 office doors and 6 of 6
+Snowdon doors, and none is in a wall Revit's export does not put it in. The
+doors and windows that are parts of a curtain wall are now the same on every
+save of an Autodesk sample project (`rac_advanced` 17 on all 13 saves of 2015 to
+2027, `rac_basic` 5, `rme_advanced` and `rme_basic` 17), where they differed by
+release before. A door whose list names a curtain wall and another wall keeps
+RE-452's rule
+(`reports/element-framing/RE-453-curtain-openings-one-wall.md`).
+
 **RE-452 (2026-11-13)** gives a door or window of a curtain wall the wall its
 list names, where the element data of an id in its list names that wall too.
 Doors and windows took a curtain wall only through the curtain grid their
