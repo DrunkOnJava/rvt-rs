@@ -18,6 +18,30 @@ Not measured, and said in each entry:
 - On the 2027 save of `rac_advanced`, 80 curtain parts (79 `L Mullion 1` corner mullions and a curtain door) stand in no curtain wall where the 2025 save aggregates them, so the 79 mullions get no `IsExternal` (#1865).
 - The reading of #1838 rests on the one model compared with Revit's export of the same save (a Revit 2027 structural model, as counts): no model of Measure has such a record.
 
+Measured against 0.20.0 on every model Measure holds (run
+[43381774360](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43381774360),
+`main` at 9b7dee8c, 146 exports; the release adds only its notes, witness files,
+version strings and fixtures to them):
+
+- All 146 exports move, and only in the GlobalIds they write: `diagnostics.json`
+  is equal on all 121 models that publish one, so what is read, approximated and
+  left out does not change.
+- The same-project check of the MEP samples shows what the GlobalIds change:
+  `bodies_across_saves` for the 2025, 2026 and 2027 saves of `rme_advanced` and
+  `rme_basic` goes from FAIL (25 differences in each, the layered floors'
+  pieces) to PASS, and the sketch outlines of the 2026 and 2027 saves against
+  the 2025 save from 47 equal and 6 differing to 53 equal and none. Those six
+  scorer outputs are the only ones that differ.
+- Time and memory, from the timing job of Measure run
+  [43381779893](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43381779893)
+  (`rvt-ifc` built at v0.20.0 and at `main` 9b7dee8c, each file exported three
+  times in turn on one runner, the median kept, with the peak resident memory of
+  the export): the 75 files take 0.94 to 1.06 times the time (median 1.00; the
+  1.06 is `rac_advanced` 2024, whose three rounds run 4.3 to 4.7 s on the base
+  side and 4.6 to 5.0 s on the head side) and 0.99 to 1.01 times the peak memory
+  (median 1.00).
+- Not measured in this run: the size of the IFC.
+
 ### Upgrading from 0.20
 
 - Every export's IFC header names rvt-rs 0.21.0, so an export that is otherwise
