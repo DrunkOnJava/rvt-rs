@@ -361,7 +361,7 @@ AI changes all four:
 - Layer 3 (per-stream framing): **done** for every stream we've
   touched; 165-byte `Global/PartitionTable` invariant + 44-byte
   `Partitions/NN` header decoded.
-- Layer 4a (schema table): **done**. 3,490 to 4,285 class records
+- Layer 4a (schema table): **done**. 3,490 to 4,285 class records on the 2016 to 2026 releases
   per release (4,126 on the 2024 sample) with
   `{tag, parent, ancestor_tag, declared_field_count}` per class.
 - Layer 4b (schema → data link): **done**. Tags from `Formats/Latest`
@@ -369,7 +369,7 @@ AI changes all four:
 - Layer 4c.1 (record framing): **done**.
 - Layer 4c.2 (field-body decoding): **done**. The `FieldType` enum
   classifies every field but 2 or 3 per release (RE-323): 9,932 to
-  12,144 fields per release, 122,107 in all. See §Q5.2 addendum for
+  12,144 fields per release from 2016 to 2026, 122,107 in all. See §Q5.2 addendum for
   byte-pattern evidence.
 - Layer 4d (ElemTable records): **done** — 28- and 40-byte records,
   both ids and the owner (`src/elem_table.rs`).
@@ -1304,7 +1304,7 @@ That is the old 100% figure: `unknown_bytes_deep` inflates `Formats/Latest`
 with `compression::inflate_at`, which does not strip its checksum pages, so
 it reads the first 64 KB only. The corpus-wide gate,
 `tests/field_type_coverage.rs`, reads the page-stripped stream: 9,932 to
-12,144 fields per release, 2 or 3 of them `Unknown` (RE-323).
+12,144 fields per release from 2016 to 2026, 2 or 3 of them `Unknown` (RE-323).
 
 ### Consequences
 
@@ -1658,7 +1658,7 @@ when the entry-point detector succeeds.
   reference produced by a different reader, or (b) fields 2–5 are
   decoded cleanly on those releases, the older-release output
   should be treated as structurally shaped but semantically
-  unvalidated. Captured by `docs/compatibility.md:189`:
+  unvalidated. Captured by the bullet of `docs/compatibility.md` that reads:
   "Schema-directed walker is partial on 2016–2023."
 
 - **The module doc at [`src/walker.rs:1`](../src/walker.rs) says
