@@ -290,7 +290,7 @@ mod tests {
     }
 
     fn homes() -> Vec<PathBuf> {
-        vec![PathBuf::from("/Users/person")]
+        vec![PathBuf::from("/people/alex")]
     }
 
     #[test]
@@ -304,11 +304,11 @@ mod tests {
             Some("the top of a file system")
         );
         assert_eq!(
-            too_broad(Path::new("/Users/person"), &homes()),
+            too_broad(Path::new("/people/alex"), &homes()),
             Some("the home folder")
         );
         assert_eq!(
-            too_broad(Path::new("/Users"), &homes()),
+            too_broad(Path::new("/people"), &homes()),
             Some("a folder that holds the home folder")
         );
     }
@@ -316,12 +316,12 @@ mod tests {
     #[test]
     fn a_folder_inside_the_home_folder_or_beside_it_is_not_too_broad() {
         assert_eq!(
-            too_broad(Path::new("/Users/person/Projects/house"), &homes()),
+            too_broad(Path::new("/people/alex/Projects/house"), &homes()),
             None
         );
         // Starts like the home folder's name, is not it, and does not hold it.
-        assert_eq!(too_broad(Path::new("/Users/person2"), &homes()), None);
-        assert_eq!(too_broad(Path::new("/Users/personal"), &homes()), None);
+        assert_eq!(too_broad(Path::new("/people/alex2"), &homes()), None);
+        assert_eq!(too_broad(Path::new("/people/alexis"), &homes()), None);
         assert_eq!(too_broad(Path::new("/srv/models"), &homes()), None);
     }
 
