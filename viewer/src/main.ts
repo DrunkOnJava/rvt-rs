@@ -5018,7 +5018,7 @@ function renderSupportGrid(): void {
     const outside = document.createElement('li');
     outside.className = 'support-legend-note';
     outside.textContent =
-      'Revit 2014 and earlier: outside the 1.0 range (2015 to 2027), measured only on a contributor\'s local files.';
+      'Revit 2014 and earlier: outside the 1.0 range (2024 to 2027), measured only on a contributor\'s local files.';
     supportLegendEl.appendChild(outside);
   }
   const note = document.createElement('li');
