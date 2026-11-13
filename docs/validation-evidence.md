@@ -4,7 +4,7 @@ rvt-rs ships a pure-Rust STEP writer for IFC4 (no IfcOpenShell
 runtime dependency). Claiming "spec-valid IFC4" is cheap; demonstrating
 it is the point of this doc.
 
-## What CI checks on every pull request
+## What CI checks on a ready pull request that changes code
 
 The `ifcopenshell-validate` job ("IfcOpenShell validates exports" in
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)) is part of
@@ -54,10 +54,13 @@ write:
    the `observation_hash_sha256` committed under `research/witness/`
    ([`verification-protocol.md`](verification-protocol.md)).
 6. **Predefined types and placements match Revit's.** On the Core Interior
-   export, every `PredefinedType` written must be one of the values Revit's
-   exporter writes for that IFC class (#220). The check compares each
-   element with its class's set of values, not with the value Revit wrote
-   for the same element: Revit's slabs carry both `.FLOOR.` and `.ROOF.`.
+   export, every `PredefinedType` written on an `IfcColumn`, `IfcSlab`,
+   `IfcWall`, `IfcSpace`, `IfcDoor`, `IfcWindow` or `IfcShadingDevice`
+   instance must be one of the values Revit's exporter writes for that IFC
+   class (#220); a value written on any other entity, type objects
+   included, is not compared. The check compares each element with its
+   class's set of values, not with the value Revit wrote for the same
+   element: Revit's slabs carry both `.FLOOR.` and `.ROOF.`.
    Two pinned elements' placement must compose to where Revit puts them
    (#232).
 7. **The full project export, on a narrow surface.** The same three

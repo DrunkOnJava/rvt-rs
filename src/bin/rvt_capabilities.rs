@@ -28,7 +28,7 @@ struct Cli {
     json: bool,
 
     /// Print the full support matrix (`docs/support-matrix.json`, built in):
-    /// every capability with its status, evidence and user impact.
+    /// every capability with its status, name and user impact.
     #[arg(long)]
     matrix: bool,
 }

@@ -125,8 +125,8 @@ project treats a silent skipped step the same as an untested change.
    green. `cargo deny check` and `cargo audit` are green.
 2. **Synthetic-project IFC integration test.** `cargo test --release
    --test integration -- ifc_synthetic_project::`. This is the end-to-end
-   regression gate — a synthesised document is written, re-read, and
-   round-tripped through the IFC4 STEP exporter.
+   regression gate — synthesised elements are bridged into an IFC4 model,
+   written as STEP, and the text checked against IFC4's requirements.
 3. **Corpus integration tests.** If the phi-ag/rvt corpus is available
    locally, `RVT_SAMPLES_DIR=... cargo test --release --test integration --
    samples:: ifc_roundtrip:: field_type_coverage::`. CI runs these on
@@ -298,11 +298,11 @@ project treats a silent skipped step the same as an untested change.
     with the real tag substituted
     (`gh release edit vX.Y.Z --notes-file <file>`).
 12. **Announce (optional).** If the release is worth calling out,
-    drafts live under `docs/launch/` — currently `hn-show-hn.md` and
-    `reddit-r-rust.md`, with further channels (buildingSMART forum,
-    OSArch) added as drafts land. Post from the drafts rather than
-    writing fresh copy; the drafts have been audit-reviewed for
-    overclaiming.
+    drafts live under `docs/launch/` — eight of them, listed in
+    [`docs/launch/README.md`](docs/launch/README.md). Post from the drafts
+    rather than writing fresh copy, but bring a draft up to what the
+    README and `ROADMAP.md` say before posting it: only the buildingSMART
+    forum draft is current, and the others still describe 0.1.2.
 
 ## Post-Publish Install Verification
 

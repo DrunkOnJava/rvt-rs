@@ -230,7 +230,7 @@ pub fn all_bounded_lines(data: &[u8]) -> Option<Vec<BoundedLine>> {
 /// start angle to the end angle. On Autodesk's Snowdon Towers 2024
 /// architectural sample it is the first curve record of 32 walls, and on
 /// the 24 of them Revit's IFC4 export draws with an arc axis, its centre and
-/// radius are that axis's to 1e-5 ft.
+/// radius are that axis's within 0.001 ft (RE-75).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BoundedArc {
     pub start_angle: f64,
@@ -465,9 +465,10 @@ pub fn scan_sketch_bounded_lines(
     )
 }
 
-/// Releases where a sketch line's B-spline ([`BoundedSpline`]) is measured
-/// (RE-211).
-pub const SKETCH_SPLINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2025];
+/// Releases where a sketch line's B-spline ([`BoundedSpline`]) is read: 2025,
+/// where RE-211 measured it against Revit's body, and 2024, 2026 and 2027,
+/// where the same project's 2025 save is the check (RE-458).
+pub const SKETCH_SPLINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// The most control points a [`BoundedSpline`] is read with.
 pub const MAX_SPLINE_CONTROL_POINTS: usize = 4096;

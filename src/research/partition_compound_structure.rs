@@ -46,9 +46,10 @@
 //!
 //! # Wall orientation
 //!
-//! A wall's data carries, after `ff ff ff ff 01 00 00 00`, three `u32`: its
-//! location line (0 to 5), a word of 0 to 2, and a flip flag
-//! ([`wall_orientation`]). With the flag set, the wall's exterior (its first
+//! A wall's data carries, after `ff ff ff ff 01 00 00 00`, two `u32`, its
+//! location line (0 to 5) and a word of 0 to 2, then a flip byte and a
+//! second flag after it ([`wall_orientation`]; RE-126: RE-54 first read the
+//! flip as a third `u32`). With the flag set, the wall's exterior (its first
 //! layer) lies to the right of its location line's direction; clear, to
 //! the left. On Snowdon Towers this holds on all 416 walls whose first and
 //! last layers Revit's IFC4 export places measurably apart. The one other

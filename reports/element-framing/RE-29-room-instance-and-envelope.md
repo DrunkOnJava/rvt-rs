@@ -189,11 +189,19 @@ from the other end — anchor on the owner, walk **forward**:
 +0x000  u64  owning room ElementId
 +0x03c  u64  owning room ElementId        (confirmation; must agree)
 +0x044  u64  host Level ElementId
-+0x1f5  u32  number length, UTF-16 units
-+0x1f9  2*n  room Number, UTF-16LE
++0x1f9  u32  number length, UTF-16 units
++0x1fd  2*n  room Number, UTF-16LE
 +…+ 8   u32  name length, UTF-16 units    (8 bytes past the number's end)
 +…+12   2*m  room Name, UTF-16LE
 ```
+
+*Corrected 2026-11-13:* this table first gave the number's length at
+`+0x1f5` and the number at `+0x1f9`, 4 bytes early. The measured
+offset, in the probe (`ROOM_PARAM_NUMBER_LEN`) and the reader
+(`NUMBER_LENGTH_OFFSET`), is 505 = `0x1f9`, and it agrees with the
+histogram below: a name starts `0x1f9 + 4 + 2n + 8 + 4` = 521 + 2n
+bytes past the owner, so 523, 525 and 527 for numbers of 1 to 3
+characters.
 
 The name's offset is *not* fixed, because the number's length is not —
 which is why the block is parsed forward from the owner rather than

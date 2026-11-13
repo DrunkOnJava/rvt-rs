@@ -39,13 +39,13 @@ issue that tracks the remainder:
 
 | IFC type | Recovered | Remaining gap tracked in |
 |---|---|---|
-| `IFCWALL` | Revit 2024 set exact (RE-21); run cut back by the joins the record names (RE-26, RE-29), the L corners its join lists leave open decided by its joined-wall lists (RE-127): 360 of 360 world-exact | #23 (2024 ArcWall records) |
-| `IFCDOOR` | Revit 2024 set and host binding exact (RE-21, RE-23) | #227 (opening cut from the wall curve) |
+| `IFCWALL` | Revit 2024 set exact (RE-21); run cut back by the joins the record names (RE-26, RE-29), the L corners its join lists leave open decided by its joined-wall lists (RE-127): 360 of 360 world-exact | nothing wall-specific; #23 and #238 are closed |
+| `IFCDOOR` | Revit 2024 set exact (RE-21); host is the wall the reference list names (RE-85) | #227 (opening cut on releases other than 2024 and 2025) |
 | `IFCSLAB` | Revit 2024 set with sketch-line profiles, 80 of 80 (RE-22, RE-25); all 80 storey-bound (RE-27), as are the 20 IFCSHADINGDEVICE plates | nothing slab-specific; #219's plate containment is closed |
-| `IFCSPACE` | Revit 2024 room set 116 of 116 with real names, numbers and storeys; body is the record box, equal to the reference envelope on all 116 (RE-29) | #90 (boundary polygon: the record carries no sketch, measured negative) |
-| `IFCWINDOW` | Revit 2024 set and host binding exact (RE-21, RE-23); all 6 storey-bound (RE-27) | nothing window-specific; #219's window containment is closed |
+| `IFCSPACE` | Revit 2024 room set 116 of 116 with real names, numbers and storeys (RE-29); the outline is the room's stored solid's (RE-101), and a room whose solid does not close keeps its record box | nothing space-specific; #90 is closed |
+| `IFCWINDOW` | Revit 2024 set exact (RE-21); host is the wall the reference list names (RE-85); all 6 storey-bound (RE-27) | nothing window-specific; #219's window containment is closed |
 | `IFCMATERIALLAYERSETUSAGE` | 403, on the floors, shading devices and walls whose types have layers (RE-53, RE-58). The walls' single layers take their category's material, "Default Wall" from the document's object styles (RE-91). The reference export is a `ReferenceView_V1.2` file with no `IfcMaterialLayerSet`, so the sets are scored against the faces its bodies style with each material: 403 of 403 within 0.001 ft | #358 (elements drawn whole get no set) |
-| `IFCOPENINGELEMENT` | opening, void and fill chain per host (RE-23) | #227 (true opening cut) |
+| `IFCOPENINGELEMENT` | opening, void and fill chain per host wall (RE-85) | #227 (opening cut on releases other than 2024 and 2025) |
 
 The table lists exactly the types `catalogued_divergence_notes` in
 `src/ifc/compare.rs` carries a note for; `IFCCOLUMN` has no note because

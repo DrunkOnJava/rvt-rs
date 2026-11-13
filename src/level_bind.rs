@@ -1,15 +1,16 @@
 //! Fail-closed Level ElementId → building-storey index binding.
 //!
 //! Floors and Rooms carry `m_level_id` / `m_host_level_id` ElementId
-//! references in the schema-driven typed view. Partition MVP Levels
-//! today usually lack ElementIds, so this map stays empty on current
-//! corpora and Floors/Rooms remain storey-unassigned — that is
-//! intentional (fail closed), not a silent invent.
+//! references in the schema-driven typed view. The Levels' own
+//! ElementIds come from their partition records (RE-24:
+//! `partition_level_records::recover_partition_levels`, 15 of 15 on
+//! Core Interior), and `ifc::apply_partition_level_storeys` fills this
+//! map from them. A file whose Levels are not recovered leaves it
+//! empty, and its elements stay storey-unassigned (fail closed).
 //!
-//! RE-20 (magnetar Einhoven / Core Interior): Level ElementId recovery
-//! remains **INSUFFICIENT** — `Level` is absent from Formats schema on
-//! those files; proximity / LevelAssociationCell-shaped scans do not
-//! yield unique elev→id maps.
+//! RE-20 found no Level ElementId map in the schema-directed scans it
+//! tried; its note that `Level` is absent from the schema was an
+//! artifact of the old 64 KB `Formats/Latest` scan (CHANGELOG).
 //!
 //! When both sides carry ElementIds that match, [`LevelStoreyBind::storey_index_for`]
 //! returns the storey index; otherwise `None`.

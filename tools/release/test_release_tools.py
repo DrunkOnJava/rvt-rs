@@ -228,6 +228,21 @@ class CopyWorkflows(unittest.TestCase):
             self.assertEqual((self.repo / ".github/workflows/publish.yml").read_text(), "# the old one\n", ref)
             self.assertIn(f"version: {V}", (self.repo / "CITATION.cff").read_text(), ref)
 
+    def test_a_main_that_lacks_a_file_to_copy_is_refused_with_nothing_written(self):
+        # Each lack is met after the files read before it (the two workflows, for the action), which a script that
+        # wrote as it read had already replaced, along with the version files.
+        for lacking in (".github/actions/wasm-tools", ".github/workflows/release-binaries.yml"):
+            git(self.repo, "checkout", "-q", "-f", "-B", "lacking", self.main)
+            git(self.repo, "rm", "-q", "-r", lacking)
+            git(self.repo, "commit", "-q", "-m", f"main without {lacking}")
+            main = git(self.repo, "rev-parse", "HEAD").stdout.strip()
+            git(self.repo, "update-ref", "refs/remotes/origin/main", main)
+            git(self.repo, "checkout", "-q", "-f", "hotfix/v0.16.1")
+            done = self.bump("--release-workflows-from", main)
+            self.assertNotEqual(done.returncode, 0, lacking)
+            self.assertIn(f"has no {lacking}", done.stderr)
+            self.assertEqual(git(self.repo, "status", "--porcelain").stdout, "", lacking)
+
     def test_main_copies_the_workflows_and_every_local_action_they_use(self):
         for ref in ("origin/main", self.main):
             git(self.repo, "checkout", "-q", "-f", "hotfix/v0.16.1")
@@ -252,6 +267,16 @@ class CopyWorkflows(unittest.TestCase):
         self.assertNotEqual(done.returncode, 0)
         self.assertIn("calendar date", done.stderr)
         self.assertIn(f"version: {V}", (self.repo / "CITATION.cff").read_text())
+
+    def test_a_version_file_the_bump_cannot_follow_stops_it_before_any_file_moves(self):
+        # viewer/package.json as a minifier writes it: the preflight reads it as JSON, but no line starts with
+        # "version", so the bump meets it after the manifests and locks it had already moved.
+        (self.repo / "viewer/package.json").write_text(json.dumps({"name": "viewer", "version": V, "private": True}) + "\n")
+        git(self.repo, "commit", "-q", "-am", "a minified package.json")
+        done = self.bump()
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("viewer/package.json: the version text was not found", done.stderr)
+        self.assertEqual(git(self.repo, "status", "--porcelain").stdout, "")
 
     def test_a_citation_the_preflight_reads_is_bumped(self):
         text = f'cff-version: 1.2.0\ntitle: "x"\nversion: "{V}"  # the release\ndate-released: 2026-11-05\n'

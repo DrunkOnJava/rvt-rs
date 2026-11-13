@@ -22,14 +22,14 @@ enforced by `tests/witness_registry.rs` plus the CI gates it names. Two
 RVT → IFC edges via Revit's exporter are recorded and gated today — the 20 KB
 element fixture and the full 19879-entity project export — each witnessed by
 three independent implementation lineages: rvt-rs on the `.rvt`, IfcOpenShell
-and IFClite on the `.ifc`. The full-project verdict's claimed surface is ten
-fields wide since #212 (`IFCWALL`, `IFCDOOR`, `IFCWINDOW`, `IFCCOLUMN`,
-`IFCSLAB`, `IFCSHADINGDEVICE`, `IFCROOF`, `IFCBEAM`, `IFCFLOWTERMINAL`,
-`IFCUNITASSIGNMENT`). The RVT → DWG
+and IFClite on the `.ifc`. The full-project verdict's claimed surface is
+fourteen fields wide, the first ten since #212 (`IFCWALL`, `IFCDOOR`,
+`IFCWINDOW`, `IFCCOLUMN`, `IFCSLAB`, `IFCSHADINGDEVICE`, `IFCROOF`, `IFCBEAM`, `IFCFLOWTERMINAL`,
+`IFCUNITASSIGNMENT`, `IFCSPACE`, `IFCBUILDINGSTOREY`, `relations.IFCRELFILLSELEMENT`, `storeys.IFCBUILDINGSTOREY`). The RVT → DWG
 edge with dwg-rs is still pending a Revit session.
 
 **OctetProof instance:** the citable protocol specification is
-[`docs/octetproof-spec.md`](octetproof-spec.md) (1.0.2, 2026-08-30, CC-BY-4.0);
+[`docs/octetproof-spec.md`](octetproof-spec.md) (1.1.1, 2026-08-30, CC-BY-4.0);
 the draft it supersedes is kept verbatim at `docs/octetproof-spec-draft.md`,
 and §19 of the spec lists every correction. Its observation / verdict / replay
 shapes are implemented in-repo — `rvt-ifc --observation`,
@@ -61,8 +61,8 @@ GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226) and, where th
 and landings' type (RE-92) and the parameters named for a standard property
 set's property (RE-194), and a body that is exact where the element's
 data is decoded and its bounding box where it is not. It writes that as IFC4,
-glTF, plan SVG and CSV, from the CLIs, Python, the zero-upload browser
-viewer, and a local, read-only MCP server (`rvt-rs-mcp`, [`docs/mcp.md`](mcp.md))
+glTF, plan SVG and CSV, from the CLIs and the zero-upload browser viewer, as
+IFC4 and CSV from Python, and as IFC4 and glTF from a local, read-only MCP server (`rvt-rs-mcp`, [`docs/mcp.md`](mcp.md))
 that answers an agent's questions from the model the IFC export writes. On Revit 2023 projects it reads each element's ElementId, category
 and bounding box (RE-81), curtain walls with their parts under them on 2015 to 2023 (RE-366), those parts with their type and family, and the mullions and panels their material (RE-367, RE-377), walls at an angle along their lines (on 2015 to 2020 only where the record box closes on the line's rectangle) and joined by their join lists on 2015 to 2023 (RE-364), or cut back at their joins (RE-120), with their `Height` where nothing is joined to them or cuts them, though not their areas or volumes (RE-364 section 9), beams at their columns
 (RE-122) and elsewhere along their location lines on 2015 to 2023, read on Autodesk's samples only (RE-362: none of BIMcollab's 91 beams holds a line, #1514), steel beams as their type's I section on 2017 to 2023 (RE-365), door and
@@ -100,15 +100,16 @@ from them. A roof on 2023 to 2027 is drawn from its saved mesh where that
 decodes whole (#1191, and #1612 for one drawn as the level block of its sketch
 outline), and keeps the record-box solve alone where it does not
 (RE-341 section 5): without its slope, so a sloped roof can still be drawn as its
-outline at the box's full height, a level block. A roof's saved mesh is scored
+outline at the box's full height, a level block. A roof by extrusion is drawn as its
+sketch's section on 2024 to 2027 (RE-211; RE-458 for 2024, 2026 and 2027). A roof's saved mesh is scored
 against Revit's export on 15 roofs that #1612 and RE-401 draw from it, each within 0.4% of
 Revit's volume (Snowdon Towers Architectural's 14, local only, 4 of them Revit's to 1e-6 since a
 `GGTag` is walked as a group, and the T/U roof of puzzbobb's Revit 2025 models, RE-389,
-RE-401), where the level blocks of 8 of them were 40% or more too large. On Autodesk's samples, which have no Revit export, the mesh of
-one roof of the 2026 and 2027 saves is not the 2025 save's body and another keeps
-its box, which the same-project gate names (`ROOFS_NOT_THE_2025_BODY`, Griffin
-2026-11-05 and 2026-11-09). Such a roof no longer cuts the top
-of the walls under it unless its record box is exactly its type's layers and
+RE-401), where the level blocks of 8 of them were 40% or more too large. On Autodesk's samples, which have no Revit export, every roof of
+the 2026 and 2027 saves is the 2025 save's body to the same-project gate's
+tolerance, its list of roofs that may differ (`ROOFS_NOT_THE_2025_BODY`, Griffin
+2026-11-05 and 2026-11-09) being empty since RE-458. A roof that is not a plate no
+longer cuts the top of the walls under it unless its record box is exactly its type's layers and
 its outline is read (RE-351): the walls of `rac_basic` that its 2024 (15),
 2026 and 2027 (16) saves cut at roof 243274, up to 3.1865 m lower than its
 2025 save draws them (Measure run 42106436497), are drawn to their record
@@ -563,11 +564,11 @@ RE-127 (2026-09-28) reads which one from the lists of walls each wall is
 joined to: the wall whose entry for the other is a run of consecutive
 values is cut. Wall ends are now **720 of 720** and wall bodies **360 of
 360** exact.
-Nothing in the file orders the two sides — the survivor is the thicker
+Nothing in the file ordered the two sides — the survivor is the thicker
 wall once and an equal-thickness wall once, the higher ElementId once
-and the lower once — so the solver keeps cutting both rather than
-guessing, and the over-trim is pinned by
-`element_record_wall_joins::tests::the_surviving_side_of_a_true_l_corner_is_still_over_trimmed`
+and the lower once — so before RE-127 the solver cut both rather than
+guessing, and the over-trim was recorded in
+`reports/element-framing/RE-29-join-reference-list.md` §4
 instead of being hidden. On columns the same list closes #239 outright:
 the exported body is the record prism minus the untrimmed record prisms
 of the walls it names, which is **256 of 256** exact at a worst residual
@@ -596,11 +597,11 @@ also closes #240 — the `18" Basement` slot reading `1851` where the
 export's `IfcWallType.Tag` is `3897` was an **index artifact**, not a
 second id space: the list is ascending and both ids are in it, with
 `1851` a record of category −2009014 that is not a wall type at all.
-**The join is library-side only.** It ships as
+**The join began in the library.** It ships as
 `rvt::research::partition_type_records::unique_type_reference` with the corpus gate
 `tests/iter_elements_typed.rs::core_interior_2024_wall_type_record_join`;
-it is **not** yet a property on the emitted wall, no emitted entity,
-property or relation changes, and both count manifests record that.
+since #322 (RE-44) the emitted wall carries its type's name as the
+element-record property set's `TypeName`.
 **RE-28 left compound layer thicknesses unrecovered, and found this
 corpus cannot witness them** (#88, RE-28 §4–§5; RE-53 and RE-58 below
 supersede this). A 128 KiB sweep centred on each of the
@@ -1181,8 +1182,8 @@ The tree, the Schedule panel and the info panel then put each element on the
 storey the IFC export writes it on (a part on its whole's, an element in a
 room on the room's, an opening on its host's) and list only the elements the
 export writes (#1422).
-RE-20 (same corpora) found **no** recoverable Level ElementId map:
-`Level` is absent from Formats schema; LevelAssociationCell / name /
+RE-20 (same corpora) found **no** recoverable Level ElementId map; its premise that
+`Level` is absent from Formats schema was an artifact of the 64 KB schema scan (the whole schema carries Level, #410); LevelAssociationCell / name /
 elevation proximity scans are noise-dominated — Floors/Rooms stay
 Unassigned by evidence, not omission. RE-24 (#218) does not reopen
 that: it recovers a *Level's own* ElementId from its `OST_Levels`
@@ -1242,10 +1243,43 @@ has a room outside its last phase and such an export: Autodesk's
 all 13 releases, and a public Revit 2018 export of it holds all 14. They are
 left out by that change's default and written with `--phase "Working Drawings"`,
 which writes 14 of that export's 17 spaces by GlobalId and changes no other
-entity (Measure runs 41784415396 and 41784419457). Revit 2015
+entity (Measure runs 41784415396 and 41784419457). Revit 2014
 and earlier write every room, as every element: both phase rules start at
-Revit 2016 (#1332). The Python bindings and the viewer follow the default
+Revit 2015 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
+
+**RE-458 (2026-11-13)** reads a roof by extrusion on Revit 2024, 2026 and 2027
+as on 2025 (RE-211): drawn as its sketch's section, where the B-spline of its
+sketch lines was read on 2025 alone. Of the 146 models of an unfiltered
+Measure only Autodesk's `rac_basic` holds one, roof 243274, which was its saved
+mesh on its 2024, 2026 and 2027 saves (34.974 m3 on the last two, against the
+2025 save's 35.424 m3), and is now the 2025 save's body on all three: 3 of
+the 146 exports move, `rac_basic`'s 2024, 2026 and 2027, and the same-project
+check's list of roofs that may differ from the 2025 save
+(`ROOFS_NOT_THE_2025_BODY`) is empty. No Revit export of a 2024, 2026 or 2027
+roof by extrusion exists here, so the witness is the same project's 2025 save,
+which cannot catch an error both saves share. `rac_advanced`'s roof 201262,
+which #1479 took for a second roof by extrusion, is drawn from its sketch's
+slope on 2025 and from its saved mesh on 2026 and 2027, equal in volume to
+0.1%; lifting the hold on 2026 and 2027 roofs (RE-341) changed no body on any
+local file, so it stays
+(`reports/element-framing/RE-458-roofs-by-extrusion-2024-2026-2027.md`).
+
+**RE-457 (2026-11-13)** writes a floor of the Structural Foundations category as
+an `IfcSlab` with `BASESLAB`, and a framing instance whose stored structural
+usage is the horizontal bracing's (8) as an `IfcMember`. `StructuralFoundation`
+was mapped to `IfcFooting` and `StructuralFraming` to `IfcBeam` whole, and on a
+reporter's Revit 2027 structural model Revit's export writes the 59 foundation
+slabs as `IfcSlab` (`BASESLAB` on their types) and the one framing instance of
+usage 8 as `IfcMember`, where the 914 of usage 3 and 6 are `IfcBeam` (#1841). A
+floor is told from a footing by the class its record names: Snowdon Towers
+Structural has 4 floors among its 90 footings, `rac_basic` has 1 on each save
+from 2024 and `rst_basic` none among its 36, and the usage is read in the pass
+that already reads the beams' rotations. No
+model Measure holds with a Revit export has a foundation or a bracing, so
+neither rule is scored against Revit here: the reporter's counts after a
+release are the check, and the member's `PredefinedType` is not read
+(`reports/element-framing/RE-457-foundation-slab-and-bracing-member.md`).
 
 **RE-454 (2026-11-13)** puts a beam or brace in the storey of its Reference
 Level, which its record's second counted reference list holds. The storey bind
@@ -1523,6 +1557,21 @@ the same project's 2024 save sets it in, its opening's centre and faces
 within 0.0005 m of the 2024 opening's; nothing else changes on 58 local
 files of 2015 to 2023
 (`reports/element-framing/RE-448-opening-native-host-pre2024.md`).
+
+**RE-456 (2026-11-12)** writes, on Revit 2015 to 2023, the openings RE-321
+writes from the steps of a wall's native record: a rectangular wall opening's,
+a door's in a second wall, a cabinet's and a curtain wall's. A 2015 to 2023
+step names its cutter in a 4-byte ElementId, which the reader took only in
+2024's 8-byte shape, and the records of 2015 to 2022 were not read. A
+rectangular opening of 2015 to 2018 saves its rectangle only in the wall's
+face, `[u, v]` along the wall's location line and up from it, and is placed
+on that line; on 2019 to 2027, which save both, the two agree on all 220
+local openings. Autodesk's `rac_basic` gains its two rectangular openings and
+`rac_advanced` its one on every save from 2015 to 2023, each equal to the
+same project's 2024 save in placement, outline and depth, and BIMcollab's
+Revit 2015 structural example gains 18, the 15 that Revit's own export of
+it holds each equal to that export's in placement, outline and depth
+(`reports/element-framing/RE-456-wall-cut-openings-pre2024.md`).
 
 **RE-327 (2026-11-04)** rebuilds a family's extrusions from their own records:
 the sketch's `CurveElem` lines and arcs (in the family's coordinates), chained

@@ -140,7 +140,7 @@ or roots), so it works with a client that offers none of them.
   scan, element decode, partition scan, saved graphics and saved meshes), and a
   last one when the call ends. A cancelled call is cancelled by the client's
   `notifications/cancelled`, which rmcp turns into a cancelled `context.ct`
-  (`rmcp` 3.8 `src/service.rs`, the serve loop: it removes the request from its
+  (`rmcp` 3.9 `src/service.rs`, the serve loop: it removes the request from its
   table and cancels its token, and `context.ct` is a child of that token), and
   the server hands that to `WalkerControl`. The decode and the saved-mesh pass
   stop at their next checkpoint, and an export being written stops at its next
@@ -202,7 +202,7 @@ that says to call `open_model` again. The tool descriptions say the same.
 | `list_rooms` | The spaces the export writes as `IfcSpace`, paged as `list_elements` is (`limit` 1000 by default, from 1 to 1000, and `offset`; the answer says `total`, `offset`, `limit` and `returned`, and a `returned` below `total` is a list that is not complete, #1883): ElementId, number, name, `space_kind`, level, area and provenance. `space_kind` says what each is (`room`, `area`, `mep_space` or `family_instance`), from the Revit class of its record (#1437): ask it, not `space_outline_source`, which says only where the outline came from and changes with the rules that read outlines. No `mep_space` is written today: rvt-rs reads no Revit Space from a file's partition records, which says what it writes and not what the files hold. The area is present only where the outline was read exactly. |
 | `list_levels` | Storeys with elevation (feet and metres) and element count. |
 | `get_diagnostics` | The export diagnostics, as `rvt-ifc --diagnostics` writes them ([`export-diagnostics.schema.json`](schemas/export-diagnostics.schema.json)): what was decoded, exported, skipped, approximated and left unread, and why. |
-| `export_ifc` | Writes IFC4 to `out_path` and returns a summary and a `resource_link` to the file. `options` takes `rvt-ifc`'s switches: `mode`, `saved_meshes` (`default`: every boxed element on Revit 2023 to 2027; `doors_and_windows`, `all`, `off`), `revit_property_sets`, `revit_set_placement`, `no_base_quantities`, `allow_partial`. |
+| `export_ifc` | Writes IFC4 to `out_path` and returns a summary and a `resource_link` to the file. `options` takes some of `rvt-ifc`'s switches: `mode`, `saved_meshes` (`default`: every boxed element on Revit 2023 to 2027, and the walls that embed a curtain wall where Revit raised their base, on Revit 2024 to 2027; `doors_and_windows`, `all`, `off`), `revit_property_sets`, `revit_set_placement`, `no_base_quantities`, `allow_partial`. `--placeholder`, `--diagnostic-proxies` and `--family-extrusions` are not offered. |
 | `export_gltf` | Writes binary glTF to `out_path` and returns the same kind of summary and link. |
 
 ### Elements and levels as the export writes them
@@ -304,9 +304,9 @@ keeps it in memory beside the model and does not return it: `get_diagnostics`
 and the exports' summaries are the diagnostics without it, as `rvt-ifc` writes
 them by default. Building it is one pass over the walk the decode already made
 and a re-read of the first bytes of each partition record. Its time on each
-model is printed by `tests/element_provenance_offsets.rs` (the `build` line of
-its report, Corpus health's `element-provenance` artifact); no figure is stated
-here yet. The fields are never written into the IFC.
+model is printed by `tests/element_provenance_offsets.rs` (the `table built in`
+time of its per-model line, Corpus health's `element-provenance` artifact); no
+figure is stated here yet. The fields are never written into the IFC.
 
 When an element has several partition element record frames, `offset` is the
 one the exporter selected. It is the newest, the highest-numbered partition: on
@@ -365,7 +365,6 @@ here yet.
 
 ### Not provided yet
 
-- A Measure scorer for the server's answers (#1327).
 - Lookup by the Revit Mark parameter: nothing in rvt-rs decodes it.
 - The Tasks extension (`io.modelcontextprotocol/tasks`). A long export is one
   call with progress and cancellation; a client moves a call that runs long to

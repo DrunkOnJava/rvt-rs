@@ -112,8 +112,9 @@ pub const ARC_WALL_STANDARD_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2023];
 #[non_exhaustive]
 pub struct ArcWallTrailer {
     /// ElementId at `+0x10e`, accepted only when it equals the echo
-    /// at `+0x11c` and is not a null/max sentinel. 23/24 Einhoven
-    /// standard walls validate; all 23 hit `Global/ElemTable`.
+    /// at `+0x11c` and is not a null/max sentinel. RE-15 measured the
+    /// two equal on 22 of 24 Einhoven standard walls, and the id in
+    /// `Global/ElemTable` on 23 of 24.
     pub element_id: Option<crate::ElementId>,
     /// Shared u32 at `+0xfe`. Constant `0x217a` across all 24 Einhoven
     /// standard walls and present in ElemTable — interpreted as a
