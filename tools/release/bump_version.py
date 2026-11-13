@@ -10,7 +10,9 @@ workspace crates' entries in `Cargo.lock` and `fuzz/Cargo.lock`, the viewer's
 `package.json`, and `CITATION.cff`'s `version:` and `date-released:` (today,
 or `--date`). Only the version text in those places changes, nothing else in
 the files. The preflight's own check then reads the tree back. A version file
-left behind fails the bump, and so do version files that disagree before it.
+left behind fails the bump, and so do version files that disagree before it. The
+new text of every file is made before any is written, so a bump that fails leaves
+the checkout as it was.
 The `CHANGELOG.md` section is the one thing it leaves: it says so if the section
 is missing. `python3 tools/release/changelog.py assemble` and the section's
 introduction are steps 5 and 6.
@@ -75,7 +77,10 @@ def replace_once(text, pattern, replacement, what):
 
 
 def bump(pf, old, new, date):
-    changed = []
+    """Move every version file from `old` to `new`. Every file's new text is made in memory first and written after
+    all are made, so a version text that is not where the preflight reads it stops the bump with the checkout as it
+    was, not with the files before it moved."""
+    texts = {}
     for path, name, owns_version, pins_rvt in pf.MANIFESTS:
         text = (ROOT / path).read_text()
         before = text
@@ -90,25 +95,22 @@ def bump(pf, old, new, date):
             text = replace_once(text, rf'^(rvt = \{{[^}}\n]*version = "=){re.escape(old)}(")', rf"\g<1>{new}\g<2>",
                                 f"{path} pin on rvt")
         if text != before:
-            (ROOT / path).write_text(text)
-            changed.append(path)
+            texts[path] = text
     for path, names in pf.LOCKS.items():
         text = (ROOT / path).read_text()
         for name in names:
             # A workspace entry has no `source` line after its version.
             text = replace_once(text, rf'^(name = "{re.escape(name)}"\nversion = "){re.escape(old)}("\n(?!source))',
                                 rf"\g<1>{new}\g<2>", f"{path} entry for {name}")
-        (ROOT / path).write_text(text)
-        changed.append(path)
+        texts[path] = text
     path = "viewer/package.json"
-    text = (ROOT / path).read_text()
     # Any indentation, and the last key of the object too: the preflight reads the file as JSON.
-    (ROOT / path).write_text(replace_once(text, rf'^([ \t]*"version"[ \t]*:[ \t]*"){re.escape(old)}(")', rf"\g<1>{new}\g<2>", path))
-    changed.append(path)
+    texts[path] = replace_once((ROOT / path).read_text(), rf'^([ \t]*"version"[ \t]*:[ \t]*"){re.escape(old)}(")', rf"\g<1>{new}\g<2>", path)
     path = "CITATION.cff"
-    (ROOT / path).write_text(bump_citation((ROOT / path).read_text(), pf, old, new, date))
-    changed.append(path)
-    return changed
+    texts[path] = bump_citation((ROOT / path).read_text(), pf, old, new, date)
+    for path, text in texts.items():
+        (ROOT / path).write_text(text)
+    return list(texts)
 
 
 def bump_citation(text, pf, old, new, date):
