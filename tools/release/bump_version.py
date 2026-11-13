@@ -17,9 +17,13 @@ introduction are steps 5 and 6.
 
 `--release-workflows-from REF` is for a hotfix cut from an older tag (RELEASE.md,
 "Hotfix process", step 6). A tag runs the workflows as they are at the tagged
-commit. So it copies REF's `publish.yml`, `release-binaries.yml`, the actions
-they use and `release_preflight.py` onto the branch, as 0.14.1's hotfix did by
-hand.
+commit. So it copies REF's `publish.yml`, `release-binaries.yml`, every local
+action they use (read from the workflows themselves, with the files of its
+folder, and from those actions in turn) and `release_preflight.py` onto the
+branch, as 0.14.1's hotfix did by hand. REF must be a commit `origin/main`
+holds: the workflows are copied as `main` has them, not from a branch no one
+has reviewed. It then reads the copied preflight and refuses if the version
+files it reads are not the ones this bump moved.
 
 `--root DIR` bumps another checkout, such as a hotfix worktree cut from a tag
 older than this script: the preflight's lists and check are this checkout's.
@@ -35,15 +39,14 @@ import sys
 
 SCRIPT_ROOT = pathlib.Path(__file__).resolve().parents[2]
 ROOT = SCRIPT_ROOT
+# What a hotfix branch carries from main; the local actions the workflows use are found in them.
 RELEASE_WORKFLOW_FILES = (
     ".github/workflows/publish.yml",
     ".github/workflows/release-binaries.yml",
-    ".github/actions/setup-rust/action.yml",
-    ".github/actions/wait-for-check/action.yml",
-    ".github/actions/wait-for-check/wait.sh",
-    ".github/actions/wasm-tools/action.yml",
     "tools/ci/release_preflight.py",
 )
+# A local action, in either form a workflow names it: `./.github/actions/NAME` or `$/.github/actions/NAME`.
+LOCAL_ACTION = re.compile(r"^[ \t]*(?:-[ \t]*)?uses:[ \t]*(?:\./|\$/)(\.github/actions/[A-Za-z0-9_.-]+)[ \t]*(?:#.*)?$", re.M)
 
 
 def preflight():
@@ -80,7 +83,7 @@ def bump(pf, old, new, date):
             head, sep, rest = text.partition("[package]")
             if not sep:
                 sys.exit(f"{path} has no [package] table")
-            rest = replace_once(rest, rf'^version = "{re.escape(old)}"$', f'version = "{new}"', f"{path} version")
+            rest = replace_once(rest, rf'^(version[ \t]*=[ \t]*"){re.escape(old)}(")', rf"\g<1>{new}\g<2>", f"{path} version")
             text = head + sep + rest
         if pins_rvt:
             text = replace_once(text, rf'^(rvt = \{{[^}}\n]*version = "=){re.escape(old)}(")', rf"\g<1>{new}\g<2>",
@@ -98,26 +101,99 @@ def bump(pf, old, new, date):
         changed.append(path)
     path = "viewer/package.json"
     text = (ROOT / path).read_text()
-    (ROOT / path).write_text(replace_once(text, rf'^(  "version": "){re.escape(old)}(",)$', rf"\g<1>{new}\g<2>", path))
+    # Any indentation, and the last key of the object too: the preflight reads the file as JSON.
+    (ROOT / path).write_text(replace_once(text, rf'^([ \t]*"version"[ \t]*:[ \t]*"){re.escape(old)}(")', rf"\g<1>{new}\g<2>", path))
     changed.append(path)
     path = "CITATION.cff"
-    text = (ROOT / path).read_text()
-    text = replace_once(text, rf"^version: {re.escape(old)}$", f"version: {new}", f"{path} version")
-    text = replace_once(text, r'^date-released: "\d{4}-\d{2}-\d{2}"$', f'date-released: "{date}"', f"{path} date")
-    (ROOT / path).write_text(text)
+    (ROOT / path).write_text(bump_citation((ROOT / path).read_text(), pf, old, new, date))
     changed.append(path)
     return changed
 
 
-def copy_release_workflows(ref):
-    for path in RELEASE_WORKFLOW_FILES:
-        blob = subprocess.run(["git", "show", f"{ref}:{path}"], cwd=ROOT, capture_output=True)
-        if blob.returncode != 0:
-            sys.exit(f"{ref} has no {path}")
+def bump_citation(text, pf, old, new, date):
+    """CITATION.cff with its `version:` and `date-released:` moved. The version line is found with the preflight's own
+    pattern, so every form the preflight reads (quoted, with a comment) is one this rewrites."""
+    found = list(pf.CITATION_VERSION.finditer(text))
+    if len(found) != 1 or found[0].group(1) != old:
+        sys.exit(f"CITATION.cff version: the version text was not found where the preflight reads it ({len(found)} lines)")
+    text = text[: found[0].start(1)] + new + text[found[0].end(1) :]
+    return replace_once(text, r'^date-released:[ \t]*"?\d{4}-\d{2}-\d{2}"?[ \t]*(?:#.*)?$', f'date-released: "{date}"', "CITATION.cff date")
+
+
+def valid_date(text):
+    """Whether `text` is a calendar date written YYYY-MM-DD: 2026-13-45 has the shape and is not one."""
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", text):
+        return False
+    try:
+        datetime.date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
+
+
+def git(*args):
+    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
+
+
+def main_commit(ref):
+    """The commit `ref` names, which must be one `origin/main` holds (RELEASE.md copies from `main`)."""
+    named = git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
+    if named.returncode != 0:
+        sys.exit(f"--release-workflows-from {ref!r} is not a commit of this checkout")
+    commit = named.stdout.strip()
+    if git("rev-parse", "--verify", "--quiet", "origin/main").returncode != 0:
+        sys.exit("origin/main is not in this checkout, so whether --release-workflows-from is on main cannot be told: git fetch origin main")
+    if git("merge-base", "--is-ancestor", commit, "origin/main").returncode != 0:
+        sys.exit(
+            f"--release-workflows-from {ref!r} ({commit[:12]}) is not on origin/main: the release workflows are copied "
+            "as main has them, not from a branch or a tag no one has reviewed for this"
+        )
+    return commit
+
+
+def local_actions(text):
+    """The action folders (`.github/actions/NAME`) a workflow or action file names, in the order it names them."""
+    return list(dict.fromkeys(LOCAL_ACTION.findall(text)))
+
+
+def copy_release_workflows(ref, commit):
+    queue = list(RELEASE_WORKFLOW_FILES)
+    folders = []
+    copied = []
+    while queue:
+        path = queue.pop(0)
+        blob = git_bytes("show", f"{commit}:{path}")
+        if blob is None:
+            sys.exit(f"{ref} ({commit[:12]}) has no {path}")
         target = ROOT / path
+        existed = target.read_bytes() if target.is_file() else None
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(blob.stdout)
-        print(f"copied {path} from {ref}")
+        target.write_bytes(blob)
+        what = "new" if existed is None else "identical" if existed == blob else "replaces a file that differs"
+        print(f"copied {path} from {ref} ({commit[:12]}): {what}")
+        copied.append(path)
+        if path.endswith((".yml", ".yaml")):
+            for folder in local_actions(blob.decode("utf-8", errors="replace")):
+                if folder not in folders:
+                    folders.append(folder)
+                    listed = git("ls-tree", "-r", "--name-only", commit, folder)
+                    files = [line for line in listed.stdout.split("\n") if line]
+                    if listed.returncode != 0 or not files:
+                        sys.exit(f"{ref} ({commit[:12]}) has no {folder}, which {path} uses")
+                    queue.extend([name for name in files if name not in copied and name not in queue])
+
+
+def git_bytes(*args):
+    done = subprocess.run(["git", *args], cwd=ROOT, capture_output=True)
+    return done.stdout if done.returncode == 0 else None
+
+
+def copied_preflight_differs(pf):
+    """The version-file lists the copied preflight reads that are not the ones this bump moves, by name."""
+    spec = importlib.util.spec_from_file_location("release_preflight_copy", ROOT / "tools/ci/release_preflight.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return [name for name in ("FILES", "MANIFESTS", "LOCKS") if getattr(module, name, None) != getattr(pf, name)]
 
 
 def main():
@@ -133,18 +209,26 @@ def main():
     pf = preflight()
     if not pf.SEMVER.fullmatch(a.version):
         sys.exit(f"{a.version!r} is not a semver version")
-    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", a.date):
-        sys.exit(f"--date {a.date!r} is not YYYY-MM-DD")
+    if not valid_date(a.date):
+        sys.exit(f"--date {a.date!r} is not a calendar date written YYYY-MM-DD")
     old, problems = pf.check_versions(read_files(pf), None)
     problems = [p for p in problems if "CHANGELOG.md" not in p]
     if old is None or problems:
         sys.exit("the version files disagree before the bump:\n  " + "\n  ".join(problems))
     if old == a.version:
         sys.exit(f"the version files already say {old}")
+    # Before anything is written: a ref that is refused leaves the checkout as it was.
+    commit = main_commit(a.release_workflows_from) if a.release_workflows_from else None
     for path in bump(pf, old, a.version, a.date):
         print(f"{old} -> {a.version}: {path}")
     if a.release_workflows_from:
-        copy_release_workflows(a.release_workflows_from)
+        copy_release_workflows(a.release_workflows_from, commit)
+        differs = copied_preflight_differs(pf)
+        if differs:
+            sys.exit(
+                "the copied tools/ci/release_preflight.py reads other version files than this bump moves "
+                f"({', '.join(differs)} differ): copy the workflows from a main this script is from"
+            )
     version, problems = pf.check_versions(read_files(pf), a.version)
     missing_section = [p for p in problems if "CHANGELOG.md" in p]
     problems = [p for p in problems if p not in missing_section]
