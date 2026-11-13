@@ -1247,6 +1247,28 @@ and earlier write every room, as every element: both phase rules start at
 Revit 2016 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
+**RE-452 (2026-11-13)** gives a door or window of a curtain wall the wall its
+list names, where the element data of an id in its list names that wall too.
+Doors and windows took a curtain wall only through the curtain grid their
+record names, whose offsets (RE-72) are not found on Revit 2027, so the curtain
+door 216844 of Autodesk's `rac_advanced` was a part of the curtain wall 162023
+on the 2025 and 2026 saves and stood alone, contained in the storey, on the 2027
+save, and lost the `IsExternal` its wall gives (#1865). The fallback RE-449 added
+for mullions never reached openings, and RE-449's statement that this door's
+match gave it the wall on both saves was wrong: a door is not one of the parts
+that match runs on. The door is a part of 162023 on 2027 again, with its
+`IsExternal`. The rule as first written took the named wall alone and put all
+268 doors that Revit's export aggregates into a curtain wall and the four BIM4LCA
+offices did not in the right one, and one door of a Revit 2018 model in a curtain
+wall where Revit's export leaves it in an ordinary one: a measured negative, so
+the element data has to name the wall too, which exists on Revit 2024 and later.
+184 of the 268 office doors now match Revit's export, with none in a different
+wall; 21 in each of the four files are still left out. 21 of the 146 exports of
+the unfiltered Measure run change (the four offices, the `rac_advanced`,
+`rac_basic`, `rme_advanced` and `rme_basic` samples of 2024 to 2027, and
+Snowdon Towers Architectural) and no export of Revit 2015 to 2023 does
+(`reports/element-framing/RE-452-curtain-openings-named-wall.md`).
+
 **RE-451 (2026-11-13)** stops Revit 2023 from reading the element before a
 furred ceiling as the ceiling's type. On Autodesk's `rac_advanced` saved by
 Revit 2023 the two furred ceilings (247617 and 247677) were written as
