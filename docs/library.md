@@ -132,8 +132,10 @@ cargo build --release
 
 # Two saves of one project, element by element: what was added, removed or
 # changed (class, storey, type, material, placement, body, properties), keyed
-# by the GlobalId the IFC export writes (#1843). Compare with one build: a
-# change in how rvt-rs reads a file shows as a change too.
+# by the GlobalId the IFC export writes (#1843). Where in the file rvt-rs read
+# an element (its stream, its offsets) is not compared: a later save moves it.
+# Compare with one build: a change in how rvt-rs reads a file shows as a change
+# too.
 ./target/release/rvt-diff --elements monday.rvt tuesday.rvt --json changes.json
 
 # Dump the full class schema (4,126 classes and 11,562 fields on a Revit 2024 file)

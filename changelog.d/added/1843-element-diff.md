@@ -3,7 +3,9 @@
   are keyed by the GlobalId the export writes. It lists the elements added,
   removed and changed, and for each changed one the fields that differ:
   class, name, storey, type, predefined type, material, where the body is
-  placed, a digest of the body, and each property the export writes. `--json`
+  placed, a digest of the body, and each property the export writes, less
+  rvt-rs's own record of where in the file it read the element (its
+  stream and offsets), which a later save moves. `--json`
   writes the whole comparison (`docs/schemas/rvt-diff-elements.schema.json`),
   and `--redact` scrubs names and text values. The library is
   `rvt::ifc::element_diff`. What rvt-rs does not read is not compared, and a

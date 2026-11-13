@@ -51,9 +51,24 @@ pub struct ElementState {
     /// geometry it uses. Two equal digests are two equal bodies.
     pub body: Option<String>,
     /// Each property the export writes for it, keyed `<set>.<property>`, as
-    /// the value's IFC kind and the value (`{"kind": "Real", "value": 2.5}`).
+    /// the value's IFC kind and the value (`{"kind": "Real", "value": 2.5}`),
+    /// less those of rvt-rs's own sets that say where in the file it was read
+    /// ([`FILE_LOCATION_PROPERTIES`]).
     pub properties: BTreeMap<String, Value>,
 }
+
+/// The properties of rvt-rs's own sets (`Rvt...`) that name where in the file
+/// an element was read: the stream and the byte offsets. A later save stores
+/// an element in another stream and at other offsets while the element stays
+/// the same, so a diff of two saves listed every element as changed (on
+/// Autodesk's samples, every element between the 2025 and 2026 saves).
+pub const FILE_LOCATION_PROPERTIES: [&str; 5] = [
+    "SourceStream",
+    "PartitionStream",
+    "PartitionOffset",
+    "ByteStart",
+    "ByteEnd",
+];
 
 /// One field of an element that differs between the two exports.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -150,7 +165,11 @@ pub fn element_states(model: &IfcModel) -> Vec<ElementState> {
         let own = property_set.iter();
         let attached = sets.get(&index).into_iter().flatten().copied();
         for set in own.chain(attached) {
+            let own_set = set.name.starts_with("Rvt");
             for property in &set.properties {
+                if own_set && FILE_LOCATION_PROPERTIES.contains(&property.name.as_str()) {
+                    continue;
+                }
                 properties.insert(
                     format!("{}.{}", set.name, property.name),
                     to_value(&property.value),
