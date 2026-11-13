@@ -50,9 +50,18 @@ class ToolError(McpError):
     """A tool answered `isError`: the message is its text."""
 
 
+def takes_root(binary):
+    """Whether the server has `--root` (#1883): Measure runs the scorers against the server of both sides of a run, and a side from before the flag reads any file."""
+    help_text = subprocess.run([binary, "--help"], capture_output=True, text=True, timeout=60, check=True).stdout
+    return "--root" in help_text
+
+
 class Server:
-    def __init__(self, binary, output_dir=None, timeout=2280.0):
+    def __init__(self, binary, output_dir=None, timeout=2280.0, root=None):
         args = [binary]
+        if root and takes_root(binary):
+            # The server reads files only inside one folder; the model's own.
+            args += ["--root", root]
         if output_dir:
             args += ["--output-dir", output_dir]
         self.timeout = timeout
@@ -298,7 +307,7 @@ def main(argv):
         print("usage: mcp_client.py <rvt-rs-mcp> <model.rvt> [--all]  (prints the semantic dump)", file=sys.stderr)
         return 2
     with tempfile.TemporaryDirectory() as scratch:
-        server = Server(argv[1], output_dir=scratch)
+        server = Server(argv[1], output_dir=scratch, root=os.path.dirname(os.path.abspath(argv[2])))
         try:
             answers = gather(server, argv[2], scratch, details="all" if "--all" in argv[3:] else "sample")
         finally:

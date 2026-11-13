@@ -18,6 +18,7 @@ mod config;
 mod exports;
 mod gate;
 mod output;
+mod root;
 mod schema;
 mod server;
 mod store;
@@ -35,6 +36,7 @@ use rvt::walker::WalkerLimits;
 
 use crate::config::Config;
 use crate::gate::Gate;
+use crate::root::{Folder, Reach};
 use crate::server::RvtServer;
 use crate::store::Store;
 
@@ -71,7 +73,13 @@ impl LogLevel {
         report it. --large-model raises them for large models.\n\n\
         An answer is bounded too: a name or value from the file longer than\n\
         --max-field-chars is cut, and an answer longer than --max-answer-bytes is\n\
-        refused, so a crafted file cannot make a tool return without end."
+        refused, so a crafted file cannot make a tool return without end.\n\n\
+        Files are read and exports written inside one folder: --root (or\n\
+        RVT_MCP_ROOT), else the folder the server is started in when that is not\n\
+        too broad (`/`, the home folder, a folder above it). A path that leaves it,\n\
+        by .. or a link, is refused, so text in a crafted file cannot steer the\n\
+        client to other files. --unconfined lifts the limit; --output-dir moves\n\
+        the exports elsewhere."
 )]
 struct Args {
     /// Raise the stream, inflate and walker-scan limits for large models:
@@ -115,8 +123,20 @@ struct Args {
     /// that says how to ask for less (default 4 MiB).
     #[arg(long, value_name = "BYTES")]
     max_answer_bytes: Option<usize>,
-    /// Write exports only inside this folder; a relative out_path is taken
-    /// from it.
+    /// The one folder models are read from and exports written to; a relative
+    /// path is taken from it, and a path that leaves it, by `..` or a link, is
+    /// refused. Also RVT_MCP_ROOT, for a client that passes only an
+    /// environment. With neither, the folder the server is started in, unless
+    /// that is the top of a file system, the home folder or a folder that holds
+    /// it: then every tool that touches a file refuses until one is given.
+    #[arg(long, value_name = "DIR", conflicts_with = "unconfined")]
+    root: Option<PathBuf>,
+    /// Lift the root: read any file the account can read, and write exports
+    /// anywhere (inside --output-dir when one is given).
+    #[arg(long)]
+    unconfined: bool,
+    /// Write exports only inside this folder, which need not be inside the
+    /// root; a relative out_path is taken from it.
     #[arg(long, value_name = "DIR")]
     output_dir: Option<PathBuf>,
     /// How much the server logs to stderr.
@@ -147,9 +167,16 @@ impl Args {
                 .unwrap_or(defaults.max_container_records),
         };
         let max_open_models = self.max_open_models.max(1);
+        let reach = Reach::choose(
+            self.unconfined,
+            self.root.as_deref(),
+            std::env::var_os(root::ROOT_ENV).as_deref(),
+            std::env::current_dir(),
+            &root::home_folders(),
+        )?;
         let output_dir = match &self.output_dir {
             Some(dir) => Some(
-                std::fs::canonicalize(dir)
+                Folder::new(dir)
                     .map_err(|error| format!("--output-dir {}: {error}", dir.display()))?,
             ),
             None => None,
@@ -162,6 +189,7 @@ impl Args {
             ),
             walker_limits,
             max_open_models,
+            reach,
             output_dir,
             max_answer_bytes: self
                 .max_answer_bytes
@@ -186,6 +214,17 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    match config.reach.limit() {
+        Ok(Some(root)) => tracing::info!(
+            "reads models from and writes exports to {} only",
+            root.dir().display()
+        ),
+        Ok(None) => {
+            tracing::info!("--unconfined: models are read from and exports written anywhere")
+        }
+        // The server starts, and each tool that touches a file says the same.
+        Err(message) => tracing::warn!("{message}"),
+    }
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

@@ -290,6 +290,10 @@ for the five lowest ElementIds of each IFC entity, the diagnostics and an
   `python3 tools/re/mcp_client.py <rvt-rs-mcp> <model.rvt> [--all]` writes it
   alone, with `get_element` for the five lowest ElementIds of each entity or
   for every element; the semantic merge check (#1334) reads it.
+- The client starts the server with `--root` set to the model's folder when
+  the server has the flag (`tools/re/mcp_client.py` reads its `--help`), since
+  a server reads files only inside one folder (#1883); a side from before the
+  flag reads any file and is started without it.
 - The server is built (`cargo build -p rvt-rs-mcp`, in the side's Build job)
   only in a run that names no scorers or names this one. It is optional: a ref
   without the crate, or whose server does not build, leaves the step NOT

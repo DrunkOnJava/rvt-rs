@@ -234,9 +234,15 @@ fn transport() -> TokioChildProcess {
     transport_with(&[])
 }
 
+/// The server is started `--unconfined`: the fixtures are outside the folder
+/// this test runs in, which is the root a server takes by default (#1883). The
+/// tests of the root itself start it as a setup would ([`Raw::start_in`]).
 fn transport_with(arguments: &[&str]) -> TokioChildProcess {
     TokioChildProcess::new(tokio::process::Command::new(SERVER).configure(|command| {
-        command.env("SOURCE_DATE_EPOCH", EPOCH).args(arguments);
+        command
+            .env("SOURCE_DATE_EPOCH", EPOCH)
+            .arg("--unconfined")
+            .args(arguments);
     }))
     .expect("spawn rvt-rs-mcp")
 }
@@ -1245,15 +1251,46 @@ struct Raw {
 }
 
 impl Raw {
+    /// A server that reads the fixtures wherever they are (`--unconfined`; see
+    /// [`transport_with`]).
     fn start(args: &[&OsStr]) -> Self {
-        let mut child = Command::new(SERVER)
+        let mut all = vec![OsStr::new("--unconfined")];
+        all.extend_from_slice(args);
+        Self::spawn(&all, None, &[])
+    }
+
+    /// A server as its setup leaves it, started in `cwd`: its root is that
+    /// folder unless `args` name another.
+    fn start_in(args: &[&OsStr], cwd: &Path) -> Self {
+        Self::spawn(args, Some(cwd), &[])
+    }
+
+    /// [`Raw::start_in`] with environment variables set (`HOME`,
+    /// `RVT_MCP_ROOT`). Only the Unix tests use it: they set `HOME`, which
+    /// Windows does not read for a user's folder, and an unused function is
+    /// an error there.
+    #[cfg(unix)]
+    fn start_with_env(args: &[&OsStr], cwd: &Path, envs: &[(&str, &OsStr)]) -> Self {
+        Self::spawn(args, Some(cwd), envs)
+    }
+
+    fn spawn(args: &[&OsStr], cwd: Option<&Path>, envs: &[(&str, &OsStr)]) -> Self {
+        let mut command = Command::new(SERVER);
+        command
             .args(args)
             .env("SOURCE_DATE_EPOCH", EPOCH)
+            // Whatever environment the tests run in names no root.
+            .env_remove("RVT_MCP_ROOT")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .expect("spawn rvt-rs-mcp");
+            .stderr(Stdio::null());
+        for (name, value) in envs {
+            command.env(name, value);
+        }
+        if let Some(cwd) = cwd {
+            command.current_dir(cwd);
+        }
+        let mut child = command.spawn().expect("spawn rvt-rs-mcp");
         let stdin = child.stdin.take();
         let stdout = child.stdout.take().expect("stdout");
         let (sender, lines) = channel();
@@ -1535,6 +1572,481 @@ fn a_path_outside_output_dir_is_refused() {
     assert_eq!(allowed["result"]["isError"], false, "{allowed}");
     assert!(!out.join("outside.ifc").exists());
     assert!(inside.join("relative.ifc").is_file());
+}
+
+/// Two folders under one scratch folder, each with the fixture copied to
+/// `model.rvt`: the project, which is a server's root in these tests, and a
+/// sibling that is not.
+fn project_and_sibling(name: &str) -> (PathBuf, PathBuf) {
+    let base = scratch(name);
+    let project = base.join("project");
+    let sibling = base.join("elsewhere");
+    for dir in [&project, &sibling] {
+        std::fs::create_dir_all(dir).expect("create a folder");
+        std::fs::copy(fixture(), dir.join("model.rvt")).expect("copy the fixture");
+    }
+    (project, sibling)
+}
+
+/// One `tools/call` on a raw server, answered by its `id`.
+fn tool(server: &mut Raw, id: i64, name: &str, arguments: Value) -> Value {
+    server.send(&json!({
+        "jsonrpc": "2.0", "id": id, "method": "tools/call",
+        "params": { "name": name, "arguments": arguments, "_meta": modern_meta() }
+    }));
+    server.recv()
+}
+
+/// The text of a tool error.
+fn refusal(reply: &Value) -> String {
+    assert_eq!(
+        reply["result"]["isError"], true,
+        "expected a refusal: {reply}"
+    );
+    reply["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// A refusal for a path outside the root names the root and both ways to move
+/// it.
+fn assert_outside(text: &str, root: &Path, label: &str) {
+    assert!(text.contains("is outside"), "{label}: {text}");
+    assert!(
+        text.contains(root.to_string_lossy().as_ref()),
+        "{label}: {text}"
+    );
+    assert!(
+        text.contains("--root") && text.contains("--unconfined"),
+        "{label}: {text}"
+    );
+}
+
+/// The default root (#1883): the folder the server is started in. A relative
+/// path is taken from it; a path outside it by another folder, by `..`, or by
+/// a link inside it is refused, for a model to read and for an export to
+/// write, and a refusal reads alike whether the file is there or not.
+#[test]
+fn the_server_acts_inside_the_folder_it_is_started_in() {
+    let (project, sibling) = project_and_sibling("root-default");
+    let root = std::fs::canonicalize(&project).expect("canonical root");
+    let mut server = Raw::start_in(&[], &project);
+
+    let opened = tool(
+        &mut server,
+        1,
+        "open_model",
+        json!({ "model": "model.rvt" }),
+    );
+    assert_eq!(opened["result"]["isError"], false, "{opened}");
+    let absolute = tool(
+        &mut server,
+        2,
+        "get_summary",
+        json!({ "model": project.join("model.rvt") }),
+    );
+    assert_eq!(absolute["result"]["isError"], false, "{absolute}");
+
+    let cases = [
+        ("another folder", json!(sibling.join("model.rvt"))),
+        ("a .. that leaves", json!("../elsewhere/model.rvt")),
+        (
+            "a file that is not there",
+            json!(sibling.join("absent.rvt")),
+        ),
+    ];
+    let mut texts = Vec::new();
+    for (index, (label, model)) in cases.iter().enumerate() {
+        let reply = tool(
+            &mut server,
+            10 + index as i64,
+            "open_model",
+            json!({ "model": model }),
+        );
+        let text = refusal(&reply);
+        assert_outside(&text, &root, label);
+        texts.push(text);
+    }
+    assert_eq!(
+        texts[0].replace("model.rvt", "FILE"),
+        texts[2].replace("absent.rvt", "FILE"),
+        "a file there and a file not there are refused in the same words"
+    );
+
+    // A link inside the root that leads out of it.
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(sibling.join("model.rvt"), project.join("link.rvt"))
+            .expect("link a file");
+        std::os::unix::fs::symlink(&sibling, project.join("folder-link")).expect("link a folder");
+        let file = tool(
+            &mut server,
+            20,
+            "open_model",
+            json!({ "model": "link.rvt" }),
+        );
+        assert_outside(&refusal(&file), &root, "a link to a file outside");
+        let through = tool(
+            &mut server,
+            21,
+            "open_model",
+            json!({ "model": "folder-link/model.rvt" }),
+        );
+        assert_outside(&refusal(&through), &root, "a link to a folder outside");
+    }
+
+    let written = tool(
+        &mut server,
+        30,
+        "export_ifc",
+        json!({ "model": "model.rvt", "out_path": "out.ifc" }),
+    );
+    assert_eq!(written["result"]["isError"], false, "{written}");
+    assert!(project.join("out.ifc").is_file());
+    let in_root = tool(
+        &mut server,
+        31,
+        "export_gltf",
+        json!({ "model": "model.rvt", "out_path": project.join("out.glb") }),
+    );
+    assert_eq!(in_root["result"]["isError"], false, "{in_root}");
+    assert!(project.join("out.glb").is_file());
+
+    let targets = [
+        ("another folder", json!(sibling.join("elsewhere.ifc"))),
+        ("a .. that leaves", json!("../elsewhere/leaves.ifc")),
+        ("a folder that is not there", json!("../absent/never.ifc")),
+    ];
+    for (index, (label, out_path)) in targets.iter().enumerate() {
+        let reply = tool(
+            &mut server,
+            40 + index as i64,
+            "export_ifc",
+            json!({ "model": "model.rvt", "out_path": out_path }),
+        );
+        let text = refusal(&reply);
+        assert_outside(&text, &root, label);
+        assert!(text.contains("out_path"), "{label}: {text}");
+    }
+    #[cfg(unix)]
+    {
+        let reply = tool(
+            &mut server,
+            50,
+            "export_ifc",
+            json!({ "model": "model.rvt", "out_path": "folder-link/through.ifc" }),
+        );
+        assert_outside(&refusal(&reply), &root, "a link to a folder outside");
+    }
+    for name in ["elsewhere.ifc", "leaves.ifc", "through.ifc"] {
+        assert!(
+            !sibling.join(name).exists(),
+            "{name} was written outside the root"
+        );
+    }
+    server.finish();
+}
+
+/// `--root` names another folder: a relative path is taken from it, not from
+/// where the server was started, and exports land in it.
+#[test]
+fn root_names_another_folder_and_relative_paths_are_taken_from_it() {
+    let (project, sibling) = project_and_sibling("root-flag");
+    let mut server = Raw::start_in(&[OsStr::new("--root"), project.as_os_str()], &sibling);
+    let opened = tool(
+        &mut server,
+        1,
+        "open_model",
+        json!({ "model": "model.rvt" }),
+    );
+    assert_eq!(opened["result"]["isError"], false, "{opened}");
+    let written = tool(
+        &mut server,
+        2,
+        "export_ifc",
+        json!({ "model": "model.rvt", "out_path": "out.ifc" }),
+    );
+    assert_eq!(written["result"]["isError"], false, "{written}");
+    assert!(project.join("out.ifc").is_file());
+    assert!(
+        !sibling.join("out.ifc").exists(),
+        "the export went to the start folder, not the root"
+    );
+    let outside = tool(
+        &mut server,
+        3,
+        "get_summary",
+        json!({ "model": sibling.join("model.rvt") }),
+    );
+    let root = std::fs::canonicalize(&project).expect("canonical root");
+    assert_outside(
+        &refusal(&outside),
+        &root,
+        "the start folder, which is not the root",
+    );
+    server.finish();
+}
+
+/// `--unconfined` lifts the limit, for reads and for writes.
+#[test]
+fn unconfined_reads_and_writes_outside_the_start_folder() {
+    let (project, sibling) = project_and_sibling("root-unconfined");
+    let mut server = Raw::start_in(&[OsStr::new("--unconfined")], &project);
+    let opened = tool(
+        &mut server,
+        1,
+        "open_model",
+        json!({ "model": sibling.join("model.rvt") }),
+    );
+    assert_eq!(opened["result"]["isError"], false, "{opened}");
+    let written = tool(
+        &mut server,
+        2,
+        "export_ifc",
+        json!({ "model": "../elsewhere/model.rvt", "out_path": sibling.join("out.ifc") }),
+    );
+    assert_eq!(written["result"]["isError"], false, "{written}");
+    assert!(sibling.join("out.ifc").is_file());
+    server.finish();
+}
+
+/// `--output-dir` names the folder exports go to and need not be inside the
+/// root; reading stays inside the root.
+#[test]
+fn an_output_dir_outside_the_root_takes_the_exports() {
+    let (project, sibling) = project_and_sibling("root-output-dir");
+    let mut server = Raw::start_in(&[OsStr::new("--output-dir"), sibling.as_os_str()], &project);
+    let written = tool(
+        &mut server,
+        1,
+        "export_ifc",
+        json!({ "model": "model.rvt", "out_path": "out.ifc" }),
+    );
+    assert_eq!(written["result"]["isError"], false, "{written}");
+    assert!(sibling.join("out.ifc").is_file());
+    assert!(!project.join("out.ifc").exists());
+    let root = std::fs::canonicalize(&project).expect("canonical root");
+    let read = tool(
+        &mut server,
+        2,
+        "get_summary",
+        json!({ "model": sibling.join("model.rvt") }),
+    );
+    assert_outside(&refusal(&read), &root, "reading outside the root");
+    server.finish();
+}
+
+/// The setup picks the root. A client that starts its server from `/` (some
+/// do), from the home folder or from a folder above it gives no root: the
+/// server starts and every tool that touches a file refuses, naming `--root`.
+#[cfg(unix)]
+#[test]
+fn a_working_directory_that_is_too_broad_gives_no_root() {
+    let (project, _sibling) = project_and_sibling("root-broad");
+    let model = project.join("model.rvt");
+    let cases: [(&str, PathBuf, Option<PathBuf>, &str); 3] = [
+        (
+            "the top of a file system",
+            PathBuf::from("/"),
+            None,
+            "the top of a file system",
+        ),
+        (
+            "the home folder",
+            project.clone(),
+            Some(project.clone()),
+            "the home folder",
+        ),
+        (
+            "a folder above the home folder",
+            project.clone(),
+            Some(project.join("inner")),
+            "a folder that holds the home folder",
+        ),
+    ];
+    for (index, (label, cwd, home, why)) in cases.iter().enumerate() {
+        std::fs::create_dir_all(project.join("inner")).expect("create the inner folder");
+        let envs: Vec<(&str, &OsStr)> =
+            home.iter().map(|home| ("HOME", home.as_os_str())).collect();
+        let mut server = Raw::start_with_env(&[], cwd, &envs);
+        // The absolute path is inside the folder in the last two cases, and the
+        // server still refuses: there is no root.
+        let reply = tool(&mut server, 1, "open_model", json!({ "model": model }));
+        let text = refusal(&reply);
+        assert!(text.contains("--root"), "{label}: {text}");
+        assert!(text.contains("RVT_MCP_ROOT"), "{label}: {text}");
+        assert!(text.contains(why), "{label}: {text}");
+        let export = tool(
+            &mut server,
+            2,
+            "export_ifc",
+            json!({ "model": model, "out_path": project.join(format!("out{index}.ifc")) }),
+        );
+        assert!(refusal(&export).contains("--root"), "{label}: {export}");
+        assert!(!project.join(format!("out{index}.ifc")).exists());
+        server.finish();
+    }
+}
+
+/// A folder inside the home folder is a root, and `RVT_MCP_ROOT` and `--root`
+/// pick one whatever the working directory is, the flag first.
+#[cfg(unix)]
+#[test]
+fn the_setup_picks_the_root_by_flag_or_environment_whatever_the_working_directory() {
+    let (project, sibling) = project_and_sibling("root-picked");
+    let home = project.parent().expect("the scratch folder").to_path_buf();
+
+    // Inside the home folder: the working directory is the root.
+    let mut server = Raw::start_with_env(&[], &project, &[("HOME", home.as_os_str())]);
+    let opened = tool(
+        &mut server,
+        1,
+        "open_model",
+        json!({ "model": "model.rvt" }),
+    );
+    assert_eq!(opened["result"]["isError"], false, "{opened}");
+    server.finish();
+
+    // The environment variable, from `/`.
+    let mut server = Raw::start_with_env(
+        &[],
+        Path::new("/"),
+        &[("RVT_MCP_ROOT", project.as_os_str())],
+    );
+    let opened = tool(
+        &mut server,
+        1,
+        "open_model",
+        json!({ "model": "model.rvt" }),
+    );
+    assert_eq!(opened["result"]["isError"], false, "{opened}");
+    server.finish();
+
+    // The flag beats the environment: the export lands in the flag's folder.
+    let mut server = Raw::start_with_env(
+        &[OsStr::new("--root"), project.as_os_str()],
+        Path::new("/"),
+        &[("RVT_MCP_ROOT", sibling.as_os_str())],
+    );
+    let written = tool(
+        &mut server,
+        1,
+        "export_ifc",
+        json!({ "model": "model.rvt", "out_path": "flag.ifc" }),
+    );
+    assert_eq!(written["result"]["isError"], false, "{written}");
+    assert!(project.join("flag.ifc").is_file());
+    assert!(!sibling.join("flag.ifc").exists());
+    server.finish();
+
+    // Reaching a whole file system is something the setup types: `--root /`.
+    let mut server = Raw::start_in(&[OsStr::new("--root"), OsStr::new("/")], &project);
+    let opened = tool(
+        &mut server,
+        1,
+        "open_model",
+        json!({ "model": sibling.join("model.rvt") }),
+    );
+    assert_eq!(opened["result"]["isError"], false, "{opened}");
+    server.finish();
+}
+
+/// A folder reached through a link has two names, and a client sends the one it
+/// knows (`/tmp/work` and `/private/tmp/work` on macOS): paths spelled either way
+/// are inside a root or an output folder named either way, and a path outside
+/// is still refused by both. The resolved path is the gate.
+#[cfg(unix)]
+#[test]
+fn a_root_and_an_output_dir_reached_through_a_link_take_paths_spelled_either_way() {
+    let base = std::fs::canonicalize(scratch("root-alias")).expect("canonical scratch");
+    let real = base.join("real");
+    for dir in ["project", "other", "out"] {
+        std::fs::create_dir_all(real.join(dir)).expect("create a folder");
+    }
+    std::fs::copy(fixture(), real.join("project/model.rvt")).expect("copy the fixture");
+    std::fs::copy(fixture(), real.join("other/model.rvt")).expect("copy the fixture");
+    let alias = base.join("alias");
+    std::os::unix::fs::symlink(&real, &alias).expect("link the folder");
+    let root = std::fs::canonicalize(real.join("project")).expect("canonical root");
+
+    let named = alias.join("project");
+    let out = alias.join("out");
+    let mut server = Raw::start_in(
+        &[
+            OsStr::new("--root"),
+            named.as_os_str(),
+            OsStr::new("--output-dir"),
+            out.as_os_str(),
+        ],
+        &base,
+    );
+    // The spelling the setup gave, and the resolved one.
+    for (id, model) in [
+        (1, alias.join("project/model.rvt")),
+        (2, real.join("project/model.rvt")),
+    ] {
+        let reply = tool(&mut server, id, "open_model", json!({ "model": model }));
+        assert_eq!(reply["result"]["isError"], false, "{model:?}: {reply}");
+    }
+    // A sibling folder is outside by either name.
+    for (id, model) in [
+        (3, alias.join("other/model.rvt")),
+        (4, real.join("other/model.rvt")),
+        (5, alias.join("project/../other/model.rvt")),
+    ] {
+        let reply = tool(&mut server, id, "open_model", json!({ "model": model }));
+        assert_outside(&refusal(&reply), &root, &format!("{model:?}"));
+    }
+    // The output folder, spelled through the link, takes an export spelled either way.
+    for (id, name) in [
+        (6, alias.join("out/by-alias.ifc")),
+        (7, real.join("out/by-real.ifc")),
+    ] {
+        let reply = tool(
+            &mut server,
+            id,
+            "export_ifc",
+            json!({ "model": "model.rvt", "out_path": name }),
+        );
+        assert_eq!(reply["result"]["isError"], false, "{name:?}: {reply}");
+    }
+    assert!(real.join("out/by-alias.ifc").is_file());
+    assert!(real.join("out/by-real.ifc").is_file());
+    // And not a folder beside it.
+    let reply = tool(
+        &mut server,
+        8,
+        "export_ifc",
+        json!({ "model": "model.rvt", "out_path": alias.join("other/leaves.ifc") }),
+    );
+    assert_eq!(reply["result"]["isError"], true, "{reply}");
+    assert!(!real.join("other/leaves.ifc").exists());
+    server.finish();
+}
+
+/// A root that is not a folder, and both flags together, are failures to start.
+#[test]
+fn a_root_that_is_not_a_folder_or_both_flags_fail_to_start() {
+    let (project, sibling) = project_and_sibling("root-bad");
+    let missing = sibling.join("not-there");
+    let mut server = Raw::start_in(&[OsStr::new("--root"), missing.as_os_str()], &project);
+    let status = server.wait();
+    assert_eq!(status.code(), Some(2), "a missing root: {status}");
+    let file = project.join("model.rvt");
+    let mut server = Raw::start_in(&[OsStr::new("--root"), file.as_os_str()], &project);
+    let status = server.wait();
+    assert_eq!(status.code(), Some(2), "a file as the root: {status}");
+    let mut server = Raw::start_in(
+        &[
+            OsStr::new("--root"),
+            project.as_os_str(),
+            OsStr::new("--unconfined"),
+        ],
+        &project,
+    );
+    let status = server.wait();
+    assert!(!status.success(), "both flags: {status}");
 }
 
 /// The names of the files in `dir`.

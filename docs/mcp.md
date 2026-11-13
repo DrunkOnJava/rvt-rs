@@ -7,10 +7,13 @@ as IFC4 or glTF, with no Revit install and no network.
 
 - **Local.** It links the `rvt` crate in process and speaks MCP on stdin and
   stdout. It starts no subprocess, opens no socket and makes no network call.
-- **Read-only on the model.** The one thing it writes is an export file a tool
-  is asked for, at a path the caller names. Reading is not confined: a tool
-  opens any file the user running the server can read, wherever its `model`
-  path points, and `--output-dir` confines the writes only.
+- **Read-only on the model, and confined to one folder.** The one thing it
+  writes is an export file a tool is asked for, at a path the caller names.
+  Models are read from, and exports written to, one root folder that the setup
+  picks (`--root`, [below](#the-root-folder)); a path that leaves it, by `..` or
+  a link, is refused. Text in a Revit file reaches the client's model unmarked
+  and could otherwise steer it into opening or overwriting files outside the
+  project (#1883).
 - **One source of truth.** `open_model` runs the decode `rvt-ifc` runs, up to
   the model its exporter builds and the diagnostics that go with it, and keeps
   that model. Every query tool reads it, and the exports are written from it, so
@@ -70,8 +73,45 @@ Claude Desktop (`claude_desktop_config.json`) and any client that reads
 
 Give the full path to the binary as `command` when the client does not search
 your `PATH`. Add `--large-model` to `args` for models with a partition of
-hundreds of megabytes, and `--output-dir <folder>` to confine the exports to one
-folder.
+hundreds of megabytes, and `--output-dir <folder>` to send the exports to a
+folder of their own.
+
+Name the folder that holds your models with `--root`, as in
+`"args": ["--root", "/path/to/models"]`. Claude Code starts the server in the
+project's folder, which then is the root; some clients start their servers from
+`/` or the home folder, which are too broad to be one (next section).
+
+### The root folder
+
+The server reads models from, and writes exports to, one folder (#1883). Its
+setup picks it, in this order:
+
+1. `--root <folder>`;
+2. the environment variable `RVT_MCP_ROOT`, for a client that passes only an
+   environment (`"env": {"RVT_MCP_ROOT": "/path/to/models"}`);
+3. the folder the server was started in, unless that is the top of a file
+   system (`/`, a drive such as `C:\`), the home folder, or a folder that holds
+   the home folder. An MCP client chooses a server's working directory, and
+   some start theirs from `/`.
+
+With none of the three the server still starts, and every tool that takes a
+file or writes one answers with an error that names `--root`, so the client
+shows what to set. A relative `model` or `out_path` is taken from the root. A
+path is compared with the root after both are made canonical, so `..` and
+symbolic links cannot leave it, and a path whose text alone puts it outside is
+refused before any file is looked at, so the refusal does not say whether the
+file exists. What this does not do is defend against another process that
+rewrites the links inside the folder while a call runs.
+
+Reaching more is something the setup types: `--root /` for a whole file system,
+or `--unconfined` for no limit at all (every drive, and exports anywhere unless
+`--output-dir` names a folder). `--output-dir <folder>` sends the exports to a
+folder that need not be inside the root; reading stays inside it.
+
+**Upgrading from 0.21.0 and earlier.** Those servers read any file the account
+could read. A setup that opens files outside the folder its client starts the
+server in now needs `--root <folder>` (or `RVT_MCP_ROOT`) naming a folder that
+holds them, or `--unconfined` to keep the old reach.
 
 ## Protocol
 
@@ -200,8 +240,9 @@ rows, 3 of RE1 Electrical's 49 and 52 of the BIM4LCA office's 12,974 as built
 
 An export goes to the path the caller names. The path must end in `.ifc` or
 `.glb`, must not be the model being read, must not exist unless `overwrite` is
-true, and must be inside `--output-dir` when the server is started with one (a
-relative path is taken from it, otherwise from the server's working directory).
+true, and must be inside `--output-dir` when the server is started with one and
+otherwise inside the root (a relative path is taken from that folder; with
+`--unconfined` and no `--output-dir` it may lie anywhere).
 The file is written to a uniquely named temporary file in the target's folder,
 created exclusively (so a link planted at a guessable name is not followed, and
 two exports to one target do not share it), and put in place when whole: with
