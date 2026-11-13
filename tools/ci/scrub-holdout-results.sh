@@ -153,6 +153,10 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^saved graphics pre2023: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^census stages: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^previous lines: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # probe_1825_threshold_census (#1825): a source site and how many values
+      # fell in each band of it, no element.
+      grep -E '^census sites=[0-9]+ values=[0-9]+ export=[a-z]+$' "$f" || true
+      grep -E '^site src/[a-z0-9_/]+\.rs:[0-9]+ n=[0-9]+( [<>]?[-+]?(1e-[0-9]+|0)=[0-9]+)*$' "$f" || true
       # probe_1335_projected_graphs (#1335): counts, verdict words, schema class
       # names (a class name is the schema's, never the model's) and the field
       # names of the readers' lists, as numbers beside fixed words. Its `file`
