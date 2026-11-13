@@ -4,7 +4,7 @@ Concrete, reproducible outputs from the `rvt-rs` toolchain. Every command
 below is a real `[[bin]]` target declared in `Cargo.toml`; every output
 excerpt is either from a committed fixture or a CLI run against the
 `rac_basic_sample_family` reference corpus (`.rfa` files shipped by
-Autodesk with Revit 2016–2026). Nothing is mocked, and anything that is
+Autodesk with Revit 2016–2027). Nothing is mocked, and anything that is
 not yet implemented is explicitly flagged `(not yet implemented)`.
 
 The demos walk the format inside-out: identify the file, dump the schema,
@@ -23,7 +23,7 @@ the `Formats/Latest` + `PartAtom` streams.
 cargo build --release
 ./target/release/rvt-info \
     --show-classes --redact \
-    samples/rac_basic_sample_family-2024.rfa
+    _corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa
 ```
 
 Real output (redacted form; raw path → `<redacted>` so it's safe to
@@ -32,8 +32,6 @@ commit):
 ```text
 Revit file ·
   version:       2024
-  build:         —
-  file GUID:     —
   original path: C:\Users\<redacted>\Desktop\Revit - <redacted project id>\2024\racbasicsamplefamily.rfa
   partition:     Partitions/67
   streams:       13 (397312 total bytes)
@@ -46,10 +44,10 @@ Schema ·
   class names (inferred): 395
   sample:
     - ADocument
+    - APIAppInfo
     - DBView
     - HostObj
     - Symbol
-    - APIAppInfo
 
 Streams ·
   BasicFileInfo
@@ -80,8 +78,9 @@ What just happened:
 - `--redact` rewrote Windows usernames + project-ID folders to
   `<redacted>` placeholders while preserving path shape.
 
-For JSON: `./target/release/rvt-info -f json --redact my.rfa` (schema is
-the `rvt::reader::Summary` struct in `src/reader.rs`). For the full
+For JSON: `./target/release/rvt-info -f json --redact my.rfa` (the schema
+is `rvt::reader::Summary` in `src/reader.rs`, plus `document` and
+`family_types`). For the full
 forensic report (identity + upgrade history + format anchors + schema +
 tag-linkage histogram + disclosure scan) use `rvt-analyze --redact
 <file>`; committed samples live at
@@ -92,7 +91,7 @@ and [`.json`](demo/rvt-analyze-2024-redacted.json).
 
 ## Demo 2: Class schema enumeration (`rvt-schema`)
 
-Goal: dump the 395-class serialization dictionary Revit ships inside
+Goal: dump the 4126-class serialization dictionary Revit ships inside
 every file under `Formats/Latest`. Each class carries a name, a u16 tag,
 an optional parent, a declared field count, and N field records — each
 with a C++ type signature the Revit serializer uses to round-trip on
@@ -100,16 +99,15 @@ disk.
 
 ```bash
 ./target/release/rvt-schema \
-    samples/rac_basic_sample_family-2024.rfa \
+    _corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa \
     --grep HostObj
 ```
 
 Real output (HostObj family only):
 
 ```text
-Schema · 395 classes
-          13570 fields total
-          1087 unique C++ type signatures
+Schema · 4126 classes
+          11562 fields total
 
 Classes matching /HostObj/:
 
@@ -133,7 +131,7 @@ Why this matters: these class names and type signatures match the
 symbols exported by the public `RevitAPI.dll` NuGet package one-to-one.
 The on-disk schema *is* the live type dictionary for the object graph in
 `Global/Latest` — which is why the schema tags appear there at ~340× the
-uniform-random rate. See README § "Findings of the first reconnaissance" and
+uniform-random rate. See [`docs/format.md`](format.md) § "Findings of the first reconnaissance" and
 [`docs/data/tag-drift-2016-2026.csv`](data/tag-drift-2016-2026.csv) for
 the drift table across the 11-release corpus.
 
@@ -147,7 +145,7 @@ decodes each field according to the `Formats/Latest` schema, and prints
 typed values.
 
 ```bash
-./target/release/rvt-doc --redact samples/rac_basic_sample_family-2024.rfa
+./target/release/rvt-doc --redact _corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa
 ```
 
 Real output (first ~15 of 36 ADocument fields):
@@ -168,7 +166,7 @@ adocument entry:   0x000a40
   m_active_view_id                     :: ElementId  [tag=193, id=7]
   m_sun_settings_id                    :: ElementId  [tag=201, id=12]
   m_project_location_id                :: ElementId  [tag=219, id=8]
-  m_devBranchInfo                      :: element_id
+  m_devBranchInfo                      :: ElementId  [tag=…, id=…]
   …
 ```
 
@@ -202,7 +200,7 @@ let entry    = schema.classes.iter().find(|c| c.name == "Level").unwrap();
 let decoded  = SimpleDecoder::new("Level").decode(bytes, entry, &handle_index)?;
 let level    = Level::from_decoded(&decoded);
 // Level { name: Some("Ground Floor"), elevation_feet: Some(0.0),
-//         level_type_id: Some(ElementId { tag: 201, id: 17 }),
+//         level_type_id: Some(ElementId::new(17)),
 //         is_building_story: Some(true) }
 ```
 
@@ -225,10 +223,10 @@ against synthesised schema and bytes.
 Goal: show what the IFC4 STEP writer produces given a set of decoded
 elements + placements + extrusions. The committed fixture at
 [`tests/fixtures/synthetic-project.ifc`](../tests/fixtures/synthetic-project.ifc)
-is 157 lines of IFC4 generated by the `synthetic_project_emits_valid_ifc4`
+is 172 lines of IFC4 generated by the `synthetic_project_emits_valid_ifc4`
 test in [`tests/ifc_synthetic_project.rs`](../tests/ifc_synthetic_project.rs).
-It is a unit-class target (see `tools/ci/test-targets.txt`) that CI no
-longer runs; the committed file is validated by IfcOpenShell in CI.
+It is a contract-class target (see `tools/ci/test-targets.txt`) that CI
+runs; the file the test writes is validated by IfcOpenShell in CI.
 Regenerate it by hand with:
 
 ```bash
@@ -243,7 +241,7 @@ What the fixture contains:
 | `IfcProject` | 1 | Root, "Synthetic Test Project" |
 | `IfcSite` / `IfcBuilding` | 1 / 1 | Defaults |
 | `IfcBuildingStorey` | 3 | Ground (0 m), Second (3.048 m / 10 ft), Roof Deck (6.096 m / 20 ft) |
-| `IfcWall` | 4 | N / S / E / W with 20 ft × 8″ × 10 ft extrusions |
+| `IfcWall` | 4 | N / S at 20 ft, E / W at 10 ft, all 8″ × 10 ft extrusions |
 | `IfcSlab` | 1 | 20 ft × 10 ft × 1 ft ground-floor slab |
 | `IfcDoor` | 1 | 3 ft × 8″ × 7 ft front door hosted in the south wall |
 | `IfcWindow` | 2 | North + south (placement only; geometry pending) |
@@ -256,7 +254,7 @@ What the fixture contains:
 | `IfcRelAssociatesMaterial` | 2 | Concrete → 7 elements, glass → 2 windows |
 | `IfcPropertySet` | 6 | `Pset_BuildingStoreyCommon` on each storey, `Pset_BuildingCommon`, `RvtWall` (5 props) and `RvtWindow` (2 props): IFC4's `Pset_WallCommon` and `Pset_WindowCommon` declare none of the wall's and window's values (#827) |
 | `IfcRelDefinesByProperties` | 6 | Binds each property set to its object |
-| `IfcRelContainedInSpatialStructure` | 2 | 9 elements on Ground + 1 on Second |
+| `IfcRelContainedInSpatialStructure` | 3 | 8 elements on Ground + 1 on Second + 1 on the building |
 | `IfcRelAggregates` | 3 | Project → Site, Site → Building, Building → 3 storeys |
 
 Abridged excerpt (header + a storey + the north wall + the door
@@ -266,7 +264,7 @@ opening-chain + a property set):
 ISO-10303-21;
 HEADER;
 FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');
-FILE_NAME('Synthetic Test Project.ifc','2026-10-20T03:35:22',('rvt-rs'),('DrunkOnJava/rvt-rs'),'rvt-rs 0.6.1','rvt-rs STEP writer','');
+FILE_NAME('Synthetic Test Project.ifc','2023-11-14T22:13:20',('rvt-rs'),('DrunkOnJava/rvt-rs'),'rvt-rs 0.21.0','rvt-rs STEP writer','');
 FILE_SCHEMA(('IFC4'));
 ENDSEC;
 DATA;
@@ -274,20 +272,20 @@ DATA;
 #18=IFCPROJECT('2DidPPITwEWgzLwN9h$v59',#5,'Synthetic Test Project','End-to-end rvt-rs pipeline smoke test',$,$,$,(#17),#12);
 #24=IFCBUILDINGSTOREY('0ltZd43IADNhrlf$bL6ubE',#5,'Ground Floor',$,$,#23,$,'Ground Floor',.ELEMENT.,0.000000);
 #26=IFCBUILDINGSTOREY('0lbLN7pIw6BuvMw4oqhcdl',#5,'Second Floor',$,$,#25,$,'Second Floor',.ELEMENT.,3.048000);
-#45=IFCMATERIAL('Concrete',$,$);
-#51=IFCMATERIAL('Glass - Tinted',$,$);
-#64=IFCRECTANGLEPROFILEDEF(.AREA.,$,#63,6.096000,0.203200);
-#65=IFCEXTRUDEDAREASOLID(#64,#16,#14,3.048000);
-#66=IFCSHAPEREPRESENTATION(#17,'Body','SweptSolid',(#65));
-#67=IFCPRODUCTDEFINITIONSHAPE($,$,(#66));
-#68=IFCWALL('3xlhuehGY479OIzuhukk6g',#5,'North Wall',$,$,#60,#67,'W-N-001',.NOTDEFINED.);
-#128=IFCDOOR('1UrhkCDyE2zQ7NtI3QeiHF',#5,'Front Entry Door',$,$,#120,#127,'DOOR-001',$,$,.DOOR.,$,$);
-#137=IFCOPENINGELEMENT('2AJs5dPAE0FvFGouvwp3Vn',#5,'Opening for Front Entry Door',$,$,#136,#135,'DOOR-001',.OPENING.);
-#146=IFCRELVOIDSELEMENT('1B$ATe42Q2qu6cp8BLVgI$',#5,$,$,#80,#137);
-#147=IFCRELFILLSELEMENT('0eAjMcQvI1j9WLKGmmjafA',#5,$,$,#137,#128);
-#153=IFCPROPERTYSET('0NWcqATUcFPhNb7lDclogt',#5,'RvtWall',$,(#148,#149,#150,#151,#152));
-#154=IFCRELDEFINESBYPROPERTIES('3XQFc66jg7_xbAwXMkpuD2',#5,$,$,(#68),#153);
-#161=IFCRELCONTAINEDINSPATIALSTRUCTURE('2nQIPsGEU2LRIyF4X3hMhW',#5,$,$,(#68,#80,#104,#116,#128,#139,#141,#143),#24);
+#44=IFCMATERIAL('Concrete',$,$);
+#50=IFCMATERIAL('Glass - Tinted',$,$);
+#63=IFCRECTANGLEPROFILEDEF(.AREA.,$,#62,6.096000,0.203200);
+#64=IFCEXTRUDEDAREASOLID(#63,#16,#14,3.048000);
+#65=IFCSHAPEREPRESENTATION(#17,'Body','SweptSolid',(#64));
+#66=IFCPRODUCTDEFINITIONSHAPE($,$,(#65));
+#67=IFCWALL('3xlhuehGY479OIzuhukk6g',#5,'North Wall',$,$,#59,#66,'W-N-001',.NOTDEFINED.);
+#127=IFCDOOR('1UrhkCDyE2zQ7NtI3QeiHF',#5,'Front Entry Door',$,$,#119,#126,'DOOR-001',$,$,.DOOR.,$,$);
+#136=IFCOPENINGELEMENT('0g1UYg_z22FBg1nTfVtggI',#5,'Opening for Front Entry Door',$,$,#135,#134,'DOOR-001',.OPENING.);
+#145=IFCRELVOIDSELEMENT('2gQ0UT8g27Wew_ZFQYQfAF',#5,$,$,#79,#136);
+#146=IFCRELFILLSELEMENT('1Iu0Q6wJw5juuaPrMW$fbH',#5,$,$,#136,#127);
+#152=IFCPROPERTYSET('3I$fcELG23_hjRN2MFw7eX',#5,'RvtWall',$,(#147,#148,#149,#150,#151));
+#153=IFCRELDEFINESBYPROPERTIES('2uwr3CjS23bAFAAOaEYHHM',#5,$,$,(#67),#152);
+#160=IFCRELCONTAINEDINSPATIALSTRUCTURE('1TIMCaq3kF5RePu_Mzxxa9',#5,$,$,(#67,#79,#103,#115,#127,#138,#140,#142),#24);
 ENDSEC;
 END-ISO-10303-21;
 ```
@@ -315,7 +313,8 @@ Notable properties:
   `IfcRelFillsElement(opening, door)`. BlenderBIM draws a real hole
   where the door goes.
 - **Materials carry surface style.** Each `IfcMaterial` is paired with
-  an `IfcSurfaceStyle` that sets diffuse colour + transparency, so the
+  an `IfcSurfaceStyle` that sets diffuse colour + the glass's
+  transparency (the concrete's was not read, so it stays unset), so the
   concrete walls render grey and the tinted-glass windows render
   translucent.
 - **Unknown classes degrade to a proxy, not an error.** The synthetic
@@ -367,7 +366,8 @@ GlobalIds are derived from identity, not generated; entity and property ordering
 stable by construction. With those three in place, re-running the
 writer on the same `IfcModel` twice produces byte-equal strings, and
 re-running the fixture-generating test with `DUMP_IFC=1` produces a
-file whose only varying line is line 4 (the timestamp).
+file whose only varying lines are line 4 and line 13 (the timestamp,
+in the `FILE_NAME` header and the `IfcOwnerHistory`).
 
 CI writes the synthetic project and structural frame on every run and
 validates them with IfcOpenShell and `tools/ci/ifc_schema_arity.py`; it
@@ -400,13 +400,13 @@ Honest boundary of what rvt-rs can demonstrate today:
   *(not yet implemented)*.
 - **Field-level writes** — stream-level byte-preserving round-trip
   works (13/13 streams), but rewriting a specific schema field back
-  into a Revit file is *(not yet implemented)*;\n  [ADR-002](decisions/ADR-002-semantic-write-api-gate.md) gates it.
+  into a Revit file is *(not yet implemented)*; [ADR-002](decisions/ADR-002-semantic-write-api-gate.md) gates it.
 - **Web viewer demos beyond two real projects** — the viewer is live at
   <https://drunkonjava.github.io/rvt-rs/>, and the gallery described in
   [`docs/viewer-demos.json`](viewer-demos.json) opens
   `Revit_IFC5_Einhoven.rvt` (2023, 913 KB) and
   `2024_Core_Interior.rvt` (2024, 33.7 MB) from the MIT
   magnetar-io/revit-test-datasets corpus, hash-verified at staging
-  time. Every other gallery entry is a 20 KB synthetic or a family
+  time. Every other gallery entry is a synthetic `.rvt` or `.ifc` or a family
   `.rfa`; a broader redistributable real-project corpus is
   *(not yet available)*.

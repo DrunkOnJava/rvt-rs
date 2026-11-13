@@ -55,7 +55,7 @@ import rvt
 f = rvt.RevitFile("my-family.rfa")
 
 # BasicFileInfo getters — each a cheap parse of the BasicFileInfo
-# stream, cached by the Rust reader.
+# stream, re-read and re-parsed on every call.
 print(f.version)              # 2024
 print(f.build)                # "20230308_1635(x64)"
 print(f.guid)                 # "7f3c..." or None
@@ -64,7 +64,7 @@ print(f.part_atom_title)      # e.g. "0610 x 0915mm" on family files
 
 # Stream enumeration.
 print(f.stream_names())       # 13 entries on the reference corpus
-print(f.missing_required_streams())  # [] on a valid Revit file
+print(f.missing_required_streams())  # [] on the family file
 
 # Schema counts (cheap).
 summary = f.schema_summary()
@@ -236,8 +236,9 @@ unknown stream names.
 missing_required_streams(self) -> list[str]
 ```
 Required Revit stream names that are absent. Empty list on a
-valid Revit file. Useful for pre-validating an input before
-running heavy extractors.
+family file, whose 13 invariant streams are all present; a project
+`.rvt` with no `PartAtom` stream lists `["PartAtom"]`. Useful for
+pre-validating an input before running heavy extractors.
 
 ```text
 basic_file_info_json(self) -> str | None
@@ -298,8 +299,8 @@ Decoded schema counts. Cheap. Keys: `classes`, `fields`,
 schema_json(self) -> str
 ```
 Full schema as a JSON string. The Rust-side `SchemaTable` type
-derives `Serialize`, so the call is effectively zero-copy
-relative to the in-memory schema. Parse with `json.loads()` to
+derives `Serialize`, so the call serialises the whole in-memory
+schema into a new string. Parse with `json.loads()` to
 get a structured dict.
 
 Return shape after `json.loads`:
@@ -325,6 +326,9 @@ Return shape after `json.loads`:
     ],
     "cpp_types": ["ElementId", "std::pair< ElementId, double >", ...],
     "skipped_records": 0,
+    "scanned_bytes": int,
+    "total_bytes": int,
+    "scan_truncated": False,
 }
 ```
 
@@ -373,6 +377,12 @@ Field kinds:
 | `pointer` | `slot_a: int`, `slot_b: int` | Two u32 slots (raw container pointer) |
 | `element_id` | `tag: int`, `id: int` | Tagged ElementId; `id` is the runtime value |
 | `ref_container` | `count: int`, `col_a: list[int]`, `col_b: list[int]` | Two-column reference container (u16 per cell) |
+| `integer` | `value: int`, `signed: bool`, `size: int` | Fixed-size integer; `value` is the widened 64-bit value |
+| `float` | `value: float`, `size: int` | 32- or 64-bit IEEE 754 value |
+| `bool` | `value: bool` | 1-byte boolean |
+| `guid` | `bytes: list[int]` | 16-byte GUID / UUID |
+| `string` | `value: str` | UTF-16LE length-prefixed string |
+| `vector` | `len: int` | Homogeneous vector; count only |
 | `bytes` | `len: int` | Raw bytes; field type not yet decoded |
 
 ```text
@@ -384,7 +394,8 @@ export_diagnostics(self, saved_meshes: bool = True, phase: str | int | None = No
 `decoded_elements()` returns production-walker elements. Each entry
 has `id`, `class_name`, `byte_range`, `fields`, `parameters` (the element's
 saved parameters, as `rvt-elements` lists them; a file whose parameters
-cannot be read keeps its elements and raises a `UserWarning`), and `typed`.
+cannot be read keeps its elements and raises a `UserWarning`), `provenance`
+(where the element was read from, and how confidently) and `typed`.
 `typed` is the typed projection for
 `Level` / `Wall` / `Floor` / `Door` / `Window` / `Room` / `Material`
 (also listed as `rvt.MVP_TYPED_CLASSES`), or `None` for other classes.
@@ -625,7 +636,7 @@ The Python bindings have the Rust core's version support:
 | 2023 | yes | `None` (entry-point detector: partial) | typed elements from element records |
 | 2024 – 2025 | yes | full | typed elements with measured geometry |
 | 2026 | yes | full | typed elements from element records, experimental |
-| 2027 | partial: the sample projects open and their schema and `BasicFileInfo` read; `PartAtom` and the preview are not measured | not measured | typed elements from element records, experimental |
+| 2027 | yes | not measured | typed elements from element records, experimental |
 
 Full matrix and per-column definitions are in
 [`docs/compatibility.md`](./compatibility.md). Expanding the generic
@@ -678,14 +689,14 @@ Not in Python today:
 Likely an older / different `rvt` package in the environment. Run
 `pip uninstall rvt` and reinstall.
 
-### `IOError: NotACfbFile`
+### `IOError: Not a Revit file (magic bytes did not match CFB/OLE)`
 
 The file doesn't start with OLE2 magic bytes
 (`D0 CF 11 E0 A1 B1 1A E1`). Likely causes: it's not a Revit file,
 it's a zero-byte Git LFS placeholder, or a transfer layer mangled
 the bytes (e.g. line-ending conversion).
 
-### `IOError: FileTooLarge`
+### `IOError: the file is <size> bytes, over the limit of <limit>`
 
 The file exceeds `max_file_bytes` (default 2 GiB). Either pass a
 larger cap explicitly in the constructor or verify the file isn't
@@ -696,7 +707,7 @@ corrupt.
 The Layer-5a walker's entry-point detector didn't find an
 `ADocument` record. Expected on Revit 2016–2023 files (see version
 support matrix). For 2024–2026 files this is unexpected on the
-11-release reference corpus — all samples resolve — but may occur
+12-release reference corpus — all samples resolve — but may occur
 on exotic layouts. File an issue with the Revit release year and
 `f.stream_names()` output.
 

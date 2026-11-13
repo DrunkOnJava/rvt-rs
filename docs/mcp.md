@@ -140,7 +140,7 @@ or roots), so it works with a client that offers none of them.
   scan, element decode, partition scan, saved graphics and saved meshes), and a
   last one when the call ends. A cancelled call is cancelled by the client's
   `notifications/cancelled`, which rmcp turns into a cancelled `context.ct`
-  (`rmcp` 3.8 `src/service.rs`, the serve loop: it removes the request from its
+  (`rmcp` 3.9 `src/service.rs`, the serve loop: it removes the request from its
   table and cancels its token, and `context.ct` is a child of that token), and
   the server hands that to `WalkerControl`. The decode and the saved-mesh pass
   stop at their next checkpoint, and an export being written stops at its next
@@ -304,9 +304,9 @@ keeps it in memory beside the model and does not return it: `get_diagnostics`
 and the exports' summaries are the diagnostics without it, as `rvt-ifc` writes
 them by default. Building it is one pass over the walk the decode already made
 and a re-read of the first bytes of each partition record. Its time on each
-model is printed by `tests/element_provenance_offsets.rs` (the `build` line of
-its report, Corpus health's `element-provenance` artifact); no figure is stated
-here yet. The fields are never written into the IFC.
+model is printed by `tests/element_provenance_offsets.rs` (the `table built in`
+time of its per-model line, Corpus health's `element-provenance` artifact); no
+figure is stated here yet. The fields are never written into the IFC.
 
 When an element has several partition element record frames, `offset` is the
 one the exporter selected. It is the newest, the highest-numbered partition: on
@@ -365,7 +365,6 @@ here yet.
 
 ### Not provided yet
 
-- A Measure scorer for the server's answers (#1327).
 - Lookup by the Revit Mark parameter: nothing in rvt-rs decodes it.
 - The Tasks extension (`io.modelcontextprotocol/tasks`). A long export is one
   call with progress and cancellation; a client moves a call that runs long to

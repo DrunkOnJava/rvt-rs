@@ -129,7 +129,7 @@ verified reproduction of every figure (W10 in the
 |---|---|---|---|---|
 | magnetar Core Interior | 2024 | MIT, redistributable | IFC4 ReferenceView 1.2, Revit 24.0.20.20 (the full `_slim` export, and a 20 KB element fixture) | 360 walls, 132 doors, 6 windows, 256 columns, 80 slabs, 15 storeys; Revit's GlobalId on 854 elements, 116 rooms and 15 storeys. Run in CI. |
 | magnetar Einhoven | 2023 | MIT, redistributable | none | 2023 element records with no export to score against (walls, windows, materials), the 2023 arc-wall path; pinned by the project-count fixture and the viewer's browser test |
-| IFC-ECS RE1 Architecture, Mechanical, Plumbing, Electrical | 2025 | MIT, redistributable | IFC2X3 CoordinationView 2.0, Revit 26.2.0.20 (the files are Revit 2025, so this is a cross-release pair) | 2025 element records; Architecture: 7 walls, 2 slabs, 11 rooms; 2 storeys each; Revit's GlobalIds 73 / 73 / 123 / 12. Run in CI. |
+| IFC-ECS RE1 Architecture, Mechanical, Plumbing, Electrical | 2025 | MIT, redistributable | IFC2X3 CoordinationView 2.0, Revit 26.2.0.20 (the files are Revit 2025, so this is a cross-release pair) | 2025 element records; Architecture: 7 walls, 2 slabs, 11 rooms; 2 storeys each; Revit's GlobalIds 73 / 74 / 123 / 49. Run in CI. |
 | Autodesk Snowdon Towers Architectural | 2024 | none declared, local only | IFC4 ReferenceView 1.2, Revit 24.0.20.20 | 5,968 exported, 5,945 of them in Revit's export (from #309 and #328, no committed report; the other 23 are curtain panels with no resolved type, and the 6 slabs in the Legends phase of #328 are no longer written, RE-184); 1,078 walls; 18 storeys; wall joins, layers, curtain walls, stairs, roofs |
 | Autodesk Snowdon Towers Structural | 2024 | none declared, local only | VIM | beams along their axes, structural categories |
 | Autodesk Snowdon Towers Plumbing, HVAC, Electrical | 2024 | Autodesk sample, local only; downloaded from Autodesk's "Revit Sample Project Files" page (sha256 `4f80526b…`, `58538599…`, `e50e1b71…`) | VIM (2027 edition) | **held out**: never used to develop the decoder, measured once as they are (`reports/validation/held-out-snowdon-mep-2026-09-27.md`) |
@@ -167,7 +167,8 @@ and the MEP projects `rme_basic` and `rme_advanced` and the `rst_advanced`
 project. Of those, the MEP projects of 2024 to 2027 are pinned (8 files: ducts
 of every shape, fittings, connectors and systems the reference models lack),
 and the MEP and `rst_advanced` projects of 2015 and 2019 (6 files), which check
-the readers of 2015 to 2022 files (RE-180, RE-181). Revit 2015's are under
+the readers of 2015 to 2022 files (RE-180, RE-181), and the 2023 MEP basic
+project (1 file, RE-443). Revit 2015's are under
 `Docs/` on the host, not `Docs/InProd/` as for later releases. Its multi-model
 2024 sample, Snowdon Towers, is pinned as well (5 files: Architectural, Structural, HVAC, Plumbing and Electrical),
 so that a regression on the models #736 found is seen in a run. It is the host the sample families of the phi-ag/rvt
@@ -279,8 +280,9 @@ class and category names, and no geometry. Without `--anonymize` they also
 hold the names the project gives things: the file and project names, the
 levels, a sample of the materials and of skipped elements, and, in
 `rvt-inspect`'s report, the folder path Revit stored for the file (by default it
-replaces only a path's `\Users\<name>\` part and Autodesk build and
-project-id folders). `--anonymize`
+replaces only a path's user-name segment under `\Users\`, `/Users/` or
+`/home/`, and Autodesk build-server, project-id and OneDrive paths).
+`--anonymize`
 replaces those with placeholders such as `Level 1`, keeping counts and
 ElementIds; the browser viewer's Download diagnostics does the same. Read
 both before posting.

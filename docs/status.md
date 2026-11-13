@@ -22,14 +22,14 @@ enforced by `tests/witness_registry.rs` plus the CI gates it names. Two
 RVT → IFC edges via Revit's exporter are recorded and gated today — the 20 KB
 element fixture and the full 19879-entity project export — each witnessed by
 three independent implementation lineages: rvt-rs on the `.rvt`, IfcOpenShell
-and IFClite on the `.ifc`. The full-project verdict's claimed surface is ten
-fields wide since #212 (`IFCWALL`, `IFCDOOR`, `IFCWINDOW`, `IFCCOLUMN`,
-`IFCSLAB`, `IFCSHADINGDEVICE`, `IFCROOF`, `IFCBEAM`, `IFCFLOWTERMINAL`,
-`IFCUNITASSIGNMENT`). The RVT → DWG
+and IFClite on the `.ifc`. The full-project verdict's claimed surface is
+fourteen fields wide, the first ten since #212 (`IFCWALL`, `IFCDOOR`,
+`IFCWINDOW`, `IFCCOLUMN`, `IFCSLAB`, `IFCSHADINGDEVICE`, `IFCROOF`, `IFCBEAM`, `IFCFLOWTERMINAL`,
+`IFCUNITASSIGNMENT`, `IFCSPACE`, `IFCBUILDINGSTOREY`, `relations.IFCRELFILLSELEMENT`, `storeys.IFCBUILDINGSTOREY`). The RVT → DWG
 edge with dwg-rs is still pending a Revit session.
 
 **OctetProof instance:** the citable protocol specification is
-[`docs/octetproof-spec.md`](octetproof-spec.md) (1.0.2, 2026-08-30, CC-BY-4.0);
+[`docs/octetproof-spec.md`](octetproof-spec.md) (1.1.1, 2026-08-30, CC-BY-4.0);
 the draft it supersedes is kept verbatim at `docs/octetproof-spec-draft.md`,
 and §19 of the spec lists every correction. Its observation / verdict / replay
 shapes are implemented in-repo — `rvt-ifc --observation`,
@@ -61,8 +61,8 @@ GlobalId, `IsExternal` (RE-193), curtain mullions' `Span` (RE-226) and, where th
 and landings' type (RE-92) and the parameters named for a standard property
 set's property (RE-194), and a body that is exact where the element's
 data is decoded and its bounding box where it is not. It writes that as IFC4,
-glTF, plan SVG and CSV, from the CLIs, Python, the zero-upload browser
-viewer, and a local, read-only MCP server (`rvt-rs-mcp`, [`docs/mcp.md`](mcp.md))
+glTF, plan SVG and CSV, from the CLIs and the zero-upload browser viewer, as
+IFC4 and CSV from Python, and as IFC4 and glTF from a local, read-only MCP server (`rvt-rs-mcp`, [`docs/mcp.md`](mcp.md))
 that answers an agent's questions from the model the IFC export writes. On Revit 2023 projects it reads each element's ElementId, category
 and bounding box (RE-81), curtain walls with their parts under them on 2015 to 2023 (RE-366), those parts with their type and family, and the mullions and panels their material (RE-367, RE-377), walls at an angle along their lines (on 2015 to 2020 only where the record box closes on the line's rectangle) and joined by their join lists on 2015 to 2023 (RE-364), or cut back at their joins (RE-120), with their `Height` where nothing is joined to them or cuts them, though not their areas or volumes (RE-364 section 9), beams at their columns
 (RE-122) and elsewhere along their location lines on 2015 to 2023, read on Autodesk's samples only (RE-362: none of BIMcollab's 91 beams holds a line, #1514), steel beams as their type's I section on 2017 to 2023 (RE-365), door and
@@ -563,11 +563,11 @@ RE-127 (2026-09-28) reads which one from the lists of walls each wall is
 joined to: the wall whose entry for the other is a run of consecutive
 values is cut. Wall ends are now **720 of 720** and wall bodies **360 of
 360** exact.
-Nothing in the file orders the two sides — the survivor is the thicker
+Nothing in the file ordered the two sides — the survivor is the thicker
 wall once and an equal-thickness wall once, the higher ElementId once
-and the lower once — so the solver keeps cutting both rather than
-guessing, and the over-trim is pinned by
-`element_record_wall_joins::tests::the_surviving_side_of_a_true_l_corner_is_still_over_trimmed`
+and the lower once — so before RE-127 the solver cut both rather than
+guessing, and the over-trim was recorded in
+`reports/element-framing/RE-29-join-reference-list.md` §4
 instead of being hidden. On columns the same list closes #239 outright:
 the exported body is the record prism minus the untrimmed record prisms
 of the walls it names, which is **256 of 256** exact at a worst residual
@@ -1242,9 +1242,9 @@ has a room outside its last phase and such an export: Autodesk's
 all 13 releases, and a public Revit 2018 export of it holds all 14. They are
 left out by that change's default and written with `--phase "Working Drawings"`,
 which writes 14 of that export's 17 spaces by GlobalId and changes no other
-entity (Measure runs 41784415396 and 41784419457). Revit 2015
+entity (Measure runs 41784415396 and 41784419457). Revit 2014
 and earlier write every room, as every element: both phase rules start at
-Revit 2016 (#1332). The Python bindings and the viewer follow the default
+Revit 2015 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
 **RE-457 (2026-11-13)** writes a floor of the Structural Foundations category as

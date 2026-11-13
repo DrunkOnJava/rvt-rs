@@ -23,11 +23,12 @@ schema/elem_table/walker against 913 KB and 34 MB real `.rvt` files.
   performance workflow.
 - **Fixture size categories:**
   - **small** — under 1 MB. Reference: `racbasicsamplefamily-2024.rfa`
-    at ~400 KB. Currently the only corpus measured.
-  - **medium** — 1–50 MB. No fixture in corpus yet.
+    at ~400 KB. Required in the scheduled workflow.
+  - **medium** — 1–50 MB. Reference: `2024_Core_Interior.rvt` at ~34 MB.
+    Required in the scheduled workflow.
   - **large** — 50 MB and up. No fixture in corpus yet.
 - **Corpus:** git-LFS-pulled [`phi-ag/rvt`](https://github.com/phi-ag/rvt)
-  sample set, 11 Revit releases 2016-2026. All small-category files.
+  sample set, 12 Revit releases 2016-2027. All small-category files.
 
 ## Criterion suites
 
@@ -37,7 +38,7 @@ Four `criterion` suites under `benches/`. Run with `cargo bench --bench
 | Suite | What it measures | Fixture |
 |---|---|---|
 | `compression` | Raw inflate throughput on synthetic gzip chunks. Isolates `compression::inflate_at` from any surrounding CFB / schema work. | In-memory |
-| `basic_file_info` | UTF-16LE key-value parse on a realistic BasicFileInfo buffer. Hot path for `rvt-info` / `rvt-history`. | In-memory synthesized |
+| `basic_file_info` | UTF-16LE key-value parse on a realistic BasicFileInfo buffer. Hot path for `rvt-info` / `rvt-analyze`. | In-memory synthesized |
 | `schema` | Floor-time timing for `formats::parse_schema` on an empty input. Richer real-schema timings are in the `project_file` suite below. | In-memory |
 | `project_file` | Open / summarize / schema-parse / elem-table records / ADocument walker on 913 KB and 34 MB real `.rvt` project files. Skips when the corpus isn't present. | magnetar-io/revit-test-datasets (LFS) |
 
@@ -127,7 +128,7 @@ bound on per-operation cost, not as microbenchmarks.
 | CLI | Mean | Notes |
 |---|---:|---|
 | `rvt-history` | **3.8 ms** | Parse document-upgrade history only |
-| `rvt-schema` | **4.5 ms** | Parse all 395 classes + 1,114 fields |
+| `rvt-schema` | **4.5 ms** | Parse all 4,126 classes + 11,562 fields |
 | `rvt-info` (text) | 7.6 ms | + basic-file-info + PartAtom + preview |
 | `rvt-info` (json) | 7.7 ms | Same content, JSON-serialised |
 | `rvt-history --partitions` | 19.4 ms | + every UTF-16LE string in `Partitions/NN` |
@@ -139,7 +140,7 @@ Raw hyperfine export: [`docs/data/bench-2024.md`](data/bench-2024.md),
 
 ### Full-corpus sweep
 
-`rvt-analyze --redact --json` over all 11 Revit releases:
+`rvt-analyze --redact --json` over 11 of the corpus's Revit releases:
 
 ```
 Mean:  227.2 ms ± 2.1 ms
@@ -165,7 +166,7 @@ closed-source.
   header + raw DEFLATE, no trailing CRC/ISIZE); `flate2::read::DeflateDecoder`
   handles the body. A `bench_identify` + `bench_schema` pair against a
   same-size generic `.gz` payload gives an apples-to-apples decode
-  comparison. Not yet wired up — see planned suites above.
+  comparison. Not yet wired up.
 - **Open-source cross-reads** (mentioned for context; not yet
   benchmarked side-by-side in this repo):
   - [`phi-ag/rvt`](https://github.com/phi-ag/rvt) — TypeScript CFB parser on Node, metadata-only.
@@ -204,8 +205,9 @@ cargo bench --bench project_file
 ```
 
 The `project_file` suite requires the magnetar-io/revit-test-datasets
-corpus (MIT, git-LFS); without it, each sub-benchmark emits a
-`skipping: … not present` message and exits green.
+corpus (MIT, git-LFS); without it, only the `open` sub-benchmark emits a
+`skipping … not present` message, the other four return silently, and the
+run exits green.
 
 ## Honest limitations
 
@@ -226,9 +228,9 @@ corpus (MIT, git-LFS); without it, each sub-benchmark emits a
   were taken on, not as a floor.
 - **Cold vs hot cache.** hyperfine defaults to warm-cache runs after
   1-2 warmups. First-open-from-disk cost is not separately reported.
-- **No allocation profiling.** The `Allocations` column in the planned
-  results table will require `criterion-perf-events` or a bespoke
-  `GlobalAlloc` wrapper. Not yet wired up.
+- **No allocation profiling.** Allocation counts would require
+  `criterion-perf-events` or a bespoke `GlobalAlloc` wrapper. Not yet
+  wired up.
 - **No cross-platform numbers.** Only Apple Silicon (M2 Max) is
   measured today. x86_64 Linux and Windows timings are expected to
   differ.
