@@ -89,8 +89,8 @@
 //! - A *second* counted list follows the first, framed identically.
 //!   Its last slot is named [`PartitionElementRecord::owner_reference`]
 //!   because on every [`OST_SKETCH_LINES`] record of the recorded edge
-//!   it names the element whose sketch the line belongs to: the 3106
-//!   sketch-line records on `2024_Core_Interior.rvt` name 135 owners,
+//!   it names the element whose sketch the line belongs to: the 3688
+//!   sketch-line records on `2024_Core_Interior.rvt` name 126 owners,
 //!   and 100 of them are exactly the 80 `IfcSlab` + 20
 //!   `IfcShadingDevice` ElementIds the reference export tags (#31,
 //!   RE-25). On other categories it is only what the byte says.
