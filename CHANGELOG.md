@@ -15,10 +15,46 @@ fragments a release moves into this file.
 Not measured, and said in each entry:
 - A foundation slab and a horizontal bracing (#1841) are checked on a reporter's counts of a Revit 2027 structural model alone: no model Measure holds with a Revit export has either, and the bracing member's `PredefinedType` is not read.
 - A roof by extrusion of Revit 2024, 2026 and 2027 is held to the same project's 2025 save, which cannot catch an error both saves share; no Revit export of one exists here (#1479).
-- 21 doors of each BIM4LCA office that Revit aggregates into a curtain wall stay out of it (#1912), and on the 2027 save of `rac_advanced` 5 corner mullions, whose wall nothing in the file names, stand in no curtain wall (#1865).
+- On the 2027 save of `rac_advanced` 5 corner mullions, whose wall nothing in the file names, stand in no curtain wall (#1865).
 - The peak memory of concurrent `rvt-rs-mcp` opens, a crafted file with a very long name, and the memory `rvt-dump` saves by releasing each partition it has written are not measured (#1883, #1885).
 
-Measured against 0.21.0 on every model Measure holds (run [43491038743](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43491038743), `main` at 2b815423; the release adds only its notes, witness files, version strings and fixtures to them): MEASURED_PENDING
+Measured against 0.21.0 on every model Measure holds (run [43491038743](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43491038743), `main` at 2b815423; the release adds only its notes, witness files, version strings and fixtures to them):
+
+- 72 of the 146 exports differ and 74 are identical, and 37 of the 121
+  `diagnostics.json` files differ and 84 are equal. Of the 72, 56 are Autodesk's
+  sample projects (34 of 2015 to 2023, 22 of 2024 to 2027), which no Revit
+  export covers, so no scorer says which of what moved is Revit's: each entry
+  above was measured in its own pull request. The other 16 are scored against
+  Revit's own exports: the four BIM4LCA offices, the six `rac_advanced` saves
+  of 2015 to 2020, BIMcollab's example, four held-out files and the spent
+  Vitoria "Before". No scorer line moves on any other model, and every line that
+  moves is one of these:
+  - The 268 doors that Revit's export aggregates into a curtain wall on the four
+    offices (66, 68, 67 and 67) and 0.21.0 did not are aggregated now, and two of
+    the four members each timber office left out (RE-452, RE-453, RE-449).
+  - The beams of the two timber offices are on Revit's storey: 67 rows on another
+    storey in each become 4, all ramps, with no beam left (RE-454).
+  - On the spent Vitoria "Before", 3 more doors are set in the wall Revit's
+    export puts them in, 133 of 133 where 130 were (RE-448).
+  - The wall openings of Revit 2015 to 2023 (RE-456) add one opening to each
+    `rac_advanced` save of 2015 to 2020, 6 to one held-out file and 18 to
+    BIMcollab's example. Each carries the `Reference` values every opening
+    carries and Revit's export does not write on them, so the values rvt-rs
+    writes that Revit's export does not rise by 2 on each of those saves
+    (342 to 344), by 12 on the held-out file (8 to 20) and by 36 on BIMcollab's
+    (522 to 558, IFC2X3, counted apart).
+  - The check of bodies across saves passes on the 2026 and 2027 saves of
+    `rac_basic`, which failed it at 0.21.0 on one roof each: the roof by
+    extrusion is drawn as the 2025 save draws it (RE-458).
+  - The schema check of 23 samples counts what the entries add: one opening on
+    each `rac_advanced` save of 2015 to 2023 and two on each `rac_basic`
+    (RE-456), and a foundation floor as `IfcSlab` on the 2024 to 2027
+    `rac_basic` and four on Snowdon Towers Structural (RE-457).
+- What differs in `diagnostics.json` is counts: the parameter values (28 files),
+  the exported entities (23), the openings a wall's cuts leave out, by reason
+  (24, 10 and 1 files), the storey-bound elements and the beams skipped (5
+  each), the `IfcFooting` and `IfcSlab` counts (5) and the roofs' body sources
+  (3).
 
 ### Upgrading from 0.21
 
@@ -128,11 +164,10 @@ Measured against 0.21.0 on every model Measure holds (run [43491038743](https://
   Two members of the BIM4LCA timber office are aggregated into the curtain
   walls Revit's own export names (`IfcMember` same whole 7,872 to 7,874). The `rac_advanced` saves of 2015 to 2022 now
   write the same 19,979 parameter values and those of 2024 to 2027 the same
-  21,035; the 2023 save was six short until RE-451 (#1899). Not changed: the curtain
-  door 216844, which the 2026 and 2027 saves leave out of its wall for a
-  cause not found, and the 5 mullions, whose wall nothing in the file names;
-  no Revit export of any of these saves exists, so the 2027 save is held to
-  the same project's earlier saves.
+  21,035; the 2023 save was six short until RE-451 (#1899). Not changed: the 5
+  mullions, whose wall nothing in the file names (the curtain door 216844 is
+  the next entry's); no Revit export of any of these saves exists, so the 2027
+  save is held to the same project's earlier saves.
 
 - **A door or window with no curtain grid found whose reference list names
   exactly one curtain wall is a part of that wall when the element data of an id
@@ -148,9 +183,10 @@ Measured against 0.21.0 on every model Measure holds (run [43491038743](https://
   Revit's export leaves it in an ordinary one. Against Revit's export of the four
   BIM4LCA offices, 184 of the 268 doors it aggregates into a curtain wall and
   rvt-rs did not are now in the same wall, none in another, and 21 in each
-  office are still left out; 21 of 146 exports change (the offices, the
-  `rac_advanced`, `rac_basic`, `rme_advanced` and `rme_basic` samples of 2024 to
-  2027, and Snowdon Towers Architectural), none of Revit 2015 to 2023.
+  office were still left out (RE-453, below, takes them); 21 of 146 exports
+  change (the offices, the `rac_advanced`, `rac_basic`, `rme_advanced` and
+  `rme_basic` samples of 2024 to 2027, and Snowdon Towers Architectural), none
+  of Revit 2015 to 2023.
 
 - **The Python bindings warn when an element's saved mesh decodes only in
   part, release the GIL for the Rust work, and say what they return and why
