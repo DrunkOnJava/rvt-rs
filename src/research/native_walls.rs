@@ -386,7 +386,7 @@ pub struct EndJoins {
 /// The index of the object `VWallDriver.m_pCrv` of the record names, where it
 /// is one `GLine`: a wall with an edited elevation profile holds more than one
 /// curve, and the pointer says which is its location curve (#1410).
-fn location_curve_index(graph: &crate::native_parameters::ObjectGraph) -> Option<usize> {
+pub(crate) fn location_curve_index(graph: &crate::native_parameters::ObjectGraph) -> Option<usize> {
     let token = graph
         .objects
         .iter()

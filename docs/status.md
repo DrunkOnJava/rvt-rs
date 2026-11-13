@@ -1528,6 +1528,21 @@ within 0.0005 m of the 2024 opening's; nothing else changes on 58 local
 files of 2015 to 2023
 (`reports/element-framing/RE-448-opening-native-host-pre2024.md`).
 
+**RE-456 (2026-11-12)** writes, on Revit 2015 to 2023, the openings RE-321
+writes from the steps of a wall's native record: a rectangular wall opening's,
+a door's in a second wall, a cabinet's and a curtain wall's. A 2015 to 2023
+step names its cutter in a 4-byte ElementId, which the reader took only in
+2024's 8-byte shape, and the records of 2015 to 2022 were not read. A
+rectangular opening of 2015 to 2018 saves its rectangle only in the wall's
+face, `[u, v]` along the wall's location line and up from it, and is placed
+on that line; on 2019 to 2027, which save both, the two agree on all 220
+local openings. Autodesk's `rac_basic` gains its two rectangular openings and
+`rac_advanced` its one on every save from 2015 to 2023, each equal to the
+same project's 2024 save in placement, outline and depth, and BIMcollab's
+Revit 2015 structural example gains 18, the 15 that Revit's own export of
+it holds each equal to that export's in placement, outline and depth
+(`reports/element-framing/RE-456-wall-cut-openings-pre2024.md`).
+
 **RE-327 (2026-11-04)** rebuilds a family's extrusions from their own records:
 the sketch's `CurveElem` lines and arcs (in the family's coordinates), chained
 into loops, placed in the `SketchPlane`'s frame and swept between the
