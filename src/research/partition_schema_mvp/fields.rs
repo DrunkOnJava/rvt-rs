@@ -258,6 +258,29 @@ pub const COLUMN_RELEASE_FIELD: &str = "m_column_release";
 /// Classes whose type's hollow section is read (W6).
 pub const HOLLOW_SECTION_CLASSES: [&str; 2] = ["StructuralColumn", "Column"];
 
+/// The releases whose hollow-section columns get the four base quantities of
+/// RE-247 section 8 (`CrossSectionArea`, `OuterSurfaceArea`, `GrossVolume` and
+/// `NetVolume`): Revit 2024, the BIM4LCA office, the only file they are
+/// measured on against Revit's export. None of Autodesk's 54 sample saves of
+/// 2015 to 2027 holds a hollow-section column (Snowdon Towers' structural
+/// sample of 2024 holds one, with no Revit export), so no later release has a
+/// file to hold them to. A release's reader is a decision, so a later one is
+/// not taken until a file of it is measured (#1945).
+pub const HOLLOW_SECTION_QUANTITIES_REVIT_VERSIONS: &[u32] = &[2024];
+
+/// Field marking a column whose release is one of
+/// [`HOLLOW_SECTION_QUANTITIES_REVIT_VERSIONS`], set beside
+/// [`COLUMN_UNJOINED_FIELD`].
+pub const COLUMN_HOLLOW_QUANTITIES_FIELD: &str = "m_column_hollow_quantities";
+
+/// The releases whose wall sweeps and ramps take their type from their own
+/// native record (RE-240): Revit 2024, where it is Revit's type for the
+/// BIM4LCA office's 9 sweeps and 5 ramps. The 8 sweeps of `rac_advanced` get
+/// no type from it on any release, and no file of a later release is measured
+/// to name one. A later release is not taken until a file of it is measured
+/// (#1945).
+pub const SWEEP_RAMP_NATIVE_TYPE_REVIT_VERSIONS: &[u32] = &[2024];
+
 /// Fields carrying the plan direction of an I-section structural column's
 /// X axis, from its transform (RE-104): its flanges run along it.
 pub const COLUMN_I_AXIS_FIELDS: [&str; 2] = ["m_i_section_axis_x", "m_i_section_axis_y"];
@@ -812,8 +835,10 @@ pub const PIPE_INNER_DIAMETER_FIELD: &str = "m_pipe_inner_diameter";
 /// Releases whose pipes take their type, centreline and outside radius from
 /// their own `RbsPipeCurve` record where nothing else gives them (RE-370):
 /// those the native record path reads, Revit 2015 to 2027. Measured on
-/// Autodesk's MEP samples of 2015, 2019 and 2024 to 2027 against the same
-/// projects saved by 2024.
+/// Autodesk's MEP samples of 2015, 2019, 2023 and 2025 to 2027 against the
+/// same projects saved by 2024, whose pipes are Revit's (RE-370, RE-461), and
+/// by counts on Revit 2018's Vitoria projects. 2016, 2017 and 2020 to 2022
+/// have no file with a pipe in any corpus.
 pub const NATIVE_PIPE_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=2027;
 
 /// Fields holding the direction across a duct's section its height lies

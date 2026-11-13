@@ -3347,7 +3347,9 @@ fn add_door_window_quantities(
 /// which the arcs of its corners are missing from: the section's outside
 /// rectangle less its inside one times the length, Revit's exactly on the
 /// BIM4LCA office's three hollow-section types measured (PI-2, PI-4 and PI-5,
-/// five columns, the PI-4 arcs taking 3.4 per cent off its area's box). A
+/// five columns, the PI-4 arcs taking 3.4 per cent off its area's box). The
+/// four are written on Revit 2024 only, the one release they are measured on
+/// (`HOLLOW_SECTION_QUANTITIES_REVIT_VERSIONS`, #1945). A
 /// column drawn as its record's box gets none of these, as a round column is
 /// drawn as one too. All on a column joined by no
 /// `CleanPairGStep`
@@ -3387,7 +3389,16 @@ fn add_body_quantities(
         name: "Length".into(),
         value: PropertyValue::PositiveLengthFeet(feet),
     }];
-    if let Some((area, perimeter, rectangles)) = profile.and_then(hollow_section_area_perimeter) {
+    // Only on the releases the hollow section's quantities are measured on
+    // (`HOLLOW_SECTION_QUANTITIES_REVIT_VERSIONS`, #1945).
+    let hollow_measured = decoded.fields.iter().any(|(name, value)| {
+        name == crate::partition_schema_mvp::COLUMN_HOLLOW_QUANTITIES_FIELD
+            && matches!(value, InstanceField::Bool(true))
+    });
+    if let Some((area, perimeter, rectangles)) = profile
+        .filter(|_| hollow_measured)
+        .and_then(hollow_section_area_perimeter)
+    {
         properties.extend([
             Property {
                 name: "CrossSectionArea".into(),
