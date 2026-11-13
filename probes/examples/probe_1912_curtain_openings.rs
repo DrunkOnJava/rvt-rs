@@ -27,7 +27,7 @@
 //!     (every wall with an exported instance record)
 //!   opening tag=<ElementId> kind=<door|window> exported=<y|n> ours=<ElementId|->
 //!     walls=<ElementIds> curtain=<ElementIds> grid=<id>><wall>,... data=<id>><wall>*<c>[/<c>...],...
-//!     box=<ElementIds>
+//!     box=<ElementIds> ids=<id>:<category>/d<n>,...
 //!     - `ours`: the curtain wall rvt-rs's export aggregates it into;
 //!     - `walls`: the walls its list names (itself left out), `curtain` those of them
 //!       that rvt-rs counts as curtain walls;
@@ -36,7 +36,10 @@
 //!     - `data`: an id of its list that is no wall and a wall whose ElementId lies in
 //!       its element data (within 1,200 bytes past the id), with the number of
 //!       places it lies at in each copy of the data, copies separated by `/`;
-//!     - `box`: the walls whose record box lies around its own, within 0.05 ft.
+//!     - `box`: the walls whose record box lies around its own, within 0.05 ft;
+//!     - `ids`: every id of its list that is no wall, with the category of its
+//!       element record (`none` where it has none: a type, a family, a grid) and the
+//!       number of copies of its element data (`d0` where it has none).
 //!   openings kind=<door|window> n=<n> ours=<n>
 //!
 //! Usage:
@@ -209,11 +212,30 @@ fn main() -> anyhow::Result<()> {
     }
     let version = rf.basic_file_info()?.version;
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
-    let categories = [per::OST_WALLS, per::OST_DOORS, per::OST_WINDOWS];
+    // Every category, so that the ids of an opening's list can be told by what
+    // they are: a wall, a Level, a curtain panel or a grid-like element.
+    let categories: Vec<i64> = per::BUILTIN_CATEGORY_NAMES
+        .iter()
+        .map(|(id, _)| *id)
+        .chain(per::PRODUCT_RECORD_CATEGORIES.iter().map(|(id, _)| *id))
+        .chain([per::OST_WALLS, per::OST_DOORS, per::OST_WINDOWS])
+        .collect::<BTreeSet<i64>>()
+        .into_iter()
+        .collect();
     let mut records: BTreeMap<u32, Vec<per::PartitionElementRecord>> = BTreeMap::new();
     for record in per::scan_category_records_multi(&mut rf, version, &categories, &declared)? {
         records.entry(record.element_id).or_default().push(record);
     }
+    let category_of: HashMap<u32, &'static str> = records
+        .iter()
+        .filter_map(|(id, records)| {
+            let record = records.first()?;
+            Some((
+                *id,
+                per::builtin_category_name(record.builtin_category).unwrap_or("unnamed"),
+            ))
+        })
+        .collect();
     // The walls, with the box of each one's first wall record.
     let wall_boxes: BTreeMap<u32, [f64; 6]> = records
         .iter()
@@ -304,12 +326,22 @@ fn main() -> anyhow::Result<()> {
             .filter(|(_, wall)| contains(wall, &record.bbox_feet))
             .map(|(wall, _)| *wall)
             .collect();
+        // Each id of the list that is no wall: what it is, if it has an element
+        // record, and how many places its element data lies at.
+        let listed: Vec<String> = others
+            .iter()
+            .map(|other| {
+                let category = category_of.get(other).copied().unwrap_or("none");
+                let places = scanned.data.get(other).map_or(0, Vec::len);
+                format!("{other}:{}/d{places}", category.replace(' ', "_"))
+            })
+            .collect();
         let ours = whole_of.get(id).copied();
         let entry = counts.entry(kind).or_default();
         entry.0 += 1;
         entry.1 += usize::from(ours.is_some());
         println!(
-            "opening tag={id} kind={kind} exported={} ours={} walls={} curtain={} grid={} data={} box={}",
+            "opening tag={id} kind={kind} exported={} ours={} walls={} curtain={} grid={} data={} box={} ids={}",
             if exported.contains(id) { "y" } else { "n" },
             ours.map_or("-".to_string(), |wall| wall.to_string()),
             ids_text(&named),
@@ -325,6 +357,11 @@ fn main() -> anyhow::Result<()> {
                 data.join(",")
             },
             ids_text(&inside),
+            if listed.is_empty() {
+                "-".to_string()
+            } else {
+                listed.join(",")
+            },
         );
     }
     for (kind, (n, ours)) in &counts {

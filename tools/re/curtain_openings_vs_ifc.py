@@ -64,6 +64,32 @@ class Opening:
             other, wall = head.split(">")
             self.data[other][wall] = [int(c) for c in copies.split("/")]
         self.box = ids_of(fields["box"])
+        # The ids of the list that are no wall: (id, category, copies of data).
+        self.ids = []
+        for item in ids_of(fields.get("ids", "-")):
+            head, places = item.rsplit("/d", 1)
+            other, category = head.split(":", 1)
+            self.ids.append((other, category, int(places)))
+
+    def signature(self):
+        """What the list holds besides walls: each id's category and whether it
+        has element data, sorted."""
+        return ", ".join(
+            sorted(f"{category}{'+data' if places else ''}" for _, category, places in self.ids)
+        ) or "no other id"
+
+
+def state_of(opening, seen, wholes):
+    """rvt-rs's wall for the opening against Revit's, or None where Revit's
+    export has no such opening."""
+    if opening.tag not in seen:
+        return None
+    theirs = wholes.get(opening.tag)
+    if opening.ours is not None and theirs is not None:
+        return "right" if opening.ours == theirs else "different"
+    if theirs is not None:
+        return "only Revit"
+    return "only rvt-rs" if opening.ours is not None else "neither"
 
 
 def read_probe(path):
@@ -190,9 +216,17 @@ def rule_box_only(opening, curtain):
     return the_one(wall for wall in opening.box if wall in curtain)
 
 
+def rule_only_curtain(opening, curtain):
+    """The list names one wall in all, and it is a curtain wall."""
+    if len(opening.walls) == 1 and opening.walls[0] in curtain:
+        return opening.walls[0]
+    return None
+
+
 RULES = (
     ("current", with_grid(lambda o, c: confirmed_by_data(o, c, MIN_COPIES))),
     ("named1", with_grid(rule_named1)),
+    ("only curtain", with_grid(rule_only_curtain)),
     ("named1+data1", with_grid(lambda o, c: confirmed_by_data(o, c, 1))),
     ("named1+box", with_grid(rule_named1_box)),
     ("named1+(data|box)", with_grid(rule_named1_data_or_box)),
@@ -252,19 +286,12 @@ def main():
     table = collections.Counter()
     only_revit = []
     for opening in openings:
-        if opening.tag not in seen:
+        state = state_of(opening, seen, wholes)
+        if state is None:
             table[(opening.kind, "not in Revit's export")] += 1
             continue
-        theirs = wholes.get(opening.tag)
-        if opening.ours is not None and theirs is not None:
-            state = "right" if opening.ours == theirs else "different"
-        elif theirs is not None:
-            state = "only Revit"
-            only_revit.append((opening, theirs))
-        elif opening.ours is not None:
-            state = "only rvt-rs"
-        else:
-            state = "neither"
+        if state == "only Revit":
+            only_revit.append((opening, wholes[opening.tag]))
         table[(opening.kind, state)] += 1
     print("rvt-rs against Revit (kind, state): count")
     for (kind, state), n in sorted(table.items()):
@@ -280,6 +307,15 @@ def main():
         classes[(opening.kind, why(opening, theirs, curtain, walls))] += 1
     for (kind, text), n in sorted(classes.items(), key=lambda kv: -kv[1]):
         print(f"  {kind:<7} {n:>4}  {text}")
+
+    print("openings whose list names a curtain wall, by state, walls named and what else the list holds (category, +data where it has element data): count")
+    holding = collections.Counter()
+    for opening in openings:
+        state = state_of(opening, seen, wholes)
+        if state is not None and opening.curtain:
+            holding[(state, len(opening.walls), opening.kind, opening.signature())] += 1
+    for (state, walls_named, kind, signature), n in sorted(holding.items(), key=lambda kv: (kv[0][0], -kv[1])):
+        print(f"  {state:<11} {walls_named} walls {kind:<7} {n:>4}  {signature}")
 
     print("candidate rules against Revit on every opening in its export (kind, rule): right / wrong / false positive / missed")
     wrong_rows = collections.defaultdict(list)
