@@ -258,6 +258,19 @@ fn main() -> std::process::ExitCode {
 
 fn run(args: Args) -> anyhow::Result<()> {
     let timestamp = source_date_epoch()?;
+    let out_path = args.output.clone().unwrap_or_else(|| {
+        let mut p = args.input.clone();
+        p.set_extension("ifc");
+        p
+    });
+    // Before the export, which can take minutes: the IFC would replace the file
+    // it was read from.
+    if rvt::cli::same_file(&out_path, &args.input) {
+        anyhow::bail!(
+            "refusing to overwrite the input {}; pass -o <path>",
+            args.input.display()
+        );
+    }
     let mut rf = RevitFile::open_with_limits(
         &args.input,
         rvt::cli::open_limits(
@@ -282,12 +295,6 @@ fn run(args: Args) -> anyhow::Result<()> {
             eprintln!("rvt-ifc: {note}");
         }
     }
-
-    let out_path = args.output.clone().unwrap_or_else(|| {
-        let mut p = args.input.clone();
-        p.set_extension("ifc");
-        p
-    });
 
     // A reader that stopped at its work budget leaves out what it would have
     // read, and the export is still written, with this warning (Griffin,
@@ -345,7 +352,7 @@ fn run(args: Args) -> anyhow::Result<()> {
             write_step_to(&model, &options, &mut bytes)?;
         }
         let step = String::from_utf8(bytes)?;
-        std::fs::write(&out_path, step.as_bytes())?;
+        write_whole(&out_path, step.as_bytes())?;
         let written = step.len() as u64;
         observed_step = Some(step);
         written
@@ -1130,6 +1137,19 @@ fn warn_about_export_quality(diagnostics: &ExportDiagnostics) {
              last Save As (#1838); if nothing was deleted, the IFC is likely incomplete."
         );
     }
+}
+
+/// `bytes` written beside `path` and renamed when whole, so a failed or killed
+/// run never leaves a truncated file under `path`.
+fn write_whole(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut partial = path.as_os_str().to_owned();
+    partial.push(".partial");
+    let partial = PathBuf::from(partial);
+    let result = std::fs::write(&partial, bytes).and_then(|()| std::fs::rename(&partial, path));
+    if result.is_err() {
+        let _ = std::fs::remove_file(&partial);
+    }
+    result
 }
 
 /// `bytes` as lowercase hex, two digits a byte.

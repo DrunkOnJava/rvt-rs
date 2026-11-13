@@ -590,15 +590,6 @@ const CSV_COLUMNS: [&str; 19] = [
     "properties",
 ];
 
-/// RFC 4180 field: quoted when it holds a comma, quote, or line break.
-fn csv_field(value: &str) -> String {
-    if value.contains([',', '"', '\n', '\r']) {
-        format!("\"{}\"", value.replace('"', "\"\""))
-    } else {
-        value.to_string()
-    }
-}
-
 fn print_csv(rows: &[Row]) {
     println!("{}", CSV_COLUMNS.join(","));
     for r in rows {
@@ -636,7 +627,7 @@ fn print_csv(rows: &[Row]) {
             flag(m.and_then(|m| m.single_user_cloud_model)),
             properties,
         ];
-        let line: Vec<String> = fields.iter().map(|f| csv_field(f)).collect();
+        let line: Vec<String> = fields.iter().map(|f| rvt::cli::csv_text(f)).collect();
         println!("{}", line.join(","));
     }
 }

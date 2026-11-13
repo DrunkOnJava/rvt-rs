@@ -100,7 +100,7 @@ fn resolve_paths(
     let output = output
         .map(Path::to_path_buf)
         .unwrap_or_else(|| input.with_extension(extension));
-    if output == input {
+    if rvt::cli::same_file(&output, &input) {
         return Err(format!(
             "refusing to overwrite the input {}; pass -o <path>",
             input.display()

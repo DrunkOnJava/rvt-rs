@@ -124,6 +124,59 @@ fn refuses_to_overwrite_the_input() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The same file under other names is still the input (#1885): the paths as
+/// typed differ, so comparing them let `./model.rvt` and a link through, and
+/// the export replaced the file it had been read from.
+#[test]
+fn refuses_to_overwrite_the_input_however_it_is_spelled() {
+    let Some(source) = fixture() else { return };
+    let dir = scratch("overwrite-spelled");
+    let input = dir.join("model.rvt");
+    std::fs::copy(&source, &input).unwrap();
+    let before = std::fs::read(&input).unwrap();
+    #[allow(unused_mut)]
+    let mut spellings = vec![dir.join(".").join("model.rvt")];
+    #[cfg(unix)]
+    {
+        let link = dir.join("link.rvt");
+        std::os::unix::fs::symlink(&input, &link).unwrap();
+        spellings.push(link);
+        let hard = dir.join("hard.rvt");
+        std::fs::hard_link(&input, &hard).unwrap();
+        spellings.push(hard);
+    }
+    for bin in [
+        env!("CARGO_BIN_EXE_rvt-gltf"),
+        env!("CARGO_BIN_EXE_rvt-sheet"),
+        env!("CARGO_BIN_EXE_rvt-schedule"),
+        env!("CARGO_BIN_EXE_rvt-ifc"),
+    ] {
+        for output in &spellings {
+            let out = run(bin, &[input.as_os_str(), "-o".as_ref(), output.as_os_str()]);
+            assert_eq!(
+                out.status.code(),
+                Some(1),
+                "{bin} -o {}: {}",
+                output.display(),
+                stderr(&out)
+            );
+            assert!(
+                stderr(&out).contains("refusing to overwrite"),
+                "{bin} -o {}: {}",
+                output.display(),
+                stderr(&out)
+            );
+            assert_eq!(
+                std::fs::read(&input).unwrap(),
+                before,
+                "{bin} -o {} changed the input",
+                output.display()
+            );
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_missing_input_is_named_with_one_error_prefix() {
     for bin in [

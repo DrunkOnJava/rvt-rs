@@ -69,6 +69,8 @@ fn run() -> anyhow::Result<()> {
     let mut taken = HashSet::new();
     for name in &streams {
         let safe = file_stem_for(name, &mut taken);
+        // A crafted file can name a stream with control characters.
+        let shown = name.escape_debug().to_string();
         let raw = rf.read_stream(name)?;
 
         let decoded = if raw.is_empty() {
@@ -97,21 +99,21 @@ fn run() -> anyhow::Result<()> {
                 };
                 println!(
                     "  {:<30}  raw={} bytes  decomp={} bytes{members}  -> {}",
-                    name,
+                    shown,
                     raw.len(),
                     decoded.bytes.len(),
                     short_path(&path)
                 );
             }
-            Err(Undecoded::Empty) => println!("  {:<30}  raw=0 bytes  (empty)", name),
+            Err(Undecoded::Empty) => println!("  {:<30}  raw=0 bytes  (empty)", shown),
             Err(Undecoded::NotCompressed) => println!(
                 "  {:<30}  raw={} bytes  (not gzip-compressed)",
-                name,
+                shown,
                 raw.len()
             ),
             Err(Undecoded::Failed) => println!(
                 "  {:<30}  raw={} bytes  (gzip header found, but it did not inflate)",
-                name,
+                shown,
                 raw.len()
             ),
         }
