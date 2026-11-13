@@ -13,7 +13,7 @@ The queries, in order:
 - `list_levels`;
 - `list_elements` unfiltered, a page of 1000 at a time, so every element's row;
 - `list_elements` once per IFC entity, per Revit class and per level, for the totals alone;
-- `list_rooms`;
+- `list_rooms`, a page of 1000 at a time (a server before #1883 gives every room in one answer, with no total);
 - `get_element` by ElementId for the five lowest ElementIds of each IFC entity (every element when
   `details` is "all"), and by GlobalId for the first of them;
 - `get_diagnostics`;
@@ -206,7 +206,17 @@ def gather(server, model, export_dir, per_entity=5, details="sample", progress=N
         "class": {name: count(**{"class": name}) for name in sorted(summary["by_revit_class"])},
         "level": {level["name"]: count(level=level["name"]) for level in opened["levels"]},
     }
-    answers["rooms"] = server.call("list_rooms", {"model": handle})["rooms"]
+    rooms, offset = [], 0
+    while True:
+        page = server.call("list_rooms", {"model": handle, "limit": PAGE, "offset": offset})
+        rooms += page["rooms"]
+        # A server that does not page (before #1883) answers with every room and says no total.
+        if "total" not in page or not page["rooms"]:
+            break
+        offset += len(page["rooms"])
+        if offset >= page["total"]:
+            break
+    answers["rooms"] = rooms
 
     by_category = {}
     for row in rows:
