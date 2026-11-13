@@ -177,7 +177,7 @@ fn diagnostics_summary(computed: &Computed) -> DiagnosticsSummary {
     DiagnosticsSummary {
         confidence_level: diagnostics.confidence.level.clone(),
         confidence_score: diagnostics.confidence.score,
-        partial: !computed.unread.is_empty(),
+        partial: computed.diagnostics.is_partial(),
         unread_streams: unread_out(&computed.unread),
         skipped: diagnostics
             .skipped

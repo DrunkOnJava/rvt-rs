@@ -154,6 +154,10 @@ const STEP_TOLERANCE_SQUARE_FEET: f64 = COVER_TOLERANCE_SQUARE_FEET;
 /// The most convex pieces a wall's plan outside the elements may come to.
 const MAX_RISERS: usize = 32;
 
+/// The most parts of a wall's plan that an element covers, before they are
+/// joined into at most [`MAX_RISERS`] pieces: thirty-two times that.
+const MAX_COVERED_PARTS: usize = 32 * MAX_RISERS;
+
 /// The area under which what a floor leaves of a wall's plan, all of it inside
 /// other walls, may be a stub that Revit cuts although the floor does not cover
 /// it, square feet: the one measured, 0.0243 ft2 at the end of a wall, inside
@@ -461,6 +465,15 @@ fn embedded(pieces: &[Ring], neighbours: &[&Wall]) -> bool {
             .iter()
             .flat_map(|piece| subtract_convex(piece, part))
             .collect();
+        // Each neighbour piece can split each piece left in three, so a
+        // crafted file's neighbours grew `left` without end (#1845). Nothing
+        // left is all inside; more than `steps` holds is no stub.
+        if left.is_empty() {
+            return true;
+        }
+        if left.len() > 4 * MAX_RISERS {
+            return false;
+        }
     }
     left.iter().map(|piece| area(piece)).sum::<f64>() <= 0.01 * size
 }
@@ -1086,6 +1099,13 @@ fn covered_pieces(cutter: &Cutter, wall: &Wall) -> Option<Vec<Ring>> {
             if part.len() >= 3 && area(&part) > PIECE_ROUNDING_SQUARE_FEET {
                 inside.push(part);
             }
+        }
+        // The outline is every triangle of every entity sharing the
+        // element's Tag, so a crafted file made millions of parts before the
+        // `MAX_RISERS` check below, and `join_pieces` is quadratic in them
+        // (#1845). Joining merges parts, so this bound is the looser one.
+        if inside.len() > MAX_COVERED_PARTS {
+            return None;
         }
     }
     let inside: Vec<Ring> = join_pieces(inside.into_iter().map(tidy).collect());

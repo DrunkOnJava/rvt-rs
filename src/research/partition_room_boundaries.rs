@@ -870,9 +870,54 @@ pub fn solid_headers(buf: &[u8], room_id: u32) -> Vec<usize> {
         .collect()
 }
 
+/// The most solid headers one room may have: a room's solid is stored once
+/// or twice (RE-101, RE-316). Each header is walked over up to
+/// [`ROOM_SOLID_WINDOW`] bytes, so a crafted file naming one room before
+/// millions of tags made each such room cost millions of walks (#1833).
+pub const MAX_SOLIDS_PER_ROOM: usize = 16;
+
+/// [`solid_headers_by_id`] for the rooms `ids` alone, in one pass over
+/// `buf`: a header naming another id is not kept, so what is held is bounded
+/// by the rooms, not by the tags a crafted stream repeats (#1833). A room
+/// with more than [`MAX_SOLIDS_PER_ROOM`] headers gets none, and keeps its
+/// record's box.
+pub fn solid_headers_for(
+    buf: &[u8],
+    ids: &std::collections::BTreeSet<u64>,
+) -> BTreeMap<u64, Vec<usize>> {
+    let mut out: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
+    let mut crowded = std::collections::BTreeSet::new();
+    for tag in memchr::memmem::find_iter(buf, &ROOM_SOLID_TAG) {
+        let direct = tag.checked_sub(8);
+        let after_ff = tag
+            .checked_sub(12)
+            .filter(|&header| buf.get(header + 8..tag) == Some(&[0xff; 4][..]));
+        for header in [direct, after_ff].into_iter().flatten() {
+            let Some(id) = le_bytes::u64_at(buf, header).filter(|id| ids.contains(id)) else {
+                continue;
+            };
+            if crowded.contains(&id) {
+                continue;
+            }
+            let headers = out.entry(id).or_default();
+            headers.push(header);
+            if headers.len() > MAX_SOLIDS_PER_ROOM {
+                crate::budget::stopped("room_solid_headers");
+                out.remove(&id);
+                crowded.insert(id);
+            }
+        }
+    }
+    for headers in out.values_mut() {
+        headers.sort_unstable();
+    }
+    out
+}
+
 /// [`solid_headers`] for every ElementId at once, in one pass over `buf`
 ///: each [`ROOM_SOLID_TAG`] with the `u64` before it, or before
-/// `ff ff ff ff` before it.
+/// `ff ff ff ff` before it. Unbounded, for probes of real files; the export
+/// reads [`solid_headers_for`].
 // Tracker: B85.
 pub fn solid_headers_by_id(buf: &[u8]) -> BTreeMap<u64, Vec<usize>> {
     let mut out: BTreeMap<u64, Vec<usize>> = BTreeMap::new();

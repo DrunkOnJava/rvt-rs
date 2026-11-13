@@ -169,6 +169,7 @@
 
 pub mod arc_wall_record;
 pub mod basic_file_info;
+mod budget;
 pub mod capability;
 pub mod class_index;
 #[doc(hidden)]

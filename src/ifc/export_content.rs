@@ -4678,19 +4678,29 @@ fn add_piece_sets(
     entities: &mut Vec<entities::IfcEntity>,
     pieces_of: Vec<(usize, std::ops::Range<usize>)>,
 ) {
+    // Each owner's sets, as entity indices in order, found once: each element
+    // in pieces scanned every entity for its sets, elements × entities
+    // (#1845). A set given to a piece is added as it is pushed, as the scan
+    // would have seen it.
+    let mut sets_of: HashMap<usize, Vec<usize>> = Default::default();
+    for (index, entity) in entities.iter().enumerate() {
+        if let entities::IfcEntity::ElementPropertySet { element, .. } = entity {
+            sets_of.entry(*element).or_default().push(index);
+        }
+    }
     for (element, pieces) in pieces_of {
-        let sets: Vec<PropertySet> = entities
-            .iter()
-            .filter_map(|entity| match entity {
-                entities::IfcEntity::ElementPropertySet {
-                    element: owner,
-                    set,
-                } if *owner == element => Some(set.clone()),
+        let sets: Vec<PropertySet> = sets_of
+            .get(&element)
+            .into_iter()
+            .flatten()
+            .filter_map(|&index| match &entities[index] {
+                entities::IfcEntity::ElementPropertySet { set, .. } => Some(set.clone()),
                 _ => None,
             })
             .collect();
         for piece in pieces {
             for set in &sets {
+                sets_of.entry(piece).or_default().push(entities.len());
                 entities.push(entities::IfcEntity::ElementPropertySet {
                     element: piece,
                     set: set.clone(),
@@ -4803,6 +4813,12 @@ const ROOM_CONTENT_TYPES: [&str; 8] = [
 /// A closed plan loop, model feet.
 type PlanLoop = Vec<(f64, f64)>;
 
+/// The outline vertices [`contain_in_spaces`] may walk in all. A storey of
+/// 1,000 rooms of 20 vertices under 10,000 pieces of furniture takes 2e8 at
+/// most, every room tested for every piece; past this a crafted file is
+/// stacking spaces to hang the export (#1845).
+const SPACE_CONTAINMENT_BUDGET: usize = 1_000_000_000;
+
 /// A space's plan outline and voids in model coordinates: its body's profile
 /// moved to its placement.
 fn space_plan_outline(
@@ -4900,8 +4916,22 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             spaces.push((index, *storey, outer, voids));
         }
     }
+    // Each storey's spaces, in order: each content looked through every space
+    // of the model for its storey's (#1845).
+    let mut storey_spaces: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for (at, (_, storey, ..)) in spaces.iter().enumerate() {
+        storey_spaces.entry(*storey).or_default().push(at);
+    }
+    // The outline vertices the pass's tests have walked: a crafted file can
+    // stack every space on one storey under every content, contents × spaces
+    // × vertices with no end. Past the budget nothing is contained in a
+    // space, and each content stays in its storey.
+    let work = std::cell::Cell::new(0usize);
     let mut contents: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     for (index, entity) in entities.iter().enumerate() {
+        if work.get() > SPACE_CONTAINMENT_BUDGET {
+            return;
+        }
         let entities::IfcEntity::BuildingElement {
             ifc_type,
             storey_index: Some(storey),
@@ -4919,13 +4949,17 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
             continue;
         }
         let holds = |outer: &PlanLoop, voids: &[PlanLoop], point: (f64, f64)| {
+            let vertices = outer.len() + voids.iter().map(|ring| ring.len()).sum::<usize>();
+            work.set(work.get().saturating_add(vertices));
             inside(outer, point) && !voids.iter().any(|ring| inside(ring, point))
         };
         let point = (location[0], location[1]);
         let on_storey = || {
-            spaces
-                .iter()
-                .filter(|(_, space_storey, ..)| space_storey == storey)
+            storey_spaces
+                .get(storey)
+                .into_iter()
+                .flatten()
+                .map(|&at| &spaces[at])
         };
         let mut space = on_storey()
             .find(|(_, _, outer, voids)| holds(outer, voids, point))

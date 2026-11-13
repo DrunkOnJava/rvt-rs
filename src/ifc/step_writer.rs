@@ -497,6 +497,10 @@ pub fn type_objects(model: &IfcModel) -> TypeObjects {
         }
     }
     let mut groups: Vec<TypeObject> = Vec::new();
+    // Each group's place in `groups` by its key: an element found its group
+    // by a scan of every group made so far, quadratic in elements (#1845).
+    type GroupKey = (u32, String, String, Option<String>);
+    let mut group_of: HashMap<GroupKey, usize> = HashMap::new();
     for (entity_idx, entity) in model.entities.iter().enumerate() {
         let IfcEntity::BuildingElement {
             ifc_type,
@@ -549,17 +553,20 @@ pub fn type_objects(model: &IfcModel) -> TypeObjects {
             .and_then(|tag| tag.parse::<u32>().ok())
             .unwrap_or(u32::MAX);
         // Revit writes a type object per entity and predefined type (B73).
-        match groups.iter_mut().find(|group| {
-            group.type_id == *type_id
-                && group.entity == entity_name
-                && group.tail == tail
-                && group.global_id == global_id
-        }) {
-            Some(group) => {
+        let key = (
+            *type_id,
+            entity_name.clone(),
+            tail.clone(),
+            global_id.clone(),
+        );
+        match group_of.get(&key).copied() {
+            Some(index) => {
+                let group = &mut groups[index];
                 group.elements.push(entity_idx);
                 group.first_element = group.first_element.min(element_id);
             }
             None => {
+                group_of.insert(key, groups.len());
                 // Spike 257: Revit's type parameters Category, Family Name
                 // and Type Name, in the sets Revit's export gives a type
                 // object.
@@ -1746,22 +1753,34 @@ impl StepWriter<'_> {
                 let rest: Vec<usize> = rest.iter().map(|(id, _)| *id).collect();
                 (self.emit_union(*first, &rest), "CSG")
             }
-            SolidShape::BooleanResult {
-                op,
-                operand_a,
-                operand_b,
-            } => {
-                // Recursively emit operands, then wrap in
-                // IFCBOOLEANRESULT(op, first, second). Nested
-                // booleans compose naturally.
-                let (a_id, _rep_a) = self.emit_solid_shape(operand_a, solid_position, z_axis, true);
-                let (b_id, _rep_b) = self.emit_solid_shape(operand_b, solid_position, z_axis, true);
-                let solid_id = self.id();
-                self.emit_entity(
-                    solid_id,
-                    format!("IFCBOOLEANRESULT({},#{a_id},#{b_id})", op.as_step_keyword()),
-                );
-                (solid_id, "CSG")
+            SolidShape::BooleanResult { .. } => {
+                // Each operand, then IFCBOOLEANRESULT(op, first, second). A
+                // wall's profile cuts nest one level per cut down the first
+                // operand (#1845), so the chain is walked as a loop, writing
+                // in the order recursion did: the innermost first operand,
+                // then each level's second operand and its result.
+                let mut chain = Vec::new();
+                let mut at = shape;
+                while let SolidShape::BooleanResult {
+                    op,
+                    operand_a,
+                    operand_b,
+                } = at
+                {
+                    chain.push((op, operand_b.as_ref()));
+                    at = operand_a.as_ref();
+                }
+                let (mut a_id, _) = self.emit_solid_shape(at, solid_position, z_axis, true);
+                for (op, operand_b) in chain.into_iter().rev() {
+                    let (b_id, _) = self.emit_solid_shape(operand_b, solid_position, z_axis, true);
+                    let solid_id = self.id();
+                    self.emit_entity(
+                        solid_id,
+                        format!("IFCBOOLEANRESULT({},#{a_id},#{b_id})", op.as_step_keyword()),
+                    );
+                    a_id = solid_id;
+                }
+                (a_id, "CSG")
             }
             SolidShape::FacetedBrep {
                 vertices_feet,
@@ -2146,10 +2165,14 @@ impl StepWriter<'_> {
 
     fn emit_header(&mut self, model: &IfcModel) {
         let project = escape(model.project_name.as_deref().unwrap_or("Untitled"));
+        // `escape` makes a string literal safe; this text goes in a comment,
+        // where the file's own PartAtom id or version could end it with `*/`
+        // and write the rest as STEP (#1845).
         let desc = escape(model.description.as_deref().unwrap_or(
             "Produced by rvt-rs (https://github.com/DrunkOnJava/rvt-rs) — \
                  clean-room Apache-2 Revit reader.",
-        ));
+        ))
+        .replace("*/", "* /");
         self.emit_line("ISO-10303-21;");
         self.emit_line("HEADER;");
         self.emit_line("FILE_DESCRIPTION(('ViewDefinition [CoordinationView]'),'2;1');");
