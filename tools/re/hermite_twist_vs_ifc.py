@@ -10,12 +10,13 @@ edge, so it does.
 
 For each surface of the probe's output, this evaluates the patch of every cell, densely, with the nodes'
 points and tangents as stage 2 reads them (the tangent times the cell's width) and with `w` read in
-several ways, and counts how many of the vertices of Revit's body (the element with the same `Tag` in
-Revit's export, in the internal frame) that lie within 0.2 ft of the surface lie within 0.01 ft of it:
+several ways, and counts how many of the vertices of Revit's body (the elements whose `Tag` the probe's
+`instance` lines give for the surface's symbol, in the internal frame) that lie within 0.2 ft of the
+surface lie within 0.01 ft of it:
 
     python3 tools/re/hermite_twist_vs_ifc.py <probe.txt> <revit.ifc>
 
-Needs IfcOpenShell, numpy and scipy.
+Needs IfcOpenShell and numpy.
 """
 
 import collections
@@ -23,7 +24,6 @@ import os
 import sys
 
 import numpy as np
-from scipy.spatial import cKDTree
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mesh_bodies_vs_ifc as mesh  # noqa: E402
@@ -34,13 +34,16 @@ SPACING = 0.01  # feet: the density of the samples of the patch
 
 
 def read_surfaces(path):
-    """(element, k) -> {u, v, nodes[(iu, iv)] -> (p, tu, tv, w)}."""
+    """((symbol, k) -> {u, v, nodes[(iu, iv)] -> (p, tu, tv, w)}, symbol -> the Tags of the elements that draw it)."""
     out = {}
+    users = collections.defaultdict(list)
     for line in open(path, encoding="utf-8", errors="replace"):
         parts = line.split()
         if not parts:
             continue
-        if parts[0] == "surface" and len(parts) > 3 and parts[3] == "nu":
+        if parts[0] == "instance" and len(parts) == 4 and parts[2] == "symbol":
+            users[parts[3]].append(parts[1])
+        elif parts[0] == "surface" and len(parts) > 3 and parts[3] == "nu":
             key = (parts[1], int(parts[2]))
             out[key] = {
                 "u": np.array([float(x) for x in parts[8].split(",")]),
@@ -51,11 +54,11 @@ def read_surfaces(path):
             key = (parts[1], int(parts[2]))
             if key not in out:
                 continue
-            numbers = [float(x) for x in parts[6:]]
             # parts: node id k iu iv p x y z tu x y z tv x y z w x y z
-            p, tu, tv, w = (np.array(numbers[i : i + 3]) for i in (0, 4, 8, 12))
+            numbers = [float(x) for x in parts[5:] if x not in ("p", "tu", "tv", "w")]
+            p, tu, tv, w = (np.array(numbers[i : i + 3]) for i in (0, 3, 6, 9))
             out[key]["nodes"][(int(parts[3]), int(parts[4]))] = (p, tu, tv, w)
-    return out
+    return out, users
 
 
 def basis(t):
@@ -99,6 +102,29 @@ def patch_points(surface, twist):
     return np.concatenate(out)
 
 
+def nearest_distance(cloud, queries, cell=NEAR):
+    """The distance from each query to its nearest point of `cloud`, exact where it is at most `cell`.
+
+    The cloud is binned in cubes of `cell` feet, so any point within `cell` of a query is in the query's
+    cube or one of its 26 neighbours; a query with none of them near gets a larger distance or infinity.
+    numpy alone: the runner's pinned requirements have no scipy.
+    """
+    keys = np.floor(cloud / cell).astype(np.int64)
+    order = np.lexsort((keys[:, 2], keys[:, 1], keys[:, 0]))
+    cloud, keys = cloud[order], keys[order]
+    starts = np.concatenate(([0], np.nonzero(np.any(keys[1:] != keys[:-1], axis=1))[0] + 1))
+    ends = np.concatenate((starts[1:], [len(cloud)]))
+    cubes = {tuple(int(c) for c in keys[s]): (s, e) for s, e in zip(starts, ends)}
+    around = [(a, b, c) for a in (-1, 0, 1) for b in (-1, 0, 1) for c in (-1, 0, 1)]
+    out = np.full(len(queries), np.inf)
+    for index, query in enumerate(queries):
+        x, y, z = (int(c) for c in np.floor(query / cell))
+        near = [cloud[s:e] for s, e in (cubes.get((x + a, y + b, z + c), (0, 0)) for a, b, c in around) if e > s]
+        if near:
+            out[index] = float(np.sqrt(((np.concatenate(near) - query) ** 2).sum(axis=1).min()))
+    return out
+
+
 CONVENTIONS = collections.OrderedDict(
     [
         ("w times du*dv (the cell's area)", lambda du, dv: du * dv),
@@ -118,21 +144,24 @@ def main():
     if len(sys.argv) != 3:
         print(__doc__)
         return 2
-    surfaces = read_surfaces(sys.argv[1])
+    surfaces, users = read_surfaces(sys.argv[1])
     if not surfaces:
         print("hermite twist: no surface in the probe output")
         return 0
-    revit = mesh.meshes(sys.argv[2], tags={element for element, _ in surfaces})
-    for (element, k), surface in sorted(surfaces.items()):
-        if element not in revit:
-            print(f"hermite twist: element {element} surface {k}: not in Revit's export")
+    # A surface is on its symbol's record; Revit's export has the elements that place the symbol.
+    tags = {symbol: users.get(symbol) or [symbol] for symbol, _ in surfaces}
+    revit = mesh.meshes(sys.argv[2], tags={tag for named in tags.values() for tag in named})
+    for (symbol, k), surface in sorted(surfaces.items()):
+        found = [tag for tag in tags[symbol] if tag in revit]
+        if not found:
+            print(f"hermite twist: symbol {symbol} surface {k}: no element of Revit's export with Tag {', '.join(tags[symbol])}")
             continue
-        vertices = np.unique(np.round(revit[element][2].reshape(-1, 3), 6), axis=0)
+        vertices = np.unique(np.round(np.concatenate([revit[tag][2].reshape(-1, 3) for tag in found]), 6), axis=0)
         cells = (len(surface["u"]) - 1) * (len(surface["v"]) - 1)
-        print(f"hermite twist: element {element} surface {k}: {len(surface['u'])} by {len(surface['v'])} nodes, {cells} cells, Revit's body {len(vertices)} vertices")
+        print(f"hermite twist: symbol {symbol} (elements {', '.join(found)}) surface {k}: {len(surface['u'])} by {len(surface['v'])} nodes, {cells} cells, Revit's bodies {len(vertices)} vertices")
         for name, twist in CONVENTIONS.items():
             cloud = patch_points(surface, twist)
-            distance, _ = cKDTree(cloud).query(vertices)
+            distance = nearest_distance(cloud, vertices)
             near = distance <= NEAR
             held = int((distance <= BAR).sum())
             print(f"hermite twist:   {name}: of the {int(near.sum())} vertices within {NEAR} ft of the surface, within {BAR} ft: {held}; median {float(np.median(distance[near])) if near.any() else float('nan'):.4f} ft")

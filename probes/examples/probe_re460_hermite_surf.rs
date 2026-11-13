@@ -733,12 +733,45 @@ const NODE_DUMP_LIMIT: usize = 12;
 /// derivatives, so what they scaled and how is untested by them. One line per object class of
 /// the element's graph, then per surface its grid and a line per node:
 ///
+///   `instance <tag> symbol <id>`
 ///   `object <id> <class>=<n> ...`
 ///   `surface <id> <k> nu <n> nv <n> u <params> v <params>`
 ///   `node <id> <k> <iu> <iv> p <x y z> tu <x y z> tv <x y z> w <x y z>`
 ///
-/// Feet and parameters, in the model's internal frame.
+/// Feet and parameters, in the model's internal frame. A surface is on the record of a symbol, and
+/// Revit's export names the element that places it, whose `Tag` is that element's id (a railing
+/// 13680 draws the symbol 13681): the `instance` lines say which element uses which symbol, for
+/// the scorer to find Revit's body of the surface.
 fn node_stage(records: &BTreeMap<u64, Record>) {
+    let holders: BTreeSet<u64> = records
+        .iter()
+        .filter(|(_, record)| {
+            record.graph.as_ref().is_some_and(|graph| {
+                graph
+                    .objects
+                    .iter()
+                    .any(|object| object.class_name == "HermiteSurf")
+            })
+        })
+        .map(|(id, _)| *id)
+        .collect();
+    for (id, record) in records {
+        let Some(graph) = &record.graph else { continue };
+        for object in &graph.objects {
+            if object.class_name != "InstanceInfo" {
+                continue;
+            }
+            if let Some(symbol) = object
+                .fields
+                .get("m_symbolId")
+                .and_then(identifier)
+                .and_then(|symbol| u64::try_from(symbol).ok())
+                .filter(|symbol| holders.contains(symbol))
+            {
+                println!("instance {id} symbol {symbol}");
+            }
+        }
+    }
     let mut printed = 0usize;
     for (id, record) in records {
         let Some(graph) = &record.graph else { continue };
