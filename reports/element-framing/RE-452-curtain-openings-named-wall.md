@@ -44,7 +44,7 @@ Rows, registered on #1865 for this form after its runs were dispatched and befor
 
 ## 6. Not changed, and what is left out
 
-- **84 of the 268 office doors** that Revit aggregates into a curtain wall (21 in each of the four files) are still left out. The rule needs the element data of an id in the door's list to name the wall; for these it does not, or their list does not name the wall, and which it is has not been read. The first form would take them, and also the Vitoria door.
+- **84 of the 268 office doors** that Revit aggregates into a curtain wall (21 in each of the four files) are still left out. The rule needs the element data of an id in the door's list to name the wall; for these it does not, or their list does not name the wall, and which it is has not been read. The first form would take them, and also the Vitoria door. (Read in RE-453: each names the wall in its list, alone, and its element data never names it; a door whose list names one wall in all takes it, which the Snowdon Towers doors Revit leaves standalone do not meet.)
 - **Revit 2015 to 2023.** The element-data reader the rule needs does not exist for the 32-bit releases, so their openings keep the grid arm only. No Revit export of a 2015 to 2023 curtain door exists in Measure to say what the named wall would give there beyond the one Vitoria door.
 - **The 5 mullions** of #1865 whose lists name no wall (RE-449) are unchanged.
 - No Revit export of `rac_advanced`, the housing or Snowdon exists to score their openings: those 17 exports that change (the samples and Snowdon) are held to the same project's other saves, not to Revit's.

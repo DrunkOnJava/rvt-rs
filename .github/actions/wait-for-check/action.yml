@@ -29,6 +29,19 @@ inputs:
       CI never ran on it (a release tags a commit CI ran on).
     required: false
     default: "true"
+  superseded-skips:
+    description: >-
+      Let a commit whose push CI run was cancelled (by a later push, while it
+      was pending) end the wait at once and succeed with the result
+      "superseded", so the caller can leave that commit out: CHECK_NAME will
+      never come on it. With "false" such a commit fails at once instead (a
+      release is cut from a commit CI ran on).
+    required: false
+    default: "false"
+  ci-workflow:
+    description: Name of the workflow whose push run makes the check
+    required: false
+    default: CI
   token:
     description: Token that reads commits and check runs (contents and checks read)
     required: false
@@ -39,7 +52,9 @@ inputs:
     default: ${{ github.repository }}
 outputs:
   result:
-    description: success, or skipped-no-ci for a commit CI's push filter skips
+    description: >-
+      success, skipped-no-ci for a commit CI's push filter skips, or superseded
+      for a commit whose CI run was cancelled (only with superseded-skips)
     value: ${{ steps.wait.outputs.result }}
 runs:
   using: composite
@@ -54,4 +69,6 @@ runs:
         CHECK_NAME: ${{ inputs.check-name }}
         ATTEMPTS: ${{ inputs.timeout-minutes }}
         DOCS_ONLY_SKIPS: ${{ inputs.docs-only-skips }}
+        SUPERSEDED_SKIPS: ${{ inputs.superseded-skips }}
+        CI_WORKFLOW: ${{ inputs.ci-workflow }}
       run: bash "${GITHUB_ACTION_PATH}/wait.sh"

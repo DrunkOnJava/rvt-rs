@@ -60,6 +60,16 @@ fn part_walls(
     (named, on_grid)
 }
 
+/// How many distinct walls of `wall_ids`, curtain or not, a part's reference
+/// list `list` names (not the part itself).
+fn walls_named(own: Option<u32>, list: &[u64], wall_ids: &BTreeSet<u32>) -> usize {
+    list.iter()
+        .filter_map(|&id| u32::try_from(id).ok())
+        .filter(|id| wall_ids.contains(id) && Some(*id) != own)
+        .collect::<BTreeSet<u32>>()
+        .len()
+}
+
 /// The one wall of `named` that the element data of the ids in `list` also
 /// names, from `in_data` ([`scan_walls_in_element_data`]); none where no wall
 /// of `named` is in any of them or two are.
@@ -423,9 +433,12 @@ pub(super) fn attach_curtain_axes(
 /// A door or window set in a curtain wall's grid in place of a panel is one
 /// of its parts too, as Revit's export aggregates RE1 Architecture's door
 /// 445975 under curtain wall 445961. It takes the curtain wall of the
-/// one grid its record names. Naming a curtain wall directly is not enough:
-/// on Snowdon Towers three doors name curtain wall 1506500 and Revit leaves
-/// them standalone (RE-46). No record box decides a door either.
+/// one grid its record names, or, with no grid found, the curtain wall its list
+/// names when that is the one wall the list names (RE-453). Naming a curtain
+/// wall among others is not enough: on Snowdon Towers three doors name curtain
+/// wall 1506500 and their host, and Revit leaves them standalone (RE-46); such
+/// a door is a part only when the element data of an id of its list names the
+/// curtain wall too (RE-452). No record box decides a door either.
 ///
 /// A part that names two or more curtain walls and finds no grid (the 79 corner
 /// mullions of Autodesk's `rac_advanced` saved by Revit 2027, which name both
@@ -565,7 +578,8 @@ pub(super) fn attach_curtain_walls(
         }
     }
     // RE-452: the ids of the lists of the openings that name exactly one curtain
-    // wall and no grid, whose element data may name it.
+    // wall and no grid, and another wall besides, whose element data may name
+    // the curtain wall.
     let mut opening_crowded: BTreeSet<u32> = BTreeSet::new();
     for (elements, lists) in openings.iter().zip(&opening_references) {
         for (element, list) in elements.iter().zip(lists) {
@@ -573,7 +587,10 @@ pub(super) fn attach_curtain_walls(
                 continue;
             };
             let (named, on_grid) = part_walls(element.id, list, &curtain_walls, &grids);
-            if on_grid.is_empty() && named.len() == 1 {
+            if on_grid.is_empty()
+                && named.len() == 1
+                && walls_named(element.id, list, &wall_ids) > 1
+            {
                 opening_crowded.extend(
                     list.iter()
                         .filter_map(|&id| u32::try_from(id).ok())
@@ -592,14 +609,22 @@ pub(super) fn attach_curtain_walls(
             let Some(list) = list else {
                 continue;
             };
-            // RE-452: an opening with no grid whose list names exactly one
-            // curtain wall is a part of it when the element data of an id of its
-            // list names that wall too, as a mullion's or a panel's grid does. On
-            // Revit 2027 the grid's offsets (RE-72) are not found, and the curtain
+            // RE-453: an opening with no grid whose list names one wall in all,
+            // and that a curtain wall, is a part of it: every door Revit's export
+            // aggregates into a curtain wall on the BIM4LCA offices and Snowdon
+            // Towers names that wall alone, and the three Snowdon doors Revit
+            // leaves standalone name a second wall, their host.
+            // RE-452: one that names a curtain wall and another wall is a part of
+            // it only when the element data of an id of its list names the
+            // curtain wall too, as a mullion's or a panel's grid does. On Revit
+            // 2027 the grid's offsets (RE-72) are not found, and the curtain
             // door 216844 of `rac_advanced` stood alone.
             let (named, on_grid) = part_walls(element.id, &list, &curtain_walls, &grids);
             let whole = match (on_grid.len(), named.len()) {
                 (1, _) => on_grid.iter().next().copied(),
+                (0, 1) if walls_named(element.id, &list, &wall_ids) == 1 => {
+                    named.iter().next().copied()
+                }
                 (0, 1) => data_confirmed_wall(element.id, &list, &named, &opening_in_data),
                 _ => None,
             };
