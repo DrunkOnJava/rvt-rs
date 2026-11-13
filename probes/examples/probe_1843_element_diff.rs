@@ -33,12 +33,14 @@ fn states(path: &str) -> anyhow::Result<Vec<ElementState>> {
     Ok(element_states(&run.model))
 }
 
-/// A property's number, whether written bare or as its kind (`{"Real": 1.5}`).
+/// A property's number: `PropertyValue` serialises as `{"kind", "value"}`.
 fn number(value: &serde_json::Value) -> Option<f64> {
-    value.as_f64().or_else(|| {
-        let object = value.as_object()?;
-        (object.len() == 1).then(|| object.values().next()?.as_f64())?
-    })
+    value.as_f64().or_else(|| value.get("value")?.as_f64())
+}
+
+/// A property's kind, where it has one.
+fn kind(value: &serde_json::Value) -> Option<&str> {
+    value.get("kind")?.as_str()
 }
 
 fn by_type(states: &[ElementState]) -> String {
@@ -102,25 +104,49 @@ fn main() -> anyhow::Result<()> {
             .join(" ")
     );
     // Which properties differ, by `<set>.<property>` (names only, no values):
-    // a file against itself should list none (#1852's first run listed 11 on
-    // Core Interior). Per key: how often, how often one side lacks it, and the
-    // largest difference where both are numbers.
-    let mut properties: BTreeMap<&str, (usize, usize, usize, f64)> = BTreeMap::new();
+    // a file against itself should list none, but #1852's first run listed
+    // wall gross quantities on every sample. Per key: how often, how often one
+    // side lacks it or the two kinds differ, and the largest difference where
+    // both are numbers, absolute and relative to the larger.
+    #[derive(Default)]
+    struct Changed {
+        n: usize,
+        left_absent: usize,
+        right_absent: usize,
+        kind_differs: usize,
+        delta: f64,
+        relative: f64,
+    }
+    let mut properties: BTreeMap<&str, Changed> = BTreeMap::new();
     for field in diff.changed.iter().flat_map(|change| &change.changes) {
         let Some(key) = field.field.strip_prefix("property:") else {
             continue;
         };
-        let entry = properties.entry(key).or_insert((0, 0, 0, 0.0));
-        entry.0 += 1;
-        entry.1 += usize::from(field.left.is_null());
-        entry.2 += usize::from(field.right.is_null());
+        let entry = properties.entry(key).or_default();
+        entry.n += 1;
+        entry.left_absent += usize::from(field.left.is_null());
+        entry.right_absent += usize::from(field.right.is_null());
+        let (left_kind, right_kind) = (kind(&field.left), kind(&field.right));
+        entry.kind_differs +=
+            usize::from(left_kind.is_some() && right_kind.is_some() && left_kind != right_kind);
         if let (Some(a), Some(b)) = (number(&field.left), number(&field.right)) {
-            entry.3 = entry.3.max((a - b).abs());
+            let delta = (a - b).abs();
+            entry.delta = entry.delta.max(delta);
+            let scale = a.abs().max(b.abs());
+            if scale > 0.0 {
+                entry.relative = entry.relative.max(delta / scale);
+            }
         }
     }
-    for (key, (n, left_absent, right_absent, delta)) in &properties {
+    for (key, changed) in &properties {
         println!(
-            "changed_property {key} n={n} left_absent={left_absent} right_absent={right_absent} max_numeric_delta={delta:e}"
+            "changed_property {key} n={} left_absent={} right_absent={} kind_differs={} max_delta={:e} max_relative={:e}",
+            changed.n,
+            changed.left_absent,
+            changed.right_absent,
+            changed.kind_differs,
+            changed.delta,
+            changed.relative
         );
     }
     Ok(())
