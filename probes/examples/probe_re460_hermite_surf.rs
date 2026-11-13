@@ -559,6 +559,7 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
         let IfcEntity::BuildingElement {
+            ifc_type,
             type_guid: Some(tag),
             property_set: Some(set),
             location_feet: Some(_),
@@ -570,10 +571,19 @@ fn main() -> anyhow::Result<()> {
         let boxed = set.properties.iter().any(|p| {
             p.name == "BodySource" && matches!(&p.value, PropertyValue::Text(t) if t == RECORD_BOX)
         });
+        // Where the saved-graphics pass now draws a Hermite face (#1191), a railing or a stair is
+        // no longer boxed: its nodes are what stage 3 prints, so these are read too.
+        let meshed = set.properties.iter().any(|p| {
+            p.name == "BodySource"
+                && matches!(&p.value, PropertyValue::Text(t) if t == "saved_graphics_mesh")
+        }) && matches!(
+            ifc_type.as_str(),
+            "IFCRAILING" | "IFCSTAIR" | "IFCSTAIRFLIGHT"
+        );
         let resolved = set.properties.iter().any(|p| {
             p.name == "ProfileResolved" && matches!(p.value, PropertyValue::Boolean(true))
         });
-        if !boxed || resolved {
+        if !(boxed || meshed) || resolved {
             continue;
         }
         if let Ok(id) = tag.parse::<u64>() {
@@ -710,7 +720,87 @@ fn main() -> anyhow::Result<()> {
         );
     }
     edge_stage(&records);
+    node_stage(&records);
     Ok(())
+}
+
+/// The most Hermite surfaces stage 3 prints in full.
+const NODE_DUMP_LIMIT: usize = 12;
+
+/// Stage 3 (#1191): the nodes of the first Hermite surfaces, for a scorer that fits the cell's
+/// twist against the vertices of Revit's own mesh of the same element. The edges of stage 2 lie
+/// along the cells' edges, where a bicubic Hermite patch does not depend on its mixed
+/// derivatives, so what they scaled and how is untested by them. One line per object class of
+/// the element's graph, then per surface its grid and a line per node:
+///
+///   `object <id> <class>=<n> ...`
+///   `surface <id> <k> nu <n> nv <n> u <params> v <params>`
+///   `node <id> <k> <iu> <iv> p <x y z> tu <x y z> tv <x y z> w <x y z>`
+///
+/// Feet and parameters, in the model's internal frame.
+fn node_stage(records: &BTreeMap<u64, Record>) {
+    let mut printed = 0usize;
+    for (id, record) in records {
+        let Some(graph) = &record.graph else { continue };
+        let mut classes: BTreeMap<&str, usize> = BTreeMap::new();
+        for object in &graph.objects {
+            *classes.entry(object.class_name.as_str()).or_default() += 1;
+        }
+        if !classes.contains_key("HermiteSurf") {
+            continue;
+        }
+        println!(
+            "object {id} {}",
+            classes
+                .iter()
+                .map(|(class, n)| format!("{class}={n}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
+        let mut k = 0usize;
+        for object in &graph.objects {
+            if object.class_name != "HermiteSurf" {
+                continue;
+            }
+            if printed >= NODE_DUMP_LIMIT {
+                return;
+            }
+            printed += 1;
+            let Some(hermite) = Hermite::read(&object.fields) else {
+                println!("surface {id} {k} unread");
+                k += 1;
+                continue;
+            };
+            let list = |values: &[f64]| {
+                values
+                    .iter()
+                    .map(|x| format!("{x:.9}"))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            };
+            println!(
+                "surface {id} {k} nu {} nv {} u {} v {}",
+                hermite.u.len(),
+                hermite.v.len(),
+                list(&hermite.u),
+                list(&hermite.v)
+            );
+            let triple = |p: [f64; 3]| format!("{:.9} {:.9} {:.9}", p[0], p[1], p[2]);
+            for (n, node) in hermite.nodes.iter().enumerate() {
+                let nu = hermite.u.len();
+                println!(
+                    "node {id} {k} {} {} p {} tu {} tv {} w {}",
+                    n % nu,
+                    n / nu,
+                    triple(node.point),
+                    triple(node.tangent[0]),
+                    triple(node.tangent[1]),
+                    triple(node.mixed)
+                );
+            }
+            k += 1;
+        }
+    }
 }
 
 /// The spacing of `f32` values at `x`: how far `x` is from the nearest other `f32`.
