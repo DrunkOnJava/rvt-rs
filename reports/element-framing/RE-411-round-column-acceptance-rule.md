@@ -27,7 +27,7 @@ RvtIO decodes the faces of a column's geometry; rvt-rs reads the mesh Revit save
 | round by neither | 2,089 |
 
 - **Both:** the office's one round column (3053209, `Round Column:PI-6`, radius 0.24606 ft, a cap of 48 points at 0.99599 of pi r squared) on each of the four office files.
-- **RE-353 only:** the 2 columns (1206189 and 1211583) in Snowdon Towers Architectural whose type's `Diameter` is 0.3333 ft (4 in). Their saved mesh's caps reach 0.99398 of pi r squared, short of the 0.995 the rule needs. The shortfall is the mesh's chords, which RvtIO's area from the stored loop does not have, so this probe cannot say whether RvtIO's reader takes them.
+- **RE-353 only:** the 2 columns (1206189 and 1211583) in Snowdon Towers Architectural whose type's `Diameter` is 0.3333 ft (4 in). Their saved mesh's caps reach 0.99398 of pi r squared, short of the 0.995 the rule needs. This probe could not say whether RvtIO's reader takes them. RvtIO's author ran the reader on two other copies of the sample (the Revit 2024 installation's and the Revit 2025 one, which hold the same two columns; discussion #1241, 2026-11-13): it does not. The stored end faces are 11-corner polygons with no loop area and no circular edge, so the rule refuses both before its area test, and the polygon's area is 0.9354 of pi r squared, under the saved mesh's 0.99398. The stored loop gives no larger area than the mesh, and neither reader takes these two columns as round.
 - **Neither:** all 2,089 are refused for the number of planar faces ("n planar faces, not 2"): boxes, steel sections and other solids.
 
 ## 4. The 1,898 columns only RvtIO's rule takes, by type
@@ -60,7 +60,7 @@ The 24 are the type with `b` 1.4764 ft (450 mm) in rac_advanced 2024, 2025, 2026
 
 - **The defect is RE-416.** A column drawn from its saved mesh keeps the box's `CrossSectionArea`, `OuterSurfaceArea`, `GrossVolume` and `NetVolume` only where the box's volume is within 2% of the mesh's, and keeps its `Length`.
 - **RE-353's caption rule is narrow.** Geometry shows 1,898 round columns in the samples that it does not take, in three kinds of type. Whether `OuterSurfaceArea` (the circumference times the height, exact on the office's column, RE-353 section 4) is written for them is a separate decision: Measure holds no Revit export of those files to score it against, so it is left as it is.
-- **The two rules agree wherever both read a column**, but for the 2 Snowdon columns of section 3, whose mesh caps are 0.6% under the circle, 0.1% past what the rule allows.
+- **The two rules agree wherever both read a column**, but for the 2 Snowdon columns of section 3, whose mesh caps are 0.6% under the circle, 0.1% past what the rule allows. RvtIO's reader does not take them either (section 3): the 0.1% is a difference between two drawings of a 4 in post, and no bar on either decides it.
 
 ## 7. Not shown
 
