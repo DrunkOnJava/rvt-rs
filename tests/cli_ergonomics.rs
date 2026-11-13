@@ -124,6 +124,163 @@ fn refuses_to_overwrite_the_input() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A manifest with one patch that gives BasicFileInfo a new payload, framed as
+/// `framing`; the tier-1 fixture stores that stream as it stands, not as gzip.
+fn manifest(dir: &Path, patch: serde_json::Value) -> PathBuf {
+    let path = dir.join("patches.json");
+    std::fs::write(&path, serde_json::to_vec(&patch).unwrap()).unwrap();
+    path
+}
+
+#[test]
+fn rvt_write_dry_run_needs_no_manifest_and_checks_what_the_write_would() {
+    let Some(source) = fixture() else { return };
+    let dir = scratch("write-dry");
+    let dst = dir.join("out.rvt");
+    let write = env!("CARGO_BIN_EXE_rvt-write");
+
+    // No manifest: the source is read and the exit is 0 (#1885, item 1).
+    let out = run(
+        write,
+        &[
+            "--src".as_ref(),
+            source.as_os_str(),
+            "--dst".as_ref(),
+            dst.as_os_str(),
+            "--dry-run".as_ref(),
+        ],
+    );
+    assert!(out.status.success(), "{}", stderr(&out));
+
+    // A stream the file does not have, a framing it is not stored in: both
+    // refused by the dry run, as the write would, and nothing is written (item 2
+    // and the framing check of item 3).
+    let missing = manifest(
+        &dir,
+        serde_json::json!({ "patches": [{
+            "stream_name": "No/Such/Stream", "new_decompressed": [1, 2, 3], "framing": "Verbatim"
+        }] }),
+    );
+    let wrong = dir.join("wrong-framing.json");
+    std::fs::write(
+        &wrong,
+        serde_json::to_vec(&serde_json::json!({ "patches": [{
+            "stream_name": "BasicFileInfo", "new_decompressed": [1, 2, 3], "framing": "RawGzipFromZero"
+        }] }))
+        .unwrap(),
+    )
+    .unwrap();
+    for (manifest, words) in [(&missing, "No/Such/Stream"), (&wrong, "not gzip-framed")] {
+        for dry in [true, false] {
+            let mut args: Vec<&std::ffi::OsStr> = vec![
+                "--src".as_ref(),
+                source.as_os_str(),
+                "--dst".as_ref(),
+                dst.as_os_str(),
+                "--patches".as_ref(),
+                manifest.as_os_str(),
+            ];
+            if dry {
+                args.push("--dry-run".as_ref());
+            }
+            let out = run(write, &args);
+            assert_eq!(out.status.code(), Some(1), "dry={dry}: {}", stderr(&out));
+            assert!(
+                stderr(&out).contains(words),
+                "dry={dry}, {words}: {}",
+                stderr(&out)
+            );
+            assert!(!dst.exists(), "dry={dry}: a refused patch left a file");
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn rvt_write_refuses_a_base64_value_that_empties_a_stream() {
+    let Some(source) = fixture() else { return };
+    let dir = scratch("write-empty-base64");
+    let dst = dir.join("out.rvt");
+    for value in ["=", ""] {
+        let manifest = manifest(
+            &dir,
+            serde_json::json!({ "patches": [{
+                "stream_name": "BasicFileInfo", "new_decompressed_base64": value, "framing": "Verbatim"
+            }] }),
+        );
+        let out = run(
+            env!("CARGO_BIN_EXE_rvt-write"),
+            &[
+                "--src".as_ref(),
+                source.as_os_str(),
+                "--dst".as_ref(),
+                dst.as_os_str(),
+                "--patches".as_ref(),
+                manifest.as_os_str(),
+            ],
+        );
+        assert_eq!(out.status.code(), Some(1), "{value:?}: {}", stderr(&out));
+        assert!(
+            stderr(&out).contains("decodes to no bytes"),
+            "{value:?}: {}",
+            stderr(&out)
+        );
+        assert!(!dst.exists(), "{value:?}: a refused patch left a file");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn rvt_write_with_no_patch_copies_the_file_byte_for_byte_and_the_file_onto_itself_is_left() {
+    let Some(source) = fixture() else { return };
+    let dir = scratch("write-copy");
+    let write = env!("CARGO_BIN_EXE_rvt-write");
+    let empty = manifest(&dir, serde_json::json!({ "patches": [] }));
+    let before = std::fs::read(&source).unwrap();
+
+    // An empty manifest is a plain copy, not "0 stream(s) failed verification"
+    // (item 5).
+    let dst = dir.join("copy.rvt");
+    let out = run(
+        write,
+        &[
+            "--src".as_ref(),
+            source.as_os_str(),
+            "--dst".as_ref(),
+            dst.as_os_str(),
+            "--patches".as_ref(),
+            empty.as_os_str(),
+        ],
+    );
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(std::fs::read(&dst).unwrap(), before);
+
+    // The copy onto itself, spelled two ways, leaves the bytes as they were and
+    // no temporary beside it (items 6 and 7).
+    for spelled in [dst.clone(), dir.join(".").join("copy.rvt")] {
+        let out = run(
+            write,
+            &[
+                "--src".as_ref(),
+                dst.as_os_str(),
+                "--dst".as_ref(),
+                spelled.as_os_str(),
+                "--patches".as_ref(),
+                empty.as_os_str(),
+            ],
+        );
+        assert!(out.status.success(), "{}", stderr(&out));
+        assert_eq!(std::fs::read(&dst).unwrap(), before);
+    }
+    let leftovers: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+        .filter(|name| name.starts_with('.'))
+        .collect();
+    assert!(leftovers.is_empty(), "temporaries left: {leftovers:?}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The same file under other names is still the input (#1885): the paths as
 /// typed differ, so comparing them let `./model.rvt` and a link through, and
 /// the export replaced the file it had been read from.
@@ -299,4 +456,195 @@ fn a_closed_stdout_pipe_is_a_quiet_exit() {
     assert!(!err.contains("Broken pipe"), "{err}");
     #[cfg(unix)]
     assert_eq!(out.status.code(), Some(141), "{err}");
+}
+
+/// A fixture made by `gen-fixture`: the streams `rvt-dump` reads, and a 1x1
+/// preview PNG that ends with its IEND chunk.
+fn generated_fixture(dir: &Path) -> PathBuf {
+    let path = dir.join("generated.rvt");
+    let out = run(
+        env!("CARGO_BIN_EXE_gen-fixture"),
+        &["demo".as_ref(), "--output".as_ref(), path.as_os_str()],
+    );
+    assert!(out.status.success(), "{}", stderr(&out));
+    path
+}
+
+/// A stream over `--max-stream-bytes` does not stop the dump (#1885): it is
+/// listed as not read, the streams after it are written, the reader's report of
+/// what a limit left unread goes to stderr and the exit status is 3 unless
+/// `--allow-partial` says the partial dump is wanted.
+#[test]
+fn rvt_dump_lists_a_stream_over_the_limit_and_dumps_the_rest() {
+    let dir = scratch("dump-limit");
+    let model = generated_fixture(&dir);
+    let whole = dir.join("whole");
+    let out = run(
+        env!("CARGO_BIN_EXE_rvt-dump"),
+        &[
+            model.as_os_str(),
+            "-o".as_ref(),
+            whole.as_os_str(),
+            "--raw".as_ref(),
+        ],
+    );
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(stderr(&out).is_empty(), "{}", stderr(&out));
+    assert!(whole.join("BasicFileInfo.raw").exists());
+
+    // BasicFileInfo is 236 bytes or more and the preview, 83.
+    let limited = dir.join("limited");
+    let args: [&std::ffi::OsStr; 6] = [
+        model.as_os_str(),
+        "-o".as_ref(),
+        limited.as_os_str(),
+        "--raw".as_ref(),
+        "--max-stream-bytes".as_ref(),
+        "100".as_ref(),
+    ];
+    let out = run(env!("CARGO_BIN_EXE_rvt-dump"), &args);
+    assert_eq!(out.status.code(), Some(3), "{}", stderr(&out));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let basic = stdout
+        .lines()
+        .find(|line| line.contains("BasicFileInfo"))
+        .unwrap_or_else(|| panic!("no line for BasicFileInfo in {stdout}"));
+    assert!(basic.contains("not read: over the stream limit"), "{basic}");
+    let err = stderr(&out);
+    assert!(err.contains("were not read whole"), "{err}");
+    assert!(err.contains("BasicFileInfo"), "{err}");
+    assert!(err.contains("--allow-partial"), "{err}");
+    assert!(
+        !limited.join("BasicFileInfo.raw").exists(),
+        "a stream that was not read is not written"
+    );
+    assert!(
+        limited.join("RevitPreview4.0.raw").exists(),
+        "the stream after it, which fits the limit, was dumped"
+    );
+
+    let partial = dir.join("partial");
+    let out = run(
+        env!("CARGO_BIN_EXE_rvt-dump"),
+        &[
+            model.as_os_str(),
+            "-o".as_ref(),
+            partial.as_os_str(),
+            "--max-stream-bytes".as_ref(),
+            "100".as_ref(),
+            "--allow-partial".as_ref(),
+        ],
+    );
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(
+        stderr(&out).contains("were not read whole"),
+        "{}",
+        stderr(&out)
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Replaces the preview stream of the compound file at `path`.
+fn set_preview(path: &Path, bytes: &[u8]) {
+    use std::io::{Seek, SeekFrom, Write};
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .unwrap();
+    let mut compound = cfb::CompoundFile::open(file).unwrap();
+    {
+        let mut stream = compound.open_stream("/RevitPreview4.0").unwrap();
+        stream.set_len(0).unwrap();
+        stream.seek(SeekFrom::Start(0)).unwrap();
+        stream.write_all(bytes).unwrap();
+    }
+    compound.flush().unwrap();
+}
+
+/// `rvt-info --extract-preview` writes a PNG that ends with its IEND chunk, and
+/// refuses a preview whose stream is cut short (#1885): the library returns
+/// what is there, and a file named `.png` that no viewer opens is not what was
+/// asked for.
+#[test]
+fn extract_preview_writes_a_whole_png_and_refuses_one_cut_short() {
+    const PNG_MAGIC: [u8; 8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    let dir = scratch("preview");
+    let whole = generated_fixture(&dir);
+    let thumb = dir.join("thumb.png");
+    let out = run(
+        env!("CARGO_BIN_EXE_rvt-info"),
+        &[
+            whole.as_os_str(),
+            "--extract-preview".as_ref(),
+            thumb.as_os_str(),
+        ],
+    );
+    assert!(out.status.success(), "{}", stderr(&out));
+    let png = std::fs::read(&thumb).unwrap();
+    assert_eq!(png[..8], PNG_MAGIC);
+    assert_eq!(&png[png.len() - 8..png.len() - 4], b"IEND");
+
+    // The same file with the PNG's stream ending inside its IHDR chunk.
+    let cut = dir.join("cut.rvt");
+    std::fs::copy(&whole, &cut).unwrap();
+    let mut stream = vec![0u8; 16];
+    stream.extend_from_slice(&PNG_MAGIC);
+    stream.extend_from_slice(&[0, 0, 0, 13, b'I', b'H', b'D', b'R', 0, 0, 0, 1]);
+    set_preview(&cut, &stream);
+    let cut_png = dir.join("cut.png");
+    let out = run(
+        env!("CARGO_BIN_EXE_rvt-info"),
+        &[
+            cut.as_os_str(),
+            "--extract-preview".as_ref(),
+            cut_png.as_os_str(),
+        ],
+    );
+    assert_eq!(out.status.code(), Some(1), "{}", stderr(&out));
+    assert!(stderr(&out).contains("cut short"), "{}", stderr(&out));
+    assert!(!cut_png.exists(), "nothing was written");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// `gen-fixture`'s name is a file name under tests/fixtures, so a name with a
+/// path in it is refused rather than written somewhere else (#1885).
+#[test]
+fn gen_fixture_name_with_a_path_in_it_writes_nothing() {
+    let dir = scratch("gen-name");
+    let project = dir.join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    for name in ["../escape", "a/b", "a\\b"] {
+        let out = Command::new(env!("CARGO_BIN_EXE_gen-fixture"))
+            .arg(name)
+            .env("CARGO_MANIFEST_DIR", &project)
+            .output()
+            .expect("spawn gen-fixture");
+        assert_eq!(out.status.code(), Some(1), "{name}: {}", stderr(&out));
+        assert!(
+            stderr(&out).contains("path separator"),
+            "{name}: {}",
+            stderr(&out)
+        );
+    }
+    assert!(
+        std::fs::read_dir(&project).unwrap().next().is_none(),
+        "no folder was made under the project"
+    );
+    assert!(!dir.join("escape.rvt").exists());
+
+    let out = Command::new(env!("CARGO_BIN_EXE_gen-fixture"))
+        .arg("plain")
+        .env("CARGO_MANIFEST_DIR", &project)
+        .output()
+        .expect("spawn gen-fixture");
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert!(
+        project
+            .join("tests")
+            .join("fixtures")
+            .join("synthetic-plain.rvt")
+            .exists()
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

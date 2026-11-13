@@ -398,10 +398,15 @@ pub fn find_element_data_names_2023(buf: &[u8], wanted: &BTreeSet<u32>) -> BTree
 /// 2023, with the release's [`element_data_header_32`]. On 2015 to 2022 a
 /// name of one character is not taken: there it is a one-id list's id read
 /// as a name ([`lone_non_ascii`]), such as the `퉼` (id 250492) that named
-/// ceiling type 247676 of the 2019 to 2022 `rac_advanced`, and the `p` that
-/// made element 86961 ("Working Drawings") of the 2019 to 2022 `rac_basic`
-/// the type of five walls. 2023 keeps RE-111's reading: there the same rule
-/// would give five walls a type their 2024 copies do not confirm (RE-180).
+/// element 247676, the one before a furred ceiling of the 2019 to 2022
+/// `rac_advanced`, and the `p` that made element 86961 ("Working Drawings")
+/// of the 2019 to 2022 `rac_basic` the type of five walls. 2023 keeps
+/// RE-111's reading of a one-letter ASCII name: there the same rule would give
+/// five walls a type their 2024 copies do not confirm (RE-180). It does not
+/// keep a lone non-ASCII one, which is no name: on 2023 the elements before
+/// the two furred ceilings of `rac_advanced` (247616 and 247676, `퉻` and `퉼`)
+/// were candidates for their type beside its own, 242823, and neither was the
+/// more specific, so the ceilings had no type (RE-451).
 /// Before Revit 2019 the name is looked for in the element's own data
 /// only, up to the next element's data header, and a one-unit entry is
 /// passed over rather than taken. Level 311 of the 2018 `rac_basic` has no
@@ -420,7 +425,9 @@ pub fn find_element_data_names_32(
     };
     let own_data_only = revit_version < 2019;
     let mut names = element_data_names(buf, &header, wanted, own_data_only, le_bytes::u32_at);
-    if revit_version != crate::partition_element_records_2023::REVIT_2023 {
+    if revit_version == crate::partition_element_records_2023::REVIT_2023 {
+        names.retain(|_, name| !lone_non_ascii(name));
+    } else {
         names.retain(|_, name| name.chars().nth(1).is_some());
     }
     names

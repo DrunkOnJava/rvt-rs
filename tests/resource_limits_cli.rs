@@ -71,7 +71,7 @@ fn unread_streams(json: &Value) -> Option<Vec<String>> {
         assert!(
             warnings
                 .iter()
-                .any(|warning| warning.contains(&format!("stream {stream} "))),
+                .any(|warning| warning.contains(&format!("stream {stream:?} "))),
             "no warning names {stream}: {warnings:?}"
         );
     }

@@ -1247,6 +1247,28 @@ and earlier write every room, as every element: both phase rules start at
 Revit 2016 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
+**RE-451 (2026-11-13)** stops Revit 2023 from reading the element before a
+furred ceiling as the ceiling's type. On Autodesk's `rac_advanced` saved by
+Revit 2023 the two furred ceilings (247617 and 247677) were written as
+`Ceiling-247617` and `Ceiling-247677`, with no `Pset_CoveringCommon` and no
+`Pset_EnvironmentalImpactIndicators`: six parameter values short of every save
+from 2015 to 2022 (#1899). A 2023 system type is the one named id of an
+element's record that is the most specific (RE-111), and each ceiling names two
+ids that have neither a record nor a name entry of their own: its type, 242823
+`Furred Ceiling`, and the element before it (247616, 247676), whose data opens
+with a list of one ElementId that reads as a name of one character. Neither
+candidate's naming categories are a subset of the other's, so the ceilings had
+no type. Revit 2015 to 2022 drop every element-data name of one character
+(RE-180) and 2023 now drops one that is a single non-ASCII character, as its
+name entries already did; a one-letter ASCII name stays, as RE-180 left it. A
+probe over the 40 models of Autodesk's 2015 to 2023 samples and Einhoven finds
+the choice of a system type changes for these two elements only. Of the 146
+exports of the unfiltered Measure run 145 are byte for byte as before; the 2023
+`rac_advanced` gains the two ceilings' type name and their
+`Pset_CoveringCommon` and `Pset_EnvironmentalImpactIndicators`, and its
+parameter values go from 19,973 to 19,979, as on every save from 2015 to 2022
+(`reports/element-framing/RE-451-lone-names-2023.md`).
+
 **RE-449 (2026-11-13)** gives a curtain part that names two curtain walls and
 no grid the wall the element data of its list names. Revit 2027 saves the 79
 corner mullions of Autodesk's `rac_advanced` with both walls of their corner in
@@ -1271,9 +1293,9 @@ not that file alone: 14 other exports of the unfiltered Measure run gain
 measured and not equal (Revit's export writes them as an exporter artefact
 and the census counts them apart, RE-269), and two members of the BIM4LCA
 timber office take the curtain wall Revit's own export puts them under
-(`aggregates_vs_ifc`, `IfcMember` same whole 7,872 to 7,874). The 2023 save of `rac_advanced` stays
+(`aggregates_vs_ifc`, `IfcMember` same whole 7,872 to 7,874). The 2023 save of `rac_advanced` was
 six values short of its neighbours
-([#1899](https://github.com/DrunkOnJava/rvt-rs/issues/1899))
+([#1899](https://github.com/DrunkOnJava/rvt-rs/issues/1899), closed by RE-451)
 (`reports/element-framing/RE-449-curtain-corner-mullions.md`).
 
 **RE-445 (2026-11-11)** reads the project's display units from its
@@ -1412,6 +1434,17 @@ or Combined, and walls, floors and stairs before Revit 2024 are left without
 (the older models show only the false state, so nothing is written for them;
 Vitoria's 247 walls are the ones the census counts apart)
 (`reports/element-framing/RE-429-structural-load-bearing.md`).
+
+**RE-448 (2026-11-12)** sets each door and window of a Revit 2015 to 2023
+save in the wall its own native record names (`m_hostId`), where the
+reference list's nearest wall is another plain wall: RE-245's rule, which
+ran on 2024 to 2027 only and read the host only in 2024's 8-byte
+ElementId. Autodesk's `rac_advanced` has 28 doors and windows and
+`rac_basic` one rebound on every save from 2015 to 2023, each now in the wall
+the same project's 2024 save sets it in, its opening's centre and faces
+within 0.0005 m of the 2024 opening's; nothing else changes on 58 local
+files of 2015 to 2023
+(`reports/element-framing/RE-448-opening-native-host-pre2024.md`).
 
 **RE-327 (2026-11-04)** rebuilds a family's extrusions from their own records:
 the sketch's `CurveElem` lines and arcs (in the family's coordinates), chained

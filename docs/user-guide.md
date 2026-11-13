@@ -384,7 +384,7 @@ one partition stream of 400 MiB to 1 GiB. When a limit stops a stream,
 
 ```text
 rvt-ifc: 1 stream(s) not read whole, so the export is missing what they hold:
-  stream Partitions/189 (422248448 bytes stored) is larger than the stream limit of 268435456 bytes, so what it holds is missing
+  stream "Partitions/189" (422248448 bytes stored) is larger than the stream limit of 268435456 bytes, so what it holds is missing
 ```
 
 Re-run with `--large-model` (streams up to 2 GiB, 8 GiB inflated), or set

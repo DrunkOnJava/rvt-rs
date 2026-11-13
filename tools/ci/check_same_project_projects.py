@@ -4,6 +4,8 @@ list in several places, which must agree or the verdict does not see a sample (R
 
   same_project_verdict.py            PROJECTS, YEARS
   check-bodies-across-saves.sh       the `for project in` list and the `for year in` list
+  measure.yml (the gates job)        the `for project in` list and the `for year in` list that write the samples the
+                                     run holds (the bodies gate's years, the 2024 save, rac_advanced's 2021 and 2022)
   measure-reference-models.sh        the two `case ... in` lists of project keys (saves_gate_keeps, bodies_across_saves),
                                      the year case of saves_gate_keeps and the `202[...]` globs of bodies_across_saves
   bodies_across_saves.py             the keys of MINIMUMS, OUTLINE_LEAST, REQUIRED and CYLINDER_LEAST
@@ -61,6 +63,9 @@ ORIGINAL_ROOF_TAGS = {
 }
 REFERENCE_YEAR = 2025
 FIRST_YEAR = 2024
+# The Areas gate's 2021 save against its 2022 save (#1434) is rac_advanced's alone.
+AREAS_2021_YEARS = {2021, 2022}
+AREAS_2021_PROJECT = "racadvanced"
 
 
 def assignments(path):
@@ -125,6 +130,36 @@ def main():
     earlier = glob_years(match.group(1)) if match else set()
     if earlier != {FIRST_YEAR, REFERENCE_YEAR}:
         problems.append(f"tools/ci/measure-reference-models.sh, earlier glob: {sorted(earlier)} is not {[FIRST_YEAR, REFERENCE_YEAR]}")
+
+    # The gates job of measure.yml writes the list of samples the run holds from its
+    # own inputs (#1881): the same projects, and the years the two gates read.
+    workflow = (ROOT / ".github/workflows/measure.yml").read_text()
+    start = workflow.find("name: Score the same-project gates")
+    gates_job = workflow[start:] if start >= 0 else ""
+    match = re.search(r"for project in ([a-z ]+); do", gates_job)
+    found[".github/workflows/measure.yml, the gates job"] = (
+        {f"{key}sampleproject" for key in match.group(1).split()} if match else set()
+    )
+    match = re.search(r"for year in ([0-9 ]+); do", gates_job)
+    gate_years = {int(y) for y in match.group(1).split()} if match else set()
+    if gate_years != years | {FIRST_YEAR} | AREAS_2021_YEARS:
+        problems.append(
+            f".github/workflows/measure.yml, the gates job: years {sorted(gate_years)}, not "
+            f"{sorted(years | {FIRST_YEAR} | AREAS_2021_YEARS)} (the bodies gate's saves, the 2024 save they are held to, "
+            "and the Areas gate's 2021 and 2022)"
+        )
+    match = re.search(
+        r'case "\$year-\$project" in (\d{4})-([a-z]+) \| (\d{4})-([a-z]+)\) ;; (\d{4})-\* \| (\d{4})-\*\) continue ;; esac',
+        gates_job,
+    )
+    if not match or {int(match.group(1)), int(match.group(3)), int(match.group(5)), int(match.group(6))} != AREAS_2021_YEARS or {
+        match.group(2),
+        match.group(4),
+    } != {AREAS_2021_PROJECT}:
+        problems.append(
+            f".github/workflows/measure.yml, the gates job: the case that keeps the {sorted(AREAS_2021_YEARS)} saves "
+            f"of {AREAS_2021_PROJECT} alone is not as the checker reads it"
+        )
 
     bodies = assignments(ROOT / "tools/re/bodies_across_saves.py")
     readers = assignments(ROOT / "tools/re/readers_across_saves.py")

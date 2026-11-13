@@ -234,6 +234,9 @@ pub fn recover_partition_schema_mvp(
         }
         bind_opening_hosts(&out.walls, &mut out.doors);
         bind_opening_hosts(&out.walls, &mut out.windows);
+        // --- Each door and window in the wall its own native record names
+        // (RE-448), as RE-245 does on 2024 to 2027 ---
+        rebind_opening_hosts_to_native(rf, &out.walls, [&mut out.doors, &mut out.windows]);
         // --- The Level parameters each element's own native record names
         // (RE-369) ---
         attach_levels_32(

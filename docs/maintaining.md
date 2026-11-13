@@ -290,6 +290,10 @@ for the five lowest ElementIds of each IFC entity, the diagnostics and an
   `python3 tools/re/mcp_client.py <rvt-rs-mcp> <model.rvt> [--all]` writes it
   alone, with `get_element` for the five lowest ElementIds of each entity or
   for every element; the semantic merge check (#1334) reads it.
+- The client starts the server with `--root` set to the model's folder when
+  the server has the flag (`tools/re/mcp_client.py` reads its `--help`), since
+  a server reads files only inside one folder (#1883); a side from before the
+  flag reads any file and is started without it.
 - The server is built (`cargo build -p rvt-rs-mcp`, in the side's Build job)
   only in a run that names no scorers or names this one. It is optional: a ref
   without the crate, or whose server does not build, leaves the step NOT
@@ -365,14 +369,24 @@ each it compared. A new sample or check has to be added in the scorers' `MINIMUM
 `check-bodies-across-saves.sh` and `same_project_verdict.py` (`PROJECTS`), which
 `tools/ci/check_same_project_projects.py` checks against each other in CI, or the
 verdict does not see it. Measure's script runs it beside each such sample, scoring
-up to as many at once as the runner has CPUs, and the job
-`same-project-gates` turns the run red on a difference, a missing file, an
-unknown project, fewer bodies than the sample holds, or a check that compared
-nothing. That job also holds #1428's Areas gate (rac_advanced's Areas across its
-2024 to 2027 saves, and its 2021 save against its 2022 save (#1434),
-`tools/ci/check-areas-across-saves.sh`), each as a step that runs whatever the
-other did. It is a job of its own, so a failure of either does
-not remove Compare's report.
+up to as many at once as the runner has CPUs (for the comparison with the base
+side), and then again in the job `gates`, which runs no measured code (#1881):
+each head-side samples shard hard-links the exports the gates score into
+`gate-ifc` and uploads it, and `gates` runs the same two gates over them with
+the script and scorers of the workflow's own ref and the sample list of this
+run's inputs (`MEASURE_GATES_ONLY`). The job `same-project-gates` reads the
+`gate-results` artifact of `gates` and no result a shard wrote, and turns the run
+red on a difference, a missing file, an unknown project, fewer bodies than the
+sample holds, or a check that compared nothing. That job also holds #1428's
+Areas gate (rac_advanced's Areas across its 2024 to 2027 saves, and its 2021 save
+against its 2022 save (#1434), `tools/ci/check-areas-across-saves.sh`), each as a
+step that runs whatever the other did. It is a job of its own, so a failure of
+either does not remove Compare's report. After the download `gates` deletes everything in
+`gate-ifc` but each `sample-*/model.ifc`, so a file the measured job planted beside the
+exports (a result file the script writes none of, for an export that is missing) is not
+read. What this keeps out is a measured binary that writes `bodies_across_saves.txt`
+itself; a binary that writes IFCs the scorers
+accept is not caught, and the maintainers read a change to `src/` before it lands.
 
 - **A change to a reader of Revit 2024 to 2027 is measured with
   `samples=true`** (every year, or `sample_years="2024 2027"`). Without it no

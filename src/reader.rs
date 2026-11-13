@@ -159,9 +159,12 @@ impl std::fmt::Display for UnreadStream {
                 "inflates past the limit on one stream's inflated total"
             }
         };
+        // The name is text from the file and is quoted, as the phase error's is: a
+        // name with a newline or a control character cannot forge a line in a
+        // log (#1884).
         write!(
             f,
-            "stream {} ({} bytes stored) {what} of {} bytes, so what it holds is missing",
+            "stream {:?} ({} bytes stored) {what} of {} bytes, so what it holds is missing",
             self.name, self.stored_bytes, self.limit
         )
     }
@@ -917,8 +920,9 @@ impl RevitFile {
     /// [`Self::inflated_partition`] inflates its stream again; a reader that
     /// holds the `Arc` it was given keeps it. The saved-graphics pass calls this
     /// once the readers that share the copies are done, so that its own walks
-    /// do not hold them at the peak (#1694).
-    pub(crate) fn release_inflated_partitions(&mut self) {
+    /// do not hold them at the peak (#1694), and `rvt-dump` after each stream
+    /// it writes (#1885).
+    pub fn release_inflated_partitions(&mut self) {
         self.inflated.clear();
         self.inflated_bytes = 0;
     }

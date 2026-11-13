@@ -505,6 +505,30 @@ sampleTest('the answers kept are bounded, the least recently selected going firs
   expect(differences(a!.id, evictedA, expected.get(a!.id)!)).toEqual([]);
 });
 
+// The map is bounded in characters too (#1887): with a budget no answer fits in,
+// only the answer just read is kept. It is not read again when it is selected
+// once more, and the one before it, pushed out by the budget, is.
+sampleTest('the answers kept are bounded in characters, the answer just read always staying', async ({ page }) => {
+  test.setTimeout(300_000);
+  const expected = oracle();
+  await watchReadWorkers(page);
+  await open(page, sample!, '?parametersRememberedCharacters=1');
+  const [a, b] = await withParameters(page, expected, 2);
+  await select(page, a!.index);
+  await settled(page);
+  await select(page, b!.index);
+  const keptB = await settled(page);
+  expect(await reads(page)).toBe(2);
+  expect(keptB.cacheElements, 'only the answer just read fits the budget').toBe(1);
+  await select(page, b!.index);
+  await settled(page);
+  expect(await reads(page), 'the answer just read was kept').toBe(2);
+  await select(page, a!.index);
+  const evictedA = await settled(page);
+  expect(await reads(page), 'the older answer was pushed out by the budget and read again').toBe(3);
+  expect(differences(a!.id, evictedA, expected.get(a!.id)!)).toEqual([]);
+});
+
 /**
  * Shapes the first `times` workers that read saved parameters. `fail` makes `savedParameters`
  * fail the way worker-failures.spec.ts fails the open's: a panic message on console.error before

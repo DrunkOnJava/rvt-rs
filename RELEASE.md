@@ -74,7 +74,7 @@ Every `vX.Y.Z` release:
   `.github/workflows/publish.yml`. crates.io and PyPI accept it by Trusted
   Publishing (OIDC), so no registry token is stored.
 - Updates `CHANGELOG.md` with human-readable entries grouped by
-  `Added` / `Changed` / `Fixed` / `Security` (Keep a Changelog format).
+  `Added` / `Changed` / `Fixed` / `Removed` / `Security` (Keep a Changelog format).
 - Updates `CITATION.cff` (`version:` + `date-released:`) so academic
   citations resolve to the right archival state.
 
@@ -146,7 +146,7 @@ project treats a silent skipped step the same as an untested change.
    `[X.Y.Z] — YYYY-MM-DD` section, leaving an empty `[Unreleased]` above
    it. Open the section with a short introduction and an **Upgrading from
    X.Y** list of what a user of the previous release has to change. Then
-   group by `Added` / `Changed` / `Fixed` / `Security` (and `Research`),
+   group by `Added` / `Changed` / `Fixed` / `Removed` / `Security` (and `Research`),
    one heading each: merges append headings of their own, so fold them,
    keeping every entry. Credit outside contributors by name. Write
    entries so a user reading just this section can decide whether to
@@ -364,7 +364,9 @@ where CI and Measure run, only when it is ready to release.
    checkout, `python3 tools/release/bump_version.py X.Y.(Z+1) --root
    <the hotfix worktree>` moves every version file, and with
    `--release-workflows-from origin/main` copies the release workflows step 6
-   needs) and
+   needs, with every local action they use; the ref must be a commit
+   `origin/main` holds, and the script refuses if the copied preflight reads
+   other version files than the bump moved) and
    the README's release lines, committed to the branch: no pull
    request into `main` can test a branch cut from a tag.
 4. **Check it.** Pushing the branch runs CI on it with the full matrix
@@ -405,9 +407,10 @@ where CI and Measure run, only when it is ready to release.
    the workflow files as they are at the tagged commit, so a hotfix cut from
    v0.15.0 or older has no preflight (and the old publish workflow, without
    its re-run and concurrency fixes) unless the branch carries `publish.yml`,
-   `release-binaries.yml`, `.github/actions/wait-for-check` and
-   `tools/ci/release_preflight.py` from `main`; copy them in the step 3
-   commit. Then close the review-only pull request unmerged and delete
+   `release-binaries.yml`, the local actions they use
+   (`.github/actions/wait-for-check`, `setup-rust`, `fetch-corpus` and
+   `wasm-tools` today) and `tools/ci/release_preflight.py` from `main`; copy
+   them in the step 3 commit. Then close the review-only pull request unmerged and delete
    `review/vX.Y.Z-base`.
 7. **Bring `main` up to it** through a pull request, as merging the
    branch back would: the fix if `main` lacks it, the new `CHANGELOG.md`

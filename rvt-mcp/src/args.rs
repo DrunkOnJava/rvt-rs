@@ -21,7 +21,10 @@ pub fn phase_of(phase: &Option<String>) -> Option<&str> {
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ModelArgs {
     /// The `model_id` that `open_model` returned, or the path of a `.rvt`,
-    /// `.rfa`, `.rte` or `.rft` file. A path that is not open yet is opened.
+    /// `.rfa`, `.rte` or `.rft` file inside the server's root folder (the
+    /// folder it was started in, or `--root`); a relative path is taken from
+    /// that folder, and a path outside it is refused. A path that is not open
+    /// yet is opened.
     #[serde(alias = "model_id", alias = "path")]
     pub model: String,
     /// The project phase to read, by its name (exactly) or its ElementId,
@@ -232,8 +235,10 @@ pub struct ExportIfcArgs {
     /// The `model_id` that `open_model` returned, or the path of the file.
     #[serde(alias = "model_id", alias = "path")]
     pub model: String,
-    /// Where to write the IFC4 file. It must end in `.ifc`, must not be the
-    /// model, and must not exist unless `overwrite` is true.
+    /// Where to write the IFC4 file, inside the server's root folder (or its
+    /// `--output-dir`); a relative path is taken from that folder. It must end
+    /// in `.ifc`, must not be the model, and must not exist unless `overwrite`
+    /// is true.
     pub out_path: String,
     /// Replace `out_path` if it exists.
     #[serde(default)]
@@ -256,8 +261,10 @@ pub struct ExportGltfArgs {
     /// The `model_id` that `open_model` returned, or the path of the file.
     #[serde(alias = "model_id", alias = "path")]
     pub model: String,
-    /// Where to write the binary glTF. It must end in `.glb`, must not be the
-    /// model, and must not exist unless `overwrite` is true.
+    /// Where to write the binary glTF, inside the server's root folder (or its
+    /// `--output-dir`); a relative path is taken from that folder. It must end
+    /// in `.glb`, must not be the model, and must not exist unless `overwrite`
+    /// is true.
     pub out_path: String,
     /// Replace `out_path` if it exists.
     #[serde(default)]
