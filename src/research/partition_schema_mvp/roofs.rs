@@ -718,7 +718,9 @@ pub fn roof_slopes_from_fields(fields: &[(String, InstanceField)]) -> Vec<RoofSl
 /// of them defining the roof's slope, that edge, its angle and its type's
 /// thickness (RE-56, [`crate::partition_roof_slopes`]). A roof with no
 /// defining edge is flat and gets nothing; one with two or more (a hip or
-/// a gable) gets nothing either, as its surfaces are not built.
+/// a gable) gets every defining edge, and is drawn as its edges'
+/// straight-skeleton roof where that reproduces its record box's height
+/// (RE-199).
 ///
 /// A roof with no defining edge and several slope arrows (RE-307) gets, for
 /// each arrow, the boundary line its tail lies on and its slope, with

@@ -1397,8 +1397,9 @@ fn swept_duct_box(
 /// reference level's name (`m_assocLevelId`) and the elevations of its two
 /// ends above it (`m_dOffsetStart`, `m_dOffsetEnd`) are given too, for its
 /// `Constraints`. A value is written only where every copy of the record
-/// agrees. It runs before RE-134's scan of 2024 and 2025, so the record's
-/// type, size and length win there.
+/// agrees. It runs before RE-134's scan (2025 to 2027,
+/// `CURVE_FIELDS_SUPPORTED_REVIT_VERSIONS`), so the record's type, size and
+/// length win where both read them.
 // Tracker: B59.
 pub(super) fn attach_native_ducts(
     rf: &mut RevitFile,

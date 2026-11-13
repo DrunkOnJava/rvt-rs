@@ -66,7 +66,7 @@ The count is framed one of two ways:
 - by `ff ff ff ff` and a per-release tag, `a6 10` on Revit 2024 and `0e 11` on Revit 2025. On 2024 this follows the type's name directly.
 - by `u32 k`, then `k` × `2d 00`, then `u32 0`, on Revit 2025 floors and ceilings.
 
-A candidate is kept only if every material it names is an `OST_Materials` record or "by category", and every width is finite and non-negative. Against the materials Revit's IFC4 export gives the same types:
+A candidate is kept only if every material it names is an `OST_Materials` record or "by category", and every width is finite and non-negative. (*Corrected 2026-11-13:* the reader shipped with this report is stricter: a width must be finite, under 10 ft, and at least 0.001 ft, or exactly 0 on a membrane, function 100. RE-112 added a structural deck, function 200, to the layers that may be 0 wide.) Against the materials Revit's IFC4 export gives the same types:
 - Snowdon Towers: 42 of 42 types give Revit's constituent sequence, once the 0-width membranes Revit leaves out are dropped.
 - Core Interior: 4 of 4 types, every layer by category.
 - RE1 Architecture: the wall, both floors and the ceiling give Revit's layer widths and materials.

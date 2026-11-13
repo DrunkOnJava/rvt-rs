@@ -8,6 +8,461 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-11-13
+
+0.22.0 limits what a crafted Revit file can make the MCP server, the command-line tools, the Python bindings and the viewer do, and writes more elements the way Revit's own export writes them. The MCP server reads from and writes to one folder and bounds what an answer carries (#1883). `rvt-doc --redact`, `rvt-info -f csv`, `rvt-dump`, `rvt-ifc`, `rvt-write`, the Python bindings and the viewer each lose a way a hostile file reached a terminal, a spreadsheet, a log or a file they should not touch (#1884, #1885, #1887, #1919), and a wall profile of thousands of regions no longer builds a chain of boolean cuts too deep for a thread to walk (#1845). On the element side, roofs by extrusion of Revit 2024, 2026 and 2027, floors of the Structural Foundations category, horizontal bracing, the storeys of beams and braces, the corner mullions and the door of a curtain wall on Revit 2027, a lone non-ASCII name on Revit 2023, and the doors, windows and walls of Revit 2015 to 2023 are read as Revit's export writes them (#1479, #1841, #1842, #1865, #1899, #1912, RE-448, RE-456). puzzbobb wrote the last two: doors and windows of Revit 2015 to 2023 are set in the wall their own record names, and those releases' walls get the openings their rectangular openings cut.
+
+Not measured, and said in each entry:
+- A foundation slab and a horizontal bracing (#1841) are checked on a reporter's counts of a Revit 2027 structural model alone: no model Measure holds with a Revit export has either, and the bracing member's `PredefinedType` is not read.
+- A roof by extrusion of Revit 2024, 2026 and 2027 is held to the same project's 2025 save, which cannot catch an error both saves share; no Revit export of one exists here (#1479).
+- On the 2027 save of `rac_advanced` 5 corner mullions, whose wall nothing in the file names, stand in no curtain wall (#1865).
+- The peak memory of concurrent `rvt-rs-mcp` opens, a crafted file with a very long name, and the memory `rvt-dump` saves by releasing each partition it has written are not measured (#1883, #1885).
+
+Measured against 0.21.0 on every model Measure holds (run [43491038743](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43491038743), `main` at 2b815423; the release adds only its notes, witness files, version strings and fixtures to them):
+
+- 72 of the 146 exports differ and 74 are identical, and 37 of the 121
+  `diagnostics.json` files differ and 84 are equal. Of the 72, 56 are Autodesk's
+  sample projects (34 of 2015 to 2023, 22 of 2024 to 2027), which no Revit
+  export covers, so no scorer says which of what moved is Revit's: each entry
+  above was measured in its own pull request. The other 16 are scored against
+  Revit's own exports: the four BIM4LCA offices, the six `rac_advanced` saves
+  of 2015 to 2020, BIMcollab's example, four held-out files and the spent
+  Vitoria "Before". No scorer line moves on any other model, and every line that
+  moves is one of these:
+  - The 268 doors that Revit's export aggregates into a curtain wall on the four
+    offices (66, 68, 67 and 67) and 0.21.0 did not are aggregated now, and two of
+    the four members that each timber office left out (RE-452, RE-453, RE-449).
+  - The beams of the two timber offices are on Revit's storey: 67 rows on another
+    storey in each become 4, all ramps, with no beam left (RE-454).
+  - On the spent Vitoria "Before", 3 more doors are set in the wall Revit's
+    export puts them in, 133 of 133 where 130 were (RE-448).
+  - The wall openings of Revit 2015 to 2023 (RE-456) add one opening to each
+    `rac_advanced` save of 2015 to 2020, 6 to one held-out file and 18 to
+    BIMcollab's example. Each carries the `Reference` values every opening
+    carries and Revit's export does not write on them, so the values rvt-rs
+    writes that Revit's export does not rise by 2 on each of those saves
+    (342 to 344), by 12 on the held-out file (8 to 20) and by 36 on BIMcollab's
+    (522 to 558, IFC2X3, counted apart).
+  - The check of bodies across saves passes on the 2026 and 2027 saves of
+    `rac_basic`, which failed it at 0.21.0 on one roof each: the roof by
+    extrusion is drawn as the 2025 save draws it (RE-458).
+  - The schema check of 23 samples counts what the entries add: one opening on
+    each `rac_advanced` save of 2015 to 2023 and two on each `rac_basic`
+    (RE-456), and a foundation floor as `IfcSlab` on the 2024 to 2027
+    `rac_basic` and four on Snowdon Towers Structural (RE-457).
+- What differs in `diagnostics.json` is counts: the parameter values (28 files),
+  the exported entities (23), the openings a wall's cuts leave out, by reason
+  (24, 10 and 1 files), the storey-bound elements and the beams skipped (5
+  each), the `IfcFooting` and `IfcSlab` counts (5) and the roofs' body sources
+  (3).
+
+### Upgrading from 0.21
+
+- **`rvt-rs-mcp` reads and writes inside one folder.** It is `--root <folder>`, else `RVT_MCP_ROOT`, else the folder the server starts in unless that is `/`, the home folder or one above it (then each tool that touches a file refuses and names `--root`). A setup that opens files outside the folder its client starts the server in passes `--root`, or `--unconfined` for the old reach. `list_rooms` pages as `list_elements` does and answers `total`, `offset`, `limit` and `returned`; a `limit` outside 1 to 1000 is a tool error; a name or value from a file is cut at 1,000 characters; an answer over 4 MiB is refused with a message that says how to ask for less.
+- **`rvt-ifc`, `rvt-gltf`, `rvt-sheet` and `rvt-schedule` refuse to write over their input**, however it is named, and `rvt-info -f csv` leads a cell that starts with `=`, `+`, `-` or `@` with `'`. `rvt-dump` has `--max-stream-bytes`, `--max-inflate-bytes` and `--large-model`, lists a stream a limit left unread, and exits 3 when it did (`--allow-partial` makes it 0). `rvt-write --dry-run` checks the patches, and a patch that frames a stream otherwise than it is stored is refused.
+- **The Python bindings** raise `RuntimeError` for a second call on one `RevitFile` from another thread while one runs (open one handle for each thread or hold a lock), `RuntimeWarning` for an element whose saved mesh decodes in part, and `ImportError` for a failed load of the extension.
+- **Exports change** where the entries below say: a roof by extrusion of Revit 2024, 2026 and 2027, a floor of the Structural Foundations category (`IfcSlab`, `BASESLAB`) and a horizontal bracing (`IfcMember`), the storey of a beam or brace, curtain mullions, doors and windows of curtain walls, the host wall and the openings of doors, windows and walls of Revit 2015 to 2023, and the type of two furred ceilings of Revit 2023.
+- **Library:** new `rvt::redact::redact_json_strings`, `rvt::cli::csv_text`, `rvt::writer::validate_patches`, `rvt::ifc::gltf::write_glb_to` and a public `RevitFile::release_inflated_partitions`; `rvt::writer::write_with_patches` returns `Error::WriteRefused` for a patch that frames a stream otherwise than it is stored, before it writes anything.
+
+### Changed
+
+- **`rvt-rs-mcp` reads models from, and writes exports to, one folder that its
+  setup picks; a path that leaves it is refused (#1883).** The names, values
+  and messages in a Revit file reach the client's model unmarked, so a crafted
+  file could steer it into asking the server to open a file outside the
+  project, or to overwrite one; until now the server read any file the account
+  could read and wrote anywhere but inside `--output-dir`. The folder is
+  `--root <folder>`, else the environment variable `RVT_MCP_ROOT` (for a
+  client that passes only an environment), else the folder the server was
+  started in, unless that is the top of a file system, the home folder or a
+  folder that holds it (an MCP client chooses a server's working directory, and
+  some start theirs from `/`): then the server starts and each tool that
+  touches a file refuses with a message that names `--root`. A relative path
+  is taken from the folder; a path is compared with it once `..` and links are
+  resolved, and one whose text alone puts it outside is refused before any file
+  is looked at, so the refusal does not say whether the file exists. The tool
+  descriptions and the refusals say where the folder is and how to move it.
+  `--root /` and `--unconfined` lift the limit, and `--output-dir` still sends
+  the exports to a folder of their own. **Upgrade:** a setup that opens files
+  outside the folder its client starts the server in now passes `--root` (or
+  sets `RVT_MCP_ROOT`), or `--unconfined` for the old reach (`docs/mcp.md`,
+  "The root folder"). Not defended: another process that rewrites the links
+  inside the folder while a call runs.
+
+### Fixed
+
+- **A roof by extrusion is a solid on Revit 2024, 2026 and 2027 as on 2025,
+  held to the same project's 2025 save (#1479, #1864, RE-458).** The release
+  list of the B-spline reader held Revit 2025 alone, so such a roof was its
+  saved mesh on 2024, 2026 and 2027 (its record box before #1191). Autodesk's
+  `rac_basic` has one, roof 243274: its 2024, 2026 and 2027 saves now draw it
+  as the 2025 save does (35.424 m3, where its mesh was 34.974 m3 on 2026 and
+  2027), and are the only 3 of 146 exports of an
+  unfiltered Measure that change; every body of the project's 2026 and 2027
+  saves is the 2025 save's. No Revit export of such a roof of those releases
+  exists here, so the check is the 2025 save. `rac_advanced`'s roof 201262,
+  which #1479 took for a second one, is not a roof by extrusion and is
+  unchanged.
+
+- **A floor of the Structural Foundations category is an `IfcSlab` with
+  `BASESLAB`, and a horizontal bracing an `IfcMember` (#1841, RE-457).**
+  `StructuralFoundation` was mapped to `IfcFooting` and `StructuralFraming`
+  to `IfcBeam` whole. On a reporter's Revit 2027 structural model, Revit's
+  export writes the 59 foundation slabs as `IfcSlab` (`BASESLAB` on their
+  types) and the one framing instance with stored structural usage 8
+  (Horizontal Bracing) as `IfcMember`, where the 914 with usage 3 and 6 are
+  `IfcBeam`. A floor of the category, which its record names as the class
+  `Floor`, is now written as the slab, and a framing instance of usage 8 as
+  the member; family-instance and wall footings and every other usage are as
+  before. No model Measure holds with a Revit export has a foundation or a
+  bracing, so the change is checked on the reporter's counts after the
+  release; the member's `PredefinedType` is not read yet.
+
+- **A beam or brace is in the storey of its Reference Level, which its record's
+  second reference list holds (#1842, #1864, RE-454).** The storey was bound from
+  the record's first reference list alone, so on each BIM4LCA timber office file
+  63 beams were in a storey other than Revit's export puts them in: 47 that name
+  two Levels in the first list, where the lower one was taken and Revit's storey
+  is the highest, and 16 whose first list names a Level below the one Revit
+  uses. A framing record now takes its Level from the second list where that
+  names any, else the first, the one Level it names or the highest of several,
+  as the `Reference Level` property already did (RE-174, RE-175). On both office
+  files the 63 are in Revit's storey now and no other element changes storey.
+  The Level is the same on the 2024 and the 2025 to 2027 saves of Autodesk's
+  `rac_advanced` and `rst_basic`, where the first list's changes for 10
+  `rst_basic` beams; 455 beams of Snowdon Towers Structural that were on no
+  storey are on one; and a Revit 2015 to 2023 save takes its 2024 save's Level
+  on more beams than before and on none fewer. Other classes, and records that
+  name three or more Levels, are as before.
+
+- **A curtain part that names two curtain walls and no grid takes the wall the
+  element data of its list names, so 74 of the 79 corner mullions of Autodesk's
+  `rac_advanced` on Revit 2027 are aggregated again and all 79 carry
+  `IsExternal` (#1865, RE-449).** The 2025 and 2026 saves name one curtain
+  wall in a corner mullion's reference list, and RE-46's rule aggregates it
+  there; the 2027 save names both walls of the corner, which no arm of the
+  match took, so the 79 stood alone with no whole and no `IsExternal`. Neither
+  the order of the list nor the part's record box tells the two walls apart,
+  but the element data of another id of the list (the part's curtain grid)
+  names exactly one of them, at offsets that move between grid kinds and
+  releases and are RE-72's on neither save, and that wall is the one that held
+  the part on 2025 for 75 of 75 parts that have such an id on each save. The
+  rule reads that data without fixed offsets, and it applies only to a part
+  with no grid whose list names two or more curtain walls. A part for which no
+  one wall comes out, the 5 mullions whose lists hold no such id, stands alone
+  and takes the `IsExternal` its walls share where they agree (all 34 walls of
+  the file are true). Measured on `rac_advanced`'s 2025 and 2026 saves against
+  the 2027 one: the 34 curtain walls hold 4,458 parts, from 4,384, 29 of them
+  as many as on 2025; `IsExternal` lost between the saves goes from 79 to
+  none, and the 2026 to 2027 pair differs in 425 fields, from 573. The rule
+  reaches every file with such a part, not the 2027 sample alone: 14 other
+  exports of the 146 on Measure's unfiltered run change, each by `IsExternal`
+  on curtain mullions the same way (9 to 79 in the 2015 to 2023 saves of
+  `rac_advanced`, 2 to 4 in the four BIM4LCA offices), values that are not
+  measured and not equal: Revit's export writes them as an exporter artefact,
+  the census counts them apart (RE-269) and it does not move on any model.
+  Two members of the BIM4LCA timber office are aggregated into the curtain
+  walls Revit's own export names (`IfcMember` same whole 7,872 to 7,874). The `rac_advanced` saves of 2015 to 2022 now
+  write the same 19,979 parameter values and those of 2024 to 2027 the same
+  21,035; the 2023 save was six short until RE-451 (#1899). Not changed: the 5
+  mullions, whose wall nothing in the file names (the curtain door 216844 is
+  the next entry's); no Revit export of any of these saves exists, so the 2027
+  save is held to the same project's earlier saves.
+
+- **A door or window with no curtain grid found whose reference list names
+  exactly one curtain wall is a part of that wall when the element data of an id
+  in its list names that wall too, as a mullion's or a panel's grid does
+  (#1865, RE-452).** Doors and windows took a curtain wall only through the
+  curtain grid their record names, whose offsets (RE-72) are not found on
+  Revit 2027, so the curtain door 216844 of Autodesk's `rac_advanced` was
+  aggregated into the curtain wall 162023 on the 2025 and 2026 saves and stood
+  alone, contained in the storey, on the 2027 save, and lost the `IsExternal`
+  its wall gives; it is a part of 162023 on 2027 now. The data fallback RE-449
+  added for mullions never reached openings. Naming the wall alone is not enough
+  for an opening: it put one door of a Revit 2018 model in a curtain wall where
+  Revit's export leaves it in an ordinary one. Against Revit's export of the four
+  BIM4LCA offices, 184 of the 268 doors it aggregates into a curtain wall and
+  rvt-rs did not are now in the same wall, none in another, and 21 in each
+  office were still left out (RE-453, below, takes them); 21 of 146 exports
+  change (the offices, the `rac_advanced`, `rac_basic`, `rme_advanced` and
+  `rme_basic` samples of 2024 to 2027, and Snowdon Towers Architectural), none
+  of Revit 2015 to 2023.
+
+- **The Python bindings warn when an element's saved mesh decodes only in
+  part, release the GIL for the Rust work, and say what they return and why
+  they fail (#1884).** A saved mesh that decodes in part leaves its element
+  with the record's box, counted in the diagnostics; the docs promised a
+  `RuntimeWarning` for it and none was raised, and it is now (the note
+  `rvt-ifc` prints for the step, when an element keeps its box). `write_ifc`,
+  `rvt_to_ifc`, `rvt_to_ifc_diagnostics`, `schedule_csv`,
+  `export_diagnostics_json`, `export_diagnostics`, `decoded_elements`,
+  `element_counts` and opening a file held the GIL for the whole decode and
+  now release it, so another Python thread runs meanwhile. **A handle is used
+  by one thread at a time:** a second call on one `RevitFile` from another
+  thread while one runs now raises `RuntimeError`, where it used to wait for
+  the GIL and then run, so a program that shares a handle between threads opens
+  one for each thread or holds a lock. The stub's `TypedField` lists the eleven kinds the
+  binding returns and the `float` values of one of them, where it listed four
+  kinds. A failed load of the extension (a missing symbol, a wrong ABI) is the
+  `ImportError` it is, where `rvt/__init__.py` caught it and it surfaced as
+  `module 'rvt' has no attribute 'RevitFile'`. The name of an unread stream is
+  quoted in the sentence that reports it, in `rvt-ifc`, `rvt-gltf`,
+  `rvt-rs-mcp`, the diagnostics and Python alike, so a stream named with a
+  newline cannot forge a line in a log. No export moves.
+
+- **`rvt-dump` takes the resource-limit options and goes on past a stream it
+  cannot read, `rvt-info --extract-preview` refuses a preview that is not a
+  whole PNG, and `gen-fixture` refuses a name with a path in it (#1885).**
+  `rvt-dump` opened every file under the default limits with no option to
+  change them, and a stream over the 256 MiB default stopped the whole dump
+  with an error. It now has `--max-stream-bytes`, `--max-inflate-bytes` and
+  `--large-model` as `rvt-gltf` and `rvt-ifc` do; a stream over the limit is
+  listed as not read, the rest of the file is dumped, and the streams a limit
+  left unread or cut short are listed on stderr with the way to read them, with
+  exit status 3 (`--allow-partial` makes it 0). It also drops each inflated
+  partition from the reader's memo once it has been written, where the memo
+  held every one (up to 16 GiB) to the end of the dump; the memory this
+  saves is not measured. `rvt-info --extract-preview` wrote what the stream
+  held from the PNG signature on, and said "preview PNG written", when a
+  preview cut short had no IEND chunk and no viewer opens it; it now writes
+  nothing, exits 1 and says the preview is cut short (`rvt-dump --raw` writes
+  the stream as it is). `gen-fixture NAME` with no `--output` wrote
+  `tests/fixtures/synthetic-NAME.rvt`, so a NAME with a `/` or `\` in it
+  wrote elsewhere; it is refused, and `--output` names another place.
+  `RevitFile::release_inflated_partitions` is now public.
+
+- **`rvt-ifc` refuses to write over its input, and `rvt-gltf`, `rvt-sheet`
+  and `rvt-schedule` refuse however the input is named (#1885).**
+  `rvt-ifc model.rvt -o model.rvt` replaced the Revit file with the IFC, with
+  no check. The other three compared the output path with the input path as
+  typed, so `./model.rvt`, a symbolic link to it and (on Unix) a hard link got
+  through. All four now ask whether the two are one file before they export,
+  and say `refusing to overwrite the input`. `rvt-ifc --observation` also
+  wrote its IFC straight to the output's name, so a killed export left a
+  truncated `.ifc` there; it is written beside the output and renamed when
+  whole, as the export without `--observation` has been.
+
+- **`rvt-write --dry-run` checks what the write would refuse, and the write
+  refuses a patch that frames a stream otherwise than it is stored (#1885).**
+  The dry run its help describes was unreachable without `--patches`, and with
+  one it exited 0 without looking at the streams. It now opens the source,
+  reads the manifest if one is given and applies the writer's own refusals
+  (`rvt::writer::validate_patches`, new): a stream the file does not have, a
+  framing the stream is not stored in, and a patch that would span a stored
+  page. A manifest alone chose a stream's framing on disk and the read-back
+  used the same framing, so a `Formats/Latest` written as `Global/Latest` is
+  framed passed its own verification; a patch framed `RawGzipFromZero` or
+  `CustomPrefix8` is now refused unless the stream is stored that way
+  (`Verbatim` is the caller's own framing and is not checked); the library's
+  `rvt::writer::write_with_patches` returns `Error::WriteRefused` for it before
+  it writes anything, where it wrote the file and verified it with the same
+  wrong framing. A
+  `new_decompressed_base64` that decodes to no bytes (`"="`, `""`) is refused
+  where it emptied the stream; an empty `patches` array is a plain copy and
+  exits 0, where it exited 1 with `0 stream(s) failed verification`; `--src`
+  and `--dst` naming one file, spelled any way, leave a file with no patch as it
+  is instead of rebuilding its container, and a copy that fails removes its
+  temporary file.
+
+- **The viewer bounds what a large or crafted file can make the page hold
+  (#1887).** A second reader of `viewer/src/main.ts` found no injection and no
+  network path for file data; what it found was growth a file controls, and
+  each part is now bounded. The scene tree builds each group's rows (a
+  storey's categories, a category's elements, an element's parts) 500 at a
+  time: a model of up to 150,000 rows, which holds the largest Measure has
+  (the BIM4LCA office, 91,723 entities), is built whole when it opens as it was
+  before, and past that a group builds its first block when it is opened and a
+  "Show more" row at its end builds the next. The filter looks at every element
+  and lists the first 2,000 matches, and says when there are more; a click on
+  an element in the 3-D view builds the row it needs. The phase field lists at
+  most 200 phases (the first 199 and the last, the default) and says how many
+  the file names; the page keeps at most 2,000 of the decoder's progress
+  reports and of what the loading card said; and the saved parameters it
+  remembers are bounded to 8 Mi characters of JSON as well as 64 elements, the
+  answer just read always staying. The address (`?parametersRemembered=`) could
+  set the cache's size without a bound; it can now only lower it. No export
+  moves.
+
+- **On Revit 2023 an element-data name of one non-ASCII character is no longer
+  taken as a name, so the two furred ceilings of Autodesk's `rac_advanced` find
+  their type (#1899, RE-451).** A list of one ElementId read as a name is one
+  character, and the elements before the two ceilings (247616 and 247676, `퉻`
+  and `퉼`) were candidates for their type beside its own, 242823 `Furred
+  Ceiling`: neither was the more specific, so the 2023 save wrote the ceilings
+  as `Ceiling-247617` and `Ceiling-247677` with no `Pset_CoveringCommon` and no
+  `Pset_EnvironmentalImpactIndicators`, six parameter values short of every save
+  from 2015 to 2022. Revit 2015 to 2022 already drop every name of one
+  character (RE-180); 2023 keeps a one-letter ASCII name, such as `rac_basic`'s
+  `p`, as before, because dropping it would give five walls a type their 2024
+  copies do not confirm. A probe over the 40 models of Autodesk's 2015 to 2023
+  samples and Einhoven finds the choice of a system type changes for these two
+  elements only.
+
+- **A door or window with no curtain grid found whose reference list names one
+  wall in all, and that wall a curtain wall, is a part of that wall (#1912,
+  RE-453).** RE-452 aggregated such an opening only when the element data of an
+  id in its list named the wall too, which left out 84 of the 268 doors that
+  Revit's export aggregates into a curtain wall on the four BIM4LCA offices (21
+  in each): the element data of their lists never names the wall. Every door of
+  the offices and of Autodesk's Snowdon Towers Architectural that Revit puts in
+  a curtain wall names that wall alone, and the three Snowdon doors that name a
+  curtain wall and that Revit leaves standalone name their host as well, so a
+  door whose list names a curtain wall and another wall keeps RE-452's rule.
+
+- **The `export_ifc` tool's schema says which `rvt-ifc` switches it offers and
+  what its mesh choices draw (#1919).** The `options` description called them
+  "the switches that change the model", but `--placeholder`,
+  `--diagnostic-proxies` and `--family-extrusions`, which do, are not offered;
+  it now says so. The `default`, `doors_and_windows` and `all` choices of
+  `saved_meshes` also draw the walls that embed a curtain wall from their saved
+  graphics where Revit raised their base, on Revit 2024 to 2027 (RE-340), and
+  `off` keeps their record's body, none of which the descriptions said.
+  `docs/mcp.md` and the committed tool contract say the same.
+
+- **Revit 2015 to 2023 doors and windows are set in the wall their own
+  record names (RE-448).** On those releases a door or window was set in
+  the nearest wall its record's reference list named, which is not always
+  its host; the correction from the element's own record (RE-245) ran on
+  2024 to 2027 only and read the host only in 2024's 8-byte form. It now
+  runs on 2015 to 2023 too, in either form. Autodesk's `rac_advanced` has
+  28 doors and windows and `rac_basic` one moved into the wall the same
+  project's 2024 save sets them in, their openings in that wall where the
+  2024 save's are.
+
+- **Revit 2015 to 2023 walls get the openings their rectangular wall
+  openings cut (RE-456).** The steps of a wall's record that name what cuts
+  it save that element's ElementId in 4 bytes before Revit 2024, and they
+  were read only in 2024's 8-byte form, so on 2015 to 2023 no rectangular
+  wall opening, cabinet, door in a second wall or curtain wall cut an
+  opening. Both forms are read now, on Revit 2015 to 2027. A rectangular
+  opening of 2015 to 2018, which saves its rectangle only in the wall's
+  face, is placed along the wall's location line. Autodesk's `rac_basic`
+  gains its two rectangular openings and `rac_advanced` its one on every
+  save from 2015 to 2023, each equal to the same project's 2024 save, and
+  BIMcollab's Revit 2015 structural example gains 18, the 15 of them that
+  Revit's own export of it holds each equal to that export's.
+
+### Security
+
+- **A wall whose edited elevation profile has more than 512 regions to cut keeps
+  them as its openings and has none cut in its body (#1845).** Each region cut
+  in a wall's body is one level of a chain of boolean results, and a chain's
+  depth is the depth of every recursion over it. On a thread of 1 MiB the derived
+  `Debug` of a `SolidShape` breaks at 3,072 levels and `Clone` at 4,096, and
+  `Drop` and the serialiser at 65,536 (`probe_1845_boolean_chain_depth`); a
+  profile of 4,096 curves can make 4,096 regions, one circle each. Nothing in the
+  export clones or prints a model, so the hazard was a library consumer's: a
+  crafted file whose model it cloned or printed. The openings Revit's export
+  writes for the regions are written either way, as for a wall whose regions
+  are not all solids; only the body is not cut. No wall of the corpus has that
+  many regions: 146 of 146 exports and 121 of 121 diagnostics files of an
+  unfiltered Measure run are byte for byte as before.
+
+- **`rvt-rs-mcp` bounds what an answer carries and what the server holds
+  (#1883).** Answers were sized by the file and the client with no byte cap,
+  and a crafted file could make any name, value or message in one as long as
+  it liked. A name or value from the file is now cut at 1,000 characters
+  (`--max-field-chars`), with the number of characters left out written where
+  it was cut; a message that quotes the file and each string of the
+  diagnostics document are cut at eight times that, since rvt-rs writes most
+  of the long ones itself (of 1,094 diagnostics documents of five Measure
+  runs, the longest string is 1,129 characters, so none is changed); the
+  diagnostics document, the one answer no `limit` pages, keeps at most 5,000
+  entries of a list or object and names in `notes` the ones it held (the
+  longest list measured has 1,070); and an answer over 4 MiB of JSON
+  (`--max-answer-bytes`, counted once although the wire message carries it
+  twice) is refused with a message that says how to ask for less, not sent.
+  The tool descriptions say that names, values and messages in an answer are
+  text from the file, to report as data and never to follow as instructions.
+  **Two behaviour changes:** `list_rooms` is paged as `list_elements` is, with
+  `limit` from 1 to 1000 and `offset`, 1000 by default so that a model with up
+  to 1000 spaces (the largest measured has 308) answers as before, and its
+  answer says `total`, `offset`, `limit` and `returned`, a `returned` below
+  `total` being a list that is not complete; and a `limit` outside 1 to 1000 is
+  a tool error that says so, where 0 returned one row and a value over 1000
+  became 1000 without a word. Both tools' schemas state the range.
+  Four more bounds: reading a file and decoding a model take a place at a gate
+  with as many places as models are kept (`--max-open-models`), so concurrent
+  calls for different files no longer each decode a model before the store
+  drops the ones past that number, and a cancelled call leaves the queue (a
+  call that has read its file and waits to decode it still holds the file's
+  bytes, which the gate does not bound); `export_gltf` writes the GLB from the
+  buffer it builds instead of beside a padded copy and a third (the new
+  `rvt::ifc::gltf::write_glb_to` writes the bytes `write_glb` does, and a GLB
+  over 4 GiB is an error where its length wrapped); the progress queue holds 16
+  events and drops what a slow client has not read, where it grew without end;
+  and a phase name over 256 characters is refused, the phase errors the server
+  remembers being bounded like any message. A file whose modification time
+  cannot be read is refused, where it counted as time 0 and a changed file of
+  the same size passed for the one opened.
+  Measured by the end-to-end test on the synthetic fixture with small limits
+  (text cut at 1 character, messages and diagnostics at 8, and an answer limit
+  of 900 bytes: the summary is refused, the levels answer is not, the export's
+  diagnostics and a message that quotes a path are cut), by pages of three
+  covering `list_rooms` on every file the test opens, and by four concurrent
+  opens under `--max-open-models 1` that all finish with one model kept. Not
+  measured: the peak memory of concurrent opens, and a crafted file with a very
+  long name, which none of the corpora holds.
+
+- **`rvt-info -f csv` writes a file's text as text, and `rvt-dump` prints a
+  stream's name without its control characters (#1885).** A title, a user
+  name, a path or a name of a file's own reached a CSV cell as it stood, so
+  one that starts with `=`, `+`, `-` or `@` ran as a formula when the CSV was
+  opened in a spreadsheet. Such a cell is now led by `'`, as `rvt-schedule`'s
+  cells have been, from one shared rule (`rvt::cli::csv_text`). A crafted
+  file can also name a stream with control characters, which `rvt-dump`
+  printed to the terminal as they were; it prints the name escaped. The file
+  name `rvt-dump` writes a stream to was already sanitised. No committed
+  output holds either, so none of it changes.
+
+- **`rvt-doc --redact` scrubs the error text, every part of the path and every
+  string a field holds (#1919).** The flag scrubbed only the user name of a
+  home folder in the path it printed, against its own help, which promised
+  user names and Autodesk-internal paths. A file in an Autodesk OneDrive or
+  project-id folder printed that folder as it stood, and the error `rvt-doc`
+  prints when it cannot open a file, which names the path it was given, was not
+  scrubbed at all. The path, the notes and the error text now go through the
+  scrubber the other commands' `--redact` runs (`rvt::redact::redact_sensitive`),
+  and the strings of the fields through the new
+  `rvt::redact::redact_json_strings`. No field of the 11 family releases (2016
+  to 2026) or the 6 projects measured decodes as a string, so the output of a
+  file that opens changes only in its path.
+
+### Research
+
+- **The column face is not where Revit stops the beams of a Revit 2027 concrete
+  frame, and `tools/re/beam_ends_vs_ifc.py` counts what the ends of Revit's own
+  beams lie on (#1839, RE-455).** The reporter ran the beam-end probe and the
+  scorer on their model against Revit's export of it, and posted the counts:
+  of 915 beams Revit shortens 538, by a median 256 mm; the Revit 2023 rule
+  (the face of the column a beam's list names) gives bounds on 361 of them and
+  is exact on 2, cutting 310 too far, and would cut 76 beams Revit leaves at the
+  box's length, so it stays off for Revit 2024 and later. The scorer now also
+  takes each Revit beam's mesh in the world frame and counts its two ends by
+  the kind of element whose face (a column's, a beam's, a wall's or a slab's,
+  within 1 mm) each end lies near in Revit's export, which asks Revit's own
+  geometry what stops the beam without the record box. On the timber office of
+  the ten BIM4LCA models, where the rule is exact on 59 of the 60 beams it cuts,
+  108 of the 142 ends of the beams Revit leaves at the box's length lie on a
+  column's face (105 of 138 at building permit); of the 13 beams Revit shortens
+  on the ten models, one (the timber office at permit) has its ends on column
+  faces.
+
+- **Revit's export stops a beam where its record box ends on the BIM4LCA
+  models, so the column face cannot be tested there (RE-455, #1839).** On the
+  ten BIM4LCA models that have Revit's export (300 beams), Revit's beam is its
+  record box's length within 1 mm on 273, shorter on 25 (13 beams) and longer
+  on 2. The only beams that name a column are the timber office's, 63 on each
+  file, and their box already ends at the column's near face: RE-122's rule
+  gives the box's own ends on 116 of the 118 it reaches that Revit leaves at
+  the box, cuts beam 3360608 230 mm short on both files, and is exact on the
+  one beam Revit shortens and it reaches. The 13 beams Revit does shorten name
+  a wall (7), a column (1) or nothing (5), and a wall's near face is not
+  Revit's stop for any of the ten beams it holds an end of. Nothing ships. The
+  test is a model whose boxes run to the lines' ends, such as the reporter's:
+  the probe and `tools/re/beam_ends_vs_ifc.py`, which prints counts only
+  without `--list`, are for it.
+
 ## [0.21.0] — 2026-11-13
 
 0.21.0 makes the GlobalIds an export writes hold from one save of a project to the next, and adds a command that compares two saves element by element. Between two saves of one Autodesk sample, every GlobalId the writer derived moved while the elements kept theirs, because each was seeded from the document's `Unique Document GUID`, which changes on every save; each is now seeded from the GlobalId of the entity it belongs to, which the file keeps (#1840, #1854). `rvt-diff --elements` lists what changed between two saves, keyed by GlobalId (#1843). `--redact` now scrubs the user name of a Linux home folder and every path of a message (#1871). The warning for element records of ElementIds the element table does not declare no longer calls the IFC incomplete for what a same-save comparison showed to be deleted elements (#1838).

@@ -11,8 +11,8 @@
 //! +0x000  u64  owning room ElementId
 //! +0x03c  u64  owning room ElementId   (confirmation; must agree)
 //! +0x044  u64  host Level ElementId
-//! +0x1f5  u32  room number length, in UTF-16 code units
-//! +0x1f9  2*n  room Number, UTF-16LE
+//! +0x1f9  u32  room number length, in UTF-16 code units
+//! +0x1fd  2*n  room Number, UTF-16LE
 //! +…+ 8   u32  room name length, in UTF-16 code units   (8 bytes past
 //! +…+12   2*m  room Name, UTF-16LE                       the number)
 //! ```

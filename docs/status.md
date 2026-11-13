@@ -597,11 +597,11 @@ also closes #240 — the `18" Basement` slot reading `1851` where the
 export's `IfcWallType.Tag` is `3897` was an **index artifact**, not a
 second id space: the list is ascending and both ids are in it, with
 `1851` a record of category −2009014 that is not a wall type at all.
-**The join is library-side only.** It ships as
+**The join began in the library.** It ships as
 `rvt::research::partition_type_records::unique_type_reference` with the corpus gate
 `tests/iter_elements_typed.rs::core_interior_2024_wall_type_record_join`;
-it is **not** yet a property on the emitted wall, no emitted entity,
-property or relation changes, and both count manifests record that.
+since #322 (RE-44) the emitted wall carries its type's name as the
+element-record property set's `TypeName`.
 **RE-28 left compound layer thicknesses unrecovered, and found this
 corpus cannot witness them** (#88, RE-28 §4–§5; RE-53 and RE-58 below
 supersede this). A 128 KiB sweep centred on each of the
@@ -1182,8 +1182,8 @@ The tree, the Schedule panel and the info panel then put each element on the
 storey the IFC export writes it on (a part on its whole's, an element in a
 room on the room's, an opening on its host's) and list only the elements the
 export writes (#1422).
-RE-20 (same corpora) found **no** recoverable Level ElementId map:
-`Level` is absent from Formats schema; LevelAssociationCell / name /
+RE-20 (same corpora) found **no** recoverable Level ElementId map; its premise that
+`Level` is absent from Formats schema was an artifact of the 64 KB schema scan (the whole schema carries Level, #410); LevelAssociationCell / name /
 elevation proximity scans are noise-dominated — Floors/Rooms stay
 Unassigned by evidence, not omission. RE-24 (#218) does not reopen
 that: it recovers a *Level's own* ElementId from its `OST_Levels`
