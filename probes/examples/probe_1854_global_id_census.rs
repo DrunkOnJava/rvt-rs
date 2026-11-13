@@ -31,6 +31,31 @@ use std::path::Path;
 
 use rvt::RevitFile;
 
+/// Whether `class`'s first attribute is a GlobalId. The classes left out are
+/// not IfcRoot and open with a name, so a 22-character name such as a
+/// property's read as a GlobalId and counted as a duplicate wherever it
+/// recurs (43348042796: up to 22,161 per export). A class missed here is
+/// counted, not hidden.
+fn holds_global_id(class: &str) -> bool {
+    let not_root = (class.starts_with("IFCPROPERTY") && !class.starts_with("IFCPROPERTYSET"))
+        || [
+            "IFCCOMPLEXPROPERTY",
+            "IFCQUANTITY",
+            "IFCPHYSICALCOMPLEXQUANTITY",
+            "IFCMATERIAL",
+            "IFCPERSON",
+            "IFCORGANIZATION",
+            "IFCAPPLICATION",
+            "IFCCLASSIFICATION",
+            "IFCPRESENTATION",
+            "IFCSURFACESTYLE",
+            "IFCCOLOURRGB",
+        ]
+        .iter()
+        .any(|prefix| class.starts_with(prefix));
+    !not_root
+}
+
 /// Each GlobalId the STEP of `path`'s default export writes, with its class,
 /// and how many GlobalIds it writes twice.
 fn global_ids(path: &Path) -> anyhow::Result<(BTreeMap<String, String>, usize)> {
@@ -59,7 +84,7 @@ fn global_ids(path: &Path) -> anyhow::Result<(BTreeMap<String, String>, usize)> 
         else {
             continue;
         };
-        if gid.len() != 22 {
+        if gid.len() != 22 || !holds_global_id(class) {
             continue;
         }
         if ids.insert(gid.to_string(), class.to_string()).is_some() {
