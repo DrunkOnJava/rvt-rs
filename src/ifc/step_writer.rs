@@ -2652,7 +2652,8 @@ impl StepWriter<'_> {
                 };
                 let layer_id = self.id();
                 // IfcMaterialLayer(Material, LayerThickness, IsVentilated=$,
-                //                  Category=$, Priority=$, Name=$, Description=$)
+                //                  Name, Description=$, Category=$, Priority=$),
+                // IFC4's order: the name is the fourth attribute (#1947).
                 // Thickness in metres (feet × 0.3048).
                 let thickness_m = layer.thickness_feet * 0.3048;
                 let name_slot = match &layer.name {
@@ -2662,7 +2663,7 @@ impl StepWriter<'_> {
                 self.emit_entity(
                     layer_id,
                     format!(
-                        "IFCMATERIALLAYER({material_slot},{thickness_m:.6},$,$,$,{name_slot},$)"
+                        "IFCMATERIALLAYER({material_slot},{thickness_m:.6},$,{name_slot},$,$,$)"
                     ),
                 );
                 layer_ids.push(layer_id);
