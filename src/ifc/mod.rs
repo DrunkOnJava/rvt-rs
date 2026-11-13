@@ -2829,10 +2829,14 @@ fn revit_model_global_ids(
     // (B72). An instance that uses its own geometry has no original symbol;
     // its type, a door's too, is a sub-element of it (`InstanceAsType`).
     let mut doors_and_windows: std::collections::BTreeSet<u32> = Default::default();
+    // The doors and windows set in a host: RE-167 says only that a door with
+    // no host is not flipped.
+    let mut hosted: std::collections::BTreeSet<u32> = Default::default();
     for entity in entities {
         let entities::IfcEntity::BuildingElement {
             ifc_type,
             type_guid: Some(tag),
+            host_element_index,
             ..
         } = entity
         else {
@@ -2843,6 +2847,9 @@ fn revit_model_global_ids(
         }
         if let Ok(id) = tag.parse::<u32>() {
             doors_and_windows.insert(id);
+            if host_element_index.is_some() {
+                hosted.insert(id);
+            }
         }
     }
     for (element, original) in element_original_symbols {
@@ -2858,7 +2865,14 @@ fn revit_model_global_ids(
             continue;
         };
         if doors_and_windows.contains(element) {
-            let flipped = element_flips.get(element).copied().unwrap_or(false);
+            // A hosted door whose flip was not read (its host's frame or its
+            // facing) gets no Revit GlobalId for its type rather than one
+            // hashed with a guessed flip; the writer derives one (#1947).
+            let flipped = match element_flips.get(element) {
+                Some(&flipped) => flipped,
+                None if hosted.contains(element) => continue,
+                None => false,
+            };
             out.element_types.insert(
                 *element,
                 door_type_global_id(global_id, flipped, revit_version),
