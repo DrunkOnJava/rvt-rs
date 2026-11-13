@@ -1015,7 +1015,14 @@ fn without_spikes(mut ring: Ring) -> Ring {
         let next = ring[(index + 1) % ring.len()];
         let cross = (point.0 - previous.0) * (next.1 - point.1)
             - (point.1 - previous.1) * (next.0 - point.0);
-        if crate::research::threshold_census::note(cross).abs() <= 1e-12 {
+        // #1825 row 5, second census: the turn's sine, the scale-free value a
+        // scaled test would compare; the test itself is unchanged.
+        let scale = (point.0 - previous.0).hypot(point.1 - previous.1)
+            * (next.0 - point.0).hypot(next.1 - point.1);
+        if scale > 0.0 {
+            crate::research::threshold_census::note(cross / scale);
+        }
+        if cross.abs() <= 1e-12 {
             ring.remove(index);
             index = index.saturating_sub(1);
         } else {
