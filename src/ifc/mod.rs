@@ -2983,7 +2983,10 @@ fn attach_hosted_cut_openings(rf: &mut crate::RevitFile, entities: &mut Vec<enti
     // Revit's export names each after its host and its place among the
     // host's openings, the cutting instance with the highest ElementId first:
     // `Basic Roof:YP-1:2991742:1` is hatch 2896992's, `:4` hatch 2053330's.
-    let mut cut_counts: std::collections::BTreeMap<usize, u32> = Default::default();
+    // The place is among every cut naming the host, counted before any is
+    // declined below: an opening that is not written still takes its number,
+    // so the ones after it keep Revit's names and GlobalIds (#1947).
+    let mut cut_counts: std::collections::BTreeMap<u64, u32> = Default::default();
     let mut cuts = cuts;
     cuts.sort_by_key(|cut| std::cmp::Reverse(cut.instance));
     // The one building element carrying each tag (`None` where several do),
@@ -3003,6 +3006,11 @@ fn attach_hosted_cut_openings(rf: &mut crate::RevitFile, entities: &mut Vec<enti
         }
     }
     for cut in cuts {
+        let number = {
+            let count = cut_counts.entry(cut.host).or_insert(0);
+            *count += 1;
+            *count
+        };
         let Some(transform) = u32::try_from(cut.instance)
             .ok()
             .and_then(|id| transforms.get(&id))
@@ -3044,13 +3052,11 @@ fn attach_hosted_cut_openings(rf: &mut crate::RevitFile, entities: &mut Vec<enti
                 (dx * cos - dy * sin, dx * sin + dy * cos)
             })
             .collect();
-        let count = cut_counts.entry(host).or_insert(0);
-        *count += 1;
         openings.push(entities::IfcEntity::HostedCutOpening {
             host,
-            number: *count,
+            number,
             tag,
-            name: format!("{name}:{count}"),
+            name: format!("{name}:{number}"),
             outline_feet,
             depth_feet: depth,
         });
