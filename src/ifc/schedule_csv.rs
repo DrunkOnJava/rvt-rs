@@ -529,11 +529,7 @@ fn natural_key(s: &str) -> String {
 
 /// A text cell: formula-neutralised, then RFC 4180-escaped.
 fn text(value: &str) -> String {
-    if value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
-        escape(&format!("'{value}"))
-    } else {
-        escape(value)
-    }
+    crate::cli::csv_text(value)
 }
 
 fn escape(value: &str) -> String {
