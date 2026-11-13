@@ -42,6 +42,10 @@
 //!   edges control plane-plane ends <n> <buckets> interior <n> <buckets>   the same distances for
 //!     edges between two planes, what the file's own edges hold
 //!   edges unevaluated vs plane: no uv <n>, outside the grid by at most 1e-6 <n> 1e-3 <n> 1 <n> more <n>
+//!   edges unevaluated inside the envelope: by at most 1e-6 <n> 1e-3 <n> 1 <n> more <n>
+//!   edges fit count <n> rr <sum of squares> normal <six sums> rhs <three sums>   the normal equations of
+//!     the least-squares fit of three scales (u tangent, v tangent, mixed derivative), to be summed
+//!   census hermite_envelope <equal|inside|outside|crossing|unread> <n>   `m_Envelope` against the grid
 //!   edges <vs plane|vs hermite> <variant> ends <n> <distance buckets> interior <n> <buckets> unevaluated <n>
 //!
 //! where a variant reads `u-fastest|v-fastest tangent0=u|tangent0=v` and the buckets are the
@@ -158,6 +162,8 @@ struct Hermite {
     u: Vec<f64>,
     v: Vec<f64>,
     nodes: Vec<Node>,
+    /// `m_Envelope.m_corners`: the lowest and the highest (u, v) the object states.
+    envelope: Option<[[f64; 2]; 2]>,
 }
 
 impl Hermite {
@@ -192,7 +198,18 @@ impl Hermite {
                 mixed: array::<3>(node.get("m_iMixedDer")?)?,
             });
         }
-        Some(Self { u, v, nodes })
+        let envelope = fields
+            .get("m_Envelope")
+            .and_then(|envelope| envelope.get("m_corners"))
+            .and_then(Fv::as_array)
+            .filter(|corners| corners.len() == 2)
+            .and_then(|corners| Some([array::<2>(&corners[0])?, array::<2>(&corners[1])?]));
+        Some(Self {
+            u,
+            v,
+            nodes,
+            envelope,
+        })
     }
 
     /// The cell of `params` that holds `x`, the last one at the far end.
@@ -209,9 +226,12 @@ impl Hermite {
         )
     }
 
-    /// The bicubic Hermite patch of the cell holding (u, v); `v_fastest` reads the node of
-    /// `(iu, iv)` at `iu * nv + iv` and `swap` reads `m_iTangent[1]` as the u tangent.
-    fn eval(&self, v_fastest: bool, swap: bool, uv: [f64; 2]) -> Option<[f64; 3]> {
+    /// The four parts of the bicubic Hermite patch of the cell holding (u, v), each a
+    /// vector: the nodes' points, their u tangents, their v tangents and their mixed
+    /// derivatives, each with its basis and the cell's size. The patch is their sum.
+    /// `v_fastest` reads the node of `(iu, iv)` at `iu * nv + iv` and `swap` reads
+    /// `m_iTangent[1]` as the u tangent.
+    fn terms(&self, v_fastest: bool, swap: bool, uv: [f64; 2]) -> Option<[[f64; 3]; 4]> {
         let (nu, nv) = (self.u.len(), self.v.len());
         let (i, j) = (Self::cell(&self.u, uv[0])?, Self::cell(&self.v, uv[1])?);
         let (du, dv) = (self.u[i + 1] - self.u[i], self.v[j + 1] - self.v[j]);
@@ -231,7 +251,12 @@ impl Hermite {
                 x.powi(3) - x * x
             }
         };
-        let mut out = [0.0f64; 3];
+        let mut parts = [[0.0f64; 3]; 4];
+        let mut add = |part: usize, term: [f64; 3]| {
+            for (slot, x) in parts[part].iter_mut().zip(term) {
+                *slot += x;
+            }
+        };
         for a in 0..2 {
             for b in 0..2 {
                 let (iu, iv) = (i + a, j + b);
@@ -245,15 +270,93 @@ impl Hermite {
                 } else {
                     (node.tangent[0], node.tangent[1])
                 };
-                for (k, slot) in out.iter_mut().enumerate() {
-                    *slot += node.point[k] * value(a, t) * value(b, s)
-                        + tu[k] * du * slope(a, t) * value(b, s)
-                        + tv[k] * dv * value(a, t) * slope(b, s)
-                        + node.mixed[k] * du * dv * slope(a, t) * slope(b, s);
-                }
+                add(
+                    0,
+                    std::array::from_fn(|k| node.point[k] * value(a, t) * value(b, s)),
+                );
+                add(
+                    1,
+                    std::array::from_fn(|k| tu[k] * du * slope(a, t) * value(b, s)),
+                );
+                add(
+                    2,
+                    std::array::from_fn(|k| tv[k] * dv * value(a, t) * slope(b, s)),
+                );
+                add(
+                    3,
+                    std::array::from_fn(|k| node.mixed[k] * du * dv * slope(a, t) * slope(b, s)),
+                );
             }
         }
-        Some(out)
+        Some(parts)
+    }
+
+    /// The patch at (u, v): the sum of [`Hermite::terms`].
+    fn eval(&self, v_fastest: bool, swap: bool, uv: [f64; 2]) -> Option<[f64; 3]> {
+        let parts = self.terms(v_fastest, swap, uv)?;
+        Some(std::array::from_fn(|k| {
+            parts[0][k] + parts[1][k] + parts[2][k] + parts[3][k]
+        }))
+    }
+
+    /// Whether (u, v) lies in the object's stated envelope.
+    fn in_envelope(&self, uv: [f64; 2]) -> bool {
+        self.envelope.is_some_and(|e| {
+            (e[0][0] - 1e-9..=e[1][0] + 1e-9).contains(&uv[0])
+                && (e[0][1] - 1e-9..=e[1][1] + 1e-9).contains(&uv[1])
+        })
+    }
+
+    /// How the stated envelope sits against the grid's first and last parameters.
+    fn envelope_kind(&self) -> &'static str {
+        let Some(e) = self.envelope else {
+            return "unread";
+        };
+        let grid = [
+            [self.u[0], self.v[0]],
+            [self.u[self.u.len() - 1], self.v[self.v.len() - 1]],
+        ];
+        let within = |outer: [[f64; 2]; 2], inner: [[f64; 2]; 2]| {
+            outer[0][0] <= inner[0][0] + 1e-9
+                && outer[0][1] <= inner[0][1] + 1e-9
+                && outer[1][0] >= inner[1][0] - 1e-9
+                && outer[1][1] >= inner[1][1] - 1e-9
+        };
+        match (within(e, grid), within(grid, e)) {
+            (true, true) => "equal",
+            (false, true) => "inside",
+            (true, false) => "outside",
+            (false, false) => "crossing",
+        }
+    }
+}
+
+fn dot3(a: [f64; 3], b: [f64; 3]) -> f64 {
+    (0..3).map(|k| a[k] * b[k]).sum()
+}
+
+/// The normal equations of a least-squares fit of three scale factors, of the u tangents,
+/// the v tangents and the mixed derivatives, over the samples of the edges: what a sample's
+/// target point leaves after the nodes' points, set against the three parts.
+#[derive(Default)]
+struct Fit {
+    normal: [[f64; 3]; 3],
+    rhs: [f64; 3],
+    rr: f64,
+    count: usize,
+}
+
+impl Fit {
+    fn add(&mut self, parts: &[[f64; 3]; 4], target: [f64; 3]) {
+        let left: [f64; 3] = std::array::from_fn(|k| target[k] - parts[0][k]);
+        for i in 0..3 {
+            for j in 0..3 {
+                self.normal[i][j] += dot3(parts[i + 1], parts[j + 1]);
+            }
+            self.rhs[i] += dot3(parts[i + 1], left);
+        }
+        self.rr += dot3(left, left);
+        self.count += 1;
     }
 }
 
@@ -386,6 +489,7 @@ fn main() -> anyhow::Result<()> {
     let mut first: Option<String> = None;
     let mut shapes: BTreeMap<String, usize> = BTreeMap::new();
     let mut layouts: BTreeMap<String, usize> = BTreeMap::new();
+    let mut envelopes: BTreeMap<&'static str, usize> = BTreeMap::new();
     let (mut nu_range, mut nv_range, mut node_range) =
         ((usize::MAX, 0), (usize::MAX, 0), (usize::MAX, 0));
     for (id, record) in &records {
@@ -437,6 +541,8 @@ fn main() -> anyhow::Result<()> {
                 increasing(fields.get("m_vParams")),
             );
             *layouts.entry(label).or_default() += 1;
+            let kind = Hermite::read(fields).map_or("unread", |hermite| hermite.envelope_kind());
+            *envelopes.entry(kind).or_default() += 1;
         }
     }
     println!(
@@ -451,6 +557,9 @@ fn main() -> anyhow::Result<()> {
     }
     for (label, n) in &layouts {
         println!("census hermite_layout {n} {label}");
+    }
+    for (kind, n) in &envelopes {
+        println!("census hermite_envelope {kind} {n}");
     }
     if total > 0 && nu_range.0 != usize::MAX {
         println!(
@@ -533,6 +642,8 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
     // no (u, v), or a (u, v) outside the grid by at most 1e-6, 1e-3, 1 or more.
     let mut no_uv = 0usize;
     let mut outside = [0usize; 4];
+    let mut outside_in_envelope = [0usize; 4];
+    let mut fit = Fit::default();
     for record in records.values() {
         let Some(graph) = &record.graph else { continue };
         let surface_of = |edge_index: usize, face: &Fv| -> Option<usize> {
@@ -636,8 +747,19 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
                                 .position(|limit| beyond <= *limit)
                                 .unwrap_or(3);
                             outside[which] += 1;
+                            if surface.in_envelope([u, v]) {
+                                outside_in_envelope[which] += 1;
+                            }
                         }
                     }
+                }
+            }
+            for sample in samples.iter().copied() {
+                let parts =
+                    uv_of(sample, hermite_side).and_then(|uv| surface.terms(false, false, uv));
+                let target = uv_of(sample, other_side).map(|uv| plane_point(&[origin, x, y], uv));
+                if let (Some(parts), Some(target)) = (parts, target) {
+                    fit.add(&parts, target);
                 }
             }
             for (slot, (v_fastest, swap, _)) in vs_plane.iter_mut().zip(VARIANTS) {
@@ -677,6 +799,27 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
     }
     println!("edges {control_edges} control plane-plane edges");
     println!("{}", control.show("control", "plane-plane"));
+    println!(
+        "edges fit count {} rr {:e} normal {:e} {:e} {:e} {:e} {:e} {:e} rhs {:e} {:e} {:e}",
+        fit.count,
+        fit.rr,
+        fit.normal[0][0],
+        fit.normal[0][1],
+        fit.normal[0][2],
+        fit.normal[1][1],
+        fit.normal[1][2],
+        fit.normal[2][2],
+        fit.rhs[0],
+        fit.rhs[1],
+        fit.rhs[2]
+    );
+    println!(
+        "edges unevaluated inside the envelope: by at most 1e-6 {} 1e-3 {} 1 {} more {}",
+        outside_in_envelope[0],
+        outside_in_envelope[1],
+        outside_in_envelope[2],
+        outside_in_envelope[3]
+    );
     println!(
         "edges unevaluated vs plane: no uv {no_uv}, outside the grid by at most 1e-6 {} 1e-3 {} 1 {} more {}",
         outside[0], outside[1], outside[2], outside[3]
