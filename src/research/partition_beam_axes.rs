@@ -465,8 +465,9 @@ pub fn scan_sketch_bounded_lines(
     )
 }
 
-/// Releases where a sketch line's B-spline ([`BoundedSpline`]) is measured
-/// (RE-211).
+/// Releases where a sketch line's B-spline ([`BoundedSpline`]) is read: 2025,
+/// where RE-211 measured it against Revit's body, and 2024, 2026 and 2027,
+/// where the same project's 2025 save is the check (RE-458).
 pub const SKETCH_SPLINE_SUPPORTED_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// The most control points a [`BoundedSpline`] is read with.
