@@ -34,8 +34,7 @@ RE-315), the same
 sample projects saved by Revit
 2019, 2023 and 2026 (but 2015's `rst_basic`, another model than its 2019 copy).
 What is not decoded
-(most parameters in IFC, family geometry, roofs by extrusion outside
-Revit 2025, openings whose symbol cuts no outline, the room phase rule against a Revit export made with the default setup, RE-326) is listed in [`docs/status.md`](docs/status.md), and
+(most parameters in IFC, family geometry, openings whose symbol cuts no outline, the room phase rule against a Revit export made with the default setup, RE-326) is listed in [`docs/status.md`](docs/status.md), and
 the four levels a file can reach are in the
 [supported profile](docs/supported-profile.md).
 

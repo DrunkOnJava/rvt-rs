@@ -100,15 +100,16 @@ from them. A roof on 2023 to 2027 is drawn from its saved mesh where that
 decodes whole (#1191, and #1612 for one drawn as the level block of its sketch
 outline), and keeps the record-box solve alone where it does not
 (RE-341 section 5): without its slope, so a sloped roof can still be drawn as its
-outline at the box's full height, a level block. A roof's saved mesh is scored
+outline at the box's full height, a level block. A roof by extrusion is drawn as its
+sketch's section on 2024 to 2027 (RE-211; RE-458 for 2024, 2026 and 2027). A roof's saved mesh is scored
 against Revit's export on 15 roofs that #1612 and RE-401 draw from it, each within 0.4% of
 Revit's volume (Snowdon Towers Architectural's 14, local only, 4 of them Revit's to 1e-6 since a
 `GGTag` is walked as a group, and the T/U roof of puzzbobb's Revit 2025 models, RE-389,
-RE-401), where the level blocks of 8 of them were 40% or more too large. On Autodesk's samples, which have no Revit export, the mesh of
-one roof of the 2026 and 2027 saves is not the 2025 save's body and another keeps
-its box, which the same-project gate names (`ROOFS_NOT_THE_2025_BODY`, Griffin
-2026-11-05 and 2026-11-09). Such a roof no longer cuts the top
-of the walls under it unless its record box is exactly its type's layers and
+RE-401), where the level blocks of 8 of them were 40% or more too large. On Autodesk's samples, which have no Revit export, every roof of
+the 2026 and 2027 saves is the 2025 save's body to the same-project gate's
+tolerance, its list of roofs that may differ (`ROOFS_NOT_THE_2025_BODY`, Griffin
+2026-11-05 and 2026-11-09) being empty since RE-458. A roof that is not a plate no
+longer cuts the top of the walls under it unless its record box is exactly its type's layers and
 its outline is read (RE-351): the walls of `rac_basic` that its 2024 (15),
 2026 and 2027 (16) saves cut at roof 243274, up to 3.1865 m lower than its
 2025 save draws them (Measure run 42106436497), are drawn to their record
@@ -1246,6 +1247,23 @@ entity (Measure runs 41784415396 and 41784419457). Revit 2014
 and earlier write every room, as every element: both phase rules start at
 Revit 2015 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
+
+**RE-458 (2026-11-13)** reads a roof by extrusion on Revit 2024, 2026 and 2027
+as on 2025 (RE-211): drawn as its sketch's section, where the B-spline of its
+sketch lines was read on 2025 alone. Of the 146 models of an unfiltered
+Measure only Autodesk's `rac_basic` holds one, roof 243274, which was its saved
+mesh on its 2024, 2026 and 2027 saves (34.974 m3 on the last two, against the
+2025 save's 35.424 m3), and is now the 2025 save's body on all three: 3 of
+the 146 exports move, `rac_basic`'s 2024, 2026 and 2027, and the same-project
+check's list of roofs that may differ from the 2025 save
+(`ROOFS_NOT_THE_2025_BODY`) is empty. No Revit export of a 2024, 2026 or 2027
+roof by extrusion exists here, so the witness is the same project's 2025 save,
+which cannot catch an error both saves share. `rac_advanced`'s roof 201262,
+which #1479 took for a second roof by extrusion, is drawn from its sketch's
+slope on 2025 and from its saved mesh on 2026 and 2027, equal in volume to
+0.1%; lifting the hold on 2026 and 2027 roofs (RE-341) changed no body on any
+local file, so it stays
+(`reports/element-framing/RE-458-roofs-by-extrusion-2024-2026-2027.md`).
 
 **RE-457 (2026-11-13)** writes a floor of the Structural Foundations category as
 an `IfcSlab` with `BASESLAB`, and a framing instance whose stored structural

@@ -359,7 +359,9 @@ pub fn roof_extrusion_bottom(top: &[(f64, f64)], thickness: f64) -> Option<Vec<(
 /// is kept only where it reproduces the roof's record box across the plane
 /// to [`ROOF_EXTRUSION_BOX_TOLERANCE_FEET`]; the roof then runs along the
 /// axis over its box. Measured on `11_RoofByExtrusion` (R2025): every one of
-/// the 1,187 vertices of Revit's body within 0.001 ft of the section.
+/// the 1,187 vertices of Revit's body within 0.001 ft of the section. Read
+/// on Revit 2024, 2026 and 2027 as on 2025, held to the same project's 2025
+/// save (RE-458).
 pub(super) fn attach_extrusion_roofs(
     rf: &mut RevitFile,
     revit_version: u32,

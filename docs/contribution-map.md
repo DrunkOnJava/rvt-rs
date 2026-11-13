@@ -67,7 +67,6 @@ milestone is for.
 | [#1495](https://github.com/DrunkOnJava/rvt-rs/issues/1495) | Snowdon wall 1996083 ends 1.03 ft short of Revit's export, and nothing marks it |
 | [#1494](https://github.com/DrunkOnJava/rvt-rs/issues/1494) | Doors bound to no plain wall: 49 inverted relative to the axes rule, by IfcDoorType (RE-347 follow-up) |
 | [#1480](https://github.com/DrunkOnJava/rvt-rs/issues/1480) | Wall base and top passes: a cutter drawn as a box, or whose level is not read, cuts nothing (RE-351 follow-up) |
-| [#1479](https://github.com/DrunkOnJava/rvt-rs/issues/1479) | Roofs by extrusion are solids only on Revit 2025: read them on 2024, 2026 and 2027, held to the 2025 save |
 | [#1478](https://github.com/DrunkOnJava/rvt-rs/issues/1478) | Walls under a read roof: cut along its sloped underside, as Revit does (RE-351 follow-up) |
 | [#1474](https://github.com/DrunkOnJava/rvt-rs/issues/1474) | Walls 2056705 and 2056770: Revit cuts their ends back above 182.087 ft and steps them, and neither office file draws that |
 | [#1427](https://github.com/DrunkOnJava/rvt-rs/issues/1427) | Semantic check: recalibrate on real pull requests, and settle fails that noise can cross (#1334 follow-up) |

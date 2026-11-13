@@ -447,15 +447,15 @@ accept is not caught, and the maintainers read a change to `src/` before it land
   extent; #1471 (RE-351) healed all 16 and the list is empty. No entry is ever
   added: `tools/ci/check_same_project_projects.py` (a CI step) holds `PINNED_MOST` at
   0 and fails on any tag beyond the 16 first pinned. A roof the 2025 save draws
-  otherwise, as its record box or its saved mesh, is counted, not scored, and exactly:
-  `ROOFS_NOT_THE_2025_BODY` names `rac_basic`'s 243274 (its saved mesh against the 2025
-  save's roof extrusion), a mesh counting only where its box contains the 2025 body's,
-  and one more, one fewer or one of another kind fails (Griffin, 2026-11-09 for the
-  saved-mesh default of #1191). `rac_advanced`'s 201262 left the list when #1706 drew
-  its saved mesh as the 2025 save's body. Three roofs of
-  `rac_advanced` that the list held until #1612 (165755, 167036 and 167158: gables the
-  2025 save drew as a level block) are drawn from their saved meshes on every save now.
-  That list only shrinks too: the same CI step holds it to those five or fewer. Any other body that differs from the 2025 save fails; a difference on a release
+  otherwise, as its record box or its saved mesh, was counted, not scored, and exactly
+  (Griffin, 2026-11-05 and 2026-11-09 for the saved-mesh default of #1191):
+  `ROOFS_NOT_THE_2025_BODY` is empty. `rac_advanced`'s 201262 left it when #1706 drew
+  its saved mesh as the 2025 save's body; three roofs of `rac_advanced` that it held
+  until #1612 (165755, 167036 and 167158: gables the 2025 save drew as a level block) are
+  drawn from their saved meshes on every save; and `rac_basic`'s 243274 (a saved mesh
+  against the 2025 save's roof extrusion) left it when RE-458 drew it from its sketch's
+  section on 2026 and 2027. A roof added back would be one more than the list holds and
+  fail. That list only shrinks too: the same CI step holds it to those five or fewer. Any other body that differs from the 2025 save fails; a difference on a release
   or sample not pinned is the maintainer's decision, not a new entry.
 - The output carries, for rac_advanced's ceiling 147534, floor 139803 and roof
   201262 and the other elements whose sketch holds an arc (`ARC_OWNERS`), the
