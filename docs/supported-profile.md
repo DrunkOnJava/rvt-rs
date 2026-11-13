@@ -57,7 +57,7 @@ apart:
 | Family (`.rfa`) | yes | family metadata and OmniClass only | none | a family's types and type parameters as its `PartAtom` stream lists them: Revit's text at save, not read from the family's own records |
 | Template (`.rte`, `.rft`) | the same container code; no template file is in any corpus, so not measured | not measured | none | none |
 
-A file that is corrupt, encrypted, a zero-byte Git LFS placeholder, or not an
+A file that is corrupt, a zero-byte Git LFS placeholder, or not an
 OLE/CFB Revit container is refused with an error. A stream larger than
 rvt-rs's resource limits (by default 2 GiB for the file, 256 MiB for one
 stream and for one inflated member, and per partition 16 times its stored size

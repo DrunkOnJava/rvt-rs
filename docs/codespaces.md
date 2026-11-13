@@ -17,12 +17,12 @@ Each assistant has its own account sign-in, permissions and chat history.
 2. Open the repository's **Code → Codespaces → New with options**. Select
    the branch containing this configuration, the `rvt-rs` dev container,
    and **2 cores / 8 GB**. Do not create a replacement for a peer's machine.
-3. Wait for the post-create command to finish. It installs Codex, Claude
-   Code and the `viewer/package.json` pnpm version from
-   `.devcontainer/tools/package-lock.json`, stable Rust, Python
-   3.12 from Ubuntu 24.04, and Chromium. It reuses `.cursor/install.sh` to
-   build the native tools, Python binding and WASM viewer, then exercises
-   a generated fixture through the CLI and browser.
+3. Wait for the create commands to finish. `provision.sh` installs Codex,
+   Claude Code and the `viewer/package.json` pnpm version from
+   `.devcontainer/tools/package-lock.json`; the post-create command adds
+   stable Rust, Python 3.12 from Ubuntu 24.04, and Chromium. It reuses
+   `.cursor/install.sh` to build the native tools, Python binding and WASM
+   viewer, then exercises a generated fixture through the CLI and browser.
 
 The native build uses `profile.ci` (no release LTO); WASM uses `--dev`.
 Cargo and Rayon default to two jobs in the container and SSH login shell.

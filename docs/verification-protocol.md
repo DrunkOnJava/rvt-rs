@@ -96,22 +96,23 @@ the place where the distance to Revit is measured: it carries 360
 `IfcWall`, 132 `IfcDoor`, 6 `IfcWindow`, 256 `IfcColumn`, 116
 `IfcSpace`, 80 `IfcSlab`, 20 `IfcShadingDevice` and 15
 `IfcBuildingStorey`, against which rvt-rs recovers
-360 / 132 / 6 / 256 / 18 / 80 / 20 / 15 (2026-08-30; walls, doors and
-windows were 0 before #211, columns 0 before #204, slabs 64 plan-loop
+360 / 132 / 6 / 256 / 116 / 80 / 20 / 15 (walls, doors and
+windows were 0 before #211, columns 0 before #204, spaces 18 on 2026-08-30, slabs 64 plan-loop
 annotations with no ElementIds and shading devices 0 before #212,
 storeys 11 with elevation-derived labels before #218).
-Three of its fifteen categories are still `known_gap` or
-`decoder_baseline` with a tracking issue (#33, #34, #35), and the
-verdict's claimed surface is thirteen fields wide —
+Two of its fourteen categories are still `known_gap` with a tracking
+issue (#34, #35), and the
+verdict's claimed surface is fourteen fields wide —
 `IFCSLAB` and `IFCSHADINGDEVICE` joined `IFCWALL`, `IFCDOOR`,
 `IFCWINDOW`, `IFCCOLUMN`, `IFCROOF`, `IFCBEAM`, `IFCFLOWTERMINAL` and
 `IFCUNITASSIGNMENT` when their **ElementId sets**, not merely their
 counts, matched the export at tolerance 0 (RE-21, RE-22);
 `relations.IFCRELFILLSELEMENT` joined when the 138 `(host wall, filling
-element)` pairs matched exactly (RE-23, #222); and
+element)` pairs matched exactly (RE-23, #222);
 `IFCBUILDINGSTOREY` plus `storeys.IFCBUILDINGSTOREY` joined when all 15
-`(name, elevation)` pairs matched exactly (RE-24, #218). Seven of the
-thirteen are agreements about presence, four are agreements about
+`(name, elevation)` pairs matched exactly (RE-24, #218); and `IFCSPACE`
+joined when the rooms read from their element records came to Revit's 116
+(#278). Eight of the fourteen are agreements about presence, four are agreements about
 absence, and two are stronger than cardinality: the relation field is
 an agreement about **topology** — two witnesses can agree on 138 fill
 relationships while disagreeing about every wall those openings belong
@@ -121,7 +122,7 @@ one of them at a different height or under a different name. The
 storey field is also the first surface where the two sides express the
 same quantity in different declared units, so each witness resolves its
 own file's `LENGTHUNIT` before emitting. The excluded list is still the
-point: spaces, materials and property sets remain the measured distance
+point: materials and property sets remain the measured distance
 between this decoder and Revit's own exporter on a real project,
 recorded rather than rounded off.
 
