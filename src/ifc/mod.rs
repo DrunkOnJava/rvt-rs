@@ -1055,8 +1055,14 @@ pub struct ExportConfidenceSummary {
     /// (`crate::partition_element_records::RECOVERED_CATEGORIES`) the
     /// partition scan found but could not export because no ElementId is attributable
     /// to them (the `element_record_without_element_id` skipped item,
-    /// RE-30). Non-zero means the model is incomplete, and `score` is
-    /// scaled down by the exported share. Zero is not a completeness claim.
+    /// RE-30): they sit in records of ElementIds the element table does not
+    /// declare. A file saved in place keeps the records of elements deleted
+    /// since its last Save As, and those are not missing elements (all 84 on
+    /// the one model compared with Revit's export of the same save, #1838); an
+    /// element table read short leaves real elements out, as it did on
+    /// Autodesk's Snowdon Towers 2024 architectural sample before RE-41.
+    /// Non-zero means the model may be incomplete, and `score` is scaled down
+    /// by the exported share. Zero is not a completeness claim.
     #[serde(default)]
     pub unexported_element_records: usize,
 }
@@ -4857,7 +4863,7 @@ pub(crate) fn build_export_diagnostics_and_decisions(
         warnings.insert(
             0,
             format!(
-                "{unattributed_total} model element record(s) in this file use an element-record layout whose ElementId this release cannot locate, so they are not exported and the model is incomplete (RE-30)."
+                "{unattributed_total} element record(s) in this file belong to ElementIds its element table does not declare, so they are not exported. A file saved in place keeps the records of elements deleted since its last Save As; if nothing was deleted, the model is incomplete (RE-30, RE-35)."
             ),
         );
     }

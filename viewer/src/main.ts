@@ -1016,7 +1016,7 @@ interface ExportDiagnostics {
     has_geometry?: boolean;
     has_diagnostic_proxies?: boolean;
     warning_count?: number;
-    /** RE-30 records found but not exported; non-zero means the model is incomplete. */
+    /** RE-30 records found but not exported, in records of ElementIds the file does not declare; non-zero means the model may be incomplete. */
     unexported_element_records?: number;
   };
   /** A10 — measured when denominators exist; fractions stay null when unknown. */
@@ -3821,8 +3821,8 @@ function classifyFailureMode(diagnostics: ExportDiagnostics): FailureModeStatus 
   if (unexported > 0) {
     return {
       kind: 'warn',
-      title: 'Incomplete model',
-      summary: `${unexported} model element records could not be exported (RE-30)`,
+      title: 'Element records not exported',
+      summary: `${unexported} element records belong to ElementIds the file does not declare: elements deleted since its last Save As, or missing elements if none was deleted (RE-30)`,
     };
   }
   if (input.release_support?.status === 'experimental') {
