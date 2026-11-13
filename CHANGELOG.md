@@ -31,7 +31,7 @@ Measured against 0.21.0 on every model Measure holds (run [43491038743](https://
   moves is one of these:
   - The 268 doors that Revit's export aggregates into a curtain wall on the four
     offices (66, 68, 67 and 67) and 0.21.0 did not are aggregated now, and two of
-    the four members each timber office left out (RE-452, RE-453, RE-449).
+    the four members that each timber office left out (RE-452, RE-453, RE-449).
   - The beams of the two timber offices are on Revit's storey: 67 rows on another
     storey in each become 4, all ramps, with no beam left (RE-454).
   - On the spent Vitoria "Before", 3 more doors are set in the wall Revit's
@@ -402,8 +402,7 @@ Measured against 0.21.0 on every model Measure holds (run [43491038743](https://
   covering `list_rooms` on every file the test opens, and by four concurrent
   opens under `--max-open-models 1` that all finish with one model kept. Not
   measured: the peak memory of concurrent opens, and a crafted file with a very
-  long name, which none of the corpora holds. Not changed: reads are not
-  confined to a folder (`docs/mcp.md`), a product decision recorded on #1883.
+  long name, which none of the corpora holds.
 
 - **`rvt-info -f csv` writes a file's text as text, and `rvt-dump` prints a
   stream's name without its control characters (#1885).** A title, a user
