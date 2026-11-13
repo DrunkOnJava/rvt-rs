@@ -1264,7 +1264,11 @@ Level's own episode gives them, as before (the project's GUID gives 0 of 229).
 A file that stores its ids keeps them (14 of the 67 models), and Revit 2015 and
 2016 have no file to measure the rule on, so they keep generated ids. The
 history of the spent Vitoria 2018 model, which `EpisodeHistory::parse` refused
-for four entries closed by `0x1e`, is read: RESULT_PENDING. It moves the
+for four entries closed by `0x1e`, is read: 1,297 of its 1,314 elements that
+Revit's export holds are Revit's, from none, and 1,420 of 1,441 on the held-out
+Revit 2018 project, with the 73 rooms of each (an unfiltered Measure of 146
+exports: the project, building and site of 50 models, and the storeys of 11 files,
+become Revit's, and the diagnostics of all 121 are equal). It moves the
 GlobalId of every project, building, site and storey it applies to, so it ships
 with the next GlobalId change and not alone
 (`reports/element-framing/RE-459-episode-global-ids-2015-2023.md`).

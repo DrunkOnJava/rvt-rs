@@ -17,7 +17,7 @@
 
 RE-48 reads `Global/History` as a count, a `u32`-counted table, the count again and that many 17-byte entries, each a GUID and the byte `0x28`, and `EpisodeHistory::parse` returned `None` when any entry ended in another byte. On the spent Vitoria "Before" (Revit 2018, 1,127 entries) four entries (the 12th, 24th, 44th and 47th) end in `0x1e`; the others, 1,123, in `0x28` (probe run 43488971062: `terminators 1e=4 28=1123`). Each of the four is a 16-byte GUID like its neighbours. So `parse` refused the history, `revit_global_ids` returned an empty map and every element got a GlobalId derived from the document: that is the 0 of 1,314. (The explanation tested first, that this file stores its ids, was wrong: no 22-character string it stores is tied to any GlobalId, run 43485868407.)
 
-The episode census (run 43487391258) shows Revit's ids on that file are episode-derived all the same: of its 1,321 elements with a numeric Tag, 1,298 have a GlobalId whose prefix (the ElementId XORed out) is an entry of the history, and for 1,233 of them the episode number at `+8` of the 28-byte record, counted from the last entry, names that entry, as RE-48 reads it. `EpisodeHistory::parse` now reads an entry whatever byte closes it, and keeps the refusals that matter (counts that disagree, a count past the stream, a table that overflows), with failure-first tests of those. The elements of the spent Vitoria model the changed reader gives Revit's id: RESULT_PENDING
+The episode census (run 43487391258) shows Revit's ids on that file are episode-derived all the same: of its 1,321 elements with a numeric Tag, 1,298 have a GlobalId whose prefix (the ElementId XORed out) is an entry of the history, and for 1,233 of them the episode number at `+8` of the 28-byte record, counted from the last entry, names that entry, as RE-48 reads it. `EpisodeHistory::parse` now reads an entry whatever byte closes it, and keeps the refusals that matter (counts that disagree, a count past the stream, a table that overflows), with failure-first tests of those. With the history read, the unfiltered run of the writer change (43498066087, head `e5516b73`) gives the spent Vitoria 1,297 of its 1,314 elements Revit's GlobalId, from none, and its 73 rooms 73 of 73, from none; the held-out Revit 2018 Vitoria project, whose project-level ids no rule gives, gets 1,420 of its 1,441 elements and 73 of 73 rooms, also from none. The 65 elements whose episode lies before the `0x1e` entries (the census's other 65) read Revit's id as well: an entry closed by `0x1e` is an episode like the others, and counting it is what their `+8` number does.
 
 ## 3. The base: the project's GUID in the header
 
@@ -57,7 +57,7 @@ On the four files whose export Revit wrote and nothing rewrote, the episode rule
 - **The held-out Revit 2018 Vitoria project (§3)**: one file, nothing found that gives its ids.
 - **Revit 2015 and 2016**: no file here has a Revit export of its own project that stores none, so the base rule is not claimed for them.
 - **The 23 elements of the spent Vitoria whose GlobalId is in no entry of its history** (1,321 less 1,298).
-- **Elements on the spent Vitoria whose episode lies before the four `0x1e` entries and whose number may count them or not** (the 65 of §2 that the census found outside RE-48's reading): RESULT_PENDING
+- **The 17 elements of the spent Vitoria and the 21 of the held-out Vitoria project that still differ** (Revit's id is in no entry of the history for 23 of the 1,321 of the first, by the census).
 
 ## 6. What the exporter does
 
