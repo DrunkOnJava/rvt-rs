@@ -66,6 +66,10 @@
 # tools/re/native_levels_vs_ifc.py (RE-281:
 # counts, the same restricted alphabet), the totals and per property counts of
 # its property set census (standard Pset_ and Qto_ names only; RE-281),
+# the `history base:` count lines of tools/re/history_base_vs_ifc.py (RE-459: how
+# many of Revit's project, building, site and storey GlobalIds are the GUID in the
+# header of Global/History with an id XORed in, as numbers beside fixed words and an
+# IFC entity name, never a GlobalId or a name),
 # the `door axes:` count lines of tools/re/door_axes_vs_ifc.py (RE-347: how many
 # doors and windows have rvt-rs's local axes the same as Revit's, a half turn or
 # a quarter turn from them, and how many placed by the rule differ, as numbers
@@ -122,6 +126,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # export's units, never an ElementId; its `--list` lines are dropped.
       grep -E "^beam lines: [A-Za-z0-9 _:.,;()=#<>/+'-]+$" "$f" || true
       grep -E '^native readers: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # tools/re/history_base_vs_ifc.py (RE-459, #878): how many project, building,
+      # site and storey GlobalIds are the header GUID of Global/History with an id
+      # XORed in, as counts beside fixed words and IFC entity names, never a
+      # GlobalId or a name; its `list` lines are dropped.
+      grep -E "^history base: [A-Za-z0-9 _:.,;()=#<>/+'-]+$" "$f" || true
       grep -E '^category census[A-Za-z ]*: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^re363 [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^door flips: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" | grep -v -E '^door flips: field ' || true

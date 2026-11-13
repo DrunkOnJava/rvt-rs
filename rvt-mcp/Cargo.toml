@@ -1,6 +1,6 @@
 [package]
 name = "rvt-rs-mcp"
-version = "0.21.0"
+version = "0.22.0"
 edition = "2024"
 # rmcp 3.x declares 1.88, so this crate does too. The workspace and the `rvt`
 # crate stay at 1.87: nothing in `rvt` depends on this crate.
@@ -28,7 +28,7 @@ workspace = true
 
 [dependencies]
 # The core library: every answer comes from the model its IFC exporter builds.
-rvt = { path = "..", version = "=0.21.0" }
+rvt = { path = "..", version = "=0.22.0" }
 # stdio only: no HTTP transport feature, so the dependency tree carries no HTTP
 # client or server (tools/ci/audit-mcp-network.sh checks it). Not
 # `transport-io` either: it switches on tokio's `net` (and with it mio and

@@ -62,14 +62,17 @@
 //!   corner residual 0.3333 ft, mean 0.0220 → 0.0081 ft. Per end,
 //!   689 → **711 of 720** correct, with no end that the geometry-only
 //!   solver had right made wrong.
-//! - The 9 residual ends are one side of a **true L corner** — two
+//! - The 9 residual ends were one side of a **true L corner** — two
 //!   walls whose runs both stop at the other's centreline, with
 //!   nothing continuing past the corner. Revit cuts exactly one of
-//!   the pair and the file offers no feature that says which: across
-//!   the two distinct corners on the recorded edge the survivor is
-//!   the thicker wall once and the thinner wall once, the lower
-//!   ElementId once and the higher once. They are recorded, not
-//!   papered over (#238, RE-29 §4).
+//!   the pair, and neither the box nor the join lists say which:
+//!   across the two distinct corners on the recorded edge the
+//!   survivor is the thicker wall once and the thinner wall once, the
+//!   lower ElementId once and the higher once (#238, RE-29 §4). RE-127
+//!   found the signal in the walls' joined-wall entries (one run of
+//!   consecutive values on the wall that stops), and `butt_joins` now
+//!   decides those corners from it: 360 of 360 walls with both ends
+//!   within 0.001 ft and 720 of 720 ends, against 351 and 711 before.
 //! - Only axis-parallel walls are resolved. Every wall on the
 //!   recorded edge is axis-parallel; a wall whose box is square in
 //!   plan has no identifiable thin axis and is declined.

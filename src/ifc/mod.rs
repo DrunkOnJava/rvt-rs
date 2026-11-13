@@ -192,8 +192,9 @@ pub struct IfcModel {
     pub type_property_sets: std::collections::BTreeMap<u32, Vec<entities::PropertySet>>,
     /// The standard property sets of each type object, by its type's
     /// ElementId and the STEP name of the type entity (`IFCWALLTYPE`): the
-    /// common set's `IsExternal`, `FireRating` and `LoadBearing` (RE-286) and a
-    /// stair or flight type's dimensions (RE-286). The writer adds
+    /// common set's `FireRating` and `LoadBearing` (RE-286; no `IsExternal`,
+    /// on which Revit's exporters disagree) and a stair or flight type's
+    /// dimensions (RE-286). The writer adds
     /// each to the `HasPropertySets` of the type object of that type and
     /// entity.
     #[serde(default)]
@@ -2749,22 +2750,50 @@ fn revit_model_global_ids(
         rf,
         &levels.iter().map(|level| level.element_id).collect(),
     );
-    out.project = stored.project.clone();
-    out.site = stored.site.clone();
-    out.building = stored.building.clone();
-    let Ok(ids) = crate::revit_global_ids::revit_global_ids(rf) else {
-        return out;
+    // RE-459: where the file stores none, Revit's export gives the project, the
+    // building and the site the project's own GUID with the fake id of each
+    // XORed in, on the releases it was measured on.
+    let revit_year = out.revit_version.unwrap_or(0);
+    let project_guid = crate::revit_global_ids::project_guid_of(rf)
+        .filter(|_| crate::revit_global_ids::PROJECT_GUID_RELEASES.contains(&revit_year));
+    let project_level = |stored: &Option<String>, fake_id: i32| {
+        stored.clone().or_else(|| {
+            project_guid
+                .map(|guid| crate::revit_global_ids::revit_ifc_global_id(guid, fake_id as u32))
+        })
     };
-    let revit_version = rf.basic_file_info().map(|info| info.version).unwrap_or(0);
+    out.project = project_level(&stored.project, crate::revit_global_ids::PROJECT_ELEMENT_ID);
+    out.site = project_level(&stored.site, crate::revit_global_ids::SITE_ELEMENT_ID);
+    out.building = project_level(
+        &stored.building,
+        crate::revit_global_ids::BUILDING_ELEMENT_ID,
+    );
+    let ids = crate::revit_global_ids::revit_global_ids(rf).unwrap_or_default();
+    let revit_version = revit_year;
+    // RE-459: the storeys of a file of 2017 to 2022 are the project's GUID with
+    // the Level's ElementId XORed in, and of 2023 to 2027 each Level's own
+    // episode's; before that, or after, none is written and the writer derives it.
+    let from_project = project_guid
+        .filter(|_| crate::revit_global_ids::PROJECT_GUID_STOREY_RELEASES.contains(&revit_year));
     for (index, storey) in storeys.iter().enumerate() {
         let mut named = levels.iter().filter(|level| level.name == storey.name);
         if let (Some(level), None) = (named.next(), named.next()) {
-            if let Some(global_id) = stored
+            let global_id = stored
                 .levels
                 .get(&level.element_id)
-                .or_else(|| ids.get(&level.element_id))
-            {
-                out.storeys.insert(index, global_id.clone());
+                .cloned()
+                .or_else(|| {
+                    from_project.map(|guid| {
+                        crate::revit_global_ids::revit_ifc_global_id(guid, level.element_id)
+                    })
+                })
+                .or_else(|| {
+                    ids.get(&level.element_id).cloned().filter(|_| {
+                        crate::revit_global_ids::STOREY_EPISODE_RELEASES.contains(&revit_year)
+                    })
+                });
+            if let Some(global_id) = global_id {
+                out.storeys.insert(index, global_id);
             }
         }
     }
