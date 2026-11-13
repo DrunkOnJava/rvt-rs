@@ -18,6 +18,7 @@
 //! Output:
 //!   history <bytes> count0e=<u32|none> table66=<u32|none> list_count=<u32|none> parse=<ok N | none>
 //!   base <offset> <32 hex, stored order>    at 0x16, 0x26, 0x36 and 0x56
+//!   episode <number> <32 hex, stored order>  the oldest (0) and the newest episode's GUID
 //!   level <ElementId> <elevation ft> <name>
 //!   terminators <byte hex>=<entries> ...
 //!   odd <index> <offset> <hex of the entry> before=<hex of the entry before> after=<hex of the one after>
@@ -83,7 +84,9 @@ fn main() {
             .checked_add(EPISODE_TABLE_OFFSET + 4)
     });
     let list_count = list_count_at.and_then(|at| u32_at(&history, at));
-    let parsed = EpisodeHistory::parse(&history)
+    let parsed_history = EpisodeHistory::parse(&history);
+    let parsed = parsed_history
+        .as_ref()
         .map_or("none".to_string(), |parsed| format!("ok {}", parsed.len()));
     println!(
         "history {} count0e={count:?} table66={table:?} list_count={list_count:?} parse={parsed}",
@@ -96,6 +99,15 @@ fn main() {
     for at in BASE_GUID_AT {
         let bytes = history.get(at..at + 16).map_or("none".to_string(), hex);
         println!("base {at:#x} {bytes}");
+    }
+    // The oldest and the newest episode's GUID, to say whether the base is one of them.
+    if let Some(parsed) = &parsed_history {
+        for episode in [0, parsed.len().saturating_sub(1) as u32] {
+            let bytes = parsed
+                .episode_guid(episode)
+                .map_or("none".to_string(), |guid| hex(&guid));
+            println!("episode {episode} {bytes}");
+        }
     }
     let version = rf.basic_file_info().map(|info| info.version);
     if let Ok(version) = version {

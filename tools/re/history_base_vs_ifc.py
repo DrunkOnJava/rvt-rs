@@ -10,19 +10,26 @@ read first, `Global/History` holds it in its header, three times in a row from `
 and a fourth time at `0x56`, and a storey's GlobalId is the same GUID with the
 storey's Level ElementId XORed in, as an element's is its episode's.
 
-Reads the output of `probes/examples/probe_re459_history_terminators.rs` (its `base` and
-`level` lines) and Revit's export, and prints counts only:
+Reads the output of `probes/examples/probe_re459_history_terminators.rs` (its `base`,
+`episode` and `level` lines) and Revit's export, and prints counts only:
 
     history base: <n> of 4 copies equal the first
+    history base: equal to the oldest episode's GUID: <0|1> of 1
+    history base: equal to the newest episode's GUID: <0|1> of 1
     history base: IfcProject equal to the base XOR -16: <k> of <n>
     history base: IfcBuilding equal to the base XOR -15: <k> of <n>
     history base: IfcSite equal to the base XOR -14: <k> of <n>
     history base: IfcBuildingStorey equal to the base XOR a Level's ElementId: <k> of <n>
     history base: IfcBuildingStorey paired with the Level of its name, equal: <k> of <n>
+    history base: IfcBuildingStorey equal to the oldest episode's GUID XOR a Level's ElementId: <k> of <n>
+
+With `--list` (Measure passes it) it also prints a `list` line for each project, building,
+site and storey that is not equal, with its name and the Level of that name: never kept
+for a model whose export has no licence (the scrub keeps only the `history base:` lines).
 
 Usage:
 
-    python3 tools/re/history_base_vs_ifc.py <probe output> <revit.ifc>
+    python3 tools/re/history_base_vs_ifc.py <probe output> <revit.ifc> [--list]
 
 Needs IfcOpenShell (the version tools/ci/requirements-ifc.txt pins).
 """
@@ -61,13 +68,18 @@ def xor_id(global_id, ident):
 
 
 def main(argv):
-    if len(argv) != 3:
+    flags = [a for a in argv[1:] if a.startswith("--")]
+    args = [a for a in argv[1:] if not a.startswith("--")]
+    if len(args) != 2 or any(f != "--list" for f in flags):
         sys.exit(__doc__)
-    bases, levels = [], {}
-    for line in open(argv[1], encoding="utf-8", errors="replace"):
+    listing = "--list" in flags
+    bases, levels, episodes = [], {}, {}
+    for line in open(args[0], encoding="utf-8", errors="replace"):
         parts = line.rstrip("\n").split(" ", 3)
         if parts[0] == "base" and len(parts) == 3 and len(parts[2]) == 32:
             bases.append(canonical(bytes.fromhex(parts[2])))
+        elif parts[0] == "episode" and len(parts) == 3 and len(parts[2]) == 32:
+            episodes[int(parts[1])] = canonical(bytes.fromhex(parts[2]))
         elif parts[0] == "level" and len(parts) == 4:
             levels.setdefault(parts[3], int(parts[1]))
     if not bases:
@@ -75,18 +87,36 @@ def main(argv):
         return 0
     base = bases[0]
     print(f"history base: {sum(1 for b in bases if b == base)} of {len(bases)} copies equal the first")
-    model = ifcopenshell.open(argv[2])
+    oldest = episodes.get(0)
+    newest = episodes.get(max(episodes)) if episodes else None
+    print(f"history base: equal to the oldest episode's GUID: {int(base == oldest)} of {int(oldest is not None)}")
+    print(f"history base: equal to the newest episode's GUID: {int(base == newest)} of {int(newest is not None)}")
+    model = ifcopenshell.open(args[1])
     for kind, fake in FAKE_IDS.items():
         found = model.by_type(kind)
-        equal = sum(1 for e in found if xor_id(e.GlobalId, fake) == base)
-        print(f"history base: {kind} equal to the base XOR {fake}: {equal} of {len(found)}")
+        equal = {e.id() for e in found if xor_id(e.GlobalId, fake) == base}
+        print(f"history base: {kind} equal to the base XOR {fake}: {len(equal)} of {len(found)}")
+        if listing:
+            for e in found:
+                if e.id() not in equal:
+                    print(f"list {kind} {e.GlobalId} {e.Name!r}")
     storeys = model.by_type("IfcBuildingStorey")
     ids = set(levels.values())
-    anyone = sum(1 for s in storeys if any(xor_id(s.GlobalId, i) == base for i in ids))
-    print(f"history base: IfcBuildingStorey equal to the base XOR a Level's ElementId: {anyone} of {len(storeys)}")
+    anyone = {s.id() for s in storeys if any(xor_id(s.GlobalId, i) == base for i in ids)}
+    print(f"history base: IfcBuildingStorey equal to the base XOR a Level's ElementId: {len(anyone)} of {len(storeys)}")
     named = [(s, levels[s.Name]) for s in storeys if s.Name in levels]
-    paired = sum(1 for s, ident in named if xor_id(s.GlobalId, ident) == base)
-    print(f"history base: IfcBuildingStorey paired with the Level of its name, equal: {paired} of {len(named)}")
+    paired = [s for s, ident in named if xor_id(s.GlobalId, ident) == base]
+    print(f"history base: IfcBuildingStorey paired with the Level of its name, equal: {len(paired)} of {len(named)}")
+    if oldest is not None:
+        from_oldest = [s for s in storeys if any(xor_id(s.GlobalId, i) == oldest for i in ids)]
+        print(
+            "history base: IfcBuildingStorey equal to the oldest episode's GUID XOR a Level's ElementId: "
+            f"{len(from_oldest)} of {len(storeys)}"
+        )
+    if listing:
+        for s in storeys:
+            if s.id() not in anyone:
+                print(f"list IfcBuildingStorey {s.GlobalId} {s.Name!r} level of that name: {levels.get(s.Name)}")
     return 0
 
 
