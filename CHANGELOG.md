@@ -8,6 +8,301 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-11-12
+
+0.20.0 is mostly hardening against crafted files. Such a file can no longer crash the browser viewer through a record's length or an overflow in a value it stores, make a read take exponential time or time that grows with the square of its element count, exhaust the stack through the chains it sets, or write its own text into an export's STEP (#1815, #1831, #1833, #1845). No real file of the measured corpus changes from any of those fixes. A reader that stops at one of the new work budgets says so: a `work_budget_reached` skipped item and a warning, and no export file unless a partial export is allowed.
+
+It also changes what users of real files get:
+- A wall, floor, ceiling or roof type edited since an earlier save keeps its layers on Revit 2024 and later, so 180 elements of the BIM4LCA files gain their type and its layers (#1802, RE-446).
+- The project's display units are read from its Project Units (RE-445).
+- 105 duct fittings of Autodesk's Revit 2023 MEP sample are drawn from their saved surfaces instead of boxes (RE-443).
+- The first run of each of `rac_advanced` 2024's five stairs reads its own settings (#1845).
+- Each GLB material says whether its colour and alpha are the file's (#1812).
+
+The saved-graphics pass of a default export keeps no inflated copy of the partitions it walks, and each of its reads visits only the partitions holding a record it selects (#1694).
+
+Not measured, and said in each entry:
+- The layer rule of #1802 rests on one project, the BIM4LCA files, the only model that holds a type it reaches. Revit 2008 to 2023 keep dropping such a type (#1805).
+- None of RE-443's 105 duct fittings passes the 0.001 ft shape threshold against the native reference at its default tessellation, and that reference is not shared.
+- No measured material is read the way #1820 changes, so no export shows it.
+- The crafted-file bounds are exercised by crafted inputs, not by any real file, none of which comes near them.
+
+MEASURED-BLOCK-TODO
+
+### Upgrading from 0.19
+
+- Every export's IFC header names rvt-rs 0.20.0, so an export that is otherwise
+  unchanged still differs from 0.19.0's there.
+- **Rust: `gltf::Material` has a new field, `extras` (#1812).** Code that builds
+  one with a struct literal sets it. Every GLB material now carries
+  `extras.colourSource` and `extras.alphaSource`, `"file"` or `"rvt-rs"`.
+- **Diagnostics name the project's display units (RE-445).**
+  `recovered_unit_identifiers` lists the units the project sets for length,
+  area, volume, angle, mass and time. On Core Interior these are feet and
+  fractional inches, square and cubic feet, degrees, pounds and seconds, where it
+  listed metres, square inches and cubic inches. A new `project_display_units`
+  lists every spec's unit. The "Unmapped Revit unit identifiers were preserved in
+  diagnostics" warning is gone. `fractionalInches` is read as inches.
+- **A file that reaches a work budget is reported, and its export not written
+  unless a partial export is allowed (#1833).** The export reports a
+  `work_budget_reached` skipped item and a `Work budget reached:` warning per
+  reader. `rvt-ifc`, `rvt-gltf`, Python's `write_ifc` and the MCP server's
+  exports then write no file unless a partial export is allowed; the CLIs exit
+  with status 3. No real file of the measured corpus reaches one.
+- An IFC surface style whose material's transparency was not read leaves the
+  attribute unset (`$`) instead of writing 0 (#1820).
+
+### Changed
+
+- **Each read of the saved-graphics pass visits only the partitions that hold
+  a record it selects (#1694).** The handle's record index, which answers
+  that without a walk, held only the elements' records (channel 102). So every
+  read of the saved graphics (channel 103) walked every partition twice, once
+  to find its records and once to decode them, whatever it selected. Each
+  channel a read selects alone now has an index of its own, built by the first
+  such read. The exports are unchanged.
+
+- **The saved-graphics pass of a default export keeps no inflated copy of the
+  partitions it walks (#1694).** The handle held every inflated partition at
+  the pass's peak: 36% to 43% of the peak resident memory of the largest
+  files. The pass now indexes its records from those copies before letting
+  them go. Each of its reads then inflates only the groups that hold a record
+  it selects. On the largest files one partition holds nearly every group, so
+  inflating whole partitions cost a walk of the file for each read.
+
+- **Each GLB material says whether its colour, and its alpha, are the Revit
+  file's or ones rvt-rs chose (#1812).** Every material carries
+  `extras.colourSource` and `extras.alphaSource`, each `"file"` where the
+  value is the Revit material's own and `"rvt-rs"` where rvt-rs chose it.
+  The second covers the category colours an element with no material of its
+  own is drawn in, translucent windows and faint rooms included, the grey of
+  a material whose colour was not read, and the opaque alpha of one whose
+  transparency was not read. A consumer that stores colour or opacity as
+  model data could not tell them apart before. Nothing else in the GLB
+  changes, and the IFC is unchanged.
+
+  A view's visibility and graphics overrides are not read, and the support
+  matrix now says so. Revit's own IFC export ignores them too: it takes colour
+  and transparency from the element's material, or else its category's.
+
+  Breaking for code that builds a `gltf::Material` with a struct literal: it
+  has a new field, `extras`.
+
+- **The export reads the project's display units from the parameter
+  definitions pass it already makes, rather than walking the file again for
+  its `UnitsElem` (#1816).** That pass decodes every `UnitsElem` the units
+  read would, in the same order, so the units, and any error reading them,
+  are the same. The read walks the file itself only where no such pass has
+  been made. Exports and their diagnostics are unchanged.
+
+- **A Revit 2015 to 2023 export reads its walls' records once, not twice, for
+  whether each wall's top is joined (#1824).** The read of the walls' records
+  that draws their bodies already finds each top join. It now keeps that
+  answer for the export's later readers of it, and reads the walls it draws
+  no body for (those with no type in the export) in the same pass, for their
+  type, top join and load bearing alone. Before, the later readers read every
+  wall's record again for those members. Exports are unchanged.
+
+### Fixed
+
+- **A wall, floor, ceiling or roof type edited since an earlier save keeps its
+  layers (#1802, RE-446).**
+  A type edited after an earlier save is rewritten into a newer partition and
+  its older copy stays, and the layers of a type whose copies gave different
+  lists were dropped, so every type edited since had none: its walls no
+  `IfcWallType`, `Width` or `Reference`, its floors and ceilings no layer set.
+  On Revit 2024 and later such a type now takes the copy of the partition the
+  element index routes it to (the rule the transform reader uses, RE-216), and
+  none where no partition is named or that partition's copies disagree. On the
+  BIM4LCA files 180 elements gain their type and its layers: the 14 walls of
+  `VS-2.CLTpinta` and `SPR-1` of the timber office at building permit (the
+  first type's width is Revit's 0.158 m, its older copy's 0.166 m is not), the
+  concrete housing's 34 walls as built and 18 at permit, 108 coverings, 4
+  slabs and 2 roofs. Every layer set written is within 0.001 ft of Revit's, and
+  over the 42 models with a Revit export the quantities equal to Revit's rise by
+  358 and the property values by 488, none different; the three values of the
+  timber office that RE-444 stopped writing for want of these layers (a wall's
+  `NetVolume`, an opening's `Height` and `Width`) are written again. Six
+  exports move (the timber office at permit, the concrete housing and the
+  timber housing as built and at permit, the terrain timber housing) and 120 are
+  byte for byte unchanged. What it costs: 6 walls of the timber office at permit
+  and 6 walls and 16 coverings of the concrete housing at permit take another
+  body, and two wall ends of the housing that were exact are 0.27 and 0.29 m off
+  (#1806); the 19 type objects it creates carry no `IsExternal`, as no type
+  does (#1185). Not done: Revit 2008 to 2023 keep dropping such a type, because
+  the current copy gave four floors of a held-out Revit 2020 file materials
+  Revit's export does not give (#1805), and no model but the BIM4LCA files holds
+  a type this reaches, so the rule rests on one project.
+
+- **An IFC surface style no longer states that a material is opaque when its
+  transparency was not read (#1820).** A material whose colour was read but
+  whose transparency was not used to be written with a transparency of 0,
+  fully opaque, a value no file gave. That optional attribute is now left
+  unset (`$`). No material of the measured models is read that way, so no
+  export changes.
+
+- **Saved ruled surfaces with a point profile (RE-443).** A zero profile
+  pointer now uses its separately saved point, for measured point/arc
+  patches with a unit envelope and rectangular trim. Bodies containing
+  these patches qualify only by the source record's duct-fitting category,
+  independently of their exported IFC class. On Autodesk's public Revit
+  2023 basic MEP sample, 105 duct fittings gain bodies instead of boxes;
+  two sanitary terminals remain boxes with an explicit refusal and are
+  negative controls. Default native-IFC comparison of the fittings is within
+  0.697 mm and 0.179% volume; none passes the stricter 0.001 ft shape threshold
+  by default, while all 105 do with fine reference tessellation. Unmeasured
+  categories, combinations and trims remain refused. The report includes
+  pinned public bytes, category-override controls and local native-reference
+  figures. The native reference is not shared: redistribution terms are not
+  established. One cell along the straight point/arc generators retains the
+  reviewed arc sampling: the 105 admitted bodies hold 64,380 triangles
+  (613 on average, 636 maximum). The 2024 MEP IFC grows from 103.6 to 107.5 MB.
+  Snowdon Towers HVAC retains 32 recovered duct fittings with 5,856 triangles
+  (183 on average): 65.5 to 65.9 MB. RE-443 separates the current local checks
+  from the maintainer's Measure of the earlier 107-body scope.
+
+- **The export reads the project's display units from its `UnitsElem`
+  record, one per spec, instead of counting unit strings, and no longer warns
+  about units of specs the IFC has no use for (RE-445).** The diagnostics'
+  `recovered_unit_identifiers` are now the units the project's Project Units
+  set for length, area, volume, angle, mass and time: Autodesk's 2024 Core
+  Interior and Snowdon Towers give feet and fractional inches, square and
+  cubic feet, degrees, pounds and seconds, where the count gave metres,
+  square inches and cubic inches; it gave the metric `rac_basic` and RE1
+  Architecture square inches and pounds too, and they now give millimetres,
+  square and cubic metres and kilograms. The warning "Unmapped Revit unit
+  identifiers were preserved in diagnostics", which listed the electrical,
+  HVAC and structural units every multi-discipline template sets (130 of
+  them on Core Interior), is gone; a warning names a display unit of the six
+  only where no IFC unit is known for it. A new `project_display_units`
+  lists the display unit of every spec (133 to 150 on the corpus). A family
+  whose records the native walk does not read takes its units from the
+  partition's string records where their maps all agree. Revit 2015 to 2020
+  files keep their units without spec names and are not read, as before. The
+  IFC is unchanged: its values and unit assignment stay SI. `fractionalInches`
+  is now read as inches (it was feet) and the diagnostics label a kilogram
+  `KILO GRAM` and a gram `GRAM` (they said `GRAM` and `MILLI GRAM`).
+
+### Security
+
+- **A crafted file can no longer crash the browser viewer through a native
+  record's length, or make a curved face's trim take unbounded work (#1815).**
+  A record group whose length field put its end within 4 bytes of the address
+  limit panicked the 32-bit and wasm32 builds the viewer runs. The group is now
+  refused, and the rest of the file reads on. A cylinder face's trim ring could
+  take 100,000 points from every edge it shares with a plane. It is now held to
+  20,000 in all, and an element with a face over that is drawn without its
+  saved mesh. The cuts of a trimmed parametric face, which could ask about
+  4e10 comparisons of a hostile trim, are held to 250,000,000. No real file of
+  the measured corpus reaches either bound. The walker's two-column container
+  read is checked as its trial walk already was, though no file reaches it
+  through the public reader.
+
+- **A crafted file can no longer panic a reader through an overflow in
+  arithmetic on a value it stores (#1831).** An element's creation episode at
+  `u32::MAX`, or two wall shell-layer counts whose sum passes the address
+  limit, panicked the 32-bit and wasm32 builds the viewer runs. Extreme stair
+  riser indices, an increment's episode at `i64::MAX`, an electrical circuit
+  list's entry count and a very large `TransmissionData` stream overflowed
+  where overflow checks are on. Each sum is now checked, and a value that
+  overflows is refused. No real file of the measured corpus changes.
+
+- **A crafted file can no longer make a native read or the saved-graphics
+  pass take exponential time (#1833).** The layout of an element index row
+  was bounded only by depth, so a schema whose classes each name the next
+  twice took 2^127 steps. It is now held to 10,000 class visits and fields,
+  where a real row has at most 40 leaves. The check that a graphics branch
+  holds only curves walked a child shared at every level once per path. It is
+  now held to 100,000 calls, as the graphics walk itself is, and a branch over
+  that is walked, or refused, as one that holds more than curves. No real file
+  of the measured corpus changes.
+
+- **A crafted file can no longer hang a read of pipe connectors, MEP curve
+  fields, room parameters, room solids, sketch loops or empty saved-mesh
+  faces (#1833).** Each did work that grew with the square or more of a
+  count the file sets. Each now finds its answer through an index built
+  once, or counts its work against a budget no real model comes near.
+  Room parameters go through the stream's listed data objects, each
+  checksum read from sums kept along the stream. Room solids are kept for
+  the stream's rooms alone. Empty faces come from one walk of each graph,
+  and a pipe end's keys through a set. Past a budget the reader leaves the
+  element as an unread stream leaves it, and the export says so: a
+  `work_budget_reached` skipped item counting each reader's stops, a
+  `Work budget reached:` warning per reader, and from `rvt-ifc`,
+  `rvt-gltf`, Python's `write_ifc` and the MCP server's exports, no file
+  unless a partial export is allowed (exit status 3 from the CLIs). The
+  memo of element-data header positions is held under 64 MiB, and the memo
+  of inflated partitions under 16 GiB. No real file of the measured corpus
+  changes.
+
+- **Six export and reader passes no longer take time that grows with the
+  square of a crafted file's element count (#1845, #1833).** Each searched a
+  list once for every element where an index answers at once: the IFC type
+  objects, the host of each face-hosted cut, the property sets each piece of
+  an element written in pieces repeats, each wall's join partners, the
+  family blocks a content key names, and the project units each `UnitsElem`
+  record registers again. Each now builds its index once. Every export is
+  the same as before.
+
+- **A crafted file can no longer exhaust the stack or hang the export
+  through the chains and counts it sets (#1845).** A wall's profile cuts,
+  one boolean level each, are written and meshed by a loop instead of by
+  recursion. The scene graph hangs an element at most 16 hosts below its
+  storey, as the IFC's storey lookup already did, so doors chained through
+  each other no longer recurse as deep as the chain. The parts a covering
+  element cuts from a wall's plan (1,024), the pieces left of a stub wall
+  inside its neighbours (128), a roof envelope's points (about a million),
+  the mullion ends in one grid cell (64) and the outline tests of space
+  containment (a billion) each have a bound no real model comes near. Past
+  one, that one step is left undone: the wall keeps its plan, a crowded
+  cell counts no partner, nothing is contained in a space. No real file of
+  the measured corpus changes.
+
+- **A crafted file can no longer write its own text into an export's STEP,
+  fail a whole IFC export over one number, or write NaN or infinity into
+  the glTF or plan SVG (#1845).** The comment after an export's header held
+  the file's PartAtom id unchanged, so a `*/` in it ended the comment and
+  the rest became part of the file; it is now kept inside the comment. A
+  stored number that is not finite, or larger than 1e30 (twenty orders past
+  any model's coordinates), reached the export, where the IFC writer
+  refused the whole file. It is now read as absent wherever a stored
+  number is decoded (`le_bytes`, which every partition scanner reads
+  through, the walker and the native graphs), so no sum or difference made
+  from it becomes infinite. A sum of stair counts that would overflow
+  leaves the property out. The glTF and the plan SVG, which had no check of
+  their own, now draw an element whose transform or outline is not finite
+  as no geometry.
+- **A stair run reads its own "begin" and "end with riser" settings where a
+  NaN came first in its data (#1845).** A NaN passed the test that matches
+  the run's record to its sketch, so the first run of each of
+  `rac_advanced` 2024's five stairs took its settings from the wrong bytes:
+  it had 14 treads, not 12, and was drawn from its saved mesh, not its
+  sketch. On the held-out Revit 2024 model, the run this moves now has
+  Revit's tread count, length and net volume.
+
+### Research
+
+- **A wall whose line drifts a hair off a model axis keeps its line's ends
+  (RE-447, #1806).** Two walls of the BIM4LCA concrete housing at permit lost
+  an exact end when #1807 gave them their type's thickness. Their lines drift
+  about 5e-8 ft across an axis, so they are drawn from their line's ends and
+  not their joined record box's. Over the 21 ends of four BIM4LCA models where
+  the box and the line differ, the box is nearer Revit's end at 12 and the
+  line at 9. At each of those 9, Revit's end lies on a layer plane inside a
+  joined wall, which no box end reaches. The best per-end rule, from the end's
+  own join record, picks right at 19 of the 21 and is never worse than the
+  line. It was fitted on those same ends, though, and no other wall of the
+  119 exports drifts. So nothing ships, and the ends join #1814.
+  `tools/re/wall_ends_list.py` now lists every wall with an end off by more
+  than the tolerance, not only the 40 largest.
+
+- **A probe lists every native pass a default export makes (`probe_pass_ledger`).**
+  Each `extract` and `extract_graphs` walk, and each use of the handle's
+  parameter-definitions pass, is listed with the line that asked for it, the
+  partitions it walked, the bytes it inflated and its time. A selection read
+  twice, and a definitions pass made again after the export let it go, are
+  named. It is kept only while a probe turns it on, so exports are unchanged.
+
 ## [0.19.0] — 2026-11-12
 
 0.19.0 takes back much of the time and memory that 0.18.0's saved-mesh default cost, draws more of the elements that stayed bounding boxes (which makes the IFC of some files larger), and writes more of what Revit's own export writes for the bodies it draws. A decoded graph's fields take a sixth of the memory they did (`rvt::research::graph_value::Fv`), and the saved-graphics pass builds only the fields meshing reads, cuts its batches by the bytes of the symbols they read and meshes the owners that name nothing 5,000 objects at a time (#1694): the default export of Autodesk's 28 samples of Revit 2023 to 2027 takes a median 0.64 times the peak memory of 0.18.0's (0.29 to 1.18) and 0.89 times the time (0.75 to 1.27), and against 0.17.0, which drew doors and windows alone, 1.04 to 1.92 times the time and 1.04 to 1.69 times the peak memory where 0.18.0 took 1.13 to 1.85 and 1.42 to 4.38. A revolved face is cut into steps by the reach of its profile over its own range, and a face cut by its trim is cut across at the steps of the chord and of the trim and not at every point of it (#1737, RE-435, RE-437), which takes 5% to 14% off the triangles of the files each reaches. More elements are drawn from their saved meshes: faces where a plane meets a cylinder across both of its parameters (175 elements of Autodesk's 2024 samples, RE-426), faces whose trim is not the rectangle of their parameters or has holes (119 elements of Snowdon Towers Architectural and 43 of each BIM4LCA office, RE-430), plane rings that visit a vertex twice (21 sanitary terminals, RE-434), four of Snowdon Towers Architectural's six block roofs (RE-422), and the curtain mullions and panels that were drawn as their turned box (RE-421). A beam gets its six base quantities from its saved mesh (RE-423) and its `Length`, `Span`, `Slope` and `Roll` from its location line (RE-428); a column its `Length`, `CrossSectionArea`, `OuterSurfaceArea` and `GrossVolume` (RE-424, RE-425) and a hollow section its `NetVolume` (RE-247); a curtain mullion its `NetVolume`, `NetSurfaceArea` and `Length` (RE-404, RE-418, RE-432, RE-433, RE-436, RE-438, RE-439, RE-441); a wall that is a prism less its openings its side areas, gross volume and height (#1046); a building element proxy its `NetVolume` (RE-387); and walls, floors and stairs their `LoadBearing` (RE-429). The housing's railing types have the name Revit gives them (RE-431), an element framed in several partitions is read from its newest frame (RE-444), and an element whose "Export to IFC As" names `IfcGeographicElement` is one (#1772). Furniture, railings, walls, ramps, light fixtures and pipe segments carry their own or their type's `PredefinedType` (#1681, #1713), and a Revit 2027 save is written without one on the fourteen classes whose exporter leaves it off (#1692, #1716): this is the one change that moves an export on purpose for every user of a 2027 file. A planar face whose rings hold more than 10,000 points, or whose boundary search would take more than 250 million steps, is refused and keeps its box instead of being triangulated, so a hostile file cannot take an export hours (#1748, #1770).
