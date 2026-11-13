@@ -864,7 +864,17 @@ pub fn append_typed_production_elements(
             continue;
         }
 
-        let mapping = category_map::lookup(&decoded.class);
+        // #1841: a floor of the Structural Foundations category is a slab, not a
+        // footing; the record names its own class (RE-76).
+        let record_class = decoded.fields.iter().find_map(|(name, value)| match value {
+            InstanceField::String(text)
+                if name == crate::partition_schema_mvp::REVIT_CLASS_FIELD =>
+            {
+                Some(text.as_str())
+            }
+            _ => None,
+        });
+        let mapping = category_map::lookup_for_record(&decoded.class, record_class);
         if mapping.is_none() && policy.require_mapped_ifc_type {
             continue;
         }

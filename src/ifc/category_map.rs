@@ -455,6 +455,38 @@ pub fn lookup(revit_class: &str) -> Option<&'static Mapping> {
     MAPPINGS.iter().find(|m| m.revit_class == revit_class)
 }
 
+/// A floor of the Structural Foundations category, which Revit's export writes
+/// as `IfcSlab` with `BASESLAB` and not as `IfcFooting` (#1841). Autodesk's
+/// exporter source (revit-ifc, CLEANROOM.md source 5, cited and not quoted)
+/// sends every `Floor` to `FloorExporter` whatever its category in
+/// `Exporter.cs`, and only a `WallFoundation` to `FootingExporter`; the class
+/// then comes from the class table, whose default maps Floors to `IfcSlab` and
+/// the Structural Foundations category to `IfcSlab` `BASESLAB`. A reporter's
+/// Revit 2027 structural model, read with its Revit export (counts only),
+/// has 59 such floors that Revit writes as `IfcSlab`, with `BASESLAB` on the
+/// four types of them and none on the occurrences, which is what rvt-rs's
+/// 2027 rule for slabs gives ([`predefined_type_left_out`]). No model with a
+/// Revit export that Measure holds has a foundation of any kind.
+pub static FOUNDATION_SLAB: Mapping = Mapping {
+    revit_class: "StructuralFoundation",
+    ifc_type: "IFCSLAB",
+    predefined_type: Some("BASESLAB"),
+};
+
+/// [`lookup`] for an element whose record names its own class
+/// (`record_class`, RE-76): a floor of the Structural Foundations category is
+/// a slab ([`FOUNDATION_SLAB`]), where an isolated or wall footing, a family
+/// instance or a `ContFooting`, stays the category's footing (#1841).
+pub fn lookup_for_record(
+    revit_class: &str,
+    record_class: Option<&str>,
+) -> Option<&'static Mapping> {
+    if revit_class == "StructuralFoundation" && record_class == Some("Floor") {
+        return Some(&FOUNDATION_SLAB);
+    }
+    lookup(revit_class)
+}
+
 /// IFC entity types a per-element Revit "IFC Export As" override may
 /// redirect a decoded element to (#212, RE-22).
 ///
