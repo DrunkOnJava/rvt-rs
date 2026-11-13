@@ -507,13 +507,20 @@ def release_constants(release_jobs, publish_jobs):
         return len(include) if isinstance(include, list) else None
 
     want = {"RELEASE_WHEELS": size(publish_jobs, "build-wheels"), "RELEASE_ARCHIVES": size(release_jobs, "build")}
-    problems = []
+    problems, seen = [], set()
     for name, job in sorted(release_jobs.items()):
-        for step in job.get("steps") or []:
+        # Job-level and step-level env both reach a step's script; reading only the steps let a job-level value
+        # drift from the matrix unchecked, and a constant set nowhere passed (#1882).
+        for env in [job.get("env") or {}] + [step.get("env") or {} for step in job.get("steps") or []]:
             for key, expected in want.items():
-                given = (step.get("env") or {}).get(key)
-                if given is not None and str(given) != str(expected):
+                given = env.get(key)
+                if given is None:
+                    continue
+                seen.add(key)
+                if str(given) != str(expected):
                     problems.append(f"{RELEASE_WORKFLOW}: job '{name}' sets {key}={given!r}, but the matrix it counts has {expected} entries")
+    for key in sorted(set(want) - seen):
+        problems.append(f"{RELEASE_WORKFLOW}: no job or step sets {key}, which the checksum and page steps count against")
     return problems
 
 
@@ -541,6 +548,10 @@ def release_page_problems(doc, publish_doc=None):
             problems.append(f"{where}: job '{name}' has a job-level `if` above `upload` and `image`; put it on its steps")
     if needs_of(jobs["page"]) != ["upload"]:
         problems.append(f"{where}: job 'page', which fails a release whose page is missing, must need exactly `upload`")
+    # `page` may run after a failed upload (so it reports), but any other condition could skip the one job that
+    # fails a release with a wrong page (#1882).
+    if condition(jobs["page"]) not in (None, "inputs.upload", "!cancelled() && inputs.upload", "always() && inputs.upload"):
+        problems.append(f"{where}: job 'page' runs on {condition(jobs['page'])!r}; it must run whenever `upload` does")
     summed, attested = downloads(jobs["checksums"]), downloads(jobs["attest"])
     for selector in sorted(PYTHON_FILES - summed):
         problems.append(f"{where}: job 'checksums' does not download `{selector}`, so SHA256SUMS cannot list the Python files on the release page")
@@ -619,6 +630,11 @@ def main():
         errors.append("Cargo.toml: no package rust-version")
     else:
         errors += msrv_problems(root, include if isinstance(include, str) else "", manifests, DELIBERATE_MSRV)
+        # Both matrix strings (the pull request's and main's) carry an msrv entry; with one gone, msrv_problems
+        # reads the other alone and the docstring's "both" no longer holds (#1882).
+        strings = len(re.findall(r"'(\[[^']*\])'", include if isinstance(include, str) else ""))
+        if strings != 2:
+            errors.append(f"ci.yml: {strings} matrix strings in the test job's include, not the two (pull request and main) the msrv check reads")
         texts = {path: (ROOT / path).read_text() if (ROOT / path).is_file() else None for path in PROSE_MSRV_FILES}
         mcp = manifests.get(MCP_MANIFEST)
         if mcp is None:
