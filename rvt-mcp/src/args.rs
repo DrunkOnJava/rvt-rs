@@ -4,6 +4,11 @@ use rvt::ifc::{ExportOptions, ExportQualityMode, SavedMeshChoice};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
+/// The longest phase name the server takes. It keeps every phase it is asked
+/// for (so that asking again does not read the file again), and no phase of a
+/// Revit project has a name near this long.
+pub const MAX_PHASE_CHARS: usize = 256;
+
 /// The phase an argument names: none when it is left out or blank.
 pub fn phase_of(phase: &Option<String>) -> Option<&str> {
     phase
@@ -50,9 +55,32 @@ pub struct ListElementsArgs {
     pub class: Option<String>,
     /// Only elements on the storey with this name (see `list_levels`).
     pub level: Option<String>,
-    /// How many elements to return: 100 by default, at most 1000.
+    /// How many elements to return: 100 by default, from 1 to 1000. A value
+    /// outside that range is an error.
+    #[schemars(range(min = 1, max = 1000))]
     pub limit: Option<u32>,
     /// How many matching elements to skip, for the next page.
+    pub offset: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListRoomsArgs {
+    /// The `model_id` that `open_model` returned, or the path of the file.
+    #[serde(alias = "model_id", alias = "path")]
+    pub model: String,
+    /// The project phase to read, by its name (exactly) or its ElementId,
+    /// instead of the project's last (`rvt-ifc --phase`). A phase named is
+    /// exact: naming the last phase differs from leaving `phase` out where the
+    /// last phase holds no room, since leaving it out then reads the rooms of
+    /// the latest phase that holds any. It applies to a file
+    /// path: a `model_id` names the phase its model was opened at. An unknown
+    /// phase is an error that lists the file's phases.
+    pub phase: Option<String>,
+    /// How many spaces to return: 100 by default, from 1 to 1000. A value
+    /// outside that range is an error.
+    #[schemars(range(min = 1, max = 1000))]
+    pub limit: Option<u32>,
+    /// How many spaces to skip, for the next page.
     pub offset: Option<u32>,
 }
 

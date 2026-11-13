@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 
 use rvt::ifc::ELEMENT_RECORD_PROPERTY_SET;
+use rvt::ifc::ExportDiagnostics;
 use rvt::ifc::IfcModel;
 use rvt::ifc::element_provenance::ValueSource;
 use rvt::ifc::entities::{IfcEntity, Property, PropertySet, PropertyValue};
@@ -16,6 +17,7 @@ use rvt::ifc::step_writer::written_names;
 use rvt::reader::UnreadStream;
 use serde_json::Value;
 
+use crate::bounds;
 use crate::schema::{
     DecisionOut, DiagnosticsOut, DiagnosticsSummary, ElementCounts, ElementDetail,
     ElementProvenance, ElementRow, EntityRefOut, ExplainElementOut, LevelOut, LevelRefOut,
@@ -39,19 +41,19 @@ fn text_property(set: Option<&PropertySet>, name: &str) -> Option<String> {
         .and_then(|property| match &property.value {
             PropertyValue::Text(text)
             | PropertyValue::Label(text)
-            | PropertyValue::Identifier(text) => Some(text.clone()),
+            | PropertyValue::Identifier(text) => Some(bounds::clip(text)),
             _ => None,
         })
 }
 
 fn non_empty(text: &str) -> Option<String> {
-    (!text.is_empty()).then(|| text.to_string())
+    (!text.is_empty()).then(|| bounds::clip(text))
 }
 
 fn storey_name(model: &IfcModel, storey_index: Option<usize>) -> Option<String> {
     storey_index
         .and_then(|index| model.building_storeys.get(index))
-        .map(|storey| storey.name.clone())
+        .map(|storey| bounds::clip(&storey.name))
 }
 
 /// A value source as the answers write it.
@@ -112,7 +114,9 @@ fn provenance(computed: &Computed, index: usize, sources: bool) -> Option<Elemen
             .and_then(|entry| entry.enclosing_record_id)
             .map(|id| id.to_string()),
         class_tag: source.and_then(|entry| entry.class_tag).map(u32::from),
-        class_name: source.and_then(|entry| entry.class_name.clone()),
+        class_name: source
+            .and_then(|entry| entry.class_name.as_deref())
+            .map(bounds::clip),
         native_record: source
             .and_then(|entry| entry.native.as_ref())
             .map(|native| NativeRecordOut {
@@ -120,7 +124,7 @@ fn provenance(computed: &Computed, index: usize, sources: bool) -> Option<Elemen
                 copy: native.copy.as_str().to_string(),
                 stream: native.stream.clone(),
                 offset: native.offset,
-                class_name: native.class_name.clone(),
+                class_name: native.class_name.as_deref().map(bounds::clip),
             }),
         provenance_omitted: omitted.then_some(true),
         value_sources: source
@@ -145,8 +149,8 @@ fn element_row(computed: &Computed, index: usize) -> Option<ElementRow> {
     let names = written_names(ifc_type, name, type_guid.as_deref(), property_set.as_ref());
     Some(ElementRow {
         id: type_guid.clone(),
-        name: (!names.name_is_placeholder).then_some(names.name),
-        long_name: names.long_name,
+        name: (!names.name_is_placeholder).then(|| bounds::clip(&names.name)),
+        long_name: names.long_name.map(bounds::clip_owned),
         level: storey_name(&computed.model, computed.storey(index)),
         // What the export writes on the occurrence (#1692).
         predefined_type: predefined_type.clone().filter(|_| {
@@ -183,7 +187,7 @@ fn diagnostics_summary(computed: &Computed) -> DiagnosticsSummary {
             .skipped
             .iter()
             .map(|item| SkippedOut {
-                reason: item.reason.clone(),
+                reason: bounds::clip(&item.reason),
                 count: item.count,
             })
             .collect(),
@@ -215,7 +219,7 @@ pub fn levels(computed: &Computed) -> Vec<LevelOut> {
         .enumerate()
         .map(|(index, (storey, element_count))| LevelOut {
             index,
-            name: storey.name.clone(),
+            name: bounds::clip(&storey.name),
             elevation_feet: storey.elevation_feet,
             elevation_metres: storey.elevation_feet * METRES_PER_FOOT,
             element_count,
@@ -267,7 +271,7 @@ pub fn summary(entry: &Entry, computed: &Computed) -> SummaryOut {
         file_kind: entry.identity.file_kind().to_string(),
         size_bytes: entry.identity.size,
         revit_release: computed.diagnostics.input.revit_version,
-        project_name: computed.model.project_name.clone(),
+        project_name: computed.model.project_name.as_deref().map(bounds::clip),
         release_support: computed
             .diagnostics
             .input
@@ -289,12 +293,23 @@ pub fn summary(entry: &Entry, computed: &Computed) -> SummaryOut {
     }
 }
 
+/// The diagnostics document as an answer carries it: bounded, with a note in
+/// `notes` for every list that was held (#1883). The document of a model that
+/// is not crafted is a few tens of kilobytes and is not changed.
+pub fn bounded_diagnostics(diagnostics: &ExportDiagnostics, notes: &mut Vec<String>) -> Value {
+    let mut document = serde_json::to_value(diagnostics).unwrap_or(Value::Null);
+    bounds::bound_value(&mut document, "diagnostics", notes);
+    document
+}
+
 pub fn diagnostics_out(entry: &Entry, computed: &Computed) -> DiagnosticsOut {
+    let mut notes = computed.notes.clone();
+    let diagnostics = bounded_diagnostics(&computed.diagnostics, &mut notes);
     DiagnosticsOut {
         model_id: entry.id.clone(),
-        diagnostics: serde_json::to_value(&computed.diagnostics).unwrap_or(Value::Null),
+        diagnostics,
         unread_streams: unread_out(&computed.unread),
-        notes: computed.notes.clone(),
+        notes,
     }
 }
 
@@ -375,7 +390,7 @@ fn natural_value(value: &PropertyValue) -> Value {
     match value {
         PropertyValue::Text(text)
         | PropertyValue::Label(text)
-        | PropertyValue::Identifier(text) => Value::from(text.as_str()),
+        | PropertyValue::Identifier(text) => Value::from(bounds::clip(text)),
         PropertyValue::Integer(number) | PropertyValue::CountValue(number) => Value::from(*number),
         PropertyValue::Real(number)
         | PropertyValue::AngleRadians(number)
@@ -396,7 +411,12 @@ fn natural_value(value: &PropertyValue) -> Value {
         PropertyValue::VolumeCubicFeet(volume) => Value::from(volume * CUBIC_METRES_PER_CUBIC_FOOT),
         PropertyValue::MassPounds(pounds) => Value::from(pounds * KILOGRAMS_PER_POUND),
         PropertyValue::List(items) => Value::Array(items.iter().map(natural_value).collect()),
-        PropertyValue::Enumerated(labels) => Value::from(labels.clone()),
+        PropertyValue::Enumerated(labels) => Value::from(
+            labels
+                .iter()
+                .map(|label| bounds::clip(label))
+                .collect::<Vec<_>>(),
+        ),
         _ => Value::Null,
     }
 }
@@ -415,14 +435,14 @@ fn property_out(property: &Property, quantities: bool) -> Option<PropertyOut> {
             .parse::<f64>()
             .map_or_else(|_| Value::from(written.as_str()), Value::from);
         return Some(PropertyOut {
-            name: property.name.clone(),
+            name: bounds::clip(&property.name),
             ifc_type: None,
             quantity: Some(kind.to_string()),
             value,
         });
     }
     Some(PropertyOut {
-        name: property.name.clone(),
+        name: bounds::clip(&property.name),
         ifc_type: ifc_value_type(&property.value),
         quantity: None,
         value: natural_value(&property.value),
@@ -447,7 +467,7 @@ fn property_set_out(set: &PropertySet) -> Option<PropertySetOut> {
         "properties"
     };
     Some(PropertySetOut {
-        name: set.name.clone(),
+        name: bounds::clip(&set.name),
         kind: kind.to_string(),
         properties,
     })
@@ -461,7 +481,7 @@ fn type_out(computed: &Computed, index: usize) -> Option<TypeOut> {
     Some(TypeOut {
         element_id: object.tag.clone(),
         ifc_type: object.entity.clone(),
-        name: object.name.clone(),
+        name: bounds::clip(&object.name),
         property_sets: object
             .property_sets
             .iter()
@@ -573,10 +593,10 @@ pub fn explain_element(
             .map(|decision| DecisionOut {
                 stage: decision.stage.as_str().to_string(),
                 reason: decision.reason.clone(),
-                class: decision.class.clone(),
+                class: decision.class.as_deref().map(bounds::clip),
                 stream: decision.stream.clone(),
                 offset: decision.offset,
-                detail: decision.detail.clone(),
+                detail: decision.detail.as_deref().map(bounds::clip),
             })
             .collect(),
         _ => Vec::new(),
@@ -607,7 +627,7 @@ pub fn explain_element(
             let property_sets = element_property_sets(model, index, property_set);
             let names = written_names(ifc_type, name, type_guid.as_deref(), property_set.as_ref());
             (
-                (!names.name_is_placeholder).then_some(names.name),
+                (!names.name_is_placeholder).then(|| bounds::clip(&names.name)),
                 provenance(computed, index, true),
                 trust_markers_of(&property_sets),
             )
@@ -657,7 +677,7 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
     let level = computed.storey(index).and_then(|storey| {
         model.building_storeys.get(storey).map(|found| LevelRefOut {
             index: storey,
-            name: found.name.clone(),
+            name: bounds::clip(&found.name),
             elevation_feet: found.elevation_feet,
         })
     });
@@ -691,8 +711,9 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
                 ..
             } => Some(EntityRefOut {
                 ifc_type: ifc_type.clone(),
-                name: written_names(ifc_type, name, type_guid.as_deref(), property_set.as_ref())
-                    .name,
+                name: bounds::clip_owned(
+                    written_names(ifc_type, name, type_guid.as_deref(), property_set.as_ref()).name,
+                ),
                 global_id: computed.global_ids.get(other).cloned().flatten(),
             }),
             _ => None,
@@ -703,8 +724,8 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
     Ok(ElementDetail {
         model_id: entry.id.clone(),
         id: type_guid.clone(),
-        name: (!names.name_is_placeholder).then_some(names.name),
-        long_name: names.long_name,
+        name: (!names.name_is_placeholder).then(|| bounds::clip(&names.name)),
+        long_name: names.long_name.map(bounds::clip_owned),
         level,
         predefined_type: predefined_type.clone().filter(|_| {
             !rvt::ifc::category_map::predefined_type_left_out(
@@ -727,11 +748,25 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
     })
 }
 
-pub fn rooms(entry: &Entry, computed: &Computed) -> RoomsOut {
-    let rooms = room_rows(&computed.model)
-        .into_iter()
-        .filter_map(|row| {
-            Some(RoomOut {
+/// One page of the spaces the export writes (#1883): `limit` of them from
+/// `offset`, with how many there are.
+pub fn rooms(entry: &Entry, computed: &Computed, offset: usize, limit: usize) -> RoomsOut {
+    let mut total = 0usize;
+    let mut rooms = Vec::new();
+    for row in room_rows(&computed.model) {
+        // A row whose entity is no building element has no provenance and is
+        // not listed, so it is not counted either.
+        if !matches!(
+            computed.model.entities.get(row.entity_index),
+            Some(IfcEntity::BuildingElement { .. })
+        ) {
+            continue;
+        }
+        if total >= offset
+            && rooms.len() < limit
+            && let Some(provenance) = provenance(computed, row.entity_index, false)
+        {
+            rooms.push(RoomOut {
                 id: non_empty(&row.revit_element_id),
                 number: non_empty(&row.number),
                 name: non_empty(&row.name),
@@ -742,12 +777,17 @@ pub fn rooms(entry: &Entry, computed: &Computed) -> RoomsOut {
                 area_square_metres: row
                     .area_square_feet
                     .map(|area| area * SQUARE_METRES_PER_SQUARE_FOOT),
-                provenance: provenance(computed, row.entity_index, false)?,
-            })
-        })
-        .collect();
+                provenance,
+            });
+        }
+        total += 1;
+    }
     RoomsOut {
         model_id: entry.id.clone(),
+        total,
+        offset,
+        limit,
+        returned: rooms.len(),
         rooms,
     }
 }

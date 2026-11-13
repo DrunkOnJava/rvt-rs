@@ -856,6 +856,53 @@ pub fn write_glb(doc: &GltfDocument, bin: &[u8], out: &mut Vec<u8>) {
     out.extend_from_slice(&bin_padded);
 }
 
+/// [`write_glb`] to any writer: the header, the JSON chunk and the binary
+/// chunk go out in turn from where they are, so the binary buffer is neither
+/// copied to be padded nor copied again into a `Vec` beside itself. The bytes
+/// are the ones [`write_glb`] writes. A GLB whose length does not fit the
+/// format's 32-bit lengths is an error here and not a file with a wrapped
+/// length.
+///
+/// # Errors
+///
+/// The writer's error, or `InvalidInput` for a document that does not
+/// serialize or a GLB over 4 GiB.
+// Tracker: VW1-04.
+pub fn write_glb_to<W: std::io::Write>(
+    doc: &GltfDocument,
+    bin: &[u8],
+    out: &mut W,
+) -> std::io::Result<()> {
+    let json_text = serde_json::to_string(doc).map_err(std::io::Error::other)?;
+    // The JSON chunk is padded with ASCII spaces and the binary chunk with
+    // zeros, to 4-byte boundaries (per spec).
+    let json_pad = (4 - json_text.len() % 4) % 4;
+    let bin_pad = (4 - bin.len() % 4) % 4;
+    let json_len = json_text.len() + json_pad;
+    let bin_len = bin.len() + bin_pad;
+    let too_long = |_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "a GLB is limited to 4 GiB by the 32-bit lengths of its format",
+        )
+    };
+    let total_len = u32::try_from(12 + 8 + json_len + 8 + bin_len).map_err(too_long)?;
+    // Header: 12 bytes (magic + version + total length).
+    out.write_all(&0x4654_6C67_u32.to_le_bytes())?; // "glTF"
+    out.write_all(&2_u32.to_le_bytes())?; // version
+    out.write_all(&total_len.to_le_bytes())?;
+    // JSON chunk. Its length is below the total, which fits.
+    out.write_all(&(json_len as u32).to_le_bytes())?;
+    out.write_all(&0x4E4F_534A_u32.to_le_bytes())?; // "JSON"
+    out.write_all(json_text.as_bytes())?;
+    out.write_all(&b"   "[..json_pad])?;
+    // BIN chunk.
+    out.write_all(&(bin_len as u32).to_le_bytes())?;
+    out.write_all(&0x004E_4942_u32.to_le_bytes())?; // "BIN\0"
+    out.write_all(bin)?;
+    out.write_all(&[0_u8; 3][..bin_pad])
+}
+
 /// One-call convenience: `IfcModel` → GLB bytes.
 ///
 /// # Examples

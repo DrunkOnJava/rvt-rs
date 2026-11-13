@@ -200,12 +200,17 @@ fn answer(result: &CallToolResult) -> Value {
 }
 
 async fn start_discover() -> Client {
+    start_discover_with(&[]).await
+}
+
+/// A `server/discover` session with a server started with `arguments`.
+async fn start_discover_with(arguments: &[&str]) -> Client {
     ClientConfig::new(
         ClientCapabilities::default(),
         Implementation::new("rvt-rs-mcp-e2e", "0"),
     )
     .serve_with_lifecycle(
-        transport(),
+        transport_with(arguments),
         ClientLifecycleMode::Discover {
             preferred_versions: vec![ProtocolVersion::V_2026_07_28],
         },
@@ -226,8 +231,12 @@ async fn start_initialize() -> Client {
 }
 
 fn transport() -> TokioChildProcess {
+    transport_with(&[])
+}
+
+fn transport_with(arguments: &[&str]) -> TokioChildProcess {
     TokioChildProcess::new(tokio::process::Command::new(SERVER).configure(|command| {
-        command.env("SOURCE_DATE_EPOCH", EPOCH);
+        command.env("SOURCE_DATE_EPOCH", EPOCH).args(arguments);
     }))
     .expect("spawn rvt-rs-mcp")
 }
@@ -358,7 +367,66 @@ async fn drive(client: &Client, modern: bool, model: &Path, out: &Path, real_pro
     assert!(rows.len() <= 5);
 
     let rooms = answer(&call(client, "list_rooms", json!({ "model": model_id })).await);
-    assert!(rooms["rooms"].is_array());
+    let first_page = rooms["rooms"].as_array().expect("rooms");
+    // list_rooms is paged as list_elements is (#1883): its page says how many
+    // spaces there are, and pages of three cover the same spaces in the same
+    // order.
+    let room_total = rooms["total"].as_u64().expect("list_rooms says its total");
+    assert_eq!(rooms["offset"].as_u64(), Some(0));
+    assert_eq!(rooms["limit"].as_u64(), Some(100));
+    assert_eq!(rooms["returned"].as_u64(), Some(first_page.len() as u64));
+    let mut paged = Vec::new();
+    loop {
+        let page = answer(
+            &call(
+                client,
+                "list_rooms",
+                json!({ "model": model_id, "limit": 3, "offset": paged.len() }),
+            )
+            .await,
+        );
+        assert_eq!(page["total"].as_u64(), Some(room_total));
+        let items = page["rooms"].as_array().expect("rooms");
+        assert!(items.len() <= 3);
+        if items.is_empty() {
+            break;
+        }
+        paged.extend(items.iter().cloned());
+    }
+    assert_eq!(
+        paged.len() as u64,
+        room_total,
+        "the pages cover every space"
+    );
+    assert_eq!(
+        &paged[..first_page.len()],
+        &first_page[..],
+        "the first page is the start of the pages"
+    );
+    // A limit outside 1 to 1000 is an error, not a value quietly changed.
+    for bad in [0, 1001, 100_000] {
+        for tool in ["list_elements", "list_rooms"] {
+            let refused = call(client, tool, json!({ "model": model_id, "limit": bad })).await;
+            let message = error_text(&refused);
+            assert!(
+                message.contains("limit must be from 1 to 1000"),
+                "{tool} limit {bad}: {message}"
+            );
+        }
+    }
+    // A phase name longer than the server keeps is refused before it is kept.
+    let long_phase = "p".repeat(300);
+    let refused = call(
+        client,
+        "list_rooms",
+        json!({ "model": path, "phase": long_phase }),
+    )
+    .await;
+    assert!(
+        error_text(&refused).contains("phase is longer than 256 characters"),
+        "{}",
+        error_text(&refused)
+    );
 
     let diagnostics = answer(&call(client, "get_diagnostics", json!({ "model": model_id })).await);
     assert_eq!(diagnostics["diagnostics"]["schema_version"], 1);
@@ -1017,6 +1085,122 @@ async fn a_model_opened_at_a_phase_reads_and_exports_that_phase() {
     assert_ne!(named["model_id"], last["model_id"], "an id names its phase");
     assert_ne!(named["model_id"], existing_id.as_str());
     assert_eq!(named["room_count"], 11);
+    client.cancel().await.expect("close the client");
+}
+
+/// What an answer carries is bounded (#1883), with limits small enough to meet
+/// on the synthetic fixture: text from the file is cut and says how much was
+/// cut, a message that quotes the file is cut too, and an answer over the byte
+/// limit is refused with what to do about it, while a small answer still goes.
+#[tokio::test]
+async fn an_answer_is_bounded() {
+    let path = fixture().to_string_lossy().into_owned();
+    let client =
+        start_discover_with(&["--max-field-chars", "4", "--max-answer-bytes", "900"]).await;
+
+    // The summary is over 900 bytes (it holds the not_read text, the file's
+    // provenance and the diagnostics' summary), so it is refused, and the
+    // message names the limit and how to ask for less.
+    let refused = call(&client, "open_model", json!({ "model": path })).await;
+    let message = error_text(&refused);
+    assert!(
+        message.contains("over this server's limit of 900")
+            && message.contains("--max-answer-bytes"),
+        "{message}"
+    );
+
+    // A small answer goes: the levels of the fixture fit.
+    let levels = answer(&call(&client, "list_levels", json!({ "model": path })).await);
+    assert!(levels["levels"].is_array());
+
+    // An export's summary is not refused (the file is written by then), and
+    // the diagnostics it carries are cut like any text from the file.
+    let out = scratch("bounded");
+    let exported = answer(
+        &call(
+            &client,
+            "export_ifc",
+            json!({ "model": path, "out_path": out.join("model.ifc") }),
+        )
+        .await,
+    );
+    // Every string of the diagnostics document is cut to 4 characters and
+    // the count of what was cut, or is shorter.
+    fn longest(value: &Value) -> usize {
+        match value {
+            Value::String(text) => {
+                let cut = text.find("…[+").map_or(text.len(), |at| at);
+                text[..cut].chars().count()
+            }
+            Value::Array(items) => items.iter().map(longest).max().unwrap_or(0),
+            Value::Object(entries) => entries.values().map(longest).max().unwrap_or(0),
+            _ => 0,
+        }
+    }
+    assert!(
+        longest(&exported["diagnostics"]) <= 4,
+        "a string of the diagnostics was not cut: {}",
+        exported["diagnostics"]
+    );
+    assert!(
+        exported["diagnostics"].to_string().contains("characters]"),
+        "nothing in the diagnostics was long enough to be cut: {exported}"
+    );
+
+    // A message that quotes the file or the client is cut at 8 times the field
+    // limit, 32 characters here.
+    let missing = Path::new("/such/a/long/folder/name/that/is/not/there/model.rvt");
+    let failed = call(&client, "open_model", json!({ "model": missing })).await;
+    let message = error_text(&failed);
+    assert!(
+        message.contains("characters]"),
+        "a message over 32 characters is cut: {message}"
+    );
+    client.cancel().await.expect("close the client");
+}
+
+/// Concurrent opens of different files all finish with one place at the gate
+/// (#1883): the gate lets one file be read or decoded at a time under
+/// `--max-open-models 1`, and nothing waits for a place that is never given
+/// back. Only the last model opened is kept.
+#[tokio::test]
+async fn concurrent_opens_of_different_files_all_finish() {
+    let dir = scratch("gate");
+    let copies: Vec<PathBuf> = (0..4)
+        .map(|n| {
+            let copy = dir.join(format!("copy-{n}.rvt"));
+            std::fs::copy(fixture(), &copy).expect("copy the fixture");
+            copy
+        })
+        .collect();
+    let client = start_discover_with(&["--max-open-models", "1"]).await;
+    async fn open(client: &Client, copy: &Path) -> Value {
+        answer(&call(client, "open_model", json!({ "model": copy })).await)
+    }
+    let (a, b, c, d) = tokio::join!(
+        open(&client, &copies[0]),
+        open(&client, &copies[1]),
+        open(&client, &copies[2]),
+        open(&client, &copies[3]),
+    );
+    let ids: Vec<String> = [a, b, c, d]
+        .iter()
+        .map(|opened| opened["model_id"].as_str().expect("model_id").to_string())
+        .collect();
+    let mut distinct = ids.clone();
+    distinct.sort();
+    distinct.dedup();
+    assert_eq!(distinct.len(), 4, "four files, four models: {ids:?}");
+    let mut kept = 0;
+    for id in &ids {
+        let levels = call(&client, "list_levels", json!({ "model": id })).await;
+        if levels.is_error != Some(true) {
+            kept += 1;
+        } else {
+            assert!(error_text(&levels).contains("open_model"));
+        }
+    }
+    assert_eq!(kept, 1, "one model is kept under --max-open-models 1");
     client.cancel().await.expect("close the client");
 }
 

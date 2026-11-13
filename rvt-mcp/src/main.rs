@@ -13,8 +13,10 @@
 #![allow(clippy::result_large_err)]
 
 mod args;
+mod bounds;
 mod config;
 mod exports;
+mod gate;
 mod output;
 mod schema;
 mod server;
@@ -32,6 +34,7 @@ use rmcp::service::ServerInitializeError;
 use rvt::walker::WalkerLimits;
 
 use crate::config::Config;
+use crate::gate::Gate;
 use crate::server::RvtServer;
 use crate::store::Store;
 
@@ -65,7 +68,10 @@ impl LogLevel {
         rvt-rs-mcp (docs/mcp.md has configuration examples).\n\n\
         The limits are rvt-ifc's: a stream larger than --max-stream-bytes, or a\n\
         member that inflates past --max-inflate-bytes, is not read, and the tools\n\
-        report it. --large-model raises them for large models."
+        report it. --large-model raises them for large models.\n\n\
+        An answer is bounded too: a name or value from the file longer than\n\
+        --max-field-chars is cut, and an answer longer than --max-answer-bytes is\n\
+        refused, so a crafted file cannot make a tool return without end."
 )]
 struct Args {
     /// Raise the stream, inflate and walker-scan limits for large models:
@@ -95,9 +101,18 @@ struct Args {
     #[arg(long, value_name = "N")]
     max_walker_container_records: Option<usize>,
     /// How many decoded models the server keeps; opening another drops the
-    /// least recently used one. A large model peaks at several GB.
+    /// least recently used one. A large model peaks at several GB, so this
+    /// is also how many files are read or decoded at the same time.
     #[arg(long, value_name = "N", default_value_t = 2)]
     max_open_models: usize,
+    /// The most characters of one name, value or message from a file that an
+    /// answer carries; more are cut, and the cut says how many (default 512).
+    #[arg(long, value_name = "N")]
+    max_field_chars: Option<usize>,
+    /// The most bytes of JSON one answer may carry; a longer answer is refused
+    /// with a message that says how to ask for less (default 4 MiB).
+    #[arg(long, value_name = "BYTES")]
+    max_answer_bytes: Option<usize>,
     /// Write exports only inside this folder; a relative out_path is taken
     /// from it.
     #[arg(long, value_name = "DIR")]
@@ -129,6 +144,7 @@ impl Args {
                 .max_walker_container_records
                 .unwrap_or(defaults.max_container_records),
         };
+        let max_open_models = self.max_open_models.max(1);
         let output_dir = match &self.output_dir {
             Some(dir) => Some(
                 std::fs::canonicalize(dir)
@@ -143,8 +159,12 @@ impl Args {
                 self.large_model,
             ),
             walker_limits,
-            max_open_models: self.max_open_models.max(1),
+            max_open_models,
             output_dir,
+            max_answer_bytes: self
+                .max_answer_bytes
+                .unwrap_or(bounds::DEFAULT_ANSWER_BYTES),
+            gate: Arc::new(Gate::new(max_open_models)),
         })
     }
 }
@@ -156,6 +176,7 @@ fn main() -> ExitCode {
         .with_ansi(false)
         .with_max_level(args.log_level.level())
         .init();
+    bounds::set_field_chars(args.max_field_chars.unwrap_or(bounds::DEFAULT_FIELD_CHARS));
     let config = match args.config() {
         Ok(config) => config,
         Err(message) => {
