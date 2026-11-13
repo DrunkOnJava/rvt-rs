@@ -586,10 +586,14 @@ projectSampleTest(
 
     // The property set is a titled group with one row per property,
     // values carrying their unit and booleans reading as words.
-    const properties = info.locator('[data-group="properties"]');
+    // An element from its 2023 record carries its record's geometry set beside
+    // its other sets (Constraints, Phasing, Pset_WallCommon and more, RE-440):
+    // the checks below read that one group.
+    const properties = info
+      .locator('[data-group="properties"]')
+      .filter({ hasText: 'RvtElementRecordGeometry' });
+    await expect(properties).toHaveCount(1);
     await expect(properties).toBeVisible();
-    // An element from its 2023 record carries its record's geometry set.
-    await expect(properties).toContainText('RvtElementRecordGeometry');
     const propertyRows = properties.locator('.info-row');
     expect(await propertyRows.count()).toBeGreaterThan(3);
     // Booleans read as words rather than `true` / `false`.
@@ -645,7 +649,8 @@ projectSampleTest(
     // the diagnostics do not call material a decode gap, the panel
     // must not claim it was "not recovered" either.
     await wallNode.click();
-    await expect(info.locator('[data-group="properties"]')).toBeVisible();
+    // The wall has several property groups (RE-440); the first is enough here.
+    await expect(info.locator('[data-group="properties"]').first()).toBeVisible();
     await expect(info.locator('[data-group="material"]')).toHaveCount(0);
     await expect(info).not.toContainText(/Not recovered:[^\n]*material/);
 
