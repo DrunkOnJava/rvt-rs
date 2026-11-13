@@ -301,11 +301,32 @@ the four levels a file can reach are in the
   settings are drawn from their sketch where their saved mesh drew them (#1856),
   and `[0.20.0]` in [`CHANGELOG.md`](CHANGELOG.md) lists what each change does
   not measure.
+- **0.21.0, 2026-11-13.** The GlobalIds an export writes hold from one save of
+  a project to the next: openings, voids, fills, property sets, quantity sets,
+  material associations, containment, aggregation, type relationships, ports and
+  the further pieces of a layered floor, a slab or a curtain wall were seeded
+  from the document's `Unique Document GUID`, which changes on every save, and
+  are now seeded from the GlobalId of the entity they belong to (#1840, #1854).
+  They change once, in this release, which a clash or issue-tracking (BCF)
+  workflow sees as those entities removed and added again. `rvt-diff --elements`
+  lists what changed between two saves, keyed by GlobalId (#1843); `--redact`
+  scrubs the user name of a Linux home folder and every path of a message
+  (#1871); and the warning for element records of ElementIds the element table
+  does not declare no longer calls the IFC incomplete for what a same-save
+  comparison showed to be deleted elements (#1838). Against 0.20.0 all 146
+  measured exports move, and `diagnostics.json` is equal on all 121 that publish
+  one; the line comparisons of the two GlobalId changes found only GlobalIds
+  changed on the exports they kept. Time and peak memory are 1.00 times 0.20.0's
+  in the median. What belongs to no entity still moves between saves (the project, site,
+  building and storeys where Revit gives them no GlobalId, classifications,
+  materials, MEP systems and some types), 79 corner mullions of Autodesk's
+  `rac_advanced` 2027 save get no `IsExternal` (#1865), and `[0.21.0]` in
+  [`CHANGELOG.md`](CHANGELOG.md) lists what each change does not measure.
 
-### 0.21.0: IFC geometry and element data
+### 0.22.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.20.0, moved from the
-0.20.0 milestone when 0.20.0 shipped. Each
+The geometry and element-data work that continues after 0.21.0, moved from the
+0.21.0 milestone when 0.21.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall

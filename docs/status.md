@@ -1535,12 +1535,40 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.20.0** (2026-11-12) is the latest release: crates.io (`rvt` and
+- **v0.21.0** (2026-11-13) is the latest release: crates.io (`rvt` and
   `rvt-rs-mcp`, both published from the tag), the `rvt` wheels and sdist on
   PyPI, GitHub Release archives for Linux, macOS and Windows, and the
   container image, each checked from its published artifacts
   ([`install.md`](install.md)); docs.rs had built `rvt` when they were checked
-  (`rvt-rs-mcp` is a binary crate with no documentation there). It is mostly
+  (`rvt-rs-mcp` is a binary crate with no documentation there). The GlobalIds
+  an export writes hold from one save of a project to the next: openings,
+  voids, fills, property sets, quantity sets, material associations,
+  containment, aggregation, type relationships, ports and the further pieces of
+  a layered floor, a slab or a curtain wall were seeded from the document's
+  `Unique Document GUID`, which changes on every save, and are now seeded from
+  the GlobalId of the entity they belong to (#1840, #1854). They change once,
+  in this release, which a clash or issue-tracking (BCF) workflow sees as those
+  entities removed and added again. `rvt-diff --elements` lists what changed
+  between two saves, keyed by GlobalId (#1843); `--redact` scrubs the user name
+  of a Linux home folder and every path of a message (#1871); and the warning
+  for element records of ElementIds the element table does not declare no
+  longer calls the IFC incomplete for what a same-save comparison showed to be
+  deleted elements (#1838). Against 0.20.0 all 146 measured exports move, and
+  `diagnostics.json` is equal on all 121 that publish one; the line comparisons
+  of the two GlobalId changes found only GlobalIds changed on the exports they
+  kept, and this run compares hashes, not lines. Time and peak memory are 1.00
+  times 0.20.0's in the median over 75 files (0.94 to 1.06 times the time).
+  What it does not measure: what belongs to no entity still moves between
+  saves (the project, site, building and storeys where Revit gives them no
+  GlobalId, classifications, materials, MEP systems and some types, #1854);
+  `rvt-diff --elements` compares what rvt-rs reads, so two saves are compared
+  with one build (#1843); the 79 corner mullions of the 2027 `rac_advanced` get
+  no `IsExternal` (#1865); and the reading of #1838 rests on one model compared
+  with Revit's export of the same save, as counts. `[0.21.0]` in
+  [`CHANGELOG.md`](../CHANGELOG.md) gives what each change measures and what it
+  does not.
+- **v0.20.0** (2026-11-12): published on every channel, each checked from its
+  published artifacts. It is mostly
   hardening against crafted files: such a file can no longer crash the browser
   viewer through a record's length or an overflow in a value it stores, make a
   read take exponential time or time that grows with the square of its element
@@ -1735,7 +1763,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.20.0 has, and is ahead of it by the fragments
+- `main` has everything v0.21.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
