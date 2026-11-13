@@ -42,6 +42,9 @@
 //!   edges control plane-plane ends <n> <buckets> interior <n> <buckets>   the same distances for
 //!     edges between two planes, what the file's own edges hold
 //!   edges unevaluated vs plane: no uv <n>, outside the grid by at most 1e-6 <n> 1e-3 <n> 1 <n> more <n>
+//!   edges off the plane, every sample [<buckets>]   how far the surface point lies from the plane, and
+//!   edges in the plane, every sample [<buckets>]    how far it then is from the plane's own point
+//!   edges misses: mostly off the plane <n> mostly in the plane <n> neither <n>
 //!   edges class <name> within 1e-6 <n> over <n>   the samples of the plane edges that the first
 //!     reading evaluates, by where they lie (boundary or interior cell, twist or none, end of an
 //!     edge or inside it, on a node line or inside a cell)
@@ -689,6 +692,12 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
     let mut classes: BTreeMap<&'static str, [usize; 2]> = BTreeMap::new();
     let mut extrapolated = Gaps::default();
     let mut misses_printed = 0usize;
+    // The distance of a sample's surface point from the neighbouring plane, and the rest of
+    // its distance from the plane's own point (in the plane), in the buckets of `bucket`.
+    let mut off_plane = [0usize; 7];
+    let mut in_plane = [0usize; 7];
+    // The misses (over 1e-6 ft) that are mostly off the plane, mostly in it, and neither.
+    let mut miss_kinds = [0usize; 3];
     for record in records.values() {
         let Some(graph) = &record.graph else { continue };
         let surface_of = |edge_index: usize, face: &Fv| -> Option<usize> {
@@ -828,6 +837,28 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
                 let point = sum(&parts);
                 let gap = distance(point, target);
                 let miss = gap > 1e-6;
+                let normal = {
+                    let n = [
+                        x[1] * y[2] - x[2] * y[1],
+                        x[2] * y[0] - x[0] * y[2],
+                        x[0] * y[1] - x[1] * y[0],
+                    ];
+                    let length = dot3(n, n).sqrt();
+                    n.map(|c| c / length)
+                };
+                let off = dot3(std::array::from_fn(|k| point[k] - origin[k]), normal).abs();
+                let within = (gap * gap - off * off).max(0.0).sqrt();
+                off_plane[bucket(off)] += 1;
+                in_plane[bucket(within)] += 1;
+                if miss {
+                    miss_kinds[if off >= 0.9 * gap {
+                        0
+                    } else if within >= 0.9 * gap {
+                        1
+                    } else {
+                        2
+                    }] += 1;
+                }
                 let i = Hermite::cell_extended(&surface.u, on_surface[0]);
                 let j = Hermite::cell_extended(&surface.v, on_surface[1]);
                 let (cells_u, cells_v) = (surface.u.len() - 1, surface.v.len() - 1);
@@ -882,7 +913,7 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
                         })
                     };
                     println!(
-                        "edges miss d {gap:e} cell {i}/{cells_u} {j}/{cells_v} t {t:.6} s {s:.6} du {du:e} dv {dv:e} twist {twist:e} end {end} su {:?} sv {:?} sw {:?}",
+                        "edges miss d {gap:e} cell {i}/{cells_u} {j}/{cells_v} t {t:.6} s {s:.6} du {du:e} dv {dv:e} twist {twist:e} end {end} off {off:e} in {within:e} su {:?} sv {:?} sw {:?}",
                         implied(parts[1]),
                         implied(parts[2]),
                         implied(parts[3])
@@ -939,6 +970,22 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
         fit.rhs[0],
         fit.rhs[1],
         fit.rhs[2]
+    );
+    let buckets = |counts: &[usize; 7]| {
+        counts
+            .iter()
+            .map(usize::to_string)
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    println!(
+        "edges off the plane, every sample [{}]",
+        buckets(&off_plane)
+    );
+    println!("edges in the plane, every sample [{}]", buckets(&in_plane));
+    println!(
+        "edges misses: mostly off the plane {} mostly in the plane {} neither {}",
+        miss_kinds[0], miss_kinds[1], miss_kinds[2]
     );
     for (class, [hits, misses]) in &classes {
         println!("edges class {class} within 1e-6 {hits} over {misses}");
