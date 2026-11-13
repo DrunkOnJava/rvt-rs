@@ -22,8 +22,9 @@ action they use (read from the workflows themselves, with the files of its
 folder, and from those actions in turn) and `release_preflight.py` onto the
 branch, as 0.14.1's hotfix did by hand. REF must be a commit `origin/main`
 holds: the workflows are copied as `main` has them, not from a branch no one
-has reviewed. It then reads the copied preflight and refuses if the version
-files it reads are not the ones this bump moved.
+has reviewed. Every file is read from REF before any is written, so a REF that
+lacks one leaves the checkout as it was. It then reads the copied preflight and
+refuses if the version files it reads are not the ones this bump moved.
 
 `--root DIR` bumps another checkout, such as a hotfix worktree cut from a tag
 older than this script: the preflight's lists and check are this checkout's.
@@ -156,22 +157,19 @@ def local_actions(text):
     return list(dict.fromkeys(LOCAL_ACTION.findall(text)))
 
 
-def copy_release_workflows(ref, commit):
+def read_release_workflows(ref, commit):
+    """Every file `--release-workflows-from` copies, as {path: bytes} in the order found: the workflows, the local
+    actions they use with each action's files, and the preflight. Nothing is written here, so a main that lacks one of
+    them is refused with the checkout as it was, not after the files read before it were written."""
     queue = list(RELEASE_WORKFLOW_FILES)
     folders = []
-    copied = []
+    blobs = {}
     while queue:
         path = queue.pop(0)
         blob = git_bytes("show", f"{commit}:{path}")
         if blob is None:
             sys.exit(f"{ref} ({commit[:12]}) has no {path}")
-        target = ROOT / path
-        existed = target.read_bytes() if target.is_file() else None
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(blob)
-        what = "new" if existed is None else "identical" if existed == blob else "replaces a file that differs"
-        print(f"copied {path} from {ref} ({commit[:12]}): {what}")
-        copied.append(path)
+        blobs[path] = blob
         if path.endswith((".yml", ".yaml")):
             for folder in local_actions(blob.decode("utf-8", errors="replace")):
                 if folder not in folders:
@@ -180,7 +178,18 @@ def copy_release_workflows(ref, commit):
                     files = [line for line in listed.stdout.split("\n") if line]
                     if listed.returncode != 0 or not files:
                         sys.exit(f"{ref} ({commit[:12]}) has no {folder}, which {path} uses")
-                    queue.extend([name for name in files if name not in copied and name not in queue])
+                    queue.extend([name for name in files if name not in blobs and name not in queue])
+    return blobs
+
+
+def copy_release_workflows(ref, commit, blobs):
+    for path, blob in blobs.items():
+        target = ROOT / path
+        existed = target.read_bytes() if target.is_file() else None
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(blob)
+        what = "new" if existed is None else "identical" if existed == blob else "replaces a file that differs"
+        print(f"copied {path} from {ref} ({commit[:12]}): {what}")
 
 
 def git_bytes(*args):
@@ -217,12 +226,13 @@ def main():
         sys.exit("the version files disagree before the bump:\n  " + "\n  ".join(problems))
     if old == a.version:
         sys.exit(f"the version files already say {old}")
-    # Before anything is written: a ref that is refused leaves the checkout as it was.
+    # Before anything is written: a ref that is refused, or that lacks a file to copy, leaves the checkout as it was.
     commit = main_commit(a.release_workflows_from) if a.release_workflows_from else None
+    blobs = read_release_workflows(a.release_workflows_from, commit) if commit else None
     for path in bump(pf, old, a.version, a.date):
         print(f"{old} -> {a.version}: {path}")
-    if a.release_workflows_from:
-        copy_release_workflows(a.release_workflows_from, commit)
+    if blobs is not None:
+        copy_release_workflows(a.release_workflows_from, commit, blobs)
         differs = copied_preflight_differs(pf)
         if differs:
             sys.exit(
