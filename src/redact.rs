@@ -13,8 +13,12 @@ const HOME_PARENTS: [&str; 3] = ["\\Users\\", "/Users/", "/home/"];
 
 /// Scrub `\Users\<name>\`, `/Users/<name>/` and `/home/<name>/` usernames
 /// while preserving the path shape, in every path the string holds. The
-/// username segment is replaced by `<redacted>`; nothing else is touched. A
-/// name no separator follows, because the string ends at it, is left as it is.
+/// username segment is replaced by `<redacted>`; nothing else is touched. The
+/// name ends at the next path separator, so a profile folder named
+/// `Alice Smith` is one name. Where no separator follows, as in a path an error
+/// echoes back, it ends at the first space, quote, closing bracket, `,`, `;` or
+/// `:`, or at the end of the string, so a name with a space is then scrubbed
+/// only up to the space. A home folder with nothing after it is left as it is.
 ///
 /// ```
 /// use rvt::redact::redact_path_str;
@@ -29,6 +33,12 @@ const HOME_PARENTS: [&str; 3] = ["\\Users\\", "/Users/", "/home/"];
 ///     "/home/<redacted>/a.rvt and /home/<redacted>/b.rvt"
 /// );
 ///
+/// // A path an error echoes back keeps no name either, though no separator follows it.
+/// assert_eq!(
+///     redact_path_str("No such file: /Users/alice"),
+///     "No such file: /Users/<redacted>"
+/// );
+///
 /// // Paths without a \Users\, /Users/ or /home/ segment pass through unchanged.
 /// assert_eq!(
 ///     redact_path_str("C:\\ProgramData\\Autodesk\\RVT 2024"),
@@ -41,9 +51,22 @@ pub fn redact_path_str(p: &str) -> String {
         .fold(p.to_string(), |text, parent| redact_after(&text, parent))
 }
 
-/// `text` with the segment after each `parent` that a path separator ends
-/// replaced by `<redacted>`. The scan moves past every replacement, so a
-/// string that is already redacted comes back as it was.
+/// The length of the user name at the start of `rest`, the text after a home
+/// folder; 0 where there is none. It ends at the next path separator. Where
+/// none follows, it ends at the first character that ends a name in running
+/// text, or at the end of the string.
+fn user_name_len(rest: &str) -> usize {
+    rest.find(['\\', '/']).unwrap_or_else(|| {
+        rest.find(|c: char| {
+            c.is_whitespace() || matches!(c, '"' | '\'' | '`' | ')' | ']' | '}' | ',' | ';' | ':')
+        })
+        .unwrap_or(rest.len())
+    })
+}
+
+/// `text` with the user name after each `parent` replaced by `<redacted>`. The
+/// scan moves past every replacement, so a string that is already redacted
+/// comes back as it was.
 fn redact_after(text: &str, parent: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
@@ -51,11 +74,11 @@ fn redact_after(text: &str, parent: &str) -> String {
         let name_at = at + parent.len();
         out.push_str(&rest[..name_at]);
         rest = &rest[name_at..];
-        let Some(end) = rest.find(['\\', '/']) else {
-            break;
-        };
-        out.push_str("<redacted>");
-        rest = &rest[end..];
+        let len = user_name_len(rest);
+        if len > 0 {
+            out.push_str("<redacted>");
+            rest = &rest[len..];
+        }
     }
     out.push_str(rest);
     out
@@ -171,13 +194,42 @@ mod tests {
     }
 
     #[test]
-    fn a_name_the_string_ends_at_is_left_as_it_is() {
+    fn a_name_no_separator_follows_is_scrubbed_where_an_error_echoes_a_path() {
+        for (text, want) in [
+            ("/home/alice", "/home/<redacted>"),
+            ("/Users/alice", "/Users/<redacted>"),
+            ("C:\\Users\\alice", "C:\\Users\\<redacted>"),
+            (
+                "No such file: /Users/alice",
+                "No such file: /Users/<redacted>",
+            ),
+            ("cwd /home/alice, then", "cwd /home/<redacted>, then"),
+            (
+                "opened '/home/alice' twice",
+                "opened '/home/<redacted>' twice",
+            ),
+            ("(see /home/alice)", "(see /home/<redacted>)"),
+            (
+                "/home/alice: no such file",
+                "/home/<redacted>: no such file",
+            ),
+            ("/home/alice; next", "/home/<redacted>; next"),
+            // The cost of cutting at a space: the rest of a spaced name stays.
+            ("C:\\Users\\Alice Smith", "C:\\Users\\<redacted> Smith"),
+        ] {
+            assert_eq!(redact_path_str(text), want);
+        }
+    }
+
+    #[test]
+    fn a_home_folder_with_no_name_after_it_is_left_alone() {
         for text in [
             "/home/",
-            "/home/alice",
             "/Users/",
-            "/Users/alice",
-            "C:\\Users\\alice",
+            "C:\\Users\\",
+            "/home/ and more",
+            "see (/Users/) here",
+            "/home//x",
         ] {
             assert_eq!(redact_path_str(text), text);
         }
