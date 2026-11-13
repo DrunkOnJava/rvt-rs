@@ -53,6 +53,16 @@
 //!     are f32 values> d <ft> cell <i>/<cells> <j>/<cells> t <t> s <s> du <du> dv <dv> twist <t> end <b>
 //!     su <(scale, rest)> sv <> sw <>   the first 40 samples over 1e-6 ft, with the scale of the u
 //!     tangents, the v tangents and the twist that would remove the miss along each, and what is left
+//!   edges shift d <ft> closest <ft> steps <n> du <u shift> dv <v shift> t <u shift in cells> s <v shift
+//!     in cells> cell <i>/<cells> <j>/<cells> at t <t> s <s> widths <du> <dv> along u <ft> v <ft>   the first
+//!     40 samples over 1e-6 ft: how far the patch (the nearest cell continued) lies from the plane's
+//!     point at its closest, by Gauss-Newton from the stored (u, v), how far the parameters move to
+//!     it, and the miss along each parameter's direction (signed, positive when the plane's point is
+//!     ahead of the patch's along the growing parameter)
+//!   edges closest point of the patch to the plane's point, over the misses [<buckets>] unsolved <n>
+//!   edges shift of the parameters to it, in cells: u [<buckets>] v [<buckets>]   with buckets at most
+//!     1e-9, 1e-6, 1e-4, 1e-3, 1e-2 and 1e-1 of a cell, and over
+//!   edges shift of the parameters to it, in parameter units [<buckets>] largest u <x> v <x>
 //!   edges unevaluated inside the envelope: by at most 1e-6 <n> 1e-3 <n> 1 <n> more <n>
 //!   edges fit count <n> rr <sum of squares> normal <six sums> rhs <three sums>   the normal equations of
 //!     the least-squares fit of three scales (u tangent, v tangent, mixed derivative), to be summed
@@ -139,10 +149,18 @@ fn increasing(value: Option<&Fv>) -> Option<bool> {
 const BUCKETS: [f64; 6] = [1e-12, 1e-9, 1e-6, 1e-5, 1e-4, 1e-3];
 
 fn bucket(distance: f64) -> usize {
-    BUCKETS
+    bucket_in(&BUCKETS, distance)
+}
+
+/// The buckets of a shift as a fraction of a cell: at most these, then over the last.
+const SHIFT_LIMITS: [f64; 6] = [1e-9, 1e-6, 1e-4, 1e-3, 1e-2, 1e-1];
+
+/// The index of the first of `limits` that `x` does not exceed, or the count of limits.
+fn bucket_in(limits: &[f64; 6], x: f64) -> usize {
+    limits
         .iter()
-        .position(|limit| distance <= *limit)
-        .unwrap_or(BUCKETS.len())
+        .position(|limit| x <= *limit)
+        .unwrap_or(limits.len())
 }
 
 fn array<const N: usize>(value: &Fv) -> Option<[f64; N]> {
@@ -343,6 +361,84 @@ impl Hermite {
         Some(std::array::from_fn(|k| {
             parts[0][k] + parts[1][k] + parts[2][k] + parts[3][k]
         }))
+    }
+
+    /// The patch at (u, v), with the nearest cell's patch continued past the grid.
+    fn point(&self, uv: [f64; 2]) -> [f64; 3] {
+        self.terms(false, false, uv, true)
+            .map_or([f64::NAN; 3], |parts| {
+                std::array::from_fn(|k| parts[0][k] + parts[1][k] + parts[2][k] + parts[3][k])
+            })
+    }
+
+    /// The widths in u and v of the cell whose patch holds (u, v).
+    fn cell_size(&self, uv: [f64; 2]) -> [f64; 2] {
+        let (i, j) = (
+            Self::cell_extended(&self.u, uv[0]),
+            Self::cell_extended(&self.v, uv[1]),
+        );
+        [self.u[i + 1] - self.u[i], self.v[j + 1] - self.v[j]]
+    }
+
+    /// The point's speed along u and along v at (u, v), by central differences over a
+    /// millionth of the cell.
+    fn slopes(&self, uv: [f64; 2]) -> [[f64; 3]; 2] {
+        let size = self.cell_size(uv);
+        std::array::from_fn(|axis| {
+            let h = 1e-6 * size[axis];
+            let (mut low, mut high) = (uv, uv);
+            low[axis] -= h;
+            high[axis] += h;
+            let (p, q) = (self.point(low), self.point(high));
+            std::array::from_fn(|k| (q[k] - p[k]) / (2.0 * h))
+        })
+    }
+
+    /// The closest point of the patch to `target`, by Gauss-Newton from `start` with the
+    /// patch continued past the grid: its (u, v), how far it lies from `target` and the
+    /// number of steps. `None` where the patch is flat in a parameter, or not a number.
+    fn closest(&self, target: [f64; 3], start: [f64; 2]) -> Option<([f64; 2], f64, usize)> {
+        let gap = |uv: [f64; 2]| distance(self.point(uv), target);
+        let mut uv = start;
+        let mut best = gap(uv);
+        if !best.is_finite() {
+            return None;
+        }
+        for step in 0..60 {
+            let [a, b] = self.slopes(uv);
+            let here = self.point(uv);
+            let left: [f64; 3] = std::array::from_fn(|k| target[k] - here[k]);
+            let (aa, ab, bb) = (dot3(a, a), dot3(a, b), dot3(b, b));
+            let det = aa * bb - ab * ab;
+            if det.is_nan() || det <= 1e-24 * aa * bb {
+                return None;
+            }
+            let (ar, br) = (dot3(a, left), dot3(b, left));
+            let delta = [(bb * ar - ab * br) / det, (aa * br - ab * ar) / det];
+            // A step that brings the point no closer is halved, and none that does ends it.
+            let mut scale = 1.0;
+            let mut moved = false;
+            for _ in 0..10 {
+                let next = [uv[0] + scale * delta[0], uv[1] + scale * delta[1]];
+                let next_gap = gap(next);
+                if next_gap < best {
+                    uv = next;
+                    best = next_gap;
+                    moved = true;
+                    break;
+                }
+                scale *= 0.5;
+            }
+            if !moved {
+                return Some((uv, best, step));
+            }
+            if delta[0].abs() <= 1e-15 * (1.0 + uv[0].abs())
+                && delta[1].abs() <= 1e-15 * (1.0 + uv[1].abs())
+            {
+                return Some((uv, best, step + 1));
+            }
+        }
+        Some((uv, best, 60))
     }
 
     /// Whether (u, v) lies in the object's stated envelope.
@@ -710,6 +806,16 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
     let mut in_plane = [0usize; 7];
     // The misses (over 1e-6 ft) that are mostly off the plane, mostly in it, and neither.
     let mut miss_kinds = [0usize; 3];
+    // Of the misses: how far the patch's closest point lies from the plane's point (the
+    // buckets of `bucket`), how far the parameters move to it as a fraction of the cell in u
+    // and in v (the buckets of `SHIFT_LIMITS`) and in parameter units (the buckets of
+    // `bucket`), the largest shift of each parameter, and the misses with no closest point.
+    let mut shifts_printed = 0usize;
+    let mut closest_gaps = [0usize; 7];
+    let mut shift_cells = [[0usize; 7]; 2];
+    let mut shift_units = [0usize; 7];
+    let mut largest_shift = [0.0f64; 2];
+    let mut unsolved = 0usize;
     for record in records.values() {
         let Some(graph) = &record.graph else { continue };
         let surface_of = |edge_index: usize, face: &Fv| -> Option<usize> {
@@ -916,6 +1022,41 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
                 ] {
                     classes.entry(class).or_default()[usize::from(miss)] += 1;
                 }
+                if miss {
+                    match surface.closest(target, on_surface) {
+                        Some((found, nearest, steps)) => {
+                            let size = surface.cell_size(on_surface);
+                            let shift = [found[0] - on_surface[0], found[1] - on_surface[1]];
+                            let cells = [shift[0] / size[0], shift[1] / size[1]];
+                            closest_gaps[bucket(nearest)] += 1;
+                            for axis in 0..2 {
+                                shift_cells[axis][bucket_in(&SHIFT_LIMITS, cells[axis].abs())] += 1;
+                                largest_shift[axis] = largest_shift[axis].max(shift[axis].abs());
+                            }
+                            shift_units[bucket(shift[0].abs().max(shift[1].abs()))] += 1;
+                            if shifts_printed < 40 {
+                                shifts_printed += 1;
+                                let left: [f64; 3] = std::array::from_fn(|k| target[k] - point[k]);
+                                let along: [f64; 2] = std::array::from_fn(|axis| {
+                                    let slope = surface.slopes(on_surface)[axis];
+                                    dot3(left, slope) / dot3(slope, slope).sqrt()
+                                });
+                                println!(
+                                    "edges shift d {gap:e} closest {nearest:e} steps {steps} du {:e} dv {:e} t {:e} s {:e} cell {i}/{cells_u} {j}/{cells_v} at t {t:.6} s {s:.6} widths {:e} {:e} along u {:e} v {:e}",
+                                    shift[0],
+                                    shift[1],
+                                    cells[0],
+                                    cells[1],
+                                    size[0],
+                                    size[1],
+                                    along[0],
+                                    along[1]
+                                );
+                            }
+                        }
+                        None => unsolved += 1,
+                    }
+                }
                 if miss && misses_printed < 40 {
                     misses_printed += 1;
                     let left: [f64; 3] = std::array::from_fn(|k| target[k] - point[k]);
@@ -1023,6 +1164,21 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
     println!(
         "edges misses: mostly off the plane {} mostly in the plane {} neither {}",
         miss_kinds[0], miss_kinds[1], miss_kinds[2]
+    );
+    println!(
+        "edges closest point of the patch to the plane's point, over the misses [{}] unsolved {unsolved}",
+        buckets(&closest_gaps)
+    );
+    println!(
+        "edges shift of the parameters to it, in cells: u [{}] v [{}]",
+        buckets(&shift_cells[0]),
+        buckets(&shift_cells[1])
+    );
+    println!(
+        "edges shift of the parameters to it, in parameter units [{}] largest u {:e} v {:e}",
+        buckets(&shift_units),
+        largest_shift[0],
+        largest_shift[1]
     );
     for (class, [hits, misses]) in &classes {
         println!("edges class {class} within 1e-6 {hits} over {misses}");
