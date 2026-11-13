@@ -6782,6 +6782,9 @@ pub const WALL_ARC_BODY_SOURCE: &str = "partition_wall_arc";
 /// How far a curved wall's drawn outline may stray inside its arcs, feet.
 pub const WALL_ARC_TOLERANCE_FEET: f64 = 0.0005;
 
+/// The most chords one arc of a curved wall's outline is drawn with.
+const WALL_ARC_MAX_CHORDS: usize = 8192;
+
 /// A curved wall's plan outline: the ring sector between its arc's radius
 /// less and plus half its thickness, from its start angle to its end angle,
 /// each arc drawn as chords that stray at most [`WALL_ARC_TOLERANCE_FEET`]
@@ -6799,7 +6802,15 @@ fn wall_arc_outline(arc: &crate::partition_schema_mvp::WallArc) -> Option<Vec<(f
         * (1.0 - WALL_ARC_TOLERANCE_FEET / outer)
             .clamp(-1.0, 1.0)
             .acos();
-    let count = ((sweep / step).ceil() as usize).clamp(2, 512);
+    // The chords bound the work a crafted radius can ask for. An arc that needs
+    // more than the cap to stay within the tolerance (a radius past about
+    // 27,000 ft for a half turn) is not drawn, rather than drawn straying
+    // further than the tolerance this function promises (#1947).
+    let needed = (sweep / step).ceil();
+    if !(needed.is_finite() && needed <= WALL_ARC_MAX_CHORDS as f64) {
+        return None;
+    }
+    let count = (needed as usize).max(2);
     let angle = |index: usize| arc.angles[0] + sweep * index as f64 / count as f64;
     let mut points: Vec<(f64, f64)> = (0..=count)
         .map(|index| {
