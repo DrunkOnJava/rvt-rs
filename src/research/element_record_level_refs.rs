@@ -44,8 +44,9 @@ pub const LEVEL_REFERENCE_SOURCE: &str = "partition_element_record_reference_lis
 /// Property the emitted element carries [`LEVEL_REFERENCE_FIELD`] on.
 pub const LEVEL_ELEMENT_ID_PROPERTY: &str = "LevelElementId";
 
-/// Field carrying the two Levels a record names, in list order, when it
-/// names exactly two (RE-59).
+/// Field carrying the Levels a record names, in list order, when it names
+/// exactly two (RE-59), or, for a structural framing record, two or more
+/// (RE-454).
 pub const CONSTRAINT_LEVELS_FIELD: &str = "m_constraintLevelIds";
 
 /// Field recording how [`LEVEL_REFERENCE_FIELD`] was chosen when it is not
@@ -55,6 +56,10 @@ pub const LEVEL_BIND_SOURCE_FIELD: &str = "m_levelBindSource";
 /// Value of [`LEVEL_BIND_SOURCE_FIELD`] for a Level chosen by
 /// [`base_constraint_level`].
 pub const BASE_CONSTRAINT_SOURCE: &str = "partition_element_record_base_constraint";
+
+/// Value of [`LEVEL_BIND_SOURCE_FIELD`] for a beam or brace given the highest
+/// Level its record names, its Reference Level (RE-175, RE-454).
+pub const FRAMING_REFERENCE_LEVEL_SOURCE: &str = "partition_element_record_reference_level";
 
 /// Field carrying the reference list of a record that names no Level,
 /// less its own id (RE-60).
