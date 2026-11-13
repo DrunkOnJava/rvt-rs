@@ -218,6 +218,73 @@ fn framed_patch_bytes(p: &StreamPatch) -> Result<Vec<u8>> {
     Ok(data)
 }
 
+/// How the bytes of a stream are stored on disk, as far as a patch's framing
+/// can tell: a gzip member from the first byte, or eight bytes of prefix and
+/// then a gzip member (Revit's `Global/*` convention). `None` for a stream that
+/// is neither, which is stored as it stands.
+fn stored_framing(raw: &[u8]) -> Option<StreamFraming> {
+    const GZIP: [u8; 3] = [0x1f, 0x8b, 0x08];
+    if raw.starts_with(&GZIP) {
+        Some(StreamFraming::RawGzipFromZero)
+    } else if raw.len() >= 8 + GZIP.len() && raw[8..].starts_with(&GZIP) {
+        Some(StreamFraming::CustomPrefix8)
+    } else {
+        None
+    }
+}
+
+/// What a stream's stored framing is called in a refusal.
+fn framing_words(framing: Option<StreamFraming>) -> &'static str {
+    match framing {
+        Some(StreamFraming::RawGzipFromZero) => "a gzip member from its first byte",
+        Some(StreamFraming::CustomPrefix8) => "an 8-byte prefix and then a gzip member",
+        _ => "neither of those (it is not gzip-framed)",
+    }
+}
+
+/// Everything [`write_with_patches`] refuses before it writes anything, for a
+/// file already open, and each patch's stored bytes: a patch for a stream the
+/// file does not have ([`crate::Error::StreamNotFound`]), one that frames a
+/// stream otherwise than it is stored, and one whose stored bytes would span a
+/// checksummed page ([`crate::Error::WriteRefused`]). `rvt-write --dry-run`
+/// calls it, so a dry run refuses what the write would.
+///
+/// A patch framed [`StreamFraming::Verbatim`] is the caller's own framing and
+/// is never checked against the stream's. The others are: a manifest alone
+/// picking the framing would write a `Formats/Latest` the reader cannot open
+/// and read it back with the same wrong framing, so the verification passed.
+///
+/// # Errors
+///
+/// As above, and the errors of reading a patched stream.
+pub fn validate_patches(rf: &mut RevitFile, patches: &[StreamPatch]) -> Result<Vec<Vec<u8>>> {
+    let streams = rf.stream_names();
+    let stream_set: std::collections::BTreeSet<&str> = streams.iter().map(|s| s.as_str()).collect();
+    for p in patches {
+        if !stream_set.contains(p.stream_name.as_str()) {
+            return Err(crate::Error::StreamNotFound(p.stream_name.clone()));
+        }
+    }
+    for p in patches {
+        if p.framing == StreamFraming::Verbatim {
+            continue;
+        }
+        let stored = stored_framing(&rf.read_stream(&p.stream_name)?);
+        if stored != Some(p.framing) {
+            return Err(crate::Error::WriteRefused(format!(
+                "stream '{}' is stored as {}, and the patch frames it as {}",
+                p.stream_name,
+                framing_words(stored),
+                framing_words(Some(p.framing)),
+            )));
+        }
+    }
+    // Tracker: B69.
+    // Every patch is framed before any file is touched, so a refused
+    // one leaves nothing behind.
+    patches.iter().map(framed_patch_bytes).collect()
+}
+
 /// Write `src` to `dst` with each patch's stream replaced by its
 /// `new_decompressed` bytes, framed as its [`StreamFraming`] says, and every
 /// other stream copied byte for byte. With no patches the file is copied
@@ -226,9 +293,10 @@ fn framed_patch_bytes(p: &StreamPatch) -> Result<Vec<u8>> {
 /// # Errors
 ///
 /// [`crate::Error::StreamNotFound`] for a patch naming a stream the file does
-/// not have, and [`crate::Error::WriteRefused`] for one whose stored bytes
-/// would span a checksummed page, both before anything is written; otherwise
-/// the errors of reading `src` and writing `dst`.
+/// not have, and [`crate::Error::WriteRefused`] for one that frames a stream
+/// otherwise than it is stored or whose stored bytes would span a checksummed
+/// page ([`validate_patches`]), both before anything is written; otherwise the
+/// errors of reading `src` and writing `dst`.
 ///
 /// ```
 /// use rvt::RevitFile;
@@ -252,21 +320,12 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
     let mut rf = RevitFile::open(src)?;
     let streams = rf.stream_names();
 
-    // Validate patch names against actual stream set. A typo or stale
-    // reference should error fast, not silently no-op.
-    let stream_set: std::collections::BTreeSet<&str> = streams.iter().map(|s| s.as_str()).collect();
-    for p in patches {
-        if !stream_set.contains(p.stream_name.as_str()) {
-            return Err(crate::Error::StreamNotFound(p.stream_name.clone()));
-        }
-    }
-    // Tracker: B69.
-    // Every patch is framed before any file is touched, so a refused
-    // one leaves nothing behind.
-    let framed: Vec<Vec<u8>> = patches
-        .iter()
-        .map(framed_patch_bytes)
-        .collect::<Result<_>>()?;
+    // A typo or stale reference should error fast, not silently no-op, and a
+    // refused patch leaves nothing behind.
+    let framed = validate_patches(&mut rf, patches)?;
+    // One file under two names (a link, `./x`) is one file: the copy below
+    // would be the file over itself.
+    let same = crate::cli::same_file(src, dst);
 
     // Tracker: WRT-10.3.
     // Fast path: an empty-patch round-trip bypasses CFB
@@ -277,7 +336,12 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
     // sector-reordering pass. For non-empty patches, fall through
     // to the CFB rewriter below — sector preservation for patched
     // builds is still pending.
-    if patches.is_empty() && src != dst {
+    if patches.is_empty() && same {
+        // The file is its own byte-for-byte copy: rebuilding the container
+        // in place would not be one.
+        return Ok(());
+    }
+    if patches.is_empty() {
         // Atomic copy via temp + rename (same durability contract as
         // the CFB path below).
         let dst_parent = dst.parent().unwrap_or_else(|| Path::new("."));
@@ -293,8 +357,12 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
             .to_string();
         let tmp_name = format!(".{dst_name}.copy-{}", std::process::id());
         let tmp_path = dst_parent.join(&tmp_name);
-        std::fs::copy(src, &tmp_path)?;
-        std::fs::rename(&tmp_path, dst)?;
+        let copied = std::fs::copy(src, &tmp_path).and_then(|_| std::fs::rename(&tmp_path, dst));
+        if copied.is_err() {
+            // Nothing is left beside the destination for a copy that failed.
+            let _ = std::fs::remove_file(&tmp_path);
+        }
+        copied?;
         return Ok(());
     }
 
@@ -310,7 +378,7 @@ pub fn write_with_patches(src: &Path, dst: &Path, patches: &[StreamPatch]) -> Re
     // rebuild) to "only the patched streams' sectors and the FAT
     // entries that describe them" — usually well under 5% for a
     // single-stream patch.
-    if src != dst {
+    if !same {
         drop(rf); // release the read-only handle before we reopen rw.
 
         let dst_parent = dst.parent().unwrap_or_else(|| Path::new("."));
