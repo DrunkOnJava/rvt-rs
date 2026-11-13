@@ -237,6 +237,9 @@ pub fn recover_partition_schema_mvp(
         // --- Each door and window in the wall its own native record names
         // (RE-448), as RE-245 does on 2024 to 2027 ---
         rebind_opening_hosts_to_native(rf, &out.walls, [&mut out.doors, &mut out.windows]);
+        // --- Each door's and window's opening from the outline its symbol
+        // cuts (RE-450), as on 2024 to 2027 where no type opening is read ---
+        attach_cut_loop_openings_32(rf, revit_version, [&mut out.doors, &mut out.windows]);
         // --- The Level parameters each element's own native record names
         // (RE-369) ---
         attach_levels_32(
