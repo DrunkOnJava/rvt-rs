@@ -64,7 +64,7 @@ def main():
     args = sys.argv[1:]
     if len(args) < 2:
         raise SystemExit(__doc__)
-    listing = int(args[args.index("--list") + 1]) if "--list" in args else 0
+    listing = int(args[args.index("--list") + 1]) if "--list" in args else 10**6
     doc, blob = layers.read_glb(args[0])
     ours = layer_ends(doc, blob)
     f = ifcopenshell.open(args[1])
