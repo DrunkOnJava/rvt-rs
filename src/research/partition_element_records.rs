@@ -40,8 +40,9 @@
 //! The counted reference list that follows the bounding box is what
 //! binds a door or window to its host wall — see
 //! [`decode_reference_list`],
-//! [`PartitionElementRecord::preceding_reference`] and
-//! `reports/element-framing/RE-23-door-window-host-binding.md`.
+//! `reports/element-framing/RE-23-door-window-host-binding.md` and
+//! RE-85, which replaced RE-23's slot rule
+//! ([`PartitionElementRecord::preceding_reference`]).
 //!
 //! 24880 records of this shape were found on that file; 23470 of
 //! them (94.3 %) carry the bbox marker at exactly `+0x50`, which is
@@ -88,8 +89,8 @@
 //! - A *second* counted list follows the first, framed identically.
 //!   Its last slot is named [`PartitionElementRecord::owner_reference`]
 //!   because on every [`OST_SKETCH_LINES`] record of the recorded edge
-//!   it names the element whose sketch the line belongs to: the 3106
-//!   sketch-line records on `2024_Core_Interior.rvt` name 135 owners,
+//!   it names the element whose sketch the line belongs to: the 3688
+//!   sketch-line records on `2024_Core_Interior.rvt` name 126 owners,
 //!   and 100 of them are exactly the 80 `IfcSlab` + 20
 //!   `IfcShadingDevice` ElementIds the reference export tags (#31,
 //!   RE-25). On other categories it is only what the byte says.
@@ -317,8 +318,9 @@ pub const OST_CONDUIT_FITTING: i64 = -2_008_128;
 pub const OST_GUTTER: i64 = -2_001_391;
 
 // RE-36: structural categories. Nearly every frame of these uses the
-// second prologue, so their instances export through RE-34's inferred
-// ElementIds; the oracle is the VIM export of the same sample
+// second prologue, so their instances export with the ElementId of the
+// record that encloses the frame (RE-35, `assign_second_prologue_ids`;
+// RE-34's inferred ids were removed); the oracle is the VIM export of the same sample
 // (`reports/element-framing/RE-36-structural-categories.md`).
 
 /// Autodesk `BuiltInCategory.OST_StructuralFraming` — beams, joists,
@@ -638,10 +640,12 @@ pub struct PartitionElementRecord {
     /// record's own id, names it in the first slot, or when the slot
     /// before it holds a value outside the `u32` ElementId range.
     ///
-    /// On a door or window record this is the host wall; on other
-    /// categories it is only what the byte says. Nothing here checks
-    /// that the value is a wall — the caller does
-    /// (`partition_schema_mvp::opening_instances_from_records`).
+    /// RE-23 took this slot as a door's or window's host wall. RE-85
+    /// replaced that rule (the slot is only the nearest smaller id, and
+    /// a host with a larger id comes after the door's own), and the
+    /// export now picks the host from the whole list
+    /// (`partition_schema_mvp::records`); only probes read this field.
+    /// Nothing here checks that the value is a wall.
     pub preceding_reference: Option<u32>,
     /// Last slot of the *second* counted reference list at `+0x88`
     /// (#31, RE-25).

@@ -283,8 +283,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         //   +0x000  u64  owning room ElementId
         //   +0x03c  u64  owning room ElementId (confirmation)
         //   +0x044  u64  host Level ElementId
-        //   +0x1f5  u32  number length in UTF-16 units
-        //   +0x1f9  2*n  room Number, UTF-16LE
+        //   +0x1f9  u32  number length in UTF-16 units
+        //   +0x1fd  2*n  room Number, UTF-16LE
         //   +…+12   u32  name length in UTF-16 units
         //   +…+16   2*m  room Name, UTF-16LE
         if !wanted.is_empty() {

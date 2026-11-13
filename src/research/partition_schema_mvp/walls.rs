@@ -282,8 +282,10 @@ const WALL_CENTRELINE_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2015..=202
 /// are the walls it rests on (RE-358). Its own list, a decision of its own
 /// (#1473): the profile openings are read on
 /// [`WALL_PROFILE_OPENING_REVIT_VERSIONS`], and a release added to that list
-/// takes the rule only when it is added here. The walls the record joins at an
-/// end are read on [`WALL_END_JOIN_REVIT_VERSIONS`], which the rule asks for.
+/// takes the rule only when it is added here, as for the end joins on
+/// [`WALL_END_JOIN_REVIT_VERSIONS`]. The rule asks nothing of the joins: RE-358
+/// dropped the join-partner condition its second Measure run tried, which
+/// refused every end the first run carried (11 walls).
 const WALL_PROFILE_STUB_REVIT_VERSIONS: &[u32] = &[2024];
 
 /// Releases a wall's top is taken at the highest point of its edited elevation

@@ -4,11 +4,12 @@ use super::*;
 
 /// Placed instances of every
 /// [`crate::partition_element_records::PRODUCT_RECORD_CATEGORIES`]
-/// category, each decoded under its class name (RE-33).
+/// category, each decoded under its class name (RE-33 added the first
+/// thirteen; the list has grown with later reports).
 ///
 /// The selection is the #211 instance rule, the same one that reproduces
 /// the exported wall, door, window and column sets; one sweep of the
-/// partitions serves all thirteen categories. Bodies are the record
+/// partitions serves every category in the list. Bodies are the record
 /// bounding box, and a Level binds only when the record's reference list
 /// names exactly one.
 pub fn product_instances_from_partition_records(

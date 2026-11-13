@@ -62,9 +62,10 @@ pub struct TypedProductionAppend {
     pub element_type_ids: BTreeMap<u32, u32>,
     /// The standard property sets Revit's export gives each type object, by
     /// the type's ElementId and the STEP name of the type entity
-    /// (`IFCWALLTYPE`): its common set's `IsExternal`, `FireRating` and
-    /// `LoadBearing` (RE-286), and a stair or flight type's dimensions
-    /// (RE-286). A type whose elements disagree has none.
+    /// (`IFCWALLTYPE`): its common set's `FireRating` and `LoadBearing`
+    /// (RE-286; no `IsExternal`, on which Revit's exporters disagree), and a
+    /// stair or flight type's dimensions (RE-286). A type whose elements
+    /// disagree has none.
     pub type_entity_sets: BTreeMap<u32, BTreeMap<String, Vec<PropertySet>>>,
     /// Each family instance's original symbol, by ElementId (RE-167).
     pub element_original_symbols: BTreeMap<u32, u32>,
@@ -3070,9 +3071,9 @@ fn add_extend_to_structure(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded:
 /// its top down its type's thickness (RE-214) is level, and so is a slab
 /// drawn as an extrusion whose depth is its type's layers' total
 /// thickness, as a sloped or shape-edited slab's record box is deeper than
-/// its layers. Any other slab gets nothing: on the BIM4LCA office the
-/// record boxes of 8 sloped floors are drawn level, and Revit gives them
-/// 1.9 to 24 degrees.
+/// its layers. Any other slab gets nothing here: the BIM4LCA office's 8
+/// sloped floors, to which Revit gives 1.9 to 24 degrees, are drawn along
+/// their plane and take their angle from `add_shaped_floor_pitch` (RE-384).
 fn level_slab(
     ifc_type: &str,
     decoded: &DecodedElement,
@@ -4073,15 +4074,6 @@ fn add_stair_flight_quantities(
     });
 }
 
-/// Add a wall's `Qto_WallBaseQuantities` `Width` to `sets`: its type's
-/// thickness, the wall's Width parameter revit-ifc's `WidthCalculator`
-/// (CLEANROOM.md source 5) reads (#1016), also on a wall the partition
-/// reader does not draw from its centreline, from its type's layers. Its `Length` too where the partition
-/// reader gives one ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]):
-/// Revit's export writes either the wall's curve's length or the length of
-/// that curve cut back at its joins, by how it draws the wall, so a Length is
-/// written only where the two are the same (Griffin, 2026-10-26, RE-252).
-/// Nothing where the thickness is not read.
 /// Add a curtain wall's `Qto_CurtainWallQuantities.Length` to `sets`: its
 /// location curve's length ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]),
 /// which revit-ifc's `LengthCalculator` takes from the wall's location curve
@@ -4108,6 +4100,15 @@ fn add_curtain_wall_length(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded:
     });
 }
 
+/// Add a wall's `Qto_WallBaseQuantities` `Width` to `sets`: its type's
+/// thickness, the wall's Width parameter revit-ifc's `WidthCalculator`
+/// (CLEANROOM.md source 5) reads (#1016), also on a wall the partition
+/// reader does not draw from its centreline, from its type's layers. Its
+/// `Length` too where the partition reader gives one ([`crate::partition_schema_mvp::WALL_LENGTH_FIELD`]):
+/// Revit's export writes either the wall's curve's length or the length of
+/// that curve cut back at its joins, by how it draws the wall, so a Length is
+/// written only where the two are the same (Griffin, 2026-10-26, RE-252).
+/// Nothing where the thickness is not read.
 fn add_wall_quantities(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded: &DecodedElement) {
     use crate::partition_schema_mvp as mvp;
     if !matches!(ifc_type, "IFCWALL" | "IFCWALLSTANDARDCASE") {

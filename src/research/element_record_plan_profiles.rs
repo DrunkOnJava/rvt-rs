@@ -405,8 +405,8 @@ pub(crate) fn loop_field(points: &[(f64, f64)]) -> InstanceField {
 ///
 /// Records that carry no [`PartitionElementRecord::owner_reference`]
 /// are dropped. A single sketch line can be framed in more than one
-/// partition stream — on `2024_Core_Interior.rvt` 3106 distinct
-/// sketch-line ids are framed 3724 times and every duplicate agrees
+/// partition stream — on `2024_Core_Interior.rvt` 3070 distinct
+/// sketch-line ids are framed 3688 times (RE-25) and every duplicate agrees
 /// on both the box and the owner — so records are de-duplicated by
 /// ElementId, keeping the first by [`PartitionElementRecord::frame_order`]
 /// (partition number, then offset).

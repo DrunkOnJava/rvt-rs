@@ -249,9 +249,10 @@ fn forge(pairs: &crate::research::graph_value::Fv) -> Result<ProjectUnits> {
 /// pair is not taken: a lone spec beside a unit is a parameter's, not a
 /// map's. A project's partition holds older copies of its map and the
 /// maps of its families' documents, and the runs do not say which is
-/// current: on 100 of the 102 corpus files the walk reads, one or more runs
-/// equal the `UnitsElem` map, and on Autodesk's Japanese structural sample
-/// none does (its runs are cut short). Each of Autodesk's sample families of
+/// current: on 101 of the 103 corpus files the walk reads, one or more runs
+/// equal the `UnitsElem` map, and on the other two, Autodesk's Japanese
+/// structural sample (2019 and 2025), none does (its runs are cut short;
+/// RE-445). Each of Autodesk's sample families of
 /// 2021 to 2027 holds one run. Only spec and unit are recovered: the
 /// accuracy is not.
 pub fn string_record_maps(records: &[crate::object_graph::StringRecord]) -> Vec<ProjectUnits> {
