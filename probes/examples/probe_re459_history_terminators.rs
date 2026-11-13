@@ -11,20 +11,31 @@
 //! closes each entry, and the entries that do not end in `0x28` with their
 //! neighbours, to say whether those four are a different kind of entry.
 //!
+//! It also prints the project's base GUID, which the header holds four times, and the
+//! file's Levels, for `tools/re/history_base_vs_ifc.py`, which asks Revit's export
+//! whether its project, building, site and storeys are that GUID with an id XORed in.
+//!
 //! Output:
 //!   history <bytes> count0e=<u32|none> table66=<u32|none> list_count=<u32|none> parse=<ok N | none>
+//!   base <offset> <32 hex, stored order>    at 0x16, 0x26, 0x36 and 0x56
+//!   level <ElementId> <elevation ft> <name>
 //!   terminators <byte hex>=<entries> ...
 //!   odd <index> <offset> <hex of the entry> before=<hex of the entry before> after=<hex of the one after>
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_re459_history_terminators -- FILE.rvt
 
+use rvt::research::partition_level_records::recover_partition_levels;
 use rvt::research::revit_global_ids::{
     EPISODE_COUNT_OFFSET, EPISODE_ENTRY_LEN, EPISODE_TABLE_OFFSET, EPISODE_TERMINATOR,
     EpisodeHistory,
 };
 use rvt::{RevitFile, compression, streams};
 use std::collections::BTreeMap;
+
+/// Where the header holds the project's base GUID: three copies in a row, then 16
+/// zero bytes, then a fourth that ends where the table's count begins.
+const BASE_GUID_AT: [usize; 4] = [0x16, 0x26, 0x36, 0x56];
 
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
@@ -78,6 +89,23 @@ fn main() {
         "history {} count0e={count:?} table66={table:?} list_count={list_count:?} parse={parsed}",
         history.len()
     );
+    // The project's base GUID, in the header, four times in the 2018 files read so
+    // far (RE-459): the GUID Revit's export XORs the fake ids -16, -15 and -14 into
+    // for the project, the building and the site, and a Level's ElementId into for
+    // a storey.
+    for at in BASE_GUID_AT {
+        let bytes = history.get(at..at + 16).map_or("none".to_string(), hex);
+        println!("base {at:#x} {bytes}");
+    }
+    let version = rf.basic_file_info().map(|info| info.version);
+    if let Ok(version) = version {
+        for level in recover_partition_levels(&mut rf, version).unwrap_or_default() {
+            println!(
+                "level {} {:.6} {}",
+                level.element_id, level.elevation_feet, level.name
+            );
+        }
+    }
     let (Some(count), Some(at), Some(list_count)) = (count, list_count_at, list_count) else {
         return;
     };
