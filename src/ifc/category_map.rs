@@ -473,8 +473,8 @@ pub static FOUNDATION_SLAB: Mapping = Mapping {
     predefined_type: Some("BASESLAB"),
 };
 
-/// The structural usage a framing instance's record stores
-/// ([`crate::partition_schema_mvp::STRUCT_USAGE_FIELD`]) for a horizontal
+/// The structural usage a framing instance's record stores (the field
+/// `STRUCT_USAGE_FIELD` of `partition_schema_mvp`) for a horizontal
 /// bracing. Read from a file and not from the API's enumeration: on a
 /// reporter's Revit 2027 structural model (counts only), of 915 framing
 /// instances the 485 with stored usage 3 (Girder in Revit's schedule) and the
