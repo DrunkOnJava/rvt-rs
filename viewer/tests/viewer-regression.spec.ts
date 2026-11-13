@@ -572,7 +572,8 @@ projectSampleTest(
     const filter = page.locator('#tree-filter');
     await expect(filter).toBeEnabled();
     await filter.fill('Basic Wall');
-    await expect(page.locator('#tree-filter-status')).toHaveText(/^\d+ elements? match$/);
+    // Einhoven's one wall (RE-440): the line is singular.
+    await expect(page.locator('#tree-filter-status')).toHaveText(/^(1 element matches|\d+ elements match)$/);
     await expect(page.locator('.tree-node.tree-element[data-ifc-type="IFCWALL"]').first()).toBeVisible();
     await filter.fill('no element is named this');
     await expect(page.locator('#tree-filter-status')).toHaveText('No element matches');
