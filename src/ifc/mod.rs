@@ -3554,7 +3554,10 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
     // plan centre and base, so `location_feet` is that base exactly as for
     // the record box it replaces. It is listed so that these beams bind by
     // their base as they did before that body; leaving it out would change
-    // a written value (their storey binding), listing it changes none.
+    // a written value (their storey binding), listing it changes none. A
+    // column or beam drawn as its type's I or hollow section is the same: the
+    // section replaces the record box's footprint and must fit it, and the
+    // element stays at the box's plan centre and base (#1947).
     let from_record = property_set.as_ref().is_some_and(|set| {
         set.properties.iter().any(|property| {
             property.name == "BodySource"
@@ -3566,6 +3569,8 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
                             || text == crate::element_record_wall_joins::WALL_BODY_JOIN_TRIMMED
                             || text == crate::element_record_column_cuts::COLUMN_BODY_JOIN_CUT
                             || text == crate::element_record_beam_cuts::BEAM_BODY_COLUMN_CUT
+                            || text == export_content::COLUMN_I_SECTION_BODY_SOURCE
+                            || text == export_content::COLUMN_HOLLOW_SECTION_BODY_SOURCE
                 )
         })
     });
