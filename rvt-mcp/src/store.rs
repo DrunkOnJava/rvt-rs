@@ -32,6 +32,7 @@ use sha2::{Digest, Sha256};
 use crate::args::MAX_PHASE_CHARS;
 use crate::bounds;
 use crate::config::{Config, Failure};
+use crate::root::Reach;
 use crate::schema::{ElemTableProvenance, FileProvenance};
 
 /// `bytes` as lowercase hex, two digits a byte.
@@ -87,10 +88,24 @@ pub struct Identity {
 }
 
 impl Identity {
-    /// The identity of the file at `path`, which is made canonical.
-    pub fn of(path: &Path) -> Result<Self, String> {
-        let canonical = std::fs::canonicalize(path)
+    /// The identity of the file at `path`, which is made canonical. Within a
+    /// root (#1883) a relative path is taken from it, and a file outside it
+    /// is refused: by its text before any file is looked at, so that the
+    /// refusal does not say whether the file exists, and again once every link
+    /// in the path is resolved.
+    pub fn of(path: &Path, reach: &Reach) -> Result<Self, String> {
+        let root = reach.limit()?;
+        let located = match root {
+            Some(root) => root.locate(path, "model")?,
+            None => path.to_path_buf(),
+        };
+        let canonical = std::fs::canonicalize(&located)
             .map_err(|error| format!("cannot read {}: {error}", path.display()))?;
+        if let Some(root) = root
+            && !root.holds(&canonical)
+        {
+            return Err(root.refusal("model", path));
+        }
         Self::stat(canonical)
     }
 
@@ -522,7 +537,7 @@ impl Store {
         if path.is_empty() {
             return Err("model is empty: pass a model_id from open_model, or the path of a .rvt, .rfa, .rte or .rft file".to_string());
         }
-        let identity = Identity::of(Path::new(path))?;
+        let identity = Identity::of(Path::new(path), &self.config.reach)?;
         // Before anything is read from a handle: an unknown phase is refused
         // here, listing the file's phases, and never takes a held slot. Every
         // decode of the entry also names the phase in its `ExportOptions`.

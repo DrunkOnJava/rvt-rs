@@ -1,8 +1,9 @@
 //! Where an export goes and how it is written.
 //!
 //! An export is the one thing the server writes. It goes to the path the
-//! caller names, which must carry the format's extension, must not be the
-//! model that was read, and must not exist unless the caller passes
+//! caller names, which must carry the format's extension, must lie inside the
+//! folder exports are confined to (`--output-dir`, else the root, #1883), must
+//! not be the model that was read, and must not exist unless the caller passes
 //! `overwrite`. It is written to a temporary file beside its target and put in
 //! place when whole, so a failed or cancelled export never leaves a truncated
 //! file under the target's name.
@@ -15,6 +16,7 @@ use sha2::{Digest, Sha256};
 use tempfile::NamedTempFile;
 
 use crate::config::{Config, Failure};
+use crate::root::{self, Root};
 use crate::store::lower_hex;
 
 /// A writer over the temporary file that counts and hashes what passes
@@ -67,9 +69,27 @@ pub struct Written {
     pub sha256: String,
 }
 
+/// The refusal for an `out_path` outside the folder exports are confined to:
+/// `--output-dir` when one was named, otherwise the root. `shown` is the path
+/// as it was resolved when the check failed, `raw` as the caller wrote it.
+fn outside(config: &Config, root: Option<&Root>, raw: &str, shown: &Path) -> String {
+    match (&config.output_dir, root) {
+        (Some(dir), _) => format!(
+            "out_path must be inside {}, the folder the server was started with (--output-dir): {}",
+            dir.display(),
+            shown.display()
+        ),
+        (None, Some(root)) => root.refusal("out_path", Path::new(raw)),
+        (None, None) => format!("out_path is outside the folder exports are confined to: {raw}"),
+    }
+}
+
 /// Check the path a caller names for an export and return the absolute path
 /// to write: `extension` is the format's, `input` the canonical path of the
-/// model being exported.
+/// model being exported. The path must lie inside `--output-dir` when the
+/// server was started with one, otherwise inside the root (a relative path is
+/// taken from that folder); with `--unconfined` and no `--output-dir` it may
+/// lie anywhere.
 pub fn plan(
     config: &Config,
     raw: &str,
@@ -82,10 +102,14 @@ pub fn plan(
         return Err("out_path is empty".to_string());
     }
     let mut path = PathBuf::from(raw);
-    if let Some(dir) = &config.output_dir
+    // Exports go inside `--output-dir` when one was named and otherwise inside
+    // the root (#1883); a relative path is taken from that folder.
+    let root = config.reach.limit()?;
+    let base: Option<&Path> = config.output_dir.as_deref().or(root.map(|root| root.dir()));
+    if let Some(base) = base
         && path.is_relative()
     {
-        path = dir.join(path);
+        path = base.join(path);
     }
     let has_extension = path
         .extension()
@@ -100,6 +124,13 @@ pub fn plan(
     let Some(file_name) = path.file_name() else {
         return Err(format!("out_path names no file: {}", path.display()));
     };
+    // Outside by its text: refused before any file is looked at, so that the
+    // refusal does not say whether a folder there exists (#1883).
+    if let Some(base) = base
+        && !root::inside(&path, base)
+    {
+        return Err(outside(config, root, raw, &path));
+    }
     let parent = match path.parent() {
         Some(parent) if !parent.as_os_str().is_empty() => parent,
         _ => Path::new("."),
@@ -114,14 +145,11 @@ pub fn plan(
         return Err(format!("{} is not a folder", parent.display()));
     }
     let target = parent.join(file_name);
-    if let Some(dir) = &config.output_dir
-        && !target.starts_with(dir)
+    // And once every link in the folder's path is resolved.
+    if let Some(base) = base
+        && !target.starts_with(base)
     {
-        return Err(format!(
-            "out_path must be inside {}, the folder the server was started with (--output-dir): {}",
-            dir.display(),
-            target.display()
-        ));
+        return Err(outside(config, root, raw, &target));
     }
     if target == input || std::fs::canonicalize(&target).is_ok_and(|existing| existing == input) {
         return Err(format!(
