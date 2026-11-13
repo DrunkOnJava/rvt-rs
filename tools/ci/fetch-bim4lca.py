@@ -166,12 +166,21 @@ def extract(url: str, total: int, entry: tuple[int, int, int, int], out: Path) -
     inflate = zlib.decompressobj(-15) if method == 8 else None
     with open(out, "wb") as f:
         for i in range(0, len(data), 1 << 22):
-            chunk = data[i : i + (1 << 22)]
-            chunk = inflate.decompress(chunk) if inflate else chunk
-            digest.update(chunk)
-            written += f.write(chunk)
-            if written > usize:
-                raise Stale(f"{out.name} inflates past the {usize} bytes the archive says")
+            pending = data[i : i + (1 << 22)]
+            while pending:
+                if inflate:
+                    # Never inflate more than one byte past the listed size: deflate can reach 1000:1, so an
+                    # unbounded call could expand a 4 MiB chunk far past it before the check below ran.
+                    chunk = inflate.decompress(pending, usize - written + 1)
+                    pending = inflate.unconsumed_tail
+                else:
+                    chunk, pending = pending, b""
+                digest.update(chunk)
+                written += f.write(chunk)
+                if written > usize:
+                    raise Stale(f"{out.name} inflates past the {usize} bytes the archive says")
+                if inflate and not chunk and pending:
+                    break
         if inflate:
             rest = inflate.flush()
             digest.update(rest)

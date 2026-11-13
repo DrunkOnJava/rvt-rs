@@ -19,7 +19,7 @@ PINS="${1:?usage: fetch-holdout-archives.sh PINS TARGET_DIR}"
 # The pins are read through a process substitution, whose failure does not stop the script: a missing
 # or empty pins file ran the loop zero times and exited 0, read as "fetched and verified" (#1882).
 [ -r "$PINS" ] || { echo "$PINS: cannot read the pins" >&2; exit 66; }
-grep -qv '^#' "$PINS" || { echo "$PINS: no pins in it" >&2; exit 66; }
+grep -qvE '^[[:space:]]*(#|$)' "$PINS" || { echo "$PINS: no pins in it" >&2; exit 66; }
 TARGET="${2:?usage: fetch-holdout-archives.sh PINS TARGET_DIR}"
 sha256() { if command -v sha256sum > /dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
 work=$(mktemp -d)

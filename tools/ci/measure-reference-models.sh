@@ -345,8 +345,6 @@ info() { # file dir
   echo "exit $?" > "$2/info.exit"
 }
 
-# C9: the IFC4 schema's view of dir/model.ifc in dir/schema.txt: attribute
-# counts always, IfcOpenShell's full validation and its check of the schema's
 # One schema step, its output filtered by `drop` (a grep pattern, or empty). These scorers exit 1 for a finding,
 # so a non-zero status alone is no crash; a timeout (124), a signal (128 and up), a usage error (2) or a Python
 # traceback is, and it gets the `exit N` line the "results are whole" step looks for. Without it a crashed or
@@ -363,6 +361,8 @@ schema_step() { # dir step limit drop script args...
   rm -f "$out"
 }
 
+# C9: the IFC4 schema's view of dir/model.ifc in dir/schema.txt: attribute
+# counts always, IfcOpenShell's full validation and its check of the schema's
 # EXPRESS rules up to max_bytes, otherwise marked as skipped, and the standard property sets against IFC4's
 # definitions, fetched once into PSET_DEFINITIONS (#822).
 PSET_DEFINITIONS="${RUNNER_TEMP:-/tmp}/ifc4-pset-definitions.csv"
