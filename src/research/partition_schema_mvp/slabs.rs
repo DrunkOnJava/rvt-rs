@@ -154,7 +154,9 @@ pub(super) fn sketch_plan_profiles(
 /// export, and a roof whose slope is not read is drawn as its outline at the
 /// record box's full height, so a sloped roof would become a level block.
 pub(super) fn roof_reads_exact_sketches(revit_version: u32) -> bool {
-    !matches!(revit_version, 2026..=2027)
+    // Experiment (#1479): every release, to hold 2026 and 2027 roofs to the 2025 save.
+    let _ = revit_version;
+    true
 }
 
 /// The first frame of a sketch line, by frame order (#1368).
