@@ -55,9 +55,11 @@ class, GlobalId, storey, BodySource, ProfileResolved, representation types
 and solid kinds,
 placement (0.001 ft), body volume (1e-6 relative) and vertices (each within
 0.001 ft of one of the other's, both ways). Where a Tag has several products (a
-floor Revit writes as several), only the first keeps the element's own GlobalId,
-so the saves must share exactly one GlobalId, on the two pieces paired by storey,
-volume and centre; a pipe that is a circular extrusion in both saves is held to
+floor Revit writes as several), they are paired by storey, volume and centre,
+and each keeps its GlobalId as a single product does: the first carries the
+element's own and the others are derived from it, not from the document
+(#1840), so a further piece that takes a new GlobalId in a later save, or two
+pieces whose identities are swapped, fails; a pipe that is a circular extrusion in both saves is held to
 the cylinder itself instead of the vertices of the polygon it meshes to: the
 axis ends in either order, the radius and the length, each within 0.001 ft
 (Griffin, 2026-11-05: the 2027 save writes the extrusion of 115 of rme_basic's 491
@@ -340,9 +342,9 @@ def products(path, named=frozenset()):
         source, resolved = properties(element)
         out[tag].append((element, source, group_of(element, source, resolved, tag in named)))
     # Products that share a Tag (a floor Revit writes as several, one stair for each
-    # storey) are ordered by what they are, not by GlobalId: all but the first carry a
-    # GlobalId derived from the export, which differs between two saves of one project
-    # and would pair them crosswise (rme_advanced's floors, RE-346). Storey, then the
+    # storey) are ordered by what they are, not by GlobalId, so that a GlobalId moved
+    # from one piece to another between saves shows as a difference rather than
+    # pairing the pieces crosswise (rme_advanced's floors, RE-346). Storey, then the
     # volume and the centre of the body, then the GlobalId.
     settings = ifcopenshell.geom.settings()
     settings.set("use-world-coords", True)
@@ -618,24 +620,8 @@ def main():
                 fail(f"{group}: {tag} is {len(chosen[tag])} product(s) here, {len(selected)} drawn so in the {year} save ({', '.join(drawn)})")
                 continue
             ok = True
-            if len(chosen[tag]) > 1:
-                # Of the products Revit writes under one Tag only the first keeps the
-                # element's own GlobalId; the others' are derived from the export and
-                # differ between saves. So the saves share exactly one, and it is on
-                # the two products paired by what they are: an identity swapped between
-                # two pieces (or none kept) fails here.
-                shared = {item[0].GlobalId for item in chosen[tag]} & {item[0].GlobalId for item in selected}
-                kept = sum(1 for left, right in zip(chosen[tag], selected) if left[0].GlobalId == right[0].GlobalId)
-                if len(shared) != 1 or kept != 1:
-                    ok = False
-                    fail(
-                        f"{group}: {tag} is {len(chosen[tag])} products here; {len(shared)} GlobalId(s) shared with the {year} save, "
-                        f"{kept} of them on the pieces paired by storey, volume and centre, where exactly one of each is expected"
-                    )
             for left, right in zip(chosen[tag], selected):
                 for field, mine, theirs in differences(settings, (scale_candidate, scale_earlier), left, right, how):
-                    if field == "GlobalId" and len(chosen[tag]) > 1:
-                        continue
                     ok = False
                     detail = f"{mine} here, {theirs} in the {year} save" if theirs != "" else mine
                     fail(f"{group}: {tag} {left[0].is_a()} differs in {field}: {detail}")

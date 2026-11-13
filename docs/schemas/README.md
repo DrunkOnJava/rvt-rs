@@ -31,6 +31,7 @@ closed.
 | [`analyze.schema.json`](analyze.schema.json) | `rvt-analyze --json` |
 | [`inspect.schema.json`](inspect.schema.json) | `rvt-inspect --json`, including its error report |
 | [`ifc-compare.schema.json`](ifc-compare.schema.json) | `rvt-ifc-compare --json PATH` (`ifc::compare::IfcCompareReport`) |
+| [`rvt-diff-elements.schema.json`](rvt-diff-elements.schema.json) | `rvt-diff --elements A B --json PATH` (`ifc::element_diff::ElementDiff`, #1843) |
 | [`schema-table.schema.json`](schema-table.schema.json) | `rvt-schema --json` (`formats::SchemaTable`; `--diagnostics` prints `schema-diagnostics`) |
 | [`es-observation.schema.json`](es-observation.schema.json) | ES remap research observations (not a production decode claim) |
 | [`es-capability.schema.json`](es-capability.schema.json) | Research capability promotion stub (report §15.16) |
