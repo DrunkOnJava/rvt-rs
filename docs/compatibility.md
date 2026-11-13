@@ -143,7 +143,7 @@ Column definitions:
 | Column | IfcColumn (COLUMN) | yes | no helper | yes | no helper | n/a |
 | StructuralColumn | IfcColumn (COLUMN) | yes | no helper | yes | no helper | n/a |
 | StructuralFraming | IfcBeam (BEAM) | yes | no helper | yes | no helper | n/a |
-| StructuralFoundation | IfcFooting | yes | no helper | yes | no helper | n/a |
+| StructuralFoundation | IfcFooting; a floor of the category is `IfcSlab` (`BASESLAB`, #1841, RE-457) | yes | no helper | yes | no helper | n/a |
 | Rebar | IfcReinforcingBar | yes | no helper | yes | no helper | n/a |
 | Room | IfcSpace (SPACE) | yes | no helper | n/a | no helper | n/a |
 | Area | IfcSpace | yes | no helper | n/a | no helper | n/a |

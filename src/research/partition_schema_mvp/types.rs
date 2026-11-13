@@ -1012,7 +1012,16 @@ pub(super) fn attach_system_family_names(
             continue;
         }
         let has_layers = type_of(element).is_some_and(|id| layered.contains(&id));
-        let Some(family) = system_family(&element.class, has_layers) else {
+        // #1841: a floor of the Structural Foundations category is the Floor
+        // system family, which its record names as the class `Floor` (RE-76).
+        let foundation_floor = element.class == "StructuralFoundation"
+            && element.fields.iter().any(|(name, value)| {
+                matches!(value, InstanceField::String(class)
+                    if name == REVIT_CLASS_FIELD && class == "Floor")
+            });
+        let Some(family) = system_family(&element.class, has_layers)
+            .or_else(|| foundation_floor.then_some("Floor"))
+        else {
             continue;
         };
         element.fields.push((

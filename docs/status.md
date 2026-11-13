@@ -1247,6 +1247,22 @@ and earlier write every room, as every element: both phase rules start at
 Revit 2016 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
+**RE-457 (2026-11-13)** writes a floor of the Structural Foundations category as
+an `IfcSlab` with `BASESLAB`, and a framing instance whose stored structural
+usage is the horizontal bracing's (8) as an `IfcMember`. `StructuralFoundation`
+was mapped to `IfcFooting` and `StructuralFraming` to `IfcBeam` whole, and on a
+reporter's Revit 2027 structural model Revit's export writes the 59 foundation
+slabs as `IfcSlab` (`BASESLAB` on their types) and the one framing instance of
+usage 8 as `IfcMember`, where the 914 of usage 3 and 6 are `IfcBeam` (#1841). A
+floor is told from a footing by the class its record names: Snowdon Towers
+Structural has 4 floors among its 90 footings, `rac_basic` has 1 on each save
+from 2024 and `rst_basic` none among its 36, and the usage is read in the pass
+that already reads the beams' rotations. No
+model Measure holds with a Revit export has a foundation or a bracing, so
+neither rule is scored against Revit here: the reporter's counts after a
+release are the check, and the member's `PredefinedType` is not read
+(`reports/element-framing/RE-457-foundation-slab-and-bracing-member.md`).
+
 **RE-454 (2026-11-13)** puts a beam or brace in the storey of its Reference
 Level, which its record's second counted reference list holds. The storey bind
 read the first list alone, so on each BIM4LCA timber office file 63 beams were
