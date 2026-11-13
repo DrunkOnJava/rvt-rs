@@ -120,6 +120,30 @@ pub fn redact_sensitive(s: &str) -> String {
     out
 }
 
+/// Scrub every string value inside `value` with [`redact_sensitive`], in
+/// place, however deep an array or an object holds it. The keys of an object,
+/// numbers, booleans and nulls are left as they are.
+///
+/// ```
+/// use rvt::redact::redact_json_strings;
+///
+/// let mut value = serde_json::json!({ "value": "/home/alice/a.rvt", "size": 4 });
+/// redact_json_strings(&mut value);
+/// assert_eq!(
+///     value,
+///     serde_json::json!({ "value": "/home/<redacted>/a.rvt", "size": 4 })
+/// );
+/// ```
+pub fn redact_json_strings(value: &mut serde_json::Value) {
+    use serde_json::Value;
+    match value {
+        Value::String(text) => *text = redact_sensitive(text.as_str()),
+        Value::Array(items) => items.iter_mut().for_each(redact_json_strings),
+        Value::Object(fields) => fields.values_mut().for_each(redact_json_strings),
+        Value::Null | Value::Bool(_) | Value::Number(_) => {}
+    }
+}
+
 fn redact_autodesk_project_ids(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut rest = s;
@@ -169,7 +193,7 @@ pub fn anonymize_file_name(path: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::redact_path_str;
+    use super::{redact_json_strings, redact_path_str};
 
     // The ways `redact_path_str` can leave a user name behind, or take more
     // than a name, written before the loop that scrubs every path.
@@ -262,5 +286,54 @@ mod tests {
     fn scrubbing_twice_gives_what_scrubbing_once_gives() {
         let once = redact_path_str("/home/alice/a.rvt and C:\\Users\\bob\\b.rvt");
         assert_eq!(redact_path_str(&once), once);
+    }
+
+    // The ways `redact_json_strings` can leave text behind, or change what is
+    // not text, written before the walk.
+
+    #[test]
+    fn a_string_is_scrubbed_however_deep_an_array_or_object_holds_it() {
+        let mut value = serde_json::json!({
+            "value": "/home/alice/a.rvt",
+            "items": [
+                "C:\\Users\\bob\\b.rvt",
+                { "inner": ["/Users/carol/c.rvt", ["C:\\Users\\dave\\OneDrive - Autodesk\\m.rfa"]] },
+            ],
+        });
+        redact_json_strings(&mut value);
+        let text = value.to_string();
+        for leaked in ["alice", "bob", "carol", "dave", "OneDrive"] {
+            assert!(!text.contains(leaked), "{leaked} survives in {text}");
+        }
+        assert!(text.contains("<redacted autodesk internal path>"));
+    }
+
+    #[test]
+    fn what_is_not_text_with_a_path_in_it_is_left_as_it_was() {
+        let before = serde_json::json!({
+            "id": 12345,
+            "flag": true,
+            "none": null,
+            "ratio": 0.5,
+            "digits": "12345",
+            "name": "Basic Wall:Generic - 200mm",
+            "empty": "",
+            "list": [],
+        });
+        let mut after = before.clone();
+        redact_json_strings(&mut after);
+        assert_eq!(after, before);
+    }
+
+    #[test]
+    fn scrubbing_a_value_twice_gives_what_scrubbing_once_gives() {
+        let mut once = serde_json::json!([
+            "/home/alice/a.rvt",
+            { "path": "C:\\Users\\bob\\OneDrive - Autodesk\\m.rfa" },
+        ]);
+        redact_json_strings(&mut once);
+        let mut twice = once.clone();
+        redact_json_strings(&mut twice);
+        assert_eq!(twice, once);
     }
 }

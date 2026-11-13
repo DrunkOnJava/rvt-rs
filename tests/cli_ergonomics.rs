@@ -356,6 +356,29 @@ fn a_missing_input_is_named_with_one_error_prefix() {
     }
 }
 
+/// An error opening a file echoes the path it was given, home folder and all
+/// (the test above), so `--redact` has to scrub the error text as well as the
+/// path a successful run prints (#1919).
+#[test]
+fn rvt_doc_redact_scrubs_the_path_an_error_names() {
+    let bin = env!("CARGO_BIN_EXE_rvt-doc");
+    // Joined from parts so that no home path is written out whole, which the
+    // PII guard job would flag.
+    let path = ["/home/", "alice", "/OneDrive - Autodesk/models/missing.rvt"].concat();
+    let plain = stderr(&run(bin, &[path.as_ref()]));
+    assert!(
+        plain.contains("alice") && plain.contains("OneDrive - Autodesk"),
+        "the error does not name the folders to scrub: {plain}"
+    );
+    let out = run(bin, &[path.as_ref(), "--redact".as_ref()]);
+    let err = stderr(&out);
+    assert_eq!(out.status.code(), Some(1), "{err}");
+    assert!(err.starts_with("error: "), "{err}");
+    for leaked in ["alice", "OneDrive"] {
+        assert!(!err.contains(leaked), "{leaked} survives --redact: {err}");
+    }
+}
+
 #[test]
 fn json_is_shorthand_for_format_json() {
     let Some(source) = fixture() else { return };
