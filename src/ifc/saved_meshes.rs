@@ -1415,11 +1415,12 @@ fn wall_frame_and_openings(model: &IfcModel) -> BTreeMap<usize, WallOpenings> {
             [cut.x_dim_feet, cut.y_dim_feet]
         });
         let [cx, cy] = cut.map_or([0.0, 0.0], |cut| cut.centre_feet);
+        // `z_range_feet` is where the opening starts and how high it is (RE-93),
+        // as the writer extrudes it: its top is `start + height`, so the start
+        // is added once, below.
         let [start, height] = cut
             .and_then(|cut| cut.z_range_feet)
-            .map_or([0.0, body.height_feet], |[start, height]| {
-                [start, start + height]
-            });
+            .unwrap_or([0.0, body.height_feet]);
         let (sin, cos) = rotation_radians.unwrap_or(0.0).sin_cos();
         let mut x = [f64::INFINITY, f64::NEG_INFINITY];
         let mut y = [f64::INFINITY, f64::NEG_INFINITY];

@@ -418,9 +418,10 @@ pub fn stored_global_ids(rf: &mut RevitFile, level_ids: &BTreeSet<u32>) -> Store
 /// is the record's first id: on Snowdon Towers the 37 elements whose
 /// ElementId differs from it (RE-41) all match Revit's only that way. Empty when the file's
 /// ElemTable records are neither 40 bytes long (Revit 2024 and later) nor
-/// 28 (Revit 2015 to 2023: equal to Revit's on files of 2018, 2020, 2021 and
-/// 2023, and not on two 2018 projects and a 2015 example, RE-459) or its
-/// history does not parse.
+/// 28 (Revit 2015 to 2023: equal to Revit's on 84% to 100% of the elements
+/// both exports hold on every such file measured but BIMcollab's Revit 2015
+/// example, which is 0 of 241 against an export that went through another
+/// tool, RE-459) or its history does not parse.
 pub fn revit_global_ids(rf: &mut RevitFile) -> Result<BTreeMap<u32, String>> {
     let records = elem_table::parse_records(rf)?;
     let episode_offset = match records.first().map(|record| record.raw.len()) {
