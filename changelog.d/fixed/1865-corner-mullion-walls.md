@@ -27,7 +27,7 @@
   Two members of the BIM4LCA timber office are aggregated into the curtain
   walls Revit's own export names (`IfcMember` same whole 7,872 to 7,874). The `rac_advanced` saves of 2015 to 2022 now
   write the same 19,979 parameter values and those of 2024 to 2027 the same
-  21,035; the 2023 save stays six short (#1899). Not changed: the curtain
+  21,035; the 2023 save was six short until RE-451 (#1899). Not changed: the curtain
   door 216844, which the 2026 and 2027 saves leave out of its wall for a
   cause not found, and the 5 mullions, whose wall nothing in the file names;
   no Revit export of any of these saves exists, so the 2027 save is held to
