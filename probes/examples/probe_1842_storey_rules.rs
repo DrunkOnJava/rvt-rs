@@ -26,10 +26,11 @@
 //!   level id=<ElementId> elev=<feet> story=<yes|no|?> name=<the rest of the line>
 //!   storey index=<n> elev=<feet> name=<the rest of the line>
 //!   named tag=<ElementId> cat=<category, spaces as _> class=<IFC entity|-> n=<Levels named>
-//!     levels=<ElementIds in list order> base=<feet> top=<feet> ours=<storey index|->
-//!     (one line per placed instance whose record names two or more Levels:
-//!     `base` and `top` are the record box's lowest and highest z, `ours` the
-//!     storey the element itself is contained in)
+//!     levels=<ElementIds in list order, or -> base=<feet> top=<feet> ours=<storey index|->
+//!     (one line per placed instance whose record names two or more Levels, and
+//!     for the structural framing, columns and foundations, floors and stairs also
+//!     those that name none or one: `base` and `top` are the record box's lowest
+//!     and highest z, `ours` the storey the element itself is contained in)
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_1842_storey_rules -- MODEL.rvt
@@ -110,13 +111,25 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
         let named = named_levels(&record.references, &level_ids);
-        if named.len() < 2 {
-            continue;
-        }
-        seen.insert(record.element_id);
         let category = per::builtin_category_name(record.builtin_category)
             .unwrap_or("unnamed")
             .replace(' ', "_");
+        // A record that names none or one Level is listed for the categories whose
+        // elements #1842 reports on no storey or on a storey below Revit's.
+        let structural = matches!(
+            category.as_str(),
+            "Structural_Framing"
+                | "Structural_Foundations"
+                | "Structural_Columns"
+                | "Floors"
+                | "Stairs"
+                | "Stairs:_Runs"
+                | "Stairs:_Landings"
+        );
+        if named.len() < 2 && !structural {
+            continue;
+        }
+        seen.insert(record.element_id);
         let (class, ours) = exported
             .get(&record.element_id)
             .map_or(("-".to_string(), None), |(class, storey)| {
@@ -127,7 +140,11 @@ fn main() -> anyhow::Result<()> {
             "named tag={} cat={category} class={class} n={} levels={} base={:.4} top={:.4} ours={}",
             record.element_id,
             named.len(),
-            listed.join(","),
+            if listed.is_empty() {
+                "-".to_string()
+            } else {
+                listed.join(",")
+            },
             record.bbox_feet[2],
             record.bbox_feet[5],
             ours.map_or("-".to_string(), |index| index.to_string())
