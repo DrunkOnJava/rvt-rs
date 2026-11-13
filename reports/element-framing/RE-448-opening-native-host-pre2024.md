@@ -55,6 +55,6 @@ On `main` the same 29 openings lay 0.66 to 4.8 m from the 2024 save's, measured 
 
 ## 5. Limits
 
-- A door's opening on 2015 to 2023 is its rough opening, which the 2024 path replaces with the outline the door's symbol cuts (RE-215, 2024 to 2027): door 154488's is 1.067 by 2.21 m on 2023 and 0.915 by 2.134 m on 2024, with the same centre and faces. This change does not touch it.
+- A door's opening on 2015 to 2023 is its record box, frame and trim included, where the 2024 path cuts the outline the door's symbol cuts (RE-215, 2024 to 2027): door 154488's is 1.067 by 2.21 m on 2023 and 0.915 by 2.134 m on 2024, with the same centre and faces. This change does not touch it; RE-450 does.
 - The rule rebinds only a door or window the reference list set in a wall. One whose list names no wall, or only a curtain wall, stays unhosted, as on 2024.
 - No Revit export of a 2015 to 2023 save is local. The witness is the same project's 2024 save, as for RE-364, RE-366 and RE-447.

@@ -20,7 +20,9 @@ counted apart.
 
 The same is asked of each kind of element a beam's list can name (`column`, `wall`, `beam`), whose
 bounds the probe prints as `<kind>_low` and `<kind>_high`: the near face of the one element of that
-kind that holds the end, where it lies more than 1 mm inside the box. The beams Revit makes shorter
+kind that holds the end, where it lies more than 1 mm inside the box. `section` is the columns again,
+held and cut not by their record box but by the section the export draws for them, along the
+beam's centre line (the probe's `section_*`). The beams Revit makes shorter
 are counted by whether they name an element of the kind, whether one holds an end, whether the
 kind gives them bounds and, where it does, whether the cut length is Revit's within 1 mm. The beams
 Revit leaves at the record or makes longer are counted by whether the kind cuts them, which it must
@@ -59,7 +61,7 @@ import numpy
 
 TOLERANCE_FEET = 0.0033  # 1 mm
 METRES_FEET = 1 / 0.3048
-KINDS = ("column", "wall", "beam")
+KINDS = ("column", "wall", "beam", "section")
 # The elements whose faces a beam's end may lie on, by the IFC class that first matches, and the
 # kind each is counted as, in the order a lying-on is reported when an end lies on several.
 FACES = (
@@ -109,6 +111,14 @@ def read_probe(path):
         fields = dict(part.split("=", 1) for part in line.split()[1:] if "=" in part)
         beams[fields["tag"]] = fields
     return beams
+
+
+def read_file_line(path):
+    """The probe's `file` line as fields: what the export holds and how many columns' sections it read."""
+    for line in open(path, encoding="utf-8", errors="replace"):
+        if line.startswith("file "):
+            return dict(part.split("=", 1) for part in line.split()[1:] if "=" in part)
+    return {}
 
 
 def lengths(model, tags):
@@ -289,6 +299,14 @@ def main():
     revit = {tag: length * factor for tag, length in raw.items()}
     square = sum(1 for f in beams.values() if f["axis"] == "-")
     print(f"beam ends: {len(beams)} beams in the probe, {len(revit)} with a body in Revit's export, {square} square in plan (not scored)")
+    # A section kind that read no column cuts no beam, which would read as a pass: say how many it read.
+    drawn = read_file_line(args[0])
+    print(
+        f"beam ends: the export draws {drawn.get('columns_exported', '?')} columns; the probe reads the "
+        f"section of {drawn.get('sections', '?')} and leaves out {drawn.get('unread', '?')} "
+        f"(a section's centre from its record box's centre, median/largest in feet: "
+        f"{drawn.get('section_centre_offset', '?')})"
+    )
 
     table = collections.Counter()
     cut = collections.Counter()
@@ -343,14 +361,14 @@ def main():
         print(f"beam ends: the {len(shortfalls)} beams Revit makes shorter than the record box, by the kind of element their list names:")
         for kind in KINDS:
             print(
-                f"beam ends:   {kind:<6} names {shortened[(kind, 'names')]}, holds an end {shortened[(kind, 'holds an end')]},"
+                f"beam ends:   {kind:<7} names {shortened[(kind, 'names')]}, holds an end {shortened[(kind, 'holds an end')]},"
                 f" gives bounds {shortened[(kind, 'gives bounds')]}"
                 f" (exact {shortened[(kind, 'exact')]}, cut too far {shortened[(kind, 'cut too far')]},"
                 f" cut too little {shortened[(kind, 'cut too little')]})"
             )
     print("beam ends: the beams Revit leaves at the record box's length or makes longer, cut by a kind of element (cut where Revit does not):")
     for kind in KINDS:
-        print(f"beam ends:   {kind:<6} same {spared[(kind, 'same')]}, longer {spared[(kind, 'longer')]}")
+        print(f"beam ends:   {kind:<7} same {spared[(kind, 'same')]}, longer {spared[(kind, 'longer')]}")
     if shortfalls:
         mm = sorted(value * 304.8 for value in shortfalls)
         print(
