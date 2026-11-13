@@ -224,22 +224,28 @@ fn write_ifc_with_quality_mode_and_limits(
         false,
         false,
     )?;
-    // #1075, #1833: a stream a resource limit kept from being read, or a
-    // reader that stopped at its work budget, leaves the export without what
-    // it holds; refuse unless the caller accepts that.
+    // #1833: a reader that stopped at its work budget leaves out what it would
+    // have read, and the IFC is still written, with a warning (Griffin,
+    // 2026-11-12, "Write it, with a warning").
+    if let Some(stops) = run.diagnostics.work_budget_stops() {
+        let mut message = String::from(
+            "readers stopped at a work budget, so the IFC leaves out what they would have read:",
+        );
+        for (reader, times) in stops {
+            message.push_str(&format!("\n  {reader} stopped {times} time(s)"));
+        }
+        warn_runtime(py, &message)?;
+    }
+    // #1075: a stream a resource limit kept from being read leaves the export
+    // without what it holds; refuse unless the caller accepts that.
     if !allow_partial && run.diagnostics.is_partial() {
         let mut message =
             String::from("part of the file was not read, so the IFC would be incomplete:");
         for stream in &run.unread {
             message.push_str(&format!("\n  {stream}"));
         }
-        for (reader, times) in run.diagnostics.work_budget_stops().into_iter().flatten() {
-            message.push_str(&format!(
-                "\n  {reader} stopped {times} time(s) at its work budget"
-            ));
-        }
         message.push_str(
-            "\nOpen the file with a larger max_stream_bytes / max_inflate_bytes to read a stream (no option raises a work budget), or pass allow_partial=True to write the incomplete IFC.",
+            "\nOpen the file with a larger max_stream_bytes / max_inflate_bytes to read it, or pass allow_partial=True to write the incomplete IFC.",
         );
         return Err(PyValueError::new_err(message));
     }
@@ -895,8 +901,9 @@ impl PyRevitFile {
     /// `ValueError`.
     ///
     /// Raises `ValueError` when a resource limit kept part of the file from
-    /// being read (`unread_streams()` lists it), or a reader stopped at its
-    /// work budget, unless `allow_partial=True`.
+    /// being read (`unread_streams()` lists it), unless `allow_partial=True`.
+    /// A reader that stopped at its work budget leaves out what it would have
+    /// read, and the IFC is still returned, with a `RuntimeWarning` naming it.
     ///
     /// Every element of a Revit 2023 to 2027 file that would be a bounding
     /// box is drawn from the mesh Revit saved for it where all of a mesh
@@ -1124,8 +1131,8 @@ impl PyRevitFile {
 /// exporter, return the STEP string. Equivalent to
 /// `rvt.RevitFile(path).write_ifc(mode, allow_partial, saved_meshes)`:
 /// raises `ValueError` when a resource limit kept part of the file from being
-/// read, or a reader stopped at its work budget, unless `allow_partial=True`,
-/// and draws doors and windows from their
+/// read, unless `allow_partial=True`, warns where a reader stopped at its work
+/// budget, and draws doors and windows from their
 /// saved meshes unless `saved_meshes=False`.
 #[pyfunction]
 #[pyo3(signature = (path, mode = "scaffold", allow_partial = false, saved_meshes = true, phase = None))]

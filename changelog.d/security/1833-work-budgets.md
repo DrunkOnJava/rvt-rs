@@ -9,9 +9,9 @@
   and a pipe end's keys through a set. Past a budget the reader leaves the
   element as an unread stream leaves it, and the export says so: a
   `work_budget_reached` skipped item counting each reader's stops, a
-  `Work budget reached:` warning per reader, and from `rvt-ifc`,
-  `rvt-gltf`, Python's `write_ifc` and the MCP server's exports, no file
-  unless a partial export is allowed (exit status 3 from the CLIs). The
-  memo of element-data header positions is held under 64 MiB, and the memo
+  `Work budget reached:` warning per reader. The export is still written:
+  `rvt-ifc` and `rvt-gltf` print a warning naming each reader, Python's
+  `write_ifc` gives a `RuntimeWarning`, and the MCP server's exports list
+  it in their notes. The memo of element-data header positions is held under 64 MiB, and the memo
   of inflated partitions under 16 GiB. No real file of the measured corpus
   changes.

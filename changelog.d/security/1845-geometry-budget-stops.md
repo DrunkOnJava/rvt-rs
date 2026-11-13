@@ -3,5 +3,5 @@
   cells and space containment left the shape out or the element uncontained
   without a word. Each now notes its stop, as the readers' budgets do
   (#1833): the export's diagnostics list it under `work_budget_reached`, and
-  `rvt-ifc` and `rvt-gltf` write no model and exit with status 3 unless
-  `--allow-partial`. No file of the measured corpus reaches one.
+  the export is written with a warning naming it. No file of the measured
+  corpus reaches one.

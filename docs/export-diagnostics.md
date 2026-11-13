@@ -612,9 +612,12 @@ budgets too: a wall's top left uncut (`wall_top_pieces`,
 (`wall_top_embedded_pieces`), a roof or slab envelope not drawn
 (`envelope_pieces`), the mullion ends in a crowded grid cell counted as
 continued by none (`mullion_end_cells`), and no element contained in a space
-(`space_containment`). No option raises a work budget. As for an unread
-stream, `rvt-ifc` and `rvt-gltf` write no model and exit with status 3 when
-this item is present, unless `--allow-partial`. The stops are kept with the
+(`space_containment`). No option raises a work budget. Unlike an unread
+stream, a stop does not make the export partial: `rvt-ifc` and `rvt-gltf`
+write the model and print a warning naming each reader, Python's
+`write_ifc` returns the IFC with a `RuntimeWarning`, and the MCP server's
+exports write the file with the stops in their notes (Griffin, 2026-11-12:
+"Write it, with a warning"). The stops are kept with the
 open file: a second export of it, which reads back what the first read,
 reports them too. A reader that export runs again adds its stops again, so a
 count is how often the reader stopped on the open file; which readers stopped

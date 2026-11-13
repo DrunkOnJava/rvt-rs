@@ -132,8 +132,10 @@ opens the file, runs the document-level IFC4 exporter
 `rvt.RevitFile(path).write_ifc(mode=mode, allow_partial=allow_partial, saved_meshes=saved_meshes, phase=phase)`.
 Raises `IOError` on open failure, `ValueError` if the file parses as CFB
 but the exporter can't build a model, the requested export mode cannot be
-satisfied, or a resource limit kept part of the file from being read or a
-reader stopped at its work budget, and `allow_partial` is false.
+satisfied, or a resource limit kept part of the file from being read and
+`allow_partial` is false. A reader that stopped at its work budget leaves out
+what it would have read, and the IFC is still returned, with a
+`RuntimeWarning` naming it.
 
 `rvt_to_ifc_diagnostics(path, saved_meshes=True, phase=None, element_provenance=False, export_decisions=False)` returns the JSON
 diagnostics sidecar for the same export path. The schema matches `rvt-ifc --diagnostics`

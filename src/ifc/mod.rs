@@ -445,15 +445,17 @@ pub struct RoomPhaseFallback {
 const UNAPPLIED_EXPORT_VALUES: &str = "so each keeps its category's entity (#792):";
 
 impl ExportDiagnostics {
-    /// Whether the export is missing part of the file: a resource limit kept
-    /// a stream from being read whole ([`UNREAD_STREAMS_REASON`], #1075), or
-    /// a reader stopped at its work budget ([`WORK_BUDGET_REASON`], #1833).
-    /// `rvt-ifc`, `rvt-gltf`, Python's `write_ifc` and the MCP server's
-    /// exports write nothing then unless a partial export is allowed.
+    /// Whether a resource limit kept a stream from being read whole
+    /// ([`UNREAD_STREAMS_REASON`], #1075), so the export is missing what it
+    /// holds. `rvt-ifc`, `rvt-gltf`, Python's `write_ifc` and the MCP
+    /// server's exports write nothing then unless a partial export is allowed.
+    /// A reader that stopped at its work budget ([`Self::work_budget_stops`])
+    /// does not make an export partial: it is written, with a warning
+    /// (Griffin, 2026-11-12).
     pub fn is_partial(&self) -> bool {
         self.skipped
             .iter()
-            .any(|item| item.reason == UNREAD_STREAMS_REASON || item.reason == WORK_BUDGET_REASON)
+            .any(|item| item.reason == UNREAD_STREAMS_REASON)
     }
 
     /// The readers that stopped at a work budget ([`WORK_BUDGET_REASON`],
