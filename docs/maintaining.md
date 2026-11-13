@@ -181,7 +181,7 @@ is never read as a count. A number that is none of these and is not a
 measurement of a model (a default limit, a count another check pins) carries a
 marker in its clause, with its reason:
 
-    the 12 JS-callable bindings<!-- w10: a count tools/ci/wasm-api.py holds to the source -->
+    the 13 JS-callable bindings<!-- w10: a count tools/ci/wasm-api.py holds to the source -->
 
 A marker without a reason fails, and so does one with nothing to excuse (its
 clause has no number, or every number in it is beside its model), so markers do
@@ -196,8 +196,8 @@ mullions`, `all 24`, `250 of the 251`), and a miss is a number nobody checked.
 Here a new form fails until it names a model, and the few numbers that are not
 measurements say so beside themselves, with a reason a reviewer can read. The
 markers on the pages today are for project release versions, the binding count
-`tools/ci/wasm-api.py` pins, the resource-limit defaults, an exit status and a
-value rvt-rs writes.
+`tools/ci/wasm-api.py` pins, the resource-limit defaults, an exit status, a
+value rvt-rs writes, wasm32's address space and a count buildingSMART publishes.
 
 **Keeping a new number to the rule.** Write the model where the number is, using a
 name from the index (`Core Interior`, `the BIM4LCA office`, `puzzbobb`), and
@@ -284,8 +284,8 @@ for the five lowest ElementIds of each IFC entity, the diagnostics and an
   any other value) and nothing else (`tools/ci/scrub-holdout-results.sh`).
   Nothing is cached: the step runs the server.
 - **The dump** (`mcp-dump.json` in the artifact of the openly licensed models
-  only: Core Interior, Einhoven, RE1, the BIM4LCA office and the Revit 2025
-  models; left out of the diff) is the same answers as one deterministic
+  only: Core Interior, Einhoven, RE1, the BIM4LCA housing and office, the Revit
+  2025 models; left out of the diff) is the same answers as one deterministic
   document: sorted, floats at six decimals, no handle, time or path.
   `python3 tools/re/mcp_client.py <rvt-rs-mcp> <model.rvt> [--all]` writes it
   alone, with `get_element` for the five lowest ElementIds of each entity or
@@ -448,11 +448,11 @@ accept is not caught, and the maintainers read a change to `src/` before it land
   added: `tools/ci/check_same_project_projects.py` (a CI step) holds `PINNED_MOST` at
   0 and fails on any tag beyond the 16 first pinned. A roof the 2025 save draws
   otherwise, as its record box or its saved mesh, is counted, not scored, and exactly:
-  `ROOFS_NOT_THE_2025_BODY` names `rac_advanced`'s 201262 (its record box, as the 2025
-  save draws its slope) and `rac_basic`'s 243274 (its saved mesh against the 2025
+  `ROOFS_NOT_THE_2025_BODY` names `rac_basic`'s 243274 (its saved mesh against the 2025
   save's roof extrusion), a mesh counting only where its box contains the 2025 body's,
-  and one more, one fewer or one of another kind fails (Griffin, 2026-11-05 for the
-  first and 2026-11-09 for the saved-mesh default of #1191). Three roofs of
+  and one more, one fewer or one of another kind fails (Griffin, 2026-11-09 for the
+  saved-mesh default of #1191). `rac_advanced`'s 201262 left the list when #1706 drew
+  its saved mesh as the 2025 save's body. Three roofs of
   `rac_advanced` that the list held until #1612 (165755, 167036 and 167158: gables the
   2025 save drew as a level block) are drawn from their saved meshes on every save now.
   That list only shrinks too: the same CI step holds it to those five or fewer. Any other body that differs from the 2025 save fails; a difference on a release
@@ -483,8 +483,8 @@ It is not in the ruleset, so merging still waits on `full / CI passed`, but a
 with no `models` filter. Adding `-f scorers=mcp_answers_vs_ifc` keeps every model
 and leaves the other scorers out, which is the cheap form of the same check.
 Most output changes land on the BIM4LCA office (#1388, #1400, #1401 and #1405
-move nothing else), so a run without it, or with a `models` list, reads "pass"
-on a change it did not look at.
+move nothing else), so a run without it, or with a `models` list, has no check run
+to read as a pass on a change it did not look at.
 
 **Only a run of every open model writes the check.** That is a run dispatched
 in this repository with a base, no `models` filter, and the BIM4LCA files and
@@ -567,7 +567,7 @@ Measure's `ifc.sha256` is what says that an export is identical.
   before and after; the byte offsets inside `provenance` dropped; order ignored;
   values compared to the dump's precision, which is six decimals
   (`tools/re/mcp_client.py` rounds a float there before it writes the dump), so
-  0.35 and 0.3500001 are different values when a dump holds both and a change
+  0.35 and 0.350001 are different values when a dump holds both and a change
   below the sixth decimal is not in a dump; whether an importer would notice is
   Jev's question; an empty object or list the same as
   no field; identical changes collapsed by the whole (path, before, after), so a
@@ -732,8 +732,8 @@ before it.
   fails on a malformed row, on any tracked file other than the registry that
   holds one of its URLs or hashes, and on any tracked file that is not Markdown
   and names the registry or the private copies' repository, other than the
-  seal script and the check. Docs may name both; they may not hold the
-  registry's URLs. It sees only what is
+  seal script, the check and the check's own test. Docs may name both; they may
+  not hold the registry's URLs. It sees only what is
   committed: a path built at run time, a glob over `research/` or a Measure run
   dispatched from an unreviewed branch are for review to catch.
 - **The final check** is the only reader still to come, of the registry and of
