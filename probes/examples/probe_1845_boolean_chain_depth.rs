@@ -9,10 +9,16 @@
 //! the chain by recursion. The audit left it open: "whether that overflows the
 //! viewer's stack needs a build to say".
 //!
-//! Hypothesis, registered before the run: a 4,096-level chain survives all four
-//! on a 1 MiB stack (the viewer's wasm stack; a native thread of that size
-//! stands in for it, frames being larger on x86-64 than on wasm32), and each
-//! breaks only at a depth many times that.
+//! Hypothesis, registered before the first run: a 4,096-level chain survives all
+//! four on a 1 MiB stack (the viewer's wasm stack; a native thread of that size
+//! stands in for it), and each breaks only at a depth many times that.
+//!
+//! First run (Measure 43420945188, depths 1,024 to 1,048,576): refuted for two
+//! of the four. `drop` holds to 16,384 and breaks at 65,536; `json` the same;
+//! `clone` and `debug` hold at 1,024 and break at 4,096. A profile has at most
+//! `SKETCH_MAX_CURVES` (4,096) curves and a cut region needs two or more, so a
+//! wall's chain is at most about 2,048 levels: the depths between are what the
+//! second run reads, registered before it as: `clone` and `debug` hold at 2,048.
 //!
 //! The probe ignores the file it is given. For each operation and depth it runs
 //! a child of itself, with the chain built by a loop and the operation run on a
@@ -37,8 +43,9 @@ const STACK_BYTES: usize = 1 << 20;
 /// What is done to the chain.
 const OPERATIONS: [&str; 4] = ["drop", "clone", "debug", "json"];
 
-/// Chain depths: 4,096 is `SKETCH_MAX_CURVES`, the most curves a profile has.
-const DEPTHS: [usize; 6] = [1_024, 4_096, 16_384, 65_536, 262_144, 1_048_576];
+/// Chain depths: 4,096 is `SKETCH_MAX_CURVES`, the most curves a profile has, and
+/// 2,048 the most cuts it can make.
+const DEPTHS: [usize; 7] = [1_024, 1_536, 2_048, 3_072, 4_096, 16_384, 65_536];
 
 fn leaf() -> SolidShape {
     SolidShape::FacetedBrep {
