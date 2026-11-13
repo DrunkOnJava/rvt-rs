@@ -36,7 +36,7 @@ use rvt::walker::WalkerLimits;
 
 use crate::config::Config;
 use crate::gate::Gate;
-use crate::root::{self, Reach};
+use crate::root::Reach;
 use crate::server::RvtServer;
 use crate::store::Store;
 
