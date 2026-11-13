@@ -1059,13 +1059,15 @@ pub struct ExportConfidenceSummary {
     /// partition scan found but could not export because no ElementId is attributable
     /// to them (the `element_record_without_element_id` skipped item,
     /// RE-30): they sit in records of ElementIds the element table does not
-    /// declare. A file saved in place keeps the records of elements deleted
-    /// since its last Save As, and those are not missing elements (all 84 on
-    /// the one model compared with Revit's export of the same save, #1838); an
-    /// element table read short leaves real elements out, as it did on
-    /// Autodesk's Snowdon Towers 2024 architectural sample before RE-41.
-    /// Non-zero means the model may be incomplete, and `score` is scaled down
-    /// by the exported share. Zero is not a completeness claim.
+    /// declare. More than one cause is known and one has been measured: on
+    /// the one model compared with Revit's export of the same save, all 84 were
+    /// the records of elements deleted since the file's last Save As, which a
+    /// file saved in place keeps and which are not missing elements (#1838).
+    /// An element table read short leaves real elements out, as it did on
+    /// Autodesk's Snowdon Towers 2024 architectural sample before RE-41, and
+    /// other causes are not ruled out. Non-zero means the model may be
+    /// incomplete, and `score` is scaled down by the exported share. Zero is
+    /// not a completeness claim.
     #[serde(default)]
     pub unexported_element_records: usize,
 }
@@ -4866,7 +4868,7 @@ pub(crate) fn build_export_diagnostics_and_decisions(
         warnings.insert(
             0,
             format!(
-                "{unattributed_total} element record(s) in this file belong to ElementIds its element table does not declare, so they are not exported. A file saved in place keeps the records of elements deleted since its last Save As; if nothing was deleted, the model is incomplete (RE-30, RE-35)."
+                "{unattributed_total} element record(s) in this file belong to ElementIds its element table does not declare, so they are not exported. On the one model compared with Revit's export of the same save, such records were elements deleted since the file's last Save As (#1838); if nothing was deleted, the model is likely incomplete (RE-30, RE-35)."
             ),
         );
     }

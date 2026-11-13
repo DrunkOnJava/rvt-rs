@@ -296,7 +296,7 @@ fn classify_failure_mode(
             kind: "incomplete_model".into(),
             title: "Element records not exported".into(),
             summary: format!(
-                "Model elements were recovered, but {unexported} element record(s) belong to ElementIds the element table does not declare and are not exported: elements deleted since the file's last Save As, or missing elements if nothing was deleted."
+                "Model elements were recovered, but {unexported} element record(s) belong to ElementIds the element table does not declare and are not exported. On the one model compared with Revit's export of the same save, such records were elements deleted since the file's last Save As (#1838); if nothing was deleted, the model is likely incomplete."
             ),
             severity: "warning".into(),
         };
@@ -445,7 +445,7 @@ fn next_steps(diagnostics: &ExportDiagnostics, schema_parsed: bool) -> Vec<Strin
     let unexported = diagnostics.confidence.unexported_element_records;
     if unexported > 0 {
         steps.push(format!(
-            "{unexported} element record(s) belong to ElementIds the element table does not declare and are not in the export (RE-30, RE-35). If no elements were deleted since the file's last Save As, compare its element counts with Revit's before using them as a takeoff."
+            "{unexported} element record(s) belong to ElementIds the element table does not declare and are not in the export (RE-30, RE-35). Whatever the cause, compare the export's element counts with Revit's before using them as a takeoff: on the one model compared, such records were elements deleted since the file's last Save As (#1838)."
         ));
     }
     if diagnostics

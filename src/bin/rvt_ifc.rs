@@ -1125,8 +1125,9 @@ fn warn_about_export_quality(diagnostics: &ExportDiagnostics) {
     if unexported > 0 {
         eprintln!(
             "warning: {unexported} element record(s) belong to ElementIds the file's element table \
-             does not declare and were not exported (RE-30, RE-35). A file saved in place keeps the \
-             records of elements deleted since its last Save As; if nothing was deleted, the IFC is incomplete."
+             does not declare and were not exported (RE-30, RE-35). On the one model compared with \
+             Revit's export of the same save, such records were elements deleted since the file's \
+             last Save As (#1838); if nothing was deleted, the IFC is likely incomplete."
         );
     }
 }

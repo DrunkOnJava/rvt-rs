@@ -3822,7 +3822,7 @@ function classifyFailureMode(diagnostics: ExportDiagnostics): FailureModeStatus 
     return {
       kind: 'warn',
       title: 'Element records not exported',
-      summary: `${unexported} element records belong to ElementIds the file does not declare: elements deleted since its last Save As, or missing elements if none was deleted (RE-30)`,
+      summary: `${unexported} element records belong to ElementIds the file does not declare. On the one model compared with Revit's export they were elements deleted since its last Save As (#1838); if none was deleted, the model is likely incomplete (RE-30)`,
     };
   }
   if (input.release_support?.status === 'experimental') {
