@@ -1,6 +1,6 @@
 # Roadmap
 
-Last reviewed: 2026-11-12
+Last reviewed: 2026-11-13
 
 This roadmap is the public, contributor-facing view of where rvt-rs is headed.
 The support boundary lives in [`docs/status.md`](docs/status.md) and the
@@ -279,11 +279,33 @@ the four levels a file can reach are in the
   is not always Revit's (the 24 railings newly drawn read about 1.2 times its
   volume), and `[0.19.0]` in [`CHANGELOG.md`](CHANGELOG.md) lists what each change
   does not measure.
+- **0.20.0, 2026-11-12.** Mostly hardening against crafted files: a file can
+  no longer crash the browser viewer through a record's length or an overflow in
+  a value it stores, make a read take exponential time or time that grows with
+  the square of its element count, exhaust the stack through the chains it sets,
+  or write its own text into an export's STEP (#1815, #1831, #1833, #1845), and a
+  reader that stops at a work budget says so and still writes the export (#1855).
+  For real files, a wall, floor, ceiling or roof type edited since an earlier
+  save keeps its layers on Revit 2024 and later (#1802, RE-446); the project's
+  display units are read from its Project Units (RE-445); Revit 2026 and 2027
+  walls and the curtain parts on them carry `IsExternal` (#1860); an element on a
+  Level that is not a building story goes to the building story below it, and a
+  file with no building story, Autodesk's `rst_basic`, is written with no storey
+  (#1842); 105 duct fittings of a Revit 2023 MEP sample are drawn from their saved
+  surfaces (RE-443); each GLB material says whether its colour and alpha are the
+  file's (#1812); and two exports of one file write the same wall areas and
+  volume to the last bit (#1862). Against 0.19.0, 49 of 146 measured exports
+  move, with no census or body regression, and the default export of Autodesk's
+  samples of Revit 2023 to 2027 takes a median 0.76 times 0.19.0's peak memory.
+  The layer rule rests on one project, the stair runs that read their own
+  settings are drawn from their sketch where their saved mesh drew them (#1856),
+  and `[0.20.0]` in [`CHANGELOG.md`](CHANGELOG.md) lists what each change does
+  not measure.
 
-### 0.20.0: IFC geometry and element data
+### 0.21.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.19.0, moved from the
-0.19.0 milestone when 0.19.0 shipped. Each
+The geometry and element-data work that continues after 0.20.0, moved from the
+0.20.0 milestone when 0.20.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
