@@ -669,6 +669,7 @@ fn decode_at_marker(
         preceding_reference: None,
         owner_reference: None,
         references,
+        second_references: Vec::new(),
         id_from_enclosing_record,
         design_option,
     })
