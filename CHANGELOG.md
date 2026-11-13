@@ -19,7 +19,7 @@ It also changes what users of real files get:
 - The first run of each of `rac_advanced` 2024's five stairs reads its own settings (#1845).
 - Each GLB material says whether its colour and alpha are the file's (#1812).
 - Revit 2026 and 2027 walls, and the curtain parts on them, get the `IsExternal` the same project's 2025 save gets (#1860).
-- An element on a Level that is not a building story goes to the building story below it, as Revit's export places it (#1842).
+- An element on a Level that is not a building story goes to the building story below it, as Revit's export places it, and a file whose Levels include no building story (Autodesk's `rst_basic`, saved by Revit 2016 to 2027) is written with no storey instead of storeys made up from its elements' heights (#1842).
 - Two rooms of the BIM4LCA timber office drop a vertex Revit's outline does not have (#1825).
 - Two exports of one file write the same wall `GrossSideArea` and `GrossVolume` to the last bit (#1862).
 
@@ -30,7 +30,7 @@ Not measured, and said in each entry:
 - None of RE-443's 105 duct fittings passes the 0.001 ft shape threshold against the native reference at its default tessellation, and that reference is not shared.
 - No measured material is read the way #1820 changes, so no export shows it.
 - On the 2027 save of `rac_advanced`, 79 of its 3,192 curtain members still get no `IsExternal` (#1865).
-- No held-out model has a Level that is not a building story, so #1842 is measured on the BIM4LCA housing files and Autodesk's Snowdon Towers structural sample alone.
+- No held-out model has a Level that is not a building story, so #1842 is measured on the BIM4LCA housing files, Autodesk's Snowdon Towers structural sample and `rst_basic` alone.
 - The crafted-file bounds are exercised by crafted inputs, not by any real file, none of which comes near them.
 
 MEASURED-BLOCK-TODO
@@ -64,7 +64,10 @@ MEASURED-BLOCK-TODO
 - **An element on a Level that is not a building story is contained in the
   building story below that Level (#1842).** The storey an element belongs to,
   and so `IfcRelContainedInSpatialStructure`, changes for such an element. A
-  file with no such Level is unchanged.
+  file none of whose Levels is a building story (Autodesk's `rst_basic`, 12
+  saves) has no `IfcBuildingStorey` now and its elements are contained in the
+  `IfcBuilding`, where 0.19.0 wrote storeys named from record-box elevations
+  ("Elevation -1.949 ft"). A file with no non-story Level is unchanged.
 - An IFC surface style whose material's transparency was not read leaves the
   attribute unset (`$`) instead of writing 0 (#1820).
 
@@ -245,6 +248,15 @@ MEASURED-BLOCK-TODO
   order, so the area moved by up to 2e-14 of its value from one export to the
   next. An element-by-element comparison of a file's export with itself
   listed 4 to 117 walls as changed on seven of eleven models.
+
+- **A file whose Levels include no building story is written with no
+  storey, as Revit's export writes it, instead of storeys made up from its
+  elements' heights (#1842).** Every one of the 9 Levels of Autodesk's
+  `rst_basic` sample, saved by Revit 2016 to 2027, has its Building Story
+  setting off. rvt-rs then fell back to storeys named from record-box
+  elevations ("Elevation -1.949 ft"), which no Revit export has. Revit's
+  exporter makes no storey from such a Level and contains the file's elements
+  in the building, and rvt-rs now does the same.
 
 ### Security
 
