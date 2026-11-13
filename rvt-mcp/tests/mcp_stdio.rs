@@ -1129,7 +1129,7 @@ async fn an_answer_is_bounded() {
     fn longest(value: &Value) -> usize {
         match value {
             Value::String(text) => {
-                let cut = text.find("…[+").map_or(text.len(), |at| at);
+                let cut = text.find("…[+").unwrap_or(text.len());
                 text[..cut].chars().count()
             }
             Value::Array(items) => items.iter().map(longest).max().unwrap_or(0),

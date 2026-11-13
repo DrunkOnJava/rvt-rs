@@ -211,9 +211,9 @@ async fn summary_answer(
     context: &RequestContext<RoleServer>,
     args: ModelArgs,
 ) -> Result<Json<SummaryOut>, CallToolResult> {
-    let store = Arc::clone(store);
+    let job_store = Arc::clone(store);
     let out = run_job(context, move |control| {
-        let (entry, computed) = decode(&store, &args.model, phase_of(&args.phase), control)?;
+        let (entry, computed) = decode(&job_store, &args.model, phase_of(&args.phase), control)?;
         Ok(views::summary(&entry, &computed))
     })
     .await?;
