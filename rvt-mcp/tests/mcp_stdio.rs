@@ -1266,7 +1266,10 @@ impl Raw {
     }
 
     /// [`Raw::start_in`] with environment variables set (`HOME`,
-    /// `RVT_MCP_ROOT`).
+    /// `RVT_MCP_ROOT`). Only the Unix tests use it: they set `HOME`, which
+    /// Windows does not read for a user's folder, and an unused function is
+    /// an error there.
+    #[cfg(unix)]
     fn start_with_env(args: &[&OsStr], cwd: &Path, envs: &[(&str, &OsStr)]) -> Self {
         Self::spawn(args, Some(cwd), envs)
     }
