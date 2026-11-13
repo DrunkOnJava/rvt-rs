@@ -38,6 +38,10 @@
 //!
 //!   edges borders <n> edges border a HermiteSurf: plane <n> hermite <n> other <n> unread <n>
 //!   edges edge_first <field names of the first such Edge>
+//!   edges <n> control plane-plane edges
+//!   edges control plane-plane ends <n> <buckets> interior <n> <buckets>   the same distances for
+//!     edges between two planes, what the file's own edges hold
+//!   edges unevaluated vs plane: no uv <n>, outside the grid by at most 1e-6 <n> 1e-3 <n> 1 <n> more <n>
 //!   edges <vs plane|vs hermite> <variant> ends <n> <distance buckets> interior <n> <buckets> unevaluated <n>
 //!
 //! where a variant reads `u-fastest|v-fastest tangent0=u|tangent0=v` and the buckets are the
@@ -472,6 +476,30 @@ fn edge_samples(edge: &Fv) -> Option<Vec<&Fv>> {
     Some(samples)
 }
 
+/// The (u, v) a sample of an edge holds on one side.
+fn uv_of(sample: &Fv, side: usize) -> Option<[f64; 2]> {
+    array::<2>(&sample["uv"][side])
+}
+
+/// A plane's origin and its two axes.
+fn plane_frame(fields: &Fv) -> Option<[[f64; 3]; 3]> {
+    Some([
+        array::<3>(fields.get("m_origin")?)?,
+        array::<3>(fields.get("m_xVec")?)?,
+        array::<3>(fields.get("m_yVec")?)?,
+    ])
+}
+
+/// The point of a plane at (u, v).
+fn plane_point(frame: &[[f64; 3]; 3], uv: [f64; 2]) -> [f64; 3] {
+    std::array::from_fn(|k| frame[0][k] + uv[0] * frame[1][k] + uv[1] * frame[2][k])
+}
+
+/// How far `x` is outside the first and last of `params`, in the units of the parameter.
+fn excess(params: &[f64], x: f64) -> f64 {
+    (params[0] - x).max(x - params[params.len() - 1]).max(0.0)
+}
+
 fn distance(p: [f64; 3], q: [f64; 3]) -> f64 {
     (0..3).map(|k| (p[k] - q[k]).powi(2)).sum::<f64>().sqrt()
 }
@@ -499,6 +527,12 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
     let mut edge_first: Option<String> = None;
     let mut vs_plane = vec![Gaps::default(); VARIANTS.len()];
     let mut vs_hermite = vec![Gaps::default(); VARIANTS.len()];
+    let mut control = Gaps::default();
+    let mut control_edges = 0usize;
+    // Why a sample of an edge between a Hermite face and a plane could not be evaluated:
+    // no (u, v), or a (u, v) outside the grid by at most 1e-6, 1e-3, 1 or more.
+    let mut no_uv = 0usize;
+    let mut outside = [0usize; 4];
     for record in records.values() {
         let Some(graph) = &record.graph else { continue };
         let surface_of = |edge_index: usize, face: &Fv| -> Option<usize> {
@@ -528,6 +562,25 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
                 .filter(|side| class(*side) == "HermiteSurf")
                 .collect();
             if hermite_sides.is_empty() {
+                // The control: two planes meet where their points at the edge's stored (u, v)
+                // are one, to whatever the file's edges hold.
+                if class(0) == "Plane" && class(1) == "Plane" {
+                    let frames = [
+                        plane_frame(&graph.objects[surfaces[0]].fields),
+                        plane_frame(&graph.objects[surfaces[1]].fields),
+                    ];
+                    if let (Some(samples), [Some(a), Some(b)]) =
+                        (edge_samples(&edge.fields), frames)
+                    {
+                        control_edges += 1;
+                        for (n, sample) in samples.iter().copied().enumerate() {
+                            let gap = uv_of(sample, 0)
+                                .zip(uv_of(sample, 1))
+                                .map(|(ua, ub)| distance(plane_point(&a, ua), plane_point(&b, ub)));
+                            record_gap(&mut control, n == 0 || n + 1 == samples.len(), gap);
+                        }
+                    }
+                }
                 continue;
             }
             edge_first.get_or_insert_with(|| shape(&edge.fields, 0, false));
@@ -535,7 +588,6 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
                 borders[3] += 1;
                 continue;
             };
-            let uv_of = |sample: &Fv, side: usize| array::<2>(&sample["uv"][side]);
             let hermite = |side: usize| Hermite::read(&graph.objects[surfaces[side]].fields);
             if hermite_sides.len() == 2 {
                 borders[1] += 1;
@@ -573,6 +625,21 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
                 continue;
             };
             borders[0] += 1;
+            for sample in samples.iter().copied() {
+                match uv_of(sample, hermite_side) {
+                    None => no_uv += 1,
+                    Some([u, v]) => {
+                        let beyond = excess(&surface.u, u).max(excess(&surface.v, v));
+                        if beyond > 1e-9 {
+                            let which = [1e-6, 1e-3, 1.0]
+                                .iter()
+                                .position(|limit| beyond <= *limit)
+                                .unwrap_or(3);
+                            outside[which] += 1;
+                        }
+                    }
+                }
+            }
             for (slot, (v_fastest, swap, _)) in vs_plane.iter_mut().zip(VARIANTS) {
                 for (n, sample) in samples.iter().copied().enumerate() {
                     let gap = uv_of(sample, hermite_side)
@@ -608,4 +675,10 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
     for ((_, _, label), gaps) in VARIANTS.iter().zip(&vs_hermite) {
         println!("{}", gaps.show("vs hermite", label));
     }
+    println!("edges {control_edges} control plane-plane edges");
+    println!("{}", control.show("control", "plane-plane"));
+    println!(
+        "edges unevaluated vs plane: no uv {no_uv}, outside the grid by at most 1e-6 {} 1e-3 {} 1 {} more {}",
+        outside[0], outside[1], outside[2], outside[3]
+    );
 }
