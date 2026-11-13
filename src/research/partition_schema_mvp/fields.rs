@@ -848,9 +848,10 @@ pub const NATIVE_NAMED_PARAMETER_REVIT_VERSIONS: &[u32] =
 
 /// Releases whose walls' native type Function is measured (RE-185, RE-193;
 /// 2015 to 2023 against the same projects saved by a later release and
-/// against BIMcollab's and modelo_bim's exports, RE-283).
+/// against BIMcollab's and modelo_bim's exports, RE-283; 2026 and 2027
+/// against the same projects' 2025 saves, element by element, #1860).
 pub const WALL_TYPE_FUNCTION_REVIT_VERSIONS: &[u32] = &[
-    2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025,
+    2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027,
 ];
 
 /// Prefix of a field carrying the Yes/No value of a project or shared
