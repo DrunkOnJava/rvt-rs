@@ -23,9 +23,13 @@ Measured against 0.20.0 on every model Measure holds (run
 `main` at 9b7dee8c, 146 exports; the release adds only its notes, witness files,
 version strings and fixtures to them):
 
-- All 146 exports move, and only in the GlobalIds they write: `diagnostics.json`
-  is equal on all 121 models that publish one, so what is read, approximated and
-  left out does not change.
+- All 146 exports move, and `diagnostics.json` is equal on all 121 models that
+  publish one, so what is read, approximated and left out does not change. That
+  the exports move only in their GlobalIds is what the line-by-line comparisons
+  of the two GlobalId changes found on the exports they kept (#1850 for the
+  further pieces, #1859 for the rest: every changed line is an entity with only
+  its GlobalId changed, apart from the header's timestamps); this run compares
+  hashes, not lines.
 - The same-project check of the MEP samples shows what the GlobalIds change:
   `bodies_across_saves` for the 2025, 2026 and 2027 saves of `rme_advanced` and
   `rme_basic` goes from FAIL (25 differences in each, the layered floors'
