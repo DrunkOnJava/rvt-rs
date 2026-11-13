@@ -15,6 +15,9 @@
 //!
 //! Output (counts only, no names or ids):
 //!   elements left=<n> right=<n> added=<n> removed=<n> changed=<n> unchanged=<n>
+//!   set_aside left=<n> right=<n> duplicate_ids left=<n> right=<n>
+//!     (elements whose GlobalId an export writes twice are compared with none:
+//!     left = removed + changed + unchanged + set_aside left)
 //!   added_by_type <IFCTYPE>=<n> ...
 //!   removed_by_type <IFCTYPE>=<n> ...
 //!   changed_by_field <field>=<n> ...      (properties counted as one field)
@@ -75,6 +78,13 @@ fn main() -> anyhow::Result<()> {
         diff.removed.len(),
         diff.changed.len(),
         diff.unchanged
+    );
+    println!(
+        "set_aside left={} right={} duplicate_ids left={} right={}",
+        diff.set_aside.left,
+        diff.set_aside.right,
+        diff.duplicate_global_ids.left.len(),
+        diff.duplicate_global_ids.right.len()
     );
     println!("added_by_type {}", by_type(&diff.added));
     println!("removed_by_type {}", by_type(&diff.removed));

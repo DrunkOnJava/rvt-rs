@@ -67,6 +67,7 @@ struct Cli {
 fn main() -> ExitCode {
     rvt::cli::exit_quietly_on_broken_pipe();
     let cli = Cli::parse();
+    let redact = cli.elements && cli.redact;
     let result = if cli.elements {
         run_elements(&cli)
     } else {
@@ -75,7 +76,14 @@ fn main() -> ExitCode {
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("error: {e}");
+            // An error opening a file names its path.
+            let message = e.to_string();
+            let message = if redact {
+                rvt::redact::redact_sensitive(&message)
+            } else {
+                message
+            };
+            eprintln!("error: {message}");
             ExitCode::from(1)
         }
     }
@@ -222,10 +230,6 @@ fn run_elements(cli: &Cli) -> anyhow::Result<()> {
     let [left, right] = cli.files.as_slice() else {
         anyhow::bail!("--elements compares exactly two files");
     };
-    let mut diff = diff_elements(&export_states(left)?, &export_states(right)?);
-    if cli.redact {
-        redact_diff(&mut diff);
-    }
     let label = |path: &Path| {
         let name = path
             .file_name()
@@ -238,6 +242,13 @@ fn run_elements(cli: &Cli) -> anyhow::Result<()> {
         }
     };
     let (left_label, right_label) = (label(left.as_path()), label(right.as_path()));
+    let mut diff = diff_elements(
+        &export_states(left, &left_label)?,
+        &export_states(right, &right_label)?,
+    );
+    if cli.redact {
+        redact_diff(&mut diff);
+    }
     print_summary(&diff, &left_label, &right_label, cli.limit);
     if let Some(path) = &cli.json {
         let report = ElementReport {
@@ -252,14 +263,14 @@ fn run_elements(cli: &Cli) -> anyhow::Result<()> {
 
 /// The elements `path`'s default IFC export writes. A stream a resource limit
 /// kept out is said on stderr, since what it holds is then missing from the
-/// comparison.
-fn export_states(path: &Path) -> anyhow::Result<Vec<ElementState>> {
+/// comparison. The file is named by `label`, not its path, so `--redact`
+/// leaves no user name on stderr.
+fn export_states(path: &Path, label: &str) -> anyhow::Result<Vec<ElementState>> {
     let mut rf = RevitFile::open_with_limits(path, rvt::cli::open_limits(None, None, false))?;
     let run = rvt::ifc::run_export(&mut rf, &rvt::ifc::ExportOptions::default())?;
     if !run.unread.is_empty() {
         eprintln!(
-            "rvt-diff: {}: {} stream(s) not read whole, so the comparison is missing what they hold:",
-            path.display(),
+            "rvt-diff: {label}: {} stream(s) not read whole, so the comparison is missing what they hold:",
             run.unread.len()
         );
         for line in rvt::cli::unread_stream_report(&run.unread) {
@@ -281,9 +292,14 @@ fn redact_diff(diff: &mut ElementDiff) {
         {
             text(value);
         }
-        for value in state.properties.values_mut() {
-            json(value);
-        }
+        // A parameter's name is typed by the user as its value is.
+        state.properties = std::mem::take(&mut state.properties)
+            .into_iter()
+            .map(|(key, mut value)| {
+                json(&mut value);
+                (rvt::redact::redact_sensitive(&key), value)
+            })
+            .collect();
     }
     fn json(value: &mut serde_json::Value) {
         match value {
@@ -298,6 +314,7 @@ fn redact_diff(diff: &mut ElementDiff) {
     for change in &mut diff.changed {
         text(&mut change.name);
         for field in &mut change.changes {
+            text(&mut field.field);
             json(&mut field.left);
             json(&mut field.right);
         }
@@ -315,6 +332,25 @@ fn print_summary(diff: &ElementDiff, left: &str, right: &str, limit: usize) {
         diff.changed.len(),
         diff.unchanged
     );
+    let aside = diff.set_aside;
+    if aside.left > 0 || aside.right > 0 {
+        let twice = &diff.duplicate_global_ids;
+        println!(
+            "  not compared: {} elements of {left} and {} of {right}, whose GlobalId an export writes for more than one element ({} GlobalIds in {left}, {} in {right})",
+            aside.left,
+            aside.right,
+            twice.left.len(),
+            twice.right.len()
+        );
+        for (name, ids) in [(left, &twice.left), (right, &twice.right)] {
+            for id in ids.iter().take(limit) {
+                println!("    written twice by {name}: {id}");
+            }
+            if ids.len() > limit {
+                println!("    ... {} more in {name}", ids.len() - limit);
+            }
+        }
+    }
     let by_type = |states: &[ElementState]| {
         let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
         for state in states {

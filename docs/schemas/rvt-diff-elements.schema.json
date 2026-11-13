@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://drunkonjava.github.io/rvt-rs/schemas/rvt-diff-elements.schema.json",
   "title": "rvt-diff --elements --json",
-  "description": "The comparison rvt-diff --elements A B --json PATH writes (rvt::ifc::element_diff::ElementDiff, #1843): the elements the IFC export of each file writes, keyed by the GlobalId it writes, as added, removed, changed (with the fields that differ) or unchanged. The fields are what the export writes, not the Revit file's records, so a change rvt-rs does not read is not seen.",
+  "description": "The comparison rvt-diff --elements A B --json PATH writes (rvt::ifc::element_diff::ElementDiff, #1843): the elements the IFC export of each file writes, keyed by the GlobalId it writes, as added, removed, changed (with the fields that differ) or unchanged. The fields are what the export writes, not the Revit file's records, so a change rvt-rs does not read is not seen. An element whose GlobalId either export writes for more than one element is not compared: it is in none of the four lists, and duplicate_global_ids and set_aside say which and how many, so that left_elements = removed + changed + unchanged + set_aside.left and right_elements = added + changed + unchanged + set_aside.right.",
   "type": "object",
   "required": [
     "left",
@@ -12,7 +12,9 @@
     "added",
     "removed",
     "changed",
-    "unchanged"
+    "unchanged",
+    "duplicate_global_ids",
+    "set_aside"
   ],
   "properties": {
     "left": {
@@ -58,6 +60,50 @@
       "description": "In both, with every field equal.",
       "type": "integer",
       "minimum": 0
+    },
+    "duplicate_global_ids": {
+      "description": "The GlobalIds each export writes for more than one element, sorted. Two elements under one key cannot be told apart, so their elements are set aside.",
+      "type": "object",
+      "required": [
+        "left",
+        "right"
+      ],
+      "properties": {
+        "left": {
+          "description": "Written more than once by the first export.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "right": {
+          "description": "Written more than once by the second export.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "set_aside": {
+      "description": "The elements of each export left out of the comparison because their GlobalId is in duplicate_global_ids (of either export).",
+      "type": "object",
+      "required": [
+        "left",
+        "right"
+      ],
+      "properties": {
+        "left": {
+          "description": "Elements of the first export.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "right": {
+          "description": "Elements of the second export.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
     }
   },
   "$defs": {

@@ -7,8 +7,11 @@
   rvt-rs's own record of where in the file it read the element (its
   stream and offsets), which a later save moves. `--json`
   writes the whole comparison (`docs/schemas/rvt-diff-elements.schema.json`),
-  and `--redact` scrubs names and text values. The library is
-  `rvt::ifc::element_diff`. What rvt-rs does not read is not compared, and a
+  and `--redact` scrubs names, parameter names and text values, and the file
+  paths in what it prints. An element whose GlobalId an export writes for more
+  than one element is left out of the comparison and reported, as
+  `duplicate_global_ids` and `set_aside`, so a repeated GlobalId cannot hide a
+  change. The library is `rvt::ifc::element_diff`. What rvt-rs does not read is not compared, and a
   change in how rvt-rs reads a file shows as a change, so compare two saves
   with one build. Suggested by HWT-25 (#1829), who compared two saves of a
   Revit 2027 model by hand.

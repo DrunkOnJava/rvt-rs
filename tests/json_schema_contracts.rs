@@ -595,18 +595,48 @@ fn tier1_report_clis_validate_against_their_schemas() {
         "a file against itself: {same}"
     );
     assert_eq!(count(&same, "unchanged"), count(&same, "left_elements"));
+    assert_eq!(
+        (
+            same["set_aside"]["left"].as_u64(),
+            same["set_aside"]["right"].as_u64()
+        ),
+        (Some(0), Some(0)),
+        "a tier-1 export writes no GlobalId twice: {same}"
+    );
     let mep = root.join("corpus/tier1/mep-2024/mep-2024.rvt");
     let other = elements(fixture.as_path(), mep.as_path());
     let in_both = count(&other, "changed") + count(&other, "unchanged");
+    let set_aside = |side: &str| other["set_aside"][side].as_u64().unwrap_or(u64::MAX);
     assert_eq!(
         count(&other, "left_elements"),
-        count(&other, "removed") + in_both,
-        "every element of the first file is removed, changed or unchanged: {other}"
+        count(&other, "removed") + in_both + set_aside("left"),
+        "every element of the first file is removed, changed, unchanged or set aside: {other}"
     );
     assert_eq!(
         count(&other, "right_elements"),
-        count(&other, "added") + in_both,
-        "every element of the second file is added, changed or unchanged: {other}"
+        count(&other, "added") + in_both + set_aside("right"),
+        "every element of the second file is added, changed, unchanged or set aside: {other}"
+    );
+
+    // --redact scrubs an error that names a file under a user's folder too.
+    // Built from parts: the PII guard rejects a home path written out in full.
+    let (root, separator) = if cfg!(windows) {
+        ("C:", "\\")
+    } else {
+        ("", "/")
+    };
+    let missing = [root, "Users", "alice-redact-contract", "missing.rvt"].join(separator);
+    let failed = Command::new(env!("CARGO_BIN_EXE_rvt-diff"))
+        .args(["--elements", "--redact"])
+        .arg(&missing)
+        .arg(fixture.as_path())
+        .output()
+        .expect("run rvt-diff --elements --redact on a missing file");
+    assert!(!failed.status.success(), "a missing file must fail");
+    let stderr = String::from_utf8_lossy(&failed.stderr);
+    assert!(
+        !stderr.contains("alice-redact-contract") && stderr.contains("<redacted>"),
+        "--redact left a user name in the error: {stderr}"
     );
 }
 

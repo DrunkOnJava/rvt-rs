@@ -5,6 +5,11 @@
 //! key by key. An element is added, removed, changed in one of the fields of
 //! [`ElementState`], or the same. `rvt-diff --elements` prints it.
 //!
+//! An element whose GlobalId an export writes for more than one element is
+//! left out of the comparison, since two elements under one key cannot be told
+//! apart, and is reported: [`ElementDiff::duplicate_global_ids`] lists the
+//! GlobalIds and [`ElementDiff::set_aside`] counts the elements.
+//!
 //! The fields are what the export writes, not the Revit file's records:
 //! - the element's class, name, storey, type, predefined type and material;
 //! - where its body is placed, and a digest of the body itself;
@@ -99,7 +104,33 @@ pub struct ElementChange {
     pub changes: Vec<FieldChange>,
 }
 
+/// The GlobalIds each export writes for more than one element, sorted. A
+/// GlobalId written twice names no one element, so an element with one is
+/// not compared ([`ElementDiff::set_aside`]).
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+#[non_exhaustive]
+pub struct DuplicateGlobalIds {
+    /// Written more than once by the first export.
+    pub left: Vec<String>,
+    /// Written more than once by the second export.
+    pub right: Vec<String>,
+}
+
+/// How many elements of each export [`diff_elements`] did not compare.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize)]
+#[non_exhaustive]
+pub struct SetAside {
+    /// Elements of the first export whose GlobalId either export writes twice.
+    pub left: usize,
+    /// Elements of the second export whose GlobalId either export writes twice.
+    pub right: usize,
+}
+
 /// Two exports compared element by element.
+///
+/// Every element of each export is counted once:
+/// `left_elements = removed + changed + unchanged + set_aside.left` and
+/// `right_elements = added + changed + unchanged + set_aside.right`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[non_exhaustive]
 pub struct ElementDiff {
@@ -115,6 +146,11 @@ pub struct ElementDiff {
     pub changed: Vec<ElementChange>,
     /// In both, with every field equal.
     pub unchanged: usize,
+    /// The GlobalIds an export writes twice. Their elements are in none of
+    /// the four lists above.
+    pub duplicate_global_ids: DuplicateGlobalIds,
+    /// The elements left out of the comparison for that.
+    pub set_aside: SetAside,
 }
 
 /// Every element `model`'s IFC export writes, in the model's order. A piece
@@ -202,19 +238,52 @@ pub fn element_states(model: &IfcModel) -> Vec<ElementState> {
 }
 
 /// `left` and `right` compared by GlobalId. Each list of the result is in
-/// GlobalId order. Where one export writes a GlobalId twice, the later
-/// element is the one compared.
+/// GlobalId order.
+///
+/// An element whose GlobalId either export writes for more than one element
+/// is not compared: two elements under one key cannot be told apart, and
+/// keeping the later one would hide a change in the other. Those GlobalIds
+/// are listed in [`ElementDiff::duplicate_global_ids`] and their elements
+/// counted in [`ElementDiff::set_aside`].
 pub fn diff_elements(left: &[ElementState], right: &[ElementState]) -> ElementDiff {
-    fn by_id(states: &[ElementState]) -> BTreeMap<String, ElementState> {
-        states
-            .iter()
-            .map(|state| (state.global_id.clone(), state.clone()))
-            .collect()
+    fn repeated(states: &[ElementState]) -> BTreeSet<&str> {
+        let mut seen = BTreeSet::new();
+        let mut twice = BTreeSet::new();
+        for state in states {
+            if !seen.insert(state.global_id.as_str()) {
+                twice.insert(state.global_id.as_str());
+            }
+        }
+        twice
     }
-    let (left_by, right_by) = (by_id(left), by_id(right));
+    let (left_twice, right_twice) = (repeated(left), repeated(right));
+    let set_aside_ids: BTreeSet<&str> = left_twice.union(&right_twice).copied().collect();
+    let by_id = |states: &[ElementState]| -> (BTreeMap<String, ElementState>, usize) {
+        let mut compared = BTreeMap::new();
+        let mut aside = 0;
+        for state in states {
+            if set_aside_ids.contains(state.global_id.as_str()) {
+                aside += 1;
+            } else {
+                compared.insert(state.global_id.clone(), state.clone());
+            }
+        }
+        (compared, aside)
+    };
+    let ((left_by, left_aside), (right_by, right_aside)) = (by_id(left), by_id(right));
+    let owned =
+        |ids: &BTreeSet<&str>| -> Vec<String> { ids.iter().map(|id| (*id).to_string()).collect() };
     let mut diff = ElementDiff {
         left_elements: left.len(),
         right_elements: right.len(),
+        duplicate_global_ids: DuplicateGlobalIds {
+            left: owned(&left_twice),
+            right: owned(&right_twice),
+        },
+        set_aside: SetAside {
+            left: left_aside,
+            right: right_aside,
+        },
         ..ElementDiff::default()
     };
     for (id, before) in &left_by {
@@ -317,4 +386,105 @@ fn digest(value: &impl Serialize) -> String {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
+}
+
+// Pure comparison of two lists, so its failure modes are tested here and not
+// on a file: a GlobalId written twice must never hide a change, and every
+// element of each side must land in exactly one bucket.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn element(global_id: &str, name: &str) -> ElementState {
+        ElementState {
+            global_id: global_id.to_string(),
+            tag: None,
+            ifc_type: "IFCWALL".to_string(),
+            name: name.to_string(),
+            storey: None,
+            type_name: None,
+            predefined_type: None,
+            material: None,
+            location_feet: None,
+            rotation_radians: None,
+            body: None,
+            properties: BTreeMap::new(),
+        }
+    }
+
+    fn balances(diff: &ElementDiff) {
+        let in_both = diff.changed.len() + diff.unchanged;
+        assert_eq!(
+            diff.left_elements,
+            diff.removed.len() + in_both + diff.set_aside.left
+        );
+        assert_eq!(
+            diff.right_elements,
+            diff.added.len() + in_both + diff.set_aside.right
+        );
+    }
+
+    #[test]
+    fn no_repeated_id_adds_removes_and_changes_as_before() {
+        let left = [element("A", "a"), element("B", "b"), element("C", "c")];
+        let right = [element("B", "b"), element("C", "c2"), element("D", "d")];
+        let diff = diff_elements(&left, &right);
+        assert_eq!(diff.removed.len(), 1);
+        assert_eq!(diff.added.len(), 1);
+        assert_eq!(diff.changed.len(), 1);
+        assert_eq!(diff.unchanged, 1);
+        assert_eq!(diff.set_aside, SetAside::default());
+        assert_eq!(diff.duplicate_global_ids, DuplicateGlobalIds::default());
+        balances(&diff);
+    }
+
+    #[test]
+    fn an_id_written_twice_on_the_left_hides_no_change() {
+        // Left holds X as A and as B, right holds X as B2. Comparing the later
+        // copy alone says "B against B2" and never shows A.
+        let left = [element("X", "A"), element("X", "B"), element("Y", "y")];
+        let right = [element("X", "B2"), element("Y", "y")];
+        let diff = diff_elements(&left, &right);
+        assert_eq!(diff.duplicate_global_ids.left, ["X"]);
+        assert!(diff.duplicate_global_ids.right.is_empty());
+        assert_eq!((diff.set_aside.left, diff.set_aside.right), (2, 1));
+        assert!(diff.added.is_empty() && diff.removed.is_empty() && diff.changed.is_empty());
+        assert_eq!(diff.unchanged, 1);
+        balances(&diff);
+    }
+
+    #[test]
+    fn an_id_written_twice_on_the_right_hides_no_change() {
+        let left = [element("X", "A"), element("Y", "y")];
+        let right = [element("X", "B"), element("X", "C"), element("Y", "y")];
+        let diff = diff_elements(&left, &right);
+        assert!(diff.duplicate_global_ids.left.is_empty());
+        assert_eq!(diff.duplicate_global_ids.right, ["X"]);
+        assert_eq!((diff.set_aside.left, diff.set_aside.right), (1, 2));
+        assert!(diff.added.is_empty() && diff.removed.is_empty() && diff.changed.is_empty());
+        balances(&diff);
+    }
+
+    #[test]
+    fn an_id_written_twice_by_both_is_listed_for_each() {
+        let left = [element("X", "A"), element("X", "B")];
+        let right = [element("X", "A"), element("X", "B"), element("Z", "z")];
+        let diff = diff_elements(&left, &right);
+        assert_eq!(diff.duplicate_global_ids.left, ["X"]);
+        assert_eq!(diff.duplicate_global_ids.right, ["X"]);
+        assert_eq!((diff.set_aside.left, diff.set_aside.right), (2, 2));
+        assert_eq!(diff.added.len(), 1);
+        assert_eq!(diff.unchanged, 0);
+        balances(&diff);
+    }
+
+    #[test]
+    fn three_copies_of_an_id_count_as_three_set_aside() {
+        let left = [element("X", "A"), element("X", "B"), element("X", "C")];
+        let diff = diff_elements(&left, &[]);
+        assert_eq!(diff.duplicate_global_ids.left, ["X"]);
+        assert_eq!(diff.set_aside.left, 3);
+        assert!(diff.removed.is_empty());
+        balances(&diff);
+    }
 }
