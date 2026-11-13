@@ -18,8 +18,10 @@ it in a storey, it sets Revit's storey beside:
   (else the lowest), `=top` the one Level at the box's top, `<top` the highest
   at or below the top, `>top` the lowest at or above it, `only` the one Level a
   record names, and, among every building-story Level of the model, `top*` the
-  one at the box's top (RE-119) and `base*` the highest at or below the base. A
-  Level whose Building Story setting is off is the storey of the Level below it.
+  one at the box's top (RE-119) and `base*` the highest at or below the base,
+  and `r2l` the Level of the record's second reference list where that names any,
+  else of its first, the highest where several (RE-174, RE-175). A Level whose
+  Building Story setting is off is the storey of the Level below it.
 
 Elements are grouped by the IFC entity rvt-rs writes, the number of Levels named
 (none, 1, 2, or 3 and more) and where they lie against the box (at or below the base /
@@ -77,6 +79,21 @@ def storey_name(level, levels):
         if other[1] != "no" and other[0] < elevation
     ]
     return max(below)[1] if below else None
+
+
+def second_list_level(first, second, levels):
+    """RE-174, RE-175: the Level of the record's second reference list where that
+    names any, else of its first; the one Level it names, or the highest of
+    several where that is unique."""
+    chosen = sorted(
+        ((level, levels[level][0]) for level in (second or first) if level in levels),
+        key=lambda item: item[1],
+    )
+    if len(chosen) == 1:
+        return chosen[0][0]
+    if len(chosen) > 1 and chosen[-1][1] - chosen[-2][1] > 1e-6:
+        return chosen[-1][0]
+    return None
 
 
 # Each rule takes the named Levels as (id, elevation) in order of elevation (an
@@ -211,10 +228,14 @@ def main():
             picked = rule(named, base, top)
             cell[name] += picked is not None and storey_name(picked[0], levels) == revit
             cell[name + "?"] += picked is not None
+        second_ids = [] if row.get("second", "-") == "-" else row["second"].split(",")
+        listed = second_list_level(ids, second_ids, levels)
+        cell["r2l"] += listed is not None and storey_name(listed, levels) == revit
+        cell["r2l?"] += listed is not None
     for what, n in skipped.most_common():
         print(f"  left out: {n} ({what})")
 
-    names = [name for name, _ in RULES]
+    names = [name for name, _ in RULES] + ["r2l"]
     print("elements by entity, Levels named and their place against the box (at or below base / within / at or above top):")
     print("  right = the rule's storey is Revit's; ? = the rule gives a Level")
     head = f"  {'entity':<22} {'n':<3} {'below/in/above':<15} {'N':>5} {'ours':>5} " + " ".join(f"{n:>9}" for n in names)
