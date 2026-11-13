@@ -974,7 +974,7 @@ fn continues_straight(before: Edge, edge: Edge) -> bool {
     // A turn whose sine is under 1e-8 is straight. At 1e-12, two rooms of the
     // BIM4LCA timber office kept a vertex Revit's outline does not have, at a
     // sine between 1e-12 and 1e-9. No turn on the models Measure holds falls
-    // between 1e-9 and 1e-6 (#1825 row 7).
+    // between 1e-8 and 1e-6, so a drift tips none (#1825 row 7).
     dot > 0.0 && cross.abs() <= 1e-8 * u.0.hypot(u.1) * v.0.hypot(v.1)
 }
 
