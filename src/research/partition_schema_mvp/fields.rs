@@ -378,9 +378,11 @@ pub const CURTAIN_WALL_PART_CLASSES: &[&str] = &["CurtainWallPanel", "CurtainWal
 
 /// Classes that are parts of a stair when their reference list names one.
 ///
-/// Railings are not among them: Revit's export aggregates 65 of the 70
-/// Snowdon railings whose lists name a stair, and nothing read so far tells
-/// the other five apart, so railings stay standalone elements.
+/// Railings are not among them: a railing's reference list does not decide
+/// it (RE-39: Revit's export aggregates 65 of the 70 Snowdon railings whose
+/// lists name a stair). A railing joins the stair its own record names
+/// (`BaseRailing.m_stairsId`, RE-254) unless it sits on one of the stair's
+/// components (`m_stairsComponentId`, RE-390): `attach_railing_lengths`.
 pub const STAIR_PART_CLASSES: &[&str] = &["StairsRun", "StairsLanding", "StairsStringer"];
 
 /// Field holding an element's IFC `Name` where Revit's export does not name
@@ -575,7 +577,7 @@ pub const PROFILE_OPENING_FIELD: &str = "m_profile_opening";
 /// The field prefix of the pockets of a wall's edited elevation profile against
 /// its convex hull, the openings Revit's export writes (#1607, RE-380):
 /// `m_profile_pocket_<k>`, the pocket's outline as model-feet points in the
-/// wall's vertical plane, and `m_profile_pocket_<k>_tag`, the highest ElementId
+/// wall's vertical plane, and `m_profile_pocket_<k>_tag`, the ElementId of the first
 /// of the profile's lines it follows.
 // Tracker: B55.
 pub const PROFILE_POCKET_FIELD: &str = "m_profile_pocket";

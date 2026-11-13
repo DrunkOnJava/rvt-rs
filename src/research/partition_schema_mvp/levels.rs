@@ -446,7 +446,10 @@ pub(super) fn resolve_base_constraint_levels(
 /// puts four beams spanning 3.2 to 4.0 m on the 4.0 m Level, and four
 /// foundation beams spanning -0.8 to 0.0 m on the 0.0 m Level, where their
 /// records name the 0.0 m Level and none. Nothing changes where no Level, or
-/// more than one, is at the top.
+/// more than one, is at the top. It runs on every release of the 32-bit
+/// records: since #742 (RE-180, RE-181) that is 2015 to 2023, and 2015 to
+/// 2022 are checked only against each project's 2023 copy, not against a
+/// Revit export of their own.
 pub(super) fn resolve_framing_top_levels(
     elevations: &BTreeMap<u32, f64>,
     elements: &mut [&mut Vec<DecodedElement>],

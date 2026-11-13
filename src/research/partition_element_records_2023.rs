@@ -6,9 +6,11 @@
 //! schema (RE-80). It opens with a chain-record header in 32-bit form: the
 //! ElementId as a `u32`, the record size, the tag of `ElementHeader` and a
 //! count, 52 bytes before the marker. The `BuiltInCategory` follows 38
-//! bytes before the marker. The container reference, placement kind,
-//! class tag and bounding box sit where 2024 has them relative to the
-//! marker, so a record's `offset` here is the marker minus
+//! bytes before the marker. The placement kind, class tag and bounding box
+//! sit where 2024 has them relative to the marker; the container reference
+//! does not: it is a `u32` 22 bytes before the marker, 16 after the
+//! category (`CONTAINER_BEFORE_MARKER`, RE-260), where RE-81 first read
+//! 2024's place. A record's `offset` here is the marker minus
 //! [`crate::partition_element_records::BBOX_MARKER_OFFSET`], as on 2024.
 //! After the box come two counted lists of `u32` ElementIds (2024 writes
 //! `u64`).

@@ -230,7 +230,7 @@ pub fn all_bounded_lines(data: &[u8]) -> Option<Vec<BoundedLine>> {
 /// start angle to the end angle. On Autodesk's Snowdon Towers 2024
 /// architectural sample it is the first curve record of 32 walls, and on
 /// the 24 of them Revit's IFC4 export draws with an arc axis, its centre and
-/// radius are that axis's to 1e-5 ft.
+/// radius are that axis's within 0.001 ft (RE-75).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BoundedArc {
     pub start_angle: f64,

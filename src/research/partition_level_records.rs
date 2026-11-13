@@ -19,7 +19,7 @@
 //!
 //! ```text
 //! +0x00  u64  ElementId of this record (declared in Global/ElemTable)
-//! +0x08  u32  record flags (0x87 on every standalone Level)
+//! +0x08  u32  record flags (0x8f on the Level RE-24 shows; kept, never tested)
 //! +0x0c  u32  0x0000059f, as on every element record
 //! +0x10  u16  0
 //! +0x12  i64  BuiltInCategory = OST_Levels (-2000240)
@@ -880,7 +880,9 @@ struct EnclosedLevels {
 /// category, opened by the 32-bit chain header 2023's element records
 /// carry (RE-81): a `u32` ElementId, the record size and the
 /// `ElementHeader` tag, 14 bytes before the category; the container
-/// reference 8 bytes after it, the placement kind 24 after it, and the
+/// reference, a `u32`, 16 bytes after it (RE-107 first read it at 8; see
+/// `reports/element-framing/32bit-container-and-building-story.md`), the
+/// placement kind 24 after it, and the
 /// record `marker` (`ff ff ff ff` and the `ElementParents` tag) 38 after
 /// it.
 pub fn find_level_records_2023(
