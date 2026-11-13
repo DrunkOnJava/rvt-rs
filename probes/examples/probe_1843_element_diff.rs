@@ -33,6 +33,14 @@ fn states(path: &str) -> anyhow::Result<Vec<ElementState>> {
     Ok(element_states(&run.model))
 }
 
+/// A property's number, whether written bare or as its kind (`{"Real": 1.5}`).
+fn number(value: &serde_json::Value) -> Option<f64> {
+    value.as_f64().or_else(|| {
+        let object = value.as_object()?;
+        (object.len() == 1).then(|| object.values().next()?.as_f64())?
+    })
+}
+
 fn by_type(states: &[ElementState]) -> String {
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     for state in states {
@@ -93,5 +101,27 @@ fn main() -> anyhow::Result<()> {
             .collect::<Vec<_>>()
             .join(" ")
     );
+    // Which properties differ, by `<set>.<property>` (names only, no values):
+    // a file against itself should list none (#1852's first run listed 11 on
+    // Core Interior). Per key: how often, how often one side lacks it, and the
+    // largest difference where both are numbers.
+    let mut properties: BTreeMap<&str, (usize, usize, usize, f64)> = BTreeMap::new();
+    for field in diff.changed.iter().flat_map(|change| &change.changes) {
+        let Some(key) = field.field.strip_prefix("property:") else {
+            continue;
+        };
+        let entry = properties.entry(key).or_insert((0, 0, 0, 0.0));
+        entry.0 += 1;
+        entry.1 += usize::from(field.left.is_null());
+        entry.2 += usize::from(field.right.is_null());
+        if let (Some(a), Some(b)) = (number(&field.left), number(&field.right)) {
+            entry.3 = entry.3.max((a - b).abs());
+        }
+    }
+    for (key, (n, left_absent, right_absent, delta)) in &properties {
+        println!(
+            "changed_property {key} n={n} left_absent={left_absent} right_absent={right_absent} max_numeric_delta={delta:e}"
+        );
+    }
     Ok(())
 }
