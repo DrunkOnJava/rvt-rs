@@ -569,13 +569,17 @@ pub(super) fn attach_curtain_walls(
             let Some(list) = list else {
                 continue;
             };
-            let ids: Vec<u32> = list
-                .iter()
-                .filter_map(|&id| u32::try_from(id).ok())
-                .collect();
-            let on_grid: BTreeSet<u32> =
-                ids.iter().filter_map(|id| grids.get(id).copied()).collect();
-            if let (1, Some(&whole)) = (on_grid.len(), on_grid.iter().next()) {
+            // RE-452: an opening with no grid whose list names exactly one
+            // curtain wall is a part of it, as a mullion or a panel is. On Revit
+            // 2027 the grid's offsets (RE-72) are not found, and the curtain
+            // door 216844 of `rac_advanced` stood alone.
+            let (named, on_grid) = part_walls(element.id, &list, &curtain_walls, &grids);
+            let whole = match (on_grid.len(), named.len()) {
+                (1, _) => on_grid.iter().next().copied(),
+                (0, 1) => named.iter().next().copied(),
+                _ => None,
+            };
+            if let Some(whole) = whole {
                 element.fields.push((
                     AGGREGATE_WHOLE_FIELD.into(),
                     InstanceField::ElementId { tag: 0, id: whole },
