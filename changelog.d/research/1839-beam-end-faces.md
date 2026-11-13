@@ -8,8 +8,10 @@
   box's length, so it stays off for Revit 2024 and later. The scorer now also
   takes each Revit beam's mesh in the world frame and counts its two ends by
   the kind of element whose face (a column's, a beam's, a wall's or a slab's,
-  within 1 mm) each end lies on in Revit's export, which asks Revit's own
-  geometry what stops the beam without the record box. On the ten BIM4LCA
-  models, where the rule is exact on 59 of 60 beams of the timber office, 108
-  of the 142 ends of the beams Revit leaves at the box's length lie on a
-  column's face.
+  within 1 mm) each end lies near in Revit's export, which asks Revit's own
+  geometry what stops the beam without the record box. On the timber office of
+  the ten BIM4LCA models, where the rule is exact on 59 of the 60 beams it cuts,
+  108 of the 142 ends of the beams Revit leaves at the box's length lie on a
+  column's face (105 of 138 at building permit); of the 13 beams Revit shortens
+  on the ten models, one (the timber office at permit) has its ends on column
+  faces.

@@ -2,10 +2,10 @@
 
 **Date:** 2026-11-13
 **Issues:** #1839 (a Revit 2027 concrete frame whose beams run past Revit's), #1829; follows RE-122 (a beam stops at the near face of the column it names, Revit 2023) and RE-328 (a beam's body from its line and its record box)
-**Artefacts:** the BIM4LCA models that Measure reads with Revit's own IFC4 export of each (VTT's ARCH archive, CC BY-SA 4.0; `research/bim4lca-measure.tsv`): the concrete and the timber office, the concrete and the timber housing, as built and at building permit, and the two terrain models. Ten models, 300 beams, each with a body in Revit's export.
+**Artefacts:** the BIM4LCA models that Measure reads with Revit's own IFC4 export of each (VTT's ARCH archive, CC BY-SA 4.0; `research/bim4lca-measure.tsv`): the concrete and the timber office, the concrete and the timber housing, as built and at building permit, and the two terrain models. Ten models, 300 beams, each with a body in Revit's export. The reporter's confidential Revit 2027 concrete frame (counts only, section 5).
 **Probe and scorer:** `probes/examples/probe_1839_beam_column_ends.rs`, `tools/re/beam_ends_vs_ifc.py`
-**Runs:** Measure [43450655901](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43450655901) (the probe at `c5ea03ff`, columns only) and [43455872839](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43455872839) (`870b4276`, columns, walls and other beams), both `-f nordic=true -f base=none -f scorers=none`; no export changes.
-**Status:** Negative. On these models a beam's record box already ends where Revit's body ends for the beams that name a column, so the face of the column has nothing to cut and the rule cannot be tested on them; and none of the three kinds of element a beam's list can name (columns, walls, other beams) explains the 13 beams Revit does shorten. A test of the column face needs a model whose boxes run to the lines' ends, such as the reporter's.
+**Runs:** Measure [43450655901](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43450655901) (the probe at `c5ea03ff`, columns only) and [43455872839](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43455872839) (`870b4276`, columns, walls and other beams), both `-f nordic=true -f base=none -f scorers=none`; Measure [43480745216](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43480745216) at `2e8098d0` (the scorer's end-face counts, same flags, section 6); no export changes. The reporter's runs are of the `probe-binaries.yml` build [43460256185](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43460256185) (`d90c1fa8`), are theirs and are posted on #1839.
+**Status:** Negative for the column face, on both kinds of model. On the ten BIM4LCA models a beam's record box already ends where Revit's body ends for the beams that name a column, so the face has nothing to cut there, and none of the three kinds of element a beam's list can name (columns, walls, other beams) explains the 13 beams Revit does shorten (sections 2 to 4). On the reporter's Revit 2027 concrete frame, where the boxes do run past Revit's beams, the face is exact on 2 of the 361 beams it gives bounds to (section 5), so the rule stays off for Revit 2024 and later. What Revit's own beam ends lie on is counted by the scorer (section 6); on the reporter's model that count is theirs to run.
 
 ## 1. The question
 
@@ -61,9 +61,9 @@ The near face of a column's record box is not where Revit stops these beams, nor
 
 ## 6. What the ends of Revit's own beams lie on (scorer addition)
 
-The scorer now also asks Revit's own export what its beams stop on, without the record box or the probe's naming: each Revit beam's mesh is taken in the world frame, its two end caps are found as the ends of its principal axis, and the centre of each cap is looked up among the faces of Revit's columns, beams and members, walls and slabs (within 1 mm of a face and inside it, the beam's own faces excluded). The ends are counted by how Revit's length stands to the record box's and by the kind of element they lie on, column first.
+The scorer now also asks Revit's own export what its beams stop on, without the record box or the probe's naming: each Revit beam's mesh is taken in the world frame, its two end caps are found as the ends of its principal axis, and the centre of each cap is looked up among the faces of Revit's columns, beams and members, walls and slabs (within 1 mm of the plane of a triangle of the element's mesh and inside that triangle, with a slack of a thousandth of the triangle's height past any edge; the beam's own faces are excluded). The ends are counted by how Revit's length stands to the record box's and by the kind of element they lie on, column first.
 
-On the ten BIM4LCA models (Measure [43480745216](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43480745216), `-f nordic=true -f base=none -f scorers=none`, the scorer from this branch's commit):
+On the ten BIM4LCA models (Measure [43480745216](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43480745216), `-f nordic=true -f base=none -f scorers=none`, the scorer at `2e8098d0`, the file of this change):
 
 | Model | Revit stands to the record | Ends | Column | Beam | Wall | Slab | Nothing |
 |---|---|---:|---:|---:|---:|---:|---:|
@@ -77,6 +77,7 @@ On the ten BIM4LCA models (Measure [43480745216](https://github.com/DrunkOnJava/
 
 - **A positive control.** On the timber offices, where the 2023 rule is exact on 59 of the 60 beams it cuts, 108 of 142 ends (105 of 138 at permit) of the beams Revit leaves at the record box's length lie on a column's face in Revit's own export: where the record box ends at the column's face, so does Revit's mesh, and the scorer finds it. The other ends lie on walls (20 and 19) or on nothing (14 and 14).
 - **The 11 timber housing beams Revit shortens (a median 96 mm, quartiles 2 and 96) end on nothing** in this set (22 of 22 ends), and the one concrete housing beam it shortens, by 2,320 mm, ends on two walls. No beam Revit shortens ends on a column face in these models except the timber office's one at permit (2 ends).
+- **A count near a face is not a proof of contact.** An end counts as on a triangle up to a thousandth of the triangle's height past its edge (1 cm on a triangle 10 m high), and every element of the kind is searched, so an end near the edge of a large wall or slab can count. The count says what Revit's beam ends are near, which is the question; it does not say what held them.
 
 The question for the reporter's model is the same, now asked of Revit's own geometry: whether the ends of the 538 beams Revit shortens lie on the true face of a column (or of a wall, the shear walls the reporter suspects), where the record box's face is not that. The scorer prints counts only without `--list`.
 

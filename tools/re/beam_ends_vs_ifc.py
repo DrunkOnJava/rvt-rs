@@ -29,10 +29,13 @@ not.
 What stops the beams Revit shortens is asked of Revit's own export as well: each beam's mesh is
 taken in the world frame, its two end caps are found as the ends of its principal axis, and the
 centre of each cap is looked up among the faces of Revit's columns, beams and members, walls and
-slabs. An end lies on an element where it is within 1 mm of one of its faces and inside that face
-(the element's true surface, not its record box). The ends of the beams Revit makes shorter, of
-those it leaves at the record length and of those it makes longer are counted by the kind of
-element they lie on (column first, then beam, wall, slab), or on nothing.
+slabs. An end lies on an element where it is within 1 mm of the plane of one of its triangles and
+inside that triangle (the element's true surface, not its record box). "Inside" has a slack of a
+thousandth of the triangle's height past any edge, which is 1 cm on a triangle 10 m high, so a
+large wall or slab can count an end that is a little past its edge: the count says where an end is
+near a face, not that the two touch. The ends of the beams Revit makes shorter, of those it leaves
+at the record length and of those it makes longer are counted by the kind of element they lie on
+(column first, then beam, wall, slab), or on nothing.
 
 Every summary line starts `beam ends:` and holds counts beside fixed words; `--list` adds one line
 per beam, which names an ElementId.
