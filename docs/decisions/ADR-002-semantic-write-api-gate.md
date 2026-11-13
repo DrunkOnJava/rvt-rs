@@ -6,8 +6,8 @@
 
 ## Context
 
-`rvt-rs` can copy a Revit CFB container byte-for-byte and can replace
-complete named OLE streams through `writer::write_with_patches`.
+`rvt-rs` can copy a Revit file's OLE streams byte-for-byte and can
+replace complete named OLE streams through `writer::write_with_patches`.
 That is a stream-level capability. It is not a semantic Revit editor.
 
 Field-level semantic writing is materially riskier. A change such as
@@ -192,7 +192,5 @@ This ADR is documentation-only. The current enforced write-path evidence
 remains:
 
 - `cargo test --test integration -- cfb_roundtrip_delta::` for family/project stream patch
-  coverage;
-- `cargo test writer::tests:: --lib` for patch verification,
-  corrupt-gzip reporting, GUID, and history helpers;
+  coverage, patch verification, and GUID and history helpers;
 - CI `Writer patch corpus` job for real family and project fixtures.

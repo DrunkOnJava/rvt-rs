@@ -29,7 +29,7 @@ programmer plus access to the `phi-ag/rvt` corpus via `_corpus/`
 
 ---
 
-## The three-file change
+## The files a decoder change touches
 
 Adding a decoder for `MyClass` touches these files:
 
@@ -51,12 +51,13 @@ schema and inspect its fields:
 
 ```bash
 cargo run --release --bin rvt-schema -- _corpus/examples/Autodesk/racbasicsamplefamily-2024.rfa \
-    | grep -A 20 "class MyClass"
+    --grep MyClass
 ```
 
-Output lists the fields in schema order with their decoded
-`FieldType`. Record the field list — you'll use it for the
-`synth_schema` helper in the tests.
+The text output lists up to eight of the fields in schema order with
+their C++ type signatures; `--format json` gives every field and its
+decoded `FieldType`. Record the field list — you'll use it for
+`from_decoded` and the field-by-field check in Step 5.
 
 If `MyClass` doesn't appear, that's useful: it means the class is
 out of scope for family files and you may need a project `.rvt` in
@@ -164,13 +165,14 @@ impl ElementDecoder for MyClassDecoder {
 ```
 
 `decode` is where failing closed happens: production skips an instance
-the decoder rejects, and `decode_instance` itself rejects nothing, so a
+the decoder rejects, and `decode_instance` itself rejects nothing. A
 decoder that only checks the schema name (which is all `SimpleDecoder`
-does) marks every same-class candidate typed, a truncated one or a false
-hit included. Before registering a class of your own, make `decode`
-return an `Error` for an instance missing a field `MyClass` needs, or
-holding one as `Bytes` or in a type the schema does not give it, and for
-any other check Step 4 lists.
+does) is not enough on its own: production drops only the two shapes
+below — one with a `Bytes` field and one its typed view reads nothing
+from (#852) — and any other same-class false hit is marked typed. Before
+registering a class of your own, make `decode` return an `Error` for an
+instance missing a field `MyClass` needs, or holding one as `Bytes` or in
+a type the schema does not give it, and for any other check Step 4 lists.
 
 ### Step 3 — Register in the dispatch table
 
@@ -215,20 +217,23 @@ or framing for the class, which is format work (see
 [CONTRIBUTING.md](../CONTRIBUTING.md#reverse-engineering-findings)), not the decoder. A class in that
 list is also advertised as typed, so the same change:
 
-- adds its arm to `typed_json::mvp_typed_view`, or the CLI and Python
-  give it `typed: null`;
+- adds its arm to `typed_json::mvp_typed_view`, or it stays untyped:
+  `typed: null` from Python, the key omitted from the CLI;
 - adds it wherever the typed classes are listed: the module doc of
   `src/elements/mod.rs`, the doc comment in `rvt-py/src/lib.rs`, the
   stub `python/rvt/__init__.pyi`, `docs/python.md`, the description in
   `docs/schemas/decoded-elements.schema.json`, the list
   `tests/python/test_decoded_api.py` pins, and the counts of them in
   `docs/evidence.md` and `docs/library.md`. `git grep -n -E 'Level.{1,6}Wall.{1,6}Floor' -- . ':!CHANGELOG.md' ':!reports'`
-  finds them, and any later copy.
+  finds the copies that put the three classes on one line, and any later
+  one, but not the stub, the pinned list or `docs/evidence.md`, which wrap
+  or split the names: check those by hand.
 
 ### Step 4 — Write down how it can fail
 
 Unit tests are banned in this repository, synthesized-byte tests
-included. Before writing the decoder, list the ways it could go wrong
+included, the one exception a pure helper in `src/` (CONTRIBUTING.md).
+Before writing the decoder, list the ways it could go wrong
 on real files: a field that is absent on one release, a record of
 another class that happens to parse, a length that runs past the
 stream, a value that is plausible but wrong. Each one becomes a check
@@ -347,12 +352,11 @@ check above fails there on a missing release. Locally,
 `RVT_SAMPLES_DIR=<corpus>/examples/Autodesk cargo test --profile ci --test integration myclass_corpus`
 runs it.
 
-### Step 6 — Document in `CHANGELOG.md`
+### Step 6 — Document in a `changelog.d/` fragment
 
-Add to the `[Unreleased]` section:
+Add `changelog.d/added/<branch-name>.md` (never `CHANGELOG.md` itself):
 
 ```markdown
-### Added
 - **`elements::my_class::MyClass`** — Layer 5b typed view of
   Revit's `MyClass` (description): `MyClass { name, foo, ... }`
   over what `SimpleDecoder` decodes. Covers N fields, measured on <files> against <oracle>
@@ -479,7 +483,8 @@ exporter + basic viewer; the rest fill in per-category coverage.
 - File an Issue with the `class-decoder` label if you hit a
   blocker that looks like a bug in the scaffold
 - `ROADMAP.md` and the GitHub issues carry the tracked decoder work, and
-  `docs/archive/TODO.md` the older decomposition (the
-  historical L5B-XX planning ids were never checked in)
+  `docs/archive/TODO.md` the older decomposition (the historical
+  L5B-XX ids are `Tracker:` comments in the code, not a checked-in
+  planning document)
 - Read `CONTRIBUTING.md` and `CLEANROOM.md` for the source-
   provenance rules before contributing

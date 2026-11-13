@@ -30,7 +30,7 @@ ship to PyPI without the default-build lints catching it.
 
 ## Decision
 
-Split the repo into a two-member Cargo workspace:
+Split the repo into a Cargo workspace with `rvt-py` as its own member:
 
 ```
 rvt-rs/
@@ -39,6 +39,7 @@ rvt-rs/
 ├── rvt-py/
 │   ├── Cargo.toml        ← new member, `rvt-py` package
 │   └── src/lib.rs        ← pyo3 bindings (was src/python.rs)
+├── …                     ← `probes`, `rvt-mcp`, `rvt-wasm`, `tools/stream_evidence`
 └── pyproject.toml        ← maturin manifest-path → rvt-py/Cargo.toml
 ```
 
@@ -66,23 +67,26 @@ library with no pyo3 in the dependency tree.
   non-publishable rvt-py member is skipped. `rvt-py` is marked
   `publish = false` — the wheel is the distribution channel, not
   crates.io.
-- Contributors grepping for `unsafe` in the core crate will find
-  zero hits.
+- Contributors grepping for an `unsafe` block in the core crate
+  will find zero hits.
 
 ### Negative / mitigated
 
-- **Two `Cargo.toml` files to keep in version lock-step.** The
+- **Every version file to keep in version lock-step.** The
   `rvt-py/Cargo.toml` has `rvt = { path = "..", version =
-  "=0.1.2" }`, so updates to `rvt`'s version require a matching
-  bump in `rvt-py`. CI's version-match check in `publish.yml`
-  covers this when pushing tags; day-to-day development catches
-  mismatches at `cargo check` time.
-- **Root crate kept `cdylib` in `crate-type`.** wasm-pack requires
-  `cdylib` to compile to `wasm32-unknown-unknown`, so we ship
-  `crate-type = ["rlib", "cdylib"]`. This doesn't weaken the
-  security posture — `cdylib` is a linker configuration, not a
-  source-level allowance. The `#![forbid(unsafe_code)]` still
-  applies under both output shapes.
+  "=<the release version>" }`, the exact version, so updates to `rvt`'s version require a matching
+  bump in `rvt-py`, and in `rvt-mcp`, `rvt-wasm`,
+  `viewer/package.json` and `CITATION.cff`. CI's version-match
+  check in `publish.yml` covers this when pushing tags; day-to-day
+  development catches mismatches at `cargo check` time.
+- **Root crate kept only `rlib` in `crate-type` (the `cdylib`
+  moved to `rvt-wasm`, C6).** wasm-pack requires `cdylib` to
+  compile to `wasm32-unknown-unknown`, so that crate type now lives
+  in `rvt-wasm` and the core crate ships as a plain `rlib`. This
+  doesn't weaken the security posture — `cdylib` is a linker
+  configuration, not a source-level allowance. The
+  `#![forbid(unsafe_code)]` still applies to every build of the core
+  crate.
 - **Workflow files needed updates.** `publish.yml`, `ci.yml`,
   `pyproject.toml`, `README.md`, and `docs/python.md` all had to
   drop `--features python` in favour of `--manifest-path
@@ -110,11 +114,11 @@ library with no pyo3 in the dependency tree.
 
 After the split:
 
-- `grep -r 'unsafe' src/` → zero results in source files.
+- `grep -r 'unsafe {' src/` → zero results in source files.
 - `cargo check --lib` (default features) → compiles, no pyo3 in
   the dependency tree.
-- `cargo check --lib --features wasm --no-default-features` →
-  compiles, builds the wasm-pack cdylib.
+- `cargo check --package rvt-wasm` → compiles, builds the
+  wasm-pack cdylib.
 - `cargo check --package rvt-py` → compiles, pyo3 is the only
   source of `unsafe`.
 - `cargo test --lib --quiet` → 697/697 pass.
