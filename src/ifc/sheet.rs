@@ -207,6 +207,16 @@ fn collect_footprints(model: &IfcModel) -> Vec<Footprint> {
         let Some((outer, holes)) = plan_outline(body, &placement) else {
             continue;
         };
+        // Every footprint the sheet draws, and its bounds, comes from here: a
+        // point that is not finite would write NaN into the SVG or blow up
+        // the sheet's scale, whatever upstream made it (#1845).
+        if !outer
+            .iter()
+            .chain(holes.iter().flatten())
+            .all(|(x, y)| x.is_finite() && y.is_finite())
+        {
+            continue;
+        }
         let on_axes = placement.sin.abs() < 1e-12 || placement.cos.abs() < 1e-12;
         let axis_aligned_rectangle = on_axes
             && matches!(body, Body::Extrusion(extrusion) if extrusion.profile_override.is_none());

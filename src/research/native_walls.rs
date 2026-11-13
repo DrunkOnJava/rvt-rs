@@ -601,6 +601,25 @@ fn wall_read_fields(class: &str) -> Option<&'static [&'static str]> {
     }
 }
 
+thread_local! {
+    static WALL_READ_PASSES: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    static WALL_FACTS_ONLY: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// The passes over the file [`WallReads`] has made on this thread since it
+/// started: a probe sets it beside an export to see whether a reader found its
+/// walls' facts already read (#1824).
+pub fn wall_read_passes() -> u64 {
+    WALL_READ_PASSES.with(std::cell::Cell::get)
+}
+
+/// The walls [`native_walls_and_top_joins_into`] has read on this thread for
+/// their facts alone (its `facts_only`), counting those whose record it read
+/// (#1824).
+pub fn wall_facts_only_reads() -> u64 {
+    WALL_FACTS_ONLY.with(std::cell::Cell::get)
+}
+
 /// What reads of walls' native records have found, kept so that the reader
 /// of the same walls that follows finds it rather than reading the records
 /// again (#1237: each read is a pass over the file, and on a Revit 2015 to
@@ -671,6 +690,7 @@ impl WallReads {
         if selected.is_empty() {
             return Ok(());
         }
+        WALL_READ_PASSES.with(|passes| passes.set(passes.get() + 1));
         let options = Options {
             selected_ids: selected,
             releases: crate::native_document::NATIVE_RELEASES,
@@ -803,15 +823,24 @@ pub fn native_walls_and_top_joins(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
 ) -> anyhow::Result<WallRecords> {
-    native_walls_and_top_joins_into(rf, walls, &mut WallReads::default())
+    native_walls_and_top_joins_into(rf, walls, &BTreeSet::new(), &mut WallReads::default())
 }
 
 /// [`native_walls_and_top_joins`], leaving in `reads` what the same records
 /// give a reader of the walls' types: each of `walls`' type ids, and the
-/// Function of each `BasicWallType` record the read takes besides (#1237).
+/// Function of each `BasicWallType` record the read takes besides (#1237);
+/// and what they give [`WallReads::top_joins`] and [`WallReads::load_bearing`]
+/// (#1824).
+///
+/// The walls of `facts_only` are read in the same pass for those facts alone,
+/// their type id, top join and load bearing, and are not in the records
+/// returned: the readers that follow ask them of every wall, and a wall the
+/// caller draws no body for would otherwise cost them a pass of their own
+/// (#1824). One whose record is not read is left to them.
 pub fn native_walls_and_top_joins_into(
     rf: &mut RevitFile,
     walls: &BTreeSet<u64>,
+    facts_only: &BTreeSet<u64>,
     reads: &mut WallReads,
 ) -> anyhow::Result<WallRecords> {
     if walls.is_empty() {
@@ -829,8 +858,11 @@ pub fn native_walls_and_top_joins_into(
     let mut whole: BTreeSet<u64> = BTreeSet::new();
     let mut bounded: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
     let mut end_joins: BTreeMap<u64, EndJoins> = BTreeMap::new();
+    let facts_only: BTreeSet<u64> = facts_only.difference(walls).copied().collect();
+    let mut facts_top_joined: BTreeMap<u64, bool> = BTreeMap::new();
+    let mut facts_bearing: BTreeMap<u64, bool> = BTreeMap::new();
     let options = Options {
-        selected_ids: walls.clone(),
+        selected_ids: walls.union(&facts_only).copied().collect(),
         selected_classes: BTreeSet::from(["BasicWallType".to_string()]),
         releases: crate::native_document::NATIVE_RELEASES,
         value_source: Some("native_wall"),
@@ -842,7 +874,7 @@ pub fn native_walls_and_top_joins_into(
     extract_graphs(rf, &options, |record| {
         if let Some(graph) = record.graph.as_ref() {
             let id = record.identity.element_id;
-            if walls.contains(&id) {
+            if walls.contains(&id) || facts_only.contains(&id) {
                 if let Some(type_id) = wall_type_id(graph) {
                     type_ids.insert(id, type_id);
                 }
@@ -868,7 +900,17 @@ pub fn native_walls_and_top_joins_into(
             }
             return Ok(());
         }
-        if !matches!(class, "SWall" | "ArcWall") || !walls.contains(&id) {
+        if !matches!(class, "SWall" | "ArcWall") {
+            return Ok(());
+        }
+        if facts_only.contains(&id) {
+            facts_top_joined.insert(id, is_top_joined(graph));
+            if let Some(load_bearing) = wall_load_bearing(graph) {
+                facts_bearing.insert(id, load_bearing);
+            }
+            return Ok(());
+        }
+        if !walls.contains(&id) {
             return Ok(());
         }
         top_joined.insert(id, is_top_joined(graph));
@@ -1083,6 +1125,23 @@ pub fn native_walls_and_top_joins_into(
     reads.functions_read.extend(functions_read);
     reads.bearing.extend(bearing);
     reads.bearing_read.extend(walls.iter().copied());
+    // The top joins too: on Revit 2015 to 2023, `read_wall_records` and
+    // `attach_wall_top_joins` ask for them next, and would otherwise read every
+    // wall's record again for this one member (#1824). Only the walls it found
+    // one for count as read: a wall whose whole graph did not decode (over the
+    // value budget, say) is left to the projected read, which builds far less.
+    reads.top_joined.extend(&top_joined);
+    reads.top_joins_read.extend(top_joined.keys().copied());
+    // A wall read for its facts alone counts as read for them only where its
+    // record was read, so one it did not decode is still read by the reader
+    // that asks.
+    let facts_read: Vec<u64> = facts_top_joined.keys().copied().collect();
+    WALL_FACTS_ONLY.with(|count| count.set(count.get() + facts_read.len() as u64));
+    reads.type_ids_read.extend(&facts_read);
+    reads.bearing.extend(facts_bearing);
+    reads.bearing_read.extend(&facts_read);
+    reads.top_joined.extend(facts_top_joined);
+    reads.top_joins_read.extend(facts_read);
     let walls = found
         .into_iter()
         .map(|(id, (mut wall, type_id))| {
