@@ -1247,6 +1247,34 @@ and earlier write every room, as every element: both phase rules start at
 Revit 2016 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
+**RE-449 (2026-11-13)** gives a curtain part that names two curtain walls and
+no grid the wall the element data of its list names. Revit 2027 saves the 79
+corner mullions of Autodesk's `rac_advanced` with both walls of their corner in
+their reference lists where the 2025 and 2026 saves name one, so RE-46's rule
+(exactly one named wall) left them without a whole and without an `IsExternal`
+(#1865). Neither the order of the list nor the part's record box tells the two
+walls apart, but the element data of another id of the list, the part's grid,
+names exactly one of them, at offsets that move between grid kinds and
+releases and are RE-72's on neither save, and that wall is the one that held
+the part on 2025 for 75 of 75 parts that have such an id on each save. 74 of
+the 79 mullions are now under it (the 2027 save's 34 curtain walls hold 4,458
+parts, from 4,384, and 29 of them as many as on 2025), `IsExternal` lost
+between the 2025 or 2026 save and the 2027 one goes from 79 to none, and the
+2026 to 2027 pair of `rac_advanced` differs in 425 fields, from 573. The 5
+mullions whose lists hold no such id stand alone with the `IsExternal` their
+two walls share, and the curtain door 216844, which the 2026 and 2027 saves
+leave out of its wall for a cause not found, is unchanged. The rule reaches
+every file with a part that names two or more curtain walls and finds no grid,
+not that file alone: 14 other exports of the unfiltered Measure run gain
+`IsExternal` on curtain mullions (the 2015 to 2023 saves of `rac_advanced`,
+9 to 79 each, and the four BIM4LCA offices, 2 to 4), which Revit's export
+cannot score (RE-269), and two members of the BIM4LCA timber office take the
+curtain wall Revit's own export puts them under (`aggregates_vs_ifc`,
+`IfcMember` same whole 7,872 to 7,874). The 2023 save of `rac_advanced` stays
+six values short of its neighbours
+([#1899](https://github.com/DrunkOnJava/rvt-rs/issues/1899))
+(`reports/element-framing/RE-449-curtain-corner-mullions.md`).
+
 **RE-445 (2026-11-11)** reads the project's display units from its
 `UnitsElem` record: from Revit 2021 its `AUnits.m_formatOptionsMap` gives
 every spec its display unit (133 to 150 specs on the corpus), and a family's
