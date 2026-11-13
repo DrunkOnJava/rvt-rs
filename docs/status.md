@@ -144,7 +144,8 @@ rac_advanced, drawn with chords on the 2025 save before (24 vertices), has the
 exports. Since RE-346 a pipe there is placed by RE-131's connector entries
 first, as on 2025 (RE-370 draws the rest from its record), family
 instances' ports are placed, walls are cut to their doors' and windows'
-outlines, and `IsExternal`, railing heights and lengths, stair names, rooms'
+outlines, and `IsExternal` (on walls and the curtain walls, members and plates
+on them since #1860), railing heights and lengths, stair names, rooms'
 height and net volume and the pipe and duct quantities are written, as on 2025,
 except a door's or window's Area on 2027 and, on 2026 and 2027, the `ObjectType`
 of every class, which Revit's own exports of those releases do not write (418
@@ -183,8 +184,7 @@ save's (36 walls on each did on `main`), and their placed ports are the 2025 sav
 (6,967 and 7,054, against 1,944 and 1,956 on `main`), and since RE-373 (#1489) the
 doors of `rac_basic` 2027 have their Width and Height too. Only 2026 and 2027 exports move, and on the held-out 2026
 and 2027 pairs every value added is equal. Sloped
-roofs, spiral runs, a wall's profile openings, `IsExternal` on walls, curtain
-walls, members and plates (2025 writes it, 2026 and 2027 do not), IFC export
+roofs, spiral runs, a wall's profile openings, IFC export
 overrides and the opening index stay unread there.
 Conduits, conduit fittings and gutters export on every release the exporter
 reads and are measured against Revit's own export on `ALD26 Before` only (all
