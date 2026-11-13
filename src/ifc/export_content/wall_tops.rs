@@ -174,7 +174,7 @@ const SHARED_HEIGHT_FEET: f64 = 0.5;
 
 /// The area under which a piece of a plan is no piece, square feet: rounding
 /// where a triangle's edge lies along another edge.
-const PIECE_ROUNDING_SQUARE_FEET: f64 = 1e-9;
+const PIECE_ROUNDING_SQUARE_FEET: f64 = 1e-6;
 
 /// How near two points of two pieces must be to be one, feet.
 const JOIN_TOLERANCE_FEET: f64 = 1e-7;
