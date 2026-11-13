@@ -3,21 +3,26 @@
 puts it in? (#1842, #1864; RE-59, RE-175.)
 
 Reads `probes/examples/probe_1842_storey_rules.rs`'s output and Revit's IFC
-export. For every placed instance whose record names two or more Levels, matched
+export. For every placed instance the probe lists (those whose record names two or more
+Levels, and the structural framing, columns and foundations, floors and stairs
+whatever it names), matched
 to Revit's export by `Tag` (the Revit ElementId) and kept where Revit contains
 it in a storey, it sets Revit's storey beside:
 
 - `ours`: the storey rvt-rs's export puts it in;
 - the storey of the Level each rule picks from the Levels the record names, in
-  order of elevation, with `lo` the lowest, `hi` the highest (unique), `bc`
-  RE-59's base constraint (two Levels: the higher if it lies at or below the
-  record box's base, else the lower), `<base` the highest Level at or below the
-  base (else the lowest), `=top` the one Level at the box's top, `<top` the
-  highest at or below the top and `>top` the lowest at or above it. A Level
-  whose Building Story setting is off is the storey of the Level below it.
+  order of elevation, with `lo` the lowest, `hi` the highest (unique), `hi*`
+  the highest where none of the named Levels lies within the box, `bc` RE-59's
+  base constraint (two Levels: the higher if it lies at or below the record
+  box's base, else the lower), `<base` the highest Level at or below the base
+  (else the lowest), `=top` the one Level at the box's top, `<top` the highest
+  at or below the top, `>top` the lowest at or above it, `only` the one Level a
+  record names, and, among every building-story Level of the model, `top*` the
+  one at the box's top (RE-119) and `base*` the highest at or below the base. A
+  Level whose Building Story setting is off is the storey of the Level below it.
 
 Elements are grouped by the IFC entity rvt-rs writes, the number of Levels named
-(2, or 3 and more) and where they lie against the box (at or below the base /
+(none, 1, 2, or 3 and more) and where they lie against the box (at or below the base /
 within / at or above the top), and each cell is the number of elements the rule
 puts in Revit's storey.
 
@@ -74,14 +79,28 @@ def storey_name(level, levels):
     return max(below)[1] if below else None
 
 
-# Each rule takes the named Levels as (id, elevation) in order of elevation, and
-# the record box's lowest and highest z, and gives one of them or none.
+# Each rule takes the named Levels as (id, elevation) in order of elevation (an
+# empty list for a record that names none), and the record box's lowest and
+# highest z, and gives one of them or none. The last two choose among every
+# building-story Level of the model, `ALL_LEVELS`.
+ALL_LEVELS = []
+
+
 def lo(named, base, top):
-    return named[0]
+    return named[0] if named else None
 
 
 def hi(named, base, top):
+    if len(named) < 2:
+        return None
     return named[-1] if named[-1][1] - named[-2][1] > 1e-6 else None
+
+
+def hi_outside(named, base, top):
+    """`hi`, unless a named Level lies strictly within the box."""
+    if any(base + EPS < elevation < top - EPS for _, elevation in named):
+        return None
+    return hi(named, base, top)
 
 
 def base_constraint(named, base, top):
@@ -91,6 +110,8 @@ def base_constraint(named, base, top):
 
 
 def below_base(named, base, top):
+    if not named:
+        return None
     below = [level for level in named if level[1] <= base + EPS]
     return below[-1] if below else named[0]
 
@@ -110,14 +131,34 @@ def above_top(named, base, top):
     return above[0] if above else None
 
 
+def only(named, base, top):
+    return named[0] if len(named) == 1 else None
+
+
+def model_top(named, base, top):
+    """RE-119: the one Level of the model at the box's top."""
+    at = [level for level in ALL_LEVELS if abs(level[1] - top) <= EPS]
+    return at[0] if len(at) == 1 else None
+
+
+def model_below_base(named, base, top):
+    """The highest Level of the model at or below the box's base."""
+    below = [level for level in ALL_LEVELS if level[1] <= base + EPS]
+    return below[-1] if below else None
+
+
 RULES = (
     ("lo", lo),
     ("hi", hi),
+    ("hi*", hi_outside),
     ("bc", base_constraint),
     ("<base", below_base),
     ("=top", at_top),
     ("<top", below_top),
     (">top", above_top),
+    ("only", only),
+    ("top*", model_top),
+    ("base*", model_below_base),
 )
 
 
@@ -134,8 +175,12 @@ def main():
         print(__doc__)
         return 2
     levels, storeys, rows = read_probe(args[0])
+    ALL_LEVELS[:] = sorted(
+        ((level, elevation) for level, (elevation, story, _) in levels.items() if story != "no"),
+        key=lambda item: item[1],
+    )
     theirs = storeys_vs_ifc.storeys(ifcopenshell.open(args[1]))
-    print(f"probe: {len(levels)} levels, {len(storeys)} storeys, {len(rows)} elements naming two or more Levels")
+    print(f"probe: {len(levels)} levels, {len(storeys)} storeys, {len(rows)} elements listed")
 
     cells = collections.defaultdict(collections.Counter)
     wrong = []
@@ -148,13 +193,13 @@ def main():
         if not storeys_vs_ifc.on_storey(revit):
             skipped["Revit contains it in " + revit] += 1
             continue
-        ids = row["levels"].split(",")
+        ids = [] if row["levels"] == "-" else row["levels"].split(",")
         if any(level not in levels for level in ids):
             skipped["a Level without an elevation"] += 1
             continue
         named = sorted(((level, levels[level][0]) for level in ids), key=lambda item: item[1])
         base, top = float(row["base"]), float(row["top"])
-        count = "2" if len(named) == 2 else "3+"
+        count = str(len(named)) if len(named) < 3 else "3+"
         key = (row["class"], count, pattern(named, base, top))
         cell = cells[key]
         cell["n"] += 1
