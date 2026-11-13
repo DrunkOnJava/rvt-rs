@@ -6,7 +6,11 @@
   is the highest, and 16 whose first list names a Level below the one Revit
   uses. A framing record now takes its Level from the second list where that
   names any, else the first, the one Level it names or the highest of several,
-  as the `Reference Level` property already did (RE-174, RE-175). The Level is
-  the same on the 2024 and the 2025 to 2027 saves of Autodesk's `rac_advanced`
-  and `rst_basic`, where the first list's changes for 10 `rst_basic` beams.
-  Other classes, and records that name three or more Levels, are as before.
+  as the `Reference Level` property already did (RE-174, RE-175). On both office
+  files the 63 are in Revit's storey now and no other element changes storey.
+  The Level is the same on the 2024 and the 2025 to 2027 saves of Autodesk's
+  `rac_advanced` and `rst_basic`, where the first list's changes for 10
+  `rst_basic` beams; 455 beams of Snowdon Towers Structural that were on no
+  storey are on one; and a Revit 2015 to 2023 save takes its 2024 save's Level
+  on more beams than before and on none fewer. Other classes, and records that
+  name three or more Levels, are as before.
