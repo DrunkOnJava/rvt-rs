@@ -292,9 +292,10 @@ fn record_at(buf: &[u8], start: usize, header_tag: u16) -> Option<(u32, usize)> 
 /// record whose trailer echoes its size. The walk starts at offset 0, steps
 /// over each record that validates, and where one does not resumes at the
 /// next place the `ElementHeader` tag sits 8 bytes into a record that
-/// validates. A record of a loaded family's own document (RE-135) is stepped
-/// over and left out, as its id is not declared. A record is never entered,
-/// so the spans do not overlap and each step moves forward, which makes the
+/// validates. A record whose id is not declared is stepped over and left
+/// out: a loaded family's own document's (RE-135), and also the few of the
+/// project's own records whose id is undeclared (RE-135 section 4). A record
+/// is never entered, so the spans do not overlap and each step moves forward, which makes the
 /// walk linear in `buf`.
 pub fn record_spans(buf: &[u8], header_tag: u16, declared: &BTreeSet<u32>) -> Vec<RecordSpan> {
     let needle = header_tag.to_le_bytes();

@@ -3071,9 +3071,9 @@ fn add_extend_to_structure(sets: &mut Vec<PropertySet>, ifc_type: &str, decoded:
 /// its top down its type's thickness (RE-214) is level, and so is a slab
 /// drawn as an extrusion whose depth is its type's layers' total
 /// thickness, as a sloped or shape-edited slab's record box is deeper than
-/// its layers. Any other slab gets nothing: on the BIM4LCA office the
-/// record boxes of 8 sloped floors are drawn level, and Revit gives them
-/// 1.9 to 24 degrees.
+/// its layers. Any other slab gets nothing here: the BIM4LCA office's 8
+/// sloped floors, to which Revit gives 1.9 to 24 degrees, are drawn along
+/// their plane and take their angle from `add_shaped_floor_pitch` (RE-384).
 fn level_slab(
     ifc_type: &str,
     decoded: &DecodedElement,

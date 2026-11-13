@@ -1062,9 +1062,10 @@ pub const CURTAIN_GRID_WALL_OFFSETS: [usize; 2] = [85, 478];
 pub(super) const CURTAIN_PART_BOX_TOLERANCE_FEET: f64 = 0.05;
 
 /// How far past an element's id its data is searched for the ids of curtain
-/// walls, bytes (#1865, RE-449): the curtain grids of Autodesk's `rac_advanced`
-/// name their wall at four places, the last 1,190 bytes past the id on Revit
-/// 2025 and 1,174 on 2027.
+/// walls, bytes (#1865, RE-449): the data of Autodesk's `rac_advanced` names
+/// the wall at four places, the last 1,130 bytes past the id on Revit 2025
+/// and 1,114 on 2027 for the 74 mullions' grids, and 1,190 and 1,174 for the
+/// curtain door's.
 pub(super) const ELEMENT_DATA_WALL_WINDOW: usize = 1200;
 
 /// How many times a curtain wall's id must lie in that window for the data to
