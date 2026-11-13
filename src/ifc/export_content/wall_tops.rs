@@ -2935,14 +2935,14 @@ pub(super) fn extend_wall_ends(
     // past the walls the record joins; an end the rule could not read and has no
     // such evidence for is Revit's end for all the record shows, so the wall
     // carries nothing and the reason is counted from the hand-off instead
-    // (`exported.wall_end_reads_unmarked`).
+    // (`exported.wall_end_reads_unmarked`). Each end is in one map or the other,
+    // so a wall in both had one end refused with face evidence and the other
+    // without: both are counted, each in its own counter (#1947).
     for (index, reason) in unmarked {
-        if !refused.contains_key(&index) {
-            handoffs.entry(index).or_default().push(Property {
-                name: WALL_END_NOT_MARKED_PROPERTY.into(),
-                value: PropertyValue::Text(reason.into()),
-            });
-        }
+        handoffs.entry(index).or_default().push(Property {
+            name: WALL_END_NOT_MARKED_PROPERTY.into(),
+            value: PropertyValue::Text(reason.into()),
+        });
     }
     for (index, reason) in refused {
         mark_end_refusal(entities, index, reason);

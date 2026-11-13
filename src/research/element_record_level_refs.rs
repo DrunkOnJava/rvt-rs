@@ -41,6 +41,10 @@ pub const LEVEL_REFERENCE_FIELD: &str = "m_levelId";
 /// Value recorded for where [`LEVEL_REFERENCE_FIELD`] came from.
 pub const LEVEL_REFERENCE_SOURCE: &str = "partition_element_record_reference_list";
 
+/// [`LEVEL_BIND_SOURCE_FIELD`] of a room bound to the Level its own parameter
+/// block names (RE-29), where its record's reference list names none (#1947).
+pub const ROOM_PARAMETER_BLOCK_SOURCE: &str = "partition_room_parameter_block";
+
 /// Property the emitted element carries [`LEVEL_REFERENCE_FIELD`] on.
 pub const LEVEL_ELEMENT_ID_PROPERTY: &str = "LevelElementId";
 
