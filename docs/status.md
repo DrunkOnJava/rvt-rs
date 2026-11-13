@@ -1269,6 +1269,22 @@ the unfiltered Measure run change (the four offices, the `rac_advanced`,
 Snowdon Towers Architectural) and no export of Revit 2015 to 2023 does
 (`reports/element-framing/RE-452-curtain-openings-named-wall.md`).
 
+**RE-454 (2026-11-13)** puts a beam or brace in the storey of its Reference
+Level, which its record's second counted reference list holds. The storey bind
+read the first list alone, so on each BIM4LCA timber office file 63 beams were
+in a storey other than Revit's: 47 that name two Levels in the first list (the
+base constraint picked the lower, Revit's storey is the highest) and 16 that
+name one there while the second list names the Level Revit puts them in
+(#1842). A beam's Level is the second list's where that names any, else the
+first's, the one it names or the highest of several (RE-174, RE-175), now for
+the storey as it was for the `Reference Level` property. The second list gives
+the same Level on the 2024 and the 2025, 2026 and 2027 saves of Autodesk's
+`rac_advanced` (37 of 38 beams, the other naming none) and `rst_basic` (370 of
+370), where the first list's single Level changes for 10 beams from 2026 on
+(#1864). A record of another class that names three or more Levels, and the
+foundations, floors and stair runs that name none, are as before
+(`reports/element-framing/RE-454-framing-reference-level-storeys.md`).
+
 **RE-451 (2026-11-13)** stops Revit 2023 from reading the element before a
 furred ceiling as the ceiling's type. On Autodesk's `rac_advanced` saved by
 Revit 2023 the two furred ceilings (247617 and 247677) were written as
