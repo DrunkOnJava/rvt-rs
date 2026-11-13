@@ -29,8 +29,8 @@ struct Args {
     /// Emit JSON instead of human-readable text.
     #[arg(long)]
     json: bool,
-    /// Scrub usernames and Autodesk-internal paths from any string
-    /// fields surfaced.
+    /// Scrub user names and Autodesk-internal paths from everything
+    /// printed: the path given, string fields, notes and error text.
     #[arg(long)]
     redact: bool,
     /// Maximum decompressed Global/Latest bytes scanned by the walker.
@@ -138,24 +138,42 @@ fn render(inst: &ADocumentInstance) -> Vec<OutField> {
         .collect()
 }
 
+/// What `--redact` promises: no user name and no Autodesk-internal path in
+/// anything printed, whichever field kinds the walker decodes. ADocument's
+/// declared fields are pointers, ids and a container today
+/// (docs/format-reconnaissance.md), so the strings and the notes are
+/// scrubbed ahead of the first string.
+fn scrub(out: &mut Output) {
+    out.path = redact::redact_sensitive(&out.path);
+    for field in &mut out.fields {
+        redact::redact_json_strings(&mut field.value);
+    }
+    for note in &mut out.notes {
+        *note = redact::redact_sensitive(note.as_str());
+    }
+}
+
 fn main() -> std::process::ExitCode {
     rvt::cli::exit_quietly_on_broken_pipe();
-    match run(Args::parse()) {
+    let args = Args::parse();
+    let redact_error = args.redact;
+    match run(args) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("error: {e}");
+            // An error opening a file names its path.
+            let message = e.to_string();
+            let message = if redact_error {
+                redact::redact_sensitive(&message)
+            } else {
+                message
+            };
+            eprintln!("error: {message}");
             std::process::ExitCode::from(1)
         }
     }
 }
 
 fn run(args: Args) -> anyhow::Result<()> {
-    let path_str = if args.redact {
-        redact::redact_path_str(&args.path.display().to_string())
-    } else {
-        args.path.display().to_string()
-    };
-
     let mut rf = RevitFile::open(&args.path)?;
     let decoded = read_adocument_lossy_with_limits(&mut rf, walker_limits_from_args(&args))?;
     let maybe_inst = if decoded
@@ -197,13 +215,16 @@ fn run(args: Args) -> anyhow::Result<()> {
         }),
     };
 
-    let out = Output {
-        path: path_str,
+    let mut out = Output {
+        path: args.path.display().to_string(),
         version,
         adocument_entry_offset: entry,
         fields,
         notes,
     };
+    if args.redact {
+        scrub(&mut out);
+    }
 
     if args.json {
         serde_json::to_writer_pretty(std::io::stdout(), &out)?;
