@@ -1015,7 +1015,7 @@ fn without_spikes(mut ring: Ring) -> Ring {
         let next = ring[(index + 1) % ring.len()];
         let cross = (point.0 - previous.0) * (next.1 - point.1)
             - (point.1 - previous.1) * (next.0 - point.0);
-        if cross.abs() <= 1e-12 {
+        if cross.abs() <= 1e-9 {
             ring.remove(index);
             index = index.saturating_sub(1);
         } else {
