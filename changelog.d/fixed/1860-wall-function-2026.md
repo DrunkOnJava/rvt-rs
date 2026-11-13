@@ -5,3 +5,5 @@
   that takes its `IsExternal` from its wall, was written without it: 4,643
   elements of Autodesk's `rac_advanced` sample. It is now read on 2026 and
   2027 too, measured against each sample's 2025 save element by element.
+  On the 2027 save of `rac_advanced`, 79 of its 3,192 curtain members still
+  get none (#1865).
