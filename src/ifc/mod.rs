@@ -4811,7 +4811,9 @@ pub(crate) fn build_export_diagnostics_and_decisions(
     }
     if model.building_storeys.is_empty() {
         warnings.push(
-            "No Revit levels were recovered; STEP output uses the fallback spatial storey.".into(),
+            "No Revit levels were recovered: the IFC has no storey, and its elements are \
+             contained in the building (RE-124)."
+                .into(),
         );
     } else {
         let elevation_fallback = model
