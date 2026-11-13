@@ -27,10 +27,14 @@
 //!   storey index=<n> elev=<feet> name=<the rest of the line>
 //!   named tag=<ElementId> cat=<category, spaces as _> class=<IFC entity|-> n=<Levels named>
 //!     levels=<ElementIds in list order, or -> base=<feet> top=<feet> ours=<storey index|->
+//!     second=<ElementIds, or ->
 //!     (one line per placed instance whose record names two or more Levels, and
 //!     for the structural framing, columns and foundations, floors and stairs also
-//!     those that name none or one: `base` and `top` are the record box's lowest
-//!     and highest z, `ours` the storey the element itself is contained in)
+//!     those that name none or one: `levels` are the Levels the record's first
+//!     counted reference list names, `second` those its second list names (RE-174,
+//!     RE-175: the list a beam's Reference Level is read from), `base` and `top`
+//!     the record box's lowest and highest z, `ours` the storey the element itself
+//!     is contained in)
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_1842_storey_rules -- MODEL.rvt
@@ -42,6 +46,30 @@ use rvt::ifc::entities::IfcEntity;
 use rvt::ifc::{ExportOptions, run_export};
 use rvt::research::element_record_level_refs::named_levels;
 use rvt::research::partition_element_records as per;
+
+/// The Levels the record's second counted reference list names, in list order.
+/// The first list is `record.references`; the second follows it, framed alike.
+fn second_levels(
+    rf: &mut RevitFile,
+    record: &per::PartitionElementRecord,
+    level_ids: &BTreeSet<u32>,
+) -> Vec<u32> {
+    let Ok(inflated) = rf.inflated_partition(&record.stream) else {
+        return Vec::new();
+    };
+    let buf = inflated.bytes();
+    let Some(at) = record.offset.checked_add(per::REFERENCE_LIST_OFFSET) else {
+        return Vec::new();
+    };
+    let Some(first) = per::decode_reference_list(buf, at) else {
+        return Vec::new();
+    };
+    let second = at
+        .checked_add(4 + first.len() * 8)
+        .and_then(|at| per::decode_reference_list(buf, at))
+        .unwrap_or_default();
+    named_levels(&second, level_ids)
+}
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args()
@@ -136,8 +164,12 @@ fn main() -> anyhow::Result<()> {
                 (class.clone(), *storey)
             });
         let listed: Vec<String> = named.iter().map(u32::to_string).collect();
+        let second: Vec<String> = second_levels(&mut rf, record, &level_ids)
+            .iter()
+            .map(u32::to_string)
+            .collect();
         println!(
-            "named tag={} cat={category} class={class} n={} levels={} base={:.4} top={:.4} ours={}",
+            "named tag={} cat={category} class={class} n={} levels={} base={:.4} top={:.4} ours={} second={}",
             record.element_id,
             named.len(),
             if listed.is_empty() {
@@ -147,7 +179,12 @@ fn main() -> anyhow::Result<()> {
             },
             record.bbox_feet[2],
             record.bbox_feet[5],
-            ours.map_or("-".to_string(), |index| index.to_string())
+            ours.map_or("-".to_string(), |index| index.to_string()),
+            if second.is_empty() {
+                "-".to_string()
+            } else {
+                second.join(",")
+            }
         );
     }
     Ok(())
