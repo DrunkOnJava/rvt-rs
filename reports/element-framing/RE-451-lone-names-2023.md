@@ -5,7 +5,7 @@
 **Artefacts:** Autodesk's sample projects `racadvancedsampleproject.rvt` of Revit 2022 (sha256 `430176be888c85e1af36e4477cde23b73dc83f70ea48315a52e3ab93083fefe6`, 16,330,752 bytes), 2023 (`75e8738dcc776950d1f08f8cf8c7ea6da1710c3a9aca17fb1e5e405aa7388d83`, 16,486,400) and 2024 (`ff791052979d8f0acd51c35da1f9976f3357c10495b96fa322dca7555dfe5afc`, 17,039,360), and the 2023 `racbasicsampleproject.rvt` (`94f98cc1a38f4f6c4799d62076dbdb14590543f9737863411ba68069a840df89`, 18,898,944), `rstbasicsampleproject.rvt` (`091ba54f47a2a84b45f925715ef4f4e3f910a16345b7d370150388cdd23c5391`, 6,344,704) and `rmebasicsampleproject.rvt` (`5b2331579140cc621d23b5642d24b2b7bbb6727e26610156962909d725e44e6a`, 30,797,824), all public and redistributable (`research/autodesk-sample-projects.tsv`); `Revit_IFC5_Einhoven.rvt` (MIT, `magnetar-io/revit-test-datasets`). No Revit export of any of the 2023 saves exists: the 2023 `rac_advanced` is held to the same project's saves of 2015 to 2022, which write 19,979 parameter values to its 19,973.
 **Probes:** `probes/examples/probe_1899_covering_parameters.rs` and `probe_1899_ceiling_type_names.rs` (PR #1905)
 **Runs:** Measure [43416338575](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43416338575) (`probe_1899_covering_parameters`), [43418834070](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43418834070) (`probe_1899_ceiling_type_names`, the 40 models of Autodesk's 2015 to 2023 samples and Einhoven) and [43420558633](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43420558633) (this change, unfiltered, against `0c58ea68`)
-**Status:** Positive on the probe: the two ceilings regain their type and nothing else of the system types of the 40 models read moves. The export's rows (section 4) are read on run 43420558633, which was still running when this was written; they replace the note in section 4 before the pull request is marked ready.
+**Status:** Positive. The two ceilings regain their type and their six property sets on the 2023 save, and nothing else moves: of the 146 exports of an unfiltered Measure run 145 are byte for byte as before, and the one that changes is the 2023 `rac_advanced`, whose `parameter_value_count` goes from 19,973 to 19,979, the value of every save from 2015 to 2022.
 
 ## 1. The question
 
@@ -56,7 +56,12 @@ Registered on #1899 before the run:
 3. The held-out models change in none of their counts.
 4. The `same-project gates` check passes on the pull request's head.
 
-Read: not yet (run 43420558633 in progress).
+Read on Measure [43420558633](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43420558633) (unfiltered: samples, families, Nordic, Revit 2025, BIMcollab, `rac_advanced`, held-out; head `db6abe17` against `0c58ea68`) and on [43424242937](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43424242937) (the 2022 and 2023 `rac_advanced` exports kept at the same head):
+
+1. **Holds.** The 2023 export names 247617 and 247677 `Compound Ceiling:Furred Ceiling:<id>` with the GlobalIds the 2022 export gives them. Each has the six property sets the 2022 export gives it (`RvtElementRecordGeometry`, `Constraints`, `Pset_CoveringCommon`, `Pset_EnvironmentalImpactIndicators`, `Other`, `Phasing`) and the `IfcRelDefinesByType` to the furred-ceiling type it shares with 242937. `parameter_value_count` goes from 19,973 to 19,979 (the 2022 save: 19,979); `layered_element_count` from 225 to 227 and `total_entities` from 38,580 to 38,584; the census of `schema.txt` reads 4 more property sets on 2 more objects.
+2. **Holds.** 145 of the 146 exports and 120 of the 121 diagnostics files are identical, and the one of each that differs is the 2023 `rac_advanced`, in the three fields above. The materials reader reads the same names and moved no export.
+3. **Holds.** The held-out models are among the 146: none changes.
+4. **Holds.** `same-project gates` passes on `db6abe17` (15 samples held to their earlier saves, and the Areas on 4 saves and on the 2021 save).
 
 ## 5. Not changed
 
