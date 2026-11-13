@@ -296,8 +296,10 @@ pub struct LayerBand {
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RevitGlobalIds {
     /// The document's `Unique Document GUID` (BasicFileInfo). The GlobalIds
-    /// the writer generates for entities Revit gives none are derived from
-    /// it (#400), so two documents never share one.
+    /// the writer generates for entities Revit gives none, and that belong to
+    /// no other entity, are derived from it (#400), so two documents never
+    /// share one. It changes on every save, so an entity that belongs to
+    /// another is derived from that entity's GlobalId instead (#1854).
     #[serde(default)]
     pub document: Option<String>,
     /// By index in `IfcModel::entities`: building elements and spaces.
