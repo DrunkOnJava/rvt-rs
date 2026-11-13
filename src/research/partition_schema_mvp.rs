@@ -176,7 +176,7 @@ pub fn recover_partition_schema_mvp(
     // identity, category, box and the readers called here; nothing else 2024
     // decodes on top of records is read. ---
     if crate::partition_element_records_2023::is_32bit_release(revit_version) {
-        let references = recover_2023_records(rf, revit_version, &mut out);
+        let references = recover_2023_records(rf, revit_version, &mut out, &mut wall_reads);
         attach_room_outlines(rf, revit_version, &mut out.rooms);
         // --- Pipes' types and centrelines, from their own native record
         // (RE-370) ---

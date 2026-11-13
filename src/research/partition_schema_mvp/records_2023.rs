@@ -15,6 +15,7 @@ pub(super) fn recover_2023_records(
     rf: &mut RevitFile,
     revit_version: u32,
     out: &mut PartitionSchemaMvp,
+    wall_reads: &mut crate::native_walls::WallReads,
 ) -> BTreeMap<u32, Vec<u64>> {
     use crate::partition_element_records as per;
     // The frames that stop are listed only for the log of decisions.
@@ -169,8 +170,11 @@ pub(super) fn recover_2023_records(
             attach_host_candidates(record, &wall_ids, element);
         }
     }
-    // --- Curtain walls and their panels and mullions (RE-440) ---
-    attach_curtain_walls_2023(rf, &selected, &mut out.walls, &mut out.products);
+    // --- Curtain walls and their panels and mullions (RE-440), on the release
+    // the rule is measured on ---
+    if CURTAIN_WALL_2023_REVIT_VERSIONS.contains(&revit_version) {
+        attach_curtain_walls_2023(rf, &selected, &mut out.walls, &mut out.products, wall_reads);
+    }
     // Each record's reference list, as read, for the readers it names (RE-366).
     selected
         .into_iter()
@@ -178,8 +182,15 @@ pub(super) fn recover_2023_records(
         .collect()
 }
 
+/// Releases the 32-bit curtain wall rule is measured on: Revit 2023, on
+/// `Revit_IFC5_Einhoven` and Autodesk's 2023 `rac_basic`, whose 9 curtain walls
+/// take the type name its 2024 and 2025 saves give them (RE-440). The 2015 to
+/// 2022 files hold no measured curtain wall of this kind.
+const CURTAIN_WALL_2023_REVIT_VERSIONS: &[u32] = &[2023];
+
 /// Make each 2023 wall whose native record's type (`m_WallAttributesId`) is a
-/// `NewCurtainWallType` a curtain wall with that type's name, and give each
+/// `NewCurtainWallType` a curtain wall, named by that type where its record
+/// holds a name (the class alone makes it a curtain wall, as on 2024), and give each
 /// panel and mullion whose reference list names exactly one of them that wall
 /// as its aggregate whole, as on 2024 (RE-46). On 2023 no mullion or grid
 /// element names its wall the way 2024's do, but the wall's own type says
@@ -191,16 +202,24 @@ fn attach_curtain_walls_2023(
     selected: &BTreeMap<u32, crate::partition_element_records::PartitionElementRecord>,
     walls: &mut [DecodedElement],
     products: &mut [DecodedElement],
+    wall_reads: &mut crate::native_walls::WallReads,
 ) {
     let wall_ids: BTreeSet<u64> = walls
         .iter()
         .filter_map(|wall| wall.id)
         .map(u64::from)
         .collect();
-    let wall_types = crate::native_walls::wall_type_ids(rf, &wall_ids).unwrap_or_default();
+    // The walls' types come from the wall records `read_wall_records` reads
+    // too, through the one shared read (#1335); the types' own records are one
+    // pass more, over those types alone.
+    let wall_types = wall_reads.type_ids(rf, &wall_ids).unwrap_or_default();
     let type_ids: BTreeSet<u64> = wall_types.values().copied().collect();
-    let curtain_types =
-        crate::native_walls::curtain_wall_type_names(rf, &type_ids).unwrap_or_default();
+    let curtain_types = crate::native_walls::curtain_wall_types(
+        rf,
+        &type_ids,
+        crate::native_document::NATIVE_RELEASES,
+    )
+    .unwrap_or_default();
     let mut curtain_walls = BTreeSet::new();
     for wall in walls.iter_mut() {
         let Some(id) = wall.id else {
@@ -227,8 +246,10 @@ fn attach_curtain_walls_2023(
                 id: type_id,
             },
         ));
-        wall.fields
-            .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+        if let Some(name) = name {
+            wall.fields
+                .push((TYPE_NAME_FIELD.into(), InstanceField::String(name.clone())));
+        }
     }
     if curtain_walls.is_empty() {
         return;
