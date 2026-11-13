@@ -213,8 +213,9 @@ project treats a silent skipped step the same as an untested change.
     Keep the landing queue disarmed from the release pull request's squash
     until the tag is pushed: a landing in between queues another CI run on
     `main` behind the squash commit's, and the preflight waits on the squash
-    commit's `CI passed` for up to 80 minutes, so a slow or superseded run
-    costs the whole wait.
+    commit's `CI passed` for up to 80 minutes, so a slow run costs the whole
+    wait. A squash commit whose CI run a later push cancelled fails the
+    preflight at once, since that check will never come.
 10. **Push the tag.** `git push origin vX.Y.Z` runs `publish.yml`. Its
     `preflight` job runs first, and every other job waits for it. It
     refuses, within seconds, a tag that is not named `vX.Y.Z` (or with a
