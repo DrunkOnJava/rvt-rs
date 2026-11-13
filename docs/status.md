@@ -1737,12 +1737,41 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.21.0** (2026-11-13) is the latest release: crates.io (`rvt` and
+- **v0.22.0** (2026-11-13) is the latest release: crates.io (`rvt` and
   `rvt-rs-mcp`, both published from the tag), the `rvt` wheels and sdist on
   PyPI, GitHub Release archives for Linux, macOS and Windows, and the
   container image, each checked from its published artifacts
   ([`install.md`](install.md)); docs.rs had built `rvt` when they were checked
-  (`rvt-rs-mcp` is a binary crate with no documentation there). The GlobalIds
+  (`rvt-rs-mcp` is a binary crate with no documentation there). It limits what
+  a crafted Revit file can make the MCP server, the command-line tools, the
+  Python bindings and the viewer do: `rvt-rs-mcp` reads from and writes to one
+  folder and bounds what an answer carries (#1883); `rvt-doc --redact`,
+  `rvt-info -f csv`, `rvt-dump`, `rvt-ifc`, `rvt-write`, the Python bindings
+  and the viewer each lose a way a hostile file reached a terminal, a
+  spreadsheet, a log or a file they should not touch (#1884, #1885, #1887,
+  #1919); and a wall profile of thousands of regions no longer builds a chain
+  of boolean cuts too deep for a thread to walk (#1845). More elements are
+  written the way Revit's export writes them: roofs by extrusion of Revit
+  2024, 2026 and 2027, floors of the Structural Foundations category,
+  horizontal bracing, the storeys of beams and braces, the corner mullions and
+  the door of a curtain wall on Revit 2027, a lone non-ASCII name on Revit
+  2023, and the doors, windows and walls of Revit 2015 to 2023 (#1479, #1841,
+  #1842, #1865, #1899, #1912, RE-448, RE-456). Against 0.21.0, 72 of the 146
+  measured exports differ and 74 are identical, and 37 of the 121
+  `diagnostics.json` files differ; of the 72, 56 are Autodesk's sample
+  projects, which no Revit export covers, and the other 16 are scored against
+  Revit's own exports. What it does not measure: a foundation slab and a
+  horizontal bracing (#1841) are checked on a reporter's counts of one Revit
+  2027 structural model; a roof by extrusion is held to the same project's
+  2025 save, which cannot catch an error both saves share (#1479); on the 2027
+  `rac_advanced` 5 corner mullions whose wall nothing in the file names stand
+  in no curtain wall (#1865); and the peak memory of concurrent `rvt-rs-mcp`
+  opens, a crafted file with a very long name and the memory `rvt-dump` saves
+  by releasing each partition it has written are not measured (#1883, #1885).
+  `[0.22.0]` in [`CHANGELOG.md`](../CHANGELOG.md) gives what each change
+  measures and what it does not.
+- **v0.21.0** (2026-11-13): published on every channel, each checked from its
+  published artifacts. The GlobalIds
   an export writes hold from one save of a project to the next: openings,
   voids, fills, property sets, quantity sets, material associations,
   containment, aggregation, type relationships, ports and the further pieces of
@@ -1965,7 +1994,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.21.0 has, and is ahead of it by the fragments
+- `main` has everything v0.22.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
