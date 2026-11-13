@@ -8,7 +8,8 @@ RE-46, RE-62). A part's whole is the `RelatingObject` of the
 ElementId. Only the parts of curtain walls and stairs are counted:
 `IfcMember` (a mullion or a stringer), `IfcPlate`, `IfcCurtainWall` (a nested
 curtain wall is itself a part), `IfcStairFlight` and `IfcRailing` (a stair's
-railing is aggregated under it, #1624).
+railing is aggregated under it, #1624), and `IfcDoor` and `IfcWindow` (a curtain
+wall's door or window panel, #1865).
 
 Usage:
 
@@ -23,7 +24,15 @@ import sys
 
 import ifcopenshell
 
-KINDS = ("IfcMember", "IfcPlate", "IfcCurtainWall", "IfcStairFlight", "IfcRailing")
+KINDS = (
+    "IfcMember",
+    "IfcPlate",
+    "IfcCurtainWall",
+    "IfcStairFlight",
+    "IfcRailing",
+    "IfcDoor",
+    "IfcWindow",
+)
 
 
 def tag(entity):
