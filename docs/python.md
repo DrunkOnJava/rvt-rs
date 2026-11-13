@@ -536,9 +536,11 @@ so a service can export several files at once, or keep answering while a large
 model decodes. The result is built into Python objects, and a warning raised,
 after the GIL is taken again.
 
-A handle serves one call at a time: a second call on the same `RevitFile`,
-from another thread, while one runs raises `RuntimeError` (the object is
-already borrowed). Use a handle for each thread, or a lock.
+A handle is used by one thread at a time: a second call on the same
+`RevitFile`, from another thread, while one runs raises `RuntimeError` (the
+object is already borrowed). Before 0.22.0 that call waited for the GIL and then
+ran, so a program that shares a handle between threads needs a handle for each
+thread, or a lock.
 
 ### Errors
 

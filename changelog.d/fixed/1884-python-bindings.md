@@ -7,9 +7,11 @@
   `rvt_to_ifc`, `rvt_to_ifc_diagnostics`, `schedule_csv`,
   `export_diagnostics_json`, `export_diagnostics`, `decoded_elements`,
   `element_counts` and opening a file held the GIL for the whole decode and
-  now release it, so another Python thread runs meanwhile; a second call on
-  one handle from another thread raises `RuntimeError`, as before for any
-  overlapping borrow. The stub's `TypedField` lists the eleven kinds the
+  now release it, so another Python thread runs meanwhile. **A handle is used
+  by one thread at a time:** a second call on one `RevitFile` from another
+  thread while one runs now raises `RuntimeError`, where it used to wait for
+  the GIL and then run, so a program that shares a handle between threads opens
+  one for each thread or holds a lock. The stub's `TypedField` lists the eleven kinds the
   binding returns and the `float` values of one of them, where it listed four
   kinds. A failed load of the extension (a missing symbol, a wrong ABI) is the
   `ImportError` it is, where `rvt/__init__.py` caught it and it surfaced as
