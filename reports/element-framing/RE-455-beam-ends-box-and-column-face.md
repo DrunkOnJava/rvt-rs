@@ -48,12 +48,44 @@ The shortening is 2 mm (3 beams), 50 mm (2), 96 mm (6), 108 mm (1) and 2,320 mm 
 - **The reporter's pattern is not in these ten models.** A box that runs to the line's ends, inside the column, is what the reporter's model shows; here the box is the body. The test is a run of the probe and the scorer on that model: the scorer prints counts only without `--list`, and its first tables say how many beams Revit shortens, how many a column gives bounds to, and how many of those the face makes exact.
 - **A wall is not a column.** Where a wall holds a beam's end, Revit's stop is not at the wall's box on any of the ten beams, and the walls' layers were not read.
 
-## 5. Not changed
+## 5. The reporter's model: the same table, and the face is not where Revit stops these beams either (2026-11-13)
+
+The reporter ran the probe (the Windows build of `probe-binaries.yml` run 43460256185) and this scorer (at `d90c1fa8`, without `--list`) on the Revit 2027 concrete frame of #1839, against Revit's export of the same save, and posted its summary lines: counts and lengths, no ElementId.
+
+- **915 beams, all with a body in Revit's export, none square in plan.** Against the record box, Revit's beam is longer on 188, the same on 189 (the rule gives bounds on 76 of them, none on 113) and shorter on 538 (bounds on 361, none on 177), by a median 256 mm (quartiles 129 and 433 mm, longest 1,294 mm).
+- **The 2023 rule is not Revit's on the 361 beams it cuts.** Exact on 2, cut too far on 310, too little on 49. It shortens them by a median 559 mm where Revit shortens them by 261 mm (Revit's length minus the rule's: median 108 mm, quartiles 20 and 503), and it would cut 76 beams that Revit leaves at the box's length.
+- **By the kind of element a shortened beam's list names:** columns 477 (an end held on 397, bounds on 364: exact 3, too far 309, too little 52), other beams 468 (held on 410, bounds on 365: exact 12, too far 192, too little 161), walls 17 (held on none).
+- **The 188 beams Revit makes longer are a case of their own:** 176 are steel roof members that name no column, longer by a median 13 mm. By the family names in Revit's export: concrete 529 shorter, 179 the same, 12 longer; steel roof and other 9, 10 and 176.
+
+The near face of a column's record box is not where Revit stops these beams, nor is a beam's or a wall's. The reporter's guess is that some of the model's columns are shear walls, with long or L-shaped sections, and that a turned column's box reaches past its real face. This scorer cannot say what the stop is, which is why section 6 asks what Revit's own beam ends lie on in Revit's own export.
+
+## 6. What the ends of Revit's own beams lie on (scorer addition)
+
+The scorer now also asks Revit's own export what its beams stop on, without the record box or the probe's naming: each Revit beam's mesh is taken in the world frame, its two end caps are found as the ends of its principal axis, and the centre of each cap is looked up among the faces of Revit's columns, beams and members, walls and slabs (within 1 mm of a face and inside it, the beam's own faces excluded). The ends are counted by how Revit's length stands to the record box's and by the kind of element they lie on, column first.
+
+On the ten BIM4LCA models (Measure [43480745216](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43480745216), `-f nordic=true -f base=none -f scorers=none`, the scorer from this branch's commit):
+
+| Model | Revit stands to the record | Ends | Column | Beam | Wall | Slab | Nothing |
+|---|---|---:|---:|---:|---:|---:|---:|
+| timber office, as built | the same (71 beams) | 142 | 108 | 0 | 20 | 0 | 14 |
+| timber office, permit | the same (69) | 138 | 105 | 0 | 19 | 0 | 14 |
+| timber office, permit | shorter (1), longer (1) | 2, 2 | 2, 1 | 0 | 0, 1 | 0 | 0 |
+| concrete housing, both | the same (21), shorter (1) | 42, 2 | 0 | 0 | 3, 2 | 0 | 39, 0 |
+| timber housing, as built | the same (29), shorter (11), longer (1) | 58, 22, 2 | 0 | 16, 0, 0 | 0 | 0 | 42, 22, 2 |
+| timber housing, permit | the same (30), shorter (11) | 60, 22 | 0 | 16, 0 | 0 | 0 | 44, 22 |
+| concrete office, as built and permit; terrain models | the same | 16 each | 0 | 0 | 8 or 0 | 0 | 8 or 16 |
+
+- **A positive control.** On the timber offices, where the 2023 rule is exact on 59 of the 60 beams it cuts, 108 of 142 ends (105 of 138 at permit) of the beams Revit leaves at the record box's length lie on a column's face in Revit's own export: where the record box ends at the column's face, so does Revit's mesh, and the scorer finds it. The other ends lie on walls (20 and 19) or on nothing (14 and 14).
+- **The 11 timber housing beams Revit shortens (a median 96 mm, quartiles 2 and 96) end on nothing** in this set (22 of 22 ends), and the one concrete housing beam it shortens, by 2,320 mm, ends on two walls. No beam Revit shortens ends on a column face in these models except the timber office's one at permit (2 ends).
+
+The question for the reporter's model is the same, now asked of Revit's own geometry: whether the ends of the 538 beams Revit shortens lie on the true face of a column (or of a wall, the shear walls the reporter suspects), where the record box's face is not that. The scorer prints counts only without `--list`.
+
+## 7. Not changed
 
 - Nothing is exported differently. `beam_column_trims` stays a Revit 2023 rule.
 - The 13 beams are left as they are. A class is written as a rule only where the cut length is Revit's within 1 mm on every beam of it, the class has at least 10 beams and it cuts none that Revit leaves; none does.
 
-## 6. Reproduce
+## 8. Reproduce
 
 ```bash
 gh workflow run measure.yml --ref research/1839-beam-column-ends -f ref=<sha of the probe> -f base=none -f nordic=true \
