@@ -121,7 +121,7 @@ The requirements these serve, each with its bar, status and evidence, are in
 | [#1046](https://github.com/DrunkOnJava/rvt-rs/issues/1046) | W7: base quantities Revit computes from its joined geometry (wall areas and volumes, mullion surfaces) |
 | [#1016](https://github.com/DrunkOnJava/rvt-rs/issues/1016) | W7: Revit's base quantities: the census runs, and what is left is on #1046, #1165, #1203, #1207, #1208 and #1209 |
 | [#879](https://github.com/DrunkOnJava/rvt-rs/issues/879) | Revit 2015 BIMcollab example: 3 air terminals Revit's export leaves out, and 16 footings on no storey |
-| [#878](https://github.com/DrunkOnJava/rvt-rs/issues/878) | Revit 2015: the elements' own GlobalIds are not rebuilt (0 of 241 on BIMcollab's structural example; project, site, building and storeys are) |
+| [#878](https://github.com/DrunkOnJava/rvt-rs/issues/878) | Revit 2015: the elements' own GlobalIds are not rebuilt (0 of 241 on BIMcollab's structural example; project, site, building and storeys are); the project, building and site of 2017 and later, and the storeys of 2017 to 2022, are rebuilt from the project's GUID (RE-459) |
 | [#874](https://github.com/DrunkOnJava/rvt-rs/issues/874) | 1.0: practitioner workflow reports folded into the supported profile |
 | [#792](https://github.com/DrunkOnJava/rvt-rs/issues/792) | BIM4LCA office: fixture 3095244 is IfcSanitaryTerminal where Revit writes IfcFlowTerminal, and the permit model writes a column Revit's export leaves out |
 | [#421](https://github.com/DrunkOnJava/rvt-rs/issues/421) | Element records beyond 2024/2025: derive the marker from the schema and measure the older envelope (RE-80 follow-up) |

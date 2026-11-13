@@ -1105,7 +1105,8 @@ a triple related as revit-ifc's fake ElementIds -16, -15 and -14 relate
 them on the BIM4LCA office. All three are Revit's on those three files,
 where none were, and the 2015 example's five storeys take their stored
 values, Revit's. A file that stores none keeps generated ones: the GUID
-Revit derives them from is not found
+Revit derives them from is not found (RE-459 finds it: the project's own GUID in
+the header of `Global/History`)
 (`reports/element-framing/RE-220-stored-global-ids.md`).
 
 **RE-221 (2026-10-25)** draws a column whose type is a square hollow
@@ -1247,6 +1248,30 @@ entity (Measure runs 41784415396 and 41784419457). Revit 2014
 and earlier write every room, as every element: both phase rules start at
 Revit 2015 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
+
+**RE-459 (2026-11-13)** gives the project, building and site of a Revit 2017 to
+2027 file that stores none the GlobalIds Revit's export gives them, and the
+storeys of a 2017 to 2022 file theirs, from the project's own GUID, which the
+header of `Global/History` holds four times (RE-220 did not find it: it is not
+an entry of the history). Revit's export writes that GUID with the fake
+ElementId -16, -15 or -14 XORed into its last 32 bits for the project, the
+building and one site, and with the Level's ElementId for a storey before 2023.
+Against Revit's exports of the 67 models of Measure that have one, the project,
+building and site are Revit's on 63 of the 64 files of 2017 to 2027 whose export
+is of their own project (the other, a held-out Revit 2018 file, follows no rule
+found) and the storeys of 2017 to 2022 on 69 of 69, on 11 files; from 2023 each
+Level's own episode gives them, as before (the project's GUID gives 0 of 229).
+A file that stores its ids keeps them (14 of the 67 models), and Revit 2015 and
+2016 have no file to measure the rule on, so they keep generated ids. The
+history of the spent Vitoria 2018 model, which `EpisodeHistory::parse` refused
+for four entries closed by `0x1e`, is read: 1,297 of its 1,314 elements that
+Revit's export holds are Revit's, from none, and 1,420 of 1,441 on the held-out
+Revit 2018 project, with the 73 rooms of each (an unfiltered Measure of 146
+exports: the project, building and site of 50 models, and the storeys of 11 files,
+become Revit's, and the diagnostics of all 121 are equal). It moves the
+GlobalId of every project, building, site and storey it applies to, so it ships
+in the release after 0.22.0, with any other GlobalId change
+(`reports/element-framing/RE-459-episode-global-ids-2015-2023.md`).
 
 **RE-458 (2026-11-13)** reads a roof by extrusion on Revit 2024, 2026 and 2027
 as on 2025 (RE-211): drawn as its sketch's section, where the B-spline of its
