@@ -54,7 +54,9 @@ struct Cli {
     #[arg(long = "all-classes")]
     all_classes: bool,
 
-    /// Extract the PNG preview thumbnail to this path (single file only).
+    /// Extract the PNG preview thumbnail to this path (single file only). A
+    /// preview whose stream is cut short has no IEND chunk, is not a whole PNG
+    /// and is not written (`rvt-dump --raw` writes the stream as it is).
     #[arg(long = "extract-preview")]
     extract_preview: Option<PathBuf>,
 
@@ -155,6 +157,14 @@ fn report_one(cli: &Cli, format: Format) -> anyhow::Result<()> {
 
     if let Some(preview_path) = &cli.extract_preview {
         let png = rf.preview_png()?;
+        // The library returns what is there when the stream is cut short; a
+        // file named .png that a viewer cannot open is not what was asked for.
+        if !ends_with_iend(&png) {
+            anyhow::bail!(
+                "the preview in {} is cut short: its stream ends before the PNG's IEND chunk, so it is not a whole PNG and nothing was written (rvt-dump --raw writes the stream as it is)",
+                cli.paths[0].display()
+            );
+        }
         std::fs::write(preview_path, &png)?;
         eprintln!("preview PNG written to {}", preview_path.display());
     }
@@ -327,6 +337,13 @@ fn has_revit_extension(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| REVIT_EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)))
+}
+
+/// Whether `png` ends with a PNG's IEND chunk: a zero length, `IEND` and its
+/// four CRC bytes. `RevitFile::preview_png` trims after that chunk when the
+/// stream has one and otherwise returns everything from the PNG magic on.
+fn ends_with_iend(png: &[u8]) -> bool {
+    png.len() >= 12 && png[png.len() - 12..png.len() - 4] == *b"\0\0\0\0IEND"
 }
 
 /// Explicit file arguments are kept whatever their extension (so a

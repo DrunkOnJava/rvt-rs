@@ -920,8 +920,9 @@ impl RevitFile {
     /// [`Self::inflated_partition`] inflates its stream again; a reader that
     /// holds the `Arc` it was given keeps it. The saved-graphics pass calls this
     /// once the readers that share the copies are done, so that its own walks
-    /// do not hold them at the peak (#1694).
-    pub(crate) fn release_inflated_partitions(&mut self) {
+    /// do not hold them at the peak (#1694), and `rvt-dump` after each stream
+    /// it writes (#1885).
+    pub fn release_inflated_partitions(&mut self) {
         self.inflated.clear();
         self.inflated_bytes = 0;
     }
