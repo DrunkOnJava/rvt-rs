@@ -20,6 +20,11 @@
 //! wall's chain is at most about 2,048 levels: the depths between are what the
 //! second run reads, registered before it as: `clone` and `debug` hold at 2,048.
 //!
+//! Second run (Measure 43422082815, depths 1,024 to 65,536): they do. `drop` and
+//! `json` hold to 16,384 and break at 65,536; `clone` holds to 3,072 and breaks
+//! at 4,096; `debug` holds to 2,048 and breaks at 3,072. A profile's curves make
+//! a region of one curve (a circle) at best, so a wall's chain can reach 4,096.
+//!
 //! The probe ignores the file it is given. For each operation and depth it runs
 //! a child of itself, with the chain built by a loop and the operation run on a
 //! thread of exactly 1 MiB, and prints how the child ended, so an overflow
