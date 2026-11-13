@@ -11,7 +11,7 @@ and a fourth time at `0x56`, and a storey's GlobalId is the same GUID with the
 storey's Level ElementId XORed in, as an element's is its episode's.
 
 Reads the output of `probes/examples/probe_re459_history_terminators.rs` (its `base`,
-`episode` and `level` lines) and Revit's export, and prints counts only:
+`episode`, `stored` and `level` lines) and Revit's export, and prints counts only:
 
     history base: <n> of 4 copies equal the first
     history base: equal to the oldest episode's GUID: <0|1> of 1
@@ -22,6 +22,9 @@ Reads the output of `probes/examples/probe_re459_history_terminators.rs` (its `b
     history base: IfcBuildingStorey equal to the base XOR a Level's ElementId: <k> of <n>
     history base: IfcBuildingStorey paired with the Level of its name, equal: <k> of <n>
     history base: IfcBuildingStorey equal to the oldest episode's GUID XOR a Level's ElementId: <k> of <n>
+    history base: <IfcProject|IfcBuilding|IfcSite|IfcBuildingStorey> equal to a GlobalId the file stores: <k> of <n>
+    history base: elements equal to a GlobalId the file stores: <k> of <n>
+    history base: elements equal to one the file stores but for the first character: <k> of <n>
 
 With `--list` (Measure passes it) it also prints a `list` line for each project, building,
 site and storey that is not equal, with its name and the Level of that name: never kept
@@ -73,13 +76,15 @@ def main(argv):
     if len(args) != 2 or any(f != "--list" for f in flags):
         sys.exit(__doc__)
     listing = "--list" in flags
-    bases, levels, episodes = [], {}, {}
+    bases, levels, episodes, stored = [], {}, {}, set()
     for line in open(args[0], encoding="utf-8", errors="replace"):
         parts = line.rstrip("\n").split(" ", 3)
         if parts[0] == "base" and len(parts) == 3 and len(parts[2]) == 32:
             bases.append(canonical(bytes.fromhex(parts[2])))
         elif parts[0] == "episode" and len(parts) == 3 and len(parts[2]) == 32:
             episodes[int(parts[1])] = canonical(bytes.fromhex(parts[2]))
+        elif parts[0] == "stored" and len(parts) == 3 and len(parts[2]) == 22:
+            stored.add(parts[2])
         elif parts[0] == "level" and len(parts) == 4:
             levels.setdefault(parts[3], int(parts[1]))
     if not bases:
@@ -113,6 +118,16 @@ def main(argv):
             "history base: IfcBuildingStorey equal to the oldest episode's GUID XOR a Level's ElementId: "
             f"{len(from_oldest)} of {len(storeys)}"
         )
+    for kind in [*FAKE_IDS, "IfcBuildingStorey"]:
+        found = model.by_type(kind)
+        equal = sum(1 for e in found if e.GlobalId in stored)
+        print(f"history base: {kind} equal to a GlobalId the file stores: {equal} of {len(found)}")
+    special = {*FAKE_IDS, "IfcBuildingStorey"}
+    elements = [e for e in model.by_type("IfcProduct") if e.is_a() not in special]
+    same = sum(1 for e in elements if e.GlobalId in stored)
+    but_first = sum(1 for e in elements if e.GlobalId not in stored and e.GlobalId[1:] in {g[1:] for g in stored})
+    print(f"history base: elements equal to a GlobalId the file stores: {same} of {len(elements)}")
+    print(f"history base: elements equal to one the file stores but for the first character: {but_first} of {len(elements)}")
     if listing:
         for s in storeys:
             if s.id() not in anyone:

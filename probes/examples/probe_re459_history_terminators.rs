@@ -19,6 +19,8 @@
 //!   history <bytes> count0e=<u32|none> table66=<u32|none> list_count=<u32|none> parse=<ok N | none>
 //!   base <offset> <32 hex, stored order>    at 0x16, 0x26, 0x36 and 0x56
 //!   episode <number> <32 hex, stored order>  the oldest (0) and the newest episode's GUID
+//!   stored <parameter id> <22 characters>   each GlobalId the file stores in UTF-16 after a
+//!                                            built-in parameter's id and the length 22 (#878)
 //!   level <ElementId> <elevation ft> <name>
 //!   terminators <byte hex>=<entries> ...
 //!   odd <index> <offset> <hex of the entry> before=<hex of the entry before> after=<hex of the one after>
@@ -29,10 +31,11 @@
 use rvt::research::partition_level_records::recover_partition_levels;
 use rvt::research::revit_global_ids::{
     EPISODE_COUNT_OFFSET, EPISODE_ENTRY_LEN, EPISODE_TABLE_OFFSET, EPISODE_TERMINATOR,
-    EpisodeHistory,
+    EpisodeHistory, IFC_BUILDING_GUID_PARAMETER, IFC_GUID_PARAMETER, IFC_PROJECT_GUID_PARAMETER,
+    IFC_SITE_GUID_PARAMETER, expand_ifc_guid,
 };
 use rvt::{RevitFile, compression, streams};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Where the header holds the project's base GUID: three copies in a row, then 16
 /// zero bytes, then a fourth that ends where the table's count begins.
@@ -62,6 +65,48 @@ fn inflate(rf: &mut RevitFile, name: &str) -> Result<Vec<u8>, String> {
     compression::inflate_at_auto(data)
         .map(|(_, out)| out)
         .map_err(|e| e.to_string())
+}
+
+/// The built-in parameters a GlobalId is stored under, and `-1` for one stored under none.
+const STORED_PARAMETERS: [i32; 5] = [
+    IFC_GUID_PARAMETER,
+    IFC_PROJECT_GUID_PARAMETER,
+    IFC_BUILDING_GUID_PARAMETER,
+    IFC_SITE_GUID_PARAMETER,
+    -1,
+];
+
+/// The 22-character GlobalId stored in UTF-16 at `at`, when it is one.
+fn utf16_global_id(buf: &[u8], at: usize) -> Option<String> {
+    let units = buf.get(at..at.checked_add(44)?)?;
+    let text: String = units
+        .chunks_exact(2)
+        .map(|unit| (unit[1] == 0).then_some(char::from(unit[0])))
+        .collect::<Option<_>>()?;
+    expand_ifc_guid(&text).map(|_| text)
+}
+
+/// Every GlobalId the file stores after a built-in parameter's id and the length 22, with
+/// that id (the reader of `stored_global_ids` looks in the same place).
+fn stored_strings(rf: &mut RevitFile) -> BTreeSet<(i32, String)> {
+    let mut out = BTreeSet::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for parameter in STORED_PARAMETERS {
+            let mut needle = [0u8; 8];
+            needle[..4].copy_from_slice(&parameter.to_le_bytes());
+            needle[4..].copy_from_slice(&22u32.to_le_bytes());
+            for hit in memchr::memmem::find_iter(buf, &needle) {
+                if let Some(text) = utf16_global_id(buf, hit + needle.len()) {
+                    out.insert((parameter, text));
+                }
+            }
+        }
+    }
+    out
 }
 
 fn main() {
@@ -108,6 +153,9 @@ fn main() {
                 .map_or("none".to_string(), |guid| hex(&guid));
             println!("episode {episode} {bytes}");
         }
+    }
+    for (parameter, text) in stored_strings(&mut rf) {
+        println!("stored {parameter} {text}");
     }
     let version = rf.basic_file_info().map(|info| info.version);
     if let Ok(version) = version {
