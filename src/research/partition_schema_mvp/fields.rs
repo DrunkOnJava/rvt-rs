@@ -1052,6 +1052,22 @@ pub const CURTAIN_GRID_WALL_OFFSETS: [usize; 2] = [85, 478];
 /// 0.01 ft misses mullions whose profile reaches past the wall's box.
 pub(super) const CURTAIN_PART_BOX_TOLERANCE_FEET: f64 = 0.05;
 
+/// How far past an element's id its data is searched for the ids of curtain
+/// walls, bytes (#1865, RE-449): the curtain grids of Autodesk's `rac_advanced`
+/// name their wall at four places, the last 1,190 bytes past the id on Revit
+/// 2025 and 1,174 on 2027.
+pub(super) const ELEMENT_DATA_WALL_WINDOW: usize = 1200;
+
+/// How many times a curtain wall's id must lie in that window for the data to
+/// name the wall: the grids measured name it four times, so a coincidence of
+/// eight bytes would have to repeat.
+pub(super) const ELEMENT_DATA_WALL_MIN_COPIES: usize = 2;
+
+/// Field naming the curtain walls a part's reference list names when it names
+/// two or more and no wall could be chosen for it (#1865), so that the part
+/// takes the `IsExternal` they agree on (`attach_curtain_member_is_external`).
+pub const CURTAIN_NAMED_WALLS_FIELD: &str = "m_curtain_walls_named";
+
 /// Field carrying a room's Floor Finish (RE-153).
 pub const ROOM_FLOOR_FINISH_FIELD: &str = "m_room_floor_finish";
 
