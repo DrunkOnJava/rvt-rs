@@ -52,14 +52,16 @@ fn source_date_epoch() -> Result<Option<i64>, String> {
 
 /// The refusal `rvt-ifc` gives with exit status 3: a resource limit kept
 /// streams from being read, and the caller did not accept an incomplete file.
-fn refuse_partial(unread: &[UnreadStream], allow_partial: bool) -> Result<(), Failure> {
-    if unread.is_empty() || allow_partial {
+/// A reader that stopped at its work budget (#1833) refuses nothing: the file
+/// is written and the result's notes name it (Griffin, 2026-11-12).
+fn refuse_partial(source: &Source<'_>, allow_partial: bool) -> Result<(), Failure> {
+    if !source.diagnostics.is_partial() || allow_partial {
         return Ok(());
     }
     let mut message = String::from(
-        "No file written: a resource limit kept part of the model from being read, so the export would be missing what these streams hold:",
+        "No file written: a resource limit kept part of the model from being read, so the export would be missing what these hold:",
     );
-    for stream in unread {
+    for stream in source.unread {
         message.push_str(&format!("\n  {stream}"));
     }
     message.push_str(
@@ -89,6 +91,13 @@ fn finish(
             entry.id, written.sha256
         ));
     let mut notes = source.notes.to_vec();
+    // `unread_streams` lists the streams; the readers that stopped at a work
+    // budget are listed here, since the glb's summary carries no diagnostics.
+    for (reader, times) in diagnostics.work_budget_stops().into_iter().flatten() {
+        notes.push(format!(
+            "Warning: {reader} stopped {times} time(s) at its work budget, so the export leaves out what it would have read."
+        ));
+    }
     let folded: usize = diagnostics.exported.body_pieces_folded.values().sum();
     if format == "glb" && folded > 0 {
         notes.push(format!(
@@ -106,7 +115,7 @@ fn finish(
         building_elements: diagnostics.exported.building_elements,
         building_elements_with_geometry: diagnostics.exported.building_elements_with_geometry,
         entity_counts: diagnostics.exported.by_ifc_type.clone(),
-        partial: !source.unread.is_empty(),
+        partial: diagnostics.is_partial(),
         unread_streams: unread_out(source.unread),
         notes,
         diagnostics: if with_diagnostics {
@@ -160,7 +169,7 @@ pub fn ifc(
             notes: &custom_notes,
         }
     };
-    refuse_partial(source.unread, args.options.allow_partial)?;
+    refuse_partial(&source, args.options.allow_partial)?;
     switches
         .mode
         .validate(source.diagnostics)
@@ -199,18 +208,18 @@ pub fn gltf(
         &entry.identity.path,
     )?;
     let computed = entry.computed(config, control)?;
-    refuse_partial(&computed.unread, args.allow_partial)?;
-    control.check().map_err(|_| Failure::Cancelled)?;
-    let glb = model_to_glb(&computed.model);
-    let written = output::write(&target, args.overwrite, control, |writer| {
-        writer.write_all(&glb)
-    })?;
     let source = Source {
         model: &computed.model,
         diagnostics: &computed.diagnostics,
         unread: &computed.unread,
         notes: &computed.notes,
     };
+    refuse_partial(&source, args.allow_partial)?;
+    control.check().map_err(|_| Failure::Cancelled)?;
+    let glb = model_to_glb(&computed.model);
+    let written = output::write(&target, args.overwrite, control, |writer| {
+        writer.write_all(&glb)
+    })?;
     Ok(finish(
         &entry,
         "glb",

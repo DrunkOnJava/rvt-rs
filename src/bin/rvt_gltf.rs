@@ -32,7 +32,8 @@ use std::process::ExitCode;
         rvt-gltf model.rvt -o viewer/model.glb --verbose\n\n\
         Exit status 3: a resource limit kept part of the file from being read, so\n\
         no glb was written. Re-run with --large-model, or --allow-partial to write\n\
-        it anyway."
+        it anyway. A reader that stopped at its work budget is a warning: the glb\n\
+        is written."
 )]
 struct Cli {
     /// Revit file to convert (.rvt / .rfa / .rte / .rft).
@@ -203,13 +204,27 @@ fn run(cli: &Cli) -> Result<(), Failure> {
         eprintln!("rvt-gltf: {note}");
     }
     let model = run.model;
-    if !run.unread.is_empty() {
+    // A reader that stopped at its work budget leaves out what it would have
+    // read, and the model is still written, with this warning (Griffin,
+    // 2026-11-12, "Write it, with a warning").
+    if let Some(stops) = run.diagnostics.work_budget_stops() {
         eprintln!(
-            "rvt-gltf: {} stream(s) not read whole, so the model is missing what they hold:",
-            run.unread.len()
+            "rvt-gltf: warning: {} reader(s) stopped at a work budget, so the model leaves out what they would have read:",
+            stops.len()
         );
-        for line in rvt::cli::unread_stream_report(&run.unread) {
+        for line in rvt::cli::work_budget_report(stops) {
             eprintln!("{line}");
+        }
+    }
+    if run.diagnostics.is_partial() {
+        if !run.unread.is_empty() {
+            eprintln!(
+                "rvt-gltf: {} stream(s) not read whole, so the model is missing what they hold:",
+                run.unread.len()
+            );
+            for line in rvt::cli::unread_stream_report(&run.unread) {
+                eprintln!("{line}");
+            }
         }
         if !cli.allow_partial {
             return Err(Failure::PartialRead);

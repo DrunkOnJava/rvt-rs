@@ -536,12 +536,17 @@ pub fn current_partitions(
 /// Extract selected current indexed records. Unsupported individual object
 /// graphs produce explicit records and do not discard other decoded owners.
 /// Framing, identity and routing errors abort instead of choosing a candidate.
+#[track_caller]
 pub fn extract(
     file: &mut RevitFile,
     options: &Options,
     emit: impl FnMut(Record) -> Result<()>,
 ) -> Result<Summary> {
-    let pass = definition_pass(file, options)?;
+    let caller = std::panic::Location::caller();
+    let pass = definition_pass(file, options, caller)?;
+    // Started after the definitions, whose walk notes its own time when it
+    // makes them: one walk is counted once.
+    let started = recording().then(std::time::Instant::now);
     let definitions = &pass.registry;
     let defined = options.definition_filter.is_none_or(|accepts| {
         definitions
@@ -583,6 +588,7 @@ pub fn extract(
             )
         });
     let mut summary = extract_records(file, &nothing, false, definitions, needles.as_ref(), emit)?;
+    note_walk("extract", caller, &nothing, &summary, started);
     summary.parameter_binding_context = serde_json::json!({
         "bindings": definitions.bindings,
         "family_categories": definitions.family_categories,
@@ -598,12 +604,13 @@ pub fn extract(
 /// The captions of the file's parameter definitions that `accepts`, from the
 /// handle's [`DefinitionPass`] for `options` (read if it has none, and kept
 /// for the [`extract`] that follows).
+#[track_caller]
 pub(crate) fn definition_captions(
     file: &mut RevitFile,
     options: &Options,
     accepts: fn(&str) -> bool,
 ) -> Result<Vec<String>> {
-    let pass = definition_pass(file, options)?;
+    let pass = definition_pass(file, options, std::panic::Location::caller())?;
     Ok(pass
         .registry
         .definitions
@@ -687,20 +694,34 @@ fn definition_key(options: &Options) -> DefinitionKey {
 /// The `UnitsElem` outcomes of the [`DefinitionPass`] the handle holds for
 /// `options`, without reading one where it holds none: a read of the units
 /// alone costs less than the pass (#1816).
+#[track_caller]
 pub(crate) fn held_definition_units(
     file: &RevitFile,
     options: &Options,
 ) -> Option<Vec<UnitsOutcome>> {
-    file.native_definitions(&definition_key(options))
-        .map(|pass| pass.units.clone())
+    let pass = file.native_definitions(&definition_key(options))?;
+    // A read the held pass answers makes no pass of its own; the ledger
+    // still names it, so its account of who reads the definitions is whole.
+    note_event("definitions held", std::panic::Location::caller());
+    Some(pass.units.clone())
 }
 
 /// The handle's [`DefinitionPass`] for `options`, read if it has none.
-fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<DefinitionPass>> {
+fn definition_pass(
+    file: &mut RevitFile,
+    options: &Options,
+    caller: &'static std::panic::Location<'static>,
+) -> Result<Arc<DefinitionPass>> {
     let key = definition_key(options);
     if let Some(cached) = file.native_definitions(&key) {
+        note_event("definitions held", caller);
         return Ok(cached);
     }
+    if file.holds_native_definitions() {
+        // Another key's pass is held, and the one slot is about to take this one.
+        note_event("definitions replaced", caller);
+    }
+    let started = recording().then(std::time::Instant::now);
     // Definition owners may follow their users physically. A bounded first pass
     // decodes only schema-declared definition owners; selected output still streams.
     let mut definitions = crate::native_parameter_definitions::Registry::default();
@@ -772,7 +793,15 @@ fn definition_pass(file: &mut RevitFile, options: &Options) -> Result<Arc<Defini
                 Ok(())
             },
         )?;
+    note_walk(
+        "definitions made",
+        caller,
+        &definition_options,
+        &definition_summary,
+        started,
+    );
     definitions.enable_builtin_catalog(&definition_summary.schema_sha256)?;
+    definitions.seal_bindings();
     let pass = Arc::new(DefinitionPass {
         registry: definitions,
         diagnostics,
@@ -822,6 +851,120 @@ fn count_walk(inflated: Option<&compression::InflatedStream>, stats: &native_seg
     }
 }
 
+/// One native pass, or one use of the handle's definitions pass, as
+/// [`record_passes`] keeps them: what a probe needs to see what an export
+/// reads and where it reads it again (#1694, #1816 and #1824 each needed a
+/// counter of their own).
+#[derive(Debug, Clone)]
+pub struct PassEntry {
+    /// `extract`, `extract_graphs`, `definitions made`, `definitions held`,
+    /// `definitions replaced` (another key's pass gave way) or `definitions
+    /// dropped` ([`RevitFile`] let it go).
+    pub kind: &'static str,
+    /// Where the pass was asked for: the caller of [`extract`],
+    /// [`extract_graphs`] or the definitions pass's reader.
+    pub caller: &'static std::panic::Location<'static>,
+    pub value_source: Option<&'static str>,
+    pub channels: Vec<u64>,
+    pub selected_ids: usize,
+    pub selected_classes: Vec<String>,
+    /// A hash of the channels, ids and classes selected: two walks with the
+    /// same one read the same records.
+    pub selection: u64,
+    pub uncached: bool,
+    /// Partitions the walk visited, and the bytes it inflated itself.
+    pub partitions: usize,
+    pub inflated_bytes: u64,
+    pub emitted: usize,
+    pub micros: u128,
+}
+
+thread_local! {
+    static PASSES: std::cell::RefCell<Option<Vec<PassEntry>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Start keeping this thread's passes ([`PassEntry`]), from none. Off until
+/// called, so an export keeps nothing and reads no clock unless a probe asks.
+pub fn record_passes() {
+    PASSES.with(|passes| *passes.borrow_mut() = Some(Vec::new()));
+}
+
+/// The passes kept since [`record_passes`], in order; keeping stops.
+pub fn take_passes() -> Vec<PassEntry> {
+    PASSES.with(|passes| passes.borrow_mut().take().unwrap_or_default())
+}
+
+fn recording() -> bool {
+    PASSES.with(|passes| passes.borrow().is_some())
+}
+
+fn note(entry: impl FnOnce() -> PassEntry) {
+    PASSES.with(|passes| {
+        if let Some(passes) = passes.borrow_mut().as_mut() {
+            passes.push(entry());
+        }
+    });
+}
+
+/// A use of the definitions pass that walks nothing.
+pub(crate) fn note_event(kind: &'static str, caller: &'static std::panic::Location<'static>) {
+    note(|| PassEntry {
+        kind,
+        caller,
+        value_source: None,
+        channels: Vec::new(),
+        selected_ids: 0,
+        selected_classes: Vec::new(),
+        selection: 0,
+        uncached: false,
+        partitions: 0,
+        inflated_bytes: 0,
+        emitted: 0,
+        micros: 0,
+    });
+}
+
+fn note_walk(
+    kind: &'static str,
+    caller: &'static std::panic::Location<'static>,
+    options: &Options,
+    summary: &Summary,
+    started: Option<std::time::Instant>,
+) {
+    let Some(started) = started else {
+        return;
+    };
+    note(|| PassEntry {
+        kind,
+        caller,
+        value_source: options.value_source,
+        channels: options.channels.iter().copied().collect(),
+        selected_ids: options.selected_ids.len(),
+        selected_classes: options.selected_classes.iter().cloned().collect(),
+        selection: {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            (
+                &options.channels,
+                &options.selected_ids,
+                &options.selected_classes,
+            )
+                .hash(&mut hasher);
+            hasher.finish()
+        },
+        uncached: options.uncached_partitions,
+        partitions: summary.partitions.len(),
+        inflated_bytes: summary
+            .partitions
+            .values()
+            .map(|stats| stats.inflated_bytes)
+            .sum(),
+        emitted: summary.emitted_records,
+        micros: started.elapsed().as_micros(),
+    });
+}
+
 /// One record of a [`RecordIndex`]: its channel, ElementId, partition, the
 /// class tag its body opens with and where its header starts in the
 /// partition's inflated bytes (#1325), where the record's group is those bytes
@@ -841,19 +984,24 @@ impl RecordIndex {
 /// values. Each record's saved metadata is read against no
 /// definitions.
 // Tracker: B80.
+#[track_caller]
 pub fn extract_graphs(
     file: &mut RevitFile,
     options: &Options,
     emit: impl FnMut(Record) -> Result<()>,
 ) -> Result<Summary> {
-    extract_records(
+    let caller = std::panic::Location::caller();
+    let started = recording().then(std::time::Instant::now);
+    let summary = extract_records(
         file,
         options,
         false,
         &crate::native_parameter_definitions::Registry::default(),
         None,
         emit,
-    )
+    )?;
+    note_walk("extract_graphs", caller, options, &summary, started);
+    Ok(summary)
 }
 /// The releases whose native records frame: Revit 2015 to 2027. A record
 /// group frames as Revit 2023 does from 2015 to 2023 (a 4-byte id) and with

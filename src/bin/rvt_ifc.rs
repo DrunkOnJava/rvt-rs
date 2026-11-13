@@ -54,7 +54,8 @@ impl From<CliExportQualityMode> for ExportQualityMode {
         history record, so two exports of the same file are the same bytes.\n\n\
         Exit status 3: a resource limit kept part of the file from being read, so\n\
         no IFC was written (the diagnostics sidecar, if asked for, lists the\n\
-        streams). Re-run with --large-model, or --allow-partial to write it anyway."
+        streams). Re-run with --large-model, or --allow-partial to write it anyway.\n\
+        A reader that stopped at its work budget is a warning: the IFC is written."
 )]
 struct Args {
     /// Path to a `.rvt` / `.rfa` / `.rte` / `.rft` file.
@@ -288,13 +289,27 @@ fn run(args: Args) -> anyhow::Result<()> {
         p
     });
 
-    if !run.unread.is_empty() {
+    // A reader that stopped at its work budget leaves out what it would have
+    // read, and the export is still written, with this warning (Griffin,
+    // 2026-11-12, "Write it, with a warning").
+    if let Some(stops) = diagnostics.work_budget_stops() {
         eprintln!(
-            "rvt-ifc: {} stream(s) not read whole, so the export is missing what they hold:",
-            run.unread.len()
+            "rvt-ifc: warning: {} reader(s) stopped at a work budget, so the export leaves out what they would have read:",
+            stops.len()
         );
-        for line in rvt::cli::unread_stream_report(&run.unread) {
+        for line in rvt::cli::work_budget_report(stops) {
             eprintln!("{line}");
+        }
+    }
+    if diagnostics.is_partial() {
+        if !run.unread.is_empty() {
+            eprintln!(
+                "rvt-ifc: {} stream(s) not read whole, so the export is missing what they hold:",
+                run.unread.len()
+            );
+            for line in rvt::cli::unread_stream_report(&run.unread) {
+                eprintln!("{line}");
+            }
         }
         if !args.allow_partial {
             if let Some(diagnostics_path) = &args.diagnostics {

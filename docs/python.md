@@ -133,7 +133,9 @@ opens the file, runs the document-level IFC4 exporter
 Raises `IOError` on open failure, `ValueError` if the file parses as CFB
 but the exporter can't build a model, the requested export mode cannot be
 satisfied, or a resource limit kept part of the file from being read and
-`allow_partial` is false.
+`allow_partial` is false. A reader that stopped at its work budget leaves out
+what it would have read, and the IFC is still returned, with a
+`RuntimeWarning` naming it.
 
 `rvt_to_ifc_diagnostics(path, saved_meshes=True, phase=None, element_provenance=False, export_decisions=False)` returns the JSON
 diagnostics sidecar for the same export path. The schema matches `rvt-ifc --diagnostics`
@@ -529,7 +531,7 @@ if `BasicFileInfo` can't be parsed.
 | Exception | Raised when |
 |---|---|
 | `IOError` | File missing, non-CFB input, file-size over `max_file_bytes`, unknown stream name, read error |
-| `ValueError` | File parsed as CFB but could not be decoded further: the IFC export cannot build a model, `mode` is not one of the four or is not met, a resource limit left part of the file unread and `allow_partial` is false, a strict variant fails, the schema or `Global/ElemTable` does not parse, `read_adocument` finds no `ADocument` class, or `schedule_csv` gets another `kind` |
+| `ValueError` | File parsed as CFB but could not be decoded further: the IFC export cannot build a model, `mode` is not one of the four or is not met, a resource limit left part of the file unread or a reader stopped at its work budget, and `allow_partial` is false, a strict variant fails, the schema or `Global/ElemTable` does not parse, `read_adocument` finds no `ADocument` class, or `schedule_csv` gets another `kind` |
 
 `IOError` is the Python alias of `OSError` — both are caught by
 `except OSError` or `except IOError`.

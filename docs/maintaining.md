@@ -22,6 +22,15 @@ answer. New issues arrive from the issue forms with `needs-triage`.
 4. An issue is closed when its acceptance criteria are met, with the evidence
    linked, or when it is superseded, with the superseding issue linked. It is
    never closed for being old.
+5. A reporter whose file cannot leave their machine can still run a probe on
+   it without a Rust toolchain. `gh workflow run probe-binaries.yml -f
+   probe=<name>` (with `--ref <branch>` for a probe not yet on `main`)
+   builds the probe for Windows, macOS and Linux, and the run
+   keeps each binary with its SHA-256 as an artifact. Link the run: downloading
+   it needs a GitHub login. The binaries are unsigned, so on macOS the reporter
+   clears the download's quarantine first (`xattr -d com.apple.quarantine
+   <probe>`). Ask only for probes whose output names no element or person
+   (#1838).
 
 ### Labels
 

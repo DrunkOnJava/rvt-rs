@@ -188,15 +188,11 @@ pub fn joined_walls(record: &PartitionElementRecord, wall_ids: &BTreeSet<u32>) -
 struct Solver<'a> {
     runs: &'a [WallRun],
     joined: &'a BTreeMap<u32, BTreeSet<u32>>,
+    /// Where the runs of each ElementId sit in `runs`, in order.
+    slots: BTreeMap<u32, Vec<usize>>,
 }
 
 impl<'a> Solver<'a> {
-    fn names(&self, wall: &WallRun, other: &WallRun) -> bool {
-        self.joined
-            .get(&wall.element_id)
-            .is_some_and(|set| set.contains(&other.element_id))
-    }
-
     /// Every wall that is perpendicular to `wall`, named by it, whose
     /// centreline lands on `coord`, whose own run spans `wall`'s
     /// centreline and whose elevation range overlaps it.
@@ -204,12 +200,28 @@ impl<'a> Solver<'a> {
     /// `skip_centre` drops candidates sitting on that plan line; it is
     /// how a candidate's own reduction ignores the joins it makes with
     /// the line currently being resolved.
+    ///
+    /// The walls `wall` names are looked up by ElementId, then taken in
+    /// the runs' own order, as a walk of every run found them: that walk,
+    /// for each end of each wall and of each candidate, was quadratic in
+    /// the walls (#1833).
     fn candidates(&self, wall: &WallRun, coord: f64, skip_centre: Option<f64>) -> Vec<&'a WallRun> {
-        self.runs
-            .iter()
+        let mut named: Vec<usize> = self
+            .joined
+            .get(&wall.element_id)
+            .into_iter()
+            .flatten()
+            .filter_map(|id| self.slots.get(id))
+            .flatten()
+            .copied()
+            .collect();
+        named.sort_unstable();
+        let runs = self.runs;
+        named
+            .into_iter()
+            .map(|slot| &runs[slot])
             .filter(|other| other.element_id != wall.element_id && other.axis != wall.axis)
             .filter(|other| (other.centre_feet - coord).abs() <= JOIN_EPS_FEET)
-            .filter(|other| self.names(wall, other))
             .filter(|other| {
                 skip_centre.is_none_or(|line| (other.centre_feet - line).abs() > JOIN_EPS_FEET)
             })
@@ -278,9 +290,14 @@ pub fn join_trims(records: &[PartitionElementRecord]) -> BTreeMap<u32, WallJoinT
         .map(|record| (record.element_id, joined_walls(record, &wall_ids)))
         .collect();
     let runs: Vec<WallRun> = records.iter().filter_map(wall_run).collect();
+    let mut slots: BTreeMap<u32, Vec<usize>> = BTreeMap::new();
+    for (slot, run) in runs.iter().enumerate() {
+        slots.entry(run.element_id).or_default().push(slot);
+    }
     let solver = Solver {
         runs: &runs,
         joined: &joined,
+        slots,
     };
     let mut out = BTreeMap::new();
     for wall in &runs {

@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use rvt-rs in academic or archival work, please cite it using this metadata."
 title: "rvt-rs: Clean-room Rust reader for Autodesk Revit files"
 type: software
-version: 0.19.0
+version: 0.20.0
 date-released: "2026-11-12"
 license: Apache-2.0
 repository-code: "https://github.com/DrunkOnJava/rvt-rs"

@@ -620,6 +620,10 @@ pub fn build_gltf(model: &IfcModel) -> (GltfDocument, Vec<u8>) {
             }),
             None => None,
         };
+        // The one place every element's transform reaches the file: a matrix
+        // that is not finite is drawn as no geometry, as `push_mesh` refuses
+        // positions that are not, whatever upstream made it (#1845).
+        let drawn = drawn.filter(|(_, matrix)| matrix.iter().all(|v| v.is_finite()));
         let (mesh, matrix) = match drawn {
             Some(((position, indices), matrix)) => {
                 let material = material_index
