@@ -155,6 +155,15 @@ fn resolve_output_path(cli: &Cli) -> anyhow::Result<PathBuf> {
     if let Some(p) = &cli.output {
         return Ok(p.clone());
     }
+    // The name becomes a file name under tests/fixtures; one with a path in it
+    // would write somewhere else (#1885). --output names another place.
+    if cli.name.contains(['/', '\\']) {
+        anyhow::bail!(
+            "the fixture name {:?} holds a path separator; it is a file name \
+             under tests/fixtures, and --output names another place",
+            cli.name
+        );
+    }
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| std::env::current_dir().unwrap());
