@@ -134,6 +134,26 @@ under those limits, so a small file reaches the same path. The browser test
 `tests/large-model-retry.spec.ts` opens the tier-1 fixture at
 `/?maxStreamBytes=200`, which stops its 236-byte BasicFileInfo, and retries.
 
+## Limits on what a file can make the page hold
+
+The page bounds what a large or crafted file can make it keep (#1887). The scene
+tree builds each group's rows (a storey's categories, a category's elements, an
+element's parts) a block of 500 at a time: the groups of a model of up to
+150,000 rows are all built when it opens, as they always were, and past that a
+group builds its first block when it is opened, and a "Show more" row at its end
+builds the next. The filter looks at every element, lists the first 2,000 it
+finds, builds their rows, and says when there are more; a click on an element in
+the 3-D view or a jump from the element panel builds the row it needs. The phase
+field lists at most 200 phases (the first 199 and the last, the default), the
+page keeps at most 2,000 of the decoder's progress reports and of what the
+loading card said, and the saved parameters it remembers are bounded in
+characters as well as in elements (64 elements and 8 Mi characters).
+`?treeRowsShown=` and `?treeRowsEager=` in the address lower the first two,
+`?parametersRemembered=` and `?parametersRememberedCharacters=` the last; none
+raises a limit. `tests/tree-rows.spec.ts` opens Einhoven with a block of 3 rows
+and nothing built up front, opens every group and every "Show more" row, and
+expects the elements the page lists without the limits, in the same order.
+
 ## Family instances from saved meshes
 
 Every element of a Revit 2023 to 2027 file that would be a bounding box (doors,

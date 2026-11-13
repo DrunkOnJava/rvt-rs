@@ -245,9 +245,13 @@ renderer that runs out of memory takes the tab and the open model with it, with
 no error to show. After a read has run out of memory, or its worker has gone
 without a word, that file is read only when asked.
 
-The page keeps each element's answer, up to 64 elements and the least recently
-selected going first, until a file is opened again, so an element selected a
-second time reads nothing.
+The page keeps each element's answer, up to 64 elements and 8 Mi characters of
+JSON between them (the answers measured below are about 2,300 characters each),
+the least recently selected going first and the answer just read always staying,
+until a file is opened again, so an element selected a second time reads
+nothing. The page's address (`?parametersRemembered=`,
+`?parametersRememberedCharacters=`) can lower either limit, for the browser
+tests, and never raises it.
 
 Measured in the viewer tests, run 42125048710 on head 3146f14e (CI runner, WASM without LTO): a read's wasm
 instance took 17 MiB on Einhoven (the open's worker 23 MiB), 275 MiB on Core
