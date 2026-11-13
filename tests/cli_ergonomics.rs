@@ -124,6 +124,163 @@ fn refuses_to_overwrite_the_input() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A manifest with one patch that gives BasicFileInfo a new payload, framed as
+/// `framing`; the tier-1 fixture stores that stream as it stands, not as gzip.
+fn manifest(dir: &Path, patch: serde_json::Value) -> PathBuf {
+    let path = dir.join("patches.json");
+    std::fs::write(&path, serde_json::to_vec(&patch).unwrap()).unwrap();
+    path
+}
+
+#[test]
+fn rvt_write_dry_run_needs_no_manifest_and_checks_what_the_write_would() {
+    let Some(source) = fixture() else { return };
+    let dir = scratch("write-dry");
+    let dst = dir.join("out.rvt");
+    let write = env!("CARGO_BIN_EXE_rvt-write");
+
+    // No manifest: the source is read and the exit is 0 (#1885, item 1).
+    let out = run(
+        write,
+        &[
+            "--src".as_ref(),
+            source.as_os_str(),
+            "--dst".as_ref(),
+            dst.as_os_str(),
+            "--dry-run".as_ref(),
+        ],
+    );
+    assert!(out.status.success(), "{}", stderr(&out));
+
+    // A stream the file does not have, a framing it is not stored in: both
+    // refused by the dry run, as the write would, and nothing is written (item 2
+    // and the framing check of item 3).
+    let missing = manifest(
+        &dir,
+        serde_json::json!({ "patches": [{
+            "stream_name": "No/Such/Stream", "new_decompressed": [1, 2, 3], "framing": "Verbatim"
+        }] }),
+    );
+    let wrong = dir.join("wrong-framing.json");
+    std::fs::write(
+        &wrong,
+        serde_json::to_vec(&serde_json::json!({ "patches": [{
+            "stream_name": "BasicFileInfo", "new_decompressed": [1, 2, 3], "framing": "RawGzipFromZero"
+        }] }))
+        .unwrap(),
+    )
+    .unwrap();
+    for (manifest, words) in [(&missing, "No/Such/Stream"), (&wrong, "not gzip-framed")] {
+        for dry in [true, false] {
+            let mut args: Vec<&std::ffi::OsStr> = vec![
+                "--src".as_ref(),
+                source.as_os_str(),
+                "--dst".as_ref(),
+                dst.as_os_str(),
+                "--patches".as_ref(),
+                manifest.as_os_str(),
+            ];
+            if dry {
+                args.push("--dry-run".as_ref());
+            }
+            let out = run(write, &args);
+            assert_eq!(out.status.code(), Some(1), "dry={dry}: {}", stderr(&out));
+            assert!(
+                stderr(&out).contains(words),
+                "dry={dry}, {words}: {}",
+                stderr(&out)
+            );
+            assert!(!dst.exists(), "dry={dry}: a refused patch left a file");
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn rvt_write_refuses_a_base64_value_that_empties_a_stream() {
+    let Some(source) = fixture() else { return };
+    let dir = scratch("write-empty-base64");
+    let dst = dir.join("out.rvt");
+    for value in ["=", ""] {
+        let manifest = manifest(
+            &dir,
+            serde_json::json!({ "patches": [{
+                "stream_name": "BasicFileInfo", "new_decompressed_base64": value, "framing": "Verbatim"
+            }] }),
+        );
+        let out = run(
+            env!("CARGO_BIN_EXE_rvt-write"),
+            &[
+                "--src".as_ref(),
+                source.as_os_str(),
+                "--dst".as_ref(),
+                dst.as_os_str(),
+                "--patches".as_ref(),
+                manifest.as_os_str(),
+            ],
+        );
+        assert_eq!(out.status.code(), Some(1), "{value:?}: {}", stderr(&out));
+        assert!(
+            stderr(&out).contains("decodes to no bytes"),
+            "{value:?}: {}",
+            stderr(&out)
+        );
+        assert!(!dst.exists(), "{value:?}: a refused patch left a file");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn rvt_write_with_no_patch_copies_the_file_byte_for_byte_and_the_file_onto_itself_is_left() {
+    let Some(source) = fixture() else { return };
+    let dir = scratch("write-copy");
+    let write = env!("CARGO_BIN_EXE_rvt-write");
+    let empty = manifest(&dir, serde_json::json!({ "patches": [] }));
+    let before = std::fs::read(&source).unwrap();
+
+    // An empty manifest is a plain copy, not "0 stream(s) failed verification"
+    // (item 5).
+    let dst = dir.join("copy.rvt");
+    let out = run(
+        write,
+        &[
+            "--src".as_ref(),
+            source.as_os_str(),
+            "--dst".as_ref(),
+            dst.as_os_str(),
+            "--patches".as_ref(),
+            empty.as_os_str(),
+        ],
+    );
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(std::fs::read(&dst).unwrap(), before);
+
+    // The copy onto itself, spelled two ways, leaves the bytes as they were and
+    // no temporary beside it (items 6 and 7).
+    for spelled in [dst.clone(), dir.join(".").join("copy.rvt")] {
+        let out = run(
+            write,
+            &[
+                "--src".as_ref(),
+                dst.as_os_str(),
+                "--dst".as_ref(),
+                spelled.as_os_str(),
+                "--patches".as_ref(),
+                empty.as_os_str(),
+            ],
+        );
+        assert!(out.status.success(), "{}", stderr(&out));
+        assert_eq!(std::fs::read(&dst).unwrap(), before);
+    }
+    let leftovers: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+        .filter(|name| name.starts_with('.'))
+        .collect();
+    assert!(leftovers.is_empty(), "temporaries left: {leftovers:?}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The same file under other names is still the input (#1885): the paths as
 /// typed differ, so comparing them let `./model.rvt` and a link through, and
 /// the export replaced the file it had been read from.

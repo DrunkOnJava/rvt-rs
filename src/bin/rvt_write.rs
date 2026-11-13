@@ -65,8 +65,10 @@ struct Cli {
     patches: Option<PathBuf>,
 
     /// Validate the patch manifest + source file without writing
-    /// anything. Exits 0 when the manifest is syntactically
-    /// well-formed and every listed stream exists in `src`.
+    /// anything. Exits 0 when the manifest is well-formed and the write
+    /// would not be refused: every listed stream exists in `src`, is stored
+    /// as the patch frames it, and fits the stored page. Without
+    /// `--patches` it checks that `src` opens.
     #[arg(long)]
     dry_run: bool,
 
@@ -158,8 +160,20 @@ fn manifest_to_patches(m: PatchManifest) -> Result<Vec<StreamPatch>, String> {
     for mp in m.patches {
         let bytes = match (mp.new_decompressed, mp.new_decompressed_base64) {
             (Some(b), None) => b,
-            (None, Some(s)) => decode_base64(&s)
-                .map_err(|e| format!("stream '{}': base64 decode failed: {e}", mp.stream_name))?,
+            (None, Some(s)) => {
+                let bytes = decode_base64(&s).map_err(|e| {
+                    format!("stream '{}': base64 decode failed: {e}", mp.stream_name)
+                })?;
+                // "=" and "" decode to nothing and would empty the stream
+                // without the manifest saying so.
+                if bytes.is_empty() {
+                    return Err(format!(
+                        "stream '{}': new_decompressed_base64 decodes to no bytes; to empty the stream give \"new_decompressed\": []",
+                        mp.stream_name
+                    ));
+                }
+                bytes
+            }
             (Some(_), Some(_)) => {
                 return Err(format!(
                     "stream '{}': both new_decompressed and new_decompressed_base64 set — pick one",
@@ -195,21 +209,28 @@ fn main() -> ExitCode {
 }
 
 fn run(cli: &Cli) -> Result<(), String> {
-    let manifest_path = cli
-        .patches
-        .as_ref()
-        .ok_or_else(|| "--patches is required (or pass --dry-run)".to_string())?;
-
-    let manifest_text = fs::read_to_string(manifest_path)
-        .map_err(|e| format!("read {}: {e}", manifest_path.display()))?;
-    let manifest: PatchManifest = serde_json::from_str(&manifest_text)
-        .map_err(|e| format!("parse {}: {e}", manifest_path.display()))?;
-    let patches = manifest_to_patches(manifest)?;
+    let patches = match (&cli.patches, cli.dry_run) {
+        (Some(manifest_path), _) => {
+            let manifest_text = fs::read_to_string(manifest_path)
+                .map_err(|e| format!("read {}: {e}", manifest_path.display()))?;
+            let manifest: PatchManifest = serde_json::from_str(&manifest_text)
+                .map_err(|e| format!("parse {}: {e}", manifest_path.display()))?;
+            manifest_to_patches(manifest)?
+        }
+        // A dry run with no manifest checks the source alone.
+        (None, true) => Vec::new(),
+        (None, false) => return Err("--patches is required (or pass --dry-run)".to_string()),
+    };
 
     // Quick sanity on the source file before attempting anything.
-    rvt::RevitFile::open(&cli.src).map_err(|e| format!("open src {}: {e}", cli.src.display()))?;
+    let mut source = rvt::RevitFile::open(&cli.src)
+        .map_err(|e| format!("open src {}: {e}", cli.src.display()))?;
 
     if cli.dry_run {
+        // What the write would refuse, before it writes: a stream the file
+        // does not have, a framing the stream is not stored in, a stored page.
+        rvt::writer::validate_patches(&mut source, &patches)
+            .map_err(|e| format!("{}: {e}", cli.src.display()))?;
         println!(
             "dry-run: {} patch(es) validated against {}",
             patches.len(),
@@ -225,11 +246,14 @@ fn run(cli: &Cli) -> Result<(), String> {
         }
         return Ok(());
     }
+    // The write opens the source again; do not hold the file twice.
+    drop(source);
 
     let report = write_with_patches_verified(&cli.src, &cli.dst, &patches)
         .map_err(|e| format!("write {} -> {}: {e}", cli.src.display(), cli.dst.display()))?;
 
-    if !report.all_matched() {
+    // No patch is a plain copy: nothing was written that could fail to read back.
+    if !patches.is_empty() && !report.all_matched() {
         for fail in report.failures() {
             eprintln!(
                 "stream '{}': mismatch — actual {} bytes, expected {} bytes, first diff @ {:?}, \
