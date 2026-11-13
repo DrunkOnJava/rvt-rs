@@ -1639,20 +1639,21 @@ pub fn cylinder_face(
         "degenerate cylinder trim"
     );
     let tol = 1e-7;
+    let envelope_tol = 1e-6;
     for (a, b) in trim_uv
         .iter()
         .zip(trim_uv.iter().cycle().skip(1))
         .take(trim_uv.len())
     {
         ensure!(
-            a[0] >= u_range[0] - tol
-                && a[0] <= u_range[1] + tol
-                && a[1] >= v_range[0] - tol
-                && a[1] <= v_range[1] + tol
-                && b[0] >= u_range[0] - tol
-                && b[0] <= u_range[1] + tol
-                && b[1] >= v_range[0] - tol
-                && b[1] <= v_range[1] + tol,
+            a[0] >= u_range[0] - envelope_tol
+                && a[0] <= u_range[1] + envelope_tol
+                && a[1] >= v_range[0] - envelope_tol
+                && a[1] <= v_range[1] + envelope_tol
+                && b[0] >= u_range[0] - envelope_tol
+                && b[0] <= u_range[1] + envelope_tol
+                && b[1] >= v_range[0] - envelope_tol
+                && b[1] <= v_range[1] + envelope_tol,
             "cylinder trim outside envelope"
         );
         ensure!(
