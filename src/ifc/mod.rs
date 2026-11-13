@@ -3539,25 +3539,36 @@ fn apply_partition_level_storeys(
             *storey_index = None;
         }
     }
-    // RE-118: only a building story is a storey of Revit's export; a Level
-    // that is not binds no element, which the later rules place.
+    // RE-118: only a building story is a storey of Revit's export. Revit's
+    // exporter walks the Levels by elevation, ties by ElementId, as
+    // `recover_partition_levels` returns them. It gives a Level that is not a
+    // building story the nearest building story below it. One below every
+    // building story gets none, and its elements are contained in the
+    // building (revit-ifc, CLEANROOM.md source 5:
+    // `Exporter.BeginDocumentExportCommon`, `LevelUtil.FindAllLevels`; #1842).
     let mut level_ids = Vec::new();
-    *building_storeys = levels
-        .into_iter()
-        .filter(|level| level.building_story != Some(false))
-        .enumerate()
-        .map(|(index, level)| {
-            // The Level's own ElementId is what a building element's
-            // record names (#219, RE-27), so the storey it became is
-            // reachable by id rather than by rank or elevation.
-            level_storey_bind.record_level(Some(level.element_id), index);
-            level_ids.push((index, level.element_id));
-            Storey {
-                name: level.name,
-                elevation_feet: level.elevation_feet,
+    let mut storeys = Vec::new();
+    let mut below: Option<usize> = None;
+    for level in levels {
+        if level.building_story == Some(false) {
+            if let Some(index) = below {
+                level_storey_bind.record_level(Some(level.element_id), index);
             }
-        })
-        .collect();
+            continue;
+        }
+        // The Level's own ElementId is what a building element's record
+        // names (#219, RE-27), so the storey it became is reachable by id
+        // rather than by rank or elevation.
+        let index = storeys.len();
+        level_storey_bind.record_level(Some(level.element_id), index);
+        level_ids.push((index, level.element_id));
+        storeys.push(Storey {
+            name: level.name,
+            elevation_feet: level.elevation_feet,
+        });
+        below = Some(index);
+    }
+    *building_storeys = storeys;
     // W7, RE-275: what each Level's own record gives its storey.
     *storey_properties = storey_properties::read(rf, &level_ids);
     // The storeys' read is the export's last native extraction: a Revit 2015

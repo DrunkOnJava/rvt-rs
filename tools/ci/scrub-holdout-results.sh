@@ -153,6 +153,8 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       grep -E '^saved graphics pre2023: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^census stages: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
       grep -E '^previous lines: [A-Za-z0-9 _:.,;()=#<>/+-]+$' "$f" || true
+      # probe_1842_level_storeys (#1842): the release and Level counts, no names.
+      grep -E '^levels release=[0-9]+ recovered=[0-9]+ building_story_true=[0-9]+ false=[0-9]+ unread=[0-9]+ false_below_first_storey=[0-9]+ false_above=[0-9]+ false_at_a_storey_elevation=[0-9]+$' "$f" || true
       # probe_1335_projected_graphs (#1335): counts, verdict words, schema class
       # names (a class name is the schema's, never the model's) and the field
       # names of the readers' lists, as numbers beside fixed words. Its `file`
