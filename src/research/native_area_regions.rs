@@ -971,7 +971,7 @@ fn continues_straight(before: Edge, edge: Edge) -> bool {
     let (u, v) = ((b.0 - a.0, b.1 - a.1), (c.0 - b.0, c.1 - b.1));
     let cross = u.0 * v.1 - u.1 * v.0;
     let dot = u.0 * v.0 + u.1 * v.1;
-    dot > 0.0 && cross.abs() <= 1e-12 * u.0.hypot(u.1) * v.0.hypot(v.1)
+    dot > 0.0 && cross.abs() <= 1e-9 * u.0.hypot(u.1) * v.0.hypot(v.1)
 }
 
 /// A loop of edges as it is written: its vertices, without a repeated closing
