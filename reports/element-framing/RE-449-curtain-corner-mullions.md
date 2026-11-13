@@ -41,11 +41,18 @@ Of the 3,192 curtain members of `rac_advanced`, the 2025 save and the 2026 save 
 
 ## 3. The rows (registered on #1865 before each run)
 
-Comments [6845864311](https://github.com/DrunkOnJava/rvt-rs/issues/1865#issuecomment-6845990245) (the first probe), [6846024013](https://github.com/DrunkOnJava/rvt-rs/issues/1865#issuecomment-6846024013) (row 5, from RE-179), [6846247941](https://github.com/DrunkOnJava/rvt-rs/issues/1865#issuecomment-6846247941) (the list probe), [6846501673](https://github.com/DrunkOnJava/rvt-rs/issues/1865#issuecomment-6846501673) (the grid probe) and [6846957690](https://github.com/DrunkOnJava/rvt-rs/issues/1865#issuecomment-6846957690) (the change). The expectation I had that failed: that the 79 are the parts of three curtain walls whose boxes `curtain_wall_box_not_read` points to; they leave six walls and none of the three is involved, and the diagnostics line has no bearing on them.
+Comments [6845990245](https://github.com/DrunkOnJava/rvt-rs/issues/1865#issuecomment-6845990245) (the first probe), [6846024013](https://github.com/DrunkOnJava/rvt-rs/issues/1865#issuecomment-6846024013) (row 5, from RE-179), [6846247941](https://github.com/DrunkOnJava/rvt-rs/issues/1865#issuecomment-6846247941) (the list probe), [6846501673](https://github.com/DrunkOnJava/rvt-rs/issues/1865#issuecomment-6846501673) (the grid probe) and [6846957690](https://github.com/DrunkOnJava/rvt-rs/issues/1865#issuecomment-6846957690) (the change). The expectation I had that failed: that the 79 are the parts of three curtain walls whose boxes `curtain_wall_box_not_read` points to; they leave six walls and none of the three is involved, and the diagnostics line has no bearing on them.
 
 ## 4. What Measure found
 
-*(added with the run of the change)*
+Rows 1 and 2 of section 3's last comment, read on the pair run [43386636537](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43386636537) (`f21e8d33`, the change; `probe_1865_curtain_is_external` on each sample project's 2025 and 2026 saves against its 2027 save). Rows 3 and 4 are read on the unfiltered run in section 4a.
+
+1. **Holds.** On `rac_advanced`'s 2027 save the 34 curtain walls hold 4,458 parts, 74 more than before the change (4,384), and 29 of the 34 hold exactly as many parts as on the 2025 save. The five that differ are the walls of the six parts that stand alone: 140003 (1 fewer), 140009 (1), 140015 (2) and 162524 (1) lose a corner mullion each of the five without a grid id, and 162023 (1) the door 216844, the one part that shows `other=1` on the 2025 save. Against the 2026 save the same four walls differ and 162023 does not (4,463 parts there, the door being a part of no wall on 2026 as on 2027). The count of a wall does not prove that each mullion is under the wall it took on 2025; what does is that the rule picks, for 75 of 75 parts, the one wall of the list that the part's grid data names, and that wall is the one that held the part on 2025 (section 2).
+2. **Holds.** `is_external_lost` is empty on the 2025 to 2027 and 2026 to 2027 pairs of `rac_advanced` (from 79 `IFCMEMBER`), and on every other project's pair (`rac_basic`, `rme_advanced`, `rme_basic`, `rst_basic`): no member that has an `IsExternal` on the earlier save lacks one on 2027. All 34 walls read `without_is_external=0` on 2027 (from 1 wall with a part that has none, the door's, on 2025).
+3. *(unfiltered run, section 4a)*
+4. *(unfiltered run, section 4a)*
+
+The expectation that failed here is the one in section 3, about the three walls. The change's own rows all held: no row in this section needed a correction.
 
 ## 5. The change
 
