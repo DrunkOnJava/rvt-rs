@@ -159,6 +159,11 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       # line names the model's file and its `native:` line may carry an error
       # with an ElementId; both are dropped, and `exit N` stays.
       grep -E '^(global-catalog [a-z-]+|compared records [0-9]+ decodes [0-9]+ full-ok [0-9]+ full-refused [0-9]+ mismatches [0-9]+ budget-stopped (true|false)|keep [A-Za-z0-9_,]* compared [0-9]+ mismatches [0-9]+|refused [A-Za-z0-9_]* [0-9]+|binding-context family-categories [0-9]+ symbol-families [0-9]+ same (true|false) ingest-refusals [0-9]+ same-refusals (true|false)|wall-facts compared [0-9]+ same (true|false)|plan-cache compared [0-9]+ mismatches [0-9]+|plan-cache limited compared [0-9]+ mismatches [0-9]+|plan-cache size peak-entries [0-9]+ peak-cost [0-9]+ clears [0-9]+|mismatch [a-z-]+ [A-Za-z0-9_]*)$' "$f" | sed 's/^/projected graphs: /' || true
+      # probe_1854_global_id_census (#1854): per class, counts of GlobalIds, and
+      # the number a file writes twice; never a GlobalId or a name.
+      grep -E '^file (left|right) entities=[0-9]+ duplicates=[0-9]+$' "$f" || true
+      grep -E '^class IFC[A-Z0-9]+ both=[0-9]+ left_only=[0-9]+ right_only=[0-9]+$' "$f" || true
+      grep -E '^projects shared=[0-9]+( IFC[A-Z0-9]+=[0-9]+)*$' "$f" || true
       grep -E '^exit [0-9]+$' "$f" | sed 's/^/probe: /' || true
       grep -E '^void rule: [A-Za-z0-9 ,]+$' "$f" || true
     done
