@@ -594,6 +594,13 @@ projectSampleTest(
       .filter({ hasText: 'RvtElementRecordGeometry' });
     await expect(properties).toHaveCount(1);
     await expect(properties).toBeVisible();
+    // It holds 15 properties, more than PROPERTY_COLLAPSE_THRESHOLD (8), so it
+    // is folded behind its summary: open it as a reader would.
+    const fold = properties.locator('details');
+    if ((await fold.count()) > 0) {
+      await fold.first().locator('summary').click();
+      await expect(fold.first()).toHaveAttribute('open', '');
+    }
     const propertyRows = properties.locator('.info-row');
     expect(await propertyRows.count()).toBeGreaterThan(3);
     // Booleans read as words rather than `true` / `false`.
