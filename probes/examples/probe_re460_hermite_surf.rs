@@ -49,7 +49,8 @@
 //!     reading evaluates, by where they lie (boundary or interior cell, twist or none, end of an
 //!     edge or inside it, on a node line or inside a cell)
 //!   edges extrapolated vs plane ...   the samples past the grid, with the nearest cell's patch continued
-//!   edges miss d <ft> cell <i>/<cells> <j>/<cells> t <t> s <s> du <du> dv <dv> twist <t> end <b>
+//!   edges miss ratio <the miss over half the f32 rounding of both parameters, in feet> f32 <whether both
+//!     are f32 values> d <ft> cell <i>/<cells> <j>/<cells> t <t> s <s> du <du> dv <dv> twist <t> end <b>
 //!     su <(scale, rest)> sv <> sw <>   the first 40 samples over 1e-6 ft, with the scale of the u
 //!     tangents, the v tangents and the twist that would remove the miss along each, and what is left
 //!   edges unevaluated inside the envelope: by at most 1e-6 <n> 1e-3 <n> 1 <n> more <n>
@@ -616,6 +617,17 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The spacing of `f32` values at `x`: how far `x` is from the nearest other `f32`.
+fn ulp32(x: f64) -> f64 {
+    let a = (x.abs() as f32).max(f32::MIN_POSITIVE);
+    f64::from(f32::from_bits(a.to_bits() + 1) - a)
+}
+
+/// Whether `x` is exactly an `f32` value.
+fn is_f32(x: f64) -> bool {
+    f64::from(x as f32) == x
+}
+
 /// An edge's samples in order: its first end, those between and its last end.
 fn edge_samples(edge: &Fv) -> Option<Vec<&Fv>> {
     let ends = edge
@@ -896,6 +908,11 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
                     } else {
                         "inside a cell"
                     },
+                    if on_surface.iter().all(|x| is_f32(*x)) {
+                        "uv are f32 values"
+                    } else {
+                        "uv are not f32 values"
+                    },
                 ] {
                     classes.entry(class).or_default()[usize::from(miss)] += 1;
                 }
@@ -912,8 +929,28 @@ fn edge_stage(records: &BTreeMap<u64, Record>) {
                             (1.0 + a, dot3(rest, rest).sqrt())
                         })
                     };
+                    // The point's speed along each parameter, by a central difference, and the
+                    // distance an `f32` rounding of each parameter would move it.
+                    let speed = |axis: usize| -> f64 {
+                        let h = 1e-6 * if axis == 0 { du } else { dv };
+                        let at = |delta: f64| {
+                            let mut uv = on_surface;
+                            uv[axis] += delta;
+                            surface
+                                .terms(false, false, uv, true)
+                                .map(|parts| sum(&parts))
+                        };
+                        match (at(-h), at(h)) {
+                            (Some(a), Some(b)) => distance(a, b) / (2.0 * h),
+                            _ => f64::NAN,
+                        }
+                    };
+                    let rounding =
+                        0.5 * (ulp32(on_surface[0]) * speed(0) + ulp32(on_surface[1]) * speed(1));
                     println!(
-                        "edges miss d {gap:e} cell {i}/{cells_u} {j}/{cells_v} t {t:.6} s {s:.6} du {du:e} dv {dv:e} twist {twist:e} end {end} off {off:e} in {within:e} su {:?} sv {:?} sw {:?}",
+                        "edges miss ratio {:e} f32 {} d {gap:e} cell {i}/{cells_u} {j}/{cells_v} t {t:.6} s {s:.6} du {du:e} dv {dv:e} twist {twist:e} end {end} off {off:e} in {within:e} su {:?} sv {:?} sw {:?}",
+                        gap / rounding,
+                        on_surface.iter().all(|x| is_f32(*x)),
                         implied(parts[1]),
                         implied(parts[2]),
                         implied(parts[3])
