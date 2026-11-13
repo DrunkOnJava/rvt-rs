@@ -1535,46 +1535,58 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.19.0** (2026-11-12) is the latest release: crates.io (`rvt` and
+- **v0.20.0** (2026-11-12) is the latest release: crates.io (`rvt` and
   `rvt-rs-mcp`, both published from the tag), the `rvt` wheels and sdist on
   PyPI, GitHub Release archives for Linux, macOS and Windows, and the
   container image, each checked from its published artifacts
   ([`install.md`](install.md)); docs.rs had built `rvt` when they were checked
-  (`rvt-rs-mcp` is a binary crate with no documentation there). A default
-  export of a Revit 2023 to 2027 project takes much of the time and memory
-  0.18.0's saved-mesh default cost back: Autodesk's 28 samples take a median
-  0.64 times 0.18.0's peak memory (0.29 to 1.18) and 0.89 times its time (0.76
-  to 1.27), and against 0.17.0 1.04 to 1.92 times the time and 1.04 to 1.69
-  times the peak memory (#1694); what is left of the peak on the largest files
-  is the inflated partitions the handle keeps. More elements are drawn from
-  their saved meshes (faces where a plane meets a cylinder, holed or
-  non-rectangular trims, plane rings that visit a vertex twice, four of Snowdon
-  Towers Architectural's six block roofs, the curtain mullions and panels that
-  were turned boxes), which makes the IFC of those files larger (the BIM4LCA
-  office as built 87.5 to 113.7 MB, Snowdon Towers Architectural 189.1 to 257.8
-  MB, `rac_advanced` +69% to +75%) and of others smaller (Snowdon Towers
-  Electrical -12.6%). The export writes more of what Revit's own writes for
-  the bodies it draws: a beam's six base quantities and its `Length`, `Span`,
-  `Slope` and `Roll`, a column's `Length`, `CrossSectionArea`,
-  `OuterSurfaceArea` and `GrossVolume`, a hollow section's `NetVolume`, a
-  curtain mullion's `NetVolume`, `NetSurfaceArea` and `Length`, a wall's side
-  areas, gross volume and height where it is a prism less its openings, a
-  proxy's `NetVolume`, and `LoadBearing` on walls, floors and stairs of Revit
-  2024 and later. Furniture, railings, walls, ramps, light fixtures and pipe
-  segments carry Revit's `PredefinedType`, and a Revit 2027 save is written
-  without one on the classes whose exporter leaves it off; an element framed in
-  several partitions is read from its newest frame; an element whose "Export to
-  IFC As" names `IfcGeographicElement` is one; and a planar face of more than
-  10,000 points or 250 million search steps is refused and keeps its box. The
-  quantity rules for beams, columns, mullions and walls were developed on, and
-  are scored against, the one project with a Revit export that holds them (the
-  BIM4LCA office and housing, Revit 2024), so the beams, columns, mullions and
-  walls of every other model gain them unscored; a mesh is not always Revit's
-  (the 24 railings newly drawn read about 1.2 times Revit's volume); the
-  `PredefinedType` rule for beams, columns, plates and coverings of a Revit 2027
-  save follows Autodesk's exporter source and no measured 2027 export.
-  `[0.19.0]` in [`CHANGELOG.md`](../CHANGELOG.md) gives what each change
+  (`rvt-rs-mcp` is a binary crate with no documentation there). It is mostly
+  hardening against crafted files: such a file can no longer crash the browser
+  viewer through a record's length or an overflow in a value it stores, make a
+  read take exponential time or time that grows with the square of its element
+  count, exhaust the stack through the chains it sets, or write its own text
+  into an export's STEP, and a reader that stops at one of the new work budgets
+  says so in a `work_budget_reached` item and a warning while the export is
+  still written; no real file of the measured corpus reaches one. For real
+  files, a wall, floor, ceiling or roof type edited since an earlier save keeps
+  its layers on Revit 2024 and later (180 elements of the BIM4LCA files gain
+  their type and its layers); the project's display units are read from its
+  Project Units; Revit 2026 and 2027 walls, and the curtain parts on them, get
+  the `IsExternal` the same project's 2025 save gives (4,643 on Autodesk's
+  `rac_advanced` 2026); an element on a Level that is not a building story goes
+  to the building story below it, as Revit's export places it, and a file whose
+  Levels include no building story (Autodesk's `rst_basic`) is written with no
+  storey instead of storeys made up from its elements' heights; and each GLB
+  material says whether its colour and alpha are the file's. Against 0.19.0, 49
+  of the 146 measured exports move, with no census regression and no body
+  regression, and the default export of Autodesk's 29 samples of Revit 2023 to
+  2027 takes a median 0.76 times 0.19.0's peak memory and 0.97 times its time.
+  What got worse: the stair runs that read their own settings are drawn from
+  their sketch where their saved mesh drew them (2.55% larger in volume on the
+  five stairs of `rac_advanced` 2024, #1856), and an `IfcRoofType` is written
+  on the terrain timber housing where Revit's export writes none. What it does
+  not measure: the layer rule rests on one project (the BIM4LCA files), no
+  held-out model has a Level that is not a building story, 79 curtain members
+  of the 2027 `rac_advanced` still get no `IsExternal` (#1865), and the
+  crafted-file bounds are exercised by crafted inputs, not by a real file.
+  `[0.20.0]` in [`CHANGELOG.md`](../CHANGELOG.md) gives what each change
   measures and what it does not.
+- **v0.19.0** (2026-11-12): published on every channel, each checked from its
+  published artifacts. A default export of a Revit 2023 to 2027 project took
+  much of the time and memory 0.18.0's saved-mesh default cost back (a median
+  0.64 times its peak memory and 0.89 times its time, #1694), drew more
+  elements from their saved meshes, which made the IFC of those files larger
+  (the BIM4LCA office as built 87.5 to 113.7 MB) and of others smaller, and
+  wrote more of what Revit's own export writes for the bodies it draws: the
+  quantities of beams, columns, curtain mullions and walls, `LoadBearing` on
+  walls, floors and stairs of Revit 2024 and later, and `PredefinedType` on
+  furniture, railings, walls, ramps, light fixtures and pipe segments. The
+  quantity rules were developed on, and are scored against, the one project
+  with a Revit export that holds them (the BIM4LCA office and housing), so the
+  beams, columns, mullions and walls of every other model gain them unscored;
+  a mesh is not always Revit's (the 24 railings newly drawn read about 1.2
+  times Revit's volume). `[0.19.0]` in [`CHANGELOG.md`](../CHANGELOG.md) gives
+  what each change measures and what it does not.
 - **v0.18.0** (2026-11-11): published on every channel, each checked from its
   published artifacts. A default export of a Revit 2023 to 2027 project drew
   every element that would be a bounding box from the mesh Revit saved for it,
@@ -1723,7 +1735,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.19.0 has, and is ahead of it by the fragments
+- `main` has everything v0.20.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
