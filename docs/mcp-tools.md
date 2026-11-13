@@ -435,7 +435,7 @@ An ElementId or a GlobalId.
 
 ### IfcOptions
 
-The `rvt-ifc` switches that change the model. The defaults are `rvt-ifc`'s.
+The `rvt-ifc` switches this server offers, some of those that change the model: `--placeholder`, `--diagnostic-proxies` and `--family-extrusions` are not among them. The defaults are `rvt-ifc`'s.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
@@ -474,10 +474,10 @@ Which bodies are drawn from the mesh Revit saved for display.
 
 | Value | Meaning |
 |---|---|
-| "default" | Every element that would be its record's bounding box, on Revit 2023 to 2027 (the default). |
-| "doors_and_windows" | Doors and windows only, on Revit 2023 to 2027: the default before #1191, and cheaper in time and memory. |
-| "all" | Every element that would be its record's bounding box, on every release. |
-| "off" | None: every element keeps its record's box. |
+| "default" | Every element that would be its record's bounding box, on Revit 2023 to 2027, and the walls that embed a curtain wall where Revit raised their base, on Revit 2024 to 2027 (the default). |
+| "doors_and_windows" | Doors and windows only, on Revit 2023 to 2027, and the walls that embed a curtain wall as for the default: the default before #1191, and cheaper in time and memory. |
+| "all" | Every element that would be its record's bounding box, on every release, and the walls that embed a curtain wall as for the default. |
+| "off" | None: every element keeps its record's box, and a wall that embeds a curtain wall its record's body. |
 
 ### ModeArg
 

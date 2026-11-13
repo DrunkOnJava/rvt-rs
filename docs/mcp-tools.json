@@ -728,7 +728,7 @@
     "inputSchema": {
       "$defs": {
         "IfcOptions": {
-          "description": "The `rvt-ifc` switches that change the model. The defaults are `rvt-ifc`'s.",
+          "description": "The `rvt-ifc` switches this server offers, some of those that change the\nmodel: `--placeholder`, `--diagnostic-proxies` and `--family-extrusions`\nare not among them. The defaults are `rvt-ifc`'s.",
           "properties": {
             "allow_partial": {
               "default": false,
@@ -766,22 +766,22 @@
           "oneOf": [
             {
               "const": "default",
-              "description": "Every element that would be its record's bounding box, on Revit 2023 to\n2027 (the default).",
+              "description": "Every element that would be its record's bounding box, on Revit 2023 to\n2027, and the walls that embed a curtain wall where Revit raised their\nbase, on Revit 2024 to 2027 (the default).",
               "type": "string"
             },
             {
               "const": "doors_and_windows",
-              "description": "Doors and windows only, on Revit 2023 to 2027: the default before #1191,\nand cheaper in time and memory.",
+              "description": "Doors and windows only, on Revit 2023 to 2027, and the walls that embed\na curtain wall as for the default: the default before #1191, and\ncheaper in time and memory.",
               "type": "string"
             },
             {
               "const": "all",
-              "description": "Every element that would be its record's bounding box, on every release.",
+              "description": "Every element that would be its record's bounding box, on every\nrelease, and the walls that embed a curtain wall as for the default.",
               "type": "string"
             },
             {
               "const": "off",
-              "description": "None: every element keeps its record's box.",
+              "description": "None: every element keeps its record's box, and a wall that embeds a\ncurtain wall its record's body.",
               "type": "string"
             }
           ]

@@ -173,19 +173,25 @@ impl From<ModeArg> for ExportQualityMode {
 #[serde(rename_all = "snake_case")]
 pub enum MeshesArg {
     /// Every element that would be its record's bounding box, on Revit 2023 to
-    /// 2027 (the default).
+    /// 2027, and the walls that embed a curtain wall where Revit raised their
+    /// base, on Revit 2024 to 2027 (the default).
     #[default]
     Default,
-    /// Doors and windows only, on Revit 2023 to 2027: the default before #1191,
-    /// and cheaper in time and memory.
+    /// Doors and windows only, on Revit 2023 to 2027, and the walls that embed
+    /// a curtain wall as for the default: the default before #1191, and
+    /// cheaper in time and memory.
     DoorsAndWindows,
-    /// Every element that would be its record's bounding box, on every release.
+    /// Every element that would be its record's bounding box, on every
+    /// release, and the walls that embed a curtain wall as for the default.
     All,
-    /// None: every element keeps its record's box.
+    /// None: every element keeps its record's box, and a wall that embeds a
+    /// curtain wall its record's body.
     Off,
 }
 
-/// The `rvt-ifc` switches that change the model. The defaults are `rvt-ifc`'s.
+/// The `rvt-ifc` switches this server offers, some of those that change the
+/// model: `--placeholder`, `--diagnostic-proxies` and `--family-extrusions`
+/// are not among them. The defaults are `rvt-ifc`'s.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 pub struct IfcOptions {
     /// Required quality (`rvt-ifc --mode`).
