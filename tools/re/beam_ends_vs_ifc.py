@@ -113,6 +113,14 @@ def read_probe(path):
     return beams
 
 
+def read_file_line(path):
+    """The probe's `file` line as fields: what the export holds and how many columns' sections it read."""
+    for line in open(path, encoding="utf-8", errors="replace"):
+        if line.startswith("file "):
+            return dict(part.split("=", 1) for part in line.split()[1:] if "=" in part)
+    return {}
+
+
 def lengths(model, tags):
     """Tag -> the longest side of the box of Revit's body, in the file's mesh unit, in its own frame."""
     elements = [
@@ -291,6 +299,14 @@ def main():
     revit = {tag: length * factor for tag, length in raw.items()}
     square = sum(1 for f in beams.values() if f["axis"] == "-")
     print(f"beam ends: {len(beams)} beams in the probe, {len(revit)} with a body in Revit's export, {square} square in plan (not scored)")
+    # A section kind that read no column cuts no beam, which would read as a pass: say how many it read.
+    drawn = read_file_line(args[0])
+    print(
+        f"beam ends: the export draws {drawn.get('columns_exported', '?')} columns; the probe reads the "
+        f"section of {drawn.get('sections', '?')} and leaves out {drawn.get('unread', '?')} "
+        f"(a section's centre from its record box's centre, median/largest in feet: "
+        f"{drawn.get('section_centre_offset', '?')})"
+    )
 
     table = collections.Counter()
     cut = collections.Counter()

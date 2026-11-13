@@ -46,8 +46,10 @@
 //!       whose section is read, `section_held` those that hold each end, and `section_low`
 //!       and `section_high` the point where the centre line leaves the one that holds the
 //!       end, when it lies more than 1 mm inside the box (#1839, a follow-up to RE-455).
-//!   file ... sections=<n> unread=<n>: the columns whose section is read, and those whose
-//!   profile is another shape, which the probe leaves out.
+//!   file ... columns_exported=<n> sections=<n> unread=<n> section_centre_offset=<median>/<largest>:
+//!   the `IfcColumn`s the export holds, those whose section is read, and those drawn another way
+//!   (a mapped or solid body, another profile) or not placed, which the probe leaves out; and how
+//!   far the centre of a read section lies from its record box's centre in plan, in feet.
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_1839_beam_column_ends -- MODEL.rvt
@@ -70,17 +72,29 @@ enum Footprint {
     Circle { centre: [f64; 2], radius: f64 },
 }
 
-/// The sections of the columns the export draws as an extrusion of a rectangle, a circle or
-/// a closed outline, by ElementId, and how many columns it draws another way.
-fn footprints(rf: &mut RevitFile) -> anyhow::Result<(BTreeMap<u32, Footprint>, usize)> {
+/// What the export draws for its columns.
+struct Sections {
+    /// The sections it draws as an extrusion of a rectangle, a circle or a closed outline, by
+    /// ElementId.
+    read: BTreeMap<u32, Footprint>,
+    /// Every `IfcColumn` the export holds: the denominator of what is read, so that a probe that
+    /// reads nothing says so beside the columns it should have read.
+    exported: usize,
+    /// The columns the export draws another way (a mapped or solid body, another profile) or
+    /// does not place, which the probe leaves out.
+    unread: usize,
+}
+
+/// The sections of the columns the export draws, and how many columns it draws another way.
+fn footprints(rf: &mut RevitFile) -> anyhow::Result<Sections> {
     let model = RvtDocExporter.export_with_diagnostics(rf)?.model;
     let mut out = BTreeMap::new();
-    let mut unread = 0usize;
+    let mut exported = 0usize;
     for entity in &model.entities {
         let IfcEntity::BuildingElement {
             ifc_type,
-            type_guid: Some(tag),
-            location_feet: Some(origin),
+            type_guid,
+            location_feet,
             rotation_radians,
             extrusion,
             solid_shape,
@@ -90,10 +104,19 @@ fn footprints(rf: &mut RevitFile) -> anyhow::Result<(BTreeMap<u32, Footprint>, u
         else {
             continue;
         };
+        // The model writes the type in capitals, as STEP does: the first run of this compared
+        // with `IfcColumn`, matched no column and printed `sections=0 unread=0` on ten models.
+        if ifc_type != "IFCCOLUMN" {
+            continue;
+        }
+        exported += 1;
+        let (Some(tag), Some(origin)) = (type_guid, location_feet) else {
+            continue;
+        };
         let Ok(id) = tag.parse::<u32>() else {
             continue;
         };
-        if ifc_type != "IfcColumn" || out.contains_key(&id) {
+        if out.contains_key(&id) {
             continue;
         }
         let (sin, cos) = rotation_radians.unwrap_or(0.0).sin_cos();
@@ -105,7 +128,6 @@ fn footprints(rf: &mut RevitFile) -> anyhow::Result<(BTreeMap<u32, Footprint>, u
         };
         let (Some(extrusion), None, None) = (extrusion, solid_shape, representation_map_index)
         else {
-            unread += 1;
             continue;
         };
         let rectangle = match &extrusion.profile_override {
@@ -136,15 +158,42 @@ fn footprints(rf: &mut RevitFile) -> anyhow::Result<(BTreeMap<u32, Footprint>, u
                 Some(ProfileDef::ArbitraryClosed { points }) if points.len() >= 3 => {
                     Footprint::Polygon(points.iter().map(|p| place(*p)).collect())
                 }
-                _ => {
-                    unread += 1;
-                    continue;
-                }
+                _ => continue,
             }
         };
         out.insert(id, footprint);
     }
-    Ok((out, unread))
+    Ok(Sections {
+        unread: exported - out.len(),
+        read: out,
+        exported,
+    })
+}
+
+/// How far the centre of each read section lies from the centre of its column's record box in
+/// plan: the median and the largest, in feet. A section placed in another frame than the records
+/// would show here, and so would a column drawn off its box's centre.
+fn centre_offsets(sections: &BTreeMap<u32, Footprint>, columns: &Records) -> Option<(f64, f64)> {
+    let mut away: Vec<f64> = sections
+        .iter()
+        .filter_map(|(id, footprint)| {
+            let b = columns.get(id)?.bbox_feet;
+            let centre = match footprint {
+                Footprint::Circle { centre, .. } => *centre,
+                Footprint::Polygon(points) => {
+                    let n = points.len() as f64;
+                    [
+                        points.iter().map(|p| p[0]).sum::<f64>() / n,
+                        points.iter().map(|p| p[1]).sum::<f64>() / n,
+                    ]
+                }
+            };
+            Some((centre[0] - (b[0] + b[3]) / 2.0).hypot(centre[1] - (b[1] + b[4]) / 2.0))
+        })
+        .collect();
+    away.sort_by(f64::total_cmp);
+    let median = *away.get(away.len() / 2)?;
+    Some((median, *away.last()?))
 }
 
 /// Where the line `across = c` of a plan axis enters and leaves a section: the first and the
@@ -320,13 +369,20 @@ fn main() -> anyhow::Result<()> {
     let beam_list: Vec<per::PartitionElementRecord> = beams.values().cloned().collect();
     let column_list: Vec<per::PartitionElementRecord> = columns.values().cloned().collect();
     let trims = beam_column_trims(&beam_list, &column_list);
-    let (sections, unread) = footprints(&mut rf)?;
+    let drawn = footprints(&mut rf)?;
+    let sections = drawn.read;
+    let offset = centre_offsets(&sections, columns).map_or_else(
+        || "-".to_string(),
+        |(median, largest)| format!("{median:.4}/{largest:.4}"),
+    );
     println!(
-        "file revit={version} beams={} columns={} walls={} sections={} unread={unread}",
+        "file revit={version} beams={} columns={} walls={} columns_exported={} sections={} unread={} section_centre_offset={offset}",
         beams.len(),
         columns.len(),
         kinds[1].1.len(),
-        sections.len()
+        drawn.exported,
+        sections.len(),
+        drawn.unread
     );
     for (id, beam) in &beams {
         let b = beam.bbox_feet;
