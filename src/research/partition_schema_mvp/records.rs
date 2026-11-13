@@ -300,6 +300,59 @@ pub(super) fn bind_opening_hosts(walls: &[DecodedElement], openings: &mut [Decod
     }
 }
 
+/// Rebind each door or window that [`bind_opening_hosts`] set in a wall to
+/// the wall its own native record's `m_hostId` names, where that is another
+/// plain wall (RE-448): RE-245's rule, which the 2024 to 2027 path applies
+/// with its cut loops. The reference list's nearest wall is not the host
+/// where the list names several: on Revit 2015 to 2023, 28 doors and windows
+/// of Autodesk's `rac_advanced` and one door of `rac_basic`, each set by the
+/// same project's 2024 save in the wall its `m_hostId` names.
+pub(super) fn rebind_opening_hosts_to_native(
+    rf: &mut RevitFile,
+    walls: &[DecodedElement],
+    groups: [&mut Vec<DecodedElement>; 2],
+) {
+    let plain_walls: BTreeSet<u32> = walls
+        .iter()
+        .filter(|wall| wall.class != CURTAIN_WALL_CLASS)
+        .filter_map(|wall| wall.id)
+        .collect();
+    let mut openings: Vec<&mut DecodedElement> = groups
+        .into_iter()
+        .flat_map(|group| group.iter_mut())
+        .collect();
+    let bound: BTreeSet<u64> = openings
+        .iter()
+        .filter(|element| {
+            element
+                .fields
+                .iter()
+                .any(|(name, _)| name == OPENING_HOST_FIELD)
+        })
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    let Ok(hosts) = crate::native_symbol_cuts::instance_hosts(rf, &bound) else {
+        return;
+    };
+    for element in &mut openings {
+        let Some(native) = element
+            .id
+            .and_then(|id| hosts.get(&u64::from(id)))
+            .and_then(|host| u32::try_from(*host).ok())
+            .filter(|host| plain_walls.contains(host))
+        else {
+            continue;
+        };
+        for (name, value) in &mut element.fields {
+            if let InstanceField::ElementId { id, .. } = value {
+                if name == OPENING_HOST_FIELD {
+                    *id = native;
+                }
+            }
+        }
+    }
+}
+
 /// Recover door / window instances of one `BuiltInCategory` and bind
 /// each to its host wall (#222, RE-23).
 pub fn openings_from_partition_category_records(
