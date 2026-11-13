@@ -537,10 +537,15 @@ pub struct RoomOut {
     pub provenance: ElementProvenance,
 }
 
-/// What `list_rooms` returns.
+/// A page of `list_rooms`.
 #[derive(Debug, Serialize, JsonSchema)]
 pub struct RoomsOut {
     pub model_id: String,
+    /// How many spaces the export writes.
+    pub total: usize,
+    pub offset: usize,
+    pub limit: usize,
+    pub returned: usize,
     pub rooms: Vec<RoomOut>,
 }
 
@@ -556,7 +561,10 @@ pub struct LevelsOut {
 pub struct DiagnosticsOut {
     pub model_id: String,
     /// The export diagnostics, as `rvt-ifc --diagnostics` writes them
-    /// (`docs/schemas/export-diagnostics.schema.json`).
+    /// (`docs/schemas/export-diagnostics.schema.json`), with any string longer
+    /// than eight times the server's field limit (8,000 characters by default)
+    /// cut and any list or object past 5,000 entries held to its first 5,000.
+    /// `notes` names a list that was held.
     pub diagnostics: Value,
     pub unread_streams: Vec<UnreadOut>,
     pub notes: Vec<String>,

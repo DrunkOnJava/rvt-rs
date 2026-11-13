@@ -29,6 +29,8 @@ use rvt::ifc::{
 use rvt::reader::UnreadStream;
 use sha2::{Digest, Sha256};
 
+use crate::args::MAX_PHASE_CHARS;
+use crate::bounds;
 use crate::config::{Config, Failure};
 use crate::schema::{ElemTableProvenance, FileProvenance};
 
@@ -51,7 +53,8 @@ fn export_failure(error: rvt::Error) -> Failure {
 
 /// The decode every tool answers from and the exports are written from:
 /// [`run_export_with_limits_and_control`] under the server's walker limits, at
-/// the phase `options` names. A cancelled `control` ends the run with
+/// the phase `options` names, once the gate has a place for it (#1883). A
+/// cancelled `control` ends the run, or the wait for a place, with
 /// [`Failure::Cancelled`] and nothing is kept.
 pub fn run_decode(
     rf: &mut RevitFile,
@@ -59,13 +62,18 @@ pub fn run_decode(
     options: &ExportOptions,
     control: &WalkerControl,
 ) -> Result<ExportRun, Failure> {
+    let _place = config.gate.enter(control)?;
     run_export_with_limits_and_control(rf, options, config.walker_limits, control)
         .map_err(export_failure)
 }
 
-/// What `rvt-ifc` prints about the run's steps, one sentence each.
+/// What `rvt-ifc` prints about the run's steps, one sentence each. A step can
+/// quote the file, so each is bounded.
 pub fn note_texts(notes: &[ExportNote]) -> Vec<String> {
-    notes.iter().map(ToString::to_string).collect()
+    notes
+        .iter()
+        .map(|note| bounds::message(note.to_string()))
+        .collect()
 }
 
 /// A file as the server identifies it: where it is and which bytes it holds,
@@ -74,7 +82,8 @@ pub fn note_texts(notes: &[ExportNote]) -> Vec<String> {
 pub struct Identity {
     pub path: PathBuf,
     pub size: u64,
-    modified_nanos: u128,
+    /// Nanoseconds from the Unix epoch, negative before it.
+    modified_nanos: i128,
 }
 
 impl Identity {
@@ -94,11 +103,18 @@ impl Identity {
                 path.display()
             ));
         }
-        let modified_nanos = metadata
-            .modified()
-            .ok()
-            .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
-            .map_or(0, |elapsed| elapsed.as_nanos());
+        // A file whose time cannot be read is refused: given a time of 0, a
+        // changed file of the same size would pass for the one that was opened.
+        let modified = metadata.modified().map_err(|error| {
+            format!(
+                "cannot read the modification time of {}: {error}. The server uses it to tell that a file changed since it was opened.",
+                path.display()
+            )
+        })?;
+        let modified_nanos = match modified.duration_since(UNIX_EPOCH) {
+            Ok(after) => i128::try_from(after.as_nanos()).unwrap_or(i128::MAX),
+            Err(before) => -i128::try_from(before.duration().as_nanos()).unwrap_or(i128::MAX),
+        };
         Ok(Self {
             path,
             size: metadata.len(),
@@ -239,7 +255,7 @@ impl Computed {
 /// What the file says about itself, from the handle that decoded it.
 fn file_provenance(rf: &mut RevitFile) -> FileProvenance {
     let (revit_release, revit_build) = match rf.basic_file_info() {
-        Ok(info) => (Some(info.version), info.build),
+        Ok(info) => (Some(info.version), info.build.map(bounds::clip_owned)),
         Err(_) => (None, None),
     };
     let schema_class_count = rf.schema().ok().map(|table| table.classes.len());
@@ -374,16 +390,30 @@ impl Store {
     /// held is opened, which reads the file into memory. A `model_id` already
     /// names the phase it was opened at, so a different `phase` with one is
     /// refused.
-    pub fn open(&self, model: &str, phase: Option<&str>) -> Result<Arc<Entry>, String> {
+    pub fn open(
+        &self,
+        model: &str,
+        phase: Option<&str>,
+        control: &WalkerControl,
+    ) -> Result<Arc<Entry>, String> {
         let model = model.trim();
+        // The store remembers every phase it is asked for, so a client's text
+        // is bounded before it is kept (#1883).
+        if let Some(spec) = phase
+            && spec.chars().count() > MAX_PHASE_CHARS
+        {
+            return Err(format!(
+                "phase is longer than {MAX_PHASE_CHARS} characters: pass a phase's name or its ElementId"
+            ));
+        }
         if !looks_like_id(model) {
-            return self.by_path(model, phase);
+            return self.by_path(model, phase, control);
         }
         let entry = self.by_id(model)?;
         let Some(spec) = phase else {
             return Ok(entry);
         };
-        let (named, _) = self.resolve_phase(&entry.identity, spec)?;
+        let (named, _) = self.resolve_phase(&entry.identity, spec, control)?;
         if entry.phase.as_ref().map(|phase| phase.id) == Some(named) {
             return Ok(entry);
         }
@@ -426,9 +456,20 @@ impl Store {
         Ok(entry)
     }
 
-    fn open_file(&self, identity: &Identity) -> Result<RevitFile, String> {
+    /// The file's handle. Reading the file takes a place at the gate, as a
+    /// decode does, so that concurrent opens do not hold every file in memory
+    /// at once.
+    fn open_file(&self, identity: &Identity, control: &WalkerControl) -> Result<RevitFile, String> {
+        let _place = self
+            .config
+            .gate
+            .enter(control)
+            .map_err(|failure| match failure {
+                Failure::Cancelled => "the request was cancelled".to_string(),
+                Failure::Message(message) => message,
+            })?;
         RevitFile::open_with_limits(&identity.path, self.config.open_limits)
-            .map_err(|error| error.to_string())
+            .map_err(|error| bounds::message(error.to_string()))
     }
 
     /// The ElementId of the phase `spec` names in the file of `identity`, and,
@@ -439,14 +480,17 @@ impl Store {
         &self,
         identity: &Identity,
         spec: &str,
+        control: &WalkerControl,
     ) -> Result<(i64, Option<RevitFile>), String> {
         if let Some(known) = self.remembered(identity, spec) {
             return known.map(|id| (id, None));
         }
-        let mut file = self.open_file(identity)?;
+        let mut file = self.open_file(identity, control)?;
+        // The error lists the file's phases and is kept: bounded, since a
+        // crafted file can name as many phases as it likes (#1883).
         let resolved = file
             .set_export_phase(spec)
-            .map_err(|error| error.to_string())
+            .map_err(|error| bounds::message(error.to_string()))
             .and_then(|()| {
                 file.export_phase()
                     .ok_or_else(|| "the export phase was not recorded".to_string())
@@ -469,7 +513,12 @@ impl Store {
         phases.truncate(PHASE_MEMORY);
     }
 
-    fn by_path(&self, path: &str, spec: Option<&str>) -> Result<Arc<Entry>, String> {
+    fn by_path(
+        &self,
+        path: &str,
+        spec: Option<&str>,
+        control: &WalkerControl,
+    ) -> Result<Arc<Entry>, String> {
         if path.is_empty() {
             return Err("model is empty: pass a model_id from open_model, or the path of a .rvt, .rfa, .rte or .rft file".to_string());
         }
@@ -480,7 +529,7 @@ impl Store {
         let (phase, mut opened) = match spec {
             None => (None, None),
             Some(spec) => {
-                let (id, opened) = self.resolve_phase(&identity, spec)?;
+                let (id, opened) = self.resolve_phase(&identity, spec, control)?;
                 let phase = OpenedPhase {
                     spec: spec.to_string(),
                     id,
@@ -495,10 +544,10 @@ impl Store {
         let file = match opened.take() {
             Some(file) => file,
             None => {
-                let mut file = self.open_file(&identity)?;
+                let mut file = self.open_file(&identity, control)?;
                 if let Some(phase) = &phase {
                     file.set_export_phase(&phase.spec)
-                        .map_err(|error| error.to_string())?;
+                        .map_err(|error| bounds::message(error.to_string()))?;
                 }
                 file
             }

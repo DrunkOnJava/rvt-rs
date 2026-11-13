@@ -856,6 +856,53 @@ pub fn write_glb(doc: &GltfDocument, bin: &[u8], out: &mut Vec<u8>) {
     out.extend_from_slice(&bin_padded);
 }
 
+/// [`write_glb`] to any writer: the header, the JSON chunk and the binary
+/// chunk go out in turn from where they are, so the binary buffer is neither
+/// copied to be padded nor copied again into a `Vec` beside itself. The bytes
+/// are the ones [`write_glb`] writes. A GLB whose length does not fit the
+/// format's 32-bit lengths is an error here and not a file with a wrapped
+/// length.
+///
+/// # Errors
+///
+/// The writer's error, or `InvalidInput` for a document that does not
+/// serialize or a GLB over 4 GiB.
+// Tracker: VW1-04.
+pub fn write_glb_to<W: std::io::Write>(
+    doc: &GltfDocument,
+    bin: &[u8],
+    out: &mut W,
+) -> std::io::Result<()> {
+    let json_text = serde_json::to_string(doc).map_err(std::io::Error::other)?;
+    // The JSON chunk is padded with ASCII spaces and the binary chunk with
+    // zeros, to 4-byte boundaries (per spec).
+    let json_pad = (4 - json_text.len() % 4) % 4;
+    let bin_pad = (4 - bin.len() % 4) % 4;
+    let json_len = json_text.len() + json_pad;
+    let bin_len = bin.len() + bin_pad;
+    let too_long = |_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "a GLB is limited to 4 GiB by the 32-bit lengths of its format",
+        )
+    };
+    let total_len = u32::try_from(12 + 8 + json_len + 8 + bin_len).map_err(too_long)?;
+    // Header: 12 bytes (magic + version + total length).
+    out.write_all(&0x4654_6C67_u32.to_le_bytes())?; // "glTF"
+    out.write_all(&2_u32.to_le_bytes())?; // version
+    out.write_all(&total_len.to_le_bytes())?;
+    // JSON chunk. Its length is below the total, which fits.
+    out.write_all(&(json_len as u32).to_le_bytes())?;
+    out.write_all(&0x4E4F_534A_u32.to_le_bytes())?; // "JSON"
+    out.write_all(json_text.as_bytes())?;
+    out.write_all(&b"   "[..json_pad])?;
+    // BIN chunk.
+    out.write_all(&(bin_len as u32).to_le_bytes())?;
+    out.write_all(&0x004E_4942_u32.to_le_bytes())?; // "BIN\0"
+    out.write_all(bin)?;
+    out.write_all(&[0_u8; 3][..bin_pad])
+}
+
 /// One-call convenience: `IfcModel` → GLB bytes.
 ///
 /// # Examples
@@ -897,5 +944,123 @@ fn bytemuck_cast_u16(src: &[u16]) -> Vec<u8> {
 fn pad_to_4(buf: &mut Vec<u8>) {
     while !buf.len().is_multiple_of(4) {
         buf.push(0);
+    }
+}
+
+// `write_glb_to` is a second writer of the format `write_glb` writes (#1883).
+// The ways it can fail: a chunk padded with the wrong byte or to the wrong
+// length, a length field that does not match the bytes, the two writers
+// drifting apart on one remainder of the lengths mod 4, and a writer's error
+// swallowed. Each is a case below; no file or other I/O is involved.
+#[cfg(test)]
+mod tests {
+    use super::{GltfDocument, write_glb, write_glb_to};
+    use std::io::{self, Write};
+
+    /// A document whose JSON text is `extra` bytes longer than the empty one.
+    fn document(extra: usize) -> GltfDocument {
+        let mut doc = GltfDocument::default();
+        doc.asset
+            .generator
+            .as_mut()
+            .expect("the default has a generator")
+            .push_str(&"x".repeat(extra));
+        doc
+    }
+
+    fn written(doc: &GltfDocument, bin: &[u8]) -> Vec<u8> {
+        let mut out = Vec::new();
+        write_glb_to(doc, bin, &mut out).expect("a Vec takes any write");
+        out
+    }
+
+    fn le(bytes: &[u8]) -> usize {
+        u32::from_le_bytes(bytes.try_into().expect("four bytes")) as usize
+    }
+
+    #[test]
+    fn the_streaming_writer_writes_the_bytes_write_glb_writes_at_every_remainder() {
+        for extra in 0..4 {
+            for bin_len in 0..9 {
+                let doc = document(extra);
+                let bin: Vec<u8> = (1..=bin_len as u8).collect();
+                let mut whole = Vec::new();
+                write_glb(&doc, &bin, &mut whole);
+                assert_eq!(
+                    written(&doc, &bin),
+                    whole,
+                    "json +{extra} bytes, binary of {bin_len}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_lengths_and_the_padding_are_the_formats() {
+        for extra in 0..4 {
+            for bin_len in 0..9 {
+                let doc = document(extra);
+                let bin = vec![0xAB_u8; bin_len];
+                let out = written(&doc, &bin);
+                assert_eq!(&out[..4], b"glTF");
+                assert_eq!(le(&out[4..8]), 2);
+                assert_eq!(le(&out[8..12]), out.len(), "total length");
+                let json_len = le(&out[12..16]);
+                assert_eq!(json_len % 4, 0);
+                assert_eq!(&out[16..20], b"JSON");
+                let json = &out[20..20 + json_len];
+                let text = std::str::from_utf8(json).expect("JSON chunk is text");
+                serde_json::from_str::<serde_json::Value>(text).expect("JSON chunk parses");
+                let unpadded = text.trim_end_matches(' ').len();
+                assert_eq!(
+                    text.len() - unpadded,
+                    (4 - unpadded % 4) % 4,
+                    "the JSON is padded with spaces to a multiple of four, no more"
+                );
+                let bin_at = 20 + json_len;
+                let bin_len_field = le(&out[bin_at..bin_at + 4]);
+                assert_eq!(bin_len_field % 4, 0);
+                assert_eq!(&out[bin_at + 4..bin_at + 8], b"BIN\0");
+                let chunk = &out[bin_at + 8..];
+                assert_eq!(chunk.len(), bin_len_field);
+                assert_eq!(&chunk[..bin_len], &bin[..]);
+                assert!(
+                    chunk[bin_len..].iter().all(|&byte| byte == 0),
+                    "the binary chunk is padded with zeros"
+                );
+            }
+        }
+    }
+
+    /// A writer that takes `room` bytes and then fails.
+    struct Full {
+        room: usize,
+    }
+
+    impl Write for Full {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            if self.room == 0 {
+                return Err(io::Error::other("full"));
+            }
+            let taken = buf.len().min(self.room);
+            self.room -= taken;
+            Ok(taken)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn a_writer_that_fails_anywhere_fails_the_write() {
+        let doc = document(1);
+        let bin = [7_u8; 5];
+        let total = written(&doc, &bin).len();
+        for room in [0, 3, 11, 12, 19, 20, total - 9, total - 1] {
+            let outcome = write_glb_to(&doc, &bin, &mut Full { room });
+            assert!(outcome.is_err(), "a writer full after {room} of {total}");
+        }
+        assert!(write_glb_to(&doc, &bin, &mut Full { room: total }).is_ok());
     }
 }
