@@ -587,6 +587,7 @@ mod frame_tests {
             preceding_reference: None,
             owner_reference: None,
             references: Vec::new(),
+            second_references: Vec::new(),
             id_from_enclosing_record: false,
             design_option: None,
         }
