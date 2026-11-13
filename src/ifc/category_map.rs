@@ -473,16 +473,47 @@ pub static FOUNDATION_SLAB: Mapping = Mapping {
     predefined_type: Some("BASESLAB"),
 };
 
+/// The structural usage a framing instance's record stores
+/// ([`crate::partition_schema_mvp::STRUCT_USAGE_FIELD`]) for a horizontal
+/// bracing. Read from a file and not from the API's enumeration: on a
+/// reporter's Revit 2027 structural model (counts only), of 915 framing
+/// instances the 485 with stored usage 3 (Girder in Revit's schedule) and the
+/// 429 with 6 (Other) are `IfcBeam` in Revit's export, and the one with 8
+/// (Horizontal Bracing) is `IfcMember`. No other value is observed to move.
+pub const HORIZONTAL_BRACING_USAGE: u64 = 8;
+
+/// A horizontal bracing, which Revit's export writes as `IfcMember` and not as
+/// `IfcBeam` (#1841). Autodesk's exporter source (revit-ifc, CLEANROOM.md
+/// source 5, cited and not quoted: `ExporterUtil.GetSpecificCategoryForElement`)
+/// swaps a framing instance's category for the sub-category of its structural
+/// usage before the class is looked up, and the class table's `IfcMember` row
+/// for the bracing categories is what the measured instance follows. Its
+/// `PredefinedType` is not measured, so none is stated (the type object says
+/// `NOTDEFINED`, and the occurrence of a Revit 2027 save none by the rule for
+/// members, [`predefined_type_left_out`]).
+pub static HORIZONTAL_BRACING_MEMBER: Mapping = Mapping {
+    revit_class: "StructuralFraming",
+    ifc_type: "IFCMEMBER",
+    predefined_type: None,
+};
+
 /// [`lookup`] for an element whose record names its own class
-/// (`record_class`, RE-76): a floor of the Structural Foundations category is
-/// a slab ([`FOUNDATION_SLAB`]), where an isolated or wall footing, a family
-/// instance or a `ContFooting`, stays the category's footing (#1841).
+/// (`record_class`, RE-76) and, for a framing instance, its structural usage:
+/// a floor of the Structural Foundations category is a slab
+/// ([`FOUNDATION_SLAB`]), where an isolated or wall footing, a family instance
+/// or a `ContFooting`, stays the category's footing; a framing instance whose
+/// usage is [`HORIZONTAL_BRACING_USAGE`] is a member
+/// ([`HORIZONTAL_BRACING_MEMBER`]), where every other stays a beam (#1841).
 pub fn lookup_for_record(
     revit_class: &str,
     record_class: Option<&str>,
+    structural_usage: Option<u64>,
 ) -> Option<&'static Mapping> {
     if revit_class == "StructuralFoundation" && record_class == Some("Floor") {
         return Some(&FOUNDATION_SLAB);
+    }
+    if revit_class == "StructuralFraming" && structural_usage == Some(HORIZONTAL_BRACING_USAGE) {
+        return Some(&HORIZONTAL_BRACING_MEMBER);
     }
     lookup(revit_class)
 }

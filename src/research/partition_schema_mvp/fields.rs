@@ -716,6 +716,13 @@ pub const STAIR_TYPE_FIELD: &str = "m_stair_type";
 /// of the `FamInstCurveDriver` in its native record (W7, RE-276).
 pub const BEAM_ROTATION_FIELD: &str = "m_beam_cross_section_rotation";
 
+/// Field holding a framing instance's structural usage: the `m_structUsage` of
+/// its `FamilyInstance` in its native record (`InsertableInst`, a 4-byte
+/// integer, #1841). Which value is which usage is read from files, not from the
+/// API's enumeration: [`crate::ifc::category_map::HORIZONTAL_BRACING_USAGE`] is the one
+/// observed.
+pub const STRUCT_USAGE_FIELD: &str = "m_struct_usage";
+
 /// Fields holding the first end of a beam's location line, model feet
 /// (RE-49).
 pub const BEAM_AXIS_START_FIELDS: [&str; 3] = [
