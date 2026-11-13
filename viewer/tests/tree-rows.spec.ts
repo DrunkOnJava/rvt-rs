@@ -117,6 +117,11 @@ einhovenTest('a "Show more" row builds the next block and keeps the keyboard whe
   if (remaining > 1) {
     await expect(more).toBeFocused();
     await expect(more).toContainText(`${remaining - 1} not listed`);
+  } else {
+    // With none left the row goes, and the keyboard moves to the first row it
+    // built (`showMoreTreeRows`): on Einhoven's 2 windows, the second.
+    await expect(more).toHaveCount(0);
+    await expect(elements.nth(1)).toBeFocused();
   }
 });
 
