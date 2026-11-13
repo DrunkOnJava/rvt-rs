@@ -7,9 +7,14 @@
 //! region with an explicit `<redacted...>` marker that indicates what
 //! class of info was scrubbed.
 
-/// Scrub `\Users\<name>\` and `/Users/<name>/` usernames while
-/// preserving the path shape. The username segment is replaced by
-/// `<redacted>`; nothing else is touched.
+/// The folders that hold one folder per user, each written with the separators
+/// of the platform that has it. The segment after one is a user name.
+const HOME_PARENTS: [&str; 3] = ["\\Users\\", "/Users/", "/home/"];
+
+/// Scrub `\Users\<name>\`, `/Users/<name>/` and `/home/<name>/` usernames
+/// while preserving the path shape, in every path the string holds. The
+/// username segment is replaced by `<redacted>`; nothing else is touched. A
+/// name no separator follows, because the string ends at it, is left as it is.
 ///
 /// ```
 /// use rvt::redact::redact_path_str;
@@ -18,31 +23,48 @@
 /// let output = redact_path_str(input);
 /// assert_eq!(output, "C:\\Users\\<redacted>\\Documents\\model.rfa");
 ///
-/// // Paths without a \Users\ or /Users/ segment pass through unchanged.
+/// // A Linux home folder is scrubbed the same way, and so is each path of a string.
+/// assert_eq!(
+///     redact_path_str("/home/alice/a.rvt and /home/bob/b.rvt"),
+///     "/home/<redacted>/a.rvt and /home/<redacted>/b.rvt"
+/// );
+///
+/// // Paths without a \Users\, /Users/ or /home/ segment pass through unchanged.
 /// assert_eq!(
 ///     redact_path_str("C:\\ProgramData\\Autodesk\\RVT 2024"),
 ///     "C:\\ProgramData\\Autodesk\\RVT 2024"
 /// );
 /// ```
 pub fn redact_path_str(p: &str) -> String {
-    let mut out = p.to_string();
-    for n in ["\\Users\\", "/Users/"] {
-        if let Some(idx) = out.find(n) {
-            let tail_start = idx + n.len();
-            let tail = &out[tail_start..];
-            if let Some(end) = tail.find(['\\', '/']) {
-                let before = &out[..tail_start];
-                let after = &tail[end..];
-                out = format!("{before}<redacted>{after}");
-            }
-        }
+    HOME_PARENTS
+        .iter()
+        .fold(p.to_string(), |text, parent| redact_after(&text, parent))
+}
+
+/// `text` with the segment after each `parent` that a path separator ends
+/// replaced by `<redacted>`. The scan moves past every replacement, so a
+/// string that is already redacted comes back as it was.
+fn redact_after(text: &str, parent: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find(parent) {
+        let name_at = at + parent.len();
+        out.push_str(&rest[..name_at]);
+        rest = &rest[name_at..];
+        let Some(end) = rest.find(['\\', '/']) else {
+            break;
+        };
+        out.push_str("<redacted>");
+        rest = &rest[end..];
     }
+    out.push_str(rest);
     out
 }
 
 /// Scrub a free-form string for every known PII pattern:
 ///
-/// - Windows usernames in `\Users\...` paths → `<redacted>`
+/// - Home-folder usernames in `\Users\`, `/Users/` and `/home/` paths →
+///   `<redacted>`
 /// - Autodesk OneDrive authoring paths → `<redacted autodesk internal path>`
 /// - Build-server paths (`F:\Ship`, `D:\build`) → `<redacted build-server path>`
 /// - Autodesk internal project-ID folders (`Revit - <digits>`) →
@@ -119,5 +141,74 @@ pub fn anonymize_file_name(path: &str) -> String {
             format!("{ANONYMIZED}.{extension}")
         }
         _ => ANONYMIZED.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::redact_path_str;
+
+    // The ways `redact_path_str` can leave a user name behind, or take more
+    // than a name, written before the loop that scrubs every path.
+
+    #[test]
+    fn a_linux_home_folder_loses_its_user_name() {
+        assert_eq!(
+            redact_path_str("/home/alice/models/a.rvt"),
+            "/home/<redacted>/models/a.rvt"
+        );
+    }
+
+    #[test]
+    fn every_path_of_a_string_is_scrubbed_not_the_first_of_each_kind() {
+        let text = "C:\\Users\\alice\\a.rvt, /Users/bob/b.rvt, /home/carol/c.rvt, \
+                    C:\\Users\\dave\\d.rvt and /home/erin/e.rvt";
+        let out = redact_path_str(text);
+        for name in ["alice", "bob", "carol", "dave", "erin"] {
+            assert!(!out.contains(name), "{name} survives in {out}");
+        }
+        assert_eq!(out.matches("<redacted>").count(), 5);
+    }
+
+    #[test]
+    fn a_name_the_string_ends_at_is_left_as_it_is() {
+        for text in [
+            "/home/",
+            "/home/alice",
+            "/Users/",
+            "/Users/alice",
+            "C:\\Users\\alice",
+        ] {
+            assert_eq!(redact_path_str(text), text);
+        }
+    }
+
+    #[test]
+    fn a_folder_that_only_starts_like_a_home_folder_is_left_alone() {
+        for text in [
+            "/srv/homework/alice/x",
+            "/opt/rvt/data.rvt",
+            "C:\\ProgramData\\Autodesk\\RVT 2024",
+        ] {
+            assert_eq!(redact_path_str(text), text);
+        }
+    }
+
+    #[test]
+    fn a_name_with_spaces_dots_or_accents_is_scrubbed_whole() {
+        assert_eq!(
+            redact_path_str("C:\\Users\\Alice Smith\\m.rvt"),
+            "C:\\Users\\<redacted>\\m.rvt"
+        );
+        assert_eq!(
+            redact_path_str("/home/j.doe-ñ/m.rvt"),
+            "/home/<redacted>/m.rvt"
+        );
+    }
+
+    #[test]
+    fn scrubbing_twice_gives_what_scrubbing_once_gives() {
+        let once = redact_path_str("/home/alice/a.rvt and C:\\Users\\bob\\b.rvt");
+        assert_eq!(redact_path_str(&once), once);
     }
 }
