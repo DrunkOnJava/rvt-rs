@@ -561,9 +561,10 @@ pub struct LevelsOut {
 pub struct DiagnosticsOut {
     pub model_id: String,
     /// The export diagnostics, as `rvt-ifc --diagnostics` writes them
-    /// (`docs/schemas/export-diagnostics.schema.json`), with any text longer
-    /// than the server's field limit cut and any list past 5,000 entries held
-    /// to its first 5,000. `notes` names a list that was held.
+    /// (`docs/schemas/export-diagnostics.schema.json`), with any string longer
+    /// than eight times the server's field limit (8,000 characters by default)
+    /// cut and any list or object past 5,000 entries held to its first 5,000.
+    /// `notes` names a list that was held.
     pub diagnostics: Value,
     pub unread_streams: Vec<UnreadOut>,
     pub notes: Vec<String>,

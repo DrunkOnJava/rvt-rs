@@ -102,15 +102,17 @@ struct Args {
     max_walker_container_records: Option<usize>,
     /// How many decoded models the server keeps; opening another drops the
     /// least recently used one. A large model peaks at several GB, so this
-    /// is also how many files are read or decoded at the same time.
+    /// is also how many files are read and how many models decoded at once.
     #[arg(long, value_name = "N", default_value_t = 2)]
     max_open_models: usize,
-    /// The most characters of one name, value or message from a file that an
-    /// answer carries; more are cut, and the cut says how many (default 512).
+    /// The most characters of one name or value from a file that an answer
+    /// carries (a message, or a string of the diagnostics, eight times that);
+    /// more are cut, and the cut says how many (default 1000).
     #[arg(long, value_name = "N")]
     max_field_chars: Option<usize>,
-    /// The most bytes of JSON one answer may carry; a longer answer is refused
-    /// with a message that says how to ask for less (default 4 MiB).
+    /// The most bytes of JSON one answer may carry, counted once (the wire
+    /// message carries it twice); a longer answer is refused with a message
+    /// that says how to ask for less (default 4 MiB).
     #[arg(long, value_name = "BYTES")]
     max_answer_bytes: Option<usize>,
     /// Write exports only inside this folder; a relative out_path is taken

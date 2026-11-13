@@ -76,8 +76,9 @@ pub struct ListRoomsArgs {
     /// path: a `model_id` names the phase its model was opened at. An unknown
     /// phase is an error that lists the file's phases.
     pub phase: Option<String>,
-    /// How many spaces to return: 100 by default, from 1 to 1000. A value
-    /// outside that range is an error.
+    /// How many spaces to return: 1000 by default, from 1 to 1000. A value
+    /// outside that range is an error. The answer's `total` says how many
+    /// there are; when `returned` is less, call again with `offset`.
     #[schemars(range(min = 1, max = 1000))]
     pub limit: Option<u32>,
     /// How many spaces to skip, for the next page.

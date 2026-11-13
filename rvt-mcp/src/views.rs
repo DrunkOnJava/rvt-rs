@@ -56,7 +56,9 @@ fn storey_name(model: &IfcModel, storey_index: Option<usize>) -> Option<String> 
         .map(|storey| bounds::clip(&storey.name))
 }
 
-/// A value source as the answers write it.
+/// A value source as the answers write it. Its reader and rule are names this
+/// code gives, and its streams are `Partitions/NN` or a CFB entry name (31
+/// characters at most): none of it is free text from the file, so none is cut.
 fn value_source_out(source: &ValueSource) -> ValueSourceOut {
     ValueSourceOut {
         reader: source.reader.clone(),
@@ -153,12 +155,15 @@ fn element_row(computed: &Computed, index: usize) -> Option<ElementRow> {
         long_name: names.long_name.map(bounds::clip_owned),
         level: storey_name(&computed.model, computed.storey(index)),
         // What the export writes on the occurrence (#1692).
-        predefined_type: predefined_type.clone().filter(|_| {
-            !rvt::ifc::category_map::predefined_type_left_out(
-                ifc_type,
-                computed.model.global_ids.revit_version,
-            )
-        }),
+        predefined_type: predefined_type
+            .clone()
+            .filter(|_| {
+                !rvt::ifc::category_map::predefined_type_left_out(
+                    ifc_type,
+                    computed.model.global_ids.revit_version,
+                )
+            })
+            .map(bounds::clip_owned),
         provenance: provenance(computed, index, false)?,
     })
 }
@@ -592,7 +597,7 @@ pub fn explain_element(
             .for_element(element_id)
             .map(|decision| DecisionOut {
                 stage: decision.stage.as_str().to_string(),
-                reason: decision.reason.clone(),
+                reason: bounds::clip(&decision.reason),
                 class: decision.class.as_deref().map(bounds::clip),
                 stream: decision.stream.clone(),
                 offset: decision.offset,
@@ -727,12 +732,15 @@ pub fn get_element(entry: &Entry, computed: &Computed, id: &str) -> Result<Eleme
         name: (!names.name_is_placeholder).then(|| bounds::clip(&names.name)),
         long_name: names.long_name.map(bounds::clip_owned),
         level,
-        predefined_type: predefined_type.clone().filter(|_| {
-            !rvt::ifc::category_map::predefined_type_left_out(
-                ifc_type,
-                model.global_ids.revit_version,
-            )
-        }),
+        predefined_type: predefined_type
+            .clone()
+            .filter(|_| {
+                !rvt::ifc::category_map::predefined_type_left_out(
+                    ifc_type,
+                    model.global_ids.revit_version,
+                )
+            })
+            .map(bounds::clip_owned),
         location_feet: *location_feet,
         rotation_degrees: rotation_radians
             .filter(|_| location_feet.is_some())

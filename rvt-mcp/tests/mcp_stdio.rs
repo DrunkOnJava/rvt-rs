@@ -373,7 +373,7 @@ async fn drive(client: &Client, modern: bool, model: &Path, out: &Path, real_pro
     // order.
     let room_total = rooms["total"].as_u64().expect("list_rooms says its total");
     assert_eq!(rooms["offset"].as_u64(), Some(0));
-    assert_eq!(rooms["limit"].as_u64(), Some(100));
+    assert_eq!(rooms["limit"].as_u64(), Some(1000));
     assert_eq!(rooms["returned"].as_u64(), Some(first_page.len() as u64));
     let mut paged = Vec::new();
     loop {
@@ -1089,14 +1089,15 @@ async fn a_model_opened_at_a_phase_reads_and_exports_that_phase() {
 }
 
 /// What an answer carries is bounded (#1883), with limits small enough to meet
-/// on the synthetic fixture: text from the file is cut and says how much was
-/// cut, a message that quotes the file is cut too, and an answer over the byte
-/// limit is refused with what to do about it, while a small answer still goes.
+/// on the synthetic fixture: a name or value from the file is cut at 1
+/// character and a message or a string of the diagnostics at 8, each saying how
+/// much was cut, and an answer over the byte limit is refused with what to do
+/// about it, while a small answer still goes.
 #[tokio::test]
 async fn an_answer_is_bounded() {
     let path = fixture().to_string_lossy().into_owned();
     let client =
-        start_discover_with(&["--max-field-chars", "4", "--max-answer-bytes", "900"]).await;
+        start_discover_with(&["--max-field-chars", "1", "--max-answer-bytes", "900"]).await;
 
     // The summary is over 900 bytes (it holds the not_read text, the file's
     // provenance and the diagnostics' summary), so it is refused, and the
@@ -1124,8 +1125,8 @@ async fn an_answer_is_bounded() {
         )
         .await,
     );
-    // Every string of the diagnostics document is cut to 4 characters and
-    // the count of what was cut, or is shorter.
+    // Every string of the diagnostics document is cut to 8 characters (eight
+    // times the field limit) and the count of what was cut, or is shorter.
     fn longest(value: &Value) -> usize {
         match value {
             Value::String(text) => {
@@ -1138,7 +1139,7 @@ async fn an_answer_is_bounded() {
         }
     }
     assert!(
-        longest(&exported["diagnostics"]) <= 4,
+        longest(&exported["diagnostics"]) <= 8,
         "a string of the diagnostics was not cut: {}",
         exported["diagnostics"]
     );
@@ -1148,13 +1149,13 @@ async fn an_answer_is_bounded() {
     );
 
     // A message that quotes the file or the client is cut at 8 times the field
-    // limit, 32 characters here.
+    // limit, 8 characters here.
     let missing = Path::new("/such/a/long/folder/name/that/is/not/there/model.rvt");
     let failed = call(&client, "open_model", json!({ "model": missing })).await;
     let message = error_text(&failed);
     assert!(
         message.contains("characters]"),
-        "a message over 32 characters is cut: {message}"
+        "a message over 8 characters is cut: {message}"
     );
     client.cancel().await.expect("close the client");
 }

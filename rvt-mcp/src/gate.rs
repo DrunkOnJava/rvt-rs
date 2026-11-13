@@ -1,10 +1,17 @@
-//! How many models are read at once (#1883).
+//! How many files are read and models decoded at once (#1883).
 //!
 //! The store keeps at most `--max-open-models` models, and the decode of one
 //! peaks at several GB. Concurrent tool calls each ran their own decode before
 //! the store dropped the models past that number, so N calls for N files
 //! decoded N models at once. Every read of a file from disk and every decode
-//! now takes a place at this gate first, as many places as models are kept.
+//! now takes a place at this gate first, as many places as models are kept, so
+//! no more than that many decode at once.
+//!
+//! What it does not bound: a call that has read its file and waits for a place
+//! to decode keeps the file's bytes meanwhile (`RevitFile` holds them), so the
+//! files held by waiting calls are sized by how many calls wait. Holding the
+//! place from the read to the end of the first decode would bound them, and
+//! leaks it into the store when a call fails between the two.
 
 use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;

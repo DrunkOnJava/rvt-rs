@@ -41,7 +41,12 @@ const TOOL_LIST_TTL_MS: u64 = 3_600_000;
 /// The fewest milliseconds between two progress notifications of one stage.
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(250);
 
+/// `list_elements` gives 100 rows by default: a model has up to tens of
+/// thousands. `list_rooms` gives 1000, its most: no measured model has more than
+/// 308 spaces, so a client that asks for no page still gets every one, and the
+/// cap is what bounds the answer (#1883).
 const DEFAULT_PAGE: u32 = 100;
+const DEFAULT_ROOMS_PAGE: u32 = 1000;
 const MAX_PAGE: u32 = 1000;
 
 /// How many progress events wait for the client to read them. A client that
@@ -103,8 +108,10 @@ fn failure_result(failure: Failure) -> CallToolResult {
 }
 
 /// `out` as a tool's answer, unless it is longer than the server's answer
-/// limit (#1883). A list is paged and text from the file is cut, so an answer
-/// over the limit is one a crafted file made, and it is refused, not sent.
+/// limit (#1883), counted once: the wire message carries the answer twice, as
+/// structured content and as text. A list is paged and text from the file is
+/// cut, so an answer over the limit is one a crafted file made, and it is
+/// refused, not sent.
 fn within_limit<T: Serialize>(store: &Store, out: T) -> Result<Json<T>, CallToolResult> {
     let max = store.config().max_answer_bytes;
     match bounds::json_bytes(&out) {
@@ -117,13 +124,13 @@ fn within_limit<T: Serialize>(store: &Store, out: T) -> Result<Json<T>, CallTool
 }
 
 /// The page a list tool was asked for, as (limit, offset): `limit` from 1 to
-/// [`MAX_PAGE`], [`DEFAULT_PAGE`] when it is left out. A value outside the range
-/// is an error, as the schema says, not a value quietly changed (#1883).
-fn page(limit: Option<u32>, offset: Option<u32>) -> Result<(usize, usize), Failure> {
-    let limit = limit.unwrap_or(DEFAULT_PAGE);
+/// [`MAX_PAGE`], `default` when it is left out. A value outside the range is an
+/// error, as the schema says, not a value quietly changed (#1883).
+fn page(limit: Option<u32>, offset: Option<u32>, default: u32) -> Result<(usize, usize), Failure> {
+    let limit = limit.unwrap_or(default);
     if !(1..=MAX_PAGE).contains(&limit) {
         return Err(Failure::Message(format!(
-            "limit must be from 1 to {MAX_PAGE}, not {limit}; it is {DEFAULT_PAGE} when left out. Page through a longer list with offset."
+            "limit must be from 1 to {MAX_PAGE}, not {limit}; it is {default} when left out. Page through a longer list with offset."
         )));
     }
     Ok((limit as usize, offset.unwrap_or(0) as usize))
@@ -311,7 +318,7 @@ impl RvtServer {
         let args = parse::<ListElementsArgs>("list_elements", arguments)?;
         let store = Arc::clone(&self.store);
         let out = run_job(&context, move |control| {
-            let (limit, offset) = page(args.limit, args.offset)?;
+            let (limit, offset) = page(args.limit, args.offset, DEFAULT_PAGE)?;
             let (entry, computed) = decode(&store, &args.model, phase_of(&args.phase), control)?;
             let filter = ElementFilter {
                 category: args
@@ -395,7 +402,7 @@ impl RvtServer {
         input_schema = rmcp::handler::server::common::schema_for_input::<ListRoomsArgs>()
             .expect("the input schema is an object"),
         description = concat!(
-            "List the spaces the export writes as IfcSpace, paged by limit (100 by default, from 1 to 1000) and offset, with total, the number of spaces: ElementId, number, name, space_kind, level, area and provenance. space_kind says what each is (room, area, mep_space or family_instance): read it, not space_outline_source, to tell an Area from a room, and never filter on the values of space_outline_source, which says only where an outline came from and changes with the rules that read outlines. mep_space is the kind of a Revit Space (MEP), which rvt-rs does not read from a file's partition records, so none is written today: that says what rvt-rs writes, not what the files hold. The area is present only where the outline was read exactly (space_outline_source says so); a space that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. ",
+            "List the spaces the export writes as IfcSpace, paged by limit (1000 by default, from 1 to 1000) and offset, with total, the number of spaces; when returned is less than total the list is not complete, so call again with offset: ElementId, number, name, space_kind, level, area and provenance. space_kind says what each is (room, area, mep_space or family_instance): read it, not space_outline_source, to tell an Area from a room, and never filter on the values of space_outline_source, which says only where an outline came from and changes with the rules that read outlines. mep_space is the kind of a Revit Space (MEP), which rvt-rs does not read from a file's partition records, so none is written today: that says what rvt-rs writes, not what the files hold. The area is present only where the outline was read exactly (space_outline_source says so); a space that keeps its record's bounding box (record_box) has no area, since the area of a box is not the area of a room. ",
             short_not_read!()
         ),
         annotations(
@@ -413,7 +420,7 @@ impl RvtServer {
         let args = parse::<ListRoomsArgs>("list_rooms", arguments)?;
         let store = Arc::clone(&self.store);
         let out = run_job(&context, move |control| {
-            let (limit, offset) = page(args.limit, args.offset)?;
+            let (limit, offset) = page(args.limit, args.offset, DEFAULT_ROOMS_PAGE)?;
             let (entry, computed) = decode(&store, &args.model, phase_of(&args.phase), control)?;
             Ok(views::rooms(&entry, &computed, offset, limit))
         })

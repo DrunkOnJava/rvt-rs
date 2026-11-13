@@ -143,9 +143,10 @@ server remembers the answer, so asking again does not read the file again.
 The handle lives while the server process runs and while the model is among the
 most recently used ones the server keeps (2 by default, `--max-open-models`):
 opening another model drops the least recently used one, and a decoded large
-model needs several GB, so that many files at most are read from disk or
-decoded at the same time: a call that needs a place waits for one, and a
-cancelled call leaves the queue (#1883). A `model_id` this server did not issue, one it evicted,
+model needs several GB, so no more than that many files are read from disk or
+models decoded at the same time: a call that needs a place waits for one, and a
+cancelled call leaves the queue (#1883). A call that has read its file and waits
+to decode it keeps the file's bytes meanwhile, which the gate does not bound. A `model_id` this server did not issue, one it evicted,
 one from before a restart, or one whose file changed on disk is a tool error
 that says to call `open_model` again. The tool descriptions say the same.
 
@@ -158,7 +159,7 @@ that says to call `open_model` again. The tool descriptions say the same.
 | `list_elements` | Building elements, filtered by `category` (IFC entity: `IFCWALL`, `IfcWall` and `wall` are the same), `class` (Revit class: `Wall`, `Room`) and `level` (storey name), paged by `limit` (100 by default, from 1 to 1000; a `limit` outside that is an error) and `offset`. Each row has the ElementId, `name` and `long_name` (the IFC `Name` and `LongName`: an IfcSpace's are its room number, or `<room name>:<ElementId>` for a room with a name and no number, and its room name; `name` is absent only for a room with neither whose name is exactly the exporter's `<Revit class>-<ElementId>` placeholder, and the placeholder names of other elements are still served as `name`), level, `predefined_type` and its provenance. |
 | `get_element` | One element by Revit ElementId or IFC GlobalId: its `name` and `long_name` as `list_elements` gives them, its property sets and quantities as the IFC export writes them (quantities in the IFC's SI units, each property with its IfcValue type), its trust markers, its provenance, the file's, its type object as the export writes it (`element_type`: the IFC entity as `ifc_type`, the `name` and the `element_id`, the type object's `Tag`, and the sets it holds, `Other` and `Identity Data` among them, or the `IfcSpaceType` made for a room; absent where the export writes none) and any other entity with the same ElementId. |
 | `explain_element` | Why one element is in the export as it is, or is not in it (#1326). `element` is a Revit ElementId, whether or not the export holds the element, or the GlobalId of an exported one. Returns the element's provenance and trust markers where it is exported, and every fail-closed decision recorded for it: a `stage` (`element_skipped`, `body_not_drawn`, `body_left_as_box`, `opening_not_cut`, `outline_not_read`, `storey_not_bound`), a `reason` (the `reason` of the `skipped` item in `get_diagnostics`, or `body_is_record_box`, `space_outline_is_record_box`, `area_body_refused`, `slab_shape_refused`, `wall_base_cut_refused`, `wall_end_extension_refused`, `wall_profile_extension_refused`, `saved_mesh_not_used`), the `stream` and byte `offset` its record was read from where known, and a `detail`. |
-| `list_rooms` | The spaces the export writes as `IfcSpace`, paged as `list_elements` is (`limit` 100 by default, from 1 to 1000, and `offset`; the answer says `total`, `offset`, `limit` and `returned`, #1883): ElementId, number, name, `space_kind`, level, area and provenance. `space_kind` says what each is (`room`, `area`, `mep_space` or `family_instance`), from the Revit class of its record (#1437): ask it, not `space_outline_source`, which says only where the outline came from and changes with the rules that read outlines. No `mep_space` is written today: rvt-rs reads no Revit Space from a file's partition records, which says what it writes and not what the files hold. The area is present only where the outline was read exactly. |
+| `list_rooms` | The spaces the export writes as `IfcSpace`, paged as `list_elements` is (`limit` 1000 by default, from 1 to 1000, and `offset`; the answer says `total`, `offset`, `limit` and `returned`, and a `returned` below `total` is a list that is not complete, #1883): ElementId, number, name, `space_kind`, level, area and provenance. `space_kind` says what each is (`room`, `area`, `mep_space` or `family_instance`), from the Revit class of its record (#1437): ask it, not `space_outline_source`, which says only where the outline came from and changes with the rules that read outlines. No `mep_space` is written today: rvt-rs reads no Revit Space from a file's partition records, which says what it writes and not what the files hold. The area is present only where the outline was read exactly. |
 | `list_levels` | Storeys with elevation (feet and metres) and element count. |
 | `get_diagnostics` | The export diagnostics, as `rvt-ifc --diagnostics` writes them ([`export-diagnostics.schema.json`](schemas/export-diagnostics.schema.json)): what was decoded, exported, skipped, approximated and left unread, and why. |
 | `export_ifc` | Writes IFC4 to `out_path` and returns a summary and a `resource_link` to the file. `options` takes `rvt-ifc`'s switches: `mode`, `saved_meshes` (`default`: every boxed element on Revit 2023 to 2027; `doors_and_windows`, `all`, `off`), `revit_property_sets`, `revit_set_placement`, `no_base_quantities`, `allow_partial`. |
@@ -355,22 +356,27 @@ limits (`rvt-rs-mcp --help`). A stream the limits keep from being read is
 reported, never read partially without saying so. A model's decode peaks at
 several GB for the largest files, which is why only the two most recently used
 models are kept by default, and why no more files than that are read or
-decoded at once.
+models decoded at once.
 
 What an answer carries is bounded too (#1883), since a crafted file can make
 any name, value or list in it as large as it likes:
 
-- A name, value or other piece of text from the file is cut at 512 characters
+- A name or value from the file is cut at 1,000 characters
   (`--max-field-chars`), with the number of characters left out written where
   it was cut (`…[+137 characters]`). A message that quotes the file, such as a
-  list of its phases, is cut at eight times that.
-- The lists are paged: `list_elements` and `list_rooms` by `limit` (1 to 1000)
-  and `offset`. The diagnostics document, which no `limit` pages, keeps at most
-  5,000 entries of a list or object, and `notes` names each one it held. An
-  honest model's document is a few tens of kilobytes and is not changed.
-- An answer over 4 MiB of JSON (`--max-answer-bytes`) is refused with a tool
-  error that says how to ask for less. An export's summary is cut as above but
-  never refused, since its file is written by then.
+  list of its phases, and each string of the diagnostics document are cut at
+  eight times that, since rvt-rs writes most of the long ones itself.
+- The lists are paged: `list_elements` (100 by default) and `list_rooms` (1000)
+  by `limit` (1 to 1000) and `offset`. The diagnostics document, which no
+  `limit` pages, keeps at most 5,000 entries of a list or object, and `notes`
+  names each one it held. Of 1,094 diagnostics documents from five Measure runs
+  (the reference models, Autodesk's samples 2015 to 2027, the BIM4LCA files)
+  the longest string is 1,129 characters, the longest list 1,070 entries and the
+  largest object 1,019, so none of them is changed.
+- An answer over 4 MiB of JSON (`--max-answer-bytes`), counted once although
+  the wire message carries it twice, as structured content and as text, is
+  refused with a tool error that says how to ask for less. An export's summary
+  is cut as above but never refused, since its file is written by then.
 - A phase name over 256 characters is refused, and a file whose modification
   time the system will not give is refused, since the server tells a changed
   file by its size and that time.
