@@ -805,13 +805,18 @@ fn run_export_steps(
 
     if options.revit_property_sets {
         match super::revit_property_sets::attach(rf, &mut model) {
-            Ok(report) => notes.push(ExportNote::RevitPropertySets {
-                elements: report.elements,
-                types: report.types,
-                untyped_elements: report.untyped_elements,
-                properties: report.properties,
-                left_out: report.left_out,
-            }),
+            Ok(report) => {
+                // The sets are entities of the model: the counts follow them,
+                // as after every other step that changes the model.
+                recount_exported(&mut diagnostics, &model);
+                notes.push(ExportNote::RevitPropertySets {
+                    elements: report.elements,
+                    types: report.types,
+                    untyped_elements: report.untyped_elements,
+                    properties: report.properties,
+                    left_out: report.left_out,
+                });
+            }
             Err(error) => {
                 control.check()?;
                 notes.push(ExportNote::RevitPropertySetsSkipped {
