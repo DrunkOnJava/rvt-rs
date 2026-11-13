@@ -1247,6 +1247,22 @@ and earlier write every room, as every element: both phase rules start at
 Revit 2016 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
+**RE-453 (2026-11-13)** gives a door or window with no curtain grid found the
+curtain wall its list names when that is the one wall the list names. RE-452
+left out 84 of the 268 doors that Revit's export aggregates into a curtain wall
+on the four BIM4LCA offices (21 in each): each names that wall alone, its
+element data names the wall at no place, and nothing else its list holds
+separates it from the 184 RE-452 had (#1912). Every door of the offices and of
+Snowdon Towers Architectural that Revit puts in a curtain wall names that wall
+alone, and the three Snowdon doors that name a curtain wall and that Revit
+leaves standalone (RE-46) name a second wall, their host. The rule as first
+written in RE-452 took the named wall whatever else the list names and was a
+measured negative on those three and on a Revit 2018 door; with the list
+naming one wall in all it is right for 268 of 268 office doors and 6 of 6
+Snowdon doors, and none is in a wall Revit's export does not put it in. A
+door whose list names a curtain wall and another wall keeps RE-452's rule
+(`reports/element-framing/RE-453-curtain-openings-one-wall.md`).
+
 **RE-452 (2026-11-13)** gives a door or window of a curtain wall the wall its
 list names, where the element data of an id in its list names that wall too.
 Doors and windows took a curtain wall only through the curtain grid their
