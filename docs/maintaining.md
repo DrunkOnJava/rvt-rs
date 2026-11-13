@@ -409,11 +409,12 @@ not remove Compare's report.
   Shaft openings are cut on 2024 only, for the same reason: the only two measured on
   2025 cut nothing.
 - **Products that share a Tag** (a floor Revit writes as several, a stair once for each
-  storey) are paired by storey, then the volume and the centre of the body. All but
-  the first copy carry a GlobalId derived from the export, which differs between two
-  saves, so those are not compared; the two saves must share exactly one GlobalId
-  under such a Tag, and it must be on the two products paired by what they are, so an
-  identity swapped between two pieces fails (RE-346).
+  storey) are paired by storey, then the volume and the centre of the body (RE-346).
+  Each keeps its GlobalId between saves as a single product does: the first carries
+  the element's own, and since #1840 the others are derived from it rather than from
+  the document's GUID. So a further piece that takes a new GlobalId in a later save
+  fails, and so does an identity swapped between two pieces. Until #1840 the gate
+  compared none but the first, which was all that held.
 - **Pipes are held as cylinders** (Griffin, 2026-11-05, "Compare the cylinder itself").
   A pipe that is a circular extrusion in both saves is compared by the two ends of its
   axis (in either order), its radius and its length, each to 0.001 ft, and not by the

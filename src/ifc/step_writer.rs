@@ -143,17 +143,23 @@ fn write_step_to_sink<W: std::io::Write>(
 /// `model.entities`; `None` for an entity that is not a building element.
 ///
 /// Fixed from what the element is rather than where it lands in the file
-/// (#400): Revit's own where the file yields it; otherwise one derived
-/// from the document's identity, the element's ElementId (its `Tag`) and which
-/// of the entities sharing that Tag it is, since a slab's further pieces
-/// (#331) or a curtain wall's parts share their element's. An element with no
-/// Tag falls back to its entity type and name. A caller that lists a model's
-/// elements reads their GlobalIds here, so that they are the ones the written
-/// IFC carries.
+/// (#400): Revit's own where the file yields it. A slab's further pieces
+/// (#331) or a curtain wall's parts share their element's `Tag`, and Revit
+/// gives only the first a GlobalId: each further one is derived from that
+/// GlobalId and which of the entities sharing the Tag it is (#1840). Any
+/// other element's is derived from the document's identity, its ElementId
+/// (its `Tag`) and that place. An element with no Tag falls back to its
+/// entity type and name. A caller that lists a model's elements reads their
+/// GlobalIds here, so that they are the ones the written IFC carries.
 pub fn element_global_ids(model: &IfcModel) -> Vec<Option<String>> {
     let document = model.global_ids.document.as_deref().unwrap_or("");
     let mut element_gids: Vec<Option<String>> = vec![None; model.entities.len()];
     let mut element_counts: HashMap<(&str, &str, &str), usize> = HashMap::new();
+    // The Revit GlobalId of the first entity carrying each Tag. The file keeps
+    // it from save to save, where the document's GUID can change between two
+    // saves of one project, which moved every further piece's GlobalId
+    // (#1840).
+    let mut revit_first: HashMap<&str, &str> = HashMap::new();
     for (entity_idx, entity) in model.entities.iter().enumerate() {
         let super::entities::IfcEntity::BuildingElement {
             ifc_type,
@@ -169,14 +175,18 @@ pub fn element_global_ids(model: &IfcModel) -> Vec<Option<String>> {
             None => ("untagged-element", ifc_type.as_str(), name.as_str()),
         };
         let occurrence = element_counts.entry(key).or_default();
-        let element_gid = model
-            .global_ids
-            .elements
-            .get(&entity_idx)
-            .cloned()
-            .unwrap_or_else(|| {
-                stable_guid(document, &[key.0, key.1, key.2, &occurrence.to_string()])
-            });
+        let element_gid = match model.global_ids.elements.get(&entity_idx) {
+            Some(revit) => {
+                if let (0, Some(tag)) = (*occurrence, type_guid.as_deref()) {
+                    revit_first.insert(tag, revit.as_str());
+                }
+                revit.clone()
+            }
+            None => match type_guid.as_deref().and_then(|tag| revit_first.get(tag)) {
+                Some(first) => stable_guid(first, &["piece", &occurrence.to_string()]),
+                None => stable_guid(document, &[key.0, key.1, key.2, &occurrence.to_string()]),
+            },
+        };
         *occurrence += 1;
         element_gids[entity_idx] = Some(element_gid);
     }
@@ -5113,8 +5123,9 @@ fn epoch_to_ymdhms(secs: i64) -> (i32, u32, u32, u32, u32, u32) {
 }
 
 /// The GlobalId of an entity Revit gives none (#400): SHA-256 over a fixed
-/// namespace, the document's identity and `key` (the entity's role and the
-/// identities it derives from), as an RFC 9562 version-8 UUID in IFC's
+/// namespace, `document` (the document's identity, or for an element's
+/// further piece the element's Revit GlobalId, #1840) and `key` (the
+/// entity's role and the identities it derives from), as an RFC 9562 version-8 UUID in IFC's
 /// 22-character form. It depends on nothing about the entity's position in
 /// the file, so it survives changes elsewhere in the model, and the
 /// namespace keeps it apart from GlobalIds other tools derive.
