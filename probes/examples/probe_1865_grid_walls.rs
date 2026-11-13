@@ -30,6 +30,13 @@
 //!   grid_offsets side=<left|right> offsets=<offset,...> parts=<n>
 //!     (the offsets at which a curtain wall of the part's own list lies, as a
 //!     set, over the parts that have any; RE-72's are 85,478)
+//!   lookup side=<left|right> part=<ElementId> named=<ElementIds> on_grid=<ElementIds>
+//!     (the two sets `attach_curtain_walls` matches on: the curtain walls the
+//!     list names, and the walls the list's other ids give as grids at RE-72's
+//!     offsets 85 and 478, where the two agree and are a wall)
+//!   lookup_arms side=<left|right> (on_grid,named)=<n> ...
+//!     (how many parts have each pair of set sizes: (1,*) takes the grid's wall,
+//!     (0,1) the named one, (0,0) the box container, any other pair none)
 //!
 //! Usage:
 //!   cargo run --profile ci -p rvt-probes --example probe_1865_grid_walls -- A.rvt B.rvt
@@ -44,6 +51,10 @@ use rvt::research::partition_element_records as per;
 /// How far past an element's id the walls are looked for, bytes.
 const WINDOW: usize = 1200;
 
+/// Where a curtain grid's element data names its wall, past the id's 8 bytes
+/// (`CURTAIN_GRID_WALL_OFFSETS`, RE-72), and the two must agree.
+const RE72_OFFSETS: [usize; 2] = [85, 478];
+
 /// One save: its curtain walls, which curtain wall each aggregated part is a
 /// part of, what each element is, and the records of the categories a curtain
 /// part belongs to.
@@ -51,6 +62,7 @@ struct Side {
     rf: RevitFile,
     version: u32,
     walls: BTreeSet<u32>,
+    all_walls: BTreeSet<u32>,
     whole_of: HashMap<u32, u32>,
     types: HashMap<u32, String>,
     records: BTreeMap<u32, Vec<per::PartitionElementRecord>>,
@@ -102,6 +114,7 @@ fn load(path: &str) -> anyhow::Result<Side> {
     let version = rf.basic_file_info()?.version;
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
     let categories = [
+        per::OST_WALLS,
         per::OST_CURTAIN_WALL_MULLIONS,
         per::OST_CURTAIN_WALL_PANELS,
         per::OST_DOORS,
@@ -111,10 +124,20 @@ fn load(path: &str) -> anyhow::Result<Side> {
     for record in per::scan_category_records_multi(&mut rf, version, &categories, &declared)? {
         records.entry(record.element_id).or_default().push(record);
     }
+    let all_walls: BTreeSet<u32> = records
+        .iter()
+        .filter(|(_, records)| {
+            records
+                .iter()
+                .any(|r| r.builtin_category == per::OST_WALLS && r.is_exported_instance())
+        })
+        .map(|(id, _)| *id)
+        .collect();
     Ok(Side {
         rf,
         version,
         walls,
+        all_walls,
         whole_of,
         types,
         records,
@@ -186,6 +209,95 @@ fn data_of(side: &mut Side, wanted: &BTreeSet<u32>) -> BTreeMap<u32, Vec<Vec<(us
         }
     }
     out
+}
+
+/// What `scan_curtain_grid_walls` gives for `wanted` on this save: for each id,
+/// the wall its element data names at both of RE-72's offsets where the two
+/// agree and are a wall, if every such place agrees on one.
+fn grid_walls(side: &mut Side, wanted: &BTreeSet<u32>) -> BTreeMap<u32, u32> {
+    let mut found: BTreeMap<u32, Option<u32>> = BTreeMap::new();
+    let Some(header) = rvt::research::partition_names::element_data_header(side.version) else {
+        return BTreeMap::new();
+    };
+    for stream in side.rf.partition_stream_names() {
+        let Ok(inflated) = side.rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for hit in memchr::memmem::find_iter(buf, &header) {
+            let id_at = hit + header.len();
+            let Some(id) = u64_at(buf, id_at)
+                .and_then(|id| u32::try_from(id).ok())
+                .filter(|id| wanted.contains(id))
+            else {
+                continue;
+            };
+            let [first, second] = RE72_OFFSETS.map(|offset| u64_at(buf, id_at + 8 + offset));
+            let wall = match (first, second) {
+                (Some(first), Some(second)) if first == second => u32::try_from(first)
+                    .ok()
+                    .filter(|wall| side.all_walls.contains(wall)),
+                _ => None,
+            };
+            let Some(wall) = wall else {
+                continue;
+            };
+            match found.get_mut(&id) {
+                None => {
+                    found.insert(id, Some(wall));
+                }
+                Some(held) => {
+                    if *held != Some(wall) {
+                        *held = None;
+                    }
+                }
+            }
+        }
+    }
+    found
+        .into_iter()
+        .filter_map(|(id, wall)| Some((id, wall?)))
+        .collect()
+}
+
+/// The two sets `attach_curtain_walls` matches on, for each lost part.
+fn lookup(label: &str, side: &mut Side, lost: &BTreeSet<u32>) {
+    let mut wanted = BTreeSet::new();
+    let mut per_part: BTreeMap<u32, (Vec<u32>, Vec<u32>)> = BTreeMap::new();
+    for part in lost {
+        let (named, others) = list_ids(side, *part);
+        wanted.extend(others.iter().copied());
+        per_part.insert(*part, (named, others));
+    }
+    let grids = grid_walls(side, &wanted);
+    let mut arms: BTreeMap<(usize, usize), usize> = BTreeMap::new();
+    for (part, (named, others)) in &per_part {
+        let on_grid: BTreeSet<u32> = others
+            .iter()
+            .filter_map(|id| grids.get(id).copied())
+            .collect();
+        println!(
+            "lookup side={label} part={part} named={} on_grid={}",
+            ids_text(named),
+            ids_text(&on_grid.iter().copied().collect::<Vec<_>>())
+        );
+        *arms.entry((on_grid.len(), named.len())).or_default() += 1;
+    }
+    println!(
+        "lookup_arms side={label} {}",
+        arms.iter()
+            .map(|((grid, named), parts)| format!("({grid},{named})={parts}"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    );
+}
+
+fn ids_text(ids: &[u32]) -> String {
+    if ids.is_empty() {
+        "-".to_string()
+    } else {
+        ids.iter().map(u32::to_string).collect::<Vec<_>>().join(",")
+    }
 }
 
 fn report(label: &str, side: &mut Side, lost: &BTreeSet<u32>) {
@@ -269,5 +381,7 @@ fn main() -> anyhow::Result<()> {
     }
     report("left", &mut left, &lost);
     report("right", &mut right, &lost);
+    lookup("left", &mut left, &lost);
+    lookup("right", &mut right, &lost);
     Ok(())
 }
