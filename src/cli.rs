@@ -100,3 +100,84 @@ pub fn work_budget_report(stops: &std::collections::BTreeMap<String, usize>) -> 
     );
     lines
 }
+
+/// Whether `a` and `b` are one file: the same path once links, `.` and `..`
+/// are resolved, or two names of one file (a hard link on Unix). A path that
+/// does not exist is no existing file's, so an output not yet written is never
+/// the input. A CLI that writes beside its input checks this before it writes,
+/// since comparing the paths as typed lets `./model.rvt` and a symlink through.
+pub fn same_file(a: &std::path::Path, b: &std::path::Path) -> bool {
+    if matches!(
+        (std::fs::canonicalize(a), std::fs::canonicalize(b)),
+        (Ok(x), Ok(y)) if x == y
+    ) {
+        return true;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if let (Ok(a), Ok(b)) = (std::fs::metadata(a), std::fs::metadata(b)) {
+            return a.dev() == b.dev() && a.ino() == b.ino();
+        }
+    }
+    false
+}
+
+/// A text cell of a CSV a spreadsheet may open: quoted when it holds a comma, a
+/// quote or a line break (RFC 4180), and led by `'` when it starts with `=`,
+/// `+`, `-`, `@`, a tab or a carriage return, which a spreadsheet would read as
+/// a formula. The text of a crafted file (a title, a user name, a path) reaches
+/// such a cell, so a spreadsheet must read it as the text it is. Numbers are
+/// written with `to_string`, not through this.
+pub fn csv_text(value: &str) -> String {
+    let value = if value.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+        std::borrow::Cow::Owned(format!("'{value}"))
+    } else {
+        std::borrow::Cow::Borrowed(value)
+    };
+    if value.contains([',', '"', '\n', '\r']) {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value.into_owned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::csv_text;
+
+    #[test]
+    fn a_formula_is_led_by_a_quote() {
+        for lead in ["=", "+", "-", "@", "\t"] {
+            let cell = format!("{lead}1+1");
+            assert_eq!(csv_text(&cell), format!("'{cell}"), "led by {lead:?}");
+        }
+    }
+
+    #[test]
+    fn a_leading_carriage_return_is_led_and_then_quoted() {
+        assert_eq!(csv_text("\r=1"), "\"'\r=1\"");
+    }
+
+    #[test]
+    fn a_neutralised_cell_is_still_quoted_for_its_commas_and_quotes() {
+        assert_eq!(
+            csv_text("=HYPERLINK(\"x\",\"y\")"),
+            "\"'=HYPERLINK(\"\"x\"\",\"\"y\"\")\""
+        );
+    }
+
+    #[test]
+    fn text_that_is_not_a_formula_is_left_as_it_is() {
+        for plain in ["", "title", "a=b", "x-1", "'=1", "12"] {
+            assert_eq!(csv_text(plain), plain);
+        }
+    }
+
+    #[test]
+    fn commas_quotes_and_line_breaks_are_quoted() {
+        assert_eq!(csv_text("a,b"), "\"a,b\"");
+        assert_eq!(csv_text("say \"hi\""), "\"say \"\"hi\"\"\"");
+        assert_eq!(csv_text("a\nb"), "\"a\nb\"");
+    }
+}
