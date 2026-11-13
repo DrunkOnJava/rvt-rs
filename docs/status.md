@@ -1105,7 +1105,8 @@ a triple related as revit-ifc's fake ElementIds -16, -15 and -14 relate
 them on the BIM4LCA office. All three are Revit's on those three files,
 where none were, and the 2015 example's five storeys take their stored
 values, Revit's. A file that stores none keeps generated ones: the GUID
-Revit derives them from is not found
+Revit derives them from is not found (RE-459 finds it: the project's own GUID in
+the header of `Global/History`)
 (`reports/element-framing/RE-220-stored-global-ids.md`).
 
 **RE-221 (2026-10-25)** draws a column whose type is a square hollow
@@ -1247,6 +1248,30 @@ entity (Measure runs 41784415396 and 41784419457). Revit 2014
 and earlier write every room, as every element: both phase rules start at
 Revit 2015 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
+
+**RE-459 (2026-11-13)** gives the project, building and site of a Revit 2017 to
+2027 file that stores none the GlobalIds Revit's export gives them, and the
+storeys of a 2017 to 2022 file theirs, from the project's own GUID, which the
+header of `Global/History` holds four times (RE-220 did not find it: it is not
+an entry of the history). Revit's export writes that GUID with the fake
+ElementId -16, -15 or -14 XORed into its last 32 bits for the project, the
+building and one site, and with the Level's ElementId for a storey before 2023.
+Against Revit's exports of the 67 models of Measure that have one, the project,
+building and site are Revit's on 63 of the 64 files of 2017 to 2027 whose export
+is of their own project (the other, a held-out Revit 2018 file, follows no rule
+found) and the storeys of 2017 to 2022 on 69 of 69, on 11 files; from 2023 each
+Level's own episode gives them, as before (the project's GUID gives 0 of 229).
+A file that stores its ids keeps them (14 of the 67 models), and Revit 2015 and
+2016 have no file to measure the rule on, so they keep generated ids. The
+history of the spent Vitoria 2018 model, which `EpisodeHistory::parse` refused
+for four entries closed by `0x1e`, is read: 1,297 of its 1,314 elements that
+Revit's export holds are Revit's, from none, and 1,420 of 1,441 on the held-out
+Revit 2018 project, with the 73 rooms of each (an unfiltered Measure of 146
+exports: the project, building and site of 50 models, and the storeys of 11 files,
+become Revit's, and the diagnostics of all 121 are equal). It moves the
+GlobalId of every project, building, site and storey it applies to, so it ships
+in the release after 0.22.0, with any other GlobalId change
+(`reports/element-framing/RE-459-episode-global-ids-2015-2023.md`).
 
 **RE-458 (2026-11-13)** reads a roof by extrusion on Revit 2024, 2026 and 2027
 as on 2025 (RE-211): drawn as its sketch's section, where the B-spline of its
@@ -1712,12 +1737,41 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.21.0** (2026-11-13) is the latest release: crates.io (`rvt` and
+- **v0.22.0** (2026-11-13) is the latest release: crates.io (`rvt` and
   `rvt-rs-mcp`, both published from the tag), the `rvt` wheels and sdist on
   PyPI, GitHub Release archives for Linux, macOS and Windows, and the
   container image, each checked from its published artifacts
   ([`install.md`](install.md)); docs.rs had built `rvt` when they were checked
-  (`rvt-rs-mcp` is a binary crate with no documentation there). The GlobalIds
+  (`rvt-rs-mcp` is a binary crate with no documentation there). It limits what
+  a crafted Revit file can make the MCP server, the command-line tools, the
+  Python bindings and the viewer do: `rvt-rs-mcp` reads from and writes to one
+  folder and bounds what an answer carries (#1883); `rvt-doc --redact`,
+  `rvt-info -f csv`, `rvt-dump`, `rvt-ifc`, `rvt-write`, the Python bindings
+  and the viewer each lose a way a hostile file reached a terminal, a
+  spreadsheet, a log or a file they should not touch (#1884, #1885, #1887,
+  #1919); and a wall profile of thousands of regions no longer builds a chain
+  of boolean cuts too deep for a thread to walk (#1845). More elements are
+  written the way Revit's export writes them: roofs by extrusion of Revit
+  2024, 2026 and 2027, floors of the Structural Foundations category,
+  horizontal bracing, the storeys of beams and braces, the corner mullions and
+  the door of a curtain wall on Revit 2027, a lone non-ASCII name on Revit
+  2023, and the doors, windows and walls of Revit 2015 to 2023 (#1479, #1841,
+  #1842, #1865, #1899, #1912, RE-448, RE-456). Against 0.21.0, 72 of the 146
+  measured exports differ and 74 are identical, and 37 of the 121
+  `diagnostics.json` files differ; of the 72, 56 are Autodesk's sample
+  projects, which no Revit export covers, and the other 16 are scored against
+  Revit's own exports. What it does not measure: a foundation slab and a
+  horizontal bracing (#1841) are checked on a reporter's counts of one Revit
+  2027 structural model; a roof by extrusion is held to the same project's
+  2025 save, which cannot catch an error both saves share (#1479); on the 2027
+  `rac_advanced` 5 corner mullions whose wall nothing in the file names stand
+  in no curtain wall (#1865); and the peak memory of concurrent `rvt-rs-mcp`
+  opens, a crafted file with a very long name and the memory `rvt-dump` saves
+  by releasing each partition it has written are not measured (#1883, #1885).
+  `[0.22.0]` in [`CHANGELOG.md`](../CHANGELOG.md) gives what each change
+  measures and what it does not.
+- **v0.21.0** (2026-11-13): published on every channel, each checked from its
+  published artifacts. The GlobalIds
   an export writes hold from one save of a project to the next: openings,
   voids, fills, property sets, quantity sets, material associations,
   containment, aggregation, type relationships, ports and the further pieces of
@@ -1940,7 +1994,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.21.0 has, and is ahead of it by the fragments
+- `main` has everything v0.22.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is
