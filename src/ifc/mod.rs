@@ -84,6 +84,7 @@ pub mod camera;
 pub mod category_map;
 pub mod clipping;
 pub mod compare;
+pub mod element_diff;
 pub mod element_provenance;
 pub mod element_record_stages;
 pub mod entities;
