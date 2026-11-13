@@ -14,7 +14,7 @@ three corpus variants. Run via `examples/probe_elem_table_hex.rs`.
 
 ## Finding: record size varies by file variant
 
-The existing `elem_table::parse_records_rough` assumes a 12-byte
+The existing `elem_table::parse_records_rough` used to assume a 12-byte
 record (three `u32` fields). That assumption holds on family files
 but breaks on project files — they use wider records with explicit
 per-record FF-marker prefixes.
@@ -101,8 +101,10 @@ offset +20 | 16 bytes of payload/zero
 offset +36 | u32 id_secondary (matches id_primary on nearly every record; where they differ it is the element's ElementId, RE-41)
 ```
 
-`rvt-elem-table --raw` on record 0 of `2024_Core_Interior.rvt` prints the
-whole 40 bytes and the framing reads off the hex directly:
+`rvt-elem-table 2024_Core_Interior.rvt --raw --limit 1` prints the whole
+40 bytes of record 0; the block below is the original 36-byte window
+from `0x1E`, 24 bytes into that record, where the `FF`×8 sits at `+4` of
+the superseded frame (it is at `+28` under the current one):
 
 ```
 00000000 ffffffff ffffffff 00000000 01000000
@@ -111,7 +113,7 @@ whole 40 bytes and the framing reads off the hex directly:
 
 ## Why the rough parser early-terminates on project files
 
-`parse_records_rough` scans for a single `0xFFFFFFFF` as the record-
+`parse_records_rough` used to scan for a single `0xFFFFFFFF` as the record-
 area trailer sentinel. On project files the marker appears AT THE
 START of every record, not just once at the end. With the 2026-04-21
 sentinel-start fix (scan from `0x30`, not `0`):
@@ -141,11 +143,11 @@ The rough parser needs three things to work on real `.rvt` files:
 
 ### Landed
 
-`elem_table::parse_records(&mut RevitFile) -> Vec<ElemRecord>` (alongside
-the pre-existing `parse_records_rough` for backward compat) implements
-all three steps via a new `detect_layout()` scanner that finds the
-first two FF markers and takes their stride. Verified against the
-3-file corpus:
+`elem_table::parse_records(&mut RevitFile) -> Result<Vec<ElemRecord>>`,
+alongside the pre-existing `parse_records_rough` for backward compat,
+implements all three steps via a new `detect_layout()` scanner that fits
+the stated count at 40 or 28 bytes from `0x06` with rising ids and takes
+the shorter tail. Verified against the 3-file corpus:
 
 | Variant | Before (rough) | After (parse_records) |
 |---|---|---|
@@ -157,14 +159,14 @@ first two FF markers and takes their stride. Verified against the
 `test` matrix job (family half, `RVT_REQUIRE_CORPUS=1`) and by
 `corpus-tier2` (project half) — until 2026-08-30 it was named by no job
 at all and skipped on every CI run, which is how the 2024 off-by-one
-survived. First 3 `id_primary` values on both project files are
-`1, 2, 3` — sequential element ids, exactly what the walker needs to
+survived. First 4 `id_primary` values on both project files are
+`0, 1, 2, 3` — sequential element ids, exactly what the walker needs to
 index into `Global/Latest`.
 
 This unblocks the record-enumeration half of walker → IFC emission.
 The remaining half — binding `ElemRecord.id_primary` to a byte offset
 inside `Global/Latest` — requires decoding the per-record payload
-(16 B on 2023, 28 B on 2024). See "Remaining unknowns" below.
+(16 B on 2023, 12 B on 2024). See "Remaining unknowns" below.
 
 Remaining unknowns that the 3-file corpus can't yet answer:
 
@@ -241,32 +243,33 @@ structurally well-formed 40-byte record that ends flush with the stream.
 So the marker is a **sentinel-valued field inside** record 0, not record
 0's first byte. `detect_layout` took the first `0xFF` run as the origin,
 which shifted every record window forward by four bytes and ran the walk
-four bytes short of the last record. `elem_table::flush_origin` now
-recovers the origin as `len − record_count × stride` whenever that lands a
-whole number of `u32` fields (and less than one stride) ahead of the
-marker, and `ElemTableLayout::marker_offset` records the difference so
-field extraction stays anchored to the marker. Every id value on records
+four bytes short of the last record. `detect_layout` now takes the record
+size (28 or 40) at which the stated records fit from the fixed origin
+`0x06` with rising ids, and `ElemTableLayout::marker_offset` records
+where in the record the owner field sits so field extraction stays
+anchored to it. Every id value on records
 0…26,423 is byte-identical before and after; what changes is
 `ElemRecord::offset` / `raw` (−4) and the recovery of record 26,424.
 
-### The 2023 variant is deliberately left alone
+### The 2023 variant keeps its 19-byte tail
 
-The same end-anchoring on `Revit_IFC5_Einhoven.rvt` would put the origin
-at `73,245 − 2615 × 28 = 25 = 0x19`, i.e. **five** bytes ahead of the
+End-anchoring would put the origin on `Revit_IFC5_Einhoven.rvt` at
+`73,245 − 2615 × 28 = 25 = 0x19`, i.e. **five** bytes ahead of the
 marker at `0x1E`. A record field cannot begin at a non-`u32` boundary
-inside the record, so the `% 4` guard in `flush_origin` rejects it and
-the 28-byte variant keeps the marker as its origin. That file therefore
-still walks 2,614 of 2,615 records and leaves a 23-byte tail — an open
-question (a short trailer record? a differently-framed final entry?), not
-a silently-loosened assertion. `tests/elem_table_corpus.rs` pins 2,614
-exactly so the day it changes, it changes visibly.
+inside the record, so no origin is taken there: the 28-byte variant starts
+at `0x06` like every other table and walks all 2,615 records. That leaves
+a 19-byte tail — an open question (a short trailer record? a
+differently-framed final entry?), not a silently-loosened assertion.
+`tests/elem_table_corpus.rs` pins 2,615 exactly so the day it changes, it
+changes visibly.
 
 ### Record-count semantics, as now understood
 
-`record_count` (u16 LE at offset 2) is the number of fixed-stride records
+`record_count` (u32 LE at offset 2) is the number of fixed-stride records
 in the array, **including** trailer/terminator records with `id_primary
-== 0`; it is not a count of distinct ElementIds — that is
-`element_count` (1,411 here, against 26,425 records). `declared_element_ids`
+== 0`; it is not a count of distinct ElementIds — `element_count` is no
+count either, but the serialization tag of the class `ElemTable` (1,411 on
+every 2024 file, against 26,425 records here). `declared_element_ids`
 therefore includes `0` for this file after dedup.
 
 ## The sentinel field is not always `0xFF` (2026-09-22)
@@ -309,11 +312,11 @@ a curtain panel, mullion or grid, the sketch of a sketch line, and the
 model group of a grouped element. The library reads it as
 `ElemRecord::owner_id`.
 
-`record_count` is still read as a `u16`. No corpus file has more than
-65,535 records, so whether bytes 4–5 hold the high half (that is, whether
-the field is really a `u32`) is unmeasured. A file past that bound would
-fail the flush check and keep the marker-spacing layout rather than parse
-a wrong count.
+`record_count` is read as the `u32` at `0x02` (#152). A Nordic LCA office
+project's table states 72,798 records (#745), past the 65,535 a `u16`
+holds. `detect_layout` fits that stated count at 28 or 40 bytes from
+`0x06`; a table neither size fits falls back to the 12-byte implicit
+layout from `0x30`.
 
 ## Family files use the project records (2026-09-22)
 
@@ -324,9 +327,9 @@ reads a 2026 family ElemTable as 40-byte chunks after a 6-byte header,
 prompted a re-measurement on all 11 `phi-ag/rvt` family releases:
 
 - **Same records as projects.** Families use 28-byte records through
-  2023 and 40-byte records from 2024, with record 0 at `0x1E`. From
-  there, `id_primary` (at `+4` or `+16`) runs 1, 3, 4, 5, … and equals
-  `id_secondary` (at `+8` or `+36`) on every record except the final
+  2023 and 40-byte records from 2024, with record 0 at `0x06`. From
+  there, `id_primary` (at `+0`) runs 0, 1, 3, 4, 5, … and equals
+  `id_secondary` (at `+4` or `+20`) on every record except the final
   zero-id terminator, which projects have too.
 - **Why neither anchor applied.** Families leave the owner field (RE-31)
   at `0` where projects write `0xFF`, so there is no marker run to scan
