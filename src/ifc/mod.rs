@@ -1683,10 +1683,13 @@ fn export_rvt_doc_reporting(
             })
             .collect();
         for wall in &scan.walls {
-            if let Some(id) = wall.element_id() {
-                if existing_ids.contains(&id) {
-                    continue;
-                }
+            // Every match the scan keeps has an ElementId whose native record is
+            // a wall (RE-440): one with none is left out there.
+            let Some(id) = wall.element_id() else {
+                continue;
+            };
+            if existing_ids.contains(&id) {
+                continue;
             }
             let geometry = if policy.include_geometry {
                 arcwall_geometry_from_partition_wall(wall)
@@ -1697,14 +1700,11 @@ fn export_rvt_doc_reporting(
                 crate::partition_arc_walls::storey_index_for_elevation(&building_storeys, elev)
             });
             let property_set = arcwall_property_set(wall);
-            let name = match wall.element_id() {
-                Some(id) => format!("ArcWall-{id}"),
-                None => format!("ArcWall-{}-{}", wall.partition, wall.offset),
-            };
+            let name = format!("ArcWall-{id}");
             entities.push(entities::IfcEntity::BuildingElement {
                 ifc_type: "IFCWALL".to_string(),
                 name,
-                type_guid: wall.element_id().map(|id| id.to_string()),
+                type_guid: Some(id.to_string()),
                 predefined_type: category_map::lookup("ArcWall")
                     .and_then(|m| m.predefined_type)
                     .map(str::to_string),
@@ -5321,14 +5321,7 @@ fn exported_model_diagnostics(model: &IfcModel) -> ExportedModelDiagnostics {
     let mut building_elements = 0usize;
     let mut building_elements_with_geometry = 0usize;
     let mut storey_bound_elements = 0usize;
-    let wholes: std::collections::BTreeSet<usize> = model
-        .entities
-        .iter()
-        .filter_map(|entity| match entity {
-            entities::IfcEntity::Aggregate { whole, .. } => Some(*whole),
-            _ => None,
-        })
-        .collect();
+    let wholes = wholes_carried_by_parts(model);
     let mut building_elements_carried_by_parts = 0usize;
     let mut body_sources = std::collections::BTreeMap::<String, usize>::new();
     let mut bounding_box_bodies = 0usize;
@@ -5625,6 +5618,38 @@ fn element_tag(type_guid: &Option<String>) -> Option<u32> {
     type_guid.as_deref().and_then(|tag| tag.parse().ok())
 }
 
+/// The building elements that are the whole of an `IfcRelAggregates` with at
+/// least one part that has a body: the parts carry the whole's body, as Revit's
+/// export draws a stair (RE-39) and a curtain wall (RE-46). A whole whose parts
+/// have no body is not carried, and still lacks its body (RE-440). The one rule
+/// the export summary's `building_elements_carried_by_parts` and the geometry
+/// gaps both read, so an element is never counted as both.
+fn wholes_carried_by_parts(model: &IfcModel) -> std::collections::BTreeSet<usize> {
+    let has_body = |index: usize| {
+        matches!(
+            model.entities.get(index),
+            Some(entities::IfcEntity::BuildingElement {
+                extrusion,
+                solid_shape,
+                representation_map_index,
+                ..
+            }) if extrusion.is_some() || solid_shape.is_some() || representation_map_index.is_some()
+        )
+    };
+    model
+        .entities
+        .iter()
+        .filter_map(|entity| match entity {
+            entities::IfcEntity::Aggregate { whole, parts }
+                if parts.iter().any(|&part| has_body(part)) =>
+            {
+                Some(*whole)
+            }
+            _ => None,
+        })
+        .collect()
+}
+
 /// The geometry gaps of `model` as `skipped` items, and the decision behind
 /// each element counted in them (#1326). A piece the writer folds into another
 /// element's body is none of the elements counted (#1424).
@@ -5657,6 +5682,10 @@ fn geometry_gap_skipped_items(
     );
 
     let placements = step_writer::placements(model);
+    // A whole whose aggregated parts carry its body, as Revit's export draws a
+    // stair (RE-39) and a curtain wall (RE-46), lacks no body of its own: it is
+    // counted in `building_elements_carried_by_parts` (RE-440).
+    let wholes = wholes_carried_by_parts(model);
     for (index, entity) in model.entities.iter().enumerate() {
         let entities::IfcEntity::BuildingElement {
             ifc_type,
@@ -5701,10 +5730,11 @@ fn geometry_gap_skipped_items(
         if location_feet.is_none() {
             unsupported_curve.add(ifc_type, name, id);
         }
-        if !has_body_shape {
+        let carried_by_parts = !has_body_shape && wholes.contains(&index);
+        if !has_body_shape && !carried_by_parts {
             missing_dimensions.add(ifc_type, name, id);
         }
-        if location_feet.is_some() && !has_body_shape {
+        if location_feet.is_some() && !has_body_shape && !carried_by_parts {
             unsupported_profile.add(ifc_type, name, id);
         }
         if hosted_geometry_type(ifc_type) && host_element_index.is_none() {
