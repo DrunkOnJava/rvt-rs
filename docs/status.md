@@ -1248,6 +1248,23 @@ and earlier write every room, as every element: both phase rules start at
 Revit 2015 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
+**RE-458 (2026-11-13)** reads a roof by extrusion on Revit 2024, 2026 and 2027
+as on 2025 (RE-211): drawn as its sketch's section, where the B-spline of its
+sketch lines was read on 2025 alone. Of the 146 models of an unfiltered
+Measure only Autodesk's `rac_basic` holds one, roof 243274, which was its saved
+mesh on its 2024, 2026 and 2027 saves (34.974 m3 on the last two, against the
+2025 save's 35.424 m3), and is now the 2025 save's body on all three: 3 of
+the 146 exports move, `rac_basic`'s 2024, 2026 and 2027, and the same-project
+check's list of roofs that may differ from the 2025 save
+(`ROOFS_NOT_THE_2025_BODY`) is empty. No Revit export of a 2024, 2026 or 2027
+roof by extrusion exists here, so the witness is the same project's 2025 save,
+which cannot catch an error both saves share. `rac_advanced`'s roof 201262,
+which #1479 took for a second roof by extrusion, is drawn from its sketch's
+slope on 2025 and from its saved mesh on 2026 and 2027, equal in volume to
+0.1%; lifting the hold on 2026 and 2027 roofs (RE-341) changed no body on any
+local file, so it stays
+(`reports/element-framing/RE-458-roofs-by-extrusion-2024-2026-2027.md`).
+
 **RE-457 (2026-11-13)** writes a floor of the Structural Foundations category as
 an `IfcSlab` with `BASESLAB`, and a framing instance whose stored structural
 usage is the horizontal bracing's (8) as an `IfcMember`. `StructuralFoundation`
