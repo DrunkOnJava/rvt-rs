@@ -4930,6 +4930,7 @@ pub(super) fn contain_in_spaces(entities: &mut Vec<entities::IfcEntity>) {
     let mut contents: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     for (index, entity) in entities.iter().enumerate() {
         if work.get() > SPACE_CONTAINMENT_BUDGET {
+            crate::budget::stopped("space_containment");
             return;
         }
         let entities::IfcEntity::BuildingElement {

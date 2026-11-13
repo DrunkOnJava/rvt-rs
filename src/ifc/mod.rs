@@ -299,7 +299,8 @@ pub struct RevitGlobalIds {
     /// the writer generates for entities Revit gives none, and that belong to
     /// no other entity, are derived from it (#400), so two documents never
     /// share one. It changes on every save, so an entity that belongs to
-    /// another is derived from that entity's GlobalId instead (#1854).
+    /// another is derived from that entity's GlobalId instead (#1854), and an
+    /// element's further pieces from the element's Revit GlobalId (#1840).
     #[serde(default)]
     pub document: Option<String>,
     /// By index in `IfcModel::entities`: building elements and spaces.
@@ -447,19 +448,23 @@ pub struct RoomPhaseFallback {
 const UNAPPLIED_EXPORT_VALUES: &str = "so each keeps its category's entity (#792):";
 
 impl ExportDiagnostics {
-    /// Whether the export is missing part of the file: a resource limit kept
-    /// a stream from being read whole ([`UNREAD_STREAMS_REASON`], #1075), or
-    /// a reader stopped at its work budget ([`WORK_BUDGET_REASON`], #1833).
-    /// `rvt-ifc`, `rvt-gltf`, Python's `write_ifc` and the MCP server's
-    /// exports write nothing then unless a partial export is allowed.
+    /// Whether a resource limit kept a stream from being read whole
+    /// ([`UNREAD_STREAMS_REASON`], #1075), so the export is missing what it
+    /// holds. `rvt-ifc`, `rvt-gltf`, Python's `write_ifc` and the MCP
+    /// server's exports write nothing then unless a partial export is allowed.
+    /// A reader that stopped at its work budget ([`Self::work_budget_stops`])
+    /// does not make an export partial: it is written, with a warning
+    /// (Griffin, 2026-11-12).
     pub fn is_partial(&self) -> bool {
         self.skipped
             .iter()
-            .any(|item| item.reason == UNREAD_STREAMS_REASON || item.reason == WORK_BUDGET_REASON)
+            .any(|item| item.reason == UNREAD_STREAMS_REASON)
     }
 
     /// The readers that stopped at a work budget ([`WORK_BUDGET_REASON`],
-    /// #1833), by name, with how often; `None` when none did.
+    /// #1833), by name, with how often they stopped on the open file: an
+    /// export made again adds the stops of a reader it runs again. `None`
+    /// when none did.
     pub fn work_budget_stops(&self) -> Option<&std::collections::BTreeMap<String, usize>> {
         self.skipped
             .iter()
@@ -1625,7 +1630,7 @@ fn export_rvt_doc_reporting(
     // no-op once the storeys carry real, distinct elevations.
     let mut level_storey_bind = crate::level_bind::LevelStoreyBind::new();
     let mut storey_properties = std::collections::BTreeMap::new();
-    if let Some(revit_version) = layout {
+    let levels_read = layout.is_some_and(|revit_version| {
         apply_partition_level_storeys(
             rf,
             revit_version,
@@ -1633,8 +1638,13 @@ fn export_rvt_doc_reporting(
             &mut building_storeys,
             &mut level_storey_bind,
             &mut storey_properties,
-        );
-    }
+        )
+    });
+    // Recovered Levels none of which is a building story: Revit's export of
+    // such a file has no storey, and contains its elements in the building
+    // (revit-ifc `Exporter.BeginDocumentExportCommon`; #1842). No storey is
+    // made up for it from walls or element heights below.
+    let no_building_story = levels_read && building_storeys.is_empty();
 
     // RE-14.3 / RE-15 — shared partition ArcWall path. Production
     // `iter_elements` also merges validated ArcWalls as
@@ -1650,7 +1660,7 @@ fn export_rvt_doc_reporting(
         let level_names = collect_partition_building_storey_names(rf);
         let recovery =
             crate::partition_arc_walls::recover_storeys_from_arc_walls(&scan.walls, &level_names);
-        if building_storeys.is_empty() {
+        if building_storeys.is_empty() && !no_building_story {
             building_storeys = recovery.storeys;
         }
         let existing_ids: std::collections::HashSet<u32> = entities
@@ -1715,7 +1725,12 @@ fn export_rvt_doc_reporting(
     // sees the whole record set, and before the geometry strip so the
     // no-geometry modes (where no record bbox was attached in the
     // first place) find nothing to bind and change nothing.
-    apply_element_record_storeys(&mut entities, &mut building_storeys, &mut storey_properties);
+    apply_element_record_storeys(
+        &mut entities,
+        &mut building_storeys,
+        &mut storey_properties,
+        no_building_story,
+    );
     // B63: a room's furniture, fixtures and equipment are contained in its
     // space, which needs both on their storeys.
     export_content::contain_in_spaces(&mut entities);
@@ -3521,6 +3536,9 @@ fn record_base_elevation_feet(entity: &entities::IfcEntity) -> Option<f64> {
 /// read out of a parameter block whose owner slot carries the Level's
 /// own `ElementId`, so nothing is joined by rank. See
 /// `reports/element-framing/RE-24-level-records.md`.
+///
+/// Returns whether Levels were recovered. The storeys it then leaves are the
+/// file's, none at all where no Level is a building story (#1842).
 fn apply_partition_level_storeys(
     rf: &mut crate::RevitFile,
     revit_version: u32,
@@ -3528,38 +3546,49 @@ fn apply_partition_level_storeys(
     building_storeys: &mut Vec<Storey>,
     level_storey_bind: &mut crate::level_bind::LevelStoreyBind,
     storey_properties: &mut std::collections::BTreeMap<usize, entities::StoreyProperties>,
-) {
+) -> bool {
     let Ok(levels) = crate::partition_level_records::recover_partition_levels(rf, revit_version)
     else {
-        return;
+        return false;
     };
     if levels.is_empty() {
-        return;
+        return false;
     }
     for entity in entities.iter_mut() {
         if let entities::IfcEntity::BuildingElement { storey_index, .. } = entity {
             *storey_index = None;
         }
     }
-    // RE-118: only a building story is a storey of Revit's export; a Level
-    // that is not binds no element, which the later rules place.
+    // RE-118: only a building story is a storey of Revit's export. Revit's
+    // exporter walks the Levels by elevation, ties by ElementId, as
+    // `recover_partition_levels` returns them. It gives a Level that is not a
+    // building story the nearest building story below it. One below every
+    // building story gets none, and its elements are contained in the
+    // building (revit-ifc, CLEANROOM.md source 5:
+    // `Exporter.BeginDocumentExportCommon`, `LevelUtil.FindAllLevels`; #1842).
     let mut level_ids = Vec::new();
-    *building_storeys = levels
-        .into_iter()
-        .filter(|level| level.building_story != Some(false))
-        .enumerate()
-        .map(|(index, level)| {
-            // The Level's own ElementId is what a building element's
-            // record names (#219, RE-27), so the storey it became is
-            // reachable by id rather than by rank or elevation.
-            level_storey_bind.record_level(Some(level.element_id), index);
-            level_ids.push((index, level.element_id));
-            Storey {
-                name: level.name,
-                elevation_feet: level.elevation_feet,
+    let mut storeys = Vec::new();
+    let mut below: Option<usize> = None;
+    for level in levels {
+        if level.building_story == Some(false) {
+            if let Some(index) = below {
+                level_storey_bind.record_level(Some(level.element_id), index);
             }
-        })
-        .collect();
+            continue;
+        }
+        // The Level's own ElementId is what a building element's record
+        // names (#219, RE-27), so the storey it became is reachable by id
+        // rather than by rank or elevation.
+        let index = storeys.len();
+        level_storey_bind.record_level(Some(level.element_id), index);
+        level_ids.push((index, level.element_id));
+        storeys.push(Storey {
+            name: level.name,
+            elevation_feet: level.elevation_feet,
+        });
+        below = Some(index);
+    }
+    *building_storeys = storeys;
     // W7, RE-275: what each Level's own record gives its storey.
     *storey_properties = storey_properties::read(rf, &level_ids);
     // The storeys' read is the export's last native extraction: a Revit 2015
@@ -3569,6 +3598,7 @@ fn apply_partition_level_storeys(
     // and memoised, before it goes; read after, they walk the file again (#1816).
     rf.project_units();
     rf.forget_native_definitions();
+    true
 }
 
 /// Value of [`STOREY_BIND_SOURCE_PROPERTY`] for the #219 join.
@@ -3681,7 +3711,9 @@ fn record_level_element_id(entity: &entities::IfcEntity) -> Option<u32> {
 ///   current corpora means every Level row defaulted to 0.0) and at
 ///   least `crate::element_record_storeys::MIN_DISTINCT_ELEVATIONS`
 ///   distinct elevations were measured. A file whose ArcWall trailers
-///   already gave real elevations keeps them.
+///   already gave real elevations keeps them, and so does a file whose
+///   recovered Levels include no building story (`no_building_story`): it
+///   has no storey, as Revit's export of it has none (#1842).
 /// - Binding is an exact elevation match, and an element whose base
 ///   matches no storey — or matches more than one — keeps
 ///   `storey_index: None` and falls to the writer's default container.
@@ -3694,6 +3726,7 @@ fn apply_element_record_storeys(
     entities: &mut [entities::IfcEntity],
     building_storeys: &mut Vec<Storey>,
     storey_properties: &mut std::collections::BTreeMap<usize, entities::StoreyProperties>,
+    no_building_story: bool,
 ) {
     use crate::element_record_storeys as records;
 
@@ -3706,7 +3739,7 @@ fn apply_element_record_storeys(
         return;
     }
 
-    if records::storeys_lack_elevation_evidence(building_storeys) {
+    if !no_building_story && records::storeys_lack_elevation_evidence(building_storeys) {
         let level_names: Vec<String> = building_storeys
             .iter()
             .map(|storey| storey.name.clone())

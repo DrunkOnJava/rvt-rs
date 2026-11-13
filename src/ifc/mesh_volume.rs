@@ -626,6 +626,9 @@ pub(super) fn partner_ends(placed: &[Placed]) -> Vec<[bool; 2]> {
             grid.entry(cell(*point)).or_default().push((index, end));
         }
     }
+    if grid.values().any(|ends| ends.len() > MAX_ENDS_PER_CELL) {
+        crate::budget::stopped("mullion_end_cells");
+    }
     placed
         .iter()
         .enumerate()
