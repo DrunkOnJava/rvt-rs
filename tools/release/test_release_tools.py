@@ -268,6 +268,16 @@ class CopyWorkflows(unittest.TestCase):
         self.assertIn("calendar date", done.stderr)
         self.assertIn(f"version: {V}", (self.repo / "CITATION.cff").read_text())
 
+    def test_a_version_file_the_bump_cannot_follow_stops_it_before_any_file_moves(self):
+        # viewer/package.json as a minifier writes it: the preflight reads it as JSON, but no line starts with
+        # "version", so the bump meets it after the manifests and locks it had already moved.
+        (self.repo / "viewer/package.json").write_text(json.dumps({"name": "viewer", "version": V, "private": True}) + "\n")
+        git(self.repo, "commit", "-q", "-am", "a minified package.json")
+        done = self.bump()
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("viewer/package.json: the version text was not found", done.stderr)
+        self.assertEqual(git(self.repo, "status", "--porcelain").stdout, "")
+
     def test_a_citation_the_preflight_reads_is_bumped(self):
         text = f'cff-version: 1.2.0\ntitle: "x"\nversion: "{V}"  # the release\ndate-released: 2026-11-05\n'
         (self.repo / "CITATION.cff").write_text(text)
