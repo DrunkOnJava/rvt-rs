@@ -377,8 +377,11 @@ sample holds, or a check that compared nothing. That job also holds #1428's
 Areas gate (rac_advanced's Areas across its 2024 to 2027 saves, and its 2021 save
 against its 2022 save (#1434), `tools/ci/check-areas-across-saves.sh`), each as a
 step that runs whatever the other did. It is a job of its own, so a failure of
-either does not remove Compare's report. What this keeps out is a measured binary
-that writes `bodies_across_saves.txt` itself; a binary that writes IFCs the scorers
+either does not remove Compare's report. After the download `gates` deletes everything in
+`gate-ifc` but each `sample-*/model.ifc`, so a file the measured job planted beside the
+exports (a result file the script writes none of, for an export that is missing) is not
+read. What this keeps out is a measured binary that writes `bodies_across_saves.txt`
+itself; a binary that writes IFCs the scorers
 accept is not caught, and the maintainers read a change to `src/` before it lands.
 
 - **A change to a reader of Revit 2024 to 2027 is measured with

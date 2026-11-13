@@ -1266,6 +1266,12 @@ jobs:
           low="${range[0]:-0}"
           high="${range[1]:-9999}"
           mkdir -p gate-ifc gate-samples
+          # What the shards uploaded is read as exports and as nothing else: the
+          # measured job could write any file into gate-ifc, a result file among
+          # them, which the script would leave in place where it writes none (an
+          # export that is missing). A gate with no export must say so.
+          find gate-ifc -type l -delete
+          find gate-ifc -type f ! -regex 'gate-ifc/sample-[^/]*/model\.ifc' -delete
           # The samples this run holds, from its own inputs: an empty
           # <year>-<project>.rvt each, which the script reads the saves from, and
           # a folder for each result. An export that is missing from gate-ifc
