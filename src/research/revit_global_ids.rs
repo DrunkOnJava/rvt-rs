@@ -17,7 +17,8 @@
 //!
 //! - A `Global/ElemTable` record holds the element's episode number at
 //!   `+8`, on the 40-byte records (Revit 2024 and later) and on the 28-byte
-//!   ones (Revit 2023, RE-108) alike: right after the record's first id on
+//!   ones (Revit 2015 to 2023: RE-108 on 2023, RE-459 on 2018 to 2021) alike:
+//!   right after the record's first id on
 //!   40 bytes, after its two ids on 28. The element's episode GUID is entry
 //!   `N - 1 - episode` of the list.
 //!
@@ -26,7 +27,14 @@
 //! 854 of 854 on `2024_Core_Interior.rvt`, 281 of 281 on the RE1 models, 10
 //! of 10 on `teste_export_2025` and `Projeto1`, 5,945 of 5,945 on Snowdon
 //! Towers, and on Revit 2023 45 of 45 on `Exemplo_data` and 36 of 37 on
-//! `modelo_bim` (RE-108). Revit also exports parts it synthesises (stair components, a
+//! `modelo_bim` (RE-108). On the 28-byte tables of earlier releases it is
+//! Revit's on 434 of 435 elements of Autodesk's 2018 sample and on three
+//! held-out files of Revit 2020 and 2021 (145 of 151, 181 of 181 and 1,696
+//! of 1,698, counts only), and it gives none on two Revit 2018 projects (0 of
+//! 1,314 and 0 of 1,441) and on BIMcollab's Revit 2015 example (0 of 241,
+//! RE-208), whose ids are not episodes (RE-459). The storeys, project, site
+//! and building of a file made before 2023 are not Revit's unless the file
+//! stores them (RE-220). Revit also exports parts it synthesises (stair components, a
 //! ramp's flight), with GlobalIds of its own making. rvt-rs does not write
 //! those parts. The ElementId XORed in is the
 //! element's first one: an element whose id has since changed (RE-41) keeps
@@ -40,9 +48,11 @@ use std::collections::{BTreeMap, BTreeSet};
 pub const EPISODE_COUNT_OFFSET: usize = 0x0e;
 /// Offset of the `u32`-counted table that precedes the episode list.
 pub const EPISODE_TABLE_OFFSET: usize = 0x66;
-/// Bytes per episode entry: a GUID and the byte [`EPISODE_TERMINATOR`].
+/// Bytes per episode entry: a GUID and one more byte, [`EPISODE_TERMINATOR`] on
+/// nearly every entry.
 pub const EPISODE_ENTRY_LEN: usize = 17;
-/// The byte that closes every episode entry.
+/// The byte that closes an episode entry: every one of 1,127 entries of a
+/// Revit 2018 project but four (RE-459), and every one of every other file read.
 pub const EPISODE_TERMINATOR: u8 = 0x28;
 /// Offset of the episode number in a 40-byte `Global/ElemTable` record,
 /// counted from the record's start at `0x06` (#152). It read `0x18` while
@@ -61,8 +71,10 @@ pub struct EpisodeHistory {
 
 impl EpisodeHistory {
     /// Parse a decompressed `Global/History`, or `None` when its counts
-    /// disagree, a count runs past the stream, or an entry is not closed by
-    /// [`EPISODE_TERMINATOR`].
+    /// disagree or a count runs past the stream. An entry's last byte is
+    /// [`EPISODE_TERMINATOR`] on all but 4 of the 1,127 entries of a Revit 2018
+    /// project (RE-459), so it is not required: refusing the history for it left
+    /// every element of that project with a GlobalId derived from the document.
     pub fn parse(history: &[u8]) -> Option<Self> {
         let count = le_bytes::u32_at(history, EPISODE_COUNT_OFFSET)? as usize;
         let skipped = le_bytes::u32_at(history, EPISODE_TABLE_OFFSET)? as usize;
@@ -77,9 +89,6 @@ impl EpisodeHistory {
         let list = history.get(start..end)?;
         let mut guids = Vec::with_capacity(count);
         for entry in list.chunks_exact(EPISODE_ENTRY_LEN) {
-            if entry[16] != EPISODE_TERMINATOR {
-                return None;
-            }
             let guid = entry.first_chunk::<16>()?;
             guids.push(*guid);
         }
@@ -347,8 +356,9 @@ pub fn stored_global_ids(rf: &mut RevitFile, level_ids: &BTreeSet<u32>) -> Store
 /// is the record's first id: on Snowdon Towers the 37 elements whose
 /// ElementId differs from it (RE-41) all match Revit's only that way. Empty when the file's
 /// ElemTable records are neither 40 bytes long (Revit 2024 and later) nor
-/// 28 (Revit 2023 and earlier, measured on 2023) or its history does not
-/// parse.
+/// 28 (Revit 2015 to 2023: equal to Revit's on files of 2018, 2020, 2021 and
+/// 2023, and not on two 2018 projects and a 2015 example, RE-459) or its
+/// history does not parse.
 pub fn revit_global_ids(rf: &mut RevitFile) -> Result<BTreeMap<u32, String>> {
     let records = elem_table::parse_records(rf)?;
     let episode_offset = match records.first().map(|record| record.raw.len()) {
@@ -378,4 +388,72 @@ pub fn revit_global_ids(rf: &mut RevitFile) -> Result<BTreeMap<u32, String>> {
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A history as `EpisodeHistory::parse` reads it: the count at `0x0e`, a table
+    /// of `table` words, the count again and the entries (a GUID and a last byte).
+    fn history(
+        count_at_head: u32,
+        table: u32,
+        count_in_list: u32,
+        entries: &[([u8; 16], u8)],
+    ) -> Vec<u8> {
+        let mut out = vec![0u8; EPISODE_TABLE_OFFSET];
+        out[EPISODE_COUNT_OFFSET..EPISODE_COUNT_OFFSET + 4]
+            .copy_from_slice(&count_at_head.to_le_bytes());
+        out.extend_from_slice(&table.to_le_bytes());
+        for _ in 0..table.min(64) {
+            out.extend_from_slice(&0u32.to_le_bytes());
+        }
+        out.extend_from_slice(&count_in_list.to_le_bytes());
+        for (guid, last) in entries {
+            out.extend_from_slice(guid);
+            out.push(*last);
+        }
+        out
+    }
+
+    #[test]
+    fn a_history_that_ends_early_or_disagrees_is_refused() {
+        let entries = [
+            ([1u8; 16], EPISODE_TERMINATOR),
+            ([2u8; 16], EPISODE_TERMINATOR),
+        ];
+        assert!(EpisodeHistory::parse(&[]).is_none());
+        assert!(EpisodeHistory::parse(&[0u8; EPISODE_TABLE_OFFSET]).is_none());
+        // The count at the head and the count before the list differ.
+        assert!(EpisodeHistory::parse(&history(2, 3, 3, &entries)).is_none());
+        // The list holds fewer entries than it says.
+        assert!(EpisodeHistory::parse(&history(3, 3, 3, &entries)).is_none());
+        // A table length that would run past the stream, and one that overflows.
+        assert!(EpisodeHistory::parse(&history(2, 1_000, 2, &entries)).is_none());
+        assert!(EpisodeHistory::parse(&history(2, u32::MAX, 2, &entries)).is_none());
+    }
+
+    #[test]
+    fn an_entry_closed_by_another_byte_is_read_like_the_rest() {
+        let entries = [
+            ([1u8; 16], EPISODE_TERMINATOR),
+            ([2u8; 16], 0x2a),
+            ([3u8; 16], EPISODE_TERMINATOR),
+        ];
+        let parsed = EpisodeHistory::parse(&history(3, 2, 3, &entries)).expect("parses");
+        assert_eq!(parsed.len(), 3);
+        // Episodes count from the last entry, whatever byte closes each one.
+        assert_eq!(parsed.episode_guid(0), Some([3u8; 16]));
+        assert_eq!(parsed.episode_guid(1), Some([2u8; 16]));
+        assert_eq!(parsed.episode_guid(2), Some([1u8; 16]));
+        assert_eq!(parsed.episode_guid(3), None);
+    }
+
+    #[test]
+    fn an_empty_list_has_no_episode() {
+        let parsed = EpisodeHistory::parse(&history(0, 0, 0, &[])).expect("parses");
+        assert!(parsed.is_empty());
+        assert_eq!(parsed.episode_guid(0), None);
+    }
 }
