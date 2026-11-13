@@ -8,4 +8,6 @@
   export clones or prints a model, so the hazard was a library consumer's: a
   crafted file whose model it cloned or printed. The openings Revit's export
   writes for the regions are written either way, as for a wall whose regions
-  are not all solids; only the body is not cut.
+  are not all solids; only the body is not cut. No wall of the corpus has that
+  many regions: 146 of 146 exports and 121 of 121 diagnostics files of an
+  unfiltered Measure run are byte for byte as before.
