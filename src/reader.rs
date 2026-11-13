@@ -159,9 +159,12 @@ impl std::fmt::Display for UnreadStream {
                 "inflates past the limit on one stream's inflated total"
             }
         };
+        // The name is text from the file and is quoted, as the phase error's is: a
+        // name with a newline or a control character cannot forge a line in a
+        // log (#1884).
         write!(
             f,
-            "stream {} ({} bytes stored) {what} of {} bytes, so what it holds is missing",
+            "stream {:?} ({} bytes stored) {what} of {} bytes, so what it holds is missing",
             self.name, self.stored_bytes, self.limit
         )
     }

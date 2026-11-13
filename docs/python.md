@@ -433,7 +433,7 @@ Every element of a Revit 2023 to 2027 file that would be a bounding box
 the mesh Revit saved for it where all of a mesh decodes, as `rvt-ifc` draws
 them by default; `saved_meshes=False` keeps their bounding boxes, as
 `rvt-ifc --no-saved-meshes` does; reading every box's saved graphics takes
-1.04 to 1.92 times the time and 1.04 to 1.69 times the peak memory of 0.17.0 on Autodesk's samples of Revit 2023 to 2027 (Measure run 43152271314, #1191, #1694); on Revit 2024 to 2027 files a wall that embeds a curtain wall is drawn from its saved mesh the same way where Revit has raised its base (RE-340), and `saved_meshes=False` keeps its record's body. When the saved graphics cannot be read,
+1.04 to 1.92 times the time and 1.04 to 1.69 times the peak memory of 0.17.0 on Autodesk's samples of Revit 2023 to 2027 (Measure run 43152271314, #1191, #1694); on Revit 2024 to 2027 files a wall that embeds a curtain wall is drawn from its saved mesh the same way where Revit has raised its base (RE-340), and `saved_meshes=False` keeps its record's body. When the saved graphics cannot be read, or an element's decode only in part (that element keeps its box),
 the export keeps the bounding boxes and a `RuntimeWarning` says so.
 `export_diagnostics()`, `export_diagnostics_json()` and
 `rvt_to_ifc_diagnostics()` take the same `saved_meshes` and describe the
@@ -525,6 +525,20 @@ __repr__(self) -> str
 ```
 Returns `"RevitFile(version=2024)"` or `"RevitFile(version=?)"`
 if `BasicFileInfo` can't be parsed.
+
+### Threads
+
+The calls that do the Rust work release the GIL while they run (#1884): opening
+a file (`RevitFile(path)`, `rvt_to_ifc`, `rvt_to_ifc_diagnostics`), `write_ifc`,
+`schedule_csv`, `export_diagnostics_json`, `export_diagnostics`,
+`decoded_elements` and `element_counts`. Another Python thread runs meanwhile,
+so a service can export several files at once, or keep answering while a large
+model decodes. The result is built into Python objects, and a warning raised,
+after the GIL is taken again.
+
+A handle serves one call at a time: a second call on the same `RevitFile`,
+from another thread, while one runs raises `RuntimeError` (the object is
+already borrowed). Use a handle for each thread, or a lock.
 
 ### Errors
 

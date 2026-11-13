@@ -7,25 +7,15 @@ a PEP-561 `py.typed` marker, giving IDEs autocomplete and type
 checkers (mypy, pyright) a target they understand.
 """
 
-# Re-export everything from the compiled extension. Maturin builds
-# the extension as `rvt.<ext>` when `module-name = "rvt"` is set,
-# which means the package and the extension collide — so we ship
-# the extension as `rvt._rvt` and re-export here.
-#
-# (Until the maturin build config is switched to produce `_rvt`,
-# this file is a no-op passthrough; the pyo3 module `rvt` is
-# discovered directly. Once the switch happens, replace the body
-# with `from rvt._rvt import *`.)
-
-# Best-effort: try the nested module first (future layout), then
-# fall back to the flat layout that maturin currently produces.
-try:
-    from rvt._rvt import *  # type: ignore  # noqa: F401,F403
-    from rvt._rvt import __version__  # type: ignore  # noqa: F401
-except ImportError:
-    # Flat pyo3 layout — the compiled extension IS this module.
-    # Nothing to re-export; native attributes resolve directly.
-    pass
+# The compiled extension is `rvt._rvt` (pyproject.toml: `module-name =
+# "rvt._rvt"`), a submodule of this package, and everything it defines is
+# re-exported here. There is no flat layout to fall back to: this file runs only
+# when `rvt` is the package, and then `rvt._rvt` is its extension. An import that
+# fails here is a broken install (a missing symbol, a wrong ABI, a library the
+# extension needs), so it is raised as it is, and not left to surface at the
+# first use as "module 'rvt' has no attribute 'RevitFile'" (#1884).
+from rvt._rvt import *  # type: ignore  # noqa: F401,F403
+from rvt._rvt import __version__  # type: ignore  # noqa: F401
 
 from typing import Any, Dict, List, Union
 
@@ -33,7 +23,7 @@ from typing import Any, Dict, List, Union
 # works at runtime too. `typing` generics, since the wheel supports Python 3.8.
 FileMetadata = Dict[str, Any]
 TypedSchemaSummary = Dict[str, int]
-TypedField = Dict[str, Union[str, int, List[int]]]
+TypedField = Dict[str, Union[str, int, float, List[int]]]
 TypedADocument = Dict[str, Union[int, List[TypedField]]]
 TypedDecodedElement = Dict[str, Any]
 TypedElementCounts = Dict[str, Union[int, Dict[str, int]]]
