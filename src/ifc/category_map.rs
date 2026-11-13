@@ -486,8 +486,8 @@ pub const HORIZONTAL_BRACING_USAGE: u64 = 8;
 /// `IfcBeam` (#1841). Autodesk's exporter source (revit-ifc, CLEANROOM.md
 /// source 5, cited and not quoted: `ExporterUtil.GetSpecificCategoryForElement`)
 /// swaps a framing instance's category for the sub-category of its structural
-/// usage before the class is looked up, and the class table's `IfcMember` row
-/// for the bracing categories is what the measured instance follows. Its
+/// usage before the class is looked up, and the measured bracing is the
+/// `IfcMember` that lookup gives it. Its
 /// `PredefinedType` is not measured, so none is stated (the type object says
 /// `NOTDEFINED`, and the occurrence of a Revit 2027 save none by the rule for
 /// members, [`predefined_type_left_out`]).
