@@ -62,6 +62,18 @@ pub const RECORD_EPISODE_OFFSET: usize = 8;
 /// (Revit 2023, RE-108), after the record's two ids. It read `0x0c` while
 /// records were framed from `0x1E`, 4 bytes before each record's start.
 pub const RECORD_EPISODE_OFFSET_28: usize = 8;
+/// Where `Global/History` holds the project's own GUID, the one every save of a
+/// project keeps: three copies in a row from `0x16`, 16 zero bytes, and a fourth
+/// that ends where the count at [`EPISODE_TABLE_OFFSET`] begins (RE-459).
+pub const PROJECT_GUID_OFFSETS: [usize; 4] = [0x16, 0x26, 0x36, 0x56];
+/// The ElementId Revit's exporter XORs into the project's GUID for the IfcProject's
+/// GlobalId, the IfcBuilding's and the IfcSite's: the fake ids of revit-ifc's
+/// `GUIDUtil.ProjectLevelGUIDType` (RE-220, RE-459).
+pub const PROJECT_ELEMENT_ID: i32 = -16;
+/// See [`PROJECT_ELEMENT_ID`]: the building's.
+pub const BUILDING_ELEMENT_ID: i32 = -15;
+/// See [`PROJECT_ELEMENT_ID`]: the site's.
+pub const SITE_ELEMENT_ID: i32 = -14;
 
 /// The episode GUIDs of a file, in stored order (newest first).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,6 +127,24 @@ impl EpisodeHistory {
             .checked_sub(episode as usize)?;
         self.guids.get(index).copied()
     }
+}
+
+/// The project's own GUID in Windows byte order, from the header of a decompressed
+/// `Global/History`: the same 16 bytes at each of [`PROJECT_GUID_OFFSETS`], not
+/// all zero. `None` when the stream ends before the last copy, when a copy
+/// differs, or when they are zero, so a header read wrongly gives no GlobalId
+/// rather than a plausible one (RE-459).
+pub fn project_guid(history: &[u8]) -> Option<[u8; 16]> {
+    let copy =
+        |at: usize| -> Option<[u8; 16]> { history.get(at..at.checked_add(16)?)?.try_into().ok() };
+    let first = copy(PROJECT_GUID_OFFSETS[0])?;
+    if first == [0u8; 16] {
+        return None;
+    }
+    PROJECT_GUID_OFFSETS[1..]
+        .iter()
+        .all(|&at| copy(at) == Some(first))
+        .then_some(first)
 }
 
 /// A GUID stored in Windows byte order (first three fields little-endian)
@@ -207,6 +237,12 @@ fn inflate_history(rf: &mut RevitFile) -> Result<Vec<u8>> {
         Some(error) => Err(error),
         None => compression::inflate_at_auto(data).map(|(_, out)| out),
     }
+}
+
+/// The project's own GUID of a file, in Windows byte order ([`project_guid`]), `None`
+/// when its `Global/History` cannot be read or holds none.
+pub fn project_guid_of(rf: &mut RevitFile) -> Option<[u8; 16]> {
+    project_guid(&inflate_history(rf).ok()?)
 }
 
 /// Built-in parameter under which Revit's exporter stores an element's
@@ -448,6 +484,44 @@ mod tests {
         assert_eq!(parsed.episode_guid(1), Some([2u8; 16]));
         assert_eq!(parsed.episode_guid(2), Some([1u8; 16]));
         assert_eq!(parsed.episode_guid(3), None);
+    }
+
+    /// A history header with `copies` at the project GUID's four offsets.
+    fn header(copies: [[u8; 16]; 4]) -> Vec<u8> {
+        let mut out = vec![0u8; EPISODE_TABLE_OFFSET];
+        for (at, copy) in PROJECT_GUID_OFFSETS.iter().zip(copies) {
+            out[*at..*at + 16].copy_from_slice(&copy);
+        }
+        out
+    }
+
+    #[test]
+    fn a_header_read_wrongly_gives_no_project_guid() {
+        let guid = [7u8; 16];
+        // Too short for the last copy, with or without the other three.
+        assert_eq!(project_guid(&[]), None);
+        assert_eq!(
+            project_guid(&header([guid; 4])[..PROJECT_GUID_OFFSETS[3] + 15]),
+            None
+        );
+        // Any one copy that differs.
+        for odd in [0, 1, 2, 3] {
+            let mut copies = [guid; 4];
+            copies[odd] = [8u8; 16];
+            assert_eq!(project_guid(&header(copies)), None, "copy {odd} differs");
+        }
+        // All four equal and zero: an unset header, not a GUID.
+        assert_eq!(project_guid(&header([[0u8; 16]; 4])), None);
+    }
+
+    #[test]
+    fn four_equal_copies_are_the_project_guid() {
+        let guid: [u8; 16] = std::array::from_fn(|i| i as u8 + 1);
+        assert_eq!(project_guid(&header([guid; 4])), Some(guid));
+        // Whatever follows the header is not read.
+        let mut longer = header([guid; 4]);
+        longer.extend_from_slice(&[0xff; 40]);
+        assert_eq!(project_guid(&longer), Some(guid));
     }
 
     #[test]

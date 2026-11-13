@@ -2749,9 +2749,22 @@ fn revit_model_global_ids(
         rf,
         &levels.iter().map(|level| level.element_id).collect(),
     );
-    out.project = stored.project.clone();
-    out.site = stored.site.clone();
-    out.building = stored.building.clone();
+    // RE-459: where the file stores none, Revit's export gives the project, the
+    // building and the site the project's own GUID with the fake id of each
+    // XORed in.
+    let project_guid = crate::revit_global_ids::project_guid_of(rf);
+    let project_level = |stored: &Option<String>, fake_id: i32| {
+        stored.clone().or_else(|| {
+            project_guid
+                .map(|guid| crate::revit_global_ids::revit_ifc_global_id(guid, fake_id as u32))
+        })
+    };
+    out.project = project_level(&stored.project, crate::revit_global_ids::PROJECT_ELEMENT_ID);
+    out.site = project_level(&stored.site, crate::revit_global_ids::SITE_ELEMENT_ID);
+    out.building = project_level(
+        &stored.building,
+        crate::revit_global_ids::BUILDING_ELEMENT_ID,
+    );
     let Ok(ids) = crate::revit_global_ids::revit_global_ids(rf) else {
         return out;
     };
