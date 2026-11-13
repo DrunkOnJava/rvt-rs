@@ -4,8 +4,8 @@
 **Issues:** #1912 (the 84 doors of the BIM4LCA offices that Revit's export aggregates into a curtain wall and RE-452 left out); follows RE-452 and RE-46
 **Artefacts:** the four BIM4LCA office files that Measure reads with Revit's own IFC4 export of each (VTT's ARCH archive, CC BY-SA 4.0: the concrete office as built and at building permit, the timber office as built and at building permit; `research/bim4lca-measure.tsv`); Autodesk's `Snowdon Towers Sample Architectural.rvt` (Revit 2024, sha256 `33271010919acb2a0d0d040851393a511d86ea7fd9a1f4c054797ae03e5e44a1`) with Revit's own IFC4 export of it (bldrs-ai/test-models, no licence: held locally and never committed, so only counts are given here); Autodesk's `rac_advanced` saves of 2025 to 2027 (public, `research/autodesk-sample-projects.tsv`).
 **Scorers:** `tools/re/curtain_openings_vs_ifc.py` (new) with `probes/examples/probe_1912_curtain_openings.rs`; `tools/re/aggregates_vs_ifc.py`
-**Runs:** Measure [43439124110](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43439124110) and [43441941672](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43441941672) (the probe and its scorer on the offices, the `rac_advanced` saves and Snowdon Towers)
-**Status:** pending the unfiltered Measure of the change (section 4).
+**Runs:** Measure [43439124110](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43439124110) and [43441941672](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43441941672) (the probe and its scorer on the offices, the `rac_advanced` saves and Snowdon Towers); of the change, [43444354218](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43444354218) (unfiltered), [43444395366](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43444395366) (Snowdon Towers, export kept) and [43450027177](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43450027177) (the exports of both sides kept for every `rac_advanced`, `rac_basic`, `rme_advanced` and `rme_basic` save of 2015 to 2027)
+**Status:** Positive. Against Revit's export, 268 of the 268 office doors and 6 of the 6 Snowdon Towers doors that it aggregates into a curtain wall are in the same wall now, and none is put in a wall it does not put them in; the saves of every Autodesk sample project that holds such doors now agree with each other.
 
 ## 1. The question
 
@@ -32,9 +32,23 @@ An opening with no grid found whose list names exactly one wall in all, and that
 
 The reason is what a door in a curtain wall is. It is a panel of the grid, so its list names the curtain wall that holds it and nothing else; a door in an ordinary wall names its host, and may name a curtain wall beside it. On the models measured the two cases do not overlap.
 
-## 4. Rows, registered on #1912 before the Measure of this change was dispatched
+## 4. Rows, registered on #1912 before the Measure of this change was dispatched, and what the runs read
 
-Pending.
+Registered with the change ([comment on #1912](https://github.com/DrunkOnJava/rvt-rs/issues/1912#issuecomment-6855955943)), read on the runs above:
+
+1. **Holds.** On each office the doors only Revit aggregates go from 21 to 0 and the doors in the same whole from 46, 48, 47 and 47 to 67, 69, 68 and 68; no door is in a different whole, none is aggregated only by rvt-rs, and no window changes.
+2. **Holds.** Snowdon Towers Architectural, from the kept export scored against Revit's own: 6 of 6 in the same wall (5 before), 126 neither, 0 only rvt-rs; the three doors that name curtain wall 1506500 and their host stay standalone.
+3. **Holds.** No model with Revit's export changes in `aggregates_vs_ifc`, `opening_hosts_vs_ifc` or any other scorer beyond the four offices' door lines, and the spent Vitoria 2018 model's openings are as on `main`.
+4. **Holds for the scored models, and read for the others.** 50 of the 146 exports of the unfiltered run change, more than the four offices and Snowdon Towers I named: the `rac_basic`, `rme_basic` and `rme_advanced` samples, the `rac_advanced` saves of 2015 to 2023 (where RE-452's element-data arm cannot read the data) and the six `racadv` models. `diagnostics.json` is identical on all 121 that have one and the same-project gates pass. None of those has a Revit export, so the exports of both sides were kept for every save of the four sample projects and the doors and windows that are parts of a curtain wall counted:
+
+| project | saves | parts before (RE-452) | parts now |
+| --- | --- | --- | --- |
+| `rac_advanced` | 2015 to 2027 (13) | 0 on 2015 to 2023, 11 on 2024 to 2027 | 17 on all 13 |
+| `rac_basic` | 2015 to 2027 (13) | 0 on 2015 to 2023, 2 on 2024 to 2027 | 5 on all 13 |
+| `rme_advanced` | 2015, 2019, 2024 to 2027 (6) | 0, 0, then 7 | 17 on all 6 |
+| `rme_basic` | 2015, 2019, 2023 to 2027 (7) | 0, 0, 0, then 7 | 17 on all 7 |
+
+   No part on the base side is lost. The saves of one project now agree where they disagreed by release, which is what a rule right on the elements it reaches would give.
 
 ## 5. Not changed, and what is left out
 
@@ -45,8 +59,8 @@ Pending.
 ## 6. Reproduce
 
 ```bash
-gh workflow run measure.yml --ref research/1912-office-doors \
-  -f ref=f774be32a626fbfab16cdd25a1979f0c2b4291f4 -f base=none -f nordic=true -f samples=true -f sample_years="2024 2024" \
+gh workflow run measure.yml --ref main \
+  -f ref=<sha of this change> -f base=none -f nordic=true -f samples=true -f sample_years="2024 2024" \
   -f models="nordic-office-as-built nordic-office-permit nordic-office-timber-as-built nordic-office-timber-permit sample-2024-snowdon*architectural*" \
   -f scorers=none -f probe=probe_1912_curtain_openings -f probe_scorer=curtain_openings_vs_ifc
 python3 tools/re/curtain_openings_vs_ifc.py <probe.txt> <Revit's export>.ifc --list

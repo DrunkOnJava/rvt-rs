@@ -1259,8 +1259,12 @@ leaves standalone (RE-46) name a second wall, their host. The rule as first
 written in RE-452 took the named wall whatever else the list names and was a
 measured negative on those three and on a Revit 2018 door; with the list
 naming one wall in all it is right for 268 of 268 office doors and 6 of 6
-Snowdon doors, and none is in a wall Revit's export does not put it in. A
-door whose list names a curtain wall and another wall keeps RE-452's rule
+Snowdon doors, and none is in a wall Revit's export does not put it in. The
+doors and windows that are parts of a curtain wall are now the same on every
+save of an Autodesk sample project (`rac_advanced` 17 on all 13 saves of 2015 to
+2027, `rac_basic` 5, `rme_advanced` and `rme_basic` 17), where they differed by
+release before. A door whose list names a curtain wall and another wall keeps
+RE-452's rule
 (`reports/element-framing/RE-453-curtain-openings-one-wall.md`).
 
 **RE-452 (2026-11-13)** gives a door or window of a curtain wall the wall its
