@@ -132,7 +132,10 @@ fn decode_increment_rows(value: &crate::graph_value::Fv) -> Result<Vec<Increment
         ensure!(
             greatest_episode >= previous
                 && greatest_episode >= -1
-                && total_episodes >= u64::try_from(greatest_episode + 1)?,
+                && greatest_episode
+                    .checked_add(1)
+                    .and_then(|episodes| u64::try_from(episodes).ok())
+                    .is_some_and(|episodes| total_episodes >= episodes),
             "invalid increment episode range"
         );
         previous = greatest_episode;
@@ -354,6 +357,11 @@ struct Leaf {
     offset: usize,
     size: usize,
 }
+/// The class visits and fields, together, that one index row's layout may
+/// take (#1833). An `ElemTable` row is 28 or 40 bytes, so a real layout has at
+/// most 40 leaves. The depth limit alone let a chain of classes, each naming
+/// the next twice, take 2^127 visits.
+const LAYOUT_STEP_BUDGET: usize = 10_000;
 fn fixed_layout(registry: &Registry, tag: u16) -> Result<(usize, Vec<Leaf>)> {
     fn visit(
         registry: &Registry,
@@ -362,11 +370,14 @@ fn fixed_layout(registry: &Registry, tag: u16) -> Result<(usize, Vec<Leaf>)> {
         pos: &mut usize,
         leaves: &mut Vec<Leaf>,
         depth: usize,
+        steps: &mut usize,
     ) -> Result<()> {
         ensure!(depth < 128, "index layout recursion budget");
         let c = registry
             .class(tag)
             .ok_or_else(|| anyhow::anyhow!("index layout class absent"))?;
+        *steps += 1 + c.fields.len();
+        ensure!(*steps <= LAYOUT_STEP_BUDGET, "index layout step budget");
         if c.parent_reference.tag >= 12 {
             visit(
                 registry,
@@ -375,6 +386,7 @@ fn fixed_layout(registry: &Registry, tag: u16) -> Result<(usize, Vec<Leaf>)> {
                 pos,
                 leaves,
                 depth + 1,
+                steps,
             )?;
         }
         for f in &c.fields {
@@ -394,7 +406,15 @@ fn fixed_layout(registry: &Registry, tag: u16) -> Result<(usize, Vec<Leaf>)> {
             };
             if f.base == 14 {
                 ensure!(f.references.len() == 1, "index reference field schema");
-                visit(registry, f.references[0].tag, &path, pos, leaves, depth + 1)?;
+                visit(
+                    registry,
+                    f.references[0].tag,
+                    &path,
+                    pos,
+                    leaves,
+                    depth + 1,
+                    steps,
+                )?;
             } else {
                 let size = match f.base {
                     1 | 2 => 1,
@@ -416,7 +436,7 @@ fn fixed_layout(registry: &Registry, tag: u16) -> Result<(usize, Vec<Leaf>)> {
     }
     let mut size = 0;
     let mut leaves = Vec::new();
-    visit(registry, tag, "", &mut size, &mut leaves, 0)?;
+    visit(registry, tag, "", &mut size, &mut leaves, 0, &mut 0)?;
     Ok((size, leaves))
 }
 /// Which leaf of the layout each lookup of a row names, once found: one field
@@ -545,7 +565,8 @@ pub fn parse(index: &[u8], registry: &Registry, episodes: &[String]) -> Result<P
         );
         let reverse = episodes
             .len()
-            .checked_sub(creation_episode as usize + 1)
+            .checked_sub(creation_episode as usize)
+            .and_then(|after| after.checked_sub(1))
             .ok_or_else(|| anyhow::anyhow!("creation episode outside history for {element_id}"))?;
         let unique_id = format!("{}-{original_id_suffix:08x}", episodes[reverse]);
         let raw_fields = row

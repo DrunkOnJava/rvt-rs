@@ -211,7 +211,12 @@ fn outer_loop_area(triangles: &[Triangle], n: [f64; 2]) -> f64 {
     };
     let mut seen: HashSet<u32> = HashSet::new();
     let mut outer = 0.0f64;
-    let starts: Vec<u32> = next.keys().copied().collect();
+    // Each loop is summed from its lowest vertex. `next` yields its keys in
+    // another order in every export, and a loop summed from another vertex
+    // adds the same terms in another order: the area moved in its last bits
+    // between two exports of one file (#1862).
+    let mut starts: Vec<u32> = next.keys().copied().collect();
+    starts.sort_unstable();
     for start in starts {
         if seen.contains(&start) {
             continue;

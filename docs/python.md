@@ -1,4 +1,4 @@
-# rvt-rs — Python bindings (v0.18.0)
+# rvt-rs — Python bindings (v0.20.0)
 
 `rvt` is a Python package built on top of the Rust `rvt` crate. It
 exposes the file reader, metadata, schema introspection, the
@@ -25,12 +25,12 @@ For all installation paths, including release smoke tests, see
 pip install rvt
 ```
 
-**PyPI `rvt` 0.18.0 is the current release.** Wheels target Python ≥ 3.8
+**PyPI `rvt` 0.20.0 is the current release.** Wheels target Python ≥ 3.8
 via pyo3's `abi3-py38` feature, so one wheel per OS/architecture covers
 every supported Python minor. The matching Rust crate is on crates.io
 (`cargo add rvt`); platforms and the other install channels are in
 [`install.md`](install.md). This page describes `main`, which can be ahead
-of the latest release: what has landed since 0.18.0 is in the fragments
+of the latest release: what has landed since 0.20.0 is in the fragments
 under [`changelog.d/`](../changelog.d/README.md).
 
 ### From source
@@ -96,7 +96,7 @@ with open("my-family.ifc", "w") as out:
 ## API reference
 
 Every signature below is verified against
-[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.18.0).
+[`rvt-py/src/lib.rs`](../rvt-py/src/lib.rs) on `main` (0.20.0).
 
 ### Module-level
 
@@ -133,7 +133,9 @@ opens the file, runs the document-level IFC4 exporter
 Raises `IOError` on open failure, `ValueError` if the file parses as CFB
 but the exporter can't build a model, the requested export mode cannot be
 satisfied, or a resource limit kept part of the file from being read and
-`allow_partial` is false.
+`allow_partial` is false. A reader that stopped at its work budget leaves out
+what it would have read, and the IFC is still returned, with a
+`RuntimeWarning` naming it.
 
 `rvt_to_ifc_diagnostics(path, saved_meshes=True, phase=None, element_provenance=False, export_decisions=False)` returns the JSON
 diagnostics sidecar for the same export path. The schema matches `rvt-ifc --diagnostics`
@@ -530,6 +532,7 @@ if `BasicFileInfo` can't be parsed.
 |---|---|
 | `IOError` | File missing, non-CFB input, file-size over `max_file_bytes`, unknown stream name, read error |
 | `ValueError` | File parsed as CFB but could not be decoded further: the IFC export cannot build a model, `mode` is not one of the four or is not met, a resource limit left part of the file unread and `allow_partial` is false, a strict variant fails, the schema or `Global/ElemTable` does not parse, `read_adocument` finds no `ADocument` class, or `schedule_csv` gets another `kind` |
+| `RuntimeWarning` (a warning, not an exception) | A reader stopped at its work budget: the export is still written, without what that reader would have read, and the warning names the reader (since 0.20.0, #1855) |
 
 `IOError` is the Python alias of `OSError` — both are caught by
 `except OSError` or `except IOError`.

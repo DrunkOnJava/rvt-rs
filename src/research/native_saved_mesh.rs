@@ -270,6 +270,7 @@ struct EdgeLimits {
     depth: u32,
     points: usize,
 }
+#[cfg(test)]
 const EDGE_LIMITS: EdgeLimits = EdgeLimits {
     depth: EDGE_REFINEMENT_DEPTH,
     points: EDGE_POINT_BUDGET,
@@ -329,6 +330,17 @@ fn distance_to_chord(p: [f64; 3], a: [f64; 3], b: [f64; 3]) -> f64 {
     point_distance(p, std::array::from_fn(|k| a[k] + t * ab[k]))
 }
 
+/// [`refine_crossing_edge_within`] at an edge's own limits, as the tests take it.
+#[cfg(test)]
+fn refine_crossing_edge(
+    evaluate: &dyn Fn([f64; 2]) -> Result<[f64; 3]>,
+    plane_origin: [f64; 3],
+    plane_normal: [f64; 3],
+    samples: &[[f64; 2]],
+) -> Result<Vec<[f64; 2]>> {
+    refine_crossing_edge_within(evaluate, plane_origin, plane_normal, samples, &EDGE_LIMITS)
+}
+
 /// The samples of an edge between a plane and a curved face that runs across both
 /// of the curved face's parameters (a slanted plane through a cylinder: an
 /// ellipse), with the points of the edge itself that keep the chord between
@@ -347,19 +359,10 @@ fn distance_to_chord(p: [f64; 3], a: [f64; 3], b: [f64; 3]) -> f64 {
 /// outside the samples' own values on both sides. A point that does not reach the
 /// plane, or lies farther from the middle of the chord than the chord is long (the
 /// other branch of the intersection), or a span that is still above the bound after
-/// the last halving, or more points than [`EDGE_POINT_BUDGET`], is an error: the
+/// the last halving, or more points than `limits` allow, is an error: the
 /// edge keeps being refused as it was. The plane's polygon and the cylinder's loop
 /// both take this list (less the points beyond the cylinder's envelope, which both
 /// leave out), so their vertices along the edge are the same.
-fn refine_crossing_edge(
-    evaluate: &dyn Fn([f64; 2]) -> Result<[f64; 3]>,
-    plane_origin: [f64; 3],
-    plane_normal: [f64; 3],
-    samples: &[[f64; 2]],
-) -> Result<Vec<[f64; 2]>> {
-    refine_crossing_edge_within(evaluate, plane_origin, plane_normal, samples, &EDGE_LIMITS)
-}
-
 fn refine_crossing_edge_within(
     evaluate: &dyn Fn([f64; 2]) -> Result<[f64; 3]>,
     plane_origin: [f64; 3],
@@ -452,12 +455,18 @@ fn bisect_crossing_edge(
 
 /// The cylinder side of [`refined_plane_edge`] (#1706): the loop of a cylinder
 /// takes along an edge it shares with a plane, where that edge runs across both
-/// its parameters, the points [`refine_crossing_edge`] gives, as the plane's
-/// polygon does. Any other edge is as the graph stores it.
+/// its parameters, the points [`refine_crossing_edge_within`] gives, as the plane's
+/// polygon does. Any other edge is as the graph stores it. `limit` is the most
+/// points the edge may add to its ring, the first not counted: an edge that would
+/// give more is refused as [`CYLINDER_BUDGET_EXCEEDED`] before it is built (#1815).
+/// The ring's budget is below an edge's own [`EDGE_POINT_BUDGET`], so an edge that
+/// runs out of points always refuses the face now, where before #1815 one past
+/// [`EDGE_POINT_BUDGET`] kept its stored samples; the plane that shares it refuses
+/// at [`PLANAR_FACE_POINT_BUDGET`] first, so the element was not drawn either way.
 ///
-/// An error is not an edge to refuse here: the loop keeps the samples the graph
-/// stored, as it did before, and the plane's side, which does refuse, decides
-/// whether the element is drawn.
+/// Any other error is not an edge to refuse here: the loop keeps the samples the
+/// graph stored, as it did before, and the plane's side, which does refuse,
+/// decides whether the element is drawn.
 fn refined_curved_edge(
     g: &ObjectGraph,
     index: &PointerIndex<'_>,
@@ -465,6 +474,7 @@ fn refined_curved_edge(
     edge_index: usize,
     side: usize,
     original: &[[f64; 2]],
+    limit: usize,
 ) -> Result<Vec<[f64; 2]>> {
     if isoparametric_axis(original).is_some() {
         return Ok(original.to_vec());
@@ -509,11 +519,20 @@ fn refined_curved_edge(
         }))
     };
     let envelope = cylinder_envelope(&cylinder.fields["m_Envelope"]["m_corners"])?;
-    Ok(within_envelope(
-        refine_crossing_edge(&evaluate, origin, normal, original)?,
-        original,
-        envelope,
-    ))
+    let limits = EdgeLimits {
+        depth: EDGE_REFINEMENT_DEPTH,
+        points: limit.saturating_add(1).min(EDGE_POINT_BUDGET),
+    };
+    let refined = refine_crossing_edge_within(&evaluate, origin, normal, original, &limits)
+        .map_err(|error| {
+            // The ring's points left ran out: its budget is below the edge's own.
+            if limits.points < EDGE_POINT_BUDGET && error.to_string() == EDGE_POINTS_EXCEEDED {
+                anyhow!(CYLINDER_BUDGET_EXCEEDED)
+            } else {
+                error
+            }
+        })?;
+    Ok(within_envelope(refined, original, envelope))
 }
 
 /// The parameter box of a cylinder surface, from its `m_Envelope` corners.
@@ -766,13 +785,22 @@ enum EdgeSide {
     /// takes the points the plane's side takes ([`refined_curved_edge`]).
     Cylinder,
 }
+/// The trim ring of the cylinder face `face`, its loop `li`, held to
+/// [`CYLINDER_RING_POINT_BUDGET`] points (#1815).
 fn ring(
     g: &ObjectGraph,
     index: &PointerIndex<'_>,
     face: usize,
     li: usize,
 ) -> Result<Vec<[f64; 2]>> {
-    ring_impl(g, index, face, li, EdgeSide::Cylinder, usize::MAX)
+    ring_impl(
+        g,
+        index,
+        face,
+        li,
+        EdgeSide::Cylinder,
+        CYLINDER_RING_POINT_BUDGET,
+    )
 }
 /// The edges' points a ring holds once an edge of `edge` points joins its `held`:
 /// the edge's first is the last of the one before it, so it is not counted. `None`
@@ -781,11 +809,12 @@ fn ring_points_with(held: usize, edge: usize, limit: usize) -> Option<usize> {
     held.checked_add(edge.saturating_sub(1))
         .filter(|total| *total <= limit)
 }
-/// The ring of the loop `li` of `face`, in the surface's parameters. A planar face's
-/// ring is bounded as it is built: the edges' points it holds may not pass `limit`,
-/// the points the face's rings may still hold, counted as each edge is read and
-/// before any of its refinement is made, so that the refusal does not wait for the
-/// ring to be built (#1770); `usize::MAX` for a face that has no such budget.
+/// The ring of the loop `li` of `face`, in the surface's parameters. A ring is
+/// bounded as it is built: the edges' points it holds may not pass `limit`, the
+/// points the face's rings may still hold, counted as each edge is read and before
+/// any of its refinement is made, so that the refusal does not wait for the ring to
+/// be built (#1770, #1815). A planar face's rings are refused past it as
+/// [`PLANAR_BUDGET_EXCEEDED`], a cylinder's trim ring as [`CYLINDER_BUDGET_EXCEEDED`].
 fn ring_impl(
     g: &ObjectGraph,
     index: &PointerIndex<'_>,
@@ -811,6 +840,10 @@ fn ring_impl(
     let mut seen = BTreeSet::new();
     let mut segments = Vec::new();
     let mut held = 0usize;
+    let exceeded = match refine {
+        EdgeSide::Plane => PLANAR_BUDGET_EXCEEDED,
+        EdgeSide::Cylinder => CYLINDER_BUDGET_EXCEEDED,
+    };
     while cur != li {
         ensure!(seen.insert(cur), "edge chain cycle before loop sentinel");
         let e = &g.objects[cur];
@@ -835,7 +868,7 @@ fn ring_impl(
             .as_array()
             .context("edge interior points")?;
         // The graph's own points of the edge, ends included, before any is copied.
-        ring_points_with(held, interior.len() + 2, limit).context(PLANAR_BUDGET_EXCEEDED)?;
+        ring_points_with(held, interior.len() + 2, limit).context(exceeded)?;
         let mut pts = vec![point::<2>(&endpoints[0]["uv"][side])?];
         for p in interior {
             pts.push(point::<2>(&p["uv"][side])?)
@@ -844,10 +877,18 @@ fn ring_impl(
         pts = match refine {
             EdgeSide::Plane => refined_plane_edge(g, index, face, cur, side, pts, limit - held)?,
             EdgeSide::Cylinder => {
-                refined_curved_edge(g, index, face, cur, side, &pts).unwrap_or(pts)
+                match refined_curved_edge(g, index, face, cur, side, &pts, limit - held) {
+                    Ok(refined) => refined,
+                    // The ring's points running out is the one error a cylinder's loop
+                    // refuses; any other keeps the samples the graph stored.
+                    Err(error) if error.to_string() == CYLINDER_BUDGET_EXCEEDED => {
+                        return Err(error);
+                    }
+                    Err(_) => pts,
+                }
             }
         };
-        held = ring_points_with(held, pts.len(), limit).context(PLANAR_BUDGET_EXCEEDED)?;
+        held = ring_points_with(held, pts.len(), limit).context(exceeded)?;
         segments.push(pts);
         cur = index
             .resolve(cur, &e.fields["m_next"][side])?
@@ -1301,6 +1342,18 @@ const PLANAR_WORK_BUDGET: u64 = 250_000_000;
 /// The text a planar face is refused with when its rings hold more points than
 /// [`PLANAR_FACE_POINT_BUDGET`], before any of them is triangulated.
 const PLANAR_BUDGET_EXCEEDED: &str = "planar face budget exceeded";
+
+/// The most points the trim ring of one cylinder face may hold (#1815). Its edges
+/// shared with a plane that crosses it take the points that plane's polygon takes,
+/// and each plane's are held to [`PLANAR_FACE_POINT_BUDGET`]; a cylinder cut by its
+/// two end planes, the column or pipe, needs at most twice that. Without it each
+/// such edge could hold [`EDGE_POINT_BUDGET`] points and a loop of many the sum,
+/// all of which the face's tessellation then walks.
+const CYLINDER_RING_POINT_BUDGET: usize = 2 * PLANAR_FACE_POINT_BUDGET;
+
+/// The text a cylinder face is refused with when its trim ring would hold more
+/// points than [`CYLINDER_RING_POINT_BUDGET`], counted before each edge is refined.
+const CYLINDER_BUDGET_EXCEEDED: &str = "cylinder trim budget exceeded";
 
 /// The points a planar face holds once a ring of `ring` points joins the `points` it
 /// has, or `None` where that is over [`PLANAR_FACE_POINT_BUDGET`] or does not fit a
@@ -1901,6 +1954,10 @@ fn is_false(value: &bool) -> bool {
 }
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct GraphicsMeshes {
+    /// A successfully decoded face used a null ruled-profile pointer's point.
+    /// Body admission still requires the owning element's measured category.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub has_collapsed_ruled_profile: bool,
     pub primitives: Vec<Primitive>,
     pub diagnostics: Vec<String>,
     pub unbounded_faces: usize,
@@ -2037,6 +2094,9 @@ fn graphics_impl<'a>(
         ..Default::default()
     };
     let mut pointer_indices = BTreeMap::new();
+    // Each owner graph's empty-trim evidence, from one walk of it: the walk
+    // for each unbounded face cost faces × objects (#1833).
+    let mut empty_trims = BTreeMap::new();
     for selected in selection.selected {
         let g = match selected.source_owner_id {
             None => g,
@@ -2064,6 +2124,17 @@ fn graphics_impl<'a>(
                     let fi = index.resolve(oi, ptr)?.context("null geometry face")?;
                     match face_indexed(g, index, fi)? {
                         Some(m) => {
+                            let face = &g.objects[fi];
+                            if let Some(si) = index.resolve(fi, &face.fields["m_pSurf"])? {
+                                let surface = &g.objects[si];
+                                if surface.class_name == "RuledSurf"
+                                    && ["m_pProfileCurve1", "m_pProfileCurve2"].iter().any(|name| {
+                                        surface.fields[*name]["pointer_token"].as_u64() == Some(0)
+                                    })
+                                {
+                                    out.has_collapsed_ruled_profile = true;
+                                }
+                            }
                             let normals = if m.normals.len() == m.vertices.len() {
                                 m.normals.clone()
                             } else {
@@ -2083,7 +2154,12 @@ fn graphics_impl<'a>(
                             })
                         }
                         None => {
-                            if crate::native_empty_faces::is_observed_empty_trim_face(g, fi) {
+                            let empty_trim = empty_trims
+                                .entry(selected.source_owner_id)
+                                .or_insert_with(|| {
+                                    crate::native_empty_faces::EmptyTrimIndex::new(g)
+                                });
+                            if empty_trim.is_observed_empty_trim_face(g, fi) {
                                 out.empty_trim_faces += 1;
                             } else {
                                 out.unbounded_faces += 1;

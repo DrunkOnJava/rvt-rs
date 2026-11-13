@@ -349,9 +349,15 @@ impl Fv {
         }
     }
 
-    /// A number as `json!` makes it of a float: `Null` where it is not finite.
+    /// A number as `json!` makes it of a float: `Null` where it is not finite,
+    /// or larger than 1e30, past any model's coordinates or quantities, so
+    /// that a sum or difference of two numbers stays finite (#1845).
     pub fn from_f64(n: f64) -> Fv {
-        if n.is_finite() { Fv::F64(n) } else { Fv::Null }
+        if crate::le_bytes::physical(n) {
+            Fv::F64(n)
+        } else {
+            Fv::Null
+        }
     }
 
     /// A number as `json!` makes it of a signed integer.
