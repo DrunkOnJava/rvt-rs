@@ -31,16 +31,23 @@ TypedSchemaSummary = dict[str, int]
 Keys: ``classes``, ``fields``, ``cpp_types`` — all ``int``.
 """
 
-TypedField = dict[str, Union[str, int, list[int]]]
+TypedField = dict[str, Union[str, int, float, list[int]]]
 """Return shape of an entry in `RevitFile.read_adocument()["fields"]`.
 
 All entries have ``name`` (str) and ``kind`` (str). Additional keys
-depend on the kind:
+depend on the kind, of which there are eleven:
 
 - ``kind == "pointer"``: ``slot_a`` (int), ``slot_b`` (int)
 - ``kind == "element_id"``: ``tag`` (int), ``id`` (int)
 - ``kind == "ref_container"``: ``count`` (int), ``col_a`` (list[int]), ``col_b`` (list[int])
+- ``kind == "integer"``: ``value`` (int), ``signed`` (bool), ``size`` (int)
+- ``kind == "float"``: ``value`` (float), ``size`` (int)
+- ``kind == "bool"``: ``value`` (bool)
+- ``kind == "guid"``: ``bytes`` (list[int])
+- ``kind == "string"``: ``value`` (str)
+- ``kind == "vector"``: ``len`` (int)
 - ``kind == "bytes"``: ``len`` (int)
+- ``kind == "unknown"``: no further key
 """
 
 TypedADocument = dict[str, Union[int, list[TypedField]]]
@@ -353,7 +360,8 @@ class RevitFile:
         2027 files a wall that embeds a curtain wall is drawn from its saved
         mesh too where Revit raised its base, and ``saved_meshes=False`` keeps
         its record's body. A ``RuntimeWarning`` says when the saved graphics
-        could not be read.
+        could not be read, or an element's decoded only in part, and so keeps
+        its box.
 
         ``phase`` is a project phase's name (matched exactly first) or its
         ElementId, as ``rvt-ifc --phase`` takes it, and the export shows that

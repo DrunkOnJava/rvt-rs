@@ -142,11 +142,17 @@ fn warn_room_fallback(
 /// The default IFC export of `rf` (`ifc::run_export_with_limits`, the build `rvt-ifc`
 /// runs), drawing every boxed element from its saved mesh (Revit 2023 to
 /// 2027) when `saved_meshes`, at `phase` (`None`: the project's last). Saved
-/// graphics only improve bodies: when they cannot be read, the export keeps the
-/// bodies it has and a `RuntimeWarning` says so. A phase the file lacks raises
+/// graphics only improve bodies: when they cannot be read, or an element's
+/// decode only in part, the export keeps the bodies it has and a
+/// `RuntimeWarning` says so. A phase the file lacks raises
 /// `ValueError`, listing the file's phases. `element_provenance` also lists
 /// where each decoded element was read from in the diagnostics (#1325), and
 /// `export_decisions` each fail-closed decision per element (#1326).
+///
+/// The GIL is released for the decode (#1884): other Python threads run
+/// meanwhile. The handle stays borrowed for the call, so a second call on it
+/// from another thread raises `RuntimeError`, as pyo3 does for any method of a
+/// `#[pyclass]` that takes `&mut self`.
 #[allow(clippy::too_many_arguments)]
 fn export_run(
     py: Python<'_>,
@@ -168,9 +174,17 @@ fn export_run(
         .with_phase(phase)
         .with_element_provenance(element_provenance)
         .with_export_decisions(export_decisions);
-    let run = ifc::run_export_with_limits(rf, &options, walker_limits).map_err(to_py_val)?;
-    for note in run.notes.iter().filter(|note| note.skipped().is_some()) {
-        warn_runtime(py, &note.to_string())?;
+    let run = py
+        .detach(|| ifc::run_export_with_limits(rf, &options, walker_limits))
+        .map_err(to_py_val)?;
+    for note in &run.notes {
+        // A step that did not run, and a saved mesh that decoded only in part,
+        // whose element keeps its box (#1884).
+        let partial_mesh =
+            matches!(note, ifc::ExportNote::SavedMeshes { partial, .. } if *partial > 0);
+        if note.skipped().is_some() || partial_mesh {
+            warn_runtime(py, &note.to_string())?;
+        }
     }
     if let Some(fallback) = &run.diagnostics.room_phase_fallback {
         warn_runtime(
@@ -253,11 +267,13 @@ fn write_ifc_with_quality_mode_and_limits(
     // The streaming writer refuses a model holding a non-finite number, which
     // the text-returning one would write into a file no IFC reader opens.
     let mut out = Vec::new();
-    ifc::step_writer::write_step_to(
-        &run.model,
-        &ifc::step_writer::StepOptions::default(),
-        &mut out,
-    )
+    py.detach(|| {
+        ifc::step_writer::write_step_to(
+            &run.model,
+            &ifc::step_writer::StepOptions::default(),
+            &mut out,
+        )
+    })
     .map_err(to_py_val)?;
     String::from_utf8(out).map_err(to_py_val)
 }
@@ -468,6 +484,7 @@ impl PyRevitFile {
     #[pyo3(signature = (path, max_file_bytes=None, max_stream_bytes=None, max_inflate_bytes=None, max_walker_scan_bytes=None, max_walker_candidates=None, max_walker_trial_offsets=None, max_walker_record_decode_bytes=None, max_walker_container_records=None))]
     #[allow(clippy::too_many_arguments)]
     fn new(
+        py: Python<'_>,
         path: &str,
         max_file_bytes: Option<u64>,
         max_stream_bytes: Option<u64>,
@@ -497,7 +514,9 @@ impl PyRevitFile {
             max_container_records: max_walker_container_records
                 .unwrap_or(walker_default.max_container_records),
         };
-        let inner = RustRevitFile::open_with_limits(path, limits).map_err(to_py_io)?;
+        let inner = py
+            .detach(|| RustRevitFile::open_with_limits(path, limits))
+            .map_err(to_py_io)?;
         Ok(Self {
             inner,
             walker_limits,
@@ -823,20 +842,25 @@ impl PyRevitFile {
     /// Where the last holds no room, the rooms are those of the latest phase
     /// that holds any, and a `RuntimeWarning` says so.
     fn decoded_elements<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
-        let elements: Vec<_> = walker::iter_elements_with_limits(
-            &mut self.inner,
-            walker::PRODUCTION_ELEMENT_MIN_SCORE,
-            self.walker_limits,
-        )
-        .map_err(to_py_val)?
-        .collect();
+        let walker_limits = self.walker_limits;
+        let elements: Vec<_> = py
+            .detach(|| {
+                walker::iter_elements_with_limits(
+                    &mut self.inner,
+                    walker::PRODUCTION_ELEMENT_MIN_SCORE,
+                    walker_limits,
+                )
+                .map(|found| found.collect::<Vec<_>>())
+            })
+            .map_err(to_py_val)?;
         if elements.iter().any(|element| element.class == "Room") {
             warn_room_fallback(py, &mut self.inner, "the result includes", CHOOSE_BY_EXPORT)?;
         }
 
         // Revit 2015 to 2027 only; a file whose parameters cannot be read
         // keeps its elements, with a warning.
-        let saved = elements::parameters::saved_parameters_lossy(&mut self.inner, &elements);
+        let saved =
+            py.detach(|| elements::parameters::saved_parameters_lossy(&mut self.inner, &elements));
         for warning in &saved.diagnostics.warnings {
             let message = std::ffi::CString::new(warning.message.as_str()).unwrap_or_default();
             PyErr::warn(
@@ -862,18 +886,22 @@ impl PyRevitFile {
     /// `export_diagnostics()["decoded"]["production_walker_elements"]`. The
     /// phase is `decoded_elements`'s.
     fn element_counts<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let mut by_class = std::collections::BTreeMap::<String, usize>::new();
-        let mut total = 0usize;
-        for element in walker::iter_elements_with_limits(
-            &mut self.inner,
-            walker::PRODUCTION_ELEMENT_MIN_SCORE,
-            self.walker_limits,
-        )
-        .map_err(to_py_val)?
-        {
-            total += 1;
-            *by_class.entry(element.class).or_insert(0) += 1;
-        }
+        let walker_limits = self.walker_limits;
+        let (total, by_class) = py
+            .detach(|| -> Result<_, rvt::Error> {
+                let mut by_class = std::collections::BTreeMap::<String, usize>::new();
+                let mut total = 0usize;
+                for element in walker::iter_elements_with_limits(
+                    &mut self.inner,
+                    walker::PRODUCTION_ELEMENT_MIN_SCORE,
+                    walker_limits,
+                )? {
+                    total += 1;
+                    *by_class.entry(element.class).or_insert(0) += 1;
+                }
+                Ok((total, by_class))
+            })
+            .map_err(to_py_val)?;
 
         if by_class.contains_key("Room") {
             warn_room_fallback(py, &mut self.inner, "the counts include", CHOOSE_BY_EXPORT)?;
@@ -964,12 +992,15 @@ impl PyRevitFile {
         if let Some(phase) = self.phase_for_export(phase)? {
             self.inner.set_export_phase(&phase).map_err(to_py_val)?;
         }
-        let model = ifc::RvtDocExporter
-            .export_with_diagnostics_mode_and_limits(
-                &mut self.inner,
-                ifc::ExportQualityMode::Scaffold,
-                self.walker_limits,
-            )
+        let walker_limits = self.walker_limits;
+        let model = py
+            .detach(|| {
+                ifc::RvtDocExporter.export_with_diagnostics_mode_and_limits(
+                    &mut self.inner,
+                    ifc::ExportQualityMode::Scaffold,
+                    walker_limits,
+                )
+            })
             .map_err(to_py_val)?
             .model;
         warn_room_fallback(
@@ -987,8 +1018,8 @@ impl PyRevitFile {
             excel_bom: excel,
         };
         match kind {
-            "elements" => Ok(elements_csv(&model, &options)),
-            "rooms" => Ok(rooms_csv(&model, &options)),
+            "elements" => Ok(py.detach(|| elements_csv(&model, &options))),
+            "rooms" => Ok(py.detach(|| rooms_csv(&model, &options))),
             other => Err(PyValueError::new_err(format!(
                 "unknown schedule kind {other:?}; expected \"elements\" or \"rooms\""
             ))),
@@ -1034,7 +1065,8 @@ impl PyRevitFile {
             element_provenance,
             export_decisions,
         )?;
-        serde_json::to_string(&run.diagnostics).map_err(to_py_val)
+        py.detach(|| serde_json::to_string(&run.diagnostics))
+            .map_err(to_py_val)
     }
 
     /// Produce the default IFC export diagnostics as a Python dict.
@@ -1144,7 +1176,7 @@ fn rvt_to_ifc(
     saved_meshes: bool,
     phase: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<String> {
-    let mut rf = RustRevitFile::open(path).map_err(to_py_io)?;
+    let mut rf = py.detach(|| RustRevitFile::open(path)).map_err(to_py_io)?;
     let mode = parse_export_quality_mode(mode)?;
     let phase = phase_argument(phase)?;
     write_ifc_with_quality_mode(py, &mut rf, mode, allow_partial, saved_meshes, phase)
@@ -1179,7 +1211,7 @@ fn rvt_to_ifc_diagnostics(
     element_provenance: bool,
     export_decisions: bool,
 ) -> PyResult<String> {
-    let mut rf = RustRevitFile::open(path).map_err(to_py_io)?;
+    let mut rf = py.detach(|| RustRevitFile::open(path)).map_err(to_py_io)?;
     let phase = phase_argument(phase)?;
     let run = export_run(
         py,
@@ -1191,7 +1223,8 @@ fn rvt_to_ifc_diagnostics(
         element_provenance,
         export_decisions,
     )?;
-    serde_json::to_string(&run.diagnostics).map_err(to_py_val)
+    py.detach(|| serde_json::to_string(&run.diagnostics))
+        .map_err(to_py_val)
 }
 
 /// Compiled Python submodule named `_rvt`. Sits under the
