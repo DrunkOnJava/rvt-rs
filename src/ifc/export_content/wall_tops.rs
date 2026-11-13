@@ -472,6 +472,7 @@ fn embedded(pieces: &[Ring], neighbours: &[&Wall]) -> bool {
             return true;
         }
         if left.len() > 4 * MAX_RISERS {
+            crate::budget::stopped("wall_top_embedded_pieces");
             return false;
         }
     }
@@ -546,6 +547,7 @@ fn steps(wall: &Wall, levels: &[(f64, Vec<&Cutter>)], neighbours: &[&Wall]) -> O
                     .flat_map(|piece| subtract_convex(piece, &clip))
                     .collect();
                 if pieces.len() > 4 * MAX_RISERS {
+                    crate::budget::stopped("wall_top_pieces");
                     return None;
                 }
             }
@@ -573,6 +575,7 @@ fn steps(wall: &Wall, levels: &[(f64, Vec<&Cutter>)], neighbours: &[&Wall]) -> O
                 }
                 held.extend(parts);
                 if held.len() > 4 * MAX_RISERS {
+                    crate::budget::stopped("wall_top_pieces");
                     return None;
                 }
             }
@@ -1105,6 +1108,7 @@ fn covered_pieces(cutter: &Cutter, wall: &Wall) -> Option<Vec<Ring>> {
         // `MAX_RISERS` check below, and `join_pieces` is quadratic in them
         // (#1845). Joining merges parts, so this bound is the looser one.
         if inside.len() > MAX_COVERED_PARTS {
+            crate::budget::stopped("wall_top_covered_parts");
             return None;
         }
     }

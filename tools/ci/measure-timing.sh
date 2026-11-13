@@ -13,7 +13,8 @@
 # medians are compared. OUT_FILE gets a Markdown table: each file, the base
 # and head medians in milliseconds and head / base, then the same for each
 # export's peak resident memory in MiB (GNU time's maximum RSS; "-" where the
-# runner has no GNU time). A file either build fails to export is reported as
+# runner has no GNU time), then every round's time and peak (KiB) for each
+# side, space-separated. A file either build fails to export is reported as
 # failed, not timed. FILEs that do not exist are skipped, so an unexpanded
 # glob costs nothing.
 set -uo pipefail
@@ -55,8 +56,8 @@ mib() { # KiB -> MiB, or the value as it is
 }
 
 {
-  echo "| file | base (ms) | head (ms) | head / base | base peak (MiB) | head peak (MiB) | peak head / base |"
-  echo "|---|---:|---:|---:|---:|---:|---:|"
+  echo "| file | base (ms) | head (ms) | head / base | base peak (MiB) | head peak (MiB) | peak head / base | base rounds (ms) | head rounds (ms) | base peak rounds (KiB) | head peak rounds (KiB) |"
+  echo "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"
 } > "$OUT"
 for file in "$@"; do
   [ -f "$file" ] || continue
@@ -77,7 +78,9 @@ for file in "$@"; do
   echo "peak KiB base ${base_kib[*]}; head ${head_kib[*]}"
   b=$(median "${base_ms[@]}"); h=$(median "${head_ms[@]}")
   bp=$(median "${base_kib[@]}"); hp=$(median "${head_kib[@]}")
-  echo "| $name | $b | $h | $(ratio "$b" "$h") | $(mib "$bp") | $(mib "$hp") | $(ratio "$bp" "$hp") |" >> "$OUT"
+  # Each round after the medians: a file whose peak takes one of two values
+  # from round to round, on the same code, has a median that is either (#1857).
+  echo "| $name | $b | $h | $(ratio "$b" "$h") | $(mib "$bp") | $(mib "$hp") | $(ratio "$bp" "$hp") | ${base_ms[*]} | ${head_ms[*]} | ${base_kib[*]} | ${head_kib[*]} |" >> "$OUT"
   echo "::endgroup::"
 done
 rm -rf "$tmp"

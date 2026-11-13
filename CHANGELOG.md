@@ -10,7 +10,7 @@ fragments a release moves into this file.
 
 ## [0.20.0] — 2026-11-12
 
-0.20.0 is mostly hardening against crafted files. Such a file can no longer crash the browser viewer through a record's length or an overflow in a value it stores, make a read take exponential time or time that grows with the square of its element count, exhaust the stack through the chains it sets, or write its own text into an export's STEP (#1815, #1831, #1833, #1845). No real file of the measured corpus changes from any of those fixes. A reader that stops at one of the new work budgets says so: a `work_budget_reached` skipped item and a warning, and no export file unless a partial export is allowed.
+0.20.0 is mostly hardening against crafted files. Such a file can no longer crash the browser viewer through a record's length or an overflow in a value it stores, make a read take exponential time or time that grows with the square of its element count, exhaust the stack through the chains it sets, or write its own text into an export's STEP (#1815, #1831, #1833, #1845). No real file of the measured corpus changes from any of those fixes. A reader that stops at one of the new work budgets says so, in a `work_budget_reached` skipped item and a warning, and the export is still written.
 
 It also changes what users of real files get:
 - A wall, floor, ceiling or roof type edited since an earlier save keeps its layers on Revit 2024 and later, so 180 elements of the BIM4LCA files gain their type and its layers (#1802, RE-446).
@@ -18,6 +18,10 @@ It also changes what users of real files get:
 - 105 duct fittings of Autodesk's Revit 2023 MEP sample are drawn from their saved surfaces instead of boxes (RE-443).
 - The first run of each of `rac_advanced` 2024's five stairs reads its own settings (#1845).
 - Each GLB material says whether its colour and alpha are the file's (#1812).
+- Revit 2026 and 2027 walls, and the curtain parts on them, get the `IsExternal` the same project's 2025 save gets (#1860).
+- An element on a Level that is not a building story goes to the building story below it, as Revit's export places it (#1842).
+- Two rooms of the BIM4LCA timber office drop a vertex Revit's outline does not have (#1825).
+- Two exports of one file write the same wall `GrossSideArea` and `GrossVolume` to the last bit (#1862).
 
 The saved-graphics pass of a default export keeps no inflated copy of the partitions it walks, and each of its reads visits only the partitions holding a record it selects (#1694).
 
@@ -25,6 +29,8 @@ Not measured, and said in each entry:
 - The layer rule of #1802 rests on one project, the BIM4LCA files, the only model that holds a type it reaches. Revit 2008 to 2023 keep dropping such a type (#1805).
 - None of RE-443's 105 duct fittings passes the 0.001 ft shape threshold against the native reference at its default tessellation, and that reference is not shared.
 - No measured material is read the way #1820 changes, so no export shows it.
+- On the 2027 save of `rac_advanced`, 79 of its 3,192 curtain members still get no `IsExternal` (#1865).
+- No held-out model has a Level that is not a building story, so #1842 is measured on the BIM4LCA housing files and Autodesk's Snowdon Towers structural sample alone.
 - The crafted-file bounds are exercised by crafted inputs, not by any real file, none of which comes near them.
 
 MEASURED-BLOCK-TODO
@@ -43,12 +49,22 @@ MEASURED-BLOCK-TODO
   listed metres, square inches and cubic inches. A new `project_display_units`
   lists every spec's unit. The "Unmapped Revit unit identifiers were preserved in
   diagnostics" warning is gone. `fractionalInches` is read as inches.
-- **A file that reaches a work budget is reported, and its export not written
-  unless a partial export is allowed (#1833).** The export reports a
-  `work_budget_reached` skipped item and a `Work budget reached:` warning per
-  reader. `rvt-ifc`, `rvt-gltf`, Python's `write_ifc` and the MCP server's
-  exports then write no file unless a partial export is allowed; the CLIs exit
-  with status 3. No real file of the measured corpus reaches one.
+- **A file that reaches a work budget is reported, and its export is still
+  written (#1833, #1845).** The export reports a `work_budget_reached` skipped
+  item and a `Work budget reached:` warning per reader. `rvt-ifc` and
+  `rvt-gltf` print a warning naming each reader, Python's `write_ifc` gives a
+  `RuntimeWarning`, and the MCP server's exports list the stops in their notes.
+  A stream a resource limit kept from being read whole still stops `rvt-ifc`
+  and `rvt-gltf` with status 3 unless `--allow-partial`, as in 0.19.0. No real
+  file of the measured corpus reaches a work budget.
+- **Revit 2026 and 2027 walls, and the curtain members, plates and curtain
+  walls on them, carry `IsExternal` (#1860).** A property set that held no
+  `IsExternal` on those releases now holds the value the same project's 2025
+  save gives: 4,643 elements of Autodesk's `rac_advanced` sample gain it.
+- **An element on a Level that is not a building story is contained in the
+  building story below that Level (#1842).** The storey an element belongs to,
+  and so `IfcRelContainedInSpatialStructure`, changes for such an element. A
+  file with no such Level is unchanged.
 - An IFC surface style whose material's transparency was not read leaves the
   attribute unset (`$`) instead of writing 0 (#1820).
 
@@ -183,6 +199,53 @@ MEASURED-BLOCK-TODO
   is now read as inches (it was feet) and the diagnostics label a kilogram
   `KILO GRAM` and a gram `GRAM` (they said `GRAM` and `MILLI GRAM`).
 
+- **A room outline drops a point where two straight edges turn by less than
+  a hundred-millionth (#1825).** The test for a straight continuation took
+  only turns under 1e-12 of the edges' lengths, so two rooms of the BIM4LCA
+  timber office, `TSTO5` and `TSTO9`, kept a vertex Revit's own outline does
+  not have, on both of its saves. They now lie within 0.01 ft of Revit's.
+
+- **An element on a Level that is not a building story is placed on the
+  building story below that Level, as Revit's export places it (#1842).** A
+  Level whose Building Story setting is off is not a storey of Revit's export
+  (RE-118), and rvt-rs bound nothing to it, so an element whose record names
+  such a Level was left on no storey unless its height placed it. Revit's
+  exporter gives that Level the nearest building story below it, and one below
+  every building story none. Autodesk's Snowdon Towers structural sample has
+  7 such Levels among its 19, and four of the BIM4LCA housing files have 2 to
+  10.
+
+- **`rvt-write` decodes a manifest's unpadded base64 to the bytes it holds
+  (#1845).** A `new_decompressed_base64` value whose last group had no `=`
+  padding decoded to three bytes whatever the group's length, and an `=`
+  inside the text decoded as zeros, so the stream was patched with bytes the
+  manifest did not give. Both now decode as standard base64 does, and text
+  ending in a lone character is refused.
+- **`rvt-dump` writes every stream, each to its own file (#1845).** A
+  stream's name is the file's own. One holding a character Windows refuses
+  in a file name (`<>"|?*` or a control character) failed its write and
+  stopped the dump: the character is now `_`, as `/` is. A name Windows
+  reserves for a device (`CON`, `NUL`, `COM1` and the like) takes a `_` in
+  front. Two names that became one file name, the later stream replacing
+  the earlier, now take `~2`, `~3` and so on.
+
+- **Revit 2026 and 2027 walls, and the curtain members, plates and curtain
+  walls on them, get the `IsExternal` the same project's 2025 save gets
+  (#1860).** A wall's type Function was read only on the releases measured
+  through 2025, so on a 2026 or 2027 save every wall, and every curtain part
+  that takes its `IsExternal` from its wall, was written without it: 4,643
+  elements of Autodesk's `rac_advanced` sample. It is now read on 2026 and
+  2027 too, measured against each sample's 2025 save element by element.
+  On the 2027 save of `rac_advanced`, 79 of its 3,192 curtain members still
+  get none (#1865).
+
+- **Two exports of one file write the same wall `GrossSideArea` and
+  `GrossVolume` to the last bit (#1862).**
+  Each boundary loop of a wall's side was summed from a vertex taken in hash
+  order, so the area moved by up to 2e-14 of its value from one export to the
+  next. An element-by-element comparison of a file's export with itself
+  listed 4 to 117 walls as changed on seven of eleven models.
+
 ### Security
 
 - **A crafted file can no longer crash the browser viewer through a native
@@ -227,11 +290,11 @@ MEASURED-BLOCK-TODO
   the stream's rooms alone. Empty faces come from one walk of each graph,
   and a pipe end's keys through a set. Past a budget the reader leaves the
   element as an unread stream leaves it, and the export says so: a
-  `work_budget_reached` skipped item counting each reader's stops, a
-  `Work budget reached:` warning per reader, and from `rvt-ifc`,
-  `rvt-gltf`, Python's `write_ifc` and the MCP server's exports, no file
-  unless a partial export is allowed (exit status 3 from the CLIs). The
-  memo of element-data header positions is held under 64 MiB, and the memo
+  `work_budget_reached` skipped item counting each reader's stops and a
+  `Work budget reached:` warning per reader. The export is still written:
+  `rvt-ifc` and `rvt-gltf` print a warning naming each reader, Python's
+  `write_ifc` gives a `RuntimeWarning`, and the MCP server's exports list
+  it in their notes. The memo of element-data header positions is held under 64 MiB, and the memo
   of inflated partitions under 16 GiB. No real file of the measured corpus
   changes.
 
@@ -279,6 +342,14 @@ MEASURED-BLOCK-TODO
   it had 14 treads, not 12, and was drawn from its saved mesh, not its
   sketch. On the held-out Revit 2024 model, the run this moves now has
   Revit's tread count, length and net volume.
+
+- **An export whose own geometry stops at a work budget says so (#1845).**
+  The bounds #1845 put on wall tops, roof and slab envelopes, mullion grid
+  cells and space containment left the shape out or the element uncontained
+  without a word. Each now notes its stop, as the readers' budgets do
+  (#1833): the export's diagnostics list it under `work_budget_reached`, and
+  the export is written with a warning naming it. No file of the measured
+  corpus reaches one.
 
 ### Research
 

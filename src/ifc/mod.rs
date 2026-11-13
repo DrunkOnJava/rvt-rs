@@ -445,19 +445,23 @@ pub struct RoomPhaseFallback {
 const UNAPPLIED_EXPORT_VALUES: &str = "so each keeps its category's entity (#792):";
 
 impl ExportDiagnostics {
-    /// Whether the export is missing part of the file: a resource limit kept
-    /// a stream from being read whole ([`UNREAD_STREAMS_REASON`], #1075), or
-    /// a reader stopped at its work budget ([`WORK_BUDGET_REASON`], #1833).
-    /// `rvt-ifc`, `rvt-gltf`, Python's `write_ifc` and the MCP server's
-    /// exports write nothing then unless a partial export is allowed.
+    /// Whether a resource limit kept a stream from being read whole
+    /// ([`UNREAD_STREAMS_REASON`], #1075), so the export is missing what it
+    /// holds. `rvt-ifc`, `rvt-gltf`, Python's `write_ifc` and the MCP
+    /// server's exports write nothing then unless a partial export is allowed.
+    /// A reader that stopped at its work budget ([`Self::work_budget_stops`])
+    /// does not make an export partial: it is written, with a warning
+    /// (Griffin, 2026-11-12).
     pub fn is_partial(&self) -> bool {
         self.skipped
             .iter()
-            .any(|item| item.reason == UNREAD_STREAMS_REASON || item.reason == WORK_BUDGET_REASON)
+            .any(|item| item.reason == UNREAD_STREAMS_REASON)
     }
 
     /// The readers that stopped at a work budget ([`WORK_BUDGET_REASON`],
-    /// #1833), by name, with how often; `None` when none did.
+    /// #1833), by name, with how often they stopped on the open file: an
+    /// export made again adds the stops of a reader it runs again. `None`
+    /// when none did.
     pub fn work_budget_stops(&self) -> Option<&std::collections::BTreeMap<String, usize>> {
         self.skipped
             .iter()
@@ -3539,25 +3543,36 @@ fn apply_partition_level_storeys(
             *storey_index = None;
         }
     }
-    // RE-118: only a building story is a storey of Revit's export; a Level
-    // that is not binds no element, which the later rules place.
+    // RE-118: only a building story is a storey of Revit's export. Revit's
+    // exporter walks the Levels by elevation, ties by ElementId, as
+    // `recover_partition_levels` returns them. It gives a Level that is not a
+    // building story the nearest building story below it. One below every
+    // building story gets none, and its elements are contained in the
+    // building (revit-ifc, CLEANROOM.md source 5:
+    // `Exporter.BeginDocumentExportCommon`, `LevelUtil.FindAllLevels`; #1842).
     let mut level_ids = Vec::new();
-    *building_storeys = levels
-        .into_iter()
-        .filter(|level| level.building_story != Some(false))
-        .enumerate()
-        .map(|(index, level)| {
-            // The Level's own ElementId is what a building element's
-            // record names (#219, RE-27), so the storey it became is
-            // reachable by id rather than by rank or elevation.
-            level_storey_bind.record_level(Some(level.element_id), index);
-            level_ids.push((index, level.element_id));
-            Storey {
-                name: level.name,
-                elevation_feet: level.elevation_feet,
+    let mut storeys = Vec::new();
+    let mut below: Option<usize> = None;
+    for level in levels {
+        if level.building_story == Some(false) {
+            if let Some(index) = below {
+                level_storey_bind.record_level(Some(level.element_id), index);
             }
-        })
-        .collect();
+            continue;
+        }
+        // The Level's own ElementId is what a building element's record
+        // names (#219, RE-27), so the storey it became is reachable by id
+        // rather than by rank or elevation.
+        let index = storeys.len();
+        level_storey_bind.record_level(Some(level.element_id), index);
+        level_ids.push((index, level.element_id));
+        storeys.push(Storey {
+            name: level.name,
+            elevation_feet: level.elevation_feet,
+        });
+        below = Some(index);
+    }
+    *building_storeys = storeys;
     // W7, RE-275: what each Level's own record gives its storey.
     *storey_properties = storey_properties::read(rf, &level_ids);
     // The storeys' read is the export's last native extraction: a Revit 2015

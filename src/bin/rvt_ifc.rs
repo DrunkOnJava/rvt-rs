@@ -52,10 +52,10 @@ impl From<CliExportQualityMode> for ExportQualityMode {
         rvt-ifc model.rvt --phase \"Working Drawings\"   export that phase exactly, not the last\n\n\
         SOURCE_DATE_EPOCH (Unix seconds) sets the time the IFC header and owner\n\
         history record, so two exports of the same file are the same bytes.\n\n\
-        Exit status 3: a resource limit kept part of the file from being read, or\n\
-        a reader stopped at its work budget, so no IFC was written (the\n\
-        diagnostics sidecar, if asked for, lists them). Re-run with --large-model\n\
-        for a stream, or --allow-partial to write it anyway."
+        Exit status 3: a resource limit kept part of the file from being read, so\n\
+        no IFC was written (the diagnostics sidecar, if asked for, lists the\n\
+        streams). Re-run with --large-model, or --allow-partial to write it anyway.\n\
+        A reader that stopped at its work budget is a warning: the IFC is written."
 )]
 struct Args {
     /// Path to a `.rvt` / `.rfa` / `.rte` / `.rft` file.
@@ -223,8 +223,7 @@ struct Args {
     #[arg(long)]
     large_model: bool,
     /// Write the IFC even when a resource limit kept part of the file from
-    /// being read, or a reader stopped at its work budget. The diagnostics
-    /// list the streams that were not read and the readers that stopped.
+    /// being read. The diagnostics list the streams that were not read.
     #[arg(long)]
     allow_partial: bool,
 }
@@ -290,6 +289,18 @@ fn run(args: Args) -> anyhow::Result<()> {
         p
     });
 
+    // A reader that stopped at its work budget leaves out what it would have
+    // read, and the export is still written, with this warning (Griffin,
+    // 2026-11-12, "Write it, with a warning").
+    if let Some(stops) = diagnostics.work_budget_stops() {
+        eprintln!(
+            "rvt-ifc: warning: {} reader(s) stopped at a work budget, so the export leaves out what they would have read:",
+            stops.len()
+        );
+        for line in rvt::cli::work_budget_report(stops) {
+            eprintln!("{line}");
+        }
+    }
     if diagnostics.is_partial() {
         if !run.unread.is_empty() {
             eprintln!(
@@ -297,15 +308,6 @@ fn run(args: Args) -> anyhow::Result<()> {
                 run.unread.len()
             );
             for line in rvt::cli::unread_stream_report(&run.unread) {
-                eprintln!("{line}");
-            }
-        }
-        if let Some(stops) = diagnostics.work_budget_stops() {
-            eprintln!(
-                "rvt-ifc: {} reader(s) stopped at a work budget, so the export is missing what they would have read:",
-                stops.len()
-            );
-            for line in rvt::cli::work_budget_report(stops) {
                 eprintln!("{line}");
             }
         }

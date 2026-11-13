@@ -13,11 +13,18 @@ rather than from its rounded ratio column:
   highest, with both ratios;
 - every file more than 3% slower, or more than 2% higher in peak, than the
   base, the bars most rows use (a row with another bar reads the table);
+- every file whose peak rounds on either side differ by more than 2%, with its
+  rounds: such a file's peak takes one of two values from round to round on
+  the same code (Snowdon Towers HVAC and Plumbing, #1857), so its median is
+  either. It counts as higher only where every head round is more than 2%
+  above every base round;
 - any row whose figures do not read as numbers.
 
-A sample is a row named `YYYY-<lowercase stem>`; every other row is a model. It judges no
-registered row; where a file's base rounds fall into two values (#1694), the
-median here is not how such a row is judged.
+The rounds are the table's last four columns (base and head time, base and
+head peak in KiB, each space-separated); a table without them is read as before.
+
+A sample is a row named `YYYY-<lowercase stem>`; every other row is a model. It
+judges no registered row.
 
 Usage: python3 -I timing_verdict.py <timing.md>
 """
@@ -54,8 +61,40 @@ def rows(path):
             "base_mib": base_mib,
             "time": head_ms / base_ms,
             "peak": head_mib / base_mib,
+            # Each round's peak, base then head, where the table has them.
+            "peak_rounds": (rounds(cells[9]), rounds(cells[10])) if len(cells) >= 11 else None,
         })
     return good, bad
+
+
+def rounds(cell):
+    """A cell's space-separated rounds as numbers, or None where any is not one
+    (a failed export, a runner without GNU time)."""
+    try:
+        values = [float(v) for v in cell.split()]
+    except ValueError:
+        return None
+    return values if values and min(values) > 0 else None
+
+
+def two_values(row):
+    """Whether either side's peak rounds differ by more than HIGHER."""
+    sides = row["peak_rounds"]
+    return bool(sides) and all(sides) and any(max(side) > HIGHER * min(side) for side in sides)
+
+
+def mib(side):
+    """Rounds in KiB, as whole MiB."""
+    return " ".join(str(round(v / 1024)) for v in side)
+
+
+def higher(row):
+    """Whether the head's peak is past HIGHER: by the medians, or, where the
+    rounds take two values, by every head round against every base round."""
+    if two_values(row):
+        base, head = row["peak_rounds"]
+        return min(head) > HIGHER * max(base)
+    return row["peak"] > HIGHER
 
 
 def spread(values):
@@ -91,11 +130,16 @@ def main(argv):
         print(f"- The three files with the {label}: " + "; ".join(
             f"{r['name']} time {r['time']:.3f}, peak {r['peak']:.3f}" for r in top))
     slower = [r for r in table if r["time"] > SLOWER]
-    higher = [r for r in table if r["peak"] > HIGHER]
+    high = [r for r in table if higher(r)]
+    split = [r for r in table if two_values(r)]
     print(f"- More than {round((SLOWER - 1) * 100)}% slower: " + (
         "; ".join(f"**{r['name']}** {r['time']:.3f}" for r in slower) if slower else "none"))
     print(f"- Peak more than {round((HIGHER - 1) * 100)}% higher: " + (
-        "; ".join(f"**{r['name']}** {r['peak']:.3f}" for r in higher) if higher else "none"))
+        "; ".join(f"**{r['name']}** {r['peak']:.3f}" for r in high) if high else "none"))
+    print(f"- Peak in two values from round to round, rounds more than {round((HIGHER - 1) * 100)}% apart, "
+          "so the median is either (higher above only where every head round is): " + (
+        "; ".join(f"**{r['name']}** {r['peak']:.3f} (base {mib(r['peak_rounds'][0])}, head {mib(r['peak_rounds'][1])} MiB)"
+                  for r in split) if split else "none"))
     if bad:
         print(f"- Rows whose figures do not read as numbers: {', '.join(bad)}")
     print()
