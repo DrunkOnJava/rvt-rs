@@ -139,7 +139,8 @@ counts reported in #421 on 2026-11-02 and 2026-11-03 on 0.12.0):
 
 Read: ElementId, category, `Family:Type:ElementId` name, type name, storey,
 material names and layer thicknesses, family instances' materials (RE-82), the IFC type
-object of each element's type (RE-110), Revit's GlobalId (other entities get one
+object of each element's type (RE-110), Revit's GlobalId (the project's, building's and site's from the project's own GUID,
+and a storey's from its Level's episode, RE-459; other entities get one
 derived from the document and their own identity, stable between exports,
 #400), stair riser and tread dimensions, each flight's
 number of treads and nosing length (RE-92, RE-236), a stair's `TreadLengthAtInnerSide` and, with `--revit-set-placement`, its `Pset_StairFlightCommon` summed or shared from its flights (RE-287), on Revit 2024 its run type as its `Reference`
