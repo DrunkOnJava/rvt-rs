@@ -3697,6 +3697,59 @@ fn apply_record_level_reference_storeys(
     }
 }
 
+/// How many exported elements, parts of an aggregate left out, reached
+/// their storey by each join, for the storey warning.
+#[derive(Debug, Default)]
+struct StoreyBindCounts {
+    /// Through the Level ElementId the record names (#219, RE-27).
+    level_reference: usize,
+    /// Through a measured base or top elevation (#213, #212).
+    elevation: usize,
+    /// In a storey with no `StoreyBindSource`.
+    other: usize,
+    /// In no storey: contained in the building.
+    unbound: usize,
+}
+
+impl StoreyBindCounts {
+    /// The warning's clause on the elements. It names every join that
+    /// placed at least one element and says "all" where one placed them
+    /// all, so a count of zero is never described.
+    fn sentence(&self) -> String {
+        const LEVEL_REFERENCE: &str = "reached their storey through the Level ElementId their \
+             own element record names (#219, RE-27; the base constraint where it names two, RE-59)";
+        let total = self.level_reference + self.elevation + self.other + self.unbound;
+        if self.level_reference == total {
+            return format!("all {total} element(s) {LEVEL_REFERENCE}.");
+        }
+        let mut clauses = vec![format!(
+            "{} of the {total} element(s) {LEVEL_REFERENCE}",
+            self.level_reference
+        )];
+        if self.elevation > 0 {
+            clauses.push(format!(
+                "{} through a measured elevation match (#213)",
+                self.elevation
+            ));
+        }
+        if self.other > 0 {
+            clauses.push(format!("{} through another rule", self.other));
+        }
+        if self.unbound > 0 {
+            clauses.push(format!(
+                "{} reached no storey and are contained in the building",
+                self.unbound
+            ));
+        }
+        let last = clauses.pop().unwrap_or_default();
+        match clauses.len() {
+            0 => format!("{last}."),
+            1 => format!("{} and {last}.", clauses[0]),
+            _ => format!("{}, and {last}.", clauses.join(", ")),
+        }
+    }
+}
+
 /// How an emitted element reached its storey, when it reached one.
 fn storey_bind_source(entity: &entities::IfcEntity) -> Option<&str> {
     let entities::IfcEntity::BuildingElement { property_set, .. } = entity else {
@@ -4822,21 +4875,47 @@ pub(crate) fn build_export_diagnostics_and_decisions(
             .filter(|storey| storey.name.starts_with("Elevation "))
             .count();
         let named = model.building_storeys.len() - elevation_fallback;
-        // #219 / RE-27: how many elements reached their storey through
-        // the Level ElementId their record names, rather than through
-        // an inferred elevation match.
-        let level_reference_bound = model
+        // #219 / RE-27: how the elements reached their storey: through
+        // the Level ElementId their record names, through a measured
+        // elevation match, otherwise, or not at all. A part of an
+        // aggregate is placed through its whole and is not counted.
+        let parts: std::collections::HashSet<usize> = model
             .entities
             .iter()
-            .filter(|entity| storey_bind_source(entity) == Some(STOREY_BIND_RECORD_LEVEL_REFERENCE))
-            .count();
-        if named > 0 && level_reference_bound == 0 {
+            .filter_map(|entity| match entity {
+                entities::IfcEntity::Aggregate { parts, .. } => Some(parts.iter().copied()),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        let mut storey_binds = StoreyBindCounts::default();
+        for (index, entity) in model.entities.iter().enumerate() {
+            let entities::IfcEntity::BuildingElement { storey_index, .. } = entity else {
+                continue;
+            };
+            if parts.contains(&index) {
+                continue;
+            }
+            match (storey_index, storey_bind_source(entity)) {
+                (None, _) => storey_binds.unbound += 1,
+                (Some(_), Some(STOREY_BIND_RECORD_LEVEL_REFERENCE)) => {
+                    storey_binds.level_reference += 1
+                }
+                (
+                    Some(_),
+                    Some(STOREY_BIND_RECORD_ELEVATION | STOREY_BIND_RECORD_TOP_ELEVATION),
+                ) => storey_binds.elevation += 1,
+                (Some(_), _) => storey_binds.other += 1,
+            }
+        }
+        if named > 0 && storey_binds.level_reference == 0 {
             warnings.push(format!(
                 "{named} building storey name(s) came from partition Level-like strings (RE-15/#86 via PR #117); ElementId↔Level binding is still pending."
             ));
         } else if named > 0 {
             warnings.push(format!(
-                "{named} building storey name(s) came from partition Level records; {level_reference_bound} building element(s) reached their storey through the Level ElementId their own element record names (#219, RE-27; the base constraint where it names two, RE-59), the rest through a measured elevation match."
+                "{named} building storey name(s) came from partition Level records; {}",
+                storey_binds.sentence()
             ));
         }
         if elevation_fallback > 0 {

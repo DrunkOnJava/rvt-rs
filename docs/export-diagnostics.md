@@ -915,6 +915,13 @@ contained in the `IfcBuilding`, which says "in this building, storey unknown";
 it is never written into the first storey, because that would state a
 containment nothing measured.
 
+Where the storeys' names come from Level records, a line of `warnings` counts
+the exported elements by how they reached their storey: through the Level
+ElementId, through a measured elevation match (either face), in a storey with
+no `StoreyBindSource`, and in no storey. A part of an aggregate, such as a
+curtain wall's panel, is placed through its whole and is not counted. Where the Level ElementId placed every element, the line says "all
+N element(s)"; a join that placed none is not named.
+
 `LevelBindResolved` still stays `false` for every element whose storey came
 from an elevation match, and for the typed `Floor` / `Room` `m_level_id` join,
 which remains unrecovered (#86 / RE-20).
