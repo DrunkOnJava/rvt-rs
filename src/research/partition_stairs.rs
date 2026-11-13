@@ -15,11 +15,11 @@
 //! Snowdon Towers 2024 architectural sample: an optional field before it
 //! moves it, so it is found rather than assumed. All three values equal the
 //! `Pset_StairCommon` `RiserHeight`, `TreadLength` and `NumberOfRiser`
-//! Revit's own IFC4 export writes for the same stair, on 29 of 29 stairs.
+//! Revit's own IFC4 export writes for the same stair, on 26 of 26 stairs.
 //!
 //! A stair run's data carries its own number of risers right after
 //! [`STAIR_RUN_RISERS_ANCHOR`], at `0x42` on every Snowdon run. The runs of
-//! a stair add up to the stair's count on 26 of its 29 stairs. The other
+//! a stair add up to the stair's count on 23 of its 26 stairs. The other
 //! three have one run each, which reads one more than the stair, so a
 //! single-run stair's flight takes the stair's count
 //! ([`flight_riser_counts`]).

@@ -162,12 +162,15 @@ impl SchemaTable {
     ///
     /// # Motivation
     ///
-    /// Of the 405 classes in a 2023 schema, only 80 carry tags. The
-    /// other 325 are abstract parents, mixins, or type-only
-    /// declarations. `Wall`, `Floor`, `Door`, `Window`, `Level`,
-    /// `Grid`, `FamilyInstance`, `Room` are all tagless; their tagged
-    /// concrete instances appear under subtype names like `ArcWall`
-    /// (`0x0191`) or `WallCGDriver` (`0x0197`). Hypothesis H7 from
+    /// Most schema classes carry no tag: abstract parents, mixins and
+    /// type-only declarations. RE-18 ran this walk on four corpus files
+    /// and no untagged class resolved to a tagged ancestor. It also found
+    /// `Wall`, `Floor`, `Door`, `Window`, `Level`, `Grid`,
+    /// `FamilyInstance` and `Room` missing from the schema, but that was
+    /// the old 64 KB `Formats/Latest` scan: the whole schema carries
+    /// `Level` (#410). Tagged concrete classes such as `ArcWall` and
+    /// `WallCGDriver` are subtypes, not ancestors, so a walk up from a
+    /// tagless parent does not reach them. Hypothesis H7 from
     /// `reports/element-framing/RE-09-synthesis.md` (confidence 0.7)
     /// says tagless classes use their parent's tag on the wire — this
     /// function is the helper for validating that hypothesis against
@@ -181,8 +184,8 @@ impl SchemaTable {
     /// # let raw = rf.read_stream(streams::FORMATS_LATEST).unwrap();
     /// # let decomp = compression::inflate_at(&raw, 0).unwrap();
     /// # let schema = formats::parse_schema(&decomp).unwrap();
-    /// // `Wall` is tagless in every observed release; its nearest
-    /// // tagged ancestor is a concrete subtype like `ArcWall`.
+    /// // `None` where no class above `Wall` carries a tag (RE-18); the
+    /// // tagged walls are subtypes such as `ArcWall`, which this does not reach.
     /// let (anc, tag) = schema.tagged_ancestor("Wall").unwrap_or(("<none>", 0));
     /// ```
     pub fn tagged_ancestor(&self, class_name: &str) -> Option<(&str, u16)> {

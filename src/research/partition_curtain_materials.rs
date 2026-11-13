@@ -11,8 +11,8 @@
 //! 2027 `rac_advanced` holds at +135 the material its 2026 copy does (RE-179).
 //! A panel type, `SysPanelFamSym`, holds a tag at +135 and its material's
 //! ElementId right after it, at +139: RE1's one panel type, whose material is
-//! the "Glass" of Revit's export, as a material followed a tag on Snowdon
-//! Towers' panel types (RE-72). A value that is not one of the file's
+//! the "Glass" of Revit's export (RE-166; the panel offset rests on RE1's
+//! panel types only). A value that is not one of the file's
 //! materials is not read as one.
 //!
 //! The value is the type's `m_renderStyleId` (RE-201, #355), and an optional

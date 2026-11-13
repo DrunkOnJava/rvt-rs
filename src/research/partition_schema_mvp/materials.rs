@@ -187,8 +187,10 @@ pub(super) fn refine_type_materials(
 /// to no material, the materials its own material parameters name
 /// (`instance_materials`, RE-200), or else `<Unnamed>` (RE-149), alongside
 /// its type's (RE-203): Revit's export does, on Snowdon Towers' 31 "Sink
-/// Vanity-Round", 21 refrigerators, 21 washer-dryers and RE1
-/// Architecture's microwave.
+/// Vanity-Round", 21 refrigerators and RE1 Architecture's microwave. A type
+/// whose forms with no material are all hidden or void is not in
+/// `partly_unset` (RE-204: Snowdon's 21 washer-dryers, where Revit writes no
+/// `<Unnamed>`).
 pub(super) fn attach_partly_unset_materials(
     partly_unset: &BTreeSet<u32>,
     instance_materials: &BTreeMap<u32, Vec<String>>,

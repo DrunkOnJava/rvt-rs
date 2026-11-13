@@ -378,9 +378,11 @@ pub const CURTAIN_WALL_PART_CLASSES: &[&str] = &["CurtainWallPanel", "CurtainWal
 
 /// Classes that are parts of a stair when their reference list names one.
 ///
-/// Railings are not among them: Revit's export aggregates 65 of the 70
-/// Snowdon railings whose lists name a stair, and nothing read so far tells
-/// the other five apart, so railings stay standalone elements.
+/// Railings are not among them: a railing's reference list does not decide
+/// it (RE-39: Revit's export aggregates 65 of the 70 Snowdon railings whose
+/// lists name a stair). A railing joins the stair its own record names
+/// (`BaseRailing.m_stairsId`, RE-254) unless it sits on one of the stair's
+/// components (`m_stairsComponentId`, RE-390): `attach_railing_lengths`.
 pub const STAIR_PART_CLASSES: &[&str] = &["StairsRun", "StairsLanding", "StairsStringer"];
 
 /// Field holding an element's IFC `Name` where Revit's export does not name
@@ -575,7 +577,7 @@ pub const PROFILE_OPENING_FIELD: &str = "m_profile_opening";
 /// The field prefix of the pockets of a wall's edited elevation profile against
 /// its convex hull, the openings Revit's export writes (#1607, RE-380):
 /// `m_profile_pocket_<k>`, the pocket's outline as model-feet points in the
-/// wall's vertical plane, and `m_profile_pocket_<k>_tag`, the highest ElementId
+/// wall's vertical plane, and `m_profile_pocket_<k>_tag`, the ElementId of the first
 /// of the profile's lines it follows.
 // Tracker: B55.
 pub const PROFILE_POCKET_FIELD: &str = "m_profile_pocket";
@@ -1060,9 +1062,10 @@ pub const CURTAIN_GRID_WALL_OFFSETS: [usize; 2] = [85, 478];
 pub(super) const CURTAIN_PART_BOX_TOLERANCE_FEET: f64 = 0.05;
 
 /// How far past an element's id its data is searched for the ids of curtain
-/// walls, bytes (#1865, RE-449): the curtain grids of Autodesk's `rac_advanced`
-/// name their wall at four places, the last 1,190 bytes past the id on Revit
-/// 2025 and 1,174 on 2027.
+/// walls, bytes (#1865, RE-449): the data of Autodesk's `rac_advanced` names
+/// the wall at four places, the last 1,130 bytes past the id on Revit 2025
+/// and 1,114 on 2027 for the 74 mullions' grids, and 1,190 and 1,174 for the
+/// curtain door's.
 pub(super) const ELEMENT_DATA_WALL_WINDOW: usize = 1200;
 
 /// How many times a curtain wall's id must lie in that window for the data to
