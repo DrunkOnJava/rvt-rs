@@ -77,7 +77,7 @@ use std::collections::BTreeMap;
 pub const VERTEX_EPS_FEET: f64 = 1e-6;
 
 /// Relative cross-product below which three vertices are collinear.
-pub const COLLINEAR_EPS: f64 = 1e-9;
+pub const COLLINEAR_EPS: f64 = 1e-6;
 
 /// Largest distance a sketch arc's chords may stray from the arc, feet
 /// (RE-96), as a curved wall's are drawn (RE-75).
