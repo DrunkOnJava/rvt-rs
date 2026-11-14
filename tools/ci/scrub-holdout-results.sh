@@ -149,6 +149,9 @@ for dir in "$RESULTS"/holdout-*/ "$RESULTS"/bimcollab-*/ "$RESULTS"/racadv-*/; d
       [ -f "$f" ] || continue
       grep -E "^(elements Revit gives materials: [0-9]+|of those, rvt-rs gives materials: [0-9]+, the same set: [0-9]+)$" "$f" | sed 's/^/materials: /' || true
       grep -E "^(different sets by|no materials from rvt-rs, by) Revit entity: \{((')?Ifc[A-Za-z0-9]+(')?: [0-9]+(, )?)*\}$" "$f" | sed 's/^/materials: /' || true
+      # #1805: how a set differs, and the elements a shared Tag hides, as counts.
+      grep -E "^different sets, how: (none|([a-zA-Z' -]+ [0-9]+(, )?)+)$" "$f" | sed 's/^/materials: /' || true
+      grep -E "^elements sharing an earlier element's Tag, not compared, (rvt-rs|Revit) by entity: \{((')?Ifc[A-Za-z0-9]+(')?: [0-9]+(, )?)*\}$" "$f" | sed 's/^/materials: /' || true
     done
     # tools/re/unfilled_openings_vs_ifc.py (#1165): how many openings nothing
     # fills each side writes, by the class of the cutter and the host, and the

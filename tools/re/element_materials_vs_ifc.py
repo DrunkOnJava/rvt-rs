@@ -39,22 +39,32 @@ def material_names(material):
     return set()
 
 
-def by_tag(path):
+def by_tag(path, shared=None):
+    """Tag -> (entity, material names) of the first element with that Tag; `shared`
+    counts, by entity, the elements whose Tag an earlier element already holds."""
     model = ifcopenshell.open(path)
     out = {}
     for element in model.by_type("IfcElement"):
         if element.is_a("IfcOpeningElement") or not element.Tag:
             continue
+        if element.Tag in out:
+            if shared is not None:
+                shared[element.is_a()] += 1
+            continue
         material = element_util.get_material(element, should_skip_usage=True)
-        out.setdefault(element.Tag, (element.is_a(), material_names(material)))
+        out[element.Tag] = (element.is_a(), material_names(material))
     return out
 
 
 def main():
-    ours, revit = by_tag(sys.argv[1]), by_tag(sys.argv[2])
+    ours_shared, revit_shared = collections.Counter(), collections.Counter()
+    ours, revit = by_tag(sys.argv[1], ours_shared), by_tag(sys.argv[2], revit_shared)
     with_revit = with_ours = same = 0
     differ = collections.Counter()
     missing = collections.Counter()
+    # How a set differs, counts only (#1805): rvt-rs's set inside Revit's, around
+    # it, overlapping it or apart from it, and whose element is another entity.
+    shapes = collections.Counter()
     for tag, (entity, theirs) in revit.items():
         if not theirs or tag not in ours:
             continue
@@ -68,10 +78,23 @@ def main():
             same += 1
         else:
             differ[entity] += 1
+            if mine < theirs:
+                shapes["inside Revit's"] += 1
+            elif mine > theirs:
+                shapes["around Revit's"] += 1
+            elif mine & theirs:
+                shapes["overlapping"] += 1
+            else:
+                shapes["apart"] += 1
+            if ours[tag][0] != entity:
+                shapes["another entity in rvt-rs"] += 1
     print(f"elements Revit gives materials: {with_revit}")
     print(f"of those, rvt-rs gives materials: {with_ours}, the same set: {same}")
     print(f"different sets by Revit entity: {dict(differ.most_common())}")
     print(f"no materials from rvt-rs, by Revit entity: {dict(missing.most_common())}")
+    print("different sets, how: " + (", ".join(f"{k} {v}" for k, v in sorted(shapes.items())) or "none"))
+    print(f"elements sharing an earlier element's Tag, not compared, rvt-rs by entity: {dict(ours_shared.most_common())}")
+    print(f"elements sharing an earlier element's Tag, not compared, Revit by entity: {dict(revit_shared.most_common())}")
 
 
 if __name__ == "__main__":
