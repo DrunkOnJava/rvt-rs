@@ -769,6 +769,16 @@ pub(super) fn attach_shaft_voids(
         if element.class == "Roof" && !roof_reads_exact_sketches(revit_version) {
             continue;
         }
+        // RE-99 measured the shaft's cut on outlines drawn from sketch lines
+        // (floors, ceilings and roofs). `plan_profile_from_fields` also takes a
+        // stair landing's outline (and a room's or an Area's, which are not in
+        // these two lists), which no shaft was measured to cut (#1945).
+        if !element.fields.iter().any(|(name, value)| {
+            name == erpp::PLAN_PROFILE_SOURCE_FIELD
+                && matches!(value, InstanceField::String(text) if text == erpp::PLAN_PROFILE_SOURCE)
+        }) {
+            continue;
+        }
         let Some(profile) = erpp::plan_profile_from_fields(&element.fields) else {
             continue;
         };

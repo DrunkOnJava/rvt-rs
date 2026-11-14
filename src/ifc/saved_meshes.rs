@@ -91,6 +91,12 @@ const COLLAPSED_RULED_CATEGORY_REFUSAL: &str =
 /// it to within 0.001 ft.
 const EMBED_RAISE_MIN_FEET: f64 = 0.5;
 
+/// The releases whose walls' native records name what embeds in them, and so
+/// the releases a wall that embeds a curtain wall is drawn from its saved mesh
+/// on (RE-340): the walls' records of 2023 name no embed step, so the rule
+/// found none there and the scope's 2023 was never exercised (#1945).
+const EMBED_HOST_REVIT_VERSIONS: std::ops::RangeInclusive<u32> = 2024..=2027;
+
 /// What [`attach`] did.
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize)]
 #[non_exhaustive]
@@ -1632,13 +1638,20 @@ fn plain_or_stepped(solid_shape: &Option<SolidShape>, property_set: &Option<Prop
 /// hosted in them but the opening their own curtain wall cuts (an
 /// `IfcEntity::WallCutOpening` whose Tag is the curtain wall's: Revit's export
 /// holds that void and the raised strip both). Nothing where the model has no
-/// curtain wall, so a file without one reads no wall record here. An `Err`
+/// curtain wall, so a file without one reads no wall record here, and nothing
+/// on a release outside [`EMBED_HOST_REVIT_VERSIONS`]. An `Err`
 /// names why the walls' native records were not read.
 fn embed_hosts(
     rf: &mut crate::RevitFile,
     model: &IfcModel,
     taken: &BTreeMap<u64, Vec<usize>>,
 ) -> Result<BTreeMap<u64, usize>, String> {
+    if !rf
+        .basic_file_info()
+        .is_ok_and(|info| EMBED_HOST_REVIT_VERSIONS.contains(&info.version))
+    {
+        return Ok(BTreeMap::new());
+    }
     let element_id = |entity: &IfcEntity, wanted: &str| match entity {
         IfcEntity::BuildingElement {
             ifc_type,

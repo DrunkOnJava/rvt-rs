@@ -651,7 +651,7 @@ pub fn recover_partition_schema_mvp(
     // --- Wall sweeps (RE-69) ---
     attach_wall_sweep_types(rf, revit_version, &mut out.products);
     // --- Pipes, wall sweeps and ramps typed in their own record (RE-240) ---
-    attach_native_type_names(rf, &mut out.products);
+    attach_native_type_names(rf, revit_version, &mut out.products);
     // --- Curtain mullions drawn as an extrusion of their section (RE-243) ---
     attach_mullion_plain_hosts(rf, &mut out.products);
     // --- Walls' layers and exterior side (RE-53) ---
@@ -851,6 +851,14 @@ pub fn recover_partition_schema_mvp(
                 element
                     .fields
                     .push((COLUMN_UNJOINED_FIELD.into(), InstanceField::Bool(true)));
+                // The hollow section's four quantities are written on the
+                // releases they are measured on only (#1945).
+                if HOLLOW_SECTION_QUANTITIES_REVIT_VERSIONS.contains(&revit_version) {
+                    element.fields.push((
+                        COLUMN_HOLLOW_QUANTITIES_FIELD.into(),
+                        InstanceField::Bool(true),
+                    ));
+                }
             }
         }
         // --- The elements each column's pair steps name (RE-291) ---

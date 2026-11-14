@@ -448,8 +448,11 @@ pub(super) fn resolve_base_constraint_levels(
 /// records name the 0.0 m Level and none. Nothing changes where no Level, or
 /// more than one, is at the top. It runs on every release of the 32-bit
 /// records, 2008 to 2023 (`REVIT_32BIT_RELEASES`). Only 2023 is measured
-/// against Revit's export; 2015 to 2022 are checked against each project's
-/// 2023 copy (#742, RE-180, RE-181), and 2008 to 2014 not at all.
+/// against Revit's export, on 8 beams of one file. Held to the project's 2024
+/// save, whose beams are bound by another rule (RE-454), the 41 beams of
+/// `rst_basic` 2016 and the 27 of each of its saves of 2017 to 2023 that this
+/// rule binds have the same storey; the 2015 save shares no ElementId with
+/// those, and 2008 to 2014 have no sample file (RE-461).
 pub(super) fn resolve_framing_top_levels(
     elevations: &BTreeMap<u32, f64>,
     elements: &mut [&mut Vec<DecodedElement>],

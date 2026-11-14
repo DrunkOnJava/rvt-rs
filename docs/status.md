@@ -1251,6 +1251,26 @@ and earlier write every room, as every element: both phase rules start at
 Revit 2015 (#1332). The Python bindings and the viewer follow the default
 (`reports/element-framing/RE-326-room-phases.md`).
 
+**RE-461 (2026-11-13)** holds four of the eight rules whose release range was
+wider than the range their report measured (#1945, found by the batch 9 export
+audit) to the release each is measured on, and says for the other four what
+holds them. A hollow-section column's `CrossSectionArea`, `OuterSurfaceArea`,
+`GrossVolume` and `NetVolume` (RE-247) and a wall sweep's and a ramp's type from
+its own record (RE-240) are written on Revit 2024 only; the wall that embeds a
+curtain wall is drawn from its saved mesh on 2024 to 2027, since the records of
+2023 name no embed step (RE-340); and a shaft's cut takes only the outlines
+drawn from sketch lines, as RE-99 measured. A beam's storey at its record box's
+top (RE-119), a pipe from its own record (RE-370), a door's origin from its
+stored transform (RE-361) and a railing's type from its payload (RE-66) keep
+their range, each held to the project's 2024 save on the releases the corpora
+have a file of; RE-119 and RE-370 still run on releases no file measures, the
+experimental band, and a file of one of them is how they are measured. In an
+unfiltered Measure of 146 exports (run 43525326226, the held-out and spent
+models included) none of the exports and none of the 121 diagnostics moves: no
+file of the corpora holds a case of the four rules that stop. The tool is
+`tools/re/release_rules_across_saves.py`
+(`reports/element-framing/RE-461-release-gates.md`).
+
 **RE-459 (2026-11-13)** gives the project, building and site of a Revit 2017 to
 2027 file that stores none the GlobalIds Revit's export gives them, and the
 storeys of a 2017 to 2022 file theirs, from the project's own GUID, which the
