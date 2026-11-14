@@ -301,6 +301,25 @@ pub enum ExportNote {
         /// The reason.
         error: String,
     },
+    /// The copies of the multistory stairs a file keeps (#1977, RE-463).
+    #[non_exhaustive]
+    MultistoryStairs {
+        /// Multistory groups in the file.
+        groups: usize,
+        /// Copies written, each of a stair with its parts on a Level above.
+        copies: usize,
+        /// Entities the copies added.
+        entities: usize,
+        /// Spans and stairs left uncopied, for want of a rule that reaches
+        /// them.
+        left_out: usize,
+    },
+    /// The multistory stairs could not be read; no copy was written.
+    #[non_exhaustive]
+    MultistoryStairsSkipped {
+        /// The reason.
+        error: String,
+    },
     /// The base quantities left out.
     #[non_exhaustive]
     BaseQuantities {
@@ -406,6 +425,7 @@ impl ExportNote {
             | Self::FamilyExtrusionsSkipped { error }
             | Self::RevitPropertySetsSkipped { error }
             | Self::RevitSetPlacementSkipped { error }
+            | Self::MultistoryStairsSkipped { error }
             | Self::EmbedHostBodiesSkipped { error } => Some(error),
             _ => None,
         }
@@ -467,6 +487,18 @@ impl fmt::Display for ExportNote {
                 f,
                 "properties not placed as Revit's exporter places them: {error}"
             ),
+            Self::MultistoryStairs {
+                groups,
+                copies,
+                entities,
+                left_out,
+            } => write!(
+                f,
+                "{copies} multistory stair copies written in {groups} groups ({entities} entities; their GlobalIds are derived from their originals', not Revit's; {left_out} spans or stairs left uncopied)"
+            ),
+            Self::MultistoryStairsSkipped { error } => {
+                write!(f, "multistory stairs written once: {error}")
+            }
             Self::BaseQuantities { left_out } => {
                 write!(f, "{left_out} base quantities left out")
             }
@@ -839,6 +871,33 @@ fn run_export_steps(
             Err(error) => {
                 control.check()?;
                 notes.push(ExportNote::RevitSetPlacementSkipped {
+                    error: format!("{error:#}"),
+                });
+            }
+        }
+    }
+
+    // #1977: Revit's export writes a multistory stair once per storey. After the
+    // passes above, so that a copy is its original as they left it, and before
+    // the base quantities are left out, which reaches the copies too.
+    if options.kind == ExportKind::Document {
+        match super::multistory_stairs::attach(rf, &mut model) {
+            Ok(report) => {
+                if report.copies > 0 {
+                    recount_exported(&mut diagnostics, &model);
+                }
+                if report.groups > 0 {
+                    notes.push(ExportNote::MultistoryStairs {
+                        groups: report.groups,
+                        copies: report.copies,
+                        entities: report.entities,
+                        left_out: report.left_out.values().sum(),
+                    });
+                }
+            }
+            Err(error) => {
+                control.check()?;
+                notes.push(ExportNote::MultistoryStairsSkipped {
                     error: format!("{error:#}"),
                 });
             }

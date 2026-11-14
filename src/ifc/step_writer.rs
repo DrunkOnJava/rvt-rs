@@ -525,6 +525,15 @@ pub fn type_objects(model: &IfcModel) -> TypeObjects {
         if folded.contains(&entity_idx) {
             continue;
         }
+        // #1977: Revit's export gives the copy of a multistory stair no type
+        // object, though it shares its original's Tag.
+        if property_set.as_ref().is_some_and(|set| {
+            set.properties
+                .iter()
+                .any(|p| p.name == super::multistory_stairs::MULTISTORY_COPY_PROPERTY)
+        }) {
+            continue;
+        }
         let Some(type_id) = type_guid
             .as_deref()
             .and_then(|tag| tag.parse::<u32>().ok())
