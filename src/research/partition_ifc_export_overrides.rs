@@ -348,6 +348,19 @@ pub fn find_export_parameters(
     header: &[u8; 10],
     declared: &BTreeSet<u32>,
 ) -> BTreeMap<u32, ExportParameters> {
+    parameters_by_header(buf, header, declared).0
+}
+
+/// What one partition holds: the parameters by owner, and the `(owner, key)`
+/// pairs it sets to two different values, which the map leaves out.
+type PartitionParameters = (BTreeMap<u32, ExportParameters>, BTreeSet<(u32, i64)>);
+
+/// [`find_export_parameters`], with the keys it dropped.
+fn parameters_by_header(
+    buf: &[u8],
+    header: &[u8; 10],
+    declared: &BTreeSet<u32>,
+) -> PartitionParameters {
     collect_export_parameters(buf, declared, |hit| {
         let from = hit.saturating_sub(EXPORT_PARAMETER_WINDOW);
         let start = memchr::memmem::rfind(&buf[from..hit], header)?;
@@ -372,6 +385,15 @@ pub fn find_export_parameters_in_objects(
     objects: &[(usize, crate::partition_room_parameters::DataObject)],
     declared: &BTreeSet<u32>,
 ) -> BTreeMap<u32, ExportParameters> {
+    parameters_in_objects(buf, objects, declared).0
+}
+
+/// [`find_export_parameters_in_objects`], with the keys it dropped.
+fn parameters_in_objects(
+    buf: &[u8],
+    objects: &[(usize, crate::partition_room_parameters::DataObject)],
+    declared: &BTreeSet<u32>,
+) -> PartitionParameters {
     use crate::partition_room_parameters::DATA_OBJECT_HEADER;
     collect_export_parameters(buf, declared, |hit| {
         let index = objects.partition_point(|(p, _)| *p <= hit).checked_sub(1)?;
@@ -382,12 +404,12 @@ pub fn find_export_parameters_in_objects(
 
 /// Every export parameter entry in `buf` whose owner `owner_of` finds and
 /// `declared` holds, by owner. A key an owner sets to two different values
-/// is dropped.
+/// is dropped, and named in the second part of the answer.
 fn collect_export_parameters(
     buf: &[u8],
     declared: &BTreeSet<u32>,
     owner_of: impl Fn(usize) -> Option<u32>,
-) -> BTreeMap<u32, ExportParameters> {
+) -> PartitionParameters {
     let mut found: BTreeMap<(u32, i64), Option<String>> = BTreeMap::new();
     for key in [
         IFC_EXPORT_ELEMENT_AS,
@@ -415,21 +437,29 @@ fn collect_export_parameters(
         }
     }
     let mut out: BTreeMap<u32, ExportParameters> = BTreeMap::new();
+    let mut dropped: BTreeSet<(u32, i64)> = BTreeSet::new();
     for ((owner, key), value) in found {
         let Some(value) = value else {
+            dropped.insert((owner, key));
             continue;
         };
         if let Some(slot) = out.entry(owner).or_default().slot(key) {
             *slot = Some(value);
         }
     }
-    out
+    (out, dropped)
 }
 
 /// [`find_export_parameters`] over every `Partitions/*` stream, or on Revit
-/// 2024 and later [`find_export_parameters_in_objects`]. An element whose
-/// streams disagree about a key loses that key. Empty for a release with no
-/// measured element-data header.
+/// 2024 and later [`find_export_parameters_in_objects`]. On Revit 2024 and
+/// later an element that several partitions give different values for a key
+/// takes the value of the latest partition that holds one, which is its
+/// current copy: the BIM4LCA permit files edit the value in later increments,
+/// and 40 walls and 42 spaces of the three of them read no value while
+/// Revit's export writes the latest (#1713). A latest copy that disagrees with
+/// itself leaves the key out. Before Revit 2024 an element whose streams
+/// disagree about a key loses it. Empty for a release with no measured
+/// element-data header.
 pub fn scan_export_parameters(
     rf: &mut RevitFile,
     revit_version: u32,
@@ -438,19 +468,22 @@ pub fn scan_export_parameters(
     let Some(header) = crate::partition_names::element_data_header(revit_version) else {
         return Ok(BTreeMap::new());
     };
+    let latest_wins = revit_version >= 2024;
     let mut merged: BTreeMap<u32, ExportParameters> = BTreeMap::new();
     let mut conflicting: BTreeSet<(u32, i64)> = BTreeSet::new();
+    // In ascending partition number, so that a later partition's copy comes
+    // after an earlier one's.
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
         };
-        let found = if revit_version >= 2024 {
+        let (found, dropped) = if latest_wins {
             let Ok(objects) = rf.memoised_partition_data_objects(&stream) else {
                 continue;
             };
-            find_export_parameters_in_objects(inflated.bytes(), &objects, declared)
+            parameters_in_objects(inflated.bytes(), &objects, declared)
         } else {
-            find_export_parameters(inflated.bytes(), &header, declared)
+            parameters_by_header(inflated.bytes(), &header, declared)
         };
         for (owner, parameters) in found {
             let held = merged.entry(owner).or_default();
@@ -467,14 +500,20 @@ pub fn scan_export_parameters(
                     continue;
                 };
                 let slot = held.slot(key).expect("an export parameter key");
-                match slot {
-                    None => *slot = Some(value),
-                    Some(existing) if *existing != value => {
-                        conflicting.insert((owner, key));
-                    }
-                    Some(_) => {}
+                if !latest_wins && slot.as_ref().is_some_and(|existing| *existing != value) {
+                    conflicting.insert((owner, key));
+                    continue;
+                }
+                // This partition is later than the ones before it: its copy is
+                // the element's current one, and it is not in doubt.
+                *slot = Some(value);
+                if latest_wins {
+                    conflicting.remove(&(owner, key));
                 }
             }
+        }
+        if latest_wins {
+            conflicting.extend(dropped);
         }
     }
     for (owner, key) in conflicting {
