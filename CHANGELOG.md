@@ -8,6 +8,178 @@ fragments a release moves into this file.
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-11-14
+
+0.24.0 closes #1713: on the 42 models with a public Revit export, every one of the 58,665 elements both exports hold has Revit's `PredefinedType` (Measure 43596206950) (railings, doors, proxies, ramps and geographic elements are new in this release), and a Revit 2024 or later file whose export parameters differ between its partitions gives each element its current copy's value. It also writes more of what Revit's own export writes: a ramp's railings are its parts, a gutter is an `IfcFlowSegment`, a multistory stair is written once on each storey it repeats on, a ceiling in pieces has its piece's `GrossArea`, and a wall under a roof drawn from its slopes is cut along the roof's underside. The export notes count the storeyless elements honestly, and the Semantic check now finds its artifact on every Measure run.
+
+Not measured, and said in each entry:
+- `PredefinedType` agrees on the 42 models with a public Revit export, not on every model: on the held-out pairs of Revit 2023 and earlier 4 of 12 roofs, 1 of 5 stairs, 1 of 5 stair flights, 12 of 60 furniture and 2 of 10 railings stay unset (counts only; none differs), since no default covers those releases.
+- A ceiling's piece `GrossArea` (#1209) rests on the one building that holds ceilings in pieces; a multistory stair's copies (#1977) are inferred from three groups of one building, since the file does not say how far a stair repeats.
+- `NOTDEFINED` on ramps and geographic elements (#1713) is measured on Revit 2024 only, the one release whose export holds them; on railings it is 2024 to 2026, and 2027 and the releases before 2024 write no such default.
+- A wall under a roof (#1478) is measured against Revit's exports on 2025; 2026 and 2027 are held to the same project's 2025 save.
+- The layers of a type whose copies disagree on Revit 2020 (#1805, RE-466) are measured on one Revit 2020 file; the other releases before 2024 still drop such a type.
+
+Measured against 0.23.0 on every model Measure holds (run [43608604021](https://github.com/DrunkOnJava/rvt-rs/actions/runs/43608604021), `main` at 009a0703; the release adds only the version files and this section):
+
+- 72 of the 126 exports differ, and 29 of the 102 `diagnostics.json` files: 28 move the count of elements skipped for want of a level (#1842), beside the class counts the entries below describe, and the spent Vitoria "Before" moves its two gutters from `IfcPipeSegment` to `IfcFlowSegment`. 28 of the 72 are Autodesk's sample projects of 2015 to 2027, with no Revit export on Measure, so no scorer says which of what moved there is Revit's: each entry below was measured in its own pull request. The other 44 are scored against Revit's own exports: the 12 BIM4LCA models, 17 of the 24 Revit 2025 models, the six `rac_advanced` saves of 2015 to 2020, RE1 Architecture, seven held-out files and the spent Vitoria "Before". On them nothing that equals Revit's falls except the counts named in the last two lines, and nothing that differs from Revit's rises, but for the 4 floors of one held-out Revit 2020 file whose new layer sets leave out Revit's 0-wide membrane layers (#1805, RE-466, said in its entry). What moved:
+  - `PredefinedType` (#1713): on the 42 models with a public Revit export, the elements that agree with Revit's go from 58,480 to all 58,665 (17 models move): the 124 with none (42 spaces, 40 walls, 18 railings, 12 proxies, 6 ramps and 6 geographic elements) and the 52 doors written `DOOR` where Revit writes `TRAPDOOR` now agree, and "NOTDEFINED where Revit writes none" stays 0. Three held-out pairs gain 6 railings the same way (counts only).
+  - Values (#1713, #1209, #1989): property values equal to Revit's rise by 52 (50 on the timber office at permit, 2 on the concrete housing as built), with 52 fewer missing and 31 fewer that Revit does not write (15 on the four housing files, 16 on the timber office at permit); quantities equal to Revit's rise by 95, with 95 fewer missing: 62 are the `GrossArea` of ceilings in pieces on the four offices (15, 16, 15 and 16, Revit's piece on 62 of 62) and 33 are the `IfcSlab` roofs of the timber office at permit; the 6 fewer quantities that Revit does not write are all on the concrete housing as built (the wall that is an `IfcCovering`). Type objects with Revit's entity rise by 1 and 8 (the concrete housing as built, the timber office at permit) and with Revit's GlobalId by 1 and 16 (the office at permit, the timber office at permit).
+  - Classes (#1989): the gutters of the four large housing files and of Vitoria's two projects read as flow segments (3 of 3 on each housing file, from none), and the ducts the scorer counts are 3 of 3 where they were 1 of 3. The saved-mesh row of `IfcCovering` falls by 2 on each of those four files (26 to 24, 25 to 23, 26 to 24 and 25 to 23) and that of `IfcPipeSegment` from 1 to none, because the three gutters are now in the `IfcFlowSegment` row (none to 3).
+  - Aggregates (#1988): the 2 ramp railings per housing file that only Revit aggregated are aggregated, and none the other way; the ramp rows of the mesh scorer read through their parts (volume ratio 0.49 to 0.51, farthest vertex 3.248 ft to 0.0066 ft), the ramp's own body unchanged.
+  - Bodies (#1713): 52 roofs of the eight BIM4LCA files that Revit writes as `IfcSlab` or `IfcSolarDevice` are drawn from their saved meshes (50 of the 52 equal to Revit's in all six measures, 2 in five), so the saved-mesh scores of `IfcSlab` rise (the housing files 4 to 10, 4 to 9, 3 to 7 and 3 to 7, the offices 0 to 10 twice and 13 to 21 and 13 to 22) and the timber office at permit's `IfcRoof` row goes from 9 to 1, its roofs now `IfcSlab` as Revit writes them. Two counts that compare the old body with Revit's fall with them: the plan-outline vertices of `IfcSlab` within 0.01 ft of Revit's go from 40 to 39, 37 to 36, 36 to 35 and 36 to 35 on the four housing files (and rise from 36 to 37 on the two concrete offices), and the GLB's layers within 0.001 ft go from 100 of 127, 97 of 103, 101 of 102 and 97 of 98 to 95 of 122, 92 of 98, 98 of 99 and 96 of 97 on the offices (82 of 84 to 83 of 85 on the concrete housing as built), because the GLB draws these roofs from their mesh and not in layers; no layer compared is wrong.
+
+### Upgrading from 0.23
+
+- **Gutters change class.** A gutter is an `IfcFlowSegment` typed by an `IfcPipeSegmentType` `GUTTER`, no longer an `IfcCovering` or `IfcPipeSegment`, unless its own "Export to IFC As" names `IfcPipeSegment` (#1989); a script that looked for gutters among the coverings or the pipe segments looks at the flow segments.
+- **More aggregates and copies.** The railings of a ramp that Revit's export contains in an `IfcRamp` (Revit 2024, a railing with no level of its own) are its parts through an `IfcRelAggregates`, as a stair's are (#1988); a multistory stair is written again on each storey it repeats on, with `:2` names and `MultistoryCopyOf` on its record set (Revit 2024, #1977), so a count of stairs rises by Revit's.
+- **More values.** `PredefinedType` is `NOTDEFINED` on railings, ramps and geographic elements that carry no value, `TRAPDOOR` on the doors Revit's export writes it on, and `USERDEFINED` on a proxy that carries it (#1713); a ceiling in pieces has its piece's `GrossArea` (#1209).
+- **`diagnostics.json`.** `unsupported_geometry_missing_level` no longer counts the flights, landings and stringers of a stair, which are in the storey of their stair (#1842); a curtain wall's host panels are counted as `element_record_curtain_host_panel` and no longer written as `IfcPlate` (#1975).
+
+### Added
+
+- **A ceiling whose sketch is several separate loops gets
+  `Qto_CoveringBaseQuantities.GrossArea` (#1209, RE-465).** It is the area of
+  the piece its sketch's two lowest-ElementId lines, the first drawn, both lie
+  on: Revit's piece on 62 of 62 such ceilings of the BIM4LCA office. A ceiling
+  whose two lowest lines lie on two pieces gets none. Measured on that one
+  building only, since no other model with a Revit export has a ceiling in
+  pieces.
+
+- **A door takes its own or its type's "IFC Predefined Type" where that is an
+  IFC4 enumerator, as Revit's export writes it (#1713).** The wall hatches of
+  the BIM4LCA files, 3 on each housing file and 10 on each office file, are
+  `TRAPDOOR` in Revit's export; rvt-rs wrote `DOOR` on every door. A door with
+  no value keeps `DOOR`.
+
+- **A building element proxy takes its own or its type's "IFC Predefined Type"
+  where that is an `IfcBuildingElementProxyTypeEnum` enumerator (#1713).** In
+  each of the twelve BIM4LCA files (six housing, six office) one proxy carries
+  `USERDEFINED` under an "Export to IFC As" of `IfcBuildingElementProxy`, and
+  Revit's export writes `USERDEFINED` on it; rvt-rs left it unset. A proxy with
+  no value keeps `NOTDEFINED`.
+
+- **A railing with no predefined type of its own or its type's is `NOTDEFINED`
+  on Revit 2024 to 2026, as Revit's export writes it (#1713).** Revit's export
+  gives every such railing `NOTDEFINED`: the 8 of the BIM4LCA office files, the
+  10 of the R2025 models 13 to 17 and the 2 of each held-out pair of 2024 to
+  2026; rvt-rs left them unset. The 2027 export writes no value on a railing and
+  a 2022 file's export parameters are not read, so neither release takes the
+  default.
+
+- **A ramp or a geographic element with no predefined type of its own or its
+  type's is `NOTDEFINED` on Revit 2024, as Revit's export writes it (#1713).**
+  Revit's export gives `NOTDEFINED` to the one ramp of each BIM4LCA housing
+  file and to 3 of the 23 geographic elements of each of its two terrain files
+  (6 and 6 in all), where rvt-rs left them unset. No measured file of another
+  release and no held-out pair holds either in both exports, so no other
+  release takes the default.
+
+- **A multistory stair is written again on each storey its group repeats it
+  on, as Revit's export writes it, on Revit 2024 (#1977, RE-463).** Where no set
+  of a `MultistoryStairs` record covers the span between two consecutive Levels
+  of its stairs, and the span is as high as the stair that ends where it
+  begins, that stair is written once more with its flights, landing, stringers
+  and railings, shifted up by the Level difference, in the storey of the span.
+  The copy of the stair and of each part but a railing is named `<name>:2` and
+  keeps its original's `Tag`; the stair, its flights and its landing have no type
+  object and the flights are `NOTDEFINED`, as in Revit's export. On Autodesk's
+  Snowdon Towers architectural the three multistory stairs gain the 53 entities
+  Revit's export holds beyond rvt-rs's, with Revit's names, storeys and place.
+  A copy's `GlobalId` is rvt-rs's own, derived from its original's, and its
+  record set carries `MultistoryCopyOf`; the rule is inferred from three groups
+  of one building, since the file does not say how far a stair repeats, and a
+  span it does not reach is counted in the export notes, not copied.
+
+### Fixed
+
+- **On Revit 2025 to 2027, a wall under a roof drawn from its slopes is cut
+  along the roof's underside (#1478).** Each piece of the wall's plan rises to the plane
+  of the roof face above it, as Revit's export draws these walls; before, they
+  stood level at their own top, through the roof. A wall the roof's underside
+  does not cover once, or that the underside crosses above its top or below its
+  base, keeps its body. Measured against Revit's exports on 2025; 2026 and
+  2027 are held to the same project's 2025 save.
+
+- **An element whose IFC export parameters differ between the partitions of a
+  Revit 2024 or later file takes its current copy's value, as Revit's export
+  writes it (#1713).** The scan dropped a key an element set to two different
+  values, but the partition the element's stored revision routes to (else the
+  latest that holds the element's data, as every other read of a copied record
+  does) holds the edited value: the BIM4LCA permit files change a wall's or a
+  wall type's "IFC Predefined Type" after the first save, so 40 walls and 42
+  family-instance spaces of three of them read no value where Revit's export
+  writes one. The same rule moves 8 roofs of the timber office to `IfcSlab`
+  and one wall of the concrete housing as built to `IfcCovering`, as their
+  latest "Export to IFC As" says. A current copy that disagrees with itself, or
+  that carries no entry for the key, still leaves the key out.
+
+- **A roof that an "Export to IFC As" value writes as another entity than
+  `IfcRoof` keeps its saved mesh, as a roof written as `IfcRoof` does (#1713).**
+  The exporter marks such a roof `RedirectedRoof` and the saved-mesh pass reads
+  the mark, so the 8 roofs above keep the bodies they had as `IfcRoof`. The
+  mark is on every roof written this way, so the body of 52 roofs in the eight
+  BIM4LCA files changes from a sketch outline to the mesh Revit drew: 48
+  `IfcSlab` roofs and the 4 `IfcSolarDevice` roofs of the housing files, 50 of
+  the 52 equal to Revit's body in all six measures and 2 in five. The viewer
+  and the GLB draw these roofs from their mesh and not in layers, as they draw
+  a roof written as `IfcRoof`.
+
+- **A category's material is read on Revit 2015 to 2023 where its object
+  style has no pattern (#1805, RE-464).** That entry holds a null object where
+  a patterned one holds its `PatternHelper`, so the material sits 10 bytes
+  earlier, and none was read. It is every host category of Autodesk's
+  `rac_advanced`, `rme` and `rst` samples of 2015 to 2023. A wall, floor, roof
+  or ceiling layer there that takes its category's material now carries that
+  material, as `rac_basic`'s layers already did.
+
+- **A wall, floor, roof or ceiling type whose layer copies disagree takes its
+  current copy on Revit 2020 too (#1805, RE-466).** It was dropped there, and
+  its elements had no layer set. On the one Revit 2020 file measured with such
+  a type, the 5 floors' layer sets are now within 0.001 ft of Revit's, with
+  Revit's material on every layer that has a width; a layer with no material
+  of its own takes its category's (RE-464). On 4 of them, Revit's export also
+  writes 0-wide membrane layers, which rvt-rs leaves out as Revit's Snowdon
+  export does (RE-53). No Autodesk sample of 2015 to 2023 has such a type, so
+  the other releases before 2024 still drop it.
+
+- **A part of an aggregate is no longer counted as written outside any storey
+  (#1842).** `unsupported_geometry_missing_level` counted every element whose own
+  storey is empty, so the flights and landings of a stair, which reach their
+  storey through the stair as in Revit's export, were counted as storeyless: 28
+  of the 79 elements a Revit 2027 structural model reported, and 396 of the
+  2,407 that 28 of Measure's 102 `diagnostics.json` files held (2,011 after: 258
+  `IfcStairFlight`, 113 `IfcSlab` landings and 25 `IfcMember` stringers fewer).
+  The count now holds only the elements, and the wholes, that are in no storey.
+  The IFC file does not change.
+
+- **A curtain panel that is the host panel of another curtain wall's grid is
+  left out on Revit 2024, as Revit's export leaves it out (#1975).** Snowdon
+  Towers Architectural's 23 host panels were written as `IfcPlate` that Revit
+  writes nothing for; the export diagnostics count them as
+  `element_record_curtain_host_panel`.
+
+- **A ceiling exported as `IfcSlab` no longer carries `Pset_SlabCommon.PitchAngle`
+  0 (#1987).** RE-238's level-slab rule is measured on floors, roofs and stair
+  landings; on the BIM4LCA timber housing Revit's export writes no `PitchAngle`
+  on a compound ceiling it exports as a slab.
+
+- **A railing that names a ramp and has no level of its own is aggregated under
+  the ramp on Revit 2024, as Revit's export aggregates it (#1988).** Revit's
+  export writes the BIM4LCA housing's ramp as an `IfcRamp` with its two
+  railings as parts, where rvt-rs wrote them as plain elements of their
+  storey. The office's eight railings that name a ramp each have a level of
+  their own, and Revit's export leaves them plain, so they stay plain.
+
+- **A gutter is an `IfcFlowSegment` typed by an `IfcPipeSegmentType`
+  `GUTTER`, as Revit's IFC4 export writes it, unless its own "Export to IFC
+  As" names `IfcPipeSegment` (#1989).** The BIM4LCA housing's 3 gutters, in each
+  of its six files, were written as an `IfcPipeSegment` and two `IfcCovering`
+  (their own value says `IfcCovering` `ROOFING`, which Revit's export does not
+  act on for a gutter) where Revit writes three `IfcFlowSegment`s. The office's
+  24 gutters carry an `IfcPipeSegment` value and stay `IfcPipeSegment`. A
+  gutter written as an `IfcFlowSegment` has no `PredefinedType`, quantity set
+  or invert, as Revit's has none.
+
 ## [0.23.0] — 2026-11-14
 
 0.23.0 writes more of what Revit's own export writes, and narrows rules that audits found wider than their evidence. A wall of a curtain wall type is an `IfcCurtainWall` on Revit 2023 to 2027 whether or not a mullion names it, and a curtain wall that is the host panel of another is not one. A roof, stair, stair flight or building element proxy with no predefined type of its own gets Revit's `NOTDEFINED`, a sloped floor gets its `Qto_SlabBaseQuantities.Depth` and `GrossVolume`, a door's or window's `FireRating` is read from its saved parameter, and a column whose saved mesh is a prism of another section than its type's rectangle is drawn from the mesh. The doors and windows of Revit 2015 to 2023 cut the outline their symbol cuts and carry its `OverallWidth` and `OverallHeight`. A material's colour reaches IFC viewers. A file that stores no project GUID gets the project, building and site GlobalIds Revit's export gives them, from the GUID in its history header. `rvt-diff --elements` counts a change in the rule that read a value as a label change, not as a changed element.
