@@ -78,7 +78,8 @@ pub(crate) mod reason {
     /// The Level the copy starts on is no storey of the export.
     pub(crate) const STOREY_NOT_FOUND: &str = "copy_level_is_no_storey";
     /// A part cannot be moved: it has no location, or the model keeps
-    /// something about it by index that a copy would not carry.
+    /// something about it by index that a copy would not carry, or it has no
+    /// record set to carry the copy's mark where the writer needs the mark.
     pub(crate) const NOT_MOVABLE: &str = "stair_part_not_movable";
 }
 
@@ -366,11 +367,16 @@ fn copy_stair(
         if ifc_type.as_str() == "IFCSTAIRFLIGHT" {
             *predefined_type = Some("NOTDEFINED".to_string());
         }
-        if let Some(set) = property_set {
-            set.properties.push(Property {
+        // The mark is what keeps the writer from giving the copy of a stair, a
+        // flight, a landing or a railing the type object Revit's export gives
+        // it none; a stringer's copy keeps its original's, so it needs none.
+        match property_set {
+            Some(set) => set.properties.push(Property {
                 name: MULTISTORY_COPY_PROPERTY.to_string(),
                 value: PropertyValue::Integer(i64::try_from(original).ok()?),
-            });
+            }),
+            None if ifc_type.as_str() != "IFCMEMBER" => return None,
+            None => {}
         }
         moved.push(copy);
     }
