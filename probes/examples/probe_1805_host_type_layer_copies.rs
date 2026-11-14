@@ -106,6 +106,38 @@ fn category_entry_trace(rf: &mut RevitFile, version: u32, category: i64) -> serd
     })
 }
 
+/// The first 44 bytes from each place a 32-bit category is followed by `ff ff ff ff` and
+/// `CATEGORY_MATERIAL_MARK_2023` within 60 bytes, as hex, with the partition; at most 12.
+fn category_entry_windows(rf: &mut RevitFile, category: i64) -> Vec<String> {
+    use rvt::research::partition_materials::CATEGORY_MATERIAL_MARK_2023 as MARK;
+    let Ok(category) = i32::try_from(category) else {
+        return Vec::new();
+    };
+    let mut pattern = category.to_le_bytes().to_vec();
+    pattern.extend_from_slice(&[0xff; 4]);
+    let mut out = Vec::new();
+    for stream in rf.partition_stream_names() {
+        let Ok(inflated) = rf.inflated_partition(&stream) else {
+            continue;
+        };
+        let buf = inflated.bytes();
+        for at in memchr::memmem::find_iter(buf, &pattern) {
+            let Some(window) = buf.get(at..at + 64) else {
+                continue;
+            };
+            if memchr::memmem::find(&window[4..], &MARK).is_none() {
+                continue;
+            }
+            let hex: Vec<String> = window[..44].iter().map(|b| format!("{b:02x}")).collect();
+            out.push(format!("p{} {}", partition_of(&stream), hex.join(" ")));
+            if out.len() == 12 {
+                return out;
+            }
+        }
+    }
+    out
+}
+
 fn partition_of(stream: &str) -> u32 {
     stream
         .rsplit('/')
@@ -160,6 +192,35 @@ fn main() -> anyhow::Result<()> {
                     .collect();
             (ids, names)
         };
+    // Each host category's material as the export reads it, and where RE-115's entry is lost,
+    // for every file (the scorer reads `json` lines only; a held-out file's raw output is not
+    // uploaded). On a file of 2008 to 2023, the bytes of each place the category is followed by
+    // `ff ff ff ff` with the mark within 60 bytes, to read the release's own layout.
+    for (class, category) in [
+        ("Wall", rvt::research::partition_element_records::OST_WALLS),
+        (
+            "Floor",
+            rvt::research::partition_element_records::OST_FLOORS,
+        ),
+        ("Roof", rvt::research::partition_element_records::OST_ROOFS),
+        (
+            "Ceiling",
+            rvt::research::partition_element_records::OST_CEILINGS,
+        ),
+    ] {
+        let read =
+            rvt::research::partition_materials::scan_category_material(&mut rf, version, category)
+                .ok()
+                .flatten();
+        let name = read.and_then(|id| names.get(&id).cloned());
+        println!(
+            "category {class} material {read:?} name {name:?} trace {}",
+            category_entry_trace(&mut rf, version, category)
+        );
+        for window in category_entry_windows(&mut rf, category) {
+            println!("category-bytes {class} {window}");
+        }
+    }
     // The elements each type is given by the partition schema reader, and its class.
     let mut elements_of: BTreeMap<u32, (String, Vec<u32>)> = BTreeMap::new();
     for element in mvp
