@@ -38,8 +38,15 @@ ROLES = ("first", "latest", "current")
 
 
 def revit_layers(element, unit_mm):
-    """[(width mm, material name or None)] of the element's material layer set, or None."""
+    """[(width mm, material name or None)] of the element's material layer set, or None. Revit 2024's
+    export gives an occurrence an `IfcMaterialConstituentSet` and its type object the layer set
+    (the BIM4LCA files), so the type's is read where the occurrence has none."""
     material = ifcopenshell.util.element.get_material(element, should_skip_usage=True)
+    if material is None or not material.is_a("IfcMaterialLayerSet"):
+        kind = ifcopenshell.util.element.get_type(element)
+        material = (
+            ifcopenshell.util.element.get_material(kind, should_skip_usage=True) if kind is not None else None
+        )
     if material is None or not material.is_a("IfcMaterialLayerSet"):
         return None
     return [
@@ -101,7 +108,12 @@ def main(argv):
                 kinds["not found by Tag"] += 1
             else:
                 material = ifcopenshell.util.element.get_material(element, should_skip_usage=True)
+                kind = ifcopenshell.util.element.get_type(element)
+                on_type = (
+                    ifcopenshell.util.element.get_material(kind, should_skip_usage=True) if kind is not None else None
+                )
                 kinds[material.is_a() if material is not None else "no material"] += 1
+                kinds["on its type " + (on_type.is_a() if on_type is not None else "none")] += 1
             layers = revit_layers(element, unit_mm) if element is not None else None
             if layers is None:
                 continue
