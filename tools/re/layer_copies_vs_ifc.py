@@ -183,6 +183,9 @@ def main(argv):
             f"layer copies: {kind} category entry: hits {trace['hits']}, word {trace['word']}, "
             f"one {trace['one']}, frame {trace['frame']}, other tag {trace['other_tag']}, "
             f"mark {trace['mark']}, values set {trace['values_set']} unset {trace['values_unset']}; "
+            f"no pattern: null {trace.get('bare', '?')}, mark {trace.get('bare_mark', '?')}, "
+            f"values set {trace.get('bare_values_set', '?')} unset {trace.get('bare_values_unset', '?')}; "
+            f"distinct values {trace.get('distinct', '?')}; "
             f"mark past the category at {offsets}; styles {trace['styles']}; "
             f"read {'yes' if trace['read'] else 'no'}; named {'yes' if trace['named'] else 'no'}"
         )

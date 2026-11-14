@@ -60,6 +60,8 @@ fn category_entry_trace(rf: &mut RevitFile, version: u32, category: i64) -> serd
     let (mut hits, mut word, mut one, mut framed, mut other_tag, mut marked) = (0, 0, 0, 0, 0, 0);
     let mut mark_offsets: BTreeMap<usize, usize> = BTreeMap::new();
     let mut values: BTreeSet<u32> = BTreeSet::new();
+    let (mut bare, mut bare_marked) = (0, 0);
+    let mut bare_values: BTreeSet<u32> = BTreeSet::new();
     for stream in rf.partition_stream_names() {
         let Ok(inflated) = rf.inflated_partition(&stream) else {
             continue;
@@ -77,6 +79,17 @@ fn category_entry_trace(rf: &mut RevitFile, version: u32, category: i64) -> serd
                 continue;
             }
             word += 1;
+            // RE-464's form with no pattern: a null object at +16, the mark at +20, the material at +24.
+            if get(16, 4) == Some(&[0; 4][..]) {
+                bare += 1;
+                if get(20, 4) == Some(&MARK[..]) {
+                    bare_marked += 1;
+                    if let Some(bytes) = get(24, 4) {
+                        bare_values
+                            .insert(u32::from_le_bytes(bytes.try_into().expect("four bytes")));
+                    }
+                }
+            }
             if get(12, 4) != Some(&[1, 0, 0, 0][..]) {
                 continue;
             }
@@ -98,10 +111,18 @@ fn category_entry_trace(rf: &mut RevitFile, version: u32, category: i64) -> serd
         }
     }
     let set = values.iter().filter(|&&v| v != 0 && v != u32::MAX).count();
+    let bare_set = bare_values
+        .iter()
+        .filter(|&&v| v != 0 && v != u32::MAX)
+        .count();
+    // The reader takes a material only when every entry that passes names the same one.
+    let distinct = values.union(&bare_values).count();
     serde_json::json!({
         "layout": "32-bit",
         "hits": hits, "word": word, "one": one, "frame": framed, "other_tag": other_tag,
         "mark": marked, "values_set": set, "values_unset": values.len() - set,
+        "bare": bare, "bare_mark": bare_marked, "bare_values_set": bare_set,
+        "bare_values_unset": bare_values.len() - bare_set, "distinct": distinct,
         "mark_offsets": mark_offsets.iter().map(|(k, v)| format!("{k} {v}")).collect::<Vec<_>>(),
     })
 }
