@@ -5402,7 +5402,7 @@ fn aggregate_wholes(model: &IfcModel) -> BTreeMap<usize, usize> {
 
 /// The parts of every aggregate whose whole is a building element (#323):
 /// they reach the spatial structure through that whole.
-fn aggregate_parts_of_elements(model: &IfcModel) -> std::collections::BTreeSet<usize> {
+pub(super) fn aggregate_parts_of_elements(model: &IfcModel) -> std::collections::BTreeSet<usize> {
     aggregate_wholes(model).into_keys().collect()
 }
 
