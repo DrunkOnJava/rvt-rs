@@ -4038,7 +4038,13 @@ pub(super) fn curve_area_length(curve: &entities::IndexedCurve) -> Option<(f64, 
 /// is 0.7 to 1.1 percent larger than Revit's on the 2 of the BIM4LCA office's
 /// ceilings as built and the 9 at permit whose records hold a `CutPairGStep`,
 /// and on no other. On a ceiling of several pieces Revit's export gives the
-/// area of one of them, which no field of the record says. Its `Width` is left
+/// area of one of them: the piece its sketch's two lowest-ElementId lines, the
+/// first drawn, both lie on (`PlanProfile::first_drawn_piece`, #1209). That is
+/// Revit's piece on 62 of 62 ceilings of the BIM4LCA offices where the two
+/// lines share a piece; a ceiling whose two lines lie on two pieces (13 there)
+/// gets no `GrossArea`, since on one of them the lowest line's piece is not
+/// Revit's. Measured on that one building only: no other model with a Revit
+/// export has a ceiling in pieces. Its `Width` is left
 /// out (RE-294): Revit 2024's exporter writes the extrusion's depth there and
 /// a later one (Revit 2025 or 2026) writes none on a covering, so the exporters
 /// disagree.
@@ -4075,8 +4081,27 @@ fn add_ceiling_quantities(
             let total: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
             (total - body.height_feet).abs() <= TOLERANCE_FEET
         });
-    if layered && pieces.is_empty() && from_sketch && uncut {
-        if let Some(area) = profile_area(body) {
+    // #1209: a ceiling in pieces takes its first-drawn piece's area, or none.
+    let measured = if pieces.is_empty() {
+        Some(body)
+    } else {
+        decoded
+            .fields
+            .iter()
+            .find_map(|(name, value)| match (name.as_str(), value) {
+                (
+                    crate::element_record_plan_profiles::PLAN_PROFILE_FIRST_PIECE_FIELD,
+                    InstanceField::Integer { value, .. },
+                ) => usize::try_from(*value).ok(),
+                _ => None,
+            })
+            .and_then(|piece| match piece {
+                0 => Some(body),
+                piece => pieces.get(piece - 1),
+            })
+    };
+    if layered && from_sketch && uncut {
+        if let Some(area) = measured.and_then(profile_area) {
             properties.push(Property {
                 name: "GrossArea".into(),
                 value: PropertyValue::AreaSquareFeet(area),
