@@ -785,32 +785,27 @@ enum Cut {
     },
 }
 
-/// Whether the slab, roof or footing made of `pieces` (ElementId `id`) has an
-/// underside a wall's top may be cut at: any slab or footing, and a roof only
-/// where it is one of `plates`, its record box exactly its type's layers and
-/// its plan outline read (RE-351). A roof whose box is deeper than its layers
-/// is not a level plate (a roof by extrusion, a slope its reader does not
-/// read): its box is drawn as a plain extrusion, but the box's underside is
-/// its lowest point, not a level the walls under it stop at. The layers are
-/// the proof that the underside is level; the outline is what the roof covers.
-fn level_underside(
-    entities: &[IfcEntity],
-    pieces: &[usize],
-    id: u32,
-    plates: &HashSet<u32>,
-) -> bool {
-    plates.contains(&id)
-        || !pieces.iter().any(|&index| {
-            matches!(
-                entities.get(index),
-                Some(IfcEntity::BuildingElement { ifc_type, .. }) if ifc_type.as_str() == "IFCROOF"
-            )
-        })
+/// Every Roof element record read, by ElementId, and whether it is a level
+/// plate: its record box exactly its type's layers and its plan outline read
+/// (RE-351). Keyed on the record's class, not the IFC entity it is exported
+/// as, so a Floor exported as `IfcRoof` keeps its cut and a Roof exported as
+/// `IfcSlab` is held to the plate rule (#1480).
+pub(super) type Roofs = HashMap<u32, bool>;
+
+/// Whether the slab, roof or footing `id` has an underside a wall's top may be
+/// cut at: any element whose record is not a Roof, and a Roof only where it is
+/// a level plate (`Roofs`). A roof whose box is deeper than its layers is not
+/// a level plate (a roof by extrusion, a slope its reader does not read): its
+/// box is drawn as a plain extrusion, but the box's underside is its lowest
+/// point, not a level the walls under it stop at. The layers are the proof
+/// that the underside is level; the outline is what the roof covers.
+fn level_underside(id: u32, roofs: &Roofs) -> bool {
+    roofs.get(&id).is_none_or(|plate| *plate)
 }
 
 /// For each of `pending` (a wall's entity index and the ElementIds its top
 /// join and cut pairs name) that is cut: its index and how.
-fn decide(entities: &[IfcEntity], pending: &[Pending], plates: &HashSet<u32>) -> Vec<(usize, Cut)> {
+fn decide(entities: &[IfcEntity], pending: &[Pending], plates: &Roofs) -> Vec<(usize, Cut)> {
     let Gathered {
         pieces,
         voids,
@@ -841,7 +836,7 @@ fn decide(entities: &[IfcEntity], pending: &[Pending], plates: &HashSet<u32>) ->
             let Some(found) = pieces.get(&id) else {
                 continue;
             };
-            if !level_underside(entities, found, id, plates) {
+            if !level_underside(id, plates) {
                 continue;
             }
             let Some(cutter) = cutters
@@ -962,7 +957,7 @@ fn to_local(placement: &Placement, point: Point2) -> Point2 {
 pub(super) fn cut_wall_tops(
     entities: &mut [IfcEntity],
     pending: &[Pending],
-    plates: &HashSet<u32>,
+    plates: &Roofs,
     sloped_roofs: &HashSet<u32>,
 ) {
     if pending.is_empty() {
@@ -1402,7 +1397,7 @@ struct BaseContext<'a> {
     entities: &'a [IfcEntity],
     gathered: Gathered<'a>,
     shapes: &'a HashMap<u32, SlabTop>,
-    plates: &'a HashSet<u32>,
+    plates: &'a Roofs,
 }
 
 /// How the base of `wall` is cut at the one element of
@@ -1468,7 +1463,7 @@ fn decide_base(
         // is a level plate (`level_underside`'s rule for the tops, RE-351): a
         // roof drawn as its record box has the box's top, not its own
         // (RE-351 section 4, #1947).
-        if !level_underside(entities, found, id, plates) {
+        if !level_underside(id, plates) {
             continue;
         }
         let Some(cutter) = cutters
@@ -1580,7 +1575,7 @@ fn decide_bases(
     entities: &[IfcEntity],
     pending: &[PendingBase],
     shapes: &HashMap<u32, SlabTop>,
-    plates: &HashSet<u32>,
+    plates: &Roofs,
 ) -> Vec<(usize, BaseDecision)> {
     let context = BaseContext {
         entities,
@@ -1618,7 +1613,7 @@ pub(super) fn cut_wall_bases(
     pending: &[PendingBase],
     shapes: &HashMap<u32, SlabTop>,
     steps: &HashMap<usize, SteppedPlan>,
-    plates: &HashSet<u32>,
+    plates: &Roofs,
 ) {
     if pending.is_empty() {
         return;
@@ -2815,7 +2810,7 @@ fn decide_ends(
     pending: &[PendingBase],
     joined: &[PendingEnds],
     shapes: &HashMap<u32, SlabTop>,
-    plates: &HashSet<u32>,
+    plates: &Roofs,
     refused: &mut BTreeMap<usize, &'static str>,
     unmarked: &mut BTreeMap<usize, &'static str>,
 ) -> Vec<WallEnds> {
@@ -3133,7 +3128,7 @@ pub(super) fn extend_wall_ends(
     pending: &[PendingBase],
     joined: &[PendingEnds],
     shapes: &HashMap<u32, SlabTop>,
-    plates: &HashSet<u32>,
+    plates: &Roofs,
     handoffs: &mut BTreeMap<usize, Vec<Property>>,
 ) -> HashMap<usize, SteppedPlan> {
     let mut stepped = HashMap::new();
