@@ -17,7 +17,13 @@ pub(super) fn attach_ifc_export_overrides(
     // parameter.
     for elements in lists.iter_mut() {
         for element in elements.iter_mut() {
-            if matches!(element.class.as_str(), "Furniture" | "Casework") {
+            let defaults = matches!(element.class.as_str(), "Furniture" | "Casework")
+                || crate::ifc::category_map::lookup(&element.class).is_some_and(|mapping| {
+                    NOTDEFINED_DEFAULTS
+                        .iter()
+                        .any(|(entity, _)| *entity == mapping.ifc_type)
+                });
+            if defaults {
                 element.fields.push((
                     FURNITURE_RELEASE_FIELD.into(),
                     InstanceField::Integer {

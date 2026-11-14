@@ -984,23 +984,26 @@ pub fn append_typed_production_elements(
                 // and a 2022 file's export parameters are not read.
                 // A value that is no enumerator is left unset: what Revit writes
                 // for one is not measured.
-                (effective.ifc_type == "IFCFURNITURE"
-                    && decoded.fields.iter().any(|(name, value)| match value {
-                        InstanceField::Integer { value, .. }
-                            if name == crate::partition_schema_mvp::FURNITURE_RELEASE_FIELD =>
-                        {
-                            u32::try_from(*value).is_ok_and(|release| {
-                                crate::partition_schema_mvp::FURNITURE_DEFAULT_REVIT_VERSIONS
-                                    .contains(&release)
-                            })
-                        }
-                        _ => false,
-                    })
-                    && !decoded.fields.iter().any(|(name, value)| {
-                        matches!(value, InstanceField::String(text)
+                // #1713: roofs, stairs, stair flights and proxies the same way, each
+                // on the releases `NOTDEFINED_DEFAULTS` gives it.
+                (decoded.fields.iter().any(|(name, value)| match value {
+                    InstanceField::Integer { value, .. }
+                        if name == crate::partition_schema_mvp::FURNITURE_RELEASE_FIELD =>
+                    {
+                        u32::try_from(*value).is_ok_and(|release| {
+                            crate::partition_schema_mvp::NOTDEFINED_DEFAULTS.iter().any(
+                                |(entity, releases)| {
+                                    *entity == effective.ifc_type && releases.contains(&release)
+                                },
+                            )
+                        })
+                    }
+                    _ => false,
+                }) && !decoded.fields.iter().any(|(name, value)| {
+                    matches!(value, InstanceField::String(text)
                             if name == crate::partition_schema_mvp::IFC_PREDEFINED_TYPE_FIELD
                                 && !text.trim().is_empty())
-                    }))
+                }))
                 .then_some("NOTDEFINED")
             })
             .or(effective.predefined_type);
