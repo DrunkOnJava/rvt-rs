@@ -1149,6 +1149,15 @@ pub fn append_typed_production_elements(
                 } else {
                     extrusion = Some(body);
                 }
+                // #1713: a roof that its "Export to IFC As" value writes as
+                // another entity is still a roof for the choice of its body.
+                let mut properties = properties;
+                if redirected && mapping.ifc_type == "IFCROOF" {
+                    properties.properties.push(Property {
+                        name: super::saved_meshes::REDIRECTED_ROOF_PROPERTY.into(),
+                        value: PropertyValue::Boolean(true),
+                    });
+                }
                 property_set = Some(properties);
                 record_handoffs = handoffs;
             } else {
