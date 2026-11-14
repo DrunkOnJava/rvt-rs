@@ -1187,6 +1187,7 @@ struct BaseContext<'a> {
     entities: &'a [IfcEntity],
     gathered: Gathered<'a>,
     shapes: &'a HashMap<u32, SlabTop>,
+    plates: &'a HashSet<u32>,
 }
 
 /// How the base of `wall` is cut at the one element of
@@ -1215,6 +1216,7 @@ fn decide_base(
         entities,
         gathered,
         shapes,
+        plates,
     } = context;
     let Some(wall) = wall else {
         return BaseDecision::Left("wall_not_one_plain_extrusion");
@@ -1247,6 +1249,13 @@ fn decide_base(
         let Some(found) = gathered.pieces.get(&id) else {
             continue;
         };
+        // A roof's top is a level the wall's base stops at only where the roof
+        // is a level plate (`level_underside`'s rule for the tops, RE-351): a
+        // roof drawn as its record box has the box's top, not its own
+        // (RE-351 section 4, #1947).
+        if !level_underside(entities, found, id, plates) {
+            continue;
+        }
         let Some(cutter) = cutters
             .entry(id)
             .or_insert_with(|| build_cutter(entities, found, &gathered.voids, plane.is_some()))
@@ -1356,11 +1365,13 @@ fn decide_bases(
     entities: &[IfcEntity],
     pending: &[PendingBase],
     shapes: &HashMap<u32, SlabTop>,
+    plates: &HashSet<u32>,
 ) -> Vec<(usize, BaseDecision)> {
     let context = BaseContext {
         entities,
         gathered: gather(entities),
         shapes,
+        plates,
     };
     let mut cutters: HashMap<u32, Option<Cutter>> = HashMap::new();
     let mut decisions = Vec::new();
@@ -1392,11 +1403,12 @@ pub(super) fn cut_wall_bases(
     pending: &[PendingBase],
     shapes: &HashMap<u32, SlabTop>,
     steps: &HashMap<usize, SteppedPlan>,
+    plates: &HashSet<u32>,
 ) {
     if pending.is_empty() {
         return;
     }
-    let decisions = decide_bases(entities, pending, shapes);
+    let decisions = decide_bases(entities, pending, shapes, plates);
     for (index, decision) in decisions {
         let Some(IfcEntity::BuildingElement {
             extrusion: Some(body),
@@ -2570,6 +2582,7 @@ fn decide_ends(
     pending: &[PendingBase],
     joined: &[PendingEnds],
     shapes: &HashMap<u32, SlabTop>,
+    plates: &HashSet<u32>,
     refused: &mut BTreeMap<usize, &'static str>,
     unmarked: &mut BTreeMap<usize, &'static str>,
 ) -> Vec<WallEnds> {
@@ -2601,6 +2614,7 @@ fn decide_ends(
         entities,
         gathered: gather(entities),
         shapes,
+        plates,
     };
     let mut cutters: HashMap<u32, Option<Cutter>> = HashMap::new();
     let mut accepted = Vec::new();
@@ -2886,6 +2900,7 @@ pub(super) fn extend_wall_ends(
     pending: &[PendingBase],
     joined: &[PendingEnds],
     shapes: &HashMap<u32, SlabTop>,
+    plates: &HashSet<u32>,
     handoffs: &mut BTreeMap<usize, Vec<Property>>,
 ) -> HashMap<usize, SteppedPlan> {
     let mut stepped = HashMap::new();
@@ -2904,6 +2919,7 @@ pub(super) fn extend_wall_ends(
         pending,
         joined,
         shapes,
+        plates,
         &mut refused,
         &mut unmarked,
     );
