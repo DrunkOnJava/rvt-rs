@@ -368,6 +368,15 @@ pub const INSTANCE_AXIS_TOLERANCE: f64 = 1e-6;
 /// `m_type_parameter:Type Mark` and so on.
 pub const TYPE_PARAMETER_FIELD_PREFIX: &str = "m_type_parameter:";
 
+/// Releases whose walls under a roof drawn from its slopes are cut along the
+/// roof's underside (#1478): Revit 2025, where Revit's exports of puzzbobb's
+/// models cut them so and rvt-rs's roofs have Revit's underside over the
+/// walls' plans (Measure run 43542785440).
+pub const SLOPED_ROOF_WALL_TOP_REVIT_VERSIONS: &[u32] = &[2025];
+
+/// Field marking a roof on one of [`SLOPED_ROOF_WALL_TOP_REVIT_VERSIONS`].
+pub const ROOF_CUTS_WALL_TOPS_FIELD: &str = "m_roof_cuts_wall_tops";
+
 /// Give each element the text parameters of its type ([`TYPE_ID_FIELD`],
 /// RE-38 and #322), as Revit shows a type's parameters on its instances.
 /// Field carrying, once per material, the name of a material an element's
