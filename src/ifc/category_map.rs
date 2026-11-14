@@ -366,9 +366,16 @@ pub const MAPPINGS: &[Mapping] = &[
         ifc_type: "IFCCABLECARRIERFITTING",
         predefined_type: None,
     },
+    // #1989: Revit's IFC4 export writes a gutter whose own "Export to IFC As"
+    // names no pipe segment as an `IfcFlowSegment`, typed by an
+    // `IfcPipeSegmentType` `GUTTER` (the BIM4LCA housing's 3 gutters, in each of
+    // its six files; BIM-Speed's Vitoria export of 2018 writes its 2 the same
+    // way in IFC2X3). An `IfcPipeSegment` value is acted on
+    // ([`EXPORT_OVERRIDE_TARGETS`]): the office's 24 gutters carry it with
+    // `GUTTER`, and Revit writes them as that.
     Mapping {
         revit_class: "Gutter",
-        ifc_type: "IFCPIPESEGMENT",
+        ifc_type: "IFCFLOWSEGMENT",
         predefined_type: None,
     },
     // Massing / abstract.
@@ -687,6 +694,14 @@ pub const EXPORT_OVERRIDE_TARGETS: &[Mapping] = &[
         ifc_type: "IFCGEOGRAPHICELEMENT",
         predefined_type: None,
     },
+    // #1989: a gutter's own value, the only class it is acted on for (a pipe
+    // is an `IfcPipeSegment` already). Its `PredefinedType` is the element's
+    // own or its type's where it is an enumerator ([`predefined_type_for`]).
+    Mapping {
+        revit_class: "IfcPipeSegment",
+        ifc_type: "IFCPIPESEGMENT",
+        predefined_type: None,
+    },
 ];
 
 /// The Revit classes an [`EXPORT_OVERRIDE_TARGETS`] value is acted on for,
@@ -704,12 +719,28 @@ const OVERRIDE_CLASS_LIMITS: &[(&str, &[&str])] = &[
         "IfcGeographicElement",
         &["Floor", "Furniture", "Planting", "SpecialtyEquipment"],
     ),
+    ("IfcPipeSegment", &["Gutter"]),
 ];
 
+/// The Revit classes an [`EXPORT_OVERRIDE_TARGETS`] value is not acted on for,
+/// where Revit's export is measured to ignore it. Two of the BIM4LCA housing's
+/// three gutters carry `IfcCovering` with `ROOFING`, as do the roofing elements
+/// around them, and Revit's IFC4 export of each of its six files writes both
+/// as `IfcFlowSegment`, as it does the third, which carries no value (#1989).
+/// As for a wall sweep's, a curtain wall's ([`export_override_applies`]).
+const OVERRIDE_CLASS_EXCLUSIONS: &[(&str, &[&str])] = &[("IfcCovering", &["Gutter"])];
+
 /// [`lookup_export_override`] for an element of `revit_class`: `None` where
-/// the value is limited to other classes (`OVERRIDE_CLASS_LIMITS`).
+/// the value is limited to other classes (`OVERRIDE_CLASS_LIMITS`) or
+/// ignored for this one (`OVERRIDE_CLASS_EXCLUSIONS`).
 pub fn lookup_export_override_for(value: &str, revit_class: &str) -> Option<&'static Mapping> {
     let target = lookup_export_override(value)?;
+    let excluded = OVERRIDE_CLASS_EXCLUSIONS.iter().any(|(name, classes)| {
+        name.eq_ignore_ascii_case(value.trim()) && classes.contains(&revit_class)
+    });
+    if excluded {
+        return None;
+    }
     let limited = OVERRIDE_CLASS_LIMITS
         .iter()
         .find(|(name, _)| name.eq_ignore_ascii_case(value.trim()));

@@ -330,7 +330,7 @@ enum ElementTail {
 /// subtype in IFC4.
 fn element_tail_for(ifc_upper: &str) -> ElementTail {
     match ifc_upper {
-        "IFCFURNISHINGELEMENT" | "IFCFLOWCONTROLLER" => ElementTail::Tag,
+        "IFCFURNISHINGELEMENT" | "IFCFLOWCONTROLLER" | "IFCFLOWSEGMENT" => ElementTail::Tag,
         "IFCDOOR" | "IFCWINDOW" => ElementTail::Opening,
         "IFCSPACE" => ElementTail::Space,
         "IFCREINFORCINGBAR" => ElementTail::ReinforcingBar,
@@ -384,6 +384,11 @@ fn step_enum_token(raw: &str) -> Option<String> {
 /// the occurrence's `PredefinedType` (RE-110). An occurrence and its type
 /// share one enumeration. `None` for entities rvt-rs does not type.
 fn type_entity_for(ifc_upper: &str, predefined: Option<&str>) -> Option<(String, String)> {
+    // #1989: the one `IfcFlowSegment` rvt-rs writes is a gutter, which Revit's
+    // export types by an `IfcPipeSegmentType` `GUTTER`.
+    if ifc_upper == "IFCFLOWSEGMENT" {
+        return Some(("IFCPIPESEGMENTTYPE".to_string(), ".GUTTER.".to_string()));
+    }
     let pt = format!(
         ".{}.",
         predefined
