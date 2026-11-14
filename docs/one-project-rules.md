@@ -26,8 +26,10 @@ this list, re-read by hand those not found word for word, checked every rule
 left on it against [RE-402](../reports/element-framing/RE-402-second-project-first-measurement.md)
 and [RE-405](../reports/element-framing/RE-405-wall-box-is-the-solid.md),
 and changed 14 verdicts. The rules measured on another project since are
-listed at the end in two parts, with the text that says so: those that were
-wrong there, which are rules to fix or narrow before 1.0, and those that held.
+listed at the end in three parts, with the text that says so: those that were
+wrong there and are still open, which are rules to fix or narrow before 1.0,
+each with its issue; those that were wrong there and have been repaired or
+narrowed since; and those that held.
 A rule measured on a second building and wrong there is not settled by having
 been measured; it is the clearest case for a fix.
 
@@ -216,19 +218,22 @@ runs, would test the largest share of the rules below.
 
 ### Measured on another project, and wrong there: rules to fix or narrow
 
+- [RE-212](../reports/element-framing/RE-212-port-flow-directions.md), `connector_ports`, `native_connectors`: RE-402 section 6.1: ports, pipes and ducts (RE-212, RE-370, RE-371) "does not hold" on the housing's duct; its pipes and ports are not exercised. Open as #1989.
+- [RE-354](../reports/element-framing/RE-354-door-type-values-and-family-type-manufacturer.md), `Pset_DoorCommon`, `partition_type_parameters`, `scan_partition`: RE-402 section 3, on the BIM4LCA housing: "RE-354 door FireRating ... does not hold on 1, holds on 3, not exercised on 2". Open as #1987.
+- [RE-381](../reports/element-framing/RE-381-profile-opening-reference-and-area.md), `Qto_OpeningElementBaseQuantities`, `step_writer`: RE-402 section 3, on the BIM4LCA housing: "RE-381/382 opening Reference ... does not hold on 4, not exercised on 2". Open as #1987.
+- [RE-384](../reports/element-framing/RE-384-sloped-floor-pitch-angle.md), `add_shaped_floor_pitch`, `slab_top_plane_from_fields`, `floor_slope_solid`, `Pset_SlabCommon`: RE-402 section 3, on the BIM4LCA housing: "RE-384 PitchAngle ... does not hold on 3, holds on 3". Open as #1987.
+- [RE-390](../reports/element-framing/RE-390-stair-railings-aggregated.md), `m_stairsComponentId`, `railing_records`, `m_stairsId`, `on_components`: RE-402 section 6.1: stair railings aggregated under their stair (RE-390) "does not hold" on the housing. Open as #1988.
+
+### Measured on another project, wrong there, and repaired or narrowed since
+
 - [RE-36](../reports/element-framing/RE-36-structural-categories.md), `OST_StructuralFraming`, `OST_StructuralColumns`, `OST_StructuralFoundation`, `OST_GenericModel`, `category_map`: RE-457 section 1: on a reporter's Revit 2027 structural model 59 foundation slabs Revit writes as `IfcSlab` are `IfcFooting` and one bracing Revit writes as `IfcMember` is `IfcBeam`; RE-457 narrows both mappings since.
 - [RE-106](../reports/element-framing/RE-106-oriented-curtain-boxes.md), `partition_family_instance_oriented_box`: RE-421 section 3: 166 of the concrete office's mullions and 173 of the timber office's had an oriented box that is not Revit's body; RE-421 offers the saved mesh since.
-- [RE-212](../reports/element-framing/RE-212-port-flow-directions.md), `connector_ports`, `native_connectors`: RE-402 section 6.1: ports, pipes and ducts (RE-212, RE-370, RE-371) "does not hold" on the housing's duct; its pipes and ports are not exercised.
-- [RE-243](../reports/element-framing/RE-243-mullion-net-volume.md), `Span`, `mullions_on_plain_hosts`, `BOX_SECTION_CLASSES`, `Qto_MemberBaseQuantities`, `native_mullion_hosts`: RE-402 section 8: the mullion rule is wrong on 48, 40, 48 and 48 of the housing's mullions, and as many `NetVolume` values differ; RE-403 repairs it since (the box rule with a mesh guard).
-- [RE-268](../reports/element-framing/RE-268-mullion-end-faces.md), `kept_ends`, `attach_mullion_plain_hosts`, `mullion_hosts`, `Qto_MemberBaseQuantities`, `partition_schema_mvp`, `native_mullion_hosts`: RE-402 section 3, on the BIM4LCA housing: "RE-268 mullion NetSurfaceArea ... does not hold on 4, holds on 2".
-- [RE-270](../reports/element-framing/RE-270-wall-areas-volumes.md), `GrossSideArea`, `NetSideArea`, `GrossVolume`, `NetVolume`, `wall_areas`, `bounded`, `export_content`, `native_walls`: RE-402 section 3, on the BIM4LCA housing: "RE-270/388 wall volumes and areas ... does not hold on 4, holds on 2".
-- [RE-292](../reports/element-framing/RE-292-wall-footprint-area.md), `GrossFootprintArea`, `FOOTPRINT_MIN_LENGTH_FACTOR`, `add_wall_areas_and_volumes`: RE-405 section 1: RE-292 is among the wall rules writing values Revit's export of the housing does not.
-- [RE-293](../reports/element-framing/RE-293-wall-height-bounded.md), `Height`, `add_bounded_wall_quantities`, `export_content`, `wall_areas`: RE-402 section 3, on the BIM4LCA housing: "RE-266/293 wall Height ... does not hold on 3, holds on 3".
-- [RE-354](../reports/element-framing/RE-354-door-type-values-and-family-type-manufacturer.md), `Pset_DoorCommon`, `partition_type_parameters`, `scan_partition`: RE-402 section 3, on the BIM4LCA housing: "RE-354 door FireRating ... does not hold on 1, holds on 3, not exercised on 2".
-- [RE-381](../reports/element-framing/RE-381-profile-opening-reference-and-area.md), `Qto_OpeningElementBaseQuantities`, `step_writer`: RE-402 section 3, on the BIM4LCA housing: "RE-381/382 opening Reference ... does not hold on 4, not exercised on 2".
-- [RE-384](../reports/element-framing/RE-384-sloped-floor-pitch-angle.md), `add_shaped_floor_pitch`, `slab_top_plane_from_fields`, `floor_slope_solid`, `Pset_SlabCommon`: RE-402 section 3, on the BIM4LCA housing: "RE-384 PitchAngle ... does not hold on 3, holds on 3".
-- [RE-390](../reports/element-framing/RE-390-stair-railings-aggregated.md), `m_stairsComponentId`, `railing_records`, `m_stairsId`, `on_components`: RE-402 section 6.1: stair railings aggregated under their stair (RE-390) "does not hold" on the housing.
-- [RE-400](../reports/element-framing/RE-400-mullion-ends-overlap.md), `kept_ends`, `Qto_MemberBaseQuantities`, `partition_schema_mvp`, `mullion_ends`: RE-402's title: "RE-400 is wrong on a file it was never measured on".
+- [RE-243](../reports/element-framing/RE-243-mullion-net-volume.md), `Span`, `mullions_on_plain_hosts`, `BOX_SECTION_CLASSES`, `Qto_MemberBaseQuantities`, `native_mullion_hosts`: RE-402 section 8: the mullion rule is wrong on 48, 40, 48 and 48 of the housing's mullions, and as many `NetVolume` values differ. RE-403 since takes every wrong mullion `NetVolume` of the housing to equal and every wrong `NetSurfaceArea` to missing.
+- [RE-268](../reports/element-framing/RE-268-mullion-end-faces.md), `kept_ends`, `attach_mullion_plain_hosts`, `mullion_hosts`, `Qto_MemberBaseQuantities`, `partition_schema_mvp`, `native_mullion_hosts`: RE-402 section 3, on the BIM4LCA housing: "RE-268 mullion NetSurfaceArea ... does not hold on 4, holds on 2". RE-403 since takes every wrong mullion `NetVolume` of the housing to equal and every wrong `NetSurfaceArea` to missing.
+- [RE-270](../reports/element-framing/RE-270-wall-areas-volumes.md), `GrossSideArea`, `NetSideArea`, `GrossVolume`, `NetVolume`, `wall_areas`, `bounded`, `export_content`, `native_walls`: RE-402 section 3, on the BIM4LCA housing: "RE-270/388 wall volumes and areas ... does not hold on 4, holds on 2". RE-405 since takes every wall `Height`, `NetVolume` and area that differed on the eight BIM4LCA files to equal or missing.
+- [RE-292](../reports/element-framing/RE-292-wall-footprint-area.md), `GrossFootprintArea`, `FOOTPRINT_MIN_LENGTH_FACTOR`, `add_wall_areas_and_volumes`: RE-405 section 1: RE-292 is among the wall rules writing values Revit's export of the housing does not. RE-405 since takes every wall `Height`, `NetVolume` and area that differed on the eight BIM4LCA files to equal or missing.
+- [RE-293](../reports/element-framing/RE-293-wall-height-bounded.md), `Height`, `add_bounded_wall_quantities`, `export_content`, `wall_areas`: RE-402 section 3, on the BIM4LCA housing: "RE-266/293 wall Height ... does not hold on 3, holds on 3". RE-405 since takes every wall `Height`, `NetVolume` and area that differed on the eight BIM4LCA files to equal or missing.
+- [RE-400](../reports/element-framing/RE-400-mullion-ends-overlap.md), `kept_ends`, `Qto_MemberBaseQuantities`, `partition_schema_mvp`, `mullion_ends`: RE-402's title: "RE-400 is wrong on a file it was never measured on". RE-403 since takes every wrong mullion `NetVolume` of the housing to equal and every wrong `NetSurfaceArea` to missing.
 
 ### Measured on another project since, and holding there
 

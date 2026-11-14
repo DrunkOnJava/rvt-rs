@@ -30,7 +30,7 @@ use crate::geometry::{
 };
 use crate::partition_area_boundaries::ArcMids;
 use crate::walker::{DecodedElement, InstanceField};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 mod column_quantities;
 mod wall_areas;
@@ -740,12 +740,13 @@ pub fn append_typed_production_elements(
     // profile, for the cut-out carried on to the wall's end.
     let mut pending_profiles: Vec<wall_profile::Pending> = Vec::new();
     let mut slab_shapes: HashMap<u32, wall_tops::SlabTop> = HashMap::new();
-    // RE-351: the roofs whose record box is exactly their type's layers and
-    // whose plan outline is read, the only roofs whose underside a wall's top
-    // may be cut at: the layers prove the underside level, and a roof without
-    // its outline is drawn over its box's rectangle, which an L-shaped roof
-    // does not fill.
-    let mut plate_roofs: HashSet<u32> = HashSet::new();
+    // RE-351: every Roof record, and whether its record box is exactly its
+    // type's layers and its plan outline is read, the only roofs whose
+    // underside a wall's top may be cut at: the layers prove the underside
+    // level, and a roof without its outline is drawn over its box's
+    // rectangle, which an L-shaped roof does not fill. Keyed on the record's
+    // class, whatever IFC entity it is exported as (#1480).
+    let mut plate_roofs: wall_tops::Roofs = HashMap::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
     // entity; `None` once two of its elements disagree.
@@ -1619,15 +1620,14 @@ pub fn append_typed_production_elements(
                     None => wall_tops::SlabTop::Flat,
                 };
                 slab_shapes.insert(id, top);
-                if decoded.class == "Roof"
-                    && crate::element_record_plan_profiles::plan_profile_from_fields(
+                if decoded.class == "Roof" {
+                    let plate = crate::element_record_plan_profiles::plan_profile_from_fields(
                         &decoded.fields,
                     )
                     .is_some()
-                    && crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
-                        .is_some_and(|layers| layers.stacked)
-                {
-                    plate_roofs.insert(id);
+                        && crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+                            .is_some_and(|layers| layers.stacked);
+                    plate_roofs.insert(id, plate);
                 }
             }
         }
@@ -5692,8 +5692,15 @@ pub const INSTANCE_TURNED_BODY_SOURCE: &str = "partition_family_instance_turned_
 pub const INSTANCE_ORIENTED_BODY_SOURCE: &str = "partition_family_instance_oriented_box";
 
 /// Below this, `|det|` of the axes' absolute components leaves the box along
-/// them undetermined by the record box (RE-106).
-const ORIENTED_BOX_MIN_DET: f64 = 0.1;
+/// them undetermined by the record box (RE-106). The BIM4LCA concrete office
+/// has 12 short mullions without a set (RE-226's shape, shorter than their own
+/// section, their own Z horizontal and turned some 45 degrees off the model's
+/// axes; #1760's probe): 6 at |det| 0.053, 0.082 and 0.096 are solved here,
+/// 3024608 (0.082) to Revit's `Length` within 0.0003 ft (0.3306 against 0.3309,
+/// #1193), and 6 at 0.015, 0.028 and 0.039 keep RE-226's extent along the
+/// model axis their own Z lies on. Those 6 solve to the same half-extents, but
+/// nothing here checks a solve that close to singular (#1193).
+const ORIENTED_BOX_MIN_DET: f64 = 0.05;
 
 /// The half-extents along `axes` (X, Y and Z, each in model coordinates) of
 /// the box whose axis-aligned box is `size` (RE-106): the box centred on the
