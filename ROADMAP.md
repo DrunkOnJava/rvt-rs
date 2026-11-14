@@ -365,11 +365,32 @@ the four levels a file can reach are in the
   it once per storey (#1977, RE-463), no Revit export holds a curtain wall
   without a mullion (#1960), and `[0.23.0]` in [`CHANGELOG.md`](CHANGELOG.md)
   lists what each change does not measure.
+- **0.24.0, 2026-11-14.** It closes #1713: on the 42 models with a public Revit
+  export, every one of the 58,665 elements both exports hold has Revit's
+  `PredefinedType`, and a Revit 2024 or later file whose export parameters
+  differ between its partitions gives each element its current copy's value.
+  A ramp's railings are its parts (#1988), a gutter is an `IfcFlowSegment`
+  typed by an `IfcPipeSegmentType` `GUTTER` (#1989), a multistory stair is
+  written once on each storey it repeats on (#1977), a ceiling in pieces has
+  its piece's `GrossArea` (#1209), and a wall under a roof drawn from its
+  slopes is cut along the roof's underside (#1478). Against 0.23.0, 72 of the
+  126 measured exports differ, and 29 of the 102 `diagnostics.json` files; 28
+  of the 72 are Autodesk's sample projects, which no Revit export covers, and
+  on the other 44 no count that equals Revit's falls except those the
+  changelog names (the saved-mesh `IfcCovering` row that the gutters leave, and
+  the plan-outline and layer counts of the roofs now drawn from their saved
+  meshes), and none that differs rises but the layer counts of 4 floors of one
+  held-out Revit 2020 file (#1805). `PredefinedType` stays unset on some
+  held-out pairs of Revit 2023 and earlier (counts only: 4 of 12 roofs, 1 of 5
+  stairs, 1 of 5 stair flights, 12 of 60 furniture and 2 of 10 railings), a
+  ceiling's piece `GrossArea` rests on one building, a multistory stair's
+  copies are inferred from three groups of one building, and `[0.24.0]` in
+  [`CHANGELOG.md`](CHANGELOG.md) lists what each change does not measure.
 
-### 0.24.0: IFC geometry and element data
+### 0.25.0: IFC geometry and element data
 
-The geometry and element-data work that continues after 0.23.0, moved from the
-0.23.0 milestone when 0.23.0 shipped. Each
+The geometry and element-data work that continues after 0.24.0, moved from the
+0.24.0 milestone when 0.24.0 shipped. Each
 slice records a baseline, an improvement and a residual against Revit's own
 exports on the reference pack (#407), approximations stay labelled (#409), and
 a slice ships in the next release that contains it. Geometry open now: wall
