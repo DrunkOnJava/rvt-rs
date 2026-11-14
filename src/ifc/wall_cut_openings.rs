@@ -62,6 +62,14 @@ const HEIGHT_TOLERANCE_FEET: f64 = 0.05;
 /// How far two copies of an element's record box may differ on any side for
 /// them to agree, feet.
 const COPY_TOLERANCE_FEET: f64 = 0.01;
+/// Releases a door's opening in a second wall is written on (RE-338, RE-353).
+/// Revit's exports hold such openings on Revit 2024 files only (the BIM4LCA
+/// housing and offices); none of 2015 to 2023 holds one, and on the spent
+/// Vitoria "Before" (Revit 2018) the one opening this rule wrote once RE-450
+/// read the door cuts of those releases is not in Revit's export (#1165).
+/// 2025 to 2027 keep the rule as before RE-450; no Revit export of them holds
+/// a door with a cut in a second wall.
+const DOOR_SECOND_WALL_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
 
 /// Why a step of a wall's record writes no opening, as the diagnostics
 /// count it (`exported.wall_cut_openings_left_out`).
@@ -86,6 +94,7 @@ pub(super) mod reason {
     pub const OUTSIDE_HEIGHT: &str = "opening_outside_wall_height";
     pub const CURTAIN_COPIES: &str = "curtain_wall_record_copies_disagree";
     pub const DOOR_CUT_ELSEWHERE: &str = "door_cuts_a_wall_it_is_not_hosted_in_as_its_own";
+    pub const DOOR_RELEASE: &str = "door_second_wall_release_not_measured";
 }
 
 /// A wall the openings are cut in: its entity, name and frame, as the
@@ -462,13 +471,18 @@ fn door_cut(host: &Host, world: &[f64; 6], door: usize) -> Result<Cut, &'static 
 /// left out and counted by its reason in the result. `handoffs` are the
 /// properties the cutters' parameters name in an opening's set (RE-386), each
 /// cutter's given to the openings it cuts as an
-/// [`IfcEntity::CutterOpeningSet`].
+/// [`IfcEntity::CutterOpeningSet`]. A door's opening in a second wall is
+/// written only on [`DOOR_SECOND_WALL_REVIT_VERSIONS`] (`revit_version`, the
+/// release whose layout the records take).
 pub(super) fn attach_wall_cut_openings(
     rf: &mut RevitFile,
     entities: &mut Vec<IfcEntity>,
     door_cuts: &BTreeMap<usize, OpeningCut>,
     handoffs: &BTreeMap<usize, Vec<Property>>,
+    revit_version: Option<u32>,
 ) -> BTreeMap<String, usize> {
+    let door_release =
+        revit_version.is_some_and(|version| DOOR_SECOND_WALL_REVIT_VERSIONS.contains(&version));
     let mut left_out: BTreeMap<String, usize> = BTreeMap::new();
     let mut hosts: BTreeMap<u64, Host> = BTreeMap::new();
     let mut curtains: BTreeMap<u64, usize> = BTreeMap::new();
@@ -588,20 +602,22 @@ pub(super) fn attach_wall_cut_openings(
             // of several pieces, or an ElementId held twice) has no opening
             // written, and each step of its record that would is counted.
             for step in list {
+                let second_wall_door = step.kind == WallCutKind::Cutout
+                    && doors.contains_key(&step.cutter)
+                    && step.cuts_something == Some(false);
                 let named = match step.kind {
                     WallCutKind::Embed => curtains.contains_key(&step.cutter),
-                    WallCutKind::Cutout => {
-                        cabinets.contains_key(&step.cutter)
-                            || (doors.contains_key(&step.cutter)
-                                && step.cuts_something == Some(false))
-                    }
+                    WallCutKind::Cutout => cabinets.contains_key(&step.cutter) || second_wall_door,
                     WallCutKind::RectOpening => true,
                     WallCutKind::ShadowCutout => false,
                 };
                 if named {
-                    *left_out
-                        .entry(reason::WALL_NOT_FRAMED.to_string())
-                        .or_insert(0) += 1;
+                    let why = if second_wall_door && !door_release {
+                        reason::DOOR_RELEASE
+                    } else {
+                        reason::WALL_NOT_FRAMED
+                    };
+                    *left_out.entry(why.to_string()).or_insert(0) += 1;
                 }
             }
             continue;
@@ -646,6 +662,7 @@ pub(super) fn attach_wall_cut_openings(
                                 Err(reason::DOOR_CUT_ELSEWHERE)
                             }
                             None => Err(reason::DOOR_FLAG_NOT_READ),
+                            Some(false) if !door_release => Err(reason::DOOR_RELEASE),
                             Some(false) => {
                                 let world = door_cuts
                                     .get(door)

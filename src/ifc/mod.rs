@@ -1755,9 +1755,13 @@ fn export_rvt_doc_reporting(
         .include_geometry
         .then(|| opening_cuts_through_hosts(&entities, &record_handoffs));
     let wall_cut_openings_left_out = match &early_opening_cuts {
-        Some(cuts) => {
-            wall_cut_openings::attach_wall_cut_openings(rf, &mut entities, cuts, &record_handoffs)
-        }
+        Some(cuts) => wall_cut_openings::attach_wall_cut_openings(
+            rf,
+            &mut entities,
+            cuts,
+            &record_handoffs,
+            layout,
+        ),
         None => Default::default(),
     };
 
