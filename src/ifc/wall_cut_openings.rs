@@ -62,14 +62,14 @@ const HEIGHT_TOLERANCE_FEET: f64 = 0.05;
 /// How far two copies of an element's record box may differ on any side for
 /// them to agree, feet.
 const COPY_TOLERANCE_FEET: f64 = 0.01;
-/// Releases a door's opening in a second wall is written on (RE-338, RE-353).
-/// Revit's exports hold such openings on Revit 2024 files only (the BIM4LCA
-/// housing and offices); none of 2015 to 2023 holds one, and on the spent
-/// Vitoria "Before" (Revit 2018) the one opening this rule wrote once RE-450
-/// read the door cuts of those releases is not in Revit's export (#1165).
-/// 2025 to 2027 keep the rule as before RE-450; no Revit export of them holds
-/// a door with a cut in a second wall.
-const DOOR_SECOND_WALL_REVIT_VERSIONS: &[u32] = &[2024, 2025, 2026, 2027];
+/// Releases a door's opening in a second wall is written on (RE-338, RE-353):
+/// the one whose files measure it. Revit's exports hold such openings on
+/// Revit 2024 files only (the BIM4LCA housing and offices). None of 2015 to
+/// 2023 holds one, and on the spent Vitoria "Before" (Revit 2018) the one
+/// opening this rule wrote once RE-450 read the door cuts of those releases is
+/// not in Revit's export (#1165). No Revit export of 2025 to 2027 has a door
+/// that cuts a second wall, so those releases are not taken either.
+const DOOR_SECOND_WALL_REVIT_VERSIONS: &[u32] = &[2024];
 
 /// Why a step of a wall's record writes no opening, as the diagnostics
 /// count it (`exported.wall_cut_openings_left_out`).
