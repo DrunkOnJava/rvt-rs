@@ -543,6 +543,12 @@ pub const CATEGORY_MATERIAL_SUPPORTED_REVIT_VERSIONS: &[u32] = &[
 /// unset). This frame is the bytes from the unset `u32` to the `3f 01`,
 /// with the 1-or-2 word skipped. `0x013f` is 2023's tag of `PatternHelper`;
 /// 2015 to 2022 write their own (RE-180).
+///
+/// An entry with no pattern holds a null object (`u32 0`) where the
+/// `PatternHelper` object and its eight bytes stand, so the mark is 20 bytes
+/// past the category and the material 24 (RE-464): every category of
+/// Autodesk's `rac_advanced`, `rme` and `rst` samples of 2015 to 2023, where
+/// `rac_basic` holds the patterned entry.
 pub const CATEGORY_MATERIAL_FRAME_2023: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
 /// See [`CATEGORY_MATERIAL_FRAME_2023`]: `i32 -3000010`, 26 bytes past the
 /// category, right before the material.
@@ -566,7 +572,7 @@ pub const CATEGORY_MATERIAL_FRAME: [u8; 20] = [
 /// On Revit 2023 the entry is [`CATEGORY_MATERIAL_FRAME_2023`]'s: on two
 /// projects the Walls, Floors and Roofs entries hold the materials Revit's
 /// own export writes for their layers that take their category's material
-/// (RE-115).
+/// (RE-115). An entry with no pattern is read too (RE-464).
 ///
 /// Where the entry is not read, the category's material is the one its
 /// graphics styles name ([`native_category_material`], RE-206).
@@ -839,14 +845,21 @@ fn scan_category_material_2023(
         for at in memchr::memmem::find_iter(buf, &pattern) {
             let entry = |offset: usize, len: usize| buf.get(at + offset..at + offset + len);
             let word = le_bytes::u32_at(buf, at + 8);
-            if !matches!(word, Some(1 | 2))
-                || entry(12, 4) != Some(&[1, 0, 0, 0][..])
-                || entry(16, 6) != Some(&frame[..])
-                || entry(30, 4) != Some(&CATEGORY_MATERIAL_MARK_2023[..])
-            {
+            if !matches!(word, Some(1 | 2)) {
                 continue;
             }
-            if let Some(material) = le_bytes::u32_at(buf, at + 34) {
+            let patterned = entry(12, 4) == Some(&[1, 0, 0, 0][..])
+                && entry(16, 6) == Some(&frame[..])
+                && entry(30, 4) == Some(&CATEGORY_MATERIAL_MARK_2023[..]);
+            // RE-464: no pattern, a null object where the PatternHelper stands.
+            let unpatterned = entry(16, 4) == Some(&[0, 0, 0, 0][..])
+                && entry(20, 4) == Some(&CATEGORY_MATERIAL_MARK_2023[..]);
+            let material_at = match (patterned, unpatterned) {
+                (true, _) => 34,
+                (false, true) => 24,
+                (false, false) => continue,
+            };
+            if let Some(material) = le_bytes::u32_at(buf, at + material_at) {
                 found.insert(material);
             }
         }
