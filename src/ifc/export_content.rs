@@ -30,7 +30,7 @@ use crate::geometry::{
 };
 use crate::partition_area_boundaries::ArcMids;
 use crate::walker::{DecodedElement, InstanceField};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 mod column_quantities;
 mod wall_areas;
