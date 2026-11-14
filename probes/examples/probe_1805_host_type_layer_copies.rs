@@ -61,30 +61,38 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     };
     let declared = rvt::elem_table::declared_ids(&rvt::elem_table::parse_records(&mut rf)?);
-    let materials: BTreeSet<u32> =
-        ptr::scan_type_records(&mut rf, version, ptr::OST_MATERIALS, &declared)?
-            .iter()
-            .map(|record| record.element_id)
-            .collect();
     let mvp = rvt::research::partition_schema_mvp::recover_partition_schema_mvp(
         &mut rf,
         version,
         rvt::walker::WalkerLimits::default(),
     )?;
-    let names: BTreeMap<u32, String> = mvp
-        .materials
-        .iter()
-        .filter_map(|material| {
-            let id = material.id?;
-            material
-                .fields
+    // The material ids and names the export reads (`materials_and_names`): a 32-bit release's
+    // from its `Material` records, a 64-bit release's from its type records and the schema
+    // reader's materials. Revit 2008 to 2023 have no material type records, so their layers
+    // would not decode against those.
+    let (materials, names): (BTreeSet<u32>, BTreeMap<u32, String>) =
+        if rvt::research::partition_element_records_2023::is_32bit_release(version) {
+            rvt::research::partition_materials::scan_materials_32(&mut rf, version, &declared)
+        } else {
+            let ids = ptr::scan_type_records(&mut rf, version, ptr::OST_MATERIALS, &declared)?
                 .iter()
-                .find_map(|(name, value)| match (name.as_str(), value) {
-                    ("m_name", InstanceField::String(text)) => Some((id, text.clone())),
-                    _ => None,
-                })
-        })
-        .collect();
+                .map(|record| record.element_id)
+                .collect();
+            let names =
+                mvp.materials
+                    .iter()
+                    .filter_map(|material| {
+                        let id = material.id?;
+                        material.fields.iter().find_map(|(name, value)| {
+                            match (name.as_str(), value) {
+                                ("m_name", InstanceField::String(text)) => Some((id, text.clone())),
+                                _ => None,
+                            }
+                        })
+                    })
+                    .collect();
+            (ids, names)
+        };
     // The elements each type is given by the partition schema reader, and its class.
     let mut elements_of: BTreeMap<u32, (String, Vec<u32>)> = BTreeMap::new();
     for element in mvp

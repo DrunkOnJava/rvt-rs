@@ -88,6 +88,7 @@ def main(argv):
             by_tag.setdefault(element.Tag, element)
     elements = sum(len(t["elements"]) for t in types)
     tallies = collections.defaultdict(collections.Counter)
+    kinds = collections.Counter()
     with_set = 0
     for kind in types:
         copies = {role: None for role in ROLES}
@@ -96,6 +97,11 @@ def main(argv):
                 copies[role] = copy["layers"]
         for element_id in kind["elements"]:
             element = by_tag.get(str(element_id))
+            if element is None:
+                kinds["not found by Tag"] += 1
+            else:
+                material = ifcopenshell.util.element.get_material(element, should_skip_usage=True)
+                kinds[material.is_a() if material is not None else "no material"] += 1
             layers = revit_layers(element, unit_mm) if element is not None else None
             if layers is None:
                 continue
@@ -114,6 +120,9 @@ def main(argv):
         f"with a current copy {sum(1 for t in types if t['current'] is not None)}; "
         f"elements {elements}; in Revit's export with a layer set {with_set}"
     )
+    # What Revit's export gives the elements, so a count of no layer set can be told apart from a
+    # Tag that is not found: entity names and counts only.
+    print("layer copies: Revit's material on those elements: " + ", ".join(f"{k} {n}" for k, n in sorted(kinds.items())))
     for kind, tally in sorted(tallies.items()):
         widths = " ".join(f"{role} {tally[f'widths {role}']}" for role in ROLES)
         both = " ".join(f"{role} {tally[f'both {role}']}" for role in ROLES)
