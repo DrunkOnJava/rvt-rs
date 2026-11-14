@@ -841,6 +841,17 @@ fn decide(entities: &[IfcEntity], pending: &[Pending], plates: &Roofs) -> Vec<(u
             if !level_underside(id, plates) {
                 continue;
             }
+            // Measurement variant for #1947 item 4: a slab or footing drawn as
+            // its record box (its plan outline not read) cuts nothing either.
+            if found.iter().any(|&piece| {
+                matches!(entities.get(piece), Some(IfcEntity::BuildingElement {
+                    property_set: Some(set), ..
+                }) if set.properties.iter().any(|property| property.name == "BodySource"
+                    && matches!(&property.value,
+                        PropertyValue::Text(source) if source == super::RECORD_BBOX_BODY_SOURCE)))
+            }) {
+                continue;
+            }
             let Some(cutter) = cutters
                 .entry(id)
                 .or_insert_with(|| build_cutter(entities, found, &voids, false))
