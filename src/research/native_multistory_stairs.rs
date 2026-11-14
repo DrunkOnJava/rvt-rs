@@ -55,6 +55,10 @@ pub struct MultistoryGroup {
     pub sets: Vec<StairSet>,
 }
 
+/// A record's standard stair and its `(index, ElementId)` pairs, before the
+/// sets are cut out of them.
+type RawGroup = (Option<u64>, Vec<(i64, u64)>);
+
 /// The ElementId in `{"m_id": {"m_id": n}}` or `{"m_id": {"m_id64": n}}`.
 fn id_of(value: &Fv) -> Option<u64> {
     let inner = value.get("m_id")?;
@@ -77,7 +81,7 @@ pub fn multistory_groups(rf: &mut RevitFile) -> anyhow::Result<Vec<MultistoryGro
         ..Options::default()
     };
     // Each record's pairs, (index, ElementId) in index order, and its standard stair.
-    let mut groups: BTreeMap<u64, (Option<u64>, Vec<(i64, u64)>)> = BTreeMap::new();
+    let mut groups: BTreeMap<u64, RawGroup> = BTreeMap::new();
     extract_graphs(rf, &options, |record| {
         let Some(graph) = &record.graph else {
             return Ok(());
