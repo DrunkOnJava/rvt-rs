@@ -263,9 +263,11 @@ Measured against 0.22.0 on every model Measure holds (run [43555120928](https://
     held to the same project's 2024 save (RE-353, RE-461): rvt-rs's export of every save
     of `rac_basic` from 2015 to 2027 holds the same door's opening in its second
     wall as its 2024 save. `rac_basic` has no Revit export, so that shows the cut
-    is read alike on every release, not that Revit writes it there; Revit's own
-    export holds this kind of opening on the BIM4LCA office pair, Revit 2024,
-    alone (RE-338) (#1165).
+    is read alike on every release, not that Revit writes it there. Revit's own
+    exports hold this kind of opening on 8 of the 12 BIM4LCA models, all Revit
+    2024 (13 to 43 each, rvt-rs writing 1 to 33 of them with every box within
+    0.01 ft), and on one held-out Revit 2026 house (1, none written; counts
+    only); no Revit export of 2015 to 2023 does (#1165).
 - What differs in `diagnostics.json` is counts: the wording of the storey
   warning (120 files), the skipped items (62), the parameter values (32), the
   exported entities (21), the bodies' sources (the saved mesh in 11 files, the
