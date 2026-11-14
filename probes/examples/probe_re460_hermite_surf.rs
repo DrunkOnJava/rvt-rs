@@ -721,6 +721,7 @@ fn main() -> anyhow::Result<()> {
     }
     edge_stage(&records);
     node_stage(&records);
+    record_stage(&records);
     Ok(())
 }
 
@@ -853,6 +854,85 @@ fn node_stage(records: &BTreeMap<u64, Record>) {
                 );
             }
             k += 1;
+        }
+    }
+}
+
+/// Stage 4 (#1191, rows 3c and 3d): what else the elements that place a `HermiteSurf` symbol hold.
+/// Revit's body of railing 13680 has 54 of its 630 vertices where none of the symbol's 12 faces is,
+/// so the question is which record of the element's `InstanceInfo` chain holds the geometry there. For
+/// each element that places a symbol with a Hermite surface, one line for its own record and one for
+/// every symbol its `InstanceInfo` objects name, with the classes each holds (a symbol the pass did not
+/// read says so):
+///
+///   `record <id> <class of the record, or -> <class>=<n> ...`
+///   `record <id> not read`
+fn record_stage(records: &BTreeMap<u64, Record>) {
+    let classes_of = |record: &Record| {
+        let mut classes: BTreeMap<&str, usize> = BTreeMap::new();
+        if let Some(graph) = &record.graph {
+            for object in &graph.objects {
+                *classes.entry(object.class_name.as_str()).or_default() += 1;
+            }
+        }
+        classes
+            .iter()
+            .map(|(class, n)| format!("{class}={n}"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    let symbols_of = |record: &Record| -> Vec<u64> {
+        let Some(graph) = &record.graph else {
+            return Vec::new();
+        };
+        graph
+            .objects
+            .iter()
+            .filter(|object| object.class_name == "InstanceInfo")
+            .filter_map(|object| {
+                object
+                    .fields
+                    .get("m_symbolId")
+                    .and_then(identifier)
+                    .and_then(|symbol| u64::try_from(symbol).ok())
+            })
+            .collect()
+    };
+    let holders: BTreeSet<u64> = records
+        .iter()
+        .filter(|(_, record)| {
+            record.graph.as_ref().is_some_and(|graph| {
+                graph
+                    .objects
+                    .iter()
+                    .any(|object| object.class_name == "HermiteSurf")
+            })
+        })
+        .map(|(id, _)| *id)
+        .collect();
+    let mut printed = BTreeSet::new();
+    for (id, record) in records {
+        let symbols = symbols_of(record);
+        if !symbols.iter().any(|symbol| holders.contains(symbol)) {
+            continue;
+        }
+        println!(
+            "record {id} {} {}",
+            record.class_name.as_deref().unwrap_or("-"),
+            classes_of(record)
+        );
+        for symbol in symbols {
+            if !printed.insert(symbol) {
+                continue;
+            }
+            match records.get(&symbol) {
+                Some(held) => println!(
+                    "record {symbol} {} {}",
+                    held.class_name.as_deref().unwrap_or("-"),
+                    classes_of(held)
+                ),
+                None => println!("record {symbol} not read"),
+            }
         }
     }
 }
