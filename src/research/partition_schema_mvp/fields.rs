@@ -572,6 +572,16 @@ pub const SLAB_UNCUT_FIELD: &str = "m_slab_uncut";
 /// shape-edits its corner vertices (`SlabShapeEditGStep`, #1384, RE-336).
 pub const SLAB_TOP_PLANE_FIELD: &str = "m_slab_top_plane";
 
+/// Releases whose sloped floors (a top along [`SLAB_TOP_PLANE_FIELD`]) take
+/// `Qto_SlabBaseQuantities.Depth` and `GrossVolume` from their layers and slope
+/// (#1208): Revit 2024, the BIM4LCA office, whose Revit 24.0.5 export writes
+/// them on all 8. No export of another release is measured to write them, so
+/// those keep neither until a file of theirs is.
+pub const SLOPED_FLOOR_QUANTITIES_REVIT_VERSIONS: &[u32] = &[2024];
+
+/// Field marking a sloped floor on one of [`SLOPED_FLOOR_QUANTITIES_REVIT_VERSIONS`].
+pub const SLOPED_FLOOR_QUANTITIES_FIELD: &str = "m_sloped_floor_quantities";
+
 /// Field set on a floor, ceiling or roof whose native record was read, with
 /// the shape it holds (or none) given by [`SLAB_TOP_PLANE_FIELD`] or
 /// [`SLAB_SHAPE_UNREAD_FIELD`] or by neither (#1384): the mark that its top is
