@@ -1809,12 +1809,39 @@ prints it from any installed build.
 
 ## Roadmap Position
 
-- **v0.22.0** (2026-11-13) is the latest release: crates.io (`rvt` and
+- **v0.23.0** (2026-11-14) is the latest release: crates.io (`rvt` and
   `rvt-rs-mcp`, both published from the tag), the `rvt` wheels and sdist on
-  PyPI, GitHub Release archives for Linux, macOS and Windows, and the
-  container image, each checked from its published artifacts
-  ([`install.md`](install.md)); docs.rs had built `rvt` when they were checked
-  (`rvt-rs-mcp` is a binary crate with no documentation there). It limits what
+  PyPI, GitHub Release archives for Linux, macOS and Windows, and the container
+  image, each checked from its published artifacts ([`install.md`](install.md));
+  docs.rs had built `rvt` when they were checked (`rvt-rs-mcp` is a binary crate
+  with no documentation there). It writes more of what Revit's own export writes
+  and narrows rules that audits found wider than their evidence: a wall of a
+  curtain wall type is an `IfcCurtainWall` on Revit 2023 to 2027 whether or not
+  a mullion names it, and a curtain wall that is the host panel of another is
+  not one (#1960); a roof, stair, stair flight or building element proxy with no
+  predefined type of its own gets Revit's `NOTDEFINED` (#1713); a sloped floor
+  gets its `Qto_SlabBaseQuantities.Depth` and `GrossVolume` (#1208); a door's or
+  window's `FireRating` is read from its saved parameter (#1507); a column whose
+  saved mesh is a prism of another section than its type's rectangle is drawn
+  from the mesh; the doors and windows of Revit 2015 to 2023 cut the outline
+  their symbol cuts and carry its `OverallWidth` and `OverallHeight`; a
+  material's colour reaches IFC viewers; and a file that stores no project GUID
+  gets the project, building and site GlobalIds Revit's export gives them, from
+  the GUID in its history header (RE-459). Against 0.22.0 all 146 measured
+  exports differ, and 120 of the 121 `diagnostics.json` files; 79 of the 146
+  have no Revit export (Autodesk's 59 sample projects, 19 families and
+  Einhoven), and on the other 67, scored against Revit's own exports, no count
+  that equals Revit's falls and none that differs rises. What it does not
+  measure: a horizontal bracing's `BRACE` type is checked on a reporter's counts
+  of one structural model (#1841); `NOTDEFINED` on stairs and flights is
+  measured on Revit 2024 only (#1713); a multistory stair is written once where
+  Revit's export writes it once per storey, so Snowdon Towers' three lack 53
+  entities (#1977, RE-463); and no Revit export holds a curtain wall without a
+  mullion, so what Revit writes for `rme_basic`'s two rests on the source of its
+  exporter (#1960). `[0.23.0]` in [`CHANGELOG.md`](../CHANGELOG.md) gives what
+  each change measures and what it does not.
+- **v0.22.0** (2026-11-13): published on every channel, each checked from its
+  published artifacts. It limits what
   a crafted Revit file can make the MCP server, the command-line tools, the
   Python bindings and the viewer do: `rvt-rs-mcp` reads from and writes to one
   folder and bounds what an answer carries (#1883); `rvt-doc --redact`,
@@ -2066,7 +2093,7 @@ prints it from any installed build.
   - elements outside the export phase left out (#328);
   - doors and windows drawn from their saved meshes by default in `rvt-ifc`;
   - Revit 2008 to 2014 exported experimentally.
-- `main` has everything v0.22.0 has, and is ahead of it by the fragments
+- `main` has everything v0.23.0 has, and is ahead of it by the fragments
   under [`changelog.d/`](../changelog.d/README.md).
 
 Open work is tracked as GitHub issues; [`docs/archive/TODO.md`](archive/TODO.md) is

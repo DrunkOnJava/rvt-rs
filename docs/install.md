@@ -4,27 +4,27 @@ This guide covers the supported ways to install or run rvt-rs on a fresh
 machine. Use [user-guide.md](user-guide.md) after installation to decide which
 workflow fits your file.
 
-**Publication status (as of 2026-11-13, release `v0.22.0`):**
+**Publication status (as of 2026-11-14, release `v0.23.0`):**
 
 | Channel | Status |
 |---|---|
-| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.22.0** (wheels for Linux x86_64 and aarch64 with glibc 2.17 or later, musl Linux x86_64 and aarch64, macOS Apple Silicon and Intel, and Windows x86_64, plus the sdist; see [the platform table](#python-package-from-pypi-available)) |
-| **Prebuilt CLI binaries** (GitHub Releases) | **Published** — [v0.22.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.22.0) carries archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), with `rvt-rs-mcp` beside the CLIs, plus `SHA256SUMS` and build attestations |
-| **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Published** — `ghcr.io/drunkonjava/rvt-rs:0.22.0`, `linux/amd64` + `linux/arm64`, with `rvt-rs-mcp`; see [Docker](#docker) |
-| **crates.io** (`rvt`) | **Published** — `cargo install rvt --locked` installs **0.22.0** (the CLIs) and `cargo add rvt` adds the library |
-| **crates.io** (`rvt-rs-mcp`) | **Published** — `cargo install rvt-rs-mcp --locked` installs **0.22.0**, the MCP server ([MCP Server](#mcp-server)) |
+| **PyPI** (`rvt`) | **Published** — `pip install rvt` installs **0.23.0** (wheels for Linux x86_64 and aarch64 with glibc 2.17 or later, musl Linux x86_64 and aarch64, macOS Apple Silicon and Intel, and Windows x86_64, plus the sdist; see [the platform table](#python-package-from-pypi-available)) |
+| **Prebuilt CLI binaries** (GitHub Releases) | **Published** — [v0.23.0](https://github.com/DrunkOnJava/rvt-rs/releases/tag/v0.23.0) carries archives for Linux (x86_64, aarch64), macOS (Apple Silicon, Intel) and Windows (x86_64), with `rvt-rs-mcp` beside the CLIs, plus `SHA256SUMS` and build attestations |
+| **Container image** (`ghcr.io/drunkonjava/rvt-rs`) | **Published** — `ghcr.io/drunkonjava/rvt-rs:0.23.0`, `linux/amd64` + `linux/arm64`, with `rvt-rs-mcp`; see [Docker](#docker) |
+| **crates.io** (`rvt`) | **Published** — `cargo install rvt --locked` installs **0.23.0** (the CLIs) and `cargo add rvt` adds the library |
+| **crates.io** (`rvt-rs-mcp`) | **Published** — `cargo install rvt-rs-mcp --locked` installs **0.23.0**, the MCP server ([MCP Server](#mcp-server)) |
 | **docs.rs** (`rvt`) | <https://docs.rs/rvt> (built by docs.rs after each crates.io publish) |
 
-Each 0.22.0 channel was checked from what was published, on 2026-11-13.
+Each 0.23.0 channel was checked from what was published, on 2026-11-14.
 
-- **crates.io** records the publish workflow's run (43502023761) and the tagged commit (`7a31459b`) as the source of both `rvt` 0.22.0 and `rvt-rs-mcp` 0.22.0 (Trusted Publishing), and its page shows the 0.22.0 README.
-- **docs.rs** had built `rvt` 0.22.0 when the channels were checked. `rvt-rs-mcp` is a binary crate and has no documentation there, as at 0.15.0.
-- **The macOS arm64 archive** matched `SHA256SUMS`, and its build attestation names the release workflow at the tag. It converted Core Interior, Einhoven and RE1 Architecture into the same IFC as Measure's export of the tag (run 43510542380), line for line once the export time (`FILE_NAME`, `IFCOWNERHISTORY`) is set aside, with diagnostics byte-identical to Measure's. Its `rvt-rs-mcp` answers `server/discover`.
+- **crates.io** records the publish workflow's run (43561193249) and the tagged commit (`28b5ed83`) as the source of both `rvt` 0.23.0 and `rvt-rs-mcp` 0.23.0 (Trusted Publishing), and its page shows the 0.23.0 README.
+- **docs.rs** had built `rvt` 0.23.0 when the channels were checked. `rvt-rs-mcp` is a binary crate and has no documentation there, as at 0.15.0.
+- **The macOS arm64 archive** matched `SHA256SUMS`, and its build attestation names the release workflow at the tag. It converted Core Interior, Einhoven and RE1 Architecture into the same IFC as Measure's export of the tag (run 43561262485), line for line once the export time (`FILE_NAME`, `IFCOWNERHISTORY`) is set aside, with diagnostics byte-identical to Measure's. Its `rvt-rs-mcp` answers `server/discover`.
 - **The PyPI wheel**, installed in a clean environment, converted the same three models into the same IFC as Measure's, with the same diagnostics as JSON (which `rvt_to_ifc_diagnostics` returns without indentation).
-- **The container image**, whose attestation verifies, ran on `linux/amd64` and `linux/arm64` and converted RE1 Architecture into the same IFC as the archive, line for line without `FILE_NAME` and `IFCOWNERHISTORY` (4,644 lines each); its `rvt-rs-mcp` answers `server/discover`.
-- **The release page** holds 15 files. `SHA256SUMS` lists the 13 that are not it or the bundle, each with the digest GitHub holds for it, and the 8 PyPI files carry the same sha256. `gh attestation verify --source-ref refs/tags/v0.22.0` passed on all 13 of them.
-- **The deployed viewer** reports `rvt-rs 0.22.0`.
-- **The publish workflow** also installed each wheel and opened a model on all seven wheel platforms, ran `cargo install` on the tagged source with the CLI sample smoke, and ran the viewer's load smoke on the built artifact (58 tests passed, 13 skipped, none failed). `cargo install` from crates.io itself was not run.
+- **The container image**, whose attestation verifies, ran on `linux/amd64` and `linux/arm64` and converted RE1 Architecture into the same IFC as the archive, line for line without `FILE_NAME` and `IFCOWNERHISTORY` (4,782 lines each); its `rvt-rs-mcp` answers `server/discover`.
+- **The release page** holds 15 files. `SHA256SUMS` lists the 13 that are not it or the bundle, each with the digest GitHub holds for it, and the 8 PyPI files carry the same sha256. `gh attestation verify --source-ref refs/tags/v0.23.0` passed on all 13 of them.
+- **The deployed viewer** reports `rvt-rs 0.23.0`.
+- **The publish workflow** also installed each wheel and opened a model on all seven wheel platforms, ran `cargo install` on the tagged source with the CLI sample smoke, and ran the viewer's load smoke on the built artifact (63 tests passed, 8 skipped, none failed). `cargo install` from crates.io itself was not run.
 
 ## Browser Viewer
 
@@ -48,7 +48,7 @@ python -c "import rvt; print(rvt.__version__)"
 
 Each wheel is one `abi3` build for CPython 3.8 and later.
 
-| Platform | 0.2.0 | 0.3.0 to 0.22.0 |
+| Platform | 0.2.0 | 0.3.0 to 0.23.0 |
 |---|---|---|
 | Linux x86_64 | glibc 2.35 or later (`manylinux_2_35`) | glibc 2.17 or later (`manylinux2014`) |
 | Linux aarch64 (Graviton, Raspberry Pi 4/5, Docker on Apple Silicon) | none | glibc 2.17 or later |
@@ -115,8 +115,8 @@ Every tagged release from v0.2.0 on attaches ready-to-run archives of
 all the CLIs (`rvt-info`, `rvt-inspect`, `rvt-ifc`, …) to its page under
 <https://github.com/DrunkOnJava/rvt-rs/releases>. No Rust toolchain is
 needed. In the archive names `<tag>` is the release tag with its `v`
-(`rvt-rs-v0.22.0-x86_64-unknown-linux-musl.tar.gz`); the wheel and the
-container image name the version without it (`0.22.0`). The release page also
+(`rvt-rs-v0.23.0-x86_64-unknown-linux-musl.tar.gz`); the wheel and the
+container image name the version without it (`0.23.0`). The release page also
 carries the Python wheels, the sdist (the files PyPI gets) and the
 provenance bundle (`rvt-rs-<tag>.intoto.jsonl`). From v0.16.1, `SHA256SUMS`
 lists every file on the page but itself and the bundle, wheels and sdist
@@ -183,7 +183,7 @@ archives are attached to that run as artifacts.
 Every tagged release from v0.2.0 on also publishes a container image
 holding the same static Linux binaries, for `linux/amd64` and `linux/arm64`:
 `ghcr.io/drunkonjava/rvt-rs:<version>` (the tag without its `v`, as
-`0.22.0`) and, for a final release, `ghcr.io/drunkonjava/rvt-rs:latest`. It is a distroless image of about the
+`0.23.0`) and, for a final release, `ghcr.io/drunkonjava/rvt-rs:latest`. It is a distroless image of about the
 binaries' size, with no shell and no package manager. The working directory
 is `/data`, so mount the folder holding the model there:
 
