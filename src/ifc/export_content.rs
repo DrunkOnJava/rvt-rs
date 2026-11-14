@@ -5628,8 +5628,13 @@ pub const INSTANCE_TURNED_BODY_SOURCE: &str = "partition_family_instance_turned_
 pub const INSTANCE_ORIENTED_BODY_SOURCE: &str = "partition_family_instance_oriented_box";
 
 /// Below this, `|det|` of the axes' absolute components leaves the box along
-/// them undetermined by the record box (RE-106).
-const ORIENTED_BOX_MIN_DET: f64 = 0.1;
+/// them undetermined by the record box (RE-106). The 12 short mullions of the
+/// BIM4LCA office (RE-226's shape, shorter than their own section, their own Z
+/// horizontal and some 47 degrees off the model's axes) have 0.082, and their
+/// box solved there is Revit's `Length` to 0.0003 ft (0.3306 against 0.3309
+/// ft for 3024608, #1193). A mullion turned within a few degrees of 45 has
+/// under 0.05 and keeps RE-226's extent along the model axis its own Z lies on.
+const ORIENTED_BOX_MIN_DET: f64 = 0.05;
 
 /// The half-extents along `axes` (X, Y and Z, each in model coordinates) of
 /// the box whose axis-aligned box is `size` (RE-106): the box centred on the
