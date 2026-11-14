@@ -173,9 +173,9 @@ pub struct PlanProfile {
     /// largest first.
     pub void_openings: Vec<VoidOpening>,
     /// Of a sketch of separate loops, the piece its two lowest-ElementId
-    /// lines, the first drawn, both lie on: 0 for the outer loop's piece, `i
-    /// + 1` for `pieces[i]` (#1209). Revit's export gives a ceiling in pieces
-    /// the area of that piece as its `GrossArea`: 62 of 62 on the BIM4LCA
+    /// lines, the first drawn, both lie on: 0 for the outer loop's piece,
+    /// `i + 1` for `pieces[i]` (#1209). Revit's export gives a ceiling in
+    /// pieces the area of that piece as its `GrossArea`: 62 of 62 on the BIM4LCA
     /// offices, where the two lines lie on one piece (13 more ceilings, whose
     /// two lowest lines lie on two pieces, include one where the lowest
     /// line's piece is not Revit's). `None` for one piece, or where the two
