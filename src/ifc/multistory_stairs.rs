@@ -31,8 +31,20 @@ use crate::RevitFile;
 use crate::native_multistory_stairs::{MULTISTORY_REVIT_VERSIONS, MultistoryGroup, StairSet};
 
 /// Property of a copy's record set: the ElementId of the stair it repeats.
-/// The writer gives no type object to an element that carries it.
 pub(crate) const MULTISTORY_COPY_PROPERTY: &str = "MultistoryCopyOf";
+
+/// Whether the element of `ifc_type` with the record set `set` is a copy of a
+/// multistory stair that Revit's export gives no type object: the stair, its
+/// flights and its landing. Its stringers keep their originals' type (30 of 30
+/// on Snowdon Towers architectural, RE-463) and its railings have none either way.
+pub(crate) fn copy_without_type_object(ifc_type: &str, set: Option<&PropertySet>) -> bool {
+    !ifc_type.eq_ignore_ascii_case("IFCMEMBER")
+        && set.is_some_and(|set| {
+            set.properties
+                .iter()
+                .any(|property| property.name == MULTISTORY_COPY_PROPERTY)
+        })
+}
 
 /// How far two heights may differ for a span to be as high as a stair, feet.
 const HEIGHT_TOLERANCE_FEET: f64 = 0.01;

@@ -47,7 +47,10 @@ def by_tag(model, classes):
 
 
 def centre(entity, settings):
-    shape = ifcopenshell.geom.create_shape(settings, entity)  # held: a chained .geometry reads back empty
+    try:
+        shape = ifcopenshell.geom.create_shape(settings, entity)  # held: a chained .geometry reads back empty
+    except RuntimeError:
+        return None  # a stair carried by its parts has no body of its own
     verts = np.array(shape.geometry.verts).reshape(-1, 3)
     if not len(verts):
         return None
