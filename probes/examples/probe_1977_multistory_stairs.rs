@@ -15,7 +15,7 @@
 //! Output, one record per line (`<ids>` are ElementIds):
 //!   file <path> release <n>
 //!   multistory <id> objects <Class:n ...>
-//!   object <id> <Class> <fields>
+//!   object <id> <Class> <scalar and id fields, or the pair set and the cell list as JSON>
 //!   standard <id> stair <id> ref_level <id|-> excluded <ids|-> type <id|->
 //!   cell <id> up_to <id|-> next_index <n|-> level_pairs <ids|->
 //!   level <id> <Class> <fields>
@@ -123,6 +123,29 @@ fn field_int(graph: &Value, name: &str) -> Option<i64> {
         .find_map(|object| object["fields"].get(name)?.as_i64())
 }
 
+/// The fields of `fields` that hold a number, a flag, a string or an ElementId, as
+/// `name=value`, in order; pointers and nested objects are left out.
+fn scalars(fields: &Value) -> String {
+    let Some(map) = fields.as_object() else {
+        return "-".to_string();
+    };
+    let mut out: Vec<String> = Vec::new();
+    for (name, value) in map {
+        match value {
+            Value::Number(_) | Value::Bool(_) | Value::String(_) => {
+                out.push(format!("{name}={value}"));
+            }
+            Value::Object(_) => {
+                if let Some(id) = id_of(value) {
+                    out.push(format!("{name}=#{id}"));
+                }
+            }
+            _ => {}
+        }
+    }
+    out.join(" ")
+}
+
 fn probe(path: &str) -> Result<()> {
     let mut rf = RevitFile::open(path)?;
     println!("file {path} release {}", rf.layout_release()?);
@@ -144,7 +167,10 @@ fn probe(path: &str) -> Result<()> {
         for object in graph["objects"].as_array().into_iter().flatten() {
             let class = object["class_name"].as_str().unwrap_or("-");
             if class.starts_with("MultistoryStairs") {
-                println!("object {id} {class} {}", clip(&object["fields"], 900));
+                println!("object {id} {class} {}", scalars(&object["fields"]));
+            }
+            if class == "ElementIdIndexPairSet" || class == "CellList" {
+                println!("object {id} {class} {}", clip(&object["fields"], 1500));
             }
         }
         let stair = field_id(&graph, "m_standardStairsId");
@@ -182,7 +208,7 @@ fn probe(path: &str) -> Result<()> {
         for object in graph["objects"].as_array().into_iter().flatten() {
             let class = object["class_name"].as_str().unwrap_or("-");
             if class == "Level" || class == "LevelAttributes" {
-                println!("level {id} {class} {}", clip(&object["fields"], 400));
+                println!("level {id} {class} {}", scalars(&object["fields"]));
             }
         }
         Ok(())
@@ -204,7 +230,7 @@ fn probe(path: &str) -> Result<()> {
             for object in graph["objects"].as_array().into_iter().flatten() {
                 let class = object["class_name"].as_str().unwrap_or("-");
                 if class == "Stairs" || class == "StairsAttributes" || class == "StairsElement" {
-                    println!("stair {id} {class} {}", clip(&object["fields"], 700));
+                    println!("stair {id} {class} {}", scalars(&object["fields"]));
                 }
             }
             Ok(())
