@@ -718,6 +718,9 @@ pub fn recover_partition_schema_mvp(
     // --- Empty curtain panels are left out, as Revit leaves them out (#309) ---
     out.products
         .retain(|product| !is_empty_curtain_panel(product));
+    // --- Curtain panels that are the host panel of another curtain wall's
+    // grid are left out, as Revit leaves them out (#1975) ---
+    without_host_panels(rf, revit_version, &mut out.products, &mut wall_reads);
     // --- Plumbing fixtures whose type draws nothing visible are left out, as
     // Revit leaves them out (RE-363, #1496) ---
     without_invisible_plumbing_fixture_types(rf, revit_version, &mut out.products);
@@ -751,6 +754,18 @@ pub fn recover_partition_schema_mvp(
             &mut out.products,
         ] {
             attach_type_text_parameters(&type_parameters, elements);
+        }
+    }
+    // --- Roofs whose underside the walls under them are cut along (#1478) ---
+    if SLOPED_ROOF_WALL_TOP_REVIT_VERSIONS.contains(&revit_version) {
+        for roof in out
+            .slabs
+            .iter_mut()
+            .chain(out.products.iter_mut())
+            .filter(|element| element.class == "Roof")
+        {
+            roof.fields
+                .push((ROOF_CUTS_WALL_TOPS_FIELD.into(), InstanceField::Bool(true)));
         }
     }
     // --- A door's or window's Fire Rating from its saved parameters (#1507) ---

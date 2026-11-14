@@ -246,6 +246,83 @@ pub(super) fn is_empty_curtain_panel(element: &DecodedElement) -> bool {
         })
 }
 
+/// The releases on which a curtain panel that is the host panel of another
+/// curtain wall's grid is left out (#1975): 2024, the one release a file
+/// holding host panels with Revit's own export is measured on (Snowdon Towers'
+/// 23, local only; RE-353).
+const HOST_PANEL_REVIT_VERSIONS: &[u32] = &[2024];
+
+/// Leave out the curtain panels that are the host panel of another curtain
+/// wall's grid, as Revit's export leaves them out (#1975, RE-462). Such a
+/// panel is a curtain wall of its own whose element record keeps the panel
+/// category, and its wall record holds a `HostPanelInfo` naming the owner's
+/// placeholder panel it fills ([`crate::native_walls::WallReads::host_panels`]).
+/// Revit's exporter returns for a host panel in `WallExporter.Export` and folds
+/// it into its owner's parts in `CurtainSystemExporter.GetVisiblePanelsForGrid`
+/// (revit-ifc, CLEANROOM.md source 5): on Snowdon Towers Architectural none of
+/// the 23 is written, and their mullions are the owner's parts. The export
+/// diagnostics count what is left out, and a check that could not run is
+/// reported there with every panel kept.
+pub(super) fn without_host_panels(
+    rf: &mut RevitFile,
+    revit_version: u32,
+    products: &mut Vec<DecodedElement>,
+    wall_reads: &mut crate::native_walls::WallReads,
+) {
+    if !HOST_PANEL_REVIT_VERSIONS.contains(&revit_version) {
+        return;
+    }
+    // A panel that holds a basic wall of a layered type (RE-64, RE-72) is
+    // written as the curtain wall Revit writes for it, host panel or not: on
+    // Snowdon Towers Architectural 18 such panels hold a `HostPanelInfo` and
+    // all 18 are `IfcCurtainWall` in Revit's export.
+    let is_panel_wall = |element: &DecodedElement| {
+        element.fields.iter().any(|(name, value)| {
+            name == CURTAIN_PANEL_WALL_FIELD && matches!(value, InstanceField::Bool(true))
+        })
+    };
+    let panels: BTreeSet<u64> = products
+        .iter()
+        .filter(|element| element.class == "CurtainWallPanel" && !is_panel_wall(element))
+        .filter_map(|element| element.id.map(u64::from))
+        .collect();
+    if panels.is_empty() {
+        return;
+    }
+    let hosts = match wall_reads.host_panels(rf, &panels) {
+        Ok(hosts) => hosts,
+        Err(error) => {
+            rf.note_host_panel_error(panels.len(), error.to_string());
+            return;
+        }
+    };
+    if hosts.is_empty() {
+        return;
+    }
+    let mut classes: BTreeMap<String, Vec<crate::partition_element_records::LeftOutElement>> =
+        BTreeMap::new();
+    products.retain(|element| {
+        let left_out = element.class == "CurtainWallPanel"
+            && !is_panel_wall(element)
+            && element.id.is_some_and(|id| hosts.contains(&u64::from(id)));
+        if left_out {
+            let framed =
+                element.provenance.record_kind.as_deref() == Some("partition_element_record");
+            classes.entry(element.class.clone()).or_default().push(
+                crate::partition_element_records::LeftOutElement {
+                    element_id: element.id,
+                    class: element.class.clone(),
+                    stream: element.provenance.source_stream.clone().filter(|_| framed),
+                    offset: element.provenance.source_offset.filter(|_| framed),
+                    detail: None,
+                },
+            );
+        }
+        !left_out
+    });
+    rf.note_host_panel_instances(classes);
+}
+
 /// The curtain panels left out as empty (#309): how many, the frame each was
 /// read from (#1326), and the types of theirs whose material is set, which
 /// would contradict the name.

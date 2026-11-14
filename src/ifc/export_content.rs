@@ -740,12 +740,16 @@ pub fn append_typed_production_elements(
     // profile, for the cut-out carried on to the wall's end.
     let mut pending_profiles: Vec<wall_profile::Pending> = Vec::new();
     let mut slab_shapes: HashMap<u32, wall_tops::SlabTop> = HashMap::new();
-    // RE-351: the roofs whose record box is exactly their type's layers and
-    // whose plan outline is read, the only roofs whose underside a wall's top
-    // may be cut at: the layers prove the underside level, and a roof without
-    // its outline is drawn over its box's rectangle, which an L-shaped roof
-    // does not fill.
-    let mut plate_roofs: HashSet<u32> = HashSet::new();
+    // RE-351: every Roof record, and whether its record box is exactly its
+    // type's layers and its plan outline is read, the only roofs whose
+    // underside a wall's top may be cut at: the layers prove the underside
+    // level, and a roof without its outline is drawn over its box's
+    // rectangle, which an L-shaped roof does not fill. Keyed on the record's
+    // class, whatever IFC entity it is exported as (#1480).
+    let mut plate_roofs: wall_tops::Roofs = HashMap::new();
+    // #1478: the roofs drawn from their slopes on the releases whose walls under
+    // them are cut along their underside.
+    let mut sloped_roofs: HashSet<u32> = HashSet::new();
     let mut level_bind = crate::level_bind::LevelStoreyBind::new();
     // RE-286: what each type object's common set holds, by type and type
     // entity; `None` once two of its elements disagree.
@@ -1144,6 +1148,15 @@ pub fn append_typed_production_elements(
                     held_body = Some(body);
                 } else {
                     extrusion = Some(body);
+                }
+                // #1713: a roof that its "Export to IFC As" value writes as
+                // another entity is still a roof for the choice of its body.
+                let mut properties = properties;
+                if redirected && mapping.ifc_type == "IFCROOF" {
+                    properties.properties.push(Property {
+                        name: super::saved_meshes::REDIRECTED_ROOF_PROPERTY.into(),
+                        value: PropertyValue::Boolean(true),
+                    });
                 }
                 property_set = Some(properties);
                 record_handoffs = handoffs;
@@ -1619,15 +1632,22 @@ pub fn append_typed_production_elements(
                     None => wall_tops::SlabTop::Flat,
                 };
                 slab_shapes.insert(id, top);
-                if decoded.class == "Roof"
-                    && crate::element_record_plan_profiles::plan_profile_from_fields(
+                if decoded.class == "Roof" {
+                    let plate = crate::element_record_plan_profiles::plan_profile_from_fields(
                         &decoded.fields,
                     )
                     .is_some()
-                    && crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
-                        .is_some_and(|layers| layers.stacked)
+                        && crate::partition_schema_mvp::element_layers_from_fields(&decoded.fields)
+                            .is_some_and(|layers| layers.stacked);
+                    plate_roofs.insert(id, plate);
+                }
+                if decoded.class == "Roof"
+                    && decoded.fields.iter().any(|(name, value)| {
+                        name == crate::partition_schema_mvp::ROOF_CUTS_WALL_TOPS_FIELD
+                            && matches!(value, InstanceField::Bool(true))
+                    })
                 {
-                    plate_roofs.insert(id);
+                    sloped_roofs.insert(id);
                 }
             }
         }
@@ -1931,7 +1951,7 @@ pub fn append_typed_production_elements(
     }
 
     // RE-267: a wall's top is cut at the underside of the floor that covers it.
-    wall_tops::cut_wall_tops(entities, &pending_tops, &plate_roofs);
+    wall_tops::cut_wall_tops(entities, &pending_tops, &plate_roofs, &sloped_roofs);
 
     // #1396: a wall with an edited elevation profile that stops short of the
     // wall beneath it is drawn to that wall's face, where its base is still cut.
@@ -3106,7 +3126,10 @@ fn level_slab(
     property_set: Option<&PropertySet>,
 ) -> bool {
     const TOLERANCE_FEET: f64 = 1e-3;
-    if ifc_type != "IFCSLAB" {
+    // RE-238 is measured on floors, roofs and stair landings. A ceiling Revit
+    // exports as `IfcSlab` gets no `PitchAngle` from Revit's export: the
+    // BIM4LCA timber housing's 2337931 (`Compound Ceiling`) as built (#1987).
+    if ifc_type != "IFCSLAB" || decoded.class == "Ceiling" {
         return false;
     }
     let landing = property_set
@@ -4035,7 +4058,13 @@ pub(super) fn curve_area_length(curve: &entities::IndexedCurve) -> Option<(f64, 
 /// is 0.7 to 1.1 percent larger than Revit's on the 2 of the BIM4LCA office's
 /// ceilings as built and the 9 at permit whose records hold a `CutPairGStep`,
 /// and on no other. On a ceiling of several pieces Revit's export gives the
-/// area of one of them, which no field of the record says. Its `Width` is left
+/// area of one of them: the piece its sketch's two lowest-ElementId lines, the
+/// first drawn, both lie on (`PlanProfile::first_drawn_piece`, #1209). That is
+/// Revit's piece on 62 of 62 ceilings of the BIM4LCA offices where the two
+/// lines share a piece; a ceiling whose two lines lie on two pieces (13 there)
+/// gets no `GrossArea`, since on one of them the lowest line's piece is not
+/// Revit's. Measured on that one building only: no other model with a Revit
+/// export has a ceiling in pieces. Its `Width` is left
 /// out (RE-294): Revit 2024's exporter writes the extrusion's depth there and
 /// a later one (Revit 2025 or 2026) writes none on a covering, so the exporters
 /// disagree.
@@ -4072,8 +4101,27 @@ fn add_ceiling_quantities(
             let total: f64 = layers.layers.iter().map(|layer| layer.width_feet).sum();
             (total - body.height_feet).abs() <= TOLERANCE_FEET
         });
-    if layered && pieces.is_empty() && from_sketch && uncut {
-        if let Some(area) = profile_area(body) {
+    // #1209: a ceiling in pieces takes its first-drawn piece's area, or none.
+    let measured = if pieces.is_empty() {
+        Some(body)
+    } else {
+        decoded
+            .fields
+            .iter()
+            .find_map(|(name, value)| match (name.as_str(), value) {
+                (
+                    crate::element_record_plan_profiles::PLAN_PROFILE_FIRST_PIECE_FIELD,
+                    InstanceField::Integer { value, .. },
+                ) => usize::try_from(*value).ok(),
+                _ => None,
+            })
+            .and_then(|piece| match piece {
+                0 => Some(body),
+                piece => pieces.get(piece - 1),
+            })
+    };
+    if layered && from_sketch && uncut {
+        if let Some(area) = measured.and_then(profile_area) {
             properties.push(Property {
                 name: "GrossArea".into(),
                 value: PropertyValue::AreaSquareFeet(area),
@@ -5319,6 +5367,10 @@ pub const WALL_TOP_COVER_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_at_covering_fl
 /// the rest: drawn as one prism of its plan to the underside and the pieces
 /// of the plan outside the element from there to the top (#1067, RE-320).
 pub const WALL_TOP_STEPPED_BODY_HEIGHT_SOURCE: &str = "wall_top_stepped_at_covering_floor";
+
+/// `BodyHeightSource` of a wall whose top is cut along the underside of the
+/// sloped roof its top join names (#1478).
+pub const WALL_TOP_SLOPED_BODY_HEIGHT_SOURCE: &str = "wall_top_cut_along_sloped_roof";
 
 /// Property of a wall's [`ELEMENT_RECORD_PROPERTY_SET`] on a wall cut whole
 /// (`BodyHeightSource` [`WALL_TOP_COVER_BODY_HEIGHT_SOURCE`]) by a floor that

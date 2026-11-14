@@ -41,7 +41,7 @@ only identifiers that exist in `src/`.
 
 | Project the rules rest on | Rules |
 |---|---:|
-| BIM4LCA office | 45 |
+| BIM4LCA office | 46 |
 | Snowdon Towers (local only) | 38 |
 | RE1 (IFC-ECS) | 12 |
 | Core Interior | 6 |
@@ -96,6 +96,7 @@ runs, would test the largest share of the rules below.
 | [RE-413](../reports/element-framing/RE-413-roof-holes-gross-area.md) | `add_slab_gross_area` | BIM4LCA housing | - | yes | "Positive, on one element: the one different `GrossArea` and the one different `GrossVolume` of each large housing file are equal, a single roof in four saves of one project, and no other export of the 126 in the unfiltered run moves, so no second model exercises the rule." |
 | [RE-417](../reports/element-framing/RE-417-export-as-values.md) | `category_map`, `lookup_export_override_for` | BIM4LCA housing | - | no, it names this model only | "The four values are proven on the housing alone; the offices carry `IfcSpace` and not `IfcSpaceType` on these discs, and no Autodesk sample carries a value on the classes the limits name." |
 | [RE-425](../reports/element-framing/RE-425-rectangle-column-quantities.md) | `column_rectangles`, `saved_meshes`, `attach_scoped_with_control`, `column_mesh_quantities`, `add_column_quantities` | BIM4LCA housing | - | no, it names this model only | "Positive on the BIM4LCA housing, where 526 values on 6 files become Revit's and none differs, the four chamfered columns among them; the offices are byte-identical." |
+| [RE-465](../reports/element-framing/RE-465-ceiling-piece-gross-area.md) | `first_drawn_piece`, `add_ceiling_quantities` | BIM4LCA office | 2024 | yes | "The four files are one building. No other model with a Revit export ... has a ceiling in pieces" |
 | [RE-188](../reports/element-framing/RE-188-curtain-wall-export-as.md) | `export_override_applies`, `category_map` | BIM4LCA office | 2024 | no, it names this model only | "On both BIM4LCA office files (Revit 2024), 124 curtain walls carry their own "Export to IFC As" (`IFC_EXPORT_ELEMENT_AS`) of `IfcShadingDevice`, read by RE-45 on a `Walls` record." |
 | [RE-190](../reports/element-framing/RE-190-office-export-values.md) | `EXPORT_OVERRIDE_TARGETS`, `category_map` | BIM4LCA office | 2024 | no, it names this model only | "positive on both office files: 185 elements of the as-built file and 165 of the permit file now have the class Revit gives them" |
 | [RE-192](../reports/element-framing/RE-192-wall-sweep-export-as.md) | `export_override_applies`, `category_map` | BIM4LCA office | 2024 | no, it names this model only | "On both BIM4LCA office files (Revit 2024), 9 wall sweeps each carry their own "Export to IFC As" (`IFC_EXPORT_ELEMENT_AS`) of `IfcCovering`, with predefined type `ROOFING`." |
