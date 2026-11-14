@@ -330,6 +330,21 @@ def main(argv):
                         near_short.add(m["tag"])
             if kinds and m["tag"] not in overlapped:
                 cause[m["tag"]] = "an end meets one left out or overlapped: " + " + ".join(sorted(kinds))
+    # Research trace for #1803 (not to land): each listed mullion's end labels,
+    # cause, and every mullion within NEAR of its ends.
+    trace = {"3027086", "3028901", "3028902", "3028900", "3028903"}
+    for host, group in by_host.items():
+        for m in group:
+            if str(m["tag"]) not in trace:
+                continue
+            print(f"trace {m['tag']}: axis {m['axis']} half {[round(h, 5) for h in m['half']]} centre {[round(c, 5) for c in m['centre']]} labels {[sorted(f) for f in found.get(m['tag'], [])]} cause {cause.get(m['tag'])} overlapped {m['tag'] in overlapped} short {m['tag'] in short}")
+            if m["axis"] is None:
+                continue
+            for k, (p, _) in enumerate(end_points(m)):
+                for o in group:
+                    if o is m or box_distance(o, p) >= NEAR:
+                        continue
+                    print(f"  end {k} near {o['tag']} at {box_distance(o, p):.5f}: cause {first.get(o['tag'])} overlapped {o['tag'] in overlapped} short {o['tag'] in short}")
     print(f"IfcMembers: {len(ours.by_type('IfcMember'))}, boxes: {len(boxes)}, not read: {dict(skipped)}")
     print(f"in a curtain wall: {sum(len(g) for g in by_host.values())}, hosts: {len(by_host)}")
     print(f"shorter than their section (read like any other): {len(short)}")
