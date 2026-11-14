@@ -353,13 +353,20 @@ pub fn attach_scoped_with_control(
 
     let mut by_id: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
     // A stair or curtain wall is drawn by its parts; its own saved graphics
-    // would draw it twice.
+    // would draw it twice. A ramp is not: its railings are parts beside its
+    // own body (#1988), which Revit's export draws from the same saved mesh.
     let wholes: BTreeSet<usize> = model
         .entities
         .iter()
         .filter_map(|entity| match entity {
             IfcEntity::Aggregate { whole, .. } => Some(*whole),
             _ => None,
+        })
+        .filter(|&whole| {
+            !matches!(
+                model.entities.get(whole),
+                Some(IfcEntity::BuildingElement { ifc_type, .. }) if ifc_type == "IFCRAMP"
+            )
         })
         .collect();
     // #1645: why each box that keeps its box does; a box the pass does not take
