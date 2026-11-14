@@ -34,7 +34,8 @@ pub type Ring = Vec<Point2>;
 pub const CIRCLE_SEGMENTS: usize = 24;
 
 /// Points a profile may have, holes included, and still be triangulated.
-/// Past it the profile draws its bounding rectangle.
+/// Past it [`section`] draws the profile's bounding rectangle and
+/// [`exact_section`] returns `None`.
 pub const MAX_TRIANGULATED_POINTS: usize = 2048;
 
 /// A triangle mesh. Triangles wind counter-clockwise seen from outside.
@@ -363,6 +364,39 @@ pub fn exact_section(outer: &[Point2], holes: &[Ring]) -> Option<Section> {
     build_section(outer, holes, true)
 }
 
+/// Absolute slack on [`covers_plan`]'s area test, square feet; the relative
+/// slack is 1e-9 of the plan's area.
+const COVERED_AREA_TOLERANCE_SQUARE_FEET: f64 = 1e-6;
+
+/// Whether `triangles` over `points` cover the area inside `outer` less
+/// `holes`: a bridge that crosses an edge, or a hole outside the outer ring,
+/// can still ear-clip, and gives another area. The same test the wall-top
+/// pass makes of its rings (#1947).
+fn covers_plan(
+    points: &[Point2],
+    triangles: &[[u32; 3]],
+    outer: &[Point2],
+    holes: &[Ring],
+) -> bool {
+    let expected = signed_area(outer).abs()
+        - holes
+            .iter()
+            .map(|hole| signed_area(hole).abs())
+            .sum::<f64>();
+    let drawn: f64 = triangles
+        .iter()
+        .map(|&[a, b, c]| {
+            let corner = |i: u32| points.get(i as usize).copied();
+            match (corner(a), corner(b), corner(c)) {
+                (Some(a), Some(b), Some(c)) => signed_area(&[a, b, c]).abs(),
+                _ => f64::INFINITY,
+            }
+        })
+        .sum();
+    expected > 0.0
+        && (drawn - expected).abs() <= COVERED_AREA_TOLERANCE_SQUARE_FEET + 1e-9 * expected
+}
+
 fn build_section(outer: &[Point2], holes: &[Ring], exact: bool) -> Option<Section> {
     let mut outer = clean(outer)?;
     if signed_area(&outer) < 0.0 {
@@ -385,7 +419,9 @@ fn build_section(outer: &[Point2], holes: &[Ring], exact: bool) -> Option<Sectio
         }
         let holes: Vec<Ring> = holes.into_iter().filter(|h| !crosses_itself(h)).collect();
         if let Some(poly) = bridge_holes(outer.clone(), holes.clone()) {
-            if let Some(triangles) = ear_clip(&poly) {
+            if let Some(triangles) = ear_clip(&poly)
+                .filter(|triangles| !exact || covers_plan(&poly, triangles, &outer, &holes))
+            {
                 let mut rings = vec![outer];
                 rings.extend(holes);
                 return Some(Section {
@@ -398,7 +434,9 @@ fn build_section(outer: &[Point2], holes: &[Ring], exact: bool) -> Option<Sectio
         if exact && !holes.is_empty() {
             return None;
         }
-        if let Some(triangles) = ear_clip(&outer) {
+        if let Some(triangles) = ear_clip(&outer)
+            .filter(|triangles| !exact || covers_plan(&outer, triangles, &outer, &[]))
+        {
             return Some(Section {
                 rings: vec![outer.clone()],
                 cap_points: outer,
